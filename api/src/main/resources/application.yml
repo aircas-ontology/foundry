@@ -1,0 +1,38 @@
+server:
+  port: 36001
+  servlet:
+    context-path: /api
+
+spring:
+  application:
+    name: api
+  servlet:
+    #限制默认上传文件的大小不设置的话默认好像是10M
+    multipart:
+      maxRequestSize: 1024MB
+      maxFileSize: 1024MB
+
+eureka:
+  instance:
+    prefer-ip-address: true
+    lease-renewal-interval-in-seconds: 5
+    lease-expiration-duration-in-seconds: 30
+    secure-port-enabled: false
+    non-secure-port-enabled: true
+  client:
+    register-with-eureka: true
+    registry-fetch-interval-seconds: 5
+    fetch-registry: true
+    service-url:
+      defaultZone: http://localhost:36000/eureka/
+
+client:
+  ontology:
+    name: ontology
+
+feign:
+  httpclient:
+    enabled: false
+    disable-ssl-validation: true
+  okhttp:
+    enabled: true
