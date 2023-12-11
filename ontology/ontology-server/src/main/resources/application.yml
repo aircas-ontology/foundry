@@ -20,6 +20,7 @@ mybatis:
     lazy-loading-enabled: true
     aggressive-lazy-loading: false
     map-underscore-to-camel-case: true
+  mapper-locations: classpath*:/mybatis-mapper/*Mapper.xml
 
 eureka:
   instance:
