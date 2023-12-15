@@ -1,0 +1,65 @@
+package com.aircas.ptr.foundry.ontology.application.service.impl;
+
+import com.aircas.ptr.foundry.common.util.BeanUtil;
+import com.aircas.ptr.foundry.model.po.OntologyProperty;
+import com.aircas.ptr.foundry.ontology.application.service.OntologyPropertyService;
+import com.aircas.ptr.foundry.ontology.entity.bo.OntologyPropertyBO;
+import com.aircas.ptr.foundry.ontology.entity.vo.OntologyPropertyVO;
+import com.aircas.ptr.foundry.ontology.repository.dao.OntologyPropertyMapper;
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.BeanUtils;
+import org.springframework.stereotype.Service;
+
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+
+@Service
+@RequiredArgsConstructor
+public class OntologyPropertyServiceImpl implements OntologyPropertyService {
+
+    private final OntologyPropertyMapper ontologyPropertyMapper;
+
+    @Override
+    public Integer add(OntologyPropertyBO ontologyPropertyBO) {
+        OntologyProperty ontologyProperty = new OntologyProperty();
+        BeanUtils.copyProperties(ontologyPropertyBO,ontologyProperty);
+        ontologyProperty.setCreateTime(new Date());
+        return ontologyPropertyMapper.insert(ontologyProperty);
+    }
+
+    @Override
+    public Integer delete(Long id) {
+        return ontologyPropertyMapper.deleteByPrimaryKey(id);
+    }
+
+    @Override
+    public Integer update(OntologyPropertyBO ontologyPropertyBO) {
+        OntologyProperty ontologyProperty = new OntologyProperty();
+        BeanUtils.copyProperties(ontologyPropertyBO,ontologyProperty);
+        ontologyProperty.setUpdateTime(new Date());
+        return ontologyPropertyMapper.updateByPrimaryKey(ontologyProperty);
+    }
+
+    @Override
+    public List<OntologyPropertyVO> selectByOntologyId(Long id) {
+        List<OntologyProperty> ontologyProperty = ontologyPropertyMapper.selectByOntologyId(id);
+        List<OntologyPropertyVO> list = new ArrayList<>();
+        for (OntologyProperty ontologyPropertyVO : ontologyProperty){
+            OntologyPropertyVO propertyVO = new OntologyPropertyVO();
+            BeanUtils.copyProperties(ontologyPropertyVO,propertyVO);
+            list.add(propertyVO);
+        }
+
+        return list;
+    }
+
+    @Override
+    public OntologyPropertyVO selectById(Long id) {
+        OntologyProperty ontologyProperty = ontologyPropertyMapper.selectByPrimaryKey(id);
+        OntologyPropertyVO ontologyPropertyVO = new OntologyPropertyVO();
+        BeanUtils.copyProperties(ontologyProperty,ontologyPropertyVO);
+        return ontologyPropertyVO;
+    }
+
+}

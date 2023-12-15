@@ -1,0 +1,45 @@
+package com.aircas.ptr.foundry.ontology.userinterface.controller;
+
+import com.aircas.ptr.foundry.common.base.DataResult;
+import com.aircas.ptr.foundry.ontology.application.service.OntologyPropertyService;
+import com.aircas.ptr.foundry.ontology.entity.bo.OntologyMetaBO;
+import com.aircas.ptr.foundry.ontology.entity.bo.OntologyPropertyBO;
+import com.aircas.ptr.foundry.ontology.entity.vo.OntologyMetaVO;
+import com.aircas.ptr.foundry.ontology.entity.vo.OntologyPropertyVO;
+import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiOperation;
+import io.swagger.annotations.ApiParam;
+import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.*;
+
+@Api(tags = "本体属性关系")
+@RestController
+@RequestMapping("/OntologyProperty")
+@RequiredArgsConstructor
+public class OntologyPropertyController {
+    private final OntologyPropertyService ontologyPropertyService;
+
+    @PostMapping("/add")
+    @ApiOperation(value = "新增本体属性")
+    public DataResult<Integer> add(@RequestBody OntologyPropertyBO ontologyPropertyBO) {
+        return DataResult.ofData(ontologyPropertyService.add(ontologyPropertyBO));
+    }
+
+    @DeleteMapping("/delete")
+    @ApiOperation(value = "删除本体属性")
+    public DataResult<Integer> delete(@RequestParam Long id) {
+        return DataResult.ofData(ontologyPropertyService.delete(id));
+    }
+
+    @PostMapping("/update")
+    @ApiOperation(value = "修改本体属性")
+    public DataResult<Integer> update(@RequestBody OntologyPropertyBO ontologyPropertyBO) {
+        return DataResult.ofData(ontologyPropertyService.update(ontologyPropertyBO));
+    }
+
+    @GetMapping("/queryById")
+    @ApiOperation(value = "根据id查询一个本体属性")
+    public DataResult<OntologyPropertyVO> getOntologyById(@RequestParam @ApiParam(value = "本体属性id", required = true) Long id) {
+        return DataResult.ofData(ontologyPropertyService.selectById(id));
+    }
+}
