@@ -1,0 +1,44 @@
+package com.aircas.ptr.foundry.model.po;
+
+import java.io.Serializable;
+import java.util.Date;
+import lombok.Data;
+
+/**
+ * ontology_to_group
+ * @author 
+ */
+@Data
+public class OntologyToGroup implements Serializable {
+    /**
+     * 主键自增
+     */
+    private Long id;
+
+    /**
+     * 软删除状态位，1有效，0无效
+     */
+    private Integer status;
+
+    /**
+     * 记录创建时间
+     */
+    private Date createTime;
+
+    /**
+     * 记录修改时间
+     */
+    private Date updateTime;
+
+    /**
+     * 本体id
+     */
+    private Long ontologyId;
+
+    /**
+     * 本体所属组id
+     */
+    private Long ontologyGroupId;
+
+    private static final long serialVersionUID = 1L;
+}

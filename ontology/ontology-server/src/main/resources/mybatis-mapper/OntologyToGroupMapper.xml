@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.aircas.ptr.foundry.ontology.repository.dao.OntologyToGroupMapper">
+  <resultMap id="BaseResultMap" type="com.aircas.ptr.foundry.model.po.OntologyToGroup">
+    <id column="id" jdbcType="BIGINT" property="id" />
+    <result column="status" jdbcType="INTEGER" property="status" />
+    <result column="create_time" jdbcType="TIMESTAMP" property="createTime" />
+    <result column="update_time" jdbcType="TIMESTAMP" property="updateTime" />
+    <result column="ontology_id" jdbcType="BIGINT" property="ontologyId" />
+    <result column="ontology_group_id" jdbcType="BIGINT" property="ontologyGroupId" />
+  </resultMap>
+  <sql id="Base_Column_List">
+    id, "status", create_time, update_time, ontology_id, ontology_group_id
+  </sql>
+  <select id="selectByPrimaryKey" parameterType="java.lang.Long" resultMap="BaseResultMap">
+    select 
+    <include refid="Base_Column_List" />
+    from "ontology_to_group"
+    where id = #{id,jdbcType=BIGINT}
+  </select>
+  <delete id="deleteByPrimaryKey" parameterType="java.lang.Long">
+    delete from "ontology_to_group"
+    where id = #{id,jdbcType=BIGINT}
+  </delete>
+  <insert id="insert" keyColumn="id" keyProperty="id" parameterType="com.aircas.ptr.foundry.model.po.OntologyToGroup" useGeneratedKeys="true">
+    insert into "ontology_to_group" ("status", create_time, update_time, 
+      ontology_id, ontology_group_id)
+    values (#{status,jdbcType=INTEGER}, #{createTime,jdbcType=TIMESTAMP}, #{updateTime,jdbcType=TIMESTAMP}, 
+      #{ontologyId,jdbcType=BIGINT}, #{ontologyGroupId,jdbcType=BIGINT})
+  </insert>
+  <insert id="insertSelective" keyColumn="id" keyProperty="id" parameterType="com.aircas.ptr.foundry.model.po.OntologyToGroup" useGeneratedKeys="true">
+    insert into "ontology_to_group"
+    <trim prefix="(" suffix=")" suffixOverrides=",">
+      <if test="status != null">
+        "status",
+      </if>
+      <if test="createTime != null">
+        create_time,
+      </if>
+      <if test="updateTime != null">
+        update_time,
+      </if>
+      <if test="ontologyId != null">
+        ontology_id,
+      </if>
+      <if test="ontologyGroupId != null">
+        ontology_group_id,
+      </if>
+    </trim>
+    <trim prefix="values (" suffix=")" suffixOverrides=",">
+      <if test="status != null">
+        #{status,jdbcType=INTEGER},
+      </if>
+      <if test="createTime != null">
+        #{createTime,jdbcType=TIMESTAMP},
+      </if>
+      <if test="updateTime != null">
+        #{updateTime,jdbcType=TIMESTAMP},
+      </if>
+      <if test="ontologyId != null">
+        #{ontologyId,jdbcType=BIGINT},
+      </if>
+      <if test="ontologyGroupId != null">
+        #{ontologyGroupId,jdbcType=BIGINT},
+      </if>
+    </trim>
+  </insert>
+  <update id="updateByPrimaryKeySelective" parameterType="com.aircas.ptr.foundry.model.po.OntologyToGroup">
+    update "ontology_to_group"
+    <set>
+      <if test="status != null">
+        "status" = #{status,jdbcType=INTEGER},
+      </if>
+      <if test="createTime != null">
+        create_time = #{createTime,jdbcType=TIMESTAMP},
+      </if>
+      <if test="updateTime != null">
+        update_time = #{updateTime,jdbcType=TIMESTAMP},
+      </if>
+      <if test="ontologyId != null">
+        ontology_id = #{ontologyId,jdbcType=BIGINT},
+      </if>
+      <if test="ontologyGroupId != null">
+        ontology_group_id = #{ontologyGroupId,jdbcType=BIGINT},
+      </if>
+    </set>
+    where id = #{id,jdbcType=BIGINT}
+  </update>
+  <update id="updateByPrimaryKey" parameterType="com.aircas.ptr.foundry.model.po.OntologyToGroup">
+    update "ontology_to_group"
+    set "status" = #{status,jdbcType=INTEGER},
+      create_time = #{createTime,jdbcType=TIMESTAMP},
+      update_time = #{updateTime,jdbcType=TIMESTAMP},
+      ontology_id = #{ontologyId,jdbcType=BIGINT},
+      ontology_group_id = #{ontologyGroupId,jdbcType=BIGINT}
+    where id = #{id,jdbcType=BIGINT}
+  </update>
+</mapper>
