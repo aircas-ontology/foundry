@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.aircas.ptr.foundry.ontology.repository.dao.OntologyLinkMapper">
+  <resultMap id="BaseResultMap" type="com.aircas.ptr.foundry.model.po.OntologyLink">
+    <id column="id" jdbcType="BIGINT" property="id" />
+    <result column="status" jdbcType="INTEGER" property="status" />
+    <result column="create_time" jdbcType="TIMESTAMP" property="createTime" />
+    <result column="update_time" jdbcType="TIMESTAMP" property="updateTime" />
+    <result column="ontology_id_from" jdbcType="BIGINT" property="ontologyIdFrom" />
+    <result column="ontology_id_to" jdbcType="BIGINT" property="ontologyIdTo" />
+    <result column="property_id_from" jdbcType="BIGINT" property="propertyIdFrom" />
+    <result column="property_id_to" jdbcType="BIGINT" property="propertyIdTo" />
+    <result column="display_name" jdbcType="VARCHAR" property="displayName" />
+    <result column="plural_display_name" jdbcType="VARCHAR" property="pluralDisplayName" />
+    <result column="visibility" jdbcType="INTEGER" property="visibility" />
+    <result column="experimental_status" jdbcType="INTEGER" property="experimentalStatus" />
+    <result column="api_name" jdbcType="INTEGER" property="apiName" />
+  </resultMap>
+  <sql id="Base_Column_List">
+    id, "status", create_time, update_time, ontology_id_from, ontology_id_to, property_id_from, 
+    property_id_to, display_name, plural_display_name, visibility, experimental_status, 
+    api_name
+  </sql>
+  <select id="selectByPrimaryKey" parameterType="java.lang.Long" resultMap="BaseResultMap">
+    select 
+    <include refid="Base_Column_List" />
+    from "ontology_link"
+    where id = #{id,jdbcType=BIGINT}
+  </select>
+  <delete id="deleteByPrimaryKey" parameterType="java.lang.Long">
+    delete from "ontology_link"
+    where id = #{id,jdbcType=BIGINT}
+  </delete>
+  <insert id="insert" keyColumn="id" keyProperty="id" parameterType="com.aircas.ptr.foundry.model.po.OntologyLink" useGeneratedKeys="true">
+    insert into "ontology_link" ("status", create_time, update_time, 
+      ontology_id_from, ontology_id_to, property_id_from, 
+      property_id_to, display_name, plural_display_name, 
+      visibility, experimental_status, api_name
+      )
+    values (#{status,jdbcType=INTEGER}, #{createTime,jdbcType=TIMESTAMP}, #{updateTime,jdbcType=TIMESTAMP}, 
+      #{ontologyIdFrom,jdbcType=BIGINT}, #{ontologyIdTo,jdbcType=BIGINT}, #{propertyIdFrom,jdbcType=BIGINT}, 
+      #{propertyIdTo,jdbcType=BIGINT}, #{displayName,jdbcType=VARCHAR}, #{pluralDisplayName,jdbcType=VARCHAR}, 
+      #{visibility,jdbcType=INTEGER}, #{experimentalStatus,jdbcType=INTEGER}, #{apiName,jdbcType=INTEGER}
+      )
+  </insert>
+  <insert id="insertSelective" keyColumn="id" keyProperty="id" parameterType="com.aircas.ptr.foundry.model.po.OntologyLink" useGeneratedKeys="true">
+    insert into "ontology_link"
+    <trim prefix="(" suffix=")" suffixOverrides=",">
+      <if test="status != null">
+        "status",
+      </if>
+      <if test="createTime != null">
+        create_time,
+      </if>
+      <if test="updateTime != null">
+        update_time,
+      </if>
+      <if test="ontologyIdFrom != null">
+        ontology_id_from,
+      </if>
+      <if test="ontologyIdTo != null">
+        ontology_id_to,
+      </if>
+      <if test="propertyIdFrom != null">
+        property_id_from,
+      </if>
+      <if test="propertyIdTo != null">
+        property_id_to,
+      </if>
+      <if test="displayName != null">
+        display_name,
+      </if>
+      <if test="pluralDisplayName != null">
+        plural_display_name,
+      </if>
+      <if test="visibility != null">
+        visibility,
+      </if>
+      <if test="experimentalStatus != null">
+        experimental_status,
+      </if>
+      <if test="apiName != null">
+        api_name,
+      </if>
+    </trim>
+    <trim prefix="values (" suffix=")" suffixOverrides=",">
+      <if test="status != null">
+        #{status,jdbcType=INTEGER},
+      </if>
+      <if test="createTime != null">
+        #{createTime,jdbcType=TIMESTAMP},
+      </if>
+      <if test="updateTime != null">
+        #{updateTime,jdbcType=TIMESTAMP},
+      </if>
+      <if test="ontologyIdFrom != null">
+        #{ontologyIdFrom,jdbcType=BIGINT},
+      </if>
+      <if test="ontologyIdTo != null">
+        #{ontologyIdTo,jdbcType=BIGINT},
+      </if>
+      <if test="propertyIdFrom != null">
+        #{propertyIdFrom,jdbcType=BIGINT},
+      </if>
+      <if test="propertyIdTo != null">
+        #{propertyIdTo,jdbcType=BIGINT},
+      </if>
+      <if test="displayName != null">
+        #{displayName,jdbcType=VARCHAR},
+      </if>
+      <if test="pluralDisplayName != null">
+        #{pluralDisplayName,jdbcType=VARCHAR},
+      </if>
+      <if test="visibility != null">
+        #{visibility,jdbcType=INTEGER},
+      </if>
+      <if test="experimentalStatus != null">
+        #{experimentalStatus,jdbcType=INTEGER},
+      </if>
+      <if test="apiName != null">
+        #{apiName,jdbcType=INTEGER},
+      </if>
+    </trim>
+  </insert>
+  <update id="updateByPrimaryKeySelective" parameterType="com.aircas.ptr.foundry.model.po.OntologyLink">
+    update "ontology_link"
+    <set>
+      <if test="status != null">
+        "status" = #{status,jdbcType=INTEGER},
+      </if>
+      <if test="createTime != null">
+        create_time = #{createTime,jdbcType=TIMESTAMP},
+      </if>
+      <if test="updateTime != null">
+        update_time = #{updateTime,jdbcType=TIMESTAMP},
+      </if>
+      <if test="ontologyIdFrom != null">
+        ontology_id_from = #{ontologyIdFrom,jdbcType=BIGINT},
+      </if>
+      <if test="ontologyIdTo != null">
+        ontology_id_to = #{ontologyIdTo,jdbcType=BIGINT},
+      </if>
+      <if test="propertyIdFrom != null">
+        property_id_from = #{propertyIdFrom,jdbcType=BIGINT},
+      </if>
+      <if test="propertyIdTo != null">
+        property_id_to = #{propertyIdTo,jdbcType=BIGINT},
+      </if>
+      <if test="displayName != null">
+        display_name = #{displayName,jdbcType=VARCHAR},
+      </if>
+      <if test="pluralDisplayName != null">
+        plural_display_name = #{pluralDisplayName,jdbcType=VARCHAR},
+      </if>
+      <if test="visibility != null">
+        visibility = #{visibility,jdbcType=INTEGER},
+      </if>
+      <if test="experimentalStatus != null">
+        experimental_status = #{experimentalStatus,jdbcType=INTEGER},
+      </if>
+      <if test="apiName != null">
+        api_name = #{apiName,jdbcType=INTEGER},
+      </if>
+    </set>
+    where id = #{id,jdbcType=BIGINT}
+  </update>
+  <update id="updateByPrimaryKey" parameterType="com.aircas.ptr.foundry.model.po.OntologyLink">
+    update "ontology_link"
+    set "status" = #{status,jdbcType=INTEGER},
+      create_time = #{createTime,jdbcType=TIMESTAMP},
+      update_time = #{updateTime,jdbcType=TIMESTAMP},
+      ontology_id_from = #{ontologyIdFrom,jdbcType=BIGINT},
+      ontology_id_to = #{ontologyIdTo,jdbcType=BIGINT},
+      property_id_from = #{propertyIdFrom,jdbcType=BIGINT},
+      property_id_to = #{propertyIdTo,jdbcType=BIGINT},
+      display_name = #{displayName,jdbcType=VARCHAR},
+      plural_display_name = #{pluralDisplayName,jdbcType=VARCHAR},
+      visibility = #{visibility,jdbcType=INTEGER},
+      experimental_status = #{experimentalStatus,jdbcType=INTEGER},
+      api_name = #{apiName,jdbcType=INTEGER}
+    where id = #{id,jdbcType=BIGINT}
+  </update>
+</mapper>
