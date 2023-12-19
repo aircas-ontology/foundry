@@ -28,11 +28,28 @@
     from "ontology_meta"
     where id = #{id,jdbcType=BIGINT} and status = 1
   </select>
+  <select id="selectByDisplayName" resultType="java.lang.Integer">
+    select
+    count(1)
+    from "ontology_meta"
+    where status = 1
+    <if test="displayName != null and displayName != ''">
+      and display_name = #{displayName}
+    </if>
+  </select>
   <delete id="deleteByPrimaryKey" parameterType="java.lang.Long">
     delete from "ontology_meta"
     where id = #{id,jdbcType=BIGINT}
   </delete>
-  <insert id="insert" keyColumn="id" keyProperty="id" parameterType="com.aircas.ptr.foundry.model.po.OntologyMeta" useGeneratedKeys="true">
+  <update id="deleteByIds" parameterType="list">
+      update "ontology_meta"
+      set status = 0
+      where id in
+      <foreach collection="ids" index="index" item="id" open="(" separator="," close=")">
+        #{id,jdbcType=BIGINT}
+      </foreach>
+  </update>
+    <insert id="insert" keyColumn="id" keyProperty="id" parameterType="com.aircas.ptr.foundry.model.po.OntologyMeta" useGeneratedKeys="true">
     insert into "ontology_meta" ("status", create_time, update_time, 
       icon, display_name, plural_display_name, 
       backing_datasource_id, description, api_name, 

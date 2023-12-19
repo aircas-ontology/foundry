@@ -10,6 +10,7 @@ import io.swagger.annotations.ApiParam;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
+import java.util.List;
 
 /**
  * @author dongjunchuan
@@ -34,8 +35,8 @@ public class OntologyMetaController {
 
      @DeleteMapping("/delete")
      @ApiOperation(value = "删除本体")
-     public DataResult<Integer> delete(@RequestParam Integer id) {
-          return DataResult.ofData(ontologyMetaService.delete(id));
+     public DataResult<Integer> delete(@RequestParam List<Long> ids) {
+          return DataResult.ofData(ontologyMetaService.delete(ids));
      }
 
      @PostMapping("/update")

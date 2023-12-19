@@ -3,6 +3,8 @@ package com.aircas.ptr.foundry.ontology.repository.dao;
 import com.aircas.ptr.foundry.model.po.OntologyGroup;
 import org.apache.ibatis.annotations.Mapper;
 
+import java.util.List;
+
 @Mapper
 public interface OntologyGroupMapper {
     int deleteByPrimaryKey(Long id);
@@ -16,4 +18,8 @@ public interface OntologyGroupMapper {
     int updateByPrimaryKeySelective(OntologyGroup record);
 
     int updateByPrimaryKey(OntologyGroup record);
+
+    int selectByGroupName(String groupName);
+
+    int deleteByIds(List<Long> ids);
 }

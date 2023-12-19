@@ -1,13 +1,18 @@
 package com.aircas.ptr.foundry.ontology.application.service.impl;
 
+import com.aircas.ptr.foundry.common.exception.DuplicatedDataException;
+import com.aircas.ptr.foundry.model.po.OntologyGroup;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyGroupService;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyGroupBO;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyGroupVO;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyGroupMapper;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyToGroupMapper;
+import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
+import java.util.Date;
+import java.util.List;
 
 /**
  * @author dongjunchuan
@@ -27,21 +32,37 @@ public class OntologyGroupServiceImpl implements OntologyGroupService {
 
     @Override
     public Integer add(OntologyGroupBO ontologyGroupBO) {
-        return null;
+        int count = ontologyGroupMapper.selectByGroupName(ontologyGroupBO.getGroupName());
+        if (count != 0) {
+            throw new DuplicatedDataException("本体分组已存在");
+        }
+
+        OntologyGroup ontologyGroup = new OntologyGroup();
+        BeanUtils.copyProperties(ontologyGroupBO, ontologyGroup);
+        ontologyGroup.setStatus(1);
+        ontologyGroup.setCreateTime(new Date());
+        count = ontologyGroupMapper.insertSelective(ontologyGroup);
+        return count;
     }
 
     @Override
-    public Integer delete(Long id) {
-        return null;
+    public Integer delete(List<Long> ids) {
+        return ontologyGroupMapper.deleteByIds(ids);
     }
 
     @Override
     public Integer update(OntologyGroupBO ontologyGroupBO) {
-        return null;
+        OntologyGroup ontologyGroup = ontologyGroupMapper.selectByPrimaryKey(ontologyGroupBO.getId());
+        BeanUtils.copyProperties(ontologyGroupBO, ontologyGroup);
+        ontologyGroup.setUpdateTime(new Date());
+        return ontologyGroupMapper.updateByPrimaryKeySelective(ontologyGroup);
     }
 
     @Override
     public OntologyGroupVO getOntologyGroupById(Long id) {
-        return null;
+        OntologyGroup ontologyGroup = ontologyGroupMapper.selectByPrimaryKey(id);
+        OntologyGroupVO ontologyGroupVO = new OntologyGroupVO();
+        BeanUtils.copyProperties(ontologyGroup, ontologyGroupVO);
+        return ontologyGroupVO;
     }
 }

@@ -11,7 +11,7 @@
     <result column="property_type" jdbcType="VARCHAR" property="propertyType" />
     <result column="display_name" jdbcType="VARCHAR" property="displayName" />
     <result column="description" jdbcType="VARCHAR" property="description" />
-    <result column="visiblity" jdbcType="INTEGER" property="visiblity" />
+    <result column="visibility" jdbcType="INTEGER" property="visibility" />
     <result column="experimental_status" jdbcType="INTEGER" property="experimentalStatus" />
     <result column="api_name" jdbcType="VARCHAR" property="apiName" />
     <result column="is_primary_key" jdbcType="INTEGER" property="isPrimaryKey" />
@@ -20,7 +20,7 @@
   </resultMap>
   <sql id="Base_Column_List">
     id, "status", create_time, update_time, ontology_id, datasource_column_name, property_type, 
-    display_name, description, visiblity, experimental_status, api_name, is_primary_key, 
+    display_name, description, visibility, experimental_status, api_name, is_primary_key, 
     is_title_key, datasource_id
   </sql>
   <select id="selectByPrimaryKey" parameterType="java.lang.Long" resultMap="BaseResultMap">
@@ -44,12 +44,12 @@
   <insert id="insert" keyColumn="id" keyProperty="id" parameterType="com.aircas.ptr.foundry.model.po.OntologyProperty" useGeneratedKeys="true">
     insert into "ontology_property" ("status", create_time, update_time, 
       ontology_id, datasource_column_name, property_type, 
-      display_name, description, visiblity, 
+      display_name, description, visibility, 
       experimental_status, api_name, is_primary_key, 
       is_title_key, datasource_id)
     values (#{status,jdbcType=INTEGER}, #{createTime,jdbcType=TIMESTAMP}, #{updateTime,jdbcType=TIMESTAMP},
       #{ontologyId,jdbcType=BIGINT}, #{datasourceColumnName,jdbcType=VARCHAR}, #{propertyType,jdbcType=VARCHAR}, 
-      #{displayName,jdbcType=VARCHAR}, #{description,jdbcType=VARCHAR}, #{visiblity,jdbcType=INTEGER}, 
+      #{displayName,jdbcType=VARCHAR}, #{description,jdbcType=VARCHAR}, #{visibility,jdbcType=INTEGER}, 
       #{experimentalStatus,jdbcType=INTEGER}, #{apiName,jdbcType=VARCHAR}, #{isPrimaryKey,jdbcType=INTEGER}, 
       #{isTitleKey,jdbcType=INTEGER}, #{datasourceId,jdbcType=BIGINT})
   </insert>
@@ -80,8 +80,8 @@
       <if test="description != null">
         description,
       </if>
-      <if test="visiblity != null">
-        visiblity,
+      <if test="visibility != null">
+        visibility,
       </if>
       <if test="experimentalStatus != null">
         experimental_status,
@@ -124,8 +124,8 @@
       <if test="description != null">
         #{description,jdbcType=VARCHAR},
       </if>
-      <if test="visiblity != null">
-        #{visiblity,jdbcType=INTEGER},
+      <if test="visibility != null">
+        #{visibility,jdbcType=INTEGER},
       </if>
       <if test="experimentalStatus != null">
         #{experimentalStatus,jdbcType=INTEGER},
@@ -171,8 +171,8 @@
       <if test="description != null">
         description = #{description,jdbcType=VARCHAR},
       </if>
-      <if test="visiblity != null">
-        visiblity = #{visiblity,jdbcType=INTEGER},
+      <if test="visibility != null">
+        visibility = #{visibility,jdbcType=INTEGER},
       </if>
       <if test="experimentalStatus != null">
         experimental_status = #{experimentalStatus,jdbcType=INTEGER},
@@ -202,7 +202,7 @@
       property_type = #{propertyType,jdbcType=VARCHAR},
       display_name = #{displayName,jdbcType=VARCHAR},
       description = #{description,jdbcType=VARCHAR},
-      visiblity = #{visiblity,jdbcType=INTEGER},
+      visibility = #{visibility,jdbcType=INTEGER},
       experimental_status = #{experimentalStatus,jdbcType=INTEGER},
       api_name = #{apiName,jdbcType=VARCHAR},
       is_primary_key = #{isPrimaryKey,jdbcType=INTEGER},

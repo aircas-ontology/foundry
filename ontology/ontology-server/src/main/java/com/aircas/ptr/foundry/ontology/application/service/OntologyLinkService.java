@@ -3,6 +3,8 @@ package com.aircas.ptr.foundry.ontology.application.service;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyLinkBO;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyLinkVO;
 
+import java.util.List;
+
 /**
  * @author dongjunchuan
  * @description
@@ -13,7 +15,7 @@ import com.aircas.ptr.foundry.ontology.entity.vo.OntologyLinkVO;
 public interface OntologyLinkService {
     Integer add(OntologyLinkBO ontologyLinkBO);
 
-    Integer delete(Long id);
+    Integer delete(List<Long> ids);
 
     Integer update(OntologyLinkBO ontologyLinkBO);
 

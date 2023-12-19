@@ -3,6 +3,8 @@ package com.aircas.ptr.foundry.ontology.application.service;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyMetaBO;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyMetaVO;
 
+import java.util.List;
+
 /**
  * @author dongjunchuan
  * @description
@@ -14,7 +16,7 @@ public interface OntologyMetaService {
 
      Integer add(OntologyMetaBO ontologyMetaBO);
 
-     Integer delete(Integer id);
+     Integer delete(List<Long> ids);
 
      Integer update(OntologyMetaBO ontologyMetaBO);
 }

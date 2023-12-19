@@ -12,6 +12,7 @@ import io.swagger.annotations.ApiParam;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
+import java.util.List;
 
 /**
  * @author dongjunchuan
@@ -35,8 +36,8 @@ public class OntologyLinkController {
 
     @DeleteMapping("/delete")
     @ApiOperation(value = "删除本体之间的关系")
-    public DataResult<Integer> delete(@RequestParam Long id) {
-        return DataResult.ofData(ontologyLinkService.delete(id));
+    public DataResult<Integer> delete(@RequestParam List<Long> ids) {
+        return DataResult.ofData(ontologyLinkService.delete(ids));
     }
 
     @PostMapping("/update")

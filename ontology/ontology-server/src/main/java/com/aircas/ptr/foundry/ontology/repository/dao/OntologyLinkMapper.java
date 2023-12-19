@@ -2,6 +2,9 @@ package com.aircas.ptr.foundry.ontology.repository.dao;
 
 import com.aircas.ptr.foundry.model.po.OntologyLink;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
+
+import java.util.List;
 
 @Mapper
 public interface OntologyLinkMapper {
@@ -16,4 +19,8 @@ public interface OntologyLinkMapper {
     int updateByPrimaryKeySelective(OntologyLink record);
 
     int updateByPrimaryKey(OntologyLink record);
+
+    int selectByDisplayName(Long ontologyIdFrom, Long ontologyIdTo, String displayName);
+
+    int deleteByIds(List<Long> ids);
 }

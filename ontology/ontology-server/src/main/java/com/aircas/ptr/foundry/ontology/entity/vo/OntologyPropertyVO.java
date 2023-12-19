@@ -54,7 +54,7 @@ public class OntologyPropertyVO {
     /**
      * 可见性、正常、隐藏、突出显示
      */
-    private Integer visiblity;
+    private Integer visibility;
 
     /**
      * 实验状态、激活、测试中、废弃
