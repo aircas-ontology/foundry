@@ -7,15 +7,15 @@ server:
   servlet:
     context-path: /
 
-eureka:
-  server:
-    enable-self-preservation: false
-    eviction-interval-timer-in-ms: 5000
-  instance:
-    hostname: localhost
-  client:
-    fetch-registry: false
-    register-with-eureka: false
-    registry-fetch-interval-seconds: 5
-    service-url:
-      defaultZone: http://localhost:36000/eureka/
+#eureka:
+#  server:
+#    enable-self-preservation: false
+#    eviction-interval-timer-in-ms: 5000
+#  instance:
+#    hostname: localhost
+#  client:
+#    fetch-registry: false
+#    register-with-eureka: false
+#    registry-fetch-interval-seconds: 5
+#    service-url:
+#      defaultZone: http://localhost:36000/eureka/
