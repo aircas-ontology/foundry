@@ -79,5 +79,5 @@ public class OntologyPropertyVO {
     /**
      * 数据源ID
      */
-    private int datasourceId;
+    private String datasourceId;
 }

@@ -9,6 +9,8 @@ public interface OntologyPropertyService {
 
     Integer add(OntologyPropertyBO ontologyPropertyBO);
 
+    Integer batchAdd(List<OntologyPropertyBO> ontologyPropertyBO);
+
     Integer delete(Long id);
 
     Integer update(OntologyPropertyBO ontologyPropertyBO);

@@ -29,6 +29,14 @@ public class OntologyPropertyServiceImpl implements OntologyPropertyService {
     }
 
     @Override
+    public Integer batchAdd(List<OntologyPropertyBO> ontologyPropertyBOs) {
+        for (OntologyPropertyBO bo : ontologyPropertyBOs) {
+            this.add(bo);
+        }
+        return 0;
+    }
+
+    @Override
     public Integer delete(Long id) {
         return ontologyPropertyMapper.deleteByPrimaryKey(id);
     }

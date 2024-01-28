@@ -16,7 +16,7 @@
     <result column="api_name" jdbcType="VARCHAR" property="apiName" />
     <result column="is_primary_key" jdbcType="INTEGER" property="isPrimaryKey" />
     <result column="is_title_key" jdbcType="INTEGER" property="isTitleKey" />
-    <result column="datasource_id" jdbcType="BIGINT" property="datasourceId" />
+    <result column="datasource_id" jdbcType="VARCHAR" property="datasourceId" />
   </resultMap>
   <sql id="Base_Column_List">
     id, "status", create_time, update_time, ontology_id, datasource_column_name, property_type, 
@@ -51,7 +51,7 @@
       #{ontologyId,jdbcType=BIGINT}, #{datasourceColumnName,jdbcType=VARCHAR}, #{propertyType,jdbcType=VARCHAR}, 
       #{displayName,jdbcType=VARCHAR}, #{description,jdbcType=VARCHAR}, #{visibility,jdbcType=INTEGER}, 
       #{experimentalStatus,jdbcType=INTEGER}, #{apiName,jdbcType=VARCHAR}, #{isPrimaryKey,jdbcType=INTEGER}, 
-      #{isTitleKey,jdbcType=INTEGER}, #{datasourceId,jdbcType=BIGINT})
+      #{isTitleKey,jdbcType=INTEGER}, #{datasourceId,jdbcType=VARCHAR})
   </insert>
   <insert id="insertSelective" keyColumn="id" keyProperty="id" parameterType="com.aircas.ptr.foundry.model.po.OntologyProperty" useGeneratedKeys="true">
     insert into "ontology_property"
@@ -140,7 +140,7 @@
         #{isTitleKey,jdbcType=INTEGER},
       </if>
       <if test="datasourceId != null">
-        #{datasourceId,jdbcType=BIGINT},
+        #{datasourceId,jdbcType=VARCHAR},
       </if>
     </trim>
   </insert>
@@ -187,7 +187,7 @@
         is_title_key = #{isTitleKey,jdbcType=INTEGER},
       </if>
       <if test="datasourceId != null">
-        datasource_id = #{datasourceId,jdbcType=BIGINT},
+        datasource_id = #{datasourceId,jdbcType=VARCHAR},
       </if>
     </set>
     where id = #{id,jdbcType=BIGINT}
@@ -207,7 +207,7 @@
       api_name = #{apiName,jdbcType=VARCHAR},
       is_primary_key = #{isPrimaryKey,jdbcType=INTEGER},
       is_title_key = #{isTitleKey,jdbcType=INTEGER},
-      datasource_id = #{datasourceId,jdbcType=BIGINT}
+      datasource_id = #{datasourceId,jdbcType=VARCHAR}
     where id = #{id,jdbcType=BIGINT}
   </update>
 </mapper>
