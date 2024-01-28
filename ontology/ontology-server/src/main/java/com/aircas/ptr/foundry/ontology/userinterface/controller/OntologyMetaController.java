@@ -56,4 +56,10 @@ public class OntologyMetaController {
      public DataResult<OntologyMetaVO> getOntologyById(@RequestParam @ApiParam(value = "本体unique identifer", required = true) String uniqueIdentifier) {
           return DataResult.ofData(ontologyMetaService.getOntologyByUniqueIdentifier(uniqueIdentifier));
      }
+
+     @GetMapping("/getAll")
+     @ApiOperation(value = "查询所有本体的metadata")
+     public DataResult<List<OntologyMetaVO>> getAllOntologies() {
+          return DataResult.ofData(ontologyMetaService.getAllOntologies());
+     }
 }

@@ -1,8 +1,11 @@
 package com.aircas.ptr.foundry.ontology.application.service;
 
+import com.aircas.ptr.foundry.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyMetaBO;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyMetaVO;
+import org.springframework.beans.BeanUtils;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -21,4 +24,6 @@ public interface OntologyMetaService {
      Integer delete(List<Long> ids);
 
      Integer update(OntologyMetaBO ontologyMetaBO);
+
+     List<OntologyMetaVO> getAllOntologies();
 }

@@ -10,6 +10,7 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
@@ -70,5 +71,17 @@ public class OntologyMetaServiceImpl implements OntologyMetaService {
         OntologyMetaVO ontologyMetaVO = new OntologyMetaVO();
         BeanUtils.copyProperties(ontologyMeta, ontologyMetaVO);
         return ontologyMetaVO;
+    }
+
+    @Override
+    public List<OntologyMetaVO> getAllOntologies() {
+        List <OntologyMeta> result = ontologyMetaMapper.selectAllOntologies();
+        List<OntologyMetaVO> retResult = new ArrayList();
+        for (OntologyMeta meta: result) {
+            OntologyMetaVO ontologyMetaVO = new OntologyMetaVO();
+            BeanUtils.copyProperties(meta, ontologyMetaVO);
+            retResult.add(ontologyMetaVO);
+        }
+        return retResult;
     }
 }

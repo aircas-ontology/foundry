@@ -83,7 +83,7 @@ public class OntologyProperty implements Serializable {
     /**
      * 数据源ID
      */
-    private Long datasourceId;
+    private int datasourceId;
 
     private static final long serialVersionUID = 1L;
 }

@@ -79,5 +79,5 @@ public class OntologyPropertyBO {
     /**
      * 数据源ID
      */
-    private Long datasourceId;
+    private int datasourceId;
 }
