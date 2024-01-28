@@ -3,6 +3,7 @@
 <mapper namespace="com.aircas.ptr.foundry.ontology.repository.dao.OntologyMetaMapper">
   <resultMap id="BaseResultMap" type="com.aircas.ptr.foundry.model.po.OntologyMeta">
     <id column="id" jdbcType="BIGINT" property="id" />
+    <result column="unique_identifier" jdbcType="VARCHAR" property="uniqueIdentifier" />
     <result column="status" jdbcType="INTEGER" property="status" />
     <result column="create_time" jdbcType="TIMESTAMP" property="createTime" />
     <result column="update_time" jdbcType="TIMESTAMP" property="updateTime" />
@@ -18,7 +19,7 @@
     <result column="writeback_flag" jdbcType="INTEGER" property="writebackFlag" />
   </resultMap>
   <sql id="Base_Column_List">
-    id, "status", create_time, update_time, icon, display_name, plural_display_name, 
+    id, "unique_identifier", "status", create_time, update_time, icon, display_name, plural_display_name,
     backing_datasource_id, description, api_name, visibility, experimental_status, index_status, 
     writeback_flag
   </sql>
@@ -27,6 +28,12 @@
     <include refid="Base_Column_List" />
     from "ontology_meta"
     where id = #{id,jdbcType=BIGINT} and status = 1
+  </select>
+  <select id="selectByUniqueIdentifier" parameterType="java.lang.String" resultMap="BaseResultMap">
+    select
+    <include refid="Base_Column_List" />
+    from "ontology_meta"
+    where unique_identifier = #{uniqueIdentifier,jdbcType=BIGINT} and status = 1
   </select>
   <select id="selectByDisplayName" resultType="java.lang.Integer">
     select
@@ -55,7 +62,7 @@
       backing_datasource_id, description, api_name, 
       visibility, experimental_status, index_status, 
       writeback_flag)
-    values (#{status,jdbcType=INTEGER}, #{createTime,jdbcType=TIMESTAMP}, #{updateTime,jdbcType=TIMESTAMP}, 
+    values (#{uniqueIdentifier,jdbcType=VARCHAR}, #{status,jdbcType=INTEGER}, #{createTime,jdbcType=TIMESTAMP}, #{updateTime,jdbcType=TIMESTAMP},
       #{icon,jdbcType=OTHER}, #{displayName,jdbcType=VARCHAR}, #{pluralDisplayName,jdbcType=VARCHAR}, 
       #{backingDatasourceId,jdbcType=VARCHAR}, #{description,jdbcType=VARCHAR}, #{apiName,jdbcType=VARCHAR},
       #{visibility,jdbcType=INTEGER}, #{experimentalStatus,jdbcType=INTEGER}, #{indexStatus,jdbcType=INTEGER}, 
@@ -64,6 +71,9 @@
   <insert id="insertSelective" keyColumn="id" keyProperty="id" parameterType="com.aircas.ptr.foundry.model.po.OntologyMeta" useGeneratedKeys="true">
     insert into "ontology_meta"
     <trim prefix="(" suffix=")" suffixOverrides=",">
+      <if test="uniqueIdentifier != null">
+        "unique_identifier",
+      </if>
       <if test="status != null">
         "status",
       </if>
@@ -105,6 +115,9 @@
       </if>
     </trim>
     <trim prefix="values (" suffix=")" suffixOverrides=",">
+      <if test="uniqueIdentifier != null">
+        #{uniqueIdentifier,jdbcType=VARCHAR},
+      </if>
       <if test="status != null">
         #{status,jdbcType=INTEGER},
       </if>
@@ -149,6 +162,9 @@
   <update id="updateByPrimaryKeySelective" parameterType="com.aircas.ptr.foundry.model.po.OntologyMeta">
     update "ontology_meta"
     <set>
+      <if test="uniqueIdentifier != null">
+        unique_identifier = #{uniqueIdentifier,jdbcType=VARCHAR},
+      </if>
       <if test="status != null">
         "status" = #{status,jdbcType=INTEGER},
       </if>
@@ -194,6 +210,7 @@
   <update id="updateByPrimaryKey" parameterType="com.aircas.ptr.foundry.model.po.OntologyMeta">
     update "ontology_meta"
     set "status" = #{status,jdbcType=INTEGER},
+      unique_identifier = #{uniqueIdentifier,jdbcType=VARCHAR},
       create_time = #{createTime,jdbcType=TIMESTAMP},
       update_time = #{updateTime,jdbcType=TIMESTAMP},
       icon = #{icon,jdbcType=OTHER},

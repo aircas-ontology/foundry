@@ -3,6 +3,7 @@
 <mapper namespace="com.aircas.ptr.foundry.ontology.repository.dao.OntologyLinkMapper">
   <resultMap id="BaseResultMap" type="com.aircas.ptr.foundry.model.po.OntologyLink">
     <id column="id" jdbcType="BIGINT" property="id" />
+    <id column="unique_identifier" jdbcType="VARCHAR" property="uniqueIdentifier" />
     <result column="status" jdbcType="INTEGER" property="status" />
     <result column="create_time" jdbcType="TIMESTAMP" property="createTime" />
     <result column="update_time" jdbcType="TIMESTAMP" property="updateTime" />
@@ -17,7 +18,7 @@
     <result column="api_name" jdbcType="INTEGER" property="apiName" />
   </resultMap>
   <sql id="Base_Column_List">
-    id, "status", create_time, update_time, ontology_id_from, ontology_id_to, property_id_from, 
+    id, unique_identifier, "status", create_time, update_time, ontology_id_from, ontology_id_to, property_id_from,
     property_id_to, display_name, plural_display_name, visibility, experimental_status, 
     api_name
   </sql>

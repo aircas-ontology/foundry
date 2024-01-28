@@ -15,6 +15,8 @@ public interface OntologyMetaMapper {
 
     OntologyMeta selectByPrimaryKey(Long id);
 
+    OntologyMeta selectByUniqueIdentifier(String uniqueIdentifier);
+
     int updateByPrimaryKeySelective(OntologyMeta record);
 
     int updateByPrimaryKey(OntologyMeta record);

@@ -19,6 +19,13 @@ public class OntologyMetaBO {
     @ApiModelProperty(name = "id", value = "自增id，新增时不传，更新时必传", dataType = "java.lang.Long", required = false, example = "5")
     private Long id;
 
+
+    /**
+     * 唯一标识
+     */
+    @ApiModelProperty(name = "uniqueIdentifier", value = "本体的唯一标识", dataType = "java.lang.String", required = true, example = "5")
+    private String uniqueIdentifier;
+
     /**
      * 图标
      */

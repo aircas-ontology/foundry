@@ -10,7 +10,7 @@
     <result column="ontology_group_id" jdbcType="BIGINT" property="ontologyGroupId" />
   </resultMap>
   <sql id="Base_Column_List">
-    id, "status", create_time, update_time, ontology_id, ontology_group_id
+    id, unique_identifier, "status", create_time, update_time, ontology_id, ontology_group_id
   </sql>
   <select id="selectByPrimaryKey" parameterType="java.lang.Long" resultMap="BaseResultMap">
     select 

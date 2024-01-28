@@ -51,6 +51,9 @@ public class OntologyMetaController {
           return DataResult.ofData(ontologyMetaService.getOntologyById(id));
      }
 
-
-
+     @GetMapping("/queryByUniqueIdentifier")
+     @ApiOperation(value = "根据unique identifier查询一个本体")
+     public DataResult<OntologyMetaVO> getOntologyById(@RequestParam @ApiParam(value = "本体unique identifer", required = true) String uniqueIdentifier) {
+          return DataResult.ofData(ontologyMetaService.getOntologyByUniqueIdentifier(uniqueIdentifier));
+     }
 }

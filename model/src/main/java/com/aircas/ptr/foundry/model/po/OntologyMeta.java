@@ -16,6 +16,11 @@ public class OntologyMeta implements Serializable {
     private Long id;
 
     /**
+     * 唯一标识
+     */
+    private String uniqueIdentifier;
+
+    /**
      * 软删除状态位，1有效，0无效
      */
     private Integer status;
