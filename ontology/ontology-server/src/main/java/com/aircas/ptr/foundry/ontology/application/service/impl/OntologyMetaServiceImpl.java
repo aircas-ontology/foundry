@@ -42,8 +42,8 @@ public class OntologyMetaServiceImpl implements OntologyMetaService {
     }
 
     @Override
-    public Integer delete(List<Long> ids) {
-        return ontologyMetaMapper.deleteByIds(ids);
+    public Integer delete(String uniqueIdentifier) {
+        return ontologyMetaMapper.deleteByUniqueIdentifier(uniqueIdentifier);
     }
 
     @Override

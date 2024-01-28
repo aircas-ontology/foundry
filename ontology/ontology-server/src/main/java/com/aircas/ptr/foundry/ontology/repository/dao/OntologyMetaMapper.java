@@ -24,7 +24,7 @@ public interface OntologyMetaMapper {
 
     int selectByDisplayName(String displayName);
 
-    int deleteByIds(List<Long> ids);
+    int deleteByUniqueIdentifier(String uniqueIdentifier);
 
     List<OntologyMeta> selectAllOntologies();
 }

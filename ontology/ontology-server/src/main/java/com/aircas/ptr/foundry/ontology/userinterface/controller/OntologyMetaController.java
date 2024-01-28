@@ -33,10 +33,10 @@ public class OntologyMetaController {
           return DataResult.ofData(ontologyMetaService.add(ontologyMetaBO));
      }
 
-     @DeleteMapping("/delete")
+     @PostMapping("/delete")
      @ApiOperation(value = "删除本体")
-     public DataResult<Integer> delete(@RequestParam List<Long> ids) {
-          return DataResult.ofData(ontologyMetaService.delete(ids));
+     public DataResult<Integer> delete(@RequestParam @ApiParam(value = "本体id", required = true) String uniqueIdentifier) {
+          return DataResult.ofData(ontologyMetaService.delete(uniqueIdentifier));
      }
 
      @PostMapping("/update")

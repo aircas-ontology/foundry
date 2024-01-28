@@ -3,10 +3,11 @@
 <mapper namespace="com.aircas.ptr.foundry.ontology.repository.dao.OntologyPropertyMapper">
   <resultMap id="BaseResultMap" type="com.aircas.ptr.foundry.model.po.OntologyProperty">
     <id column="id" jdbcType="BIGINT" property="id" />
+    <result column="unique_identifier" jdbcType="VARCHAR" property="uniqueIdentifier" />
     <result column="status" jdbcType="INTEGER" property="status" />
     <result column="create_time" jdbcType="TIMESTAMP" property="createTime" />
     <result column="update_time" jdbcType="TIMESTAMP" property="updateTime" />
-    <result column="ontology_id" jdbcType="BIGINT" property="ontologyId" />
+    <result column="ontology_unique_identifier" jdbcType="VARCHAR" property="ontologyUniqueIdentifier" />
     <result column="datasource_column_name" jdbcType="VARCHAR" property="datasourceColumnName" />
     <result column="property_type" jdbcType="VARCHAR" property="propertyType" />
     <result column="display_name" jdbcType="VARCHAR" property="displayName" />
@@ -19,7 +20,7 @@
     <result column="datasource_id" jdbcType="VARCHAR" property="datasourceId" />
   </resultMap>
   <sql id="Base_Column_List">
-    id, "status", create_time, update_time, ontology_id, datasource_column_name, property_type, 
+    id, unique_identifier, "status", create_time, update_time, ontology_unique_identifier, datasource_column_name, property_type,
     display_name, description, visibility, experimental_status, api_name, is_primary_key, 
     is_title_key, datasource_id
   </sql>
@@ -30,11 +31,11 @@
     where id = #{id,jdbcType=BIGINT}
   </select>
 
-  <select id="selectByOntologyId" resultType="com.aircas.ptr.foundry.model.po.OntologyProperty">
+  <select id="selectByOntologyUniqueIdentifier" resultType="com.aircas.ptr.foundry.model.po.OntologyProperty">
     select
     <include refid="Base_Column_List" />
     from "ontology_property"
-    where ontology_id = #{ontologyId,jdbcType=BIGINT}
+    where ontology_unique_identifier = #{uniqueIdentifier,jdbcType=VARCHAR}
   </select>
 
   <delete id="deleteByPrimaryKey" parameterType="java.lang.Long">
@@ -42,13 +43,13 @@
     where id = #{id,jdbcType=BIGINT}
   </delete>
   <insert id="insert" keyColumn="id" keyProperty="id" parameterType="com.aircas.ptr.foundry.model.po.OntologyProperty" useGeneratedKeys="true">
-    insert into "ontology_property" ("status", create_time, update_time, 
-      ontology_id, datasource_column_name, property_type, 
+    insert into "ontology_property" ("status", unique_identifier, create_time, update_time,
+      ontology_unique_identifier, datasource_column_name, property_type,
       display_name, description, visibility, 
       experimental_status, api_name, is_primary_key, 
       is_title_key, datasource_id)
-    values (#{status,jdbcType=INTEGER}, #{createTime,jdbcType=TIMESTAMP}, #{updateTime,jdbcType=TIMESTAMP},
-      #{ontologyId,jdbcType=BIGINT}, #{datasourceColumnName,jdbcType=VARCHAR}, #{propertyType,jdbcType=VARCHAR}, 
+    values (#{status,jdbcType=INTEGER}, #{uniqueIdentifier,jdbcType=VARCHAR}, #{createTime,jdbcType=TIMESTAMP}, #{updateTime,jdbcType=TIMESTAMP},
+      #{ontologyUniqueIdentifier,jdbcType=VARCHAR}, #{datasourceColumnName,jdbcType=VARCHAR}, #{propertyType,jdbcType=VARCHAR},
       #{displayName,jdbcType=VARCHAR}, #{description,jdbcType=VARCHAR}, #{visibility,jdbcType=INTEGER}, 
       #{experimentalStatus,jdbcType=INTEGER}, #{apiName,jdbcType=VARCHAR}, #{isPrimaryKey,jdbcType=INTEGER}, 
       #{isTitleKey,jdbcType=INTEGER}, #{datasourceId,jdbcType=VARCHAR})
@@ -56,6 +57,9 @@
   <insert id="insertSelective" keyColumn="id" keyProperty="id" parameterType="com.aircas.ptr.foundry.model.po.OntologyProperty" useGeneratedKeys="true">
     insert into "ontology_property"
     <trim prefix="(" suffix=")" suffixOverrides=",">
+      <if test="uniqueIdentifier != null">
+        uniqueIdentifier,
+      </if>
       <if test="status != null">
         "status",
       </if>
@@ -65,8 +69,8 @@
       <if test="updateTime != null">
         update_time,
       </if>
-      <if test="ontologyId != null">
-        ontology_id,
+      <if test="ontologyUniqueIdentifier != null">
+        ontology_unique_identifier,
       </if>
       <if test="datasourceColumnName != null">
         datasource_column_name,
@@ -109,8 +113,8 @@
       <if test="updateTime != null">
         #{updateTime,jdbcType=TIMESTAMP},
       </if>
-      <if test="ontologyId != null">
-        #{ontologyId,jdbcType=BIGINT},
+      <if test="ontologyUniqueIdentifier != null">
+        #{ontologyUniqueIdentifier,jdbcType=VARCHAR},
       </if>
       <if test="datasourceColumnName != null">
         #{datasourceColumnName,jdbcType=VARCHAR},
@@ -147,6 +151,9 @@
   <update id="updateByPrimaryKeySelective" parameterType="com.aircas.ptr.foundry.model.po.OntologyProperty">
     update "ontology_property"
     <set>
+      <if test="uniqueIdentifier != null">
+        "status" = #{uniqueIdentifier,jdbcType=VARCHAR},
+      </if>
       <if test="status != null">
         "status" = #{status,jdbcType=INTEGER},
       </if>
@@ -156,8 +163,8 @@
       <if test="updateTime != null">
         update_time = #{updateTime,jdbcType=TIMESTAMP},
       </if>
-      <if test="ontologyId != null">
-        ontology_id = #{ontologyId,jdbcType=BIGINT},
+      <if test="ontologyUniqueIdentifier != null">
+        ontology_unique_identifier = #{ontologyUniqueIdentifier,jdbcType=VARCHAR},
       </if>
       <if test="datasourceColumnName != null">
         datasource_column_name = #{datasourceColumnName,jdbcType=VARCHAR},
@@ -195,9 +202,10 @@
   <update id="updateByPrimaryKey" parameterType="com.aircas.ptr.foundry.model.po.OntologyProperty">
     update "ontology_property"
     set "status" = #{status,jdbcType=INTEGER},
+      unique_identifier = #{uniqueIdentifier,jdbcType=VARCHAR},
       create_time = #{createTime,jdbcType=TIMESTAMP},
       update_time = #{updateTime,jdbcType=TIMESTAMP},
-      ontology_id = #{ontologyId,jdbcType=BIGINT},
+      ontology_unique_identifier = #{ontologyUniqueIdentifier,jdbcType=VARCHAR},
       datasource_column_name = #{datasourceColumnName,jdbcType=VARCHAR},
       property_type = #{propertyType,jdbcType=VARCHAR},
       display_name = #{displayName,jdbcType=VARCHAR},

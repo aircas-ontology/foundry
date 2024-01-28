@@ -40,6 +40,7 @@
     select
     <include refid="Base_Column_List" />
     from "ontology_meta"
+    where status = 1
   </select>
 
   <select id="selectByDisplayName" resultType="java.lang.Integer">
@@ -55,13 +56,10 @@
     delete from "ontology_meta"
     where id = #{id,jdbcType=BIGINT}
   </delete>
-  <update id="deleteByIds" parameterType="list">
+  <update id="deleteByUniqueIdentifier" parameterType="java.lang.String">
       update "ontology_meta"
       set status = 0
-      where id in
-      <foreach collection="ids" index="index" item="id" open="(" separator="," close=")">
-        #{id,jdbcType=BIGINT}
-      </foreach>
+      where unique_identifier = #{uniqueIdentifier, jdbcType=VARCHAR}
   </update>
     <insert id="insert" keyColumn="id" keyProperty="id" parameterType="com.aircas.ptr.foundry.model.po.OntologyMeta" useGeneratedKeys="true">
     insert into "ontology_meta" ("status", create_time, update_time, 

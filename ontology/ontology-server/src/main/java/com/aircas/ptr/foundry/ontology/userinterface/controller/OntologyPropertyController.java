@@ -44,9 +44,9 @@ public class OntologyPropertyController {
         return DataResult.ofData(ontologyPropertyService.update(ontologyPropertyBO));
     }
 
-    @GetMapping("/queryById")
-    @ApiOperation(value = "根据id查询一个本体属性")
-    public DataResult<OntologyPropertyVO> getOntologyById(@RequestParam @ApiParam(value = "本体属性id", required = true) Long id) {
-        return DataResult.ofData(ontologyPropertyService.selectById(id));
+    @GetMapping("/queryByOntologyUniqueIdentifier")
+    @ApiOperation(value = "根据本体identifier查询本体属性列表")
+    public DataResult<List<OntologyPropertyVO>> getOntologyById(@RequestParam @ApiParam(value = "本体uniqueIdentifier", required = true) String uniqueIdentifier) {
+        return DataResult.ofData(ontologyPropertyService.selectByOntologyUniqueIdentifier(uniqueIdentifier));
     }
 }

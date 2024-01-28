@@ -15,6 +15,12 @@ public class OntologyProperty implements Serializable {
      */
     private Long id;
 
+
+    /**
+     * 主键自增
+     */
+    private String uniqueIdentifier;
+
     /**
      * 软删除标志位，1有效 0无效
      */
@@ -33,7 +39,7 @@ public class OntologyProperty implements Serializable {
     /**
      * 本体id
      */
-    private Long ontologyId;
+    private String ontologyUniqueIdentifier;
 
     /**
      * 数据源的字段名称，即映射

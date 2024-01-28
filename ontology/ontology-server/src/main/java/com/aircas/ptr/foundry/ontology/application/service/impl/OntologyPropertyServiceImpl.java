@@ -33,7 +33,8 @@ public class OntologyPropertyServiceImpl implements OntologyPropertyService {
         for (OntologyPropertyBO bo : ontologyPropertyBOs) {
             this.add(bo);
         }
-        return 0;
+        //TODO: 这里需要修改返回正确的status
+        return 1;
     }
 
     @Override
@@ -50,8 +51,8 @@ public class OntologyPropertyServiceImpl implements OntologyPropertyService {
     }
 
     @Override
-    public List<OntologyPropertyVO> selectByOntologyId(Long id) {
-        List<OntologyProperty> ontologyProperty = ontologyPropertyMapper.selectByOntologyId(id);
+    public List<OntologyPropertyVO> selectByOntologyUniqueIdentifier(String uniqueIdentifier) {
+        List<OntologyProperty> ontologyProperty = ontologyPropertyMapper.selectByOntologyUniqueIdentifier(uniqueIdentifier);
         List<OntologyPropertyVO> list = new ArrayList<>();
         for (OntologyProperty ontologyPropertyVO : ontologyProperty){
             OntologyPropertyVO propertyVO = new OntologyPropertyVO();
@@ -61,13 +62,13 @@ public class OntologyPropertyServiceImpl implements OntologyPropertyService {
 
         return list;
     }
-
-    @Override
-    public OntologyPropertyVO selectById(Long id) {
-        OntologyProperty ontologyProperty = ontologyPropertyMapper.selectByPrimaryKey(id);
-        OntologyPropertyVO ontologyPropertyVO = new OntologyPropertyVO();
-        BeanUtils.copyProperties(ontologyProperty,ontologyPropertyVO);
-        return ontologyPropertyVO;
-    }
+//
+//    @Override
+//    public OntologyPropertyVO selectById(Long id) {
+//        OntologyProperty ontologyProperty = ontologyPropertyMapper.selectByPrimaryKey(id);
+//        OntologyPropertyVO ontologyPropertyVO = new OntologyPropertyVO();
+//        BeanUtils.copyProperties(ontologyProperty,ontologyPropertyVO);
+//        return ontologyPropertyVO;
+//    }
 
 }

@@ -15,7 +15,7 @@ public interface OntologyPropertyService {
 
     Integer update(OntologyPropertyBO ontologyPropertyBO);
 
-    List<OntologyPropertyVO> selectByOntologyId(Long id);
+    List<OntologyPropertyVO> selectByOntologyUniqueIdentifier(String uniqueIdentifier);
 
-    OntologyPropertyVO selectById(Long id);
+//    OntologyPropertyVO selectById(Long id);
 }

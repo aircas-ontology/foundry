@@ -21,7 +21,7 @@ public interface OntologyMetaService {
 
      Integer add(OntologyMetaBO ontologyMetaBO);
 
-     Integer delete(List<Long> ids);
+     Integer delete(String uniqueIdentifier);
 
      Integer update(OntologyMetaBO ontologyMetaBO);
 

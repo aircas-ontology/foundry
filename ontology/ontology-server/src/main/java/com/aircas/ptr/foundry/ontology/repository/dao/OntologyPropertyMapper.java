@@ -15,7 +15,7 @@ public interface OntologyPropertyMapper {
 
     OntologyProperty selectByPrimaryKey(Long id);
 
-    List<OntologyProperty> selectByOntologyId(Long ontologyId);
+    List<OntologyProperty> selectByOntologyUniqueIdentifier(String uniqueIdentifier);
 
     int updateByPrimaryKeySelective(OntologyProperty record);
 
