@@ -8,12 +8,18 @@
         <artifactId>foundry</artifactId>
         <version>0.0.1-SNAPSHOT</version>
     </parent>
-<!--    <dependencies>-->
+    <dependencies>
 <!--        <dependency>-->
 <!--            <groupId>org.springframework.cloud</groupId>-->
 <!--            <artifactId>spring-cloud-starter-netflix-eureka-server</artifactId>-->
 <!--        </dependency>-->
-<!--    </dependencies>-->
+        <dependency>
+            <groupId>com.aircas.ptr</groupId>
+            <artifactId>common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+    </dependencies>
 
     <build>
         <finalName>ptr_eureka</finalName>

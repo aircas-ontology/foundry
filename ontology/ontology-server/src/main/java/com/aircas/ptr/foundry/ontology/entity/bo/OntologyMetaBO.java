@@ -23,7 +23,6 @@ public class OntologyMetaBO {
      * 图标
      */
     @ApiModelProperty(name = "icon", value = "本体图标", dataType = "java.lang.String", example = "飞机图标base64")
-    @
     private String icon;
 
     /**
@@ -41,8 +40,8 @@ public class OntologyMetaBO {
     /**
      * 本体对应的数据源id，这里的数据源由上层应用指导、治理好的表的访问方式
      */
-    @ApiModelProperty(name = "backingDatasourceId", value = "本体对应的数据源id", dataType = "java.lang.Long", example = "123456789")
-    private Long backingDatasourceId;
+    @ApiModelProperty(name = "backingDatasourceId", value = "本体对应的数据源id", dataType = "java.lang.String", example = "123456789")
+    private String backingDatasourceId;
 
     /**
      * 本体描述

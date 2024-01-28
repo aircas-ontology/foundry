@@ -48,7 +48,7 @@ public class OntologyMeta implements Serializable {
     /**
      * 本体对应的数据源id，这里的数据源由上层应用指导、治理好的表的访问方式
      */
-    private Long backingDatasourceId;
+    private String backingDatasourceId;
 
     /**
      * 本体描述
