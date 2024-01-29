@@ -25,17 +25,17 @@ public class OntologyLinkBO {
      /**
       * 结束本体id
       */
-     private Long ontologyIdTo;
+     private String ontologyUniqueIdentifierTo;
 
      /**
       * 开始本体的某个属性，作为连接键
       */
-     private Long propertyIdFrom;
+     private String propertyUniqueIdentifierFrom;
 
      /**
       * 结束本体的某个属性，作为连接键
       */
-     private Long propertyIdTo;
+     private String propertyUniqueIdentifierTo;
 
      /**
       * 本体间关系的名称

@@ -1,19 +1,28 @@
-package com.aircas.ptr.foundry.model.po;
+package com.aircas.ptr.foundry.ontology.entity.bo;
 
-import java.io.Serializable;
-import java.util.Date;
+
+import com.aircas.ptr.foundry.model.po.OntologyChildLink;
 import lombok.Data;
 
-/**
- * ontology_link
- * @author 
- */
+import java.util.Date;
+
 @Data
-public class OntologyLink implements Serializable {
+public class OntologyLinkGroupBo {
+
     /**
      * 主键自增
      */
     private Long id;
+
+    /**
+     * link的unique identifier
+     */
+    private String uniqueIdentifier;
+
+    /**
+     * link的名称
+     */
+    private String name;
 
     /**
      * 软删除状态位，1有效，0无效
@@ -51,29 +60,20 @@ public class OntologyLink implements Serializable {
     private String propertyUniqueIdentifierTo;
 
     /**
-     * 本体间关系的名称
-     */
-    private String displayName;
-
-    /**
-     * 本体间关系的复数名称
-     */
-    private String pluralDisplayName;
-
-    /**
-     * 可见性，1正常、2隐藏、3突出显示
-     */
-    private Integer visibility;
-
-    /**
      * 实验状态，1激活、2测试中、3废弃
      */
     private Integer experimentalStatus;
 
     /**
-     * 在代码里用的本体名称
+     * 1: 1对1
+     * 2: 1对多
+     * 3: 多对1
+     * 4: 多对多
      */
-    private Integer apiName;
 
-    private static final long serialVersionUID = 1L;
+    private Integer mapping;
+
+    private OntologyChildLinkBo forwardLink;
+
+    private OntologyChildLinkBo backwardLink;
 }

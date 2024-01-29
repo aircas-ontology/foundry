@@ -20,7 +20,7 @@ public interface OntologyLinkMapper {
 
     int updateByPrimaryKey(OntologyLink record);
 
-    int selectByDisplayName(String ontologyUniqueIdentifierFrom, Long ontologyIdTo, String displayName);
+    int selectByDisplayName(String ontologyUniqueIdentifierFrom, String ontologyUniqueIdentifierTo, String displayName);
 
     int deleteByIds(List<Long> ids);
 }

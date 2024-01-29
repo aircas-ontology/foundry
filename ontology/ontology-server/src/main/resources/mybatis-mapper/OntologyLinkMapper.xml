@@ -9,8 +9,8 @@
     <result column="update_time" jdbcType="TIMESTAMP" property="updateTime" />
     <result column="ontology_unique_identifier_from" jdbcType="VARCHAR" property="ontologyUniqueIdentifierFrom" />
     <result column="ontology_id_to" jdbcType="BIGINT" property="ontologyIdTo" />
-    <result column="property_id_from" jdbcType="BIGINT" property="propertyIdFrom" />
-    <result column="property_id_to" jdbcType="BIGINT" property="propertyIdTo" />
+    <result column="property_unique_identifier_from" jdbcType="VARCHAR" property="propertyUniqueIdentifierFrom" />
+    <result column="property_unique_identifier_to" jdbcType="BIGINT" property="propertyUniqueIdentifierTo" />
     <result column="display_name" jdbcType="VARCHAR" property="displayName" />
     <result column="plural_display_name" jdbcType="VARCHAR" property="pluralDisplayName" />
     <result column="visibility" jdbcType="INTEGER" property="visibility" />
@@ -34,10 +34,10 @@
       from "ontology_link"
       where status = 1
       <if test="ontologyUniqueIdentifierFrom != null">
-        and ontology_id_from = #{ontologyUniqueIdentifierFrom}
+        and ontology_unique_Identifier_from = #{ontologyUniqueIdentifierFrom}
       </if>
-      <if test="ontologyIdTo != null">
-        and ontology_id_to = #{ontologyIdTo}
+      <if test="ontologyUniqueIdentifierTo != null">
+        and ontology_unique_identifier_to = #{ontologyUniqueIdentifierTo}
       </if>
       <if test="displayName != null and displayName != ''">
         and display_name = #{displayName}
@@ -62,8 +62,8 @@
       visibility, experimental_status, api_name
       )
     values (#{status,jdbcType=INTEGER}, #{createTime,jdbcType=TIMESTAMP}, #{updateTime,jdbcType=TIMESTAMP}, 
-      #{ontologyUniqueIdentifierFrom,jdbcType=VARCHAR}, #{ontologyIdTo,jdbcType=BIGINT}, #{propertyIdFrom,jdbcType=BIGINT},
-      #{propertyIdTo,jdbcType=BIGINT}, #{displayName,jdbcType=VARCHAR}, #{pluralDisplayName,jdbcType=VARCHAR}, 
+      #{ontologyUniqueIdentifierFrom,jdbcType=VARCHAR}, #{ontologyUniqueIdentifierTo,jdbcType=VARCHAR}, #{propertyUniqueIdentifierFrom,jdbcType=VARCHAR},
+      #{propertyUniqueIdentifierTo,jdbcType=VARCHAR}, #{displayName,jdbcType=VARCHAR}, #{pluralDisplayName,jdbcType=VARCHAR},
       #{visibility,jdbcType=INTEGER}, #{experimentalStatus,jdbcType=INTEGER}, #{apiName,jdbcType=INTEGER}
       )
   </insert>
@@ -82,14 +82,14 @@
       <if test="ontologyUniqueIdentifierFrom != null">
         ontology_unique_identifier_from,
       </if>
-      <if test="ontologyIdTo != null">
-        ontology_id_to,
+      <if test="ontologyUniqueIdentifierTo != null">
+        ontology_unique_identifier_to,
       </if>
-      <if test="propertyIdFrom != null">
-        property_id_from,
+      <if test="propertyUniqueIdentifierFrom != null">
+        property_unique_identifier_from,
       </if>
-      <if test="propertyIdTo != null">
-        property_id_to,
+      <if test="propertyUniqueIdentifierTo != null">
+        property_unique_identifier_to,
       </if>
       <if test="displayName != null">
         display_name,
@@ -120,14 +120,14 @@
       <if test="ontologyUniqueIdentifierFrom != null">
         #{ontologyUniqueIdentifierFrom,jdbcType=VARCHAR},
       </if>
-      <if test="ontologyIdTo != null">
-        #{ontologyIdTo,jdbcType=BIGINT},
+      <if test="ontologyUniqueIdentifierTo != null">
+        #{ontologyUniqueIdentifierTo,jdbcType=VARCHAR},
       </if>
-      <if test="propertyIdFrom != null">
-        #{propertyIdFrom,jdbcType=BIGINT},
+      <if test="propertyUniqueIdentifierFrom != null">
+        #{propertyUniqueIdentifierFrom,jdbcType=VARCHAR},
       </if>
-      <if test="propertyIdTo != null">
-        #{propertyIdTo,jdbcType=BIGINT},
+      <if test="propertyUniqueIdentifierTo != null">
+        #{propertyUniqueIdentifierTo,jdbcType=VARCHAR},
       </if>
       <if test="displayName != null">
         #{displayName,jdbcType=VARCHAR},
@@ -161,14 +161,14 @@
       <if test="ontologyUniqueIdentifierFrom != null">
         ontology_id_from = #{ontologyUniqueIdentifierFrom,jdbcType=VARCHAR},
       </if>
-      <if test="ontologyIdTo != null">
-        ontology_id_to = #{ontologyIdTo,jdbcType=BIGINT},
+      <if test="ontologyUniqueIdentifierTo != null">
+        ontology_id_to = #{ontologyUniqueIdentifierTo,jdbcType=VARCHAR},
       </if>
-      <if test="propertyIdFrom != null">
-        property_id_from = #{propertyIdFrom,jdbcType=BIGINT},
+      <if test="propertyUniqueIdentifierFrom != null">
+        property_unique_identifier_from = #{propertyUniqueIdentifierFrom,jdbcType=VARCHAR},
       </if>
       <if test="propertyIdTo != null">
-        property_id_to = #{propertyIdTo,jdbcType=BIGINT},
+        property_unique_identifier_to = #{propertyUniqueIdentifierTo,jdbcType=VARCHAR},
       </if>
       <if test="displayName != null">
         display_name = #{displayName,jdbcType=VARCHAR},
@@ -194,9 +194,9 @@
       create_time = #{createTime,jdbcType=TIMESTAMP},
       update_time = #{updateTime,jdbcType=TIMESTAMP},
       ontology_id_from = #{ontologyUniqueIdentifierFrom,jdbcType=VARCHAR},
-      ontology_id_to = #{ontologyIdTo,jdbcType=BIGINT},
-      property_id_from = #{propertyIdFrom,jdbcType=BIGINT},
-      property_id_to = #{propertyIdTo,jdbcType=BIGINT},
+      ontology_id_to = #{ontologyUniqueIdentifierTo,jdbcType=VARCHAR},
+      property_unique_identifier_from = #{propertyUniqueIdentifierFrom,jdbcType=VARCHAR},
+      property_unique_identifier_to = #{propertyUniqueIdentifierTo,jdbcType=VARCHAR},
       display_name = #{displayName,jdbcType=VARCHAR},
       plural_display_name = #{pluralDisplayName,jdbcType=VARCHAR},
       visibility = #{visibility,jdbcType=INTEGER},
