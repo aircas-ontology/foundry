@@ -2,6 +2,7 @@ package com.aircas.ptr.foundry.ontology.application.service.impl;
 
 import com.aircas.ptr.foundry.common.exception.DuplicatedDataException;
 import com.aircas.ptr.foundry.model.po.OntologyLink;
+import com.aircas.ptr.foundry.model.po.OntologyLinkGroup;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyLinkService;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyLinkBO;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyLinkGroupBo;
@@ -28,8 +29,39 @@ public class OntologyLinkServiceImpl implements OntologyLinkService {
     private OntologyLinkMapper ontologyLinkMapper;
 
 
+//    @Resource
+//    private OntologyLinkGroupMapper ontologyLinkGroupMapper;
+//
+//    @Resource
+//    private OntologyChildLinkMapper ontologyChildLinkMapper;
+
     @Override
     public Integer add(OntologyLinkGroupBo ontologyLinkGroupBo) {
+//        int count = ontologyLinkMapper.selectByDisplayName(ontologyLinkBO.getOntologyUniqueIdentifierFrom(), ontologyLinkBO.getOntologyUniqueIdentifierTo(), ontologyLinkBO.getDisplayName());
+//        if (count != 0) {
+//            throw new DuplicatedDataException("本体间关系名称已存在");
+//        }
+
+//        OntologyLinkGroup ontologyLinkGroup = new OntologyLinkGroup();
+//        BeanUtils.copyProperties(ontologyLinkGroupBo, ontologyLinkGroup);
+//        ontologyLinkGroup.setStatus(1);
+//        ontologyLinkGroup.setCreateTime(new Date());
+//        int count = ontologyChildLinkMapper.insert(ontologyLinkGroup.forwardLink);
+//        if (count == 0) {
+//            return 0;
+//        }
+//        count = ontologyChildLinkMapper.insert(ontologyLinkGroup.backwardLink);
+//        if (count == 0) {
+//            return 0;
+//        }
+//
+//        count = ontologyLinkGroupMapper.insert(ontologyLinkGroup);
+        return 0;
+    }
+
+
+//    @Override
+//    public Integer add(OntologyLinkGroupBo ontologyLinkGroupBo) {
 //        int count = ontologyLinkMapper.selectByDisplayName(ontologyLinkBO.getOntologyUniqueIdentifierFrom(), ontologyLinkBO.getOntologyUniqueIdentifierTo(), ontologyLinkBO.getDisplayName());
 //        if (count != 0) {
 //            throw new DuplicatedDataException("本体间关系名称已存在");
@@ -41,8 +73,7 @@ public class OntologyLinkServiceImpl implements OntologyLinkService {
 //        ontologyLink.setCreateTime(new Date());
 //        count = ontologyLinkMapper.insertSelective(ontologyLink);
 //        return count;
-        return 0;
-    }
+//    }
 
     @Override
     public Integer delete(List<Long> ids) {
