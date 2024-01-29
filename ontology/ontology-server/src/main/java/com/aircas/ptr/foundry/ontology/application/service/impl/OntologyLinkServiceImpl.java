@@ -29,7 +29,7 @@ public class OntologyLinkServiceImpl implements OntologyLinkService {
 
     @Override
     public Integer add(OntologyLinkBO ontologyLinkBO) {
-        int count = ontologyLinkMapper.selectByDisplayName(ontologyLinkBO.getOntologyIdFrom(), ontologyLinkBO.getOntologyIdTo(), ontologyLinkBO.getDisplayName());
+        int count = ontologyLinkMapper.selectByDisplayName(ontologyLinkBO.getOntologyUniqueIdentifierFrom(), ontologyLinkBO.getOntologyIdTo(), ontologyLinkBO.getDisplayName());
         if (count != 0) {
             throw new DuplicatedDataException("本体间关系名称已存在");
         }

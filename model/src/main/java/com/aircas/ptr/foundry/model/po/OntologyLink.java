@@ -31,9 +31,9 @@ public class OntologyLink implements Serializable {
     private Date updateTime;
 
     /**
-     * 开始本体id
+     * 开始本体unique identifier
      */
-    private Long ontologyIdFrom;
+    private String ontologyUniqueIdentifierFrom;
 
     /**
      * 结束本体id

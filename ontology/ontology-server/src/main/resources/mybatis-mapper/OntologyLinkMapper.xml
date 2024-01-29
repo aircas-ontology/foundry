@@ -7,7 +7,7 @@
     <result column="status" jdbcType="INTEGER" property="status" />
     <result column="create_time" jdbcType="TIMESTAMP" property="createTime" />
     <result column="update_time" jdbcType="TIMESTAMP" property="updateTime" />
-    <result column="ontology_id_from" jdbcType="BIGINT" property="ontologyIdFrom" />
+    <result column="ontology_unique_identifier_from" jdbcType="VARCHAR" property="ontologyUniqueIdentifierFrom" />
     <result column="ontology_id_to" jdbcType="BIGINT" property="ontologyIdTo" />
     <result column="property_id_from" jdbcType="BIGINT" property="propertyIdFrom" />
     <result column="property_id_to" jdbcType="BIGINT" property="propertyIdTo" />
@@ -33,8 +33,8 @@
       count(1)
       from "ontology_link"
       where status = 1
-      <if test="ontologyIdFrom != null">
-        and ontology_id_from = #{ontologyIdFrom}
+      <if test="ontologyUniqueIdentifierFrom != null">
+        and ontology_id_from = #{ontologyUniqueIdentifierFrom}
       </if>
       <if test="ontologyIdTo != null">
         and ontology_id_to = #{ontologyIdTo}
@@ -62,7 +62,7 @@
       visibility, experimental_status, api_name
       )
     values (#{status,jdbcType=INTEGER}, #{createTime,jdbcType=TIMESTAMP}, #{updateTime,jdbcType=TIMESTAMP}, 
-      #{ontologyIdFrom,jdbcType=BIGINT}, #{ontologyIdTo,jdbcType=BIGINT}, #{propertyIdFrom,jdbcType=BIGINT}, 
+      #{ontologyUniqueIdentifierFrom,jdbcType=VARCHAR}, #{ontologyIdTo,jdbcType=BIGINT}, #{propertyIdFrom,jdbcType=BIGINT},
       #{propertyIdTo,jdbcType=BIGINT}, #{displayName,jdbcType=VARCHAR}, #{pluralDisplayName,jdbcType=VARCHAR}, 
       #{visibility,jdbcType=INTEGER}, #{experimentalStatus,jdbcType=INTEGER}, #{apiName,jdbcType=INTEGER}
       )
@@ -79,8 +79,8 @@
       <if test="updateTime != null">
         update_time,
       </if>
-      <if test="ontologyIdFrom != null">
-        ontology_id_from,
+      <if test="ontologyUniqueIdentifierFrom != null">
+        ontology_unique_identifier_from,
       </if>
       <if test="ontologyIdTo != null">
         ontology_id_to,
@@ -117,8 +117,8 @@
       <if test="updateTime != null">
         #{updateTime,jdbcType=TIMESTAMP},
       </if>
-      <if test="ontologyIdFrom != null">
-        #{ontologyIdFrom,jdbcType=BIGINT},
+      <if test="ontologyUniqueIdentifierFrom != null">
+        #{ontologyUniqueIdentifierFrom,jdbcType=VARCHAR},
       </if>
       <if test="ontologyIdTo != null">
         #{ontologyIdTo,jdbcType=BIGINT},
@@ -158,8 +158,8 @@
       <if test="updateTime != null">
         update_time = #{updateTime,jdbcType=TIMESTAMP},
       </if>
-      <if test="ontologyIdFrom != null">
-        ontology_id_from = #{ontologyIdFrom,jdbcType=BIGINT},
+      <if test="ontologyUniqueIdentifierFrom != null">
+        ontology_id_from = #{ontologyUniqueIdentifierFrom,jdbcType=VARCHAR},
       </if>
       <if test="ontologyIdTo != null">
         ontology_id_to = #{ontologyIdTo,jdbcType=BIGINT},
@@ -193,7 +193,7 @@
     set "status" = #{status,jdbcType=INTEGER},
       create_time = #{createTime,jdbcType=TIMESTAMP},
       update_time = #{updateTime,jdbcType=TIMESTAMP},
-      ontology_id_from = #{ontologyIdFrom,jdbcType=BIGINT},
+      ontology_id_from = #{ontologyUniqueIdentifierFrom,jdbcType=VARCHAR},
       ontology_id_to = #{ontologyIdTo,jdbcType=BIGINT},
       property_id_from = #{propertyIdFrom,jdbcType=BIGINT},
       property_id_to = #{propertyIdTo,jdbcType=BIGINT},

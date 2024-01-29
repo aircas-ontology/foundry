@@ -35,7 +35,7 @@ public class OntologyLinkVO {
      /**
       * 开始本体id
       */
-     private Long ontologyIdFrom;
+     private String ontologyUniqueIdentifierFrom;
 
      /**
       * 结束本体id
