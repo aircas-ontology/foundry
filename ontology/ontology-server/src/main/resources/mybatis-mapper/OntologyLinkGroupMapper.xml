@@ -4,6 +4,7 @@
   <resultMap id="BaseResultMap" type="com.aircas.ptr.foundry.model.po.OntologyLinkGroup">
     <!-- @mbg.generated: generated automatically, do not modify! -->
     <id column="id" jdbcType="BIGINT" property="id" />
+    <id column="unique_identifier" jdbcType="VARCHAR" property="uniqueIdentifier" />
     <result column="status" jdbcType="INTEGER" property="status" />
     <result column="create_time" jdbcType="TIMESTAMP" property="createTime" />
     <result column="update_time" jdbcType="TIMESTAMP" property="updateTime" />
@@ -14,14 +15,14 @@
     <result column="name" jdbcType="VARCHAR" property="name" />
     <result column="experimental_status" jdbcType="INTEGER" property="experimentalStatus" />
     <result column="mapping" jdbcType="INTEGER" property="mapping" />
-    <result column="foward_child_link_id" jdbcType="INTEGER" property="fowardChildLinkId" />
+    <result column="forward_child_link_id" jdbcType="INTEGER" property="forwardChildLinkId" />
     <result column="backward_child_link_id" jdbcType="INTEGER" property="backwardChildLinkId" />
   </resultMap>
   <sql id="Base_Column_List">
     <!-- @mbg.generated: generated automatically, do not modify! -->
-    id, "status", create_time, update_time, ontology_unique_identifier_from, ontology_unique_identifier_to,
+    id, unique_identifier, "status", create_time, update_time, ontology_unique_identifier_from, ontology_unique_identifier_to,
     property_unique_identifier_from, property_unique_identifier_to, "name", experimental_status,
-    mapping, foward_child_link_id, backward_child_link_id
+    mapping, forward_child_link_id, backward_child_link_id
   </sql>
   <select id="selectByPrimaryKey" parameterType="java.lang.Long" resultMap="BaseResultMap">
     <!-- @mbg.generated: generated automatically, do not modify! -->
@@ -30,6 +31,24 @@
     from ontology_link_group
     where id = #{id,jdbcType=BIGINT}
   </select>
+
+  <select id="selectByOntologyUniqueIdentifierFrom" parameterType="java.lang.String" resultMap="BaseResultMap">
+    <!-- @mbg.generated: generated automatically, do not modify! -->
+    select
+    <include refid="Base_Column_List" />
+    from ontology_link_group
+    where ontology_unique_identifier_from = #{uniqueIdentifier,jdbcType=VARCHAR}
+  </select>
+
+  <select id="selectByOntologyUniqueIdentifierTo" parameterType="java.lang.String" resultMap="BaseResultMap">
+    <!-- @mbg.generated: generated automatically, do not modify! -->
+    select
+    <include refid="Base_Column_List" />
+    from ontology_link_group
+    where ontology_unique_identifier_to = #{uniqueIdentifier,jdbcType=VARCHAR}
+  </select>
+
+
   <delete id="deleteByPrimaryKey" parameterType="java.lang.Long">
     <!-- @mbg.generated: generated automatically, do not modify! -->
     delete from ontology_link_group
@@ -37,17 +56,17 @@
   </delete>
   <insert id="insert" parameterType="com.aircas.ptr.foundry.model.po.OntologyLinkGroup">
     <!-- @mbg.generated: generated automatically, do not modify! -->
-    insert into ontology_link_group ("status", create_time,
+    insert into ontology_link_group (unique_identifier, "status", create_time,
       update_time, ontology_unique_identifier_from, 
       ontology_unique_identifier_to, property_unique_identifier_from, 
       property_unique_identifier_to, "name", experimental_status,
-      mapping, foward_child_link_id, backward_child_link_id
+      mapping, forward_child_link_id, backward_child_link_id
       )
-    values (#{status,jdbcType=INTEGER}, #{createTime,jdbcType=TIMESTAMP},
+    values (#{uniqueIdentifier,jdbcType=VARCHAR}, #{status,jdbcType=INTEGER}, #{createTime,jdbcType=TIMESTAMP},
       #{updateTime,jdbcType=TIMESTAMP}, #{ontologyUniqueIdentifierFrom,jdbcType=VARCHAR}, 
       #{ontologyUniqueIdentifierTo,jdbcType=VARCHAR}, #{propertyUniqueIdentifierFrom,jdbcType=VARCHAR}, 
       #{propertyUniqueIdentifierTo,jdbcType=VARCHAR}, #{name,jdbcType=VARCHAR}, #{experimentalStatus,jdbcType=INTEGER}, 
-      #{mapping,jdbcType=INTEGER}, #{fowardChildLinkId,jdbcType=INTEGER}, #{backwardChildLinkId,jdbcType=INTEGER}
+      #{mapping,jdbcType=INTEGER}, #{forwardChildLinkId,jdbcType=INTEGER}, #{backwardChildLinkId,jdbcType=INTEGER}
       )
   </insert>
   <insert id="insertSelective" parameterType="com.aircas.ptr.foundry.model.po.OntologyLinkGroup">
@@ -55,6 +74,9 @@
     insert into ontology_link_group
     <trim prefix="(" suffix=")" suffixOverrides=",">
       <if test="id != null">
+        id,
+      </if>
+      <if test="uniqueIdentifier != null">
         id,
       </if>
       <if test="status != null">
@@ -87,8 +109,8 @@
       <if test="mapping != null">
         mapping,
       </if>
-      <if test="fowardChildLinkId != null">
-        foward_child_link_id,
+      <if test="forwardChildLinkId != null">
+        forward_child_link_id,
       </if>
       <if test="backwardChildLinkId != null">
         backward_child_link_id,
@@ -97,6 +119,9 @@
     <trim prefix="values (" suffix=")" suffixOverrides=",">
       <if test="id != null">
         #{id,jdbcType=BIGINT},
+      </if>
+      <if test="uniqueIdentifier != null">
+        #{uniqueIdentifier,jdbcType=VARCHAR},
       </if>
       <if test="status != null">
         #{status,jdbcType=INTEGER},
@@ -128,8 +153,8 @@
       <if test="mapping != null">
         #{mapping,jdbcType=INTEGER},
       </if>
-      <if test="fowardChildLinkId != null">
-        #{fowardChildLinkId,jdbcType=INTEGER},
+      <if test="forwardChildLinkId != null">
+        #{forwardChildLinkId,jdbcType=INTEGER},
       </if>
       <if test="backwardChildLinkId != null">
         #{backwardChildLinkId,jdbcType=INTEGER},
@@ -170,8 +195,8 @@
       <if test="mapping != null">
         mapping = #{mapping,jdbcType=INTEGER},
       </if>
-      <if test="fowardChildLinkId != null">
-        foward_child_link_id = #{fowardChildLinkId,jdbcType=INTEGER},
+      <if test="forwardChildLinkId != null">
+        forward_child_link_id = #{forwardChildLinkId,jdbcType=INTEGER},
       </if>
       <if test="backwardChildLinkId != null">
         backward_child_link_id = #{backwardChildLinkId,jdbcType=INTEGER},
@@ -192,7 +217,7 @@
       "name" = #{name,jdbcType=VARCHAR},
       experimental_status = #{experimentalStatus,jdbcType=INTEGER},
       mapping = #{mapping,jdbcType=INTEGER},
-      foward_child_link_id = #{fowardChildLinkId,jdbcType=INTEGER},
+      forward_child_link_id = #{forwardChildLinkId,jdbcType=INTEGER},
       backward_child_link_id = #{backwardChildLinkId,jdbcType=INTEGER}
     where id = #{id,jdbcType=BIGINT}
   </update>

@@ -1,8 +1,9 @@
 package com.aircas.ptr.foundry.ontology.entity.bo;
 
 
-import com.aircas.ptr.foundry.model.po.OntologyChildLink;
+import com.aircas.ptr.foundry.model.po.OntologyLinkGroup;
 import lombok.Data;
+import org.springframework.beans.BeanUtils;
 
 import java.util.Date;
 
@@ -76,4 +77,35 @@ public class OntologyLinkGroupBo {
     private OntologyChildLinkBo forwardLink;
 
     private OntologyChildLinkBo backwardLink;
+
+    public OntologyLinkGroupBo normalized() {
+        if (propertyUniqueIdentifierFrom.toUpperCase().compareTo(propertyUniqueIdentifierTo.toUpperCase()) >= 0) {
+            return this;
+        } else {
+            return revertForwardToBackward();
+        }
+    }
+
+    private OntologyLinkGroupBo revertForwardToBackward() {
+        OntologyLinkGroupBo ontologyLinkGroupBo = new OntologyLinkGroupBo();
+        BeanUtils.copyProperties(this, ontologyLinkGroupBo);
+        ontologyLinkGroupBo.forwardLink = this.backwardLink;
+        ontologyLinkGroupBo.backwardLink = this.forwardLink;
+        ontologyLinkGroupBo.ontologyUniqueIdentifierFrom = this.ontologyUniqueIdentifierTo;
+        ontologyLinkGroupBo.ontologyUniqueIdentifierTo = this.ontologyUniqueIdentifierFrom;
+        ontologyLinkGroupBo.propertyUniqueIdentifierFrom = this.propertyUniqueIdentifierTo;
+        ontologyLinkGroupBo.propertyUniqueIdentifierTo = this.propertyUniqueIdentifierFrom;
+        ontologyLinkGroupBo.mapping = revertMapping(this.mapping);
+        return ontologyLinkGroupBo;
+    }
+
+    private static Integer revertMapping (int mapping) {
+        switch (mapping) {
+            case 1: return 1;
+            case 2: return 3;
+            case 3: return 2;
+            case 4: return 4;
+        }
+        return 0;
+    }
 }

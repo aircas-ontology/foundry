@@ -3,6 +3,8 @@ package com.aircas.ptr.foundry.ontology.repository.dao;
 import com.aircas.ptr.foundry.model.po.OntologyLinkGroup;
 import org.apache.ibatis.annotations.Mapper;
 
+import java.util.List;
+
 
 @Mapper
 public interface OntologyLinkGroupMapper {
@@ -25,6 +27,16 @@ public interface OntologyLinkGroupMapper {
      * @mbg.generated generated automatically, do not modify!
      */
     OntologyLinkGroup selectByPrimaryKey(Long id);
+
+    /**
+     * @mbg.generated generated automatically, do not modify!
+     */
+    List<OntologyLinkGroup> selectByOntologyUniqueIdentifierFrom(String uniqueIdentifier);
+
+    /**
+     * @mbg.generated generated automatically, do not modify!
+     */
+    List<OntologyLinkGroup> selectByOntologyUniqueIdentifierTo(String uniqueIdentifier);
 
     /**
      * @mbg.generated generated automatically, do not modify!

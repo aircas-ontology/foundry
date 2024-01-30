@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.ontology.entity.bo;
 
 import lombok.Data;
+import org.springframework.beans.BeanUtils;
 
 import java.util.Date;
 
@@ -85,4 +86,5 @@ public class OntologyPropertyBO {
      * 数据源ID
      */
     private String datasourceId;
+
 }

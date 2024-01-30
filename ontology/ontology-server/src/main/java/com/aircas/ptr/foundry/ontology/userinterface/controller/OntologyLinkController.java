@@ -1,10 +1,12 @@
 package com.aircas.ptr.foundry.ontology.userinterface.controller;
 
 import com.aircas.ptr.foundry.common.base.DataResult;
+import com.aircas.ptr.foundry.model.po.OntologyLinkGroup;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyLinkService;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyLinkBO;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyLinkGroupBo;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyMetaBO;
+import com.aircas.ptr.foundry.ontology.entity.vo.OntologyLinkGroupVO;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyLinkVO;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyMetaVO;
 import io.swagger.annotations.Api;
@@ -35,12 +37,7 @@ public class OntologyLinkController {
         return DataResult.ofData(ontologyLinkService.add(ontologyLinkGroupBo));
     }
 
-//    @PostMapping("/add")
-//    @ApiOperation(value = "新增本体之间的关系")
-//    public DataResult<Integer> add(@RequestBody OntologyLinkBO ontologyLinkBO) {
-//        return DataResult.ofData(ontologyLinkService.add(ontologyLinkBO));
-//    }
-//
+
 //    @DeleteMapping("/delete")
 //    @ApiOperation(value = "删除本体之间的关系")
 //    public DataResult<Integer> delete(@RequestParam List<Long> ids) {
@@ -58,4 +55,10 @@ public class OntologyLinkController {
 //    public DataResult<OntologyLinkVO> getOntologyLinkById(@RequestParam @ApiParam(value = "本体间关系的id", required = true) Long id) {
 //        return DataResult.ofData(ontologyLinkService.getOntologyLinkById(id));
 //    }
+
+    @GetMapping("/queryByOntologyUniqueIdentifier")
+    @ApiOperation(value = "根据本体unique identifier 查询关系")
+    public DataResult<List<OntologyLinkGroupVO>> getLinkByOntologyUniqueIdentifier(@RequestParam @ApiParam(value = "本体id", required = true) String uniqueIdentifier) {
+        return DataResult.ofData(ontologyLinkService.getLinkByOntologyUniqueIdentifier(uniqueIdentifier));
+    }
 }
