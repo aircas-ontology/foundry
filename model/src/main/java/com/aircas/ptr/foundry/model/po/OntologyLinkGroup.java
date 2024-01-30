@@ -1,6 +1,8 @@
 package com.aircas.ptr.foundry.model.po;
 
 import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
 
 import java.io.Serializable;
 import java.util.Date;
@@ -72,9 +74,9 @@ public class OntologyLinkGroup implements Serializable {
 
     private Integer mapping;
 
-    private OntologyChildLink forwardLink;
+    private int fowardChildLinkId;
 
-    private OntologyChildLink backwardLink;
+    private int backwardChildLinkId;
 
     private static final long serialVersionUID = 1L;
 }

@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.aircas.ptr.foundry.ontology.repository.dao.OntologyChildLinkMapper">
+  <resultMap id="BaseResultMap" type="com.aircas.ptr.foundry.model.po.OntologyChildLink">
+    <!-- @mbg.generated: generated automatically, do not modify! -->
+    <id column="id" jdbcType="BIGINT" property="id" />
+    <result column="create_time" jdbcType="TIMESTAMP" property="createTime" />
+    <result column="update_time" jdbcType="TIMESTAMP" property="updateTime" />
+    <result column="display_name" jdbcType="VARCHAR" property="displayName" />
+    <result column="visibility" jdbcType="INTEGER" property="visibility" />
+    <result column="api_name" jdbcType="VARCHAR" property="apiName" />
+  </resultMap>
+  <sql id="Base_Column_List">
+    <!-- @mbg.generated: generated automatically, do not modify! -->
+    id, create_time, update_time, display_name, visibility, api_name
+  </sql>
+  <select id="selectByPrimaryKey" parameterType="java.lang.Long" resultMap="BaseResultMap">
+    <!-- @mbg.generated: generated automatically, do not modify! -->
+    select 
+    <include refid="Base_Column_List" />
+    from ontology_child_link
+    where id = #{id,jdbcType=BIGINT}
+  </select>
+  <delete id="deleteByPrimaryKey" parameterType="java.lang.Long">
+    <!-- @mbg.generated: generated automatically, do not modify! -->
+    delete from ontology_child_link
+    where id = #{id,jdbcType=BIGINT}
+  </delete>
+  <insert id="insert"  keyColumn="id" keyProperty="id" parameterType="com.aircas.ptr.foundry.model.po.OntologyChildLink" useGeneratedKeys="true">
+    <!-- @mbg.generated: generated automatically, do not modify! -->
+    insert into ontology_child_link (create_time, update_time,
+      display_name, visibility, api_name)
+    values ( #{createTime,jdbcType=TIMESTAMP}, #{updateTime,jdbcType=TIMESTAMP},
+      #{displayName,jdbcType=VARCHAR}, #{visibility,jdbcType=INTEGER},
+      #{apiName,jdbcType=INTEGER})
+  </insert>
+  <insert id="insertSelective" parameterType="com.aircas.ptr.foundry.model.po.OntologyChildLink">
+    <!-- @mbg.generated: generated automatically, do not modify! -->
+    insert into ontology_child_link
+    <trim prefix="(" suffix=")" suffixOverrides=",">
+      <if test="id != null">
+        id,
+      </if>
+      <if test="createTime != null">
+        create_time,
+      </if>
+      <if test="updateTime != null">
+        update_time,
+      </if>
+      <if test="displayName != null">
+        display_name,
+      </if>
+      <if test="visibility != null">
+        visibility,
+      </if>
+      <if test="apiName != null">
+        api_name,
+      </if>
+    </trim>
+    <trim prefix="values (" suffix=")" suffixOverrides=",">
+      <if test="id != null">
+        #{id,jdbcType=BIGINT},
+      </if>
+      <if test="createTime != null">
+        #{createTime,jdbcType=TIMESTAMP},
+      </if>
+      <if test="updateTime != null">
+        #{updateTime,jdbcType=TIMESTAMP},
+      </if>
+      <if test="displayName != null">
+        #{displayName,jdbcType=VARCHAR},
+      </if>
+      <if test="visibility != null">
+        #{visibility,jdbcType=INTEGER},
+      </if>
+      <if test="apiName != null">
+        #{apiName,jdbcType=VARCHAR},
+      </if>
+    </trim>
+  </insert>
+  <update id="updateByPrimaryKeySelective" parameterType="com.aircas.ptr.foundry.model.po.OntologyChildLink">
+    <!-- @mbg.generated: generated automatically, do not modify! -->
+    update ontology_child_link
+    <set>
+      <if test="createTime != null">
+        create_time = #{createTime,jdbcType=TIMESTAMP},
+      </if>
+      <if test="updateTime != null">
+        update_time = #{updateTime,jdbcType=TIMESTAMP},
+      </if>
+      <if test="displayName != null">
+        display_name = #{displayName,jdbcType=VARCHAR},
+      </if>
+      <if test="visibility != null">
+        visibility = #{visibility,jdbcType=INTEGER},
+      </if>
+      <if test="apiName != null">
+        api_name = #{apiName,jdbcType=VARCHAR},
+      </if>
+    </set>
+    where id = #{id,jdbcType=BIGINT}
+  </update>
+  <update id="updateByPrimaryKey" parameterType="com.aircas.ptr.foundry.model.po.OntologyChildLink">
+    <!-- @mbg.generated: generated automatically, do not modify! -->
+    update ontology_child_link
+    set create_time = #{createTime,jdbcType=TIMESTAMP},
+      update_time = #{updateTime,jdbcType=TIMESTAMP},
+      display_name = #{displayName,jdbcType=VARCHAR},
+      visibility = #{visibility,jdbcType=INTEGER},
+      api_name = #{apiName,jdbcType=VARCHAR}
+    where id = #{id,jdbcType=BIGINT}
+  </update>
+</mapper>

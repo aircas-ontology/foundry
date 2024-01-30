@@ -1,13 +1,15 @@
 package com.aircas.ptr.foundry.ontology.application.service.impl;
 
 import com.aircas.ptr.foundry.common.exception.DuplicatedDataException;
+import com.aircas.ptr.foundry.model.po.OntologyChildLink;
 import com.aircas.ptr.foundry.model.po.OntologyLink;
 import com.aircas.ptr.foundry.model.po.OntologyLinkGroup;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyLinkService;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyLinkBO;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyLinkGroupBo;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyLinkVO;
-import com.aircas.ptr.foundry.ontology.entity.vo.OntologyMetaVO;
+import com.aircas.ptr.foundry.ontology.repository.dao.OntologyChildLinkMapper;
+import com.aircas.ptr.foundry.ontology.repository.dao.OntologyLinkGroupMapper;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyLinkMapper;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
@@ -28,34 +30,34 @@ public class OntologyLinkServiceImpl implements OntologyLinkService {
     @Resource
     private OntologyLinkMapper ontologyLinkMapper;
 
+    @Resource
+    private OntologyLinkGroupMapper ontologyLinkGroupMapper;
 
-//    @Resource
-//    private OntologyLinkGroupMapper ontologyLinkGroupMapper;
-//
-//    @Resource
-//    private OntologyChildLinkMapper ontologyChildLinkMapper;
+    @Resource
+    private OntologyChildLinkMapper ontologyChildLinkMapper;
 
     @Override
     public Integer add(OntologyLinkGroupBo ontologyLinkGroupBo) {
-//        int count = ontologyLinkMapper.selectByDisplayName(ontologyLinkBO.getOntologyUniqueIdentifierFrom(), ontologyLinkBO.getOntologyUniqueIdentifierTo(), ontologyLinkBO.getDisplayName());
-//        if (count != 0) {
-//            throw new DuplicatedDataException("本体间关系名称已存在");
-//        }
+        OntologyChildLink forwardLink = new OntologyChildLink();
+        BeanUtils.copyProperties(ontologyLinkGroupBo.getForwardLink(), forwardLink);
+        int count = ontologyChildLinkMapper.insert(forwardLink);
+        if (count == 0) {
+            return 0;
+        }
 
-//        OntologyLinkGroup ontologyLinkGroup = new OntologyLinkGroup();
-//        BeanUtils.copyProperties(ontologyLinkGroupBo, ontologyLinkGroup);
-//        ontologyLinkGroup.setStatus(1);
-//        ontologyLinkGroup.setCreateTime(new Date());
-//        int count = ontologyChildLinkMapper.insert(ontologyLinkGroup.forwardLink);
-//        if (count == 0) {
-//            return 0;
-//        }
-//        count = ontologyChildLinkMapper.insert(ontologyLinkGroup.backwardLink);
-//        if (count == 0) {
-//            return 0;
-//        }
-//
-//        count = ontologyLinkGroupMapper.insert(ontologyLinkGroup);
+        OntologyChildLink backwardLink = new OntologyChildLink();
+        BeanUtils.copyProperties(ontologyLinkGroupBo.getBackwardLink(), backwardLink);
+        count = ontologyChildLinkMapper.insert(backwardLink);
+        if (count == 0) {
+            return 0;
+        }
+
+        OntologyLinkGroup ontologyLinkGroup = new OntologyLinkGroup();
+        BeanUtils.copyProperties(ontologyLinkGroupBo, ontologyLinkGroup);
+        ontologyLinkGroup.setStatus(1);
+        ontologyLinkGroup.setCreateTime(new Date());
+
+        count = ontologyLinkGroupMapper.insert(ontologyLinkGroup);
         return 0;
     }
 
