@@ -84,13 +84,13 @@ public class OntologyLinkServiceImpl implements OntologyLinkService {
 
             OntologyChildLink forwardChildLink = ontologyChildLinkMapper.selectByPrimaryKey(linkGroup.getForwardChildLinkId());
             OntologyChildLinkVO forwardChildLinkVO = new OntologyChildLinkVO();
-            BeanUtils.copyProperties(forwardChildLinkVO, forwardChildLink);
+            BeanUtils.copyProperties(forwardChildLink, forwardChildLinkVO);
             linkGroupVO.setForwardLink(forwardChildLinkVO);
 
             OntologyChildLink backwardChildLink = ontologyChildLinkMapper.selectByPrimaryKey(linkGroup.getBackwardChildLinkId());
             OntologyChildLinkVO backwardChildLinkVO = new OntologyChildLinkVO();
-            BeanUtils.copyProperties(backwardChildLinkVO, backwardChildLink);
-            linkGroupVO.setForwardLink(backwardChildLinkVO);
+            BeanUtils.copyProperties(backwardChildLink, backwardChildLinkVO);
+            linkGroupVO.setBackwardLink(backwardChildLinkVO);
 
             result.add(linkGroupVO);
         }
