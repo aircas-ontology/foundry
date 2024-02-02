@@ -31,6 +31,12 @@ public class OntologyPropertyController {
         return DataResult.ofData(ontologyPropertyService.batchAdd(ontologyPropertyBOs));
     }
 
+    @PostMapping("/batch_update")
+    @ApiOperation(value = "更新多个本体属性")
+    public DataResult<Integer> update(@RequestBody List<OntologyPropertyBO> ontologyPropertyBOs) {
+        return DataResult.ofData(ontologyPropertyService.batchUpdate(ontologyPropertyBOs));
+    }
+
 
     @DeleteMapping("/delete")
     @ApiOperation(value = "删除本体属性")

@@ -11,11 +11,15 @@ public interface OntologyPropertyService {
 
     Integer batchAdd(List<OntologyPropertyBO> ontologyPropertyBO);
 
+    Integer batchUpdate(List<OntologyPropertyBO> ontologyPropertyBO);
+
     Integer delete(Long id);
 
     Integer update(OntologyPropertyBO ontologyPropertyBO);
 
     List<OntologyPropertyVO> selectByOntologyUniqueIdentifier(String uniqueIdentifier);
+
+    OntologyPropertyVO selectByUniqueIdentifier(String uniqueIdentifier);
 
 //    OntologyPropertyVO selectById(Long id);
 }

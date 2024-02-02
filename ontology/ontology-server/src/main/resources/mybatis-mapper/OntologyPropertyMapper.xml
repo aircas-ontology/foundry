@@ -36,6 +36,15 @@
     <include refid="Base_Column_List" />
     from "ontology_property"
     where ontology_unique_identifier = #{uniqueIdentifier,jdbcType=VARCHAR}
+    and status = 1
+  </select>
+
+  <select id="selectByUniqueIdentifier" resultType="com.aircas.ptr.foundry.model.po.OntologyProperty">
+    select
+    <include refid="Base_Column_List" />
+    from "ontology_property"
+    where unique_identifier = #{uniqueIdentifier,jdbcType=VARCHAR}
+    and status = 1
   </select>
 
   <delete id="deleteByPrimaryKey" parameterType="java.lang.Long">
@@ -148,12 +157,9 @@
       </if>
     </trim>
   </insert>
-  <update id="updateByPrimaryKeySelective" parameterType="com.aircas.ptr.foundry.model.po.OntologyProperty">
+  <update id="updateSelective" parameterType="com.aircas.ptr.foundry.model.po.OntologyProperty">
     update "ontology_property"
     <set>
-      <if test="uniqueIdentifier != null">
-        "status" = #{uniqueIdentifier,jdbcType=VARCHAR},
-      </if>
       <if test="status != null">
         "status" = #{status,jdbcType=INTEGER},
       </if>
@@ -197,12 +203,11 @@
         datasource_id = #{datasourceId,jdbcType=VARCHAR},
       </if>
     </set>
-    where id = #{id,jdbcType=BIGINT}
+    where unique_Identifier = #{uniqueIdentifier,jdbcType=VARCHAR}
   </update>
-  <update id="updateByPrimaryKey" parameterType="com.aircas.ptr.foundry.model.po.OntologyProperty">
+  <update id="updateByUniqueIdentifier" parameterType="com.aircas.ptr.foundry.model.po.OntologyProperty">
     update "ontology_property"
     set "status" = #{status,jdbcType=INTEGER},
-      unique_identifier = #{uniqueIdentifier,jdbcType=VARCHAR},
       create_time = #{createTime,jdbcType=TIMESTAMP},
       update_time = #{updateTime,jdbcType=TIMESTAMP},
       ontology_unique_identifier = #{ontologyUniqueIdentifier,jdbcType=VARCHAR},
@@ -216,6 +221,6 @@
       is_primary_key = #{isPrimaryKey,jdbcType=INTEGER},
       is_title_key = #{isTitleKey,jdbcType=INTEGER},
       datasource_id = #{datasourceId,jdbcType=VARCHAR}
-    where id = #{id,jdbcType=BIGINT}
+    where unique_Identifier = #{uniqueIdentifier,jdbcType=VARCHAR}
   </update>
 </mapper>

@@ -7,6 +7,7 @@ import java.util.List;
 
 @Mapper
 public interface OntologyPropertyMapper {
+
     int deleteByPrimaryKey(Long id);
 
     int insert(OntologyProperty record);
@@ -17,7 +18,8 @@ public interface OntologyPropertyMapper {
 
     List<OntologyProperty> selectByOntologyUniqueIdentifier(String uniqueIdentifier);
 
-    int updateByPrimaryKeySelective(OntologyProperty record);
+    List<OntologyProperty> selectByUniqueIdentifier(String uniqueIdentifier);
 
-    int updateByPrimaryKey(OntologyProperty record);
+    int updateSelective(OntologyProperty ontologyProperty);
+
 }

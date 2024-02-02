@@ -1,6 +1,5 @@
 package com.aircas.ptr.foundry.ontology.application.service.impl;
 
-import com.aircas.ptr.foundry.common.util.BeanUtil;
 import com.aircas.ptr.foundry.model.po.OntologyProperty;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyPropertyService;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyPropertyBO;
@@ -38,6 +37,24 @@ public class OntologyPropertyServiceImpl implements OntologyPropertyService {
     }
 
     @Override
+    public Integer batchUpdate(List<OntologyPropertyBO> ontologyPropertyBOs) {
+        for (OntologyPropertyBO bo : ontologyPropertyBOs) {
+            if (isExist(bo.getUniqueIdentifier())) {
+                update(bo);
+            } else {
+                add(bo);
+            }
+        }
+        //TODO: 这里需要修改返回正确的status
+        return 1;
+    }
+
+    private Boolean isExist(String uniqueIdentifier) {
+        return selectByUniqueIdentifier(uniqueIdentifier) != null;
+    }
+
+
+    @Override
     public Integer delete(Long id) {
         return ontologyPropertyMapper.deleteByPrimaryKey(id);
     }
@@ -45,30 +62,32 @@ public class OntologyPropertyServiceImpl implements OntologyPropertyService {
     @Override
     public Integer update(OntologyPropertyBO ontologyPropertyBO) {
         OntologyProperty ontologyProperty = new OntologyProperty();
-        BeanUtils.copyProperties(ontologyPropertyBO,ontologyProperty);
+        BeanUtils.copyProperties(ontologyPropertyBO, ontologyProperty);
         ontologyProperty.setUpdateTime(new Date());
-        return ontologyPropertyMapper.updateByPrimaryKey(ontologyProperty);
+        return ontologyPropertyMapper.updateSelective(ontologyProperty);
     }
 
     @Override
     public List<OntologyPropertyVO> selectByOntologyUniqueIdentifier(String uniqueIdentifier) {
-        List<OntologyProperty> ontologyProperty = ontologyPropertyMapper.selectByOntologyUniqueIdentifier(uniqueIdentifier);
+        List<OntologyProperty> ontologyPropertyList = ontologyPropertyMapper.selectByOntologyUniqueIdentifier(uniqueIdentifier);
         List<OntologyPropertyVO> list = new ArrayList<>();
-        for (OntologyProperty ontologyPropertyVO : ontologyProperty){
+        for (OntologyProperty ontologyProperty : ontologyPropertyList){
             OntologyPropertyVO propertyVO = new OntologyPropertyVO();
-            BeanUtils.copyProperties(ontologyPropertyVO,propertyVO);
+            BeanUtils.copyProperties(ontologyProperty, propertyVO);
             list.add(propertyVO);
         }
 
         return list;
     }
-//
-//    @Override
-//    public OntologyPropertyVO selectById(Long id) {
-//        OntologyProperty ontologyProperty = ontologyPropertyMapper.selectByPrimaryKey(id);
-//        OntologyPropertyVO ontologyPropertyVO = new OntologyPropertyVO();
-//        BeanUtils.copyProperties(ontologyProperty,ontologyPropertyVO);
-//        return ontologyPropertyVO;
-//    }
 
+    @Override
+    public OntologyPropertyVO selectByUniqueIdentifier(String uniqueIdentifier) {
+        List<OntologyProperty> ontologyPropertyList = ontologyPropertyMapper.selectByUniqueIdentifier(uniqueIdentifier);
+        if (ontologyPropertyList.size() == 0) {
+            return null;
+        }
+        OntologyPropertyVO propertyVO = new OntologyPropertyVO();
+        BeanUtils.copyProperties(ontologyPropertyList.get(0),propertyVO);
+        return  propertyVO;
+    }
 }

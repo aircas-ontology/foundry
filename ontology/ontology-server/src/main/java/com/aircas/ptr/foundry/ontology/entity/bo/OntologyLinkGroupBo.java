@@ -79,7 +79,7 @@ public class OntologyLinkGroupBo {
     private OntologyChildLinkBo backwardLink;
 
     public OntologyLinkGroupBo normalized() {
-        if (propertyUniqueIdentifierFrom.toUpperCase().compareTo(propertyUniqueIdentifierTo.toUpperCase()) >= 0) {
+        if (ontologyUniqueIdentifierFrom.toUpperCase().compareTo(ontologyUniqueIdentifierTo.toUpperCase()) >= 0) {
             return this;
         } else {
             return revertForwardToBackward();

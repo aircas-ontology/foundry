@@ -38,7 +38,7 @@ public class OntologyMeta implements Serializable {
     /**
      * 图标
      */
-    private Object icon;
+    private String icon;
 
     /**
      * 本体名称
