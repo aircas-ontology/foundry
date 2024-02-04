@@ -38,10 +38,10 @@ public class OntologyPropertyController {
     }
 
 
-    @DeleteMapping("/delete")
+    @PostMapping("/delete")
     @ApiOperation(value = "删除本体属性")
-    public DataResult<Integer> delete(@RequestParam Long id) {
-        return DataResult.ofData(ontologyPropertyService.delete(id));
+    public DataResult<Integer> delete(@RequestParam @ApiParam(value = "本体属性id", required = true) String uniqueIdentifier) {
+        return DataResult.ofData(ontologyPropertyService.delete(uniqueIdentifier));
     }
 
     @PostMapping("/update")

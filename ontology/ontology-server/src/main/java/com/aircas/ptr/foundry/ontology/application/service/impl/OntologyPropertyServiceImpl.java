@@ -55,8 +55,8 @@ public class OntologyPropertyServiceImpl implements OntologyPropertyService {
 
 
     @Override
-    public Integer delete(Long id) {
-        return ontologyPropertyMapper.deleteByPrimaryKey(id);
+    public Integer delete(String uniqueIdentifier) {
+        return ontologyPropertyMapper.deleteByUniqueIdentifier(uniqueIdentifier);
     }
 
     @Override

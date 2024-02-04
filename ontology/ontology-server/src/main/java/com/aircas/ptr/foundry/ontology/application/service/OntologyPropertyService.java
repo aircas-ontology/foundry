@@ -13,7 +13,7 @@ public interface OntologyPropertyService {
 
     Integer batchUpdate(List<OntologyPropertyBO> ontologyPropertyBO);
 
-    Integer delete(Long id);
+    Integer delete(String uniqueIdentifier);
 
     Integer update(OntologyPropertyBO ontologyPropertyBO);
 
