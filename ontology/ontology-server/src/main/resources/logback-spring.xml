@@ -74,4 +74,6 @@
         <appender-ref ref="CONSOLE"/>
     </root>
 
+    <logger name = "org.mybatis" level="DEBUG" />
+
 </configuration>

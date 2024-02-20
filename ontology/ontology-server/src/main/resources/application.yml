@@ -15,9 +15,9 @@ spring:
       password: iecas123
       validation-query: SELECT 1
       test-on-borrow: true
-    datasource:
+    datalake:
       driver-class-name: org.postgresql.Driver
-      url: jdbc:postgresql://192.168.2.173:5432/postgres?currentSchema=foudry_datasource
+      url: jdbc:postgresql://192.168.2.173:5432/foudry_datasource?currentSchema=public
       username: postgres
       password: postgres
 

@@ -16,28 +16,28 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import javax.sql.DataSource;
 
 @Configuration
-@MapperScan(basePackages = "com.aircas.ptr.foundry.ontology.repository.dao", sqlSessionFactoryRef = "mainSqlSessionFactory")
-public class MainDataSourceConfiguration {
+@MapperScan(basePackages = "com.aircas.ptr.foundry.ontology.repository.datalakeDao", sqlSessionFactoryRef = "datalakeSqlSessionFactory")
+public class DatalakeDataSourceConfiguration {
 
     @Primary
-    @Bean("mainDataSource")
-    @ConfigurationProperties("spring.datasource.main")
+    @Bean("datalakeDataSource")
+    @ConfigurationProperties("spring.datasource.datalake")
     public DataSource createMainDataSource() {
         return DruidDataSourceBuilder.create().build();
     }
 
     @Primary
-    @Bean("mainSqlSessionFactory")
-    public SqlSessionFactory createMainSqlSessionFactory(@Qualifier("mainDataSource")DataSource dataSource) throws Exception {
+    @Bean("datalakeSqlSessionFactory")
+    public SqlSessionFactory createMainSqlSessionFactory(@Qualifier("datalakeDataSource")DataSource dataSource) throws Exception {
         SqlSessionFactoryBean sqlSessionFactoryBean = new SqlSessionFactoryBean();
         sqlSessionFactoryBean.setDataSource(dataSource);
-        String resourcePath = "classpath:mybatis-mapper/main/*.xml";
+        String resourcePath = "classpath:mybatis-mapper/datalake/*.xml";
         sqlSessionFactoryBean.setMapperLocations(new PathMatchingResourcePatternResolver().getResources(resourcePath));
         return sqlSessionFactoryBean.getObject();
     }
 
-    @Bean(name = "mainTransactionManager")
-    public DataSourceTransactionManager mainTransactionManager(@Qualifier("mainDataSource")DataSource dataSource) {
+    @Bean(name = "datalakeTransactionManager")
+    public DataSourceTransactionManager mainTransactionManager(@Qualifier("datalakeDataSource")DataSource dataSource) {
         return new DataSourceTransactionManager(dataSource);
     }
 }

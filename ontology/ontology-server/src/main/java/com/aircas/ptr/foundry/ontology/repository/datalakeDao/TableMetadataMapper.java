@@ -1,4 +1,4 @@
-package com.aircas.ptr.foundry.ontology.repository.dao;
+package com.aircas.ptr.foundry.ontology.repository.datalakeDao;
 
 import com.aircas.ptr.foundry.model.po.TableColumnDesc;
 import org.apache.ibatis.annotations.Mapper;

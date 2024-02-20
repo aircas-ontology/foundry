@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.aircas.ptr.foundry.ontology.repository.dao.TableMetadataMapper">
+<mapper namespace="com.aircas.ptr.foundry.ontology.repository.datalakeDao.TableMetadataMapper">
     <resultMap id="BaseResultMap" type="com.aircas.ptr.foundry.model.po.TableColumnDesc">
         <result column="column_name" jdbcType="VARCHAR" property="columnName" />
         <result column="description" jdbcType="VARCHAR" property="description" />
@@ -10,9 +10,10 @@
     <select id="getColumnMetadata" parameterType="java.lang.String" resultMap="BaseResultMap">
         select
         a.attname as column_name,
-        col_description(a.attrelid, a.attnum) as description
+        col_description(a.attrelid, a.attnum) as description,
+        pg_catalog.format_type(a.atttypid, a.atttypmod) as type
         from pg_class as c, pg_attribute as a
-        where c.relname = #{gfgx_y_ts_mbgjd,jdbcType=VARCHAR} and a.attrelid = c.oid and a.attnum > 0
+        where c.relname = #{tableName,jdbcType=VARCHAR} and a.attrelid = c.oid and a.attnum > 0
     </select>
 </mapper>
 

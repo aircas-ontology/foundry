@@ -1,12 +1,9 @@
 package com.aircas.ptr.foundry.ontology.application.service.impl;
 
-import com.aircas.ptr.foundry.common.util.BeanUtil;
-import com.aircas.ptr.foundry.model.po.OntologyProperty;
 import com.aircas.ptr.foundry.model.po.TableColumnDesc;
-import com.aircas.ptr.foundry.model.po.base.Bean;
 import com.aircas.ptr.foundry.ontology.application.service.TableMetadataService;
 import com.aircas.ptr.foundry.ontology.entity.vo.TableColumnDescVO;
-import com.aircas.ptr.foundry.ontology.repository.dao.TableMetadataMapper;
+import com.aircas.ptr.foundry.ontology.repository.datalakeDao.TableMetadataMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
