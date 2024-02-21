@@ -8,7 +8,7 @@ import lombok.Data;
 @Data
 public class DirectoryItem implements Serializable {
 
-    private String key;
+    private String primaryKey;
     private String displayName;
 
     private static final long serialVersionUID = 1L;

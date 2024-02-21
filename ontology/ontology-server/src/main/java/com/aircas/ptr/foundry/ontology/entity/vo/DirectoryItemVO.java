@@ -1,12 +1,14 @@
 package com.aircas.ptr.foundry.ontology.entity.vo;
 
+import lombok.Data;
 
+@Data
 public class DirectoryItemVO {
 
     /**
      * 主键
      */
-    private String keyValue;
+    private String primaryKey;
 
 
     /**
