@@ -6,11 +6,19 @@
         <result column="displayName" jdbcType="VARCHAR" property="displayName" />
     </resultMap>
 
+    <resultMap id="ObjectResultMap" type="java.util.HashMap">
+
+    </resultMap>
+
     <select id="queryDirectory" resultMap="BaseResultMap" statementType="STATEMENT">
         select
           ${primaryKey} as primaryKey,
           ${titleKey} as displayName
         from ${tableName}
+    </select>
+
+    <select id="queryAnySQL" resultMap="ObjectResultMap" statementType="STATEMENT">
+        ${query}
     </select>
 
 </mapper>

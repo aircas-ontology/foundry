@@ -6,6 +6,7 @@ import com.aircas.ptr.foundry.ontology.application.service.ObjectService;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyService;
 import com.aircas.ptr.foundry.ontology.entity.vo.DirectoryItemVO;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyVO;
+import com.aircas.ptr.foundry.ontology.entity.vo.PropertyValueVO;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import javax.annotation.Resource;
 import java.util.List;
+import java.util.Map;
 
 @Api(tags = "Objects")
 @RestController
@@ -29,6 +31,13 @@ public class ObjectController {
     public DataResult<List<DirectoryItemVO>> queryDirectory(@RequestParam String uniqueIdentifier) {
         List<DirectoryItemVO> OntologyInfoList = objectService.queryDirectories(uniqueIdentifier);
         return DataResult.ofData(OntologyInfoList);
+    }
+
+
+    @GetMapping("/queryObjectByPrimaryKey")
+    public DataResult<List<PropertyValueVO>> queryObjectByPrimaryKey(@RequestParam String uniqueIdentifier, @RequestParam String key) {
+        List<PropertyValueVO> list = objectService.queryObjectByPrimaryKey(uniqueIdentifier, key);
+        return DataResult.ofData(list);
     }
 
 }
