@@ -20,4 +20,5 @@ public class PropertyValueVO {
 
     private String value;
 
+    private String uniqueIdentifier;
 }

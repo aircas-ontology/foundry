@@ -39,7 +39,7 @@
     and status = 1
   </select>
 
-  <select id="selectByUniqueIdentifier" resultType="com.aircas.ptr.foundry.model.po.OntologyProperty">
+  <select id="selectByUniqueIdentifier" resultMap="BaseResultMap">
     select
     <include refid="Base_Column_List" />
     from "ontology_property"

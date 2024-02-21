@@ -8,7 +8,7 @@ import java.util.List;
 @Data
 public class ObjectWithLinkedInfoVO {
 
-    ObjectValueVo objectValueVo;
+    ObjectValueVo objectValue;
 
     List<LinkedValueVo> links;
 }
