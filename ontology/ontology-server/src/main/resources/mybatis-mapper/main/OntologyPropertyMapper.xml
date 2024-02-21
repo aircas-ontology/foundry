@@ -31,7 +31,7 @@
     where id = #{id,jdbcType=BIGINT}
   </select>
 
-  <select id="selectByOntologyUniqueIdentifier" resultType="com.aircas.ptr.foundry.model.po.OntologyProperty">
+  <select id="selectByOntologyUniqueIdentifier" resultMap="BaseResultMap">
     select
     <include refid="Base_Column_List" />
     from "ontology_property"
