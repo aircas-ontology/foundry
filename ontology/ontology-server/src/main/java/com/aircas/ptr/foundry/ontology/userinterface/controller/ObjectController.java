@@ -4,9 +4,7 @@ import com.aircas.ptr.foundry.common.base.DataResult;
 import com.aircas.ptr.foundry.common.constant.Status;
 import com.aircas.ptr.foundry.ontology.application.service.ObjectService;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyService;
-import com.aircas.ptr.foundry.ontology.entity.vo.DirectoryItemVO;
-import com.aircas.ptr.foundry.ontology.entity.vo.OntologyVO;
-import com.aircas.ptr.foundry.ontology.entity.vo.PropertyValueVO;
+import com.aircas.ptr.foundry.ontology.entity.vo.*;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -35,9 +33,15 @@ public class ObjectController {
 
 
     @GetMapping("/queryObjectByPrimaryKey")
-    public DataResult<List<PropertyValueVO>> queryObjectByPrimaryKey(@RequestParam String uniqueIdentifier, @RequestParam String key) {
-        List<PropertyValueVO> list = objectService.queryObjectByPrimaryKey(uniqueIdentifier, key);
-        return DataResult.ofData(list);
+    public DataResult<ObjectValueVo> queryObjectByPrimaryKey(@RequestParam String uniqueIdentifier, @RequestParam String key) {
+        ObjectValueVo objectValueVo = objectService.queryObjectByPrimaryKey(uniqueIdentifier, key);
+        return DataResult.ofData(objectValueVo);
+    }
+
+    @GetMapping("/queryObjectWithLinkedInfoByPrimaryKey")
+    public DataResult<ObjectWithLinkedInfoVO> queryObjectWithLinkedInfoByPrimaryKey(@RequestParam String uniqueIdentifier, @RequestParam String key) {
+        ObjectWithLinkedInfoVO objectWithLinkedInfoVO = objectService.queryObjectWithLinkedInfoByPrimaryKey(uniqueIdentifier, key);
+        return DataResult.ofData(objectWithLinkedInfoVO);
     }
 
 }

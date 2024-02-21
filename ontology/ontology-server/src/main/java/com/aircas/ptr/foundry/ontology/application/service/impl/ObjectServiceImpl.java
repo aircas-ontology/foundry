@@ -3,9 +3,7 @@ package com.aircas.ptr.foundry.ontology.application.service.impl;
 import com.aircas.ptr.foundry.model.po.DirectoryItem;
 import com.aircas.ptr.foundry.model.po.OntologyProperty;
 import com.aircas.ptr.foundry.ontology.application.service.ObjectService;
-import com.aircas.ptr.foundry.ontology.entity.vo.DirectoryItemVO;
-import com.aircas.ptr.foundry.ontology.entity.vo.OntologyPropertyVO;
-import com.aircas.ptr.foundry.ontology.entity.vo.PropertyValueVO;
+import com.aircas.ptr.foundry.ontology.entity.vo.*;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyPropertyMapper;
 import com.aircas.ptr.foundry.ontology.repository.datalakeDao.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -69,7 +67,7 @@ public class ObjectServiceImpl implements ObjectService {
     }
 
     @Override
-    public List<PropertyValueVO> queryObjectByPrimaryKey(String ontologyUniqueIdentifier, String primaryKey) {
+    public ObjectValueVo queryObjectByPrimaryKey(String ontologyUniqueIdentifier, String primaryKey) {
         List<OntologyProperty> ontologyPropertyList = ontologyPropertyMapper.selectByOntologyUniqueIdentifier(ontologyUniqueIdentifier);
         String primaryKeyColumnName = getPrimaryKeyColumnName(ontologyPropertyList);
         String sql = buildSQLByPrimaryKey(ontologyPropertyList, primaryKeyColumnName, primaryKey);
@@ -79,10 +77,10 @@ public class ObjectServiceImpl implements ObjectService {
             return null;
         }
         Map<String, Object> rawKeyValueMap = rawResult.get(0);
-        List<PropertyValueVO> retList = new ArrayList<>();
+        List<PropertyValueVO> propertyList = new ArrayList<>();
         for (String key: rawKeyValueMap.keySet()) {
             PropertyValueVO propertyValueVO = new PropertyValueVO();
-            retList.add(propertyValueVO);
+            propertyList.add(propertyValueVO);
             //index0 -> 0
             int propertyIndex = Integer.valueOf(key.substring(5));
             OntologyProperty property = ontologyPropertyList.get(propertyIndex);
@@ -95,9 +93,18 @@ public class ObjectServiceImpl implements ObjectService {
             String value = rawKeyValueMap.get(key).toString();
             propertyValueVO.setValue(value);
         }
-        return retList;
+        ObjectValueVo objectValueVo = new ObjectValueVo();
+        objectValueVo.setProperties(propertyList);
+        return objectValueVo;
     }
 
+    @Override
+    public ObjectWithLinkedInfoVO queryObjectWithLinkedInfoByPrimaryKey(String ontologyUniqueIdentifier, String key) {
+        return null;
+    }
+
+
+    // helper functions
     private String getPrimaryKeyColumnName(List<OntologyProperty> ontologyPropertyList) {
         for (OntologyProperty property: ontologyPropertyList) {
             if (property.getIsPrimaryKey() == 1) {
