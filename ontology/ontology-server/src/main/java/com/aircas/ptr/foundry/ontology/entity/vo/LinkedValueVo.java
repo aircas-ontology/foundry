@@ -10,6 +10,8 @@ public class LinkedValueVo {
 
     private String name; // 关系的名字
 
+    private String apiName;
+
     //可能查询出很多个object
     private List<ObjectValueVo> joinedResults;
 }

@@ -181,9 +181,11 @@ public class ObjectServiceImpl implements ObjectService {
 
     private LinkedValueVo getLinkedValue(OntologyLinkGroup ontologyLinkGroup, ObjectValueVo objectValueVo) {
         LinkedValueVo linkedValueVo = new LinkedValueVo();
-        OntologyChildLink forwardChildLink = ontologyChildLinkMapper.selectByPrimaryKey(ontologyLinkGroup.getForwardChildLinkId());
-        String linkDisplayName = forwardChildLink.getDisplayName();
+        OntologyChildLink backwardChildLink = ontologyChildLinkMapper.selectByPrimaryKey(ontologyLinkGroup.getBackwardChildLinkId());
+        String linkDisplayName = backwardChildLink.getDisplayName();
+        String apiName = backwardChildLink.getApiName();
         linkedValueVo.setName(linkDisplayName);
+        linkedValueVo.setApiName(apiName);
 
         String propertyIdentifierFrom = ontologyLinkGroup.getPropertyUniqueIdentifierFrom();
         String propertyIdentifierTo = ontologyLinkGroup.getPropertyUniqueIdentifierTo();
@@ -219,7 +221,7 @@ public class ObjectServiceImpl implements ObjectService {
         }
         String colunmnsPart = "";
         for (int i = 0; i < ontologyPropertyList.size(); i++) {
-            String tmp = ontologyPropertyList.get(i).getDatasourceColumnName() + " AS " + "index" + i;
+            String tmp = "\"" + ontologyPropertyList.get(i).getDatasourceColumnName() + "\" AS " + "index" + i;
             if (i != 0) {
                 tmp = ", " + tmp;
             }
@@ -228,7 +230,8 @@ public class ObjectServiceImpl implements ObjectService {
         String tableName = ontologyPropertyList.get(0).getDatasourceId();
         String fromPart = " FROM " + tableName;
         String wherePart = " WHERE " + columnName + " = '" + value + "'";
-        String sql = "SELECT " + colunmnsPart + fromPart + wherePart;
+        String limitPart = " LIMIT 1000";
+        String sql = "SELECT " + colunmnsPart + fromPart + wherePart + limitPart;
         System.out.println(sql);
         return sql;
     }
