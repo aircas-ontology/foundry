@@ -16,6 +16,11 @@ public interface OntologyLinkGroupMapper {
     /**
      * @mbg.generated generated automatically, do not modify!
      */
+    int deleteByUniqueIdentifier(String uniqueIdentifier);
+
+    /**
+     * @mbg.generated generated automatically, do not modify!
+     */
     int insert(OntologyLinkGroup record);
 
     /**

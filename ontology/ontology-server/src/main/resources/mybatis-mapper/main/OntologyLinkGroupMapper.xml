@@ -54,6 +54,12 @@
     delete from ontology_link_group
     where id = #{id,jdbcType=BIGINT}
   </delete>
+
+  <delete id="deleteByUniqueIdentifier" parameterType="java.lang.String">
+    delete from ontology_link_group
+    where unique_identifier = #{uniqueIdentifier,jdbcType=VARCHAR}
+  </delete>
+
   <insert id="insert" parameterType="com.aircas.ptr.foundry.model.po.OntologyLinkGroup">
     <!-- @mbg.generated: generated automatically, do not modify! -->
     insert into ontology_link_group (unique_identifier, "status", create_time,

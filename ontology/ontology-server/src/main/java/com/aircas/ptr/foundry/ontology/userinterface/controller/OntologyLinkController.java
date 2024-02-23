@@ -38,27 +38,15 @@ public class OntologyLinkController {
     }
 
 
-//    @DeleteMapping("/delete")
-//    @ApiOperation(value = "删除本体之间的关系")
-//    public DataResult<Integer> delete(@RequestParam List<Long> ids) {
-//        return DataResult.ofData(ontologyLinkService.delete(ids));
-//    }
-//
-//    @PostMapping("/update")
-//    @ApiOperation(value = "修改本体之间的关系")
-//    public DataResult<Integer> update(@RequestBody OntologyLinkBO ontologyLinkBO) {
-//        return DataResult.ofData(ontologyLinkService.update(ontologyLinkBO));
-//    }
-//
-//    @GetMapping("/queryById")
-//    @ApiOperation(value = "根据本体间关系id查询一个本体之间的关系")
-//    public DataResult<OntologyLinkVO> getOntologyLinkById(@RequestParam @ApiParam(value = "本体间关系的id", required = true) Long id) {
-//        return DataResult.ofData(ontologyLinkService.getOntologyLinkById(id));
-//    }
-
     @GetMapping("/queryByOntologyUniqueIdentifier")
     @ApiOperation(value = "根据本体unique identifier 查询关系")
     public DataResult<List<OntologyLinkGroupVO>> getLinkByOntologyUniqueIdentifier(@RequestParam @ApiParam(value = "本体id", required = true) String uniqueIdentifier) {
         return DataResult.ofData(ontologyLinkService.getLinkByOntologyUniqueIdentifier(uniqueIdentifier));
+    }
+
+    @PostMapping("/deleteByOntologyUniqueIdentifier")
+    @ApiOperation(value = "根据本体unique identifier 删除关系")
+    public DataResult<Integer> deleteLinkByOntologyUniqueIdentifier(@RequestParam @ApiParam(value = "本体id", required = true) String uniqueIdentifier) {
+        return DataResult.ofData(ontologyLinkService.deleteLinkByOntologyUniqueIdentifier(uniqueIdentifier));
     }
 }

@@ -17,9 +17,7 @@ import java.util.List;
 public interface OntologyLinkService {
     Integer add(OntologyLinkGroupBo ontologyLinkGroupBo);
 
-//    Integer delete(List<Long> ids);
-//
-//    Integer update(OntologyLinkBO ontologyLinkBO);
-
     List<OntologyLinkGroupVO> getLinkByOntologyUniqueIdentifier(String uniqueIdentifier);
+
+    Integer deleteLinkByOntologyUniqueIdentifier(String uniqueIdentifier);
 }

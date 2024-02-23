@@ -1,20 +1,13 @@
 package com.aircas.ptr.foundry.ontology.application.service.impl;
 
-import com.aircas.ptr.foundry.common.exception.DuplicatedDataException;
-import com.aircas.ptr.foundry.common.util.BeanUtil;
 import com.aircas.ptr.foundry.model.po.OntologyChildLink;
-import com.aircas.ptr.foundry.model.po.OntologyLink;
 import com.aircas.ptr.foundry.model.po.OntologyLinkGroup;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyLinkService;
-import com.aircas.ptr.foundry.ontology.entity.bo.OntologyLinkBO;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyLinkGroupBo;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyChildLinkVO;
-import com.aircas.ptr.foundry.ontology.entity.vo.OntologyGroupVO;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyLinkGroupVO;
-import com.aircas.ptr.foundry.ontology.entity.vo.OntologyLinkVO;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyChildLinkMapper;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyLinkGroupMapper;
-import com.aircas.ptr.foundry.ontology.repository.dao.OntologyLinkMapper;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 
@@ -32,9 +25,6 @@ import java.util.stream.Collectors;
 
 @Service
 public class OntologyLinkServiceImpl implements OntologyLinkService {
-
-    @Resource
-    private OntologyLinkMapper ontologyLinkMapper;
 
     @Resource
     private OntologyLinkGroupMapper ontologyLinkGroupMapper;
@@ -118,15 +108,22 @@ public class OntologyLinkServiceImpl implements OntologyLinkService {
 //        return ontologyLinkMapper.deleteByIds(ids);
 //    }
 //
-//    @Override
-//    public Integer update(OntologyLinkBO ontologyLinkBO) {
-//        if (ontologyLinkBO.getId() == null) {
-//            throw new RuntimeException("id必传");
-//        }
-//        OntologyLink ontologyLink = ontologyLinkMapper.selectByPrimaryKey(ontologyLinkBO.getId());
-//        BeanUtils.copyProperties(ontologyLinkBO, ontologyLink);
-//        ontologyLink.setUpdateTime(new Date());
-//        return ontologyLinkMapper.updateByPrimaryKeySelective(ontologyLink);
-//    }
+    @Override
+    public Integer deleteLinkByOntologyUniqueIdentifier(String uniqueIdentifier) {
+        List<OntologyLinkGroup> linkGroups = new ArrayList<>();
+        List<OntologyLinkGroup> forwardOntologyLinkGroups = ontologyLinkGroupMapper.selectByOntologyUniqueIdentifierFrom(uniqueIdentifier);
+        linkGroups.addAll(forwardOntologyLinkGroups);
+
+        List<OntologyLinkGroup> backwardOntologyLinkGroups = ontologyLinkGroupMapper.selectByOntologyUniqueIdentifierTo(uniqueIdentifier);
+        linkGroups.addAll(backwardOntologyLinkGroups);
+
+        for(OntologyLinkGroup group: linkGroups) {
+            long forwardChildLinkId = group.getForwardChildLinkId();
+            ontologyChildLinkMapper.deleteByPrimaryKey(forwardChildLinkId);
+            long backwardChildLinkId = group.getBackwardChildLinkId();
+            ontologyChildLinkMapper.deleteByPrimaryKey(backwardChildLinkId);
+        }
+        return ontologyLinkGroupMapper.deleteByUniqueIdentifier(uniqueIdentifier);
+    }
 
 }
