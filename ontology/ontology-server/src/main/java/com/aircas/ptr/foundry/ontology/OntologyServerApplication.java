@@ -4,14 +4,16 @@ import com.alibaba.druid.spring.boot.autoconfigure.DruidDataSourceAutoConfigure;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
+import org.springframework.context.ApplicationContext;
 import tk.mybatis.mapper.autoconfigure.MapperAutoConfiguration;
 
 @SpringBootApplication(scanBasePackages = "com.aircas.ptr", exclude = {DataSourceAutoConfiguration.class, DruidDataSourceAutoConfigure.class, MapperAutoConfiguration.class})
 public class OntologyServerApplication {
 
+    private static ApplicationContext context;
 
     public static void main(String[] args) {
-        SpringApplication.run(OntologyServerApplication.class, args);
+        context = SpringApplication.run(OntologyServerApplication.class, args);
     }
 
 }

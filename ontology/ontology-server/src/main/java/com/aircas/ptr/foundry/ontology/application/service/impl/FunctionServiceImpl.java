@@ -24,6 +24,7 @@ public class FunctionServiceImpl implements FunctionService {
     public Object handle(String path, HashMap<String, Object> parameters) {
         Object result = null;
         try {
+            classLoader.parseClass(new File("D:\\weilong(1)\\workplaces\\foundry2\\ontology\\ontology-server\\src\\main\\java\\com\\aircas\\ptr\\foundry\\ontology\\function\\Ontology.groovy"));
             Class groovyClass = classLoader.parseClass(new File(path));
             GroovyObject groovyObject = (GroovyObject)groovyClass.newInstance();
 
