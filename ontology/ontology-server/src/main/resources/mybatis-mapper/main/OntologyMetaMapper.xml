@@ -33,7 +33,14 @@
     select
     <include refid="Base_Column_List" />
     from "ontology_meta"
-    where unique_identifier = #{uniqueIdentifier,jdbcType=BIGINT} and status = 1
+    where unique_identifier = #{uniqueIdentifier,jdbcType=VARCHAR} and status = 1
+  </select>
+
+  <select id="selectByApi" parameterType="java.lang.String" resultMap="BaseResultMap">
+    select
+    <include refid="Base_Column_List" />
+    from "ontology_meta"
+    where api_name = #{api,jdbcType=VARCHAR} and status = 1
   </select>
 
   <select id="selectAllOntologies" resultMap="BaseResultMap">

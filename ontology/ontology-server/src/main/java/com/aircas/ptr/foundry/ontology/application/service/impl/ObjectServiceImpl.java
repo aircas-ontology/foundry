@@ -9,6 +9,7 @@ import com.aircas.ptr.foundry.ontology.application.service.OntologyLinkService;
 import com.aircas.ptr.foundry.ontology.entity.vo.*;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyChildLinkMapper;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyLinkGroupMapper;
+import com.aircas.ptr.foundry.ontology.repository.dao.OntologyMetaMapper;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyPropertyMapper;
 import com.aircas.ptr.foundry.ontology.repository.datalakeDao.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +30,9 @@ public class ObjectServiceImpl implements ObjectService {
 
     @Resource
     private final OntologyPropertyMapper ontologyPropertyMapper;
+
+    @Resource
+    private final OntologyMetaMapper ontologyMetaMapper;
 
     @Resource
     private final ObjectMapper objectMapper;
@@ -82,6 +86,18 @@ public class ObjectServiceImpl implements ObjectService {
         return queryByPrimaryKey(ontologyUniqueIdentifier, primaryKey);
     }
 
+
+    @Override
+    public ObjectValueVo queryObjectByApiAndPrimaryKey(String api, String primaryKey) {
+        String identifier = queryIdentifierByAPI(api);
+        return queryObjectByPrimaryKey(identifier, primaryKey);
+    }
+
+    private String queryIdentifierByAPI(String api) {
+        return ontologyMetaMapper.selectByApi(api).getUniqueIdentifier();
+    }
+
+
     @Override
     public ObjectWithLinkedInfoVO queryObjectWithLinkedInfoByPrimaryKey(String ontologyUniqueIdentifier, String primaryKey) {
         ObjectWithLinkedInfoVO objectWithLinkedInfoVO = new ObjectWithLinkedInfoVO();
@@ -101,6 +117,7 @@ public class ObjectServiceImpl implements ObjectService {
         return objectWithLinkedInfoVO;
     }
 
+
     private ObjectValueVo queryByPrimaryKey(String ontologyUniqueIdentifier, String primaryKey) {
         List<OntologyProperty> ontologyPropertyList = ontologyPropertyMapper.selectByOntologyUniqueIdentifier(ontologyUniqueIdentifier);
         String primaryColumnName = getPrimaryKeyColumnName(ontologyPropertyList);
@@ -110,6 +127,7 @@ public class ObjectServiceImpl implements ObjectService {
         }
         return objectValueVoList.get(0);
     }
+
 
     private List<ObjectValueVo> queryByColumnNameValue(String ontologyUniqueIdentifier, String columnName, String columnValue) {
         List<OntologyProperty> ontologyPropertyList = ontologyPropertyMapper.selectByOntologyUniqueIdentifier(ontologyUniqueIdentifier);

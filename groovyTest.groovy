@@ -7,6 +7,9 @@ import com.aircas.ptr.foundry.ontology.function.Ontology
 class Test {
 
     String handle(HashMap parameters) {
-        return Ontology.getObject(null, null).toString()
+        System.out.println(parameters)
+        def mb = Ontology.getObject("xtmb", "7")
+        def name = Ontology.getProperty(mb, "zbxh");
+        return name
     }
 }
