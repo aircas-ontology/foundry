@@ -16,4 +16,6 @@ public interface ObjectService {
     ObjectValueVo queryObjectByApiAndPrimaryKey(String api, String key);
 
     ObjectWithLinkedInfoVO queryObjectWithLinkedInfoByPrimaryKey(String ontologyUniqueIdentifier, String key);
+
+    ObjectWithLinkedInfoVO queryObjectWithLinkedInfoByApiAndPrimaryKey(String api, String key);
 }

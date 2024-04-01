@@ -1,15 +1,18 @@
 import com.aircas.ptr.foundry.ontology.entity.objectType.*;
-import com.aircas.ptr.foundry.ontology.function.Ontology
+import com.aircas.ptr.foundry.ontology.function.Ontology;
 
 
-//import Javassist.JC;
-
-class Test {
+class groovyTest {
 
     String handle(HashMap parameters) {
         System.out.println(parameters)
-        def mb = Ontology.getObject("xtmb", "7")
-        def name = Ontology.getProperty(mb, "zbxh");
-        return name
+        String primaryKey = parameters.getOrDefault("primaryKey", null);
+        def mbgjd = Ontology.getLinkedObjects("xtmb", primaryKey, "mbgjd");
+        print();
+        return mbgjd
+    }
+
+    void print() {
+        System.out.println("test");
     }
 }

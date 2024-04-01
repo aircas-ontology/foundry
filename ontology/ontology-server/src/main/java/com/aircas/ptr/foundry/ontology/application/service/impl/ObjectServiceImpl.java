@@ -97,6 +97,10 @@ public class ObjectServiceImpl implements ObjectService {
         return ontologyMetaMapper.selectByApi(api).getUniqueIdentifier();
     }
 
+    public ObjectWithLinkedInfoVO queryObjectWithLinkedInfoByApiAndPrimaryKey(String api, String primaryKey) {
+        String identifier = queryIdentifierByAPI(api);
+        return queryObjectWithLinkedInfoByPrimaryKey(identifier, primaryKey);
+    }
 
     @Override
     public ObjectWithLinkedInfoVO queryObjectWithLinkedInfoByPrimaryKey(String ontologyUniqueIdentifier, String primaryKey) {

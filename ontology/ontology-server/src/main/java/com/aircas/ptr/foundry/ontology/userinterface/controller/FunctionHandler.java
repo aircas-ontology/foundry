@@ -8,6 +8,11 @@ import io.swagger.annotations.ApiOperation;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
+import java.io.File;
+import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+import java.net.URLDecoder;
+import java.net.URLEncoder;
 import java.util.HashMap;
 
 
@@ -21,11 +26,33 @@ public class FunctionHandler {
     @Resource
     OntologyClassGenerator ontologyClassGenerator;
 
-    @ApiOperation(value = "执行一段script")
-    @PostMapping("/execution")
-    public DataResult<Object> run(@RequestBody HashMap map) {
-        String filePath = (String) map.getOrDefault("classFilePath", null);
+    @ApiOperation(value = "执行某个function")
+    @PostMapping("/execute")
+    public DataResult<Object> execute(@RequestBody HashMap map) {
+        String functionName = (String) map.getOrDefault("functionName", null);
+        Boolean isPreview = (Boolean) map.getOrDefault("isPreview", true);
         HashMap<String, Object> parameters= (HashMap<String, Object>) map.getOrDefault("parameters", null);
-        return DataResult.ofData(functionService.handle(filePath, parameters));
+        return DataResult.ofData(functionService.handle(functionName, isPreview, parameters));
+    }
+
+    @ApiOperation(value = "保存代码")
+    @PostMapping("/write")
+    public DataResult<Boolean> save(@RequestBody HashMap map) throws UnsupportedEncodingException {
+        String functionName = (String) map.getOrDefault("functionName", null);
+        if (functionName == null) {
+            return DataResult.ofData(false);
+        }
+        String code = (String) map.getOrDefault("code", null);
+        if (code == null) {
+            return DataResult.ofData(false);
+        }
+        Boolean isPreview = (Boolean) map.getOrDefault("isPreview", true);
+        return DataResult.ofData(functionService.write(functionName, code, isPreview));
+    }
+
+    @ApiOperation(value = "获取代码")
+    @GetMapping("/get")
+    public DataResult<String> get(@RequestParam String functionName, @RequestParam Boolean isPreview) {
+        return DataResult.ofData(functionService.get(functionName, isPreview));
     }
 }
