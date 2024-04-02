@@ -1,19 +1,16 @@
 package com.aircas.ptr.foundry.ontology.application.service.impl;
 
 
+import com.aircas.ptr.foundry.common.util.FileUtil;
 import com.aircas.ptr.foundry.ontology.GroovyClassLoaderManager;
 import com.aircas.ptr.foundry.ontology.application.service.FunctionService;
-import com.aircas.ptr.foundry.ontology.application.service.ObjectService;
-import com.alibaba.fastjson.JSON;
 import groovy.lang.GroovyObject;
 import lombok.RequiredArgsConstructor;
-import groovy.lang.GroovyClassLoader;
 
 import org.apache.commons.io.FileUtils;
 import org.springframework.stereotype.Service;
 
 import java.io.*;
-import java.net.URL;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -25,12 +22,14 @@ import java.util.HashMap;
 
 public class FunctionServiceImpl implements FunctionService {
 
+    static String baseDir = "functions";
+
     @Override
     public Object handle(String functionName, Boolean isPreview, HashMap<String, Object> parameters) {
         Object result = null;
         try {
-            String fileName = this.getFileName(functionName,isPreview);
-            Class groovyClass = GroovyClassLoaderManager.getIndependentClassLoader().parseClass(new File(fileName));
+            File file = getFile(functionName, isPreview);
+            Class groovyClass = GroovyClassLoaderManager.getIndependentClassLoader().parseClass(file);
             GroovyObject groovyObject = (GroovyObject)groovyClass.newInstance();
             result = groovyObject.invokeMethod("handle", parameters);
         } catch (Exception e) {
@@ -41,8 +40,7 @@ public class FunctionServiceImpl implements FunctionService {
 
     @Override
     public Boolean write(String functionName, String code, Boolean isPreview) {
-        String fileName = getFileName(functionName, isPreview);
-        File file = new File(fileName);
+        File file = getFile(functionName, isPreview);
         if (isPreview) {
             file.delete();
         }
@@ -64,8 +62,7 @@ public class FunctionServiceImpl implements FunctionService {
 
     @Override
     public String get(String functionName, Boolean isPreview) {
-        String fileName = getFileName(functionName, isPreview);
-        File file = new File(fileName);
+        File file = getFile(functionName, isPreview);
         try {
             String code = FileUtils.readFileToString(file, StandardCharsets.UTF_8);
             String decodeCode = URLEncoder.encode(code, "UTF-8");
@@ -76,11 +73,22 @@ public class FunctionServiceImpl implements FunctionService {
         }
     }
 
-    private String getFileName(String functionName, Boolean isPreview) {
+    private File getFile(String functionName, Boolean isPreview) {
+        this.createFunctionFoldersIfNeeded();
         String fileName = functionName + ".groovy";
+        File path;
         if (isPreview) {
-            fileName = "is_preview_" + functionName + ".groovy";
+            path = FileUtils.getFile(baseDir, "preview", fileName);
+        } else {
+            path = FileUtils.getFile(baseDir, fileName);
         }
-        return fileName;
+        return path;
+    }
+
+    private void createFunctionFoldersIfNeeded() {
+        if (FileUtil.allFiles(baseDir) == null) {
+            FileUtil.createDir(baseDir);
+            FileUtil.createDir(FileUtils.getFile(baseDir, "preview").getPath());
+        }
     }
 }
