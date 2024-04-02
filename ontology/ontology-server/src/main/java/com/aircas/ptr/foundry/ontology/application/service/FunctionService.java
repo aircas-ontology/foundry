@@ -1,8 +1,6 @@
 package com.aircas.ptr.foundry.ontology.application.service;
 
 
-import java.io.FileNotFoundException;
-import java.io.IOException;
 import java.util.HashMap;
 
 public interface FunctionService {

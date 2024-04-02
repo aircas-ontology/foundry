@@ -1,11 +1,12 @@
 import com.aircas.ptr.foundry.ontology.function.Ontology;
+import com.aircas.ptr.foundry.ontology.XTMB;
 
 
-
-class Test {
+class generateXTMBDesc {
 
     String handle(HashMap parameters) {
         System.out.println(parameters)
+        def abc = new XTMB()
         String primaryKey = parameters.getOrDefault("primaryKey", null);
         def xtmb = Ontology.getObject("xtmb", primaryKey)
         def mbmc = Ontology.getTitle(xtmb);
@@ -20,5 +21,3 @@ class Test {
 
     }
 }
-
-

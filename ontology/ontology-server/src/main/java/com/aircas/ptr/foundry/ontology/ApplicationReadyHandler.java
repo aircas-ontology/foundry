@@ -13,8 +13,6 @@ import org.springframework.util.FileCopyUtils;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URI;
-import java.net.URL;
 import java.nio.charset.StandardCharsets;
 
 @Component
@@ -23,6 +21,8 @@ class ApplicationReadyHandler implements ApplicationListener<ApplicationReadyEve
     @Override
     public void onApplicationEvent(ApplicationReadyEvent event) {
         GroovyClassLoader classLoader = GroovyClassLoaderManager.getParentClassLoader();
+        Class XMTB = classLoader.parseClass("package com.aircas.ptr.foundry.ontology; class XTMB  extends Object {}");
+        Class XMTB2 =  classLoader.parseClass("package com.aircas.ptr.foundry.ontology; class XTMB2  extends XTMB {}");
         String content = null;
         try {
             content = readResourceContent("groovy/Ontology.groovy");
