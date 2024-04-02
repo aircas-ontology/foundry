@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.aircas.ptr.foundry.ontology.repository.dao.FunctionMapper">
+  <resultMap id="BaseResultMap" type="com.aircas.ptr.foundry.model.po.Function">
+    <!-- @mbg.generated: generated automatically, do not modify! -->
+    <result column="api" jdbcType="VARCHAR" property="api" />
+    <result column="desc" jdbcType="VARCHAR" property="desc" />
+    <result column="status" jdbcType="BIGINT" property="status" />
+    <result column="id" jdbcType="BIGINT" property="id" />
+    <result column="ontology_apis" jdbcType="VARCHAR" property="ontologyApis" />
+  </resultMap>
+  <insert id="insert" parameterType="com.aircas.ptr.foundry.model.po.Function">
+    <!-- @mbg.generated: generated automatically, do not modify! -->
+    insert into function (api, `desc`, `status`,
+      id, ontologyApis)
+    values (#{api,jdbcType=VARCHAR}, #{desc,jdbcType=VARCHAR}, #{status,jdbcType=BIGINT}, 
+      #{id,jdbcType=BIGINT}, #{ontologyapis,jdbcType=VARCHAR})
+  </insert>
+  <insert id="insertSelective" parameterType="model.Function">
+    <!-- @mbg.generated: generated automatically, do not modify! -->
+    insert into function
+    <trim prefix="(" suffix=")" suffixOverrides=",">
+      <if test="api != null">
+        api,
+      </if>
+      <if test="desc != null">
+        `desc`,
+      </if>
+      <if test="status != null">
+        `status`,
+      </if>
+      <if test="id != null">
+        id,
+      </if>
+      <if test="ontologyapis != null">
+        ontologyApis,
+      </if>
+    </trim>
+    <trim prefix="values (" suffix=")" suffixOverrides=",">
+      <if test="api != null">
+        #{api,jdbcType=VARCHAR},
+      </if>
+      <if test="desc != null">
+        #{desc,jdbcType=VARCHAR},
+      </if>
+      <if test="status != null">
+        #{status,jdbcType=BIGINT},
+      </if>
+      <if test="id != null">
+        #{id,jdbcType=BIGINT},
+      </if>
+      <if test="ontologyApis != null">
+        #{ontologyapis,jdbcType=VARCHAR},
+      </if>
+    </trim>
+  </insert>
+</mapper>
