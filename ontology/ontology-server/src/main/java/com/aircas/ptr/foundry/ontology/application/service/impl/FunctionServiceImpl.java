@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.ontology.application.service.impl;
 
 
+import com.aircas.ptr.foundry.ontology.GroovyClassLoaderManager;
 import com.aircas.ptr.foundry.ontology.application.service.FunctionService;
 import com.aircas.ptr.foundry.ontology.application.service.ObjectService;
 import com.alibaba.fastjson.JSON;
@@ -12,6 +13,7 @@ import org.apache.commons.io.FileUtils;
 import org.springframework.stereotype.Service;
 
 import java.io.*;
+import java.net.URL;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -23,16 +25,12 @@ import java.util.HashMap;
 
 public class FunctionServiceImpl implements FunctionService {
 
-    GroovyClassLoader classLoader = new GroovyClassLoader();
-
     @Override
     public Object handle(String functionName, Boolean isPreview, HashMap<String, Object> parameters) {
         Object result = null;
         try {
-            classLoader.parseClass(new File("D:\\weilong(1)\\workplaces\\foundry2\\ontology\\ontology-server\\src\\main\\java\\com\\aircas\\ptr\\foundry\\ontology\\function\\Ontology.groovy"));
-
             String fileName = this.getFileName(functionName,isPreview);
-            Class groovyClass = classLoader.parseClass(new File(fileName));
+            Class groovyClass = GroovyClassLoaderManager.getIndependentClassLoader().parseClass(new File(fileName));
             GroovyObject groovyObject = (GroovyObject)groovyClass.newInstance();
             result = groovyObject.invokeMethod("handle", parameters);
         } catch (Exception e) {
