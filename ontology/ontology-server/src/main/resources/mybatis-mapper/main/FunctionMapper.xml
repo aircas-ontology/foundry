@@ -16,7 +16,7 @@
     values (#{api,jdbcType=VARCHAR}, #{desc,jdbcType=VARCHAR}, #{status,jdbcType=BIGINT}, 
       #{id,jdbcType=BIGINT}, #{ontologyapis,jdbcType=VARCHAR})
   </insert>
-  <insert id="insertSelective" parameterType="model.Function">
+  <insert id="insertSelective" parameterType="com.aircas.ptr.foundry.model.po.Function">
     <!-- @mbg.generated: generated automatically, do not modify! -->
     insert into function
     <trim prefix="(" suffix=")" suffixOverrides=",">
