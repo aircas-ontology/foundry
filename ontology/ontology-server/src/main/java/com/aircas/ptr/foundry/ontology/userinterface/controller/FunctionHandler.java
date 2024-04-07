@@ -31,9 +31,25 @@ public class FunctionHandler {
         return DataResult.ofData(functionService.handle(functionName, isPreview, parameters));
     }
 
+
+
+    // 将函数
+    @ApiOperation(value = "保存函数")
+    @PostMapping("/saveFunction")
+    public DataResult<Boolean> saveFunction(@RequestBody HashMap map) throws UnsupportedEncodingException {
+
+    }
+
+    //读取函数列表
+    @ApiOperation(value = "读取函数列表")
+    @PostMapping("/list")
+    public DataResult<Boolean> functionList(@RequestBody HashMap map) throws UnsupportedEncodingException {
+
+    }
+
     @ApiOperation(value = "保存代码")
     @PostMapping("/write")
-    public DataResult<Boolean> save(@RequestBody HashMap map) throws UnsupportedEncodingException {
+    public DataResult<Boolean> saveCode(@RequestBody HashMap map) throws UnsupportedEncodingException {
         String functionName = (String) map.getOrDefault("functionName", null);
         if (functionName == null) {
             return DataResult.ofData(false);
@@ -48,7 +64,7 @@ public class FunctionHandler {
 
     @ApiOperation(value = "获取代码")
     @GetMapping("/get")
-    public DataResult<String> get(@RequestParam String functionName, @RequestParam Boolean isPreview) {
+    public DataResult<String> getCode(@RequestParam String functionName, @RequestParam Boolean isPreview) {
         return DataResult.ofData(functionService.get(functionName, isPreview));
     }
 }
