@@ -1,20 +1,32 @@
 package com.aircas.ptr.foundry.ontology.application.service.impl;
 
 
+import com.aircas.ptr.foundry.common.exception.DuplicatedDataException;
 import com.aircas.ptr.foundry.common.util.FileUtil;
+import com.aircas.ptr.foundry.model.po.Function;
+import com.aircas.ptr.foundry.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.GroovyClassLoaderManager;
 import com.aircas.ptr.foundry.ontology.application.service.FunctionService;
+import com.aircas.ptr.foundry.ontology.entity.bo.FunctionBo;
+import com.aircas.ptr.foundry.ontology.entity.vo.FunctionVO;
+import com.aircas.ptr.foundry.ontology.entity.vo.OntologyMetaVO;
+import com.aircas.ptr.foundry.ontology.repository.dao.FunctionMapper;
 import groovy.lang.GroovyObject;
 import lombok.RequiredArgsConstructor;
 
 import org.apache.commons.io.FileUtils;
+import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 
+import javax.annotation.Resource;
 import java.io.*;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 
 
 @Service
@@ -23,6 +35,45 @@ import java.util.HashMap;
 public class FunctionServiceImpl implements FunctionService {
 
     static String baseDir = "functions";
+
+    @Resource
+    FunctionMapper functionMapper;
+
+    @Override
+    public int saveFunctionMetadata(FunctionBo functionBo) {
+//        int count = functionMapper.selectByApi(function.getApi());
+//        if (count != 0) {
+//            throw new DuplicatedDataException("函数已经存在");
+//        }
+
+        Function function = new Function();
+        BeanUtils.copyProperties(functionBo, function);
+        function.setStatus(1);
+        function.setCreateTime(new Date());
+        function.setUpdateTime(new Date());
+        int count = functionMapper.insert(function);
+        return count;
+    }
+
+    @Override
+    public FunctionVO getFunctionByApi(String api) {
+        Function function = functionMapper.selectByApi(api);
+        FunctionVO functionVO = new FunctionVO();
+        BeanUtils.copyProperties(function, functionVO);
+        return functionVO;
+    }
+
+    @Override
+    public List<FunctionVO> functionMetadataList() {
+        List<Function> list = functionMapper.getAllFunctions();
+        List<FunctionVO> retResult = new ArrayList();
+        for (Function function: list) {
+            FunctionVO functionVO = new FunctionVO();
+            BeanUtils.copyProperties(function, functionVO);
+            retResult.add(functionVO);
+        }
+        return retResult;
+    }
 
     @Override
     public Object handle(String functionName, Boolean isPreview, HashMap<String, Object> parameters) {
@@ -72,6 +123,8 @@ public class FunctionServiceImpl implements FunctionService {
             return null;
         }
     }
+
+
 
     private File getFile(String functionName, Boolean isPreview) {
         this.createFunctionFoldersIfNeeded();

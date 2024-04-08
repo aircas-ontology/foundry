@@ -4,17 +4,38 @@
   <resultMap id="BaseResultMap" type="com.aircas.ptr.foundry.model.po.Function">
     <!-- @mbg.generated: generated automatically, do not modify! -->
     <result column="api" jdbcType="VARCHAR" property="api" />
-    <result column="desc" jdbcType="VARCHAR" property="desc" />
+    <result column="description" jdbcType="VARCHAR" property="description" />
     <result column="status" jdbcType="BIGINT" property="status" />
     <result column="id" jdbcType="BIGINT" property="id" />
-    <result column="ontology_apis" jdbcType="VARCHAR" property="ontologyApis" />
+    <result column="object_types" jdbcType="VARCHAR" property="objectTypes" />
+    <result column="create_time" jdbcType="TIMESTAMP" property="createTime" />
+    <result column="update_time" jdbcType="TIMESTAMP" property="updateTime" />
   </resultMap>
+  <sql id="Base_Column_List">
+    <!-- @mbg.generated: generated automatically, do not modify! -->
+    id, create_time, update_time, api, description, status, object_types
+  </sql>
+  <select id="selectByApi" parameterType="java.lang.String" resultMap="BaseResultMap">
+    <!-- @mbg.generated: generated automatically, do not modify! -->
+    select
+    <include refid="Base_Column_List" />
+    from function
+    where api = #{api,jdbcType=VARCHAR} and status = 1
+  </select>
+
+  <select id="getAllFunctions" resultMap="BaseResultMap">
+    <!-- @mbg.generated: generated automatically, do not modify! -->
+    select
+    <include refid="Base_Column_List" />
+    from function
+    where status = 1
+  </select>
+
   <insert id="insert" parameterType="com.aircas.ptr.foundry.model.po.Function">
     <!-- @mbg.generated: generated automatically, do not modify! -->
-    insert into function (api, `desc`, `status`,
-      id, ontologyApis)
-    values (#{api,jdbcType=VARCHAR}, #{desc,jdbcType=VARCHAR}, #{status,jdbcType=BIGINT}, 
-      #{id,jdbcType=BIGINT}, #{ontologyapis,jdbcType=VARCHAR})
+    insert into function (api, description, status, object_types, create_time, update_time)
+    values (#{api,jdbcType=VARCHAR}, #{description,jdbcType=VARCHAR}, #{status,jdbcType=BIGINT},
+    #{objectTypes,jdbcType=VARCHAR}, #{createTime,jdbcType=TIMESTAMP}, #{updateTime,jdbcType=TIMESTAMP})
   </insert>
   <insert id="insertSelective" parameterType="com.aircas.ptr.foundry.model.po.Function">
     <!-- @mbg.generated: generated automatically, do not modify! -->
@@ -23,8 +44,8 @@
       <if test="api != null">
         api,
       </if>
-      <if test="desc != null">
-        `desc`,
+      <if test="description != null">
+        description,
       </if>
       <if test="status != null">
         `status`,
@@ -32,16 +53,16 @@
       <if test="id != null">
         id,
       </if>
-      <if test="ontologyapis != null">
-        ontologyApis,
+      <if test="objectTypes != null">
+        object_types,
       </if>
     </trim>
     <trim prefix="values (" suffix=")" suffixOverrides=",">
       <if test="api != null">
         #{api,jdbcType=VARCHAR},
       </if>
-      <if test="desc != null">
-        #{desc,jdbcType=VARCHAR},
+      <if test="description != null">
+        #{description,jdbcType=VARCHAR},
       </if>
       <if test="status != null">
         #{status,jdbcType=BIGINT},
@@ -49,8 +70,8 @@
       <if test="id != null">
         #{id,jdbcType=BIGINT},
       </if>
-      <if test="ontologyApis != null">
-        #{ontologyapis,jdbcType=VARCHAR},
+      <if test="objectTypes != null">
+        #{objectTypes,jdbcType=VARCHAR},
       </if>
     </trim>
   </insert>

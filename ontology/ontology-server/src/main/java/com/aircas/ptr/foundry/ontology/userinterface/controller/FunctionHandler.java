@@ -1,15 +1,16 @@
 package com.aircas.ptr.foundry.ontology.userinterface.controller;
 
 import com.aircas.ptr.foundry.common.base.DataResult;
-import com.aircas.ptr.foundry.ontology.OntologyClassGenerator;
 import com.aircas.ptr.foundry.ontology.application.service.FunctionService;
+import com.aircas.ptr.foundry.ontology.entity.bo.FunctionBo;
+import com.aircas.ptr.foundry.ontology.entity.vo.FunctionVO;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
-import java.io.UnsupportedEncodingException;
 import java.util.HashMap;
+import java.util.List;
 
 
 @Api(tags = "function")
@@ -19,8 +20,6 @@ public class FunctionHandler {
 
     @Resource
     FunctionService functionService;
-    @Resource
-    OntologyClassGenerator ontologyClassGenerator;
 
     @ApiOperation(value = "执行某个function")
     @PostMapping("/execute")
@@ -32,24 +31,23 @@ public class FunctionHandler {
     }
 
 
-
     // 将函数
     @ApiOperation(value = "保存函数")
-    @PostMapping("/saveFunction")
-    public DataResult<Boolean> saveFunction(@RequestBody HashMap map) throws UnsupportedEncodingException {
-
+    @PostMapping("/saveMetadata")
+    public DataResult<Integer> saveFunctionMetadata(@RequestBody FunctionBo functionBo) {
+        return DataResult.ofData(functionService.saveFunctionMetadata(functionBo));
     }
 
     //读取函数列表
     @ApiOperation(value = "读取函数列表")
-    @PostMapping("/list")
-    public DataResult<Boolean> functionList(@RequestBody HashMap map) throws UnsupportedEncodingException {
-
+    @GetMapping("/list")
+    public DataResult<List<FunctionVO>> functionList() {
+        return DataResult.ofData(functionService.functionMetadataList());
     }
 
     @ApiOperation(value = "保存代码")
     @PostMapping("/write")
-    public DataResult<Boolean> saveCode(@RequestBody HashMap map) throws UnsupportedEncodingException {
+    public DataResult<Boolean> saveCode(@RequestBody HashMap map) {
         String functionName = (String) map.getOrDefault("functionName", null);
         if (functionName == null) {
             return DataResult.ofData(false);

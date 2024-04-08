@@ -4,12 +4,6 @@ import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
 import org.springframework.web.multipart.MultipartFile;
 
-/**
- * @author dongjunchuan
- * @description
- * @since 2023/12/11 17:28
- */
-
 
 @Data
 public class OntologyMetaBO {

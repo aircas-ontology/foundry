@@ -35,7 +35,6 @@ public class OntologyMetaController {
      public DataResult<Integer> add(@RequestBody OntologyMetaBO ontologyMetaBO) {
 //          int result = ontologyMetaService.add(ontologyMetaBO);
           int result = 1;
-          ontologyClassGenerator.generate(ontologyMetaBO.getUniqueIdentifier());
           return DataResult.ofData(result);
      }
 

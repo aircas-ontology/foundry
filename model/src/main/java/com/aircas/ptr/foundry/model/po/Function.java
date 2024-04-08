@@ -2,9 +2,24 @@ package com.aircas.ptr.foundry.model.po;
 
 import lombok.Data;
 
+import java.util.Date;
+
 
 @Data
 public class Function {
+
+
+    /**
+     * 记录创建时间
+     */
+    private Date createTime;
+
+
+    /**
+     * 记录创建时间
+     */
+    private Date updateTime;
+
     /**
      * Column: api
      */
@@ -13,12 +28,12 @@ public class Function {
     /**
      * Column: desc
      */
-    private String desc;
+    private String description;
 
     /**
      * Column: status
      */
-    private Long status;
+    private Integer status;
 
     /**
      * Column: id
@@ -26,47 +41,8 @@ public class Function {
     private Long id;
 
     /**
-     * Column: ontologyApis
+     * Column: ObjectTypes
      */
-    private String ontologyapis;
+    private String objectTypes;
 
-    public String getApi() {
-        return api;
-    }
-
-    public void setApi(String api) {
-        this.api = api == null ? null : api.trim();
-    }
-
-    public String getDesc() {
-        return desc;
-    }
-
-    public void setDesc(String desc) {
-        this.desc = desc == null ? null : desc.trim();
-    }
-
-    public Long getStatus() {
-        return status;
-    }
-
-    public void setStatus(Long status) {
-        this.status = status;
-    }
-
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public String getOntologyapis() {
-        return ontologyapis;
-    }
-
-    public void setOntologyapis(String ontologyapis) {
-        this.ontologyapis = ontologyapis == null ? null : ontologyapis.trim();
-    }
 }
