@@ -17,6 +17,8 @@ import java.util.List;
 public interface OntologyMetaService {
      OntologyMetaVO getOntologyById(Long id);
 
+     OntologyMetaVO getOntologyByApi(String api);
+
      OntologyMetaVO getOntologyByUniqueIdentifier(String uniqueIdentifier);
 
      Integer add(OntologyMetaBO ontologyMetaBO);

@@ -8,7 +8,7 @@ import java.util.HashMap;
 import java.util.List;
 
 public interface FunctionService {
-    Object handle(String functionName, Boolean isPreview, HashMap<String, Object> parameters);
+    Object handle(String functionName, Boolean isPreview, String objectTypes, HashMap<String, Object> parameters);
 
     Boolean write(String functionName, String code, Boolean isPreview);
 

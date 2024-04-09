@@ -1,22 +1,23 @@
-import com.aircas.ptr.foundry.ontology.function.Ontology;
-import com.aircas.ptr.foundry.ontology.XTMB;
+import com.aircas.ptr.foundry.ontology.Xtmb;
 
 
 class generateXTMBDesc {
 
     String handle(HashMap parameters) {
-        System.out.println(parameters)
-        String primaryKey = parameters.getOrDefault("primaryKey", null);
-        def xtmb = Ontology.getObject("xtmb", primaryKey)
-        def mbmc = Ontology.getTitle(xtmb);
-        def jcgk = Ontology.getProperty(xtmb, "jcgk");
-        def ds = Ontology.getProperty(xtmb, "ds");
-        def zbxh = Ontology.getProperty(xtmb, "zbxh");
-        def jxh = Ontology.getProperty(xtmb, "jxh");
-        return mbmc + "所在的机场港口为:" + jcgk +
+        String primaryKey = parameters.getOrDefault("primaryKey", null)
+        if (primaryKey == null) {
+            return null
+        }
+        def xtmb = new Xtmb(primaryKey)
+        def mbmc = xtmb.mbmc
+        def jcgk = xtmb.jcgk
+        def ds = xtmb.ds
+        def zbxh = xtmb.zbxh
+        def jxh = xtmb.jxh
+        def desc = mbmc +
+                "所在的机场港口为:" + jcgk +
                 ",其吨数为：" + ds  +
                 ",其装备型号为:" + zbxh +
                 ",其机舷号为:" + jxh
-
     }
 }

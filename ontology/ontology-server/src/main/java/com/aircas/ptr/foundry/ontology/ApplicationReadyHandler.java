@@ -21,8 +21,6 @@ class ApplicationReadyHandler implements ApplicationListener<ApplicationReadyEve
     @Override
     public void onApplicationEvent(ApplicationReadyEvent event) {
         GroovyClassLoader classLoader = GroovyClassLoaderManager.getParentClassLoader();
-        Class XMTB = classLoader.parseClass("package com.aircas.ptr.foundry.ontology; class XTMB  extends Object {}");
-        Class XMTB2 =  classLoader.parseClass("package com.aircas.ptr.foundry.ontology; class XTMB2  extends XTMB {}");
         String content = null;
         try {
             content = readResourceContent("groovy/Ontology.groovy");
@@ -30,8 +28,16 @@ class ApplicationReadyHandler implements ApplicationListener<ApplicationReadyEve
             e.printStackTrace();
             System.out.println("Ontology.groovy is not parsed");
         }
-        System.out.println(content);
         classLoader.parseClass(content, "Ontology");
+
+        try {
+            content = readResourceContent("groovy/OntologBaseObject.groovy");
+        } catch (IOException e) {
+            e.printStackTrace();
+            System.out.println("Ontology.OntologBaseObject is not parsed");
+        }
+        System.out.println(content);
+        classLoader.parseClass(content, "OntologBaseObject");
     }
 
     private String readResourceContent(String path) throws IOException {

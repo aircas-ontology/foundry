@@ -3,6 +3,7 @@ package com.aircas.ptr.foundry.ontology.application.service.impl;
 
 import com.aircas.ptr.foundry.common.exception.DuplicatedDataException;
 import com.aircas.ptr.foundry.common.util.FileUtil;
+import com.aircas.ptr.foundry.common.util.StringUtil;
 import com.aircas.ptr.foundry.model.po.Function;
 import com.aircas.ptr.foundry.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.GroovyClassLoaderManager;
@@ -11,6 +12,7 @@ import com.aircas.ptr.foundry.ontology.entity.bo.FunctionBo;
 import com.aircas.ptr.foundry.ontology.entity.vo.FunctionVO;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyMetaVO;
 import com.aircas.ptr.foundry.ontology.repository.dao.FunctionMapper;
+import groovy.lang.GroovyClassLoader;
 import groovy.lang.GroovyObject;
 import lombok.RequiredArgsConstructor;
 
@@ -23,10 +25,7 @@ import java.io.*;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
+import java.util.*;
 
 
 @Service
@@ -76,17 +75,37 @@ public class FunctionServiceImpl implements FunctionService {
     }
 
     @Override
-    public Object handle(String functionName, Boolean isPreview, HashMap<String, Object> parameters) {
+    public Object handle(String functionName, Boolean isPreview, String objectTypes, HashMap<String, Object> parameters) {
         Object result = null;
         try {
+            GroovyClassLoader classLoader = GroovyClassLoaderManager.getIndependentClassLoader();
+            List<String> objectApiList = new ArrayList<>();
+            if(objectTypes != null) {
+                objectApiList = Arrays.asList(objectTypes.split(","));
+            }
+            importAllObjectType(classLoader, objectApiList);
             File file = getFile(functionName, isPreview);
-            Class groovyClass = GroovyClassLoaderManager.getIndependentClassLoader().parseClass(file);
+            Class groovyClass = classLoader.parseClass(file);
             GroovyObject groovyObject = (GroovyObject)groovyClass.newInstance();
             result = groovyObject.invokeMethod("handle", parameters);
         } catch (Exception e) {
             e.printStackTrace();
         }
         return result;
+    }
+
+    private void importAllObjectType(GroovyClassLoader loader, List<String> objectApis) {
+        for(String objectApi: objectApis) {
+            String  className = StringUtil.capitalize(objectApi);
+            String classImplString = "" +
+                    "package com.aircas.ptr.foundry.ontology;" +
+                    "import com.aircas.ptr.foundry.ontology.function.OntologBaseObject; " +
+                    "class " + className + "  extends OntologBaseObject {  " +
+                    className + "(String primaryKey) { super(\"" + objectApi + "\", primaryKey)}" +
+                    "}";
+            System.out.println(classImplString);
+            loader.parseClass(classImplString);
+        }
     }
 
     @Override

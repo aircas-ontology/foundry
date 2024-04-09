@@ -33,8 +33,7 @@ public class OntologyMetaController {
      @PostMapping("/add")
      @ApiOperation(value = "新增本体")
      public DataResult<Integer> add(@RequestBody OntologyMetaBO ontologyMetaBO) {
-//          int result = ontologyMetaService.add(ontologyMetaBO);
-          int result = 1;
+          int result = ontologyMetaService.add(ontologyMetaBO);
           return DataResult.ofData(result);
      }
 

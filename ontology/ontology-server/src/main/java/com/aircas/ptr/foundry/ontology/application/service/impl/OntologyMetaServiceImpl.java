@@ -66,6 +66,14 @@ public class OntologyMetaServiceImpl implements OntologyMetaService {
     }
 
     @Override
+    public OntologyMetaVO getOntologyByApi(String api) {
+        OntologyMeta ontologyMeta = ontologyMetaMapper.selectByApi(api);
+        OntologyMetaVO ontologyMetaVO = new OntologyMetaVO();
+        BeanUtils.copyProperties(ontologyMeta, ontologyMetaVO);
+        return ontologyMetaVO;
+    }
+
+    @Override
     public OntologyMetaVO getOntologyByUniqueIdentifier(String uniqueIdentifier) {
         OntologyMeta ontologyMeta = ontologyMetaMapper.selectByUniqueIdentifier(uniqueIdentifier);
         OntologyMetaVO ontologyMetaVO = new OntologyMetaVO();

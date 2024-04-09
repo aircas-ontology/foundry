@@ -25,9 +25,10 @@ public class FunctionHandler {
     @PostMapping("/execute")
     public DataResult<Object> execute(@RequestBody HashMap map) {
         String functionName = (String) map.getOrDefault("functionName", null);
+        String objectTypes = (String) map.getOrDefault("objectTypes", null);
         Boolean isPreview = (Boolean) map.getOrDefault("isPreview", true);
         HashMap<String, Object> parameters= (HashMap<String, Object>) map.getOrDefault("parameters", null);
-        return DataResult.ofData(functionService.handle(functionName, isPreview, parameters));
+        return DataResult.ofData(functionService.handle(functionName, isPreview, objectTypes, parameters));
     }
 
 

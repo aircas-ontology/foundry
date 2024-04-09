@@ -1,24 +1,7 @@
-import com.aircas.ptr.foundry.ontology.function.Ontology;
+package com.aircas.ptr.foundry.ontology;
+import com.aircas.ptr.foundry.ontology.function.OntologBaseObject;
 
-
-
-class Test {
-
-    String handle(HashMap parameters) {
-        System.out.println(parameters)
-        String primaryKey = parameters.getOrDefault("primaryKey", null);
-        def xtmb = Ontology.getObject("xtmb", primaryKey)
-        def mbmc = Ontology.getTitle(xtmb);
-        def jcgk = Ontology.getProperty(xtmb, "jcgk");
-        def ds = Ontology.getProperty(xtmb, "ds");
-        def zbxh = Ontology.getProperty(xtmb, "zbxh");
-        def jxh = Ontology.getProperty(xtmb, "jxh");
-        return mbmc + "所在的机场港口为:" + jcgk +
-                ",其吨数为：" + ds  +
-                ",其装备型号为:" + zbxh +
-                ",其机舷号为:" + jxh
-
-    }
-}
-
-
+class Xtmb  extends OntologBaseObject {
+    Xtmb(String primaryKey) {
+        super(xtmb", primaryKey)
+    }}

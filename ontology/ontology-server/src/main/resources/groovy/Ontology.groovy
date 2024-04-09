@@ -1,10 +1,16 @@
 package com.aircas.ptr.foundry.ontology.function
 
+import com.aircas.ptr.foundry.model.po.OntologyMeta
 import com.aircas.ptr.foundry.ontology.application.service.ObjectService
 import  com.aircas.ptr.foundry.ontology.OntologyServerApplication
+import com.aircas.ptr.foundry.ontology.application.service.OntologyMetaService
+import com.aircas.ptr.foundry.ontology.application.service.OntologyPropertyService
+import com.aircas.ptr.foundry.ontology.application.service.impl.OntologyMetaServiceImpl
 import com.aircas.ptr.foundry.ontology.entity.vo.LinkedValueVo
 import com.aircas.ptr.foundry.ontology.entity.vo.ObjectValueVo
 import com.aircas.ptr.foundry.ontology.entity.vo.ObjectWithLinkedInfoVO
+import com.aircas.ptr.foundry.ontology.entity.vo.OntologyMetaVO
+import com.aircas.ptr.foundry.ontology.entity.vo.OntologyPropertyVO
 import com.aircas.ptr.foundry.ontology.entity.vo.PropertyValueVO;
 
 
@@ -31,6 +37,14 @@ class Ontology {
         }
         String value = propertyValueVO.getValue();
         return value;
+    }
+
+    static getPropertyList(String api) {
+        OntologyMetaService ontologyMetaService = OntologyServerApplication.context.getBean(OntologyMetaService.class)
+        OntologyMetaVO metaVO =  ontologyMetaService.getOntologyByApi(api)
+        OntologyPropertyService ontologyPropertyService = OntologyServerApplication.context.getBean(OntologyPropertyService.class)
+        List<OntologyPropertyVO> propertyList = ontologyPropertyService.selectByOntologyUniqueIdentifier(metaVO.getUniqueIdentifier())
+        return propertyList
     }
 
     static getTitle(ObjectValueVo object) {
