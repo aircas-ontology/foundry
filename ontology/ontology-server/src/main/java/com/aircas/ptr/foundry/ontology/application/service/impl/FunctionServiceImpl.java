@@ -14,8 +14,10 @@ import com.aircas.ptr.foundry.ontology.entity.vo.OntologyMetaVO;
 import com.aircas.ptr.foundry.ontology.repository.dao.FunctionMapper;
 import groovy.lang.GroovyClassLoader;
 import groovy.lang.GroovyObject;
+import javassist.ClassPool;
 import lombok.RequiredArgsConstructor;
 
+import org.apache.commons.compress.utils.Lists;
 import org.apache.commons.io.FileUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
@@ -26,6 +28,7 @@ import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.stream.Collectors;
 
 
 @Service
@@ -87,7 +90,23 @@ public class FunctionServiceImpl implements FunctionService {
             File file = getFile(functionName, isPreview);
             Class groovyClass = classLoader.parseClass(file);
             GroovyObject groovyObject = (GroovyObject)groovyClass.newInstance();
-            result = groovyObject.invokeMethod("handle", parameters);
+
+            List<Class> functionProxyClasses = Arrays.asList(
+                    GroovyClassLoaderManager.getParentClassLoader().getLoadedClasses()
+            )
+                    .stream()
+                    .filter((Class loadedClass) -> loadedClass.getSimpleName().contains("FunctionProxy"))
+                    .collect(Collectors.toList());
+            if (functionProxyClasses.size() != 1) {
+                return null;
+            }
+            Class functionProxyClass = functionProxyClasses.get(0);
+            GroovyObject functionProxyInstance = (GroovyObject) functionProxyClass.newInstance();
+            HashMap map = new HashMap();
+            map.put("parameter", parameters);
+            map.put("instance", groovyObject);
+            functionProxyInstance.invokeMethod("invoke", map);
+
         } catch (Exception e) {
             e.printStackTrace();
         }

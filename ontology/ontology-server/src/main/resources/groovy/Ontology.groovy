@@ -11,8 +11,21 @@ import com.aircas.ptr.foundry.ontology.entity.vo.ObjectValueVo
 import com.aircas.ptr.foundry.ontology.entity.vo.ObjectWithLinkedInfoVO
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyMetaVO
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyPropertyVO
-import com.aircas.ptr.foundry.ontology.entity.vo.PropertyValueVO;
+import com.aircas.ptr.foundry.ontology.entity.vo.PropertyValueVO
 
+import java.lang.annotation.ElementType
+import java.lang.annotation.Retention
+import java.lang.annotation.RetentionPolicy
+import java.lang.annotation.Target;
+
+
+
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.PARAMETER)
+@interface Parameter{
+    String name () default "null"
+    String description() default "null"
+}
 
 class Ontology {
 

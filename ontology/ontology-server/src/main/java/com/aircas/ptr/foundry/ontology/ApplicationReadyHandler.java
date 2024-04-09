@@ -1,10 +1,7 @@
 package com.aircas.ptr.foundry.ontology;
 
 import groovy.lang.GroovyClassLoader;
-import org.springframework.boot.ApplicationArguments;
-import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.ApplicationEvent;
 import org.springframework.context.ApplicationListener;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
@@ -38,6 +35,15 @@ class ApplicationReadyHandler implements ApplicationListener<ApplicationReadyEve
         }
         System.out.println(content);
         classLoader.parseClass(content, "OntologBaseObject");
+
+        try {
+            content = readResourceContent("groovy/FunctionProxy.groovy");
+        } catch (IOException e) {
+            e.printStackTrace();
+            System.out.println("Ontology.BaseFunction is not parsed");
+        }
+        System.out.println(content);
+        classLoader.parseClass(content, "BaseFunction");
     }
 
     private String readResourceContent(String path) throws IOException {
