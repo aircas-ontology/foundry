@@ -46,6 +46,13 @@ public class FunctionHandler {
         return DataResult.ofData(functionService.functionMetadataList());
     }
 
+    //读取函数列表
+    @ApiOperation(value = "根据api获取函数metadata")
+    @GetMapping("/getMetadataByApi")
+    public DataResult<FunctionVO> functionList(String api) {
+        return DataResult.ofData(functionService.getFunctionByApi(api));
+    }
+
     @ApiOperation(value = "保存代码")
     @PostMapping("/write")
     public DataResult<Boolean> saveCode(@RequestBody HashMap map) {
@@ -66,4 +73,11 @@ public class FunctionHandler {
     public DataResult<String> getCode(@RequestParam String functionName, @RequestParam Boolean isPreview) {
         return DataResult.ofData(functionService.get(functionName, isPreview));
     }
+
+    @ApiOperation(value = "删除函数")
+    @PostMapping("/delete")
+    public DataResult<Boolean> delete(@RequestParam String functionName) {
+        return DataResult.ofData(functionService.delete(functionName));
+    }
+
 }

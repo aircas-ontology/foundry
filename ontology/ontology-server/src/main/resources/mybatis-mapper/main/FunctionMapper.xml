@@ -23,6 +23,14 @@
     where api = #{api,jdbcType=VARCHAR} and status = 1
   </select>
 
+  <delete id="deleteByApi" parameterType="java.lang.String">
+    <!-- @mbg.generated: generated automatically, do not modify! -->
+    delete
+    from function
+    where api = #{api,jdbcType=VARCHAR}
+  </delete>
+
+
   <select id="getAllFunctions" resultMap="BaseResultMap">
     <!-- @mbg.generated: generated automatically, do not modify! -->
     select

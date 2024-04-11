@@ -13,11 +13,6 @@ import org.springframework.web.bind.annotation.*;
 import javax.annotation.Resource;
 import java.util.List;
 
-/**
- * @author dongjunchuan
- * @description
- * @since 2023/12/11 16:06
- */
 
 @Api(tags = "本体管理")
 @RestController

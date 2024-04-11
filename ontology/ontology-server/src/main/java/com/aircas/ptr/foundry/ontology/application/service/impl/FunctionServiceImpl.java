@@ -1,7 +1,6 @@
 package com.aircas.ptr.foundry.ontology.application.service.impl;
 
 
-import com.aircas.ptr.foundry.common.exception.DuplicatedDataException;
 import com.aircas.ptr.foundry.common.util.FileUtil;
 import com.aircas.ptr.foundry.common.util.StringUtil;
 import com.aircas.ptr.foundry.model.po.Function;
@@ -13,16 +12,13 @@ import com.aircas.ptr.foundry.ontology.entity.vo.FunctionVO;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyMetaVO;
 import com.aircas.ptr.foundry.ontology.function.FunctionUtils;
 import com.aircas.ptr.foundry.ontology.repository.dao.FunctionMapper;
+import com.aircas.ptr.foundry.ontology.repository.dao.OntologyMetaMapper;
 import groovy.lang.GroovyClassLoader;
 import groovy.lang.GroovyObject;
-import groovy.lang.MetaMethod;
-import javassist.ClassPool;
 import lombok.RequiredArgsConstructor;
 
-import org.apache.commons.compress.utils.Lists;
 import org.apache.commons.io.FileUtils;
 import org.springframework.beans.BeanUtils;
-import org.springframework.beans.MethodInvocationException;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
@@ -45,6 +41,9 @@ public class FunctionServiceImpl implements FunctionService {
     @Resource
     FunctionMapper functionMapper;
 
+    @Resource
+    OntologyMetaMapper ontologyMetaMapper;
+
     @Override
     public int saveFunctionMetadata(FunctionBo functionBo) {
 //        int count = functionMapper.selectByApi(function.getApi());
@@ -66,7 +65,27 @@ public class FunctionServiceImpl implements FunctionService {
         Function function = functionMapper.selectByApi(api);
         FunctionVO functionVO = new FunctionVO();
         BeanUtils.copyProperties(function, functionVO);
+        List<FunctionVO> list = new ArrayList<FunctionVO>();
+        list.add(functionVO);
+        this.setOntologyList(list);
         return functionVO;
+    }
+
+    @Override
+    public Boolean delete(String functionName) {
+        Integer status = functionMapper.deleteByApi(functionName);
+        System.out.println(status);
+        if (status == 0) {
+            return false;
+        }
+        try {
+            File file = getFile(functionName, false);
+            file.delete();
+        } catch (SecurityException exception) {
+            System.out.println("删除文件失败");
+            return false;
+        }
+        return true;
     }
 
     @Override
@@ -78,7 +97,48 @@ public class FunctionServiceImpl implements FunctionService {
             BeanUtils.copyProperties(function, functionVO);
             retResult.add(functionVO);
         }
+        this.setOntologyList(retResult);
         return retResult;
+    }
+
+    private void setOntologyList(List<FunctionVO> functionVOList) {
+        Map<String, OntologyMeta> ontologyMetas = ontologyMetaMapper
+                .selectAllOntologies()
+                .stream()
+                .map((meta) -> new Map.Entry<String, OntologyMeta>() {
+                    @Override
+                    public String getKey() {
+                        return meta.getApiName();
+                    }
+
+                    @Override
+                    public OntologyMeta getValue() {
+                        return meta;
+                    }
+
+                    @Override
+                    public OntologyMeta setValue(OntologyMeta value) {
+                        return meta;
+                    }
+                })
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+
+        functionVOList.forEach(functionVO -> {
+            String objectTypes = functionVO.getObjectTypes();
+            if (objectTypes == null || objectTypes.length() == 0) {
+                return;
+            }
+            String[] ontologyApis = objectTypes.split(",");
+            List<OntologyMetaVO> list =  Arrays.stream(ontologyApis)
+                    .map(api -> ontologyMetas.get(api))
+                    .map(meta -> {
+                        OntologyMetaVO vo = new OntologyMetaVO();
+                        BeanUtils.copyProperties(meta, vo);
+                        return vo;
+                    })
+                    .collect(Collectors.toList());
+            functionVO.setOntologyList(list);
+        });
     }
 
     @Override

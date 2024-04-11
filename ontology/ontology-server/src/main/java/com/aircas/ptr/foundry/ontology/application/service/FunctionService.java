@@ -19,4 +19,6 @@ public interface FunctionService {
     List<FunctionVO> functionMetadataList();
 
     FunctionVO getFunctionByApi(String api);
+
+    Boolean delete(String functionName);
 }

@@ -10,10 +10,11 @@ public interface FunctionMapper {
 
     int insert(Function function);
 
-
     int insertSelective(Function function);
 
     Function selectByApi(String api);
+
+    Integer deleteByApi(String api);
 
     List<Function> getAllFunctions();
 }
