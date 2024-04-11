@@ -5,7 +5,7 @@ import com.aircas.ptr.foundry.ontology.Xtmb
 class generateXTMBDesc {
 
     String handle(@Parameter(name = "primaryKey", description = "舰船的主键") String primaryKey,
-                  String ss) {
+                  @Parameter(name = "number", description = "无用的参数") Integer number) {
         if (primaryKey == null) {
             return null
         }

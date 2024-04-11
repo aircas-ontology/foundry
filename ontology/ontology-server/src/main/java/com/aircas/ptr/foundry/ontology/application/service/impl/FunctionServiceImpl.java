@@ -93,14 +93,14 @@ public class FunctionServiceImpl implements FunctionService {
             //将本体涉及的类都import
             importAllObjectType(classLoader, objectApiList);
 
-            GroovyObject functionInstance = getFunctionInstance(classLoader, functionName, isPreview)
+            GroovyObject functionInstance = getFunctionInstance(classLoader, functionName, isPreview);
 
             HashMap functionProxyParameters = new HashMap();
+            Method handleMethod = FunctionUtils.getMethod(functionInstance, "handle");
             functionProxyParameters.put("parameters", parameters);
-            functionProxyParameters.put("parameterNames", FunctionUtils.getAnnotatedMethodParameterNames(
-                    FunctionUtils.getGroovyMethod(functionInstance, "handle")
-            ));
+            functionProxyParameters.put("parameterNames", FunctionUtils.getAnnotatedMethodParameterNames(handleMethod));
             functionProxyParameters.put("instance", functionInstance);
+            functionProxyParameters.put("method", handleMethod);
             result = FunctionUtils.getFunctionProxyInstance().invokeMethod("invoke", functionProxyParameters);
         } catch (Exception e) {
             e.printStackTrace();
