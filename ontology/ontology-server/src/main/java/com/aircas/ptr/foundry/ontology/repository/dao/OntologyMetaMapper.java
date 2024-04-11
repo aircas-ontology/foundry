@@ -18,6 +18,8 @@ public interface OntologyMetaMapper {
 
     OntologyMeta selectByUniqueIdentifier(String uniqueIdentifier);
 
+    List<OntologyMeta> selectByUniqueIdentifiers(List<String> list);
+
     OntologyMeta selectByApi(String api);
 
     int updateByPrimaryKeySelective(OntologyMeta record);

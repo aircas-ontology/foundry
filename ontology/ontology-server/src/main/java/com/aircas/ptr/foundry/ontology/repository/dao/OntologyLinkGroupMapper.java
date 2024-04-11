@@ -33,6 +33,10 @@ public interface OntologyLinkGroupMapper {
      */
     OntologyLinkGroup selectByPrimaryKey(Long id);
 
+
+    List<OntologyLinkGroup> selectAll();
+
+
     /**
      * @mbg.generated generated automatically, do not modify!
      */

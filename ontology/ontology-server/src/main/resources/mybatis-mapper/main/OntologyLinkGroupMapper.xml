@@ -32,6 +32,13 @@
     where id = #{id,jdbcType=BIGINT}
   </select>
 
+  <select id="selectAll" parameterType="java.lang.String" resultMap="BaseResultMap">
+    <!-- @mbg.generated: generated automatically, do not modify! -->
+    select
+    <include refid="Base_Column_List" />
+    from ontology_link_group
+  </select>
+
   <select id="selectByOntologyUniqueIdentifierFrom" parameterType="java.lang.String" resultMap="BaseResultMap">
     <!-- @mbg.generated: generated automatically, do not modify! -->
     select

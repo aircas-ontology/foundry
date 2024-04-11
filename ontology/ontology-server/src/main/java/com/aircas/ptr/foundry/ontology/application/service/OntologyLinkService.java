@@ -20,4 +20,6 @@ public interface OntologyLinkService {
     List<OntologyLinkGroupVO> getLinkByOntologyUniqueIdentifier(String uniqueIdentifier);
 
     Integer deleteLinkByOntologyUniqueIdentifier(String uniqueIdentifier);
+
+    List<OntologyLinkGroupVO> getAll();
 }

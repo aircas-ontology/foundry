@@ -49,4 +49,10 @@ public class OntologyLinkController {
     public DataResult<Integer> deleteLinkByOntologyUniqueIdentifier(@RequestParam @ApiParam(value = "本体id", required = true) String uniqueIdentifier) {
         return DataResult.ofData(ontologyLinkService.deleteLinkByOntologyUniqueIdentifier(uniqueIdentifier));
     }
+
+    @GetMapping("/all")
+    @ApiOperation(value = "得到所有的关系")
+    public DataResult<List<OntologyLinkGroupVO>> getAllLinks() {
+        return DataResult.ofData(ontologyLinkService.getAll());
+    }
 }
