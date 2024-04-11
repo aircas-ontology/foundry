@@ -11,19 +11,23 @@ import com.aircas.ptr.foundry.ontology.application.service.FunctionService;
 import com.aircas.ptr.foundry.ontology.entity.bo.FunctionBo;
 import com.aircas.ptr.foundry.ontology.entity.vo.FunctionVO;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyMetaVO;
+import com.aircas.ptr.foundry.ontology.function.FunctionUtils;
 import com.aircas.ptr.foundry.ontology.repository.dao.FunctionMapper;
 import groovy.lang.GroovyClassLoader;
 import groovy.lang.GroovyObject;
+import groovy.lang.MetaMethod;
 import javassist.ClassPool;
 import lombok.RequiredArgsConstructor;
 
 import org.apache.commons.compress.utils.Lists;
 import org.apache.commons.io.FileUtils;
 import org.springframework.beans.BeanUtils;
+import org.springframework.beans.MethodInvocationException;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
 import java.io.*;
+import java.lang.reflect.Method;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -86,31 +90,30 @@ public class FunctionServiceImpl implements FunctionService {
             if(objectTypes != null) {
                 objectApiList = Arrays.asList(objectTypes.split(","));
             }
+            //将本体涉及的类都import
             importAllObjectType(classLoader, objectApiList);
-            File file = getFile(functionName, isPreview);
-            Class groovyClass = classLoader.parseClass(file);
-            GroovyObject groovyObject = (GroovyObject)groovyClass.newInstance();
 
-            List<Class> functionProxyClasses = Arrays.asList(
-                    GroovyClassLoaderManager.getParentClassLoader().getLoadedClasses()
-            )
-                    .stream()
-                    .filter((Class loadedClass) -> loadedClass.getSimpleName().contains("FunctionProxy"))
-                    .collect(Collectors.toList());
-            if (functionProxyClasses.size() != 1) {
-                return null;
-            }
-            Class functionProxyClass = functionProxyClasses.get(0);
-            GroovyObject functionProxyInstance = (GroovyObject) functionProxyClass.newInstance();
-            HashMap map = new HashMap();
-            map.put("parameter", parameters);
-            map.put("instance", groovyObject);
-            functionProxyInstance.invokeMethod("invoke", map);
+            GroovyObject functionInstance = getFunctionInstance(classLoader, functionName, isPreview)
 
+            HashMap functionProxyParameters = new HashMap();
+            functionProxyParameters.put("parameters", parameters);
+            functionProxyParameters.put("parameterNames", FunctionUtils.getAnnotatedMethodParameterNames(
+                    FunctionUtils.getGroovyMethod(functionInstance, "handle")
+            ));
+            functionProxyParameters.put("instance", functionInstance);
+            result = FunctionUtils.getFunctionProxyInstance().invokeMethod("invoke", functionProxyParameters);
         } catch (Exception e) {
             e.printStackTrace();
         }
         return result;
+    }
+
+
+    static private GroovyObject getFunctionInstance(GroovyClassLoader classLoader, String functionName, boolean isPreview)
+            throws IllegalAccessException, InstantiationException, IOException {
+        File file = getFile(functionName, isPreview);
+        Class groovyClass = classLoader.parseClass(file);
+        return (GroovyObject)groovyClass.newInstance();
     }
 
     private void importAllObjectType(GroovyClassLoader loader, List<String> objectApis) {
@@ -164,8 +167,8 @@ public class FunctionServiceImpl implements FunctionService {
 
 
 
-    private File getFile(String functionName, Boolean isPreview) {
-        this.createFunctionFoldersIfNeeded();
+    private static File getFile(String functionName, Boolean isPreview) {
+        createFunctionFoldersIfNeeded();
         String fileName = functionName + ".groovy";
         File path;
         if (isPreview) {
@@ -176,7 +179,7 @@ public class FunctionServiceImpl implements FunctionService {
         return path;
     }
 
-    private void createFunctionFoldersIfNeeded() {
+    private static void createFunctionFoldersIfNeeded() {
         if (FileUtil.allFiles(baseDir) == null) {
             FileUtil.createDir(baseDir);
             FileUtil.createDir(FileUtils.getFile(baseDir, "preview").getPath());

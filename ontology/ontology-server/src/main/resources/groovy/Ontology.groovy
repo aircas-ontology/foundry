@@ -20,13 +20,6 @@ import java.lang.annotation.Target;
 
 
 
-@Retention(RetentionPolicy.RUNTIME)
-@Target(ElementType.PARAMETER)
-@interface Parameter{
-    String name () default "null"
-    String description() default "null"
-}
-
 class Ontology {
 
     static getObjectByOntologyUniqueIdentifier(identifier, primaryKey) {
