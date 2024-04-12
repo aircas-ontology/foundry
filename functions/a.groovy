@@ -10,7 +10,7 @@ class generateXTMBDesc {
         }
         def xtmb = new Xtmb(primaryKey)
         def mbmc = xtmb.mbmc
-        def jcgk = xtmb.jcgk
+        def jcgk = xtmb.jcgk2
         def ds = xtmb.ds
         def zbxh = xtmb.zbxh
         def jxh = xtmb.jxh

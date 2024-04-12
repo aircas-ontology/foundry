@@ -12,7 +12,7 @@ class generateXTMBDesc {
         def mbmc = xtmb.mbmc
         def jcgk = xtmb.jcgk
         def ds = xtmb.ds
-        def zbxh = xtmb.zbxh
+        def zbxh = xtmb.zbxh22
         def jxh = xtmb.jxh
         def desc = mbmc +
                 "所在的机场港口为:" + jcgk +

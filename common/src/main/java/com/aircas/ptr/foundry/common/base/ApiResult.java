@@ -15,9 +15,13 @@ public class ApiResult {
 
     private String rejectReason = "";
 
+    private Integer errorCode = -1;
+
     private String thumbPath = "";
 
     private long strategyVersionNumber;
+
+    private String cause;
 
     public static final String TRUE = "true";
     public static final String FALSE = "false";
@@ -30,6 +34,13 @@ public class ApiResult {
     public ApiResult(String aTrue, long strategyVersionNumber) {
         this.result = aTrue;
         this.strategyVersionNumber = strategyVersionNumber;
+    }
+
+    public ApiResult(String result, String msg, Integer errorCode, String cause) {
+        this.result = result;
+        this.rejectReason = msg;
+        this.errorCode = errorCode;
+        this.cause = cause;
     }
 
     public static ApiResult success(String thumbPath) {
@@ -46,6 +57,10 @@ public class ApiResult {
 
     public static ApiResult fail(String msg) {
         return new ApiResult(FALSE, msg);
+    }
+
+    public static ApiResult fail(String msg, Integer errorCode, String cause) {
+       return new ApiResult(FALSE, msg, errorCode, cause);
     }
 
     public boolean succeed() {

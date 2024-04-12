@@ -15,7 +15,7 @@ public class DataResult<T> extends ApiResult {
     private Pagination pagination;
 
     public static DataResult<?> empty() {
-        return new DataResult<>();
+        return new DataResult<>(null);
     }
 
     public static <T> DataResult<T> ofData(T data) {
@@ -23,6 +23,7 @@ public class DataResult<T> extends ApiResult {
     }
 
     public DataResult(T detail) {
+        super(TRUE, "");
         this.detail = detail;
     }
 }
