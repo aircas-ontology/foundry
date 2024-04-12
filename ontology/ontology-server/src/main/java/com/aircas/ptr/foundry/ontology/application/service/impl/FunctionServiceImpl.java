@@ -5,6 +5,7 @@ import com.aircas.ptr.foundry.common.util.FileUtil;
 import com.aircas.ptr.foundry.common.util.StringUtil;
 import com.aircas.ptr.foundry.model.po.Function;
 import com.aircas.ptr.foundry.model.po.OntologyMeta;
+import com.aircas.ptr.foundry.ontology.Exception.*;
 import com.aircas.ptr.foundry.ontology.GroovyClassLoaderManager;
 import com.aircas.ptr.foundry.ontology.application.service.FunctionService;
 import com.aircas.ptr.foundry.ontology.entity.bo.FunctionBo;
@@ -17,7 +18,9 @@ import groovy.lang.GroovyClassLoader;
 import groovy.lang.GroovyObject;
 import lombok.RequiredArgsConstructor;
 
+import net.bytebuddy.implementation.bytecode.Throw;
 import org.apache.commons.io.FileUtils;
+import org.codehaus.groovy.control.CompilationFailedException;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 
@@ -142,9 +145,9 @@ public class FunctionServiceImpl implements FunctionService {
     }
 
     @Override
-    public Object handle(String functionName, Boolean isPreview, String objectTypes, HashMap<String, Object> parameters) {
-        Object result = null;
-        try {
+    public Object handle(String functionName, Boolean isPreview, String objectTypes, HashMap<String, Object> parameters)
+            throws FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionRunTimeException {
+
             GroovyClassLoader classLoader = GroovyClassLoaderManager.getIndependentClassLoader();
             List<String> objectApiList = new ArrayList<>();
             if(objectTypes != null) {
@@ -161,19 +164,35 @@ public class FunctionServiceImpl implements FunctionService {
             functionProxyParameters.put("parameterNames", FunctionUtils.getAnnotatedMethodParameterNames(handleMethod));
             functionProxyParameters.put("instance", functionInstance);
             functionProxyParameters.put("method", handleMethod);
-            result = FunctionUtils.getFunctionProxyInstance().invokeMethod("invoke", functionProxyParameters);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        return result;
+            GroovyObject functionProxy = FunctionUtils.getFunctionProxyInstance();
+            if (functionProxy == null) {
+                System.out.println("functionProxy没有初始化成功");
+                return null;
+            }
+            try {
+                return functionProxy.invokeMethod("invoke", functionProxyParameters);
+            } catch (Exception exception) {
+                throw new FunctionRunTimeException(exception);
+            }
     }
 
 
     static private GroovyObject getFunctionInstance(GroovyClassLoader classLoader, String functionName, boolean isPreview)
-            throws IllegalAccessException, InstantiationException, IOException {
+            throws FunctionFileNotCompiled, FunctionClassNotNewInstanceException {
         File file = getFile(functionName, isPreview);
-        Class groovyClass = classLoader.parseClass(file);
-        return (GroovyObject)groovyClass.newInstance();
+        Class groovyClass;
+        try {
+            groovyClass = classLoader.parseClass(file);
+        } catch (IOException e) {
+            throw new FunctionFileNotCompiled(e);
+        }
+        try {
+            return (GroovyObject)groovyClass.newInstance();
+        }  catch (IllegalAccessException e) {
+            throw new FunctionClassNotNewInstanceException(e);
+        } catch (InstantiationException e) {
+            throw new FunctionClassNotNewInstanceException(e);
+        }
     }
 
     private void importAllObjectType(GroovyClassLoader loader, List<String> objectApis) {

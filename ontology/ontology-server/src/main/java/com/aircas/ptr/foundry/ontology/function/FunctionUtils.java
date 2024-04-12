@@ -36,7 +36,7 @@ public class FunctionUtils {
     }
 
 
-    public static GroovyObject getFunctionProxyInstance() throws IllegalAccessException, InstantiationException {
+    public static GroovyObject getFunctionProxyInstance() {
         List<Class> functionProxyClasses = Arrays.asList(
                 GroovyClassLoaderManager.getParentClassLoader().getLoadedClasses()
         )
@@ -47,6 +47,13 @@ public class FunctionUtils {
             return null;
         }
         Class functionProxyClass = functionProxyClasses.get(0);
-        return (GroovyObject) functionProxyClass.newInstance();
+        try {
+            return (GroovyObject) functionProxyClass.newInstance();
+        }  catch (IllegalAccessException e) {
+            e.printStackTrace();
+        } catch (InstantiationException e) {
+            e.printStackTrace();
+        }
+        return null;
     }
 }

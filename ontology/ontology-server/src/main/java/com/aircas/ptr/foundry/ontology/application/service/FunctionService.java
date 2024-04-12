@@ -1,14 +1,18 @@
 package com.aircas.ptr.foundry.ontology.application.service;
 
 
+import com.aircas.ptr.foundry.ontology.Exception.FunctionClassNotNewInstanceException;
+import com.aircas.ptr.foundry.ontology.Exception.FunctionFileNotCompiled;
+import com.aircas.ptr.foundry.ontology.Exception.FunctionRunTimeException;
 import com.aircas.ptr.foundry.ontology.entity.bo.FunctionBo;
 import com.aircas.ptr.foundry.ontology.entity.vo.FunctionVO;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 
 public interface FunctionService {
-    Object handle(String functionName, Boolean isPreview, String objectTypes, HashMap<String, Object> parameters);
+    Object handle(String functionName, Boolean isPreview, String objectTypes, HashMap<String, Object> parameters) throws FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionRunTimeException;
 
     Boolean write(String functionName, String code, Boolean isPreview);
 

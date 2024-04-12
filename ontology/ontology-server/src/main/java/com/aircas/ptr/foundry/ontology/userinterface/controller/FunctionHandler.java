@@ -1,6 +1,8 @@
 package com.aircas.ptr.foundry.ontology.userinterface.controller;
 
+import com.aircas.ptr.foundry.common.base.ApiResult;
 import com.aircas.ptr.foundry.common.base.DataResult;
+import com.aircas.ptr.foundry.ontology.Exception.BaseException;
 import com.aircas.ptr.foundry.ontology.application.service.FunctionService;
 import com.aircas.ptr.foundry.ontology.entity.bo.FunctionBo;
 import com.aircas.ptr.foundry.ontology.entity.vo.FunctionVO;
@@ -23,12 +25,16 @@ public class FunctionHandler {
 
     @ApiOperation(value = "执行某个function")
     @PostMapping("/execute")
-    public DataResult<Object> execute(@RequestBody HashMap map) {
+    public ApiResult execute(@RequestBody HashMap map) {
         String functionName = (String) map.getOrDefault("functionName", null);
         String objectTypes = (String) map.getOrDefault("objectTypes", null);
         Boolean isPreview = (Boolean) map.getOrDefault("isPreview", true);
         HashMap<String, Object> parameters= (HashMap<String, Object>) map.getOrDefault("parameters", null);
-        return DataResult.ofData(functionService.handle(functionName, isPreview, objectTypes, parameters));
+        try {
+            return DataResult.ofData(functionService.handle(functionName, isPreview, objectTypes, parameters));
+        } catch (BaseException e) {
+            return DataResult.fail(e.getMessage(), e.code, e.getRootCause().getMessage());
+        }
     }
 
 
