@@ -1,6 +1,8 @@
 package com.aircas.ptr.foundry.ontology.function;
 
+import com.aircas.ptr.foundry.model.po.OntologyType;
 import com.aircas.ptr.foundry.ontology.GroovyClassLoaderManager;
+import com.aircas.ptr.foundry.ontology.entity.vo.ParameterMetadataVO;
 import groovy.lang.GroovyObject;
 
 import java.lang.annotation.Annotation;
@@ -13,18 +15,30 @@ import java.util.stream.Collectors;
 public class FunctionUtils {
 
     //得到函数参数名称
-    public static List getAnnotatedMethodParameterNames(Method method) {
+    public static List<Parameter> getMethodParameterAnnotates(Method method) {
         Annotation[][] annotations = method.getParameterAnnotations();
-        List<String> names = new ArrayList<>();
+        List<Parameter> parameters = new ArrayList<>();
         for (Annotation[] annotation: annotations) {
             if (annotation.length == 0) {
-                names.add(null);
+                parameters.add(null);
             } else {
-                names.add(((Parameter)annotation[0]).name());
+                parameters.add(((Parameter)annotation[0]));
             }
         }
-        return names;
+        return parameters;
     }
+
+    public static List<OntologyType> getParameterTypes(Method method) {
+        Class[] parameterTypes = method.getParameterTypes();
+        List<OntologyType> paramTypes = new ArrayList<>();
+        for(int i = 0; i < parameterTypes.length; i ++) {
+            Class parameterClass = parameterTypes[i];
+            OntologyType type = OntologyType.valueOf(parameterClass);
+            paramTypes.add(type);
+        }
+        return paramTypes;
+    }
+
 
     public static Method getMethod(GroovyObject groovyObject, String methodName) {
         List<Method> matchedMethods = Arrays.asList(groovyObject.getClass().getMethods())

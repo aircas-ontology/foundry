@@ -11,16 +11,17 @@ import com.aircas.ptr.foundry.ontology.application.service.FunctionService;
 import com.aircas.ptr.foundry.ontology.entity.bo.FunctionBo;
 import com.aircas.ptr.foundry.ontology.entity.vo.FunctionVO;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyMetaVO;
+import com.aircas.ptr.foundry.ontology.entity.vo.ParameterMetadataVO;
 import com.aircas.ptr.foundry.ontology.function.FunctionUtils;
+import com.aircas.ptr.foundry.ontology.function.Parameter;
 import com.aircas.ptr.foundry.ontology.repository.dao.FunctionMapper;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyMetaMapper;
 import groovy.lang.GroovyClassLoader;
 import groovy.lang.GroovyObject;
 import lombok.RequiredArgsConstructor;
+import com.aircas.ptr.foundry.model.po.OntologyType;
 
-import net.bytebuddy.implementation.bytecode.Throw;
 import org.apache.commons.io.FileUtils;
-import org.codehaus.groovy.control.CompilationFailedException;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 
@@ -161,7 +162,12 @@ public class FunctionServiceImpl implements FunctionService {
             HashMap functionProxyParameters = new HashMap();
             Method handleMethod = FunctionUtils.getMethod(functionInstance, "handle");
             functionProxyParameters.put("parameters", parameters);
-            functionProxyParameters.put("parameterNames", FunctionUtils.getAnnotatedMethodParameterNames(handleMethod));
+            functionProxyParameters.put("parameterNames",
+                    FunctionUtils.getMethodParameterAnnotates(handleMethod)
+                            .stream()
+                            .map((annotate) -> annotate.name())
+                            .collect(Collectors.toList())
+            );
             functionProxyParameters.put("instance", functionInstance);
             functionProxyParameters.put("method", handleMethod);
             GroovyObject functionProxy = FunctionUtils.getFunctionProxyInstance();
@@ -174,6 +180,31 @@ public class FunctionServiceImpl implements FunctionService {
             } catch (Exception exception) {
                 throw new FunctionRunTimeException(exception);
             }
+    }
+
+    @Override
+    public List<ParameterMetadataVO> getParameters(String functionName, Boolean isPreview, String objectTypes) throws FunctionClassNotNewInstanceException, FunctionFileNotCompiled {
+        GroovyClassLoader classLoader = GroovyClassLoaderManager.getIndependentClassLoader();
+        List<String> objectApiList = new ArrayList<>();
+        if(objectTypes != null) {
+            objectApiList = Arrays.asList(objectTypes.split(","));
+        }
+        //将本体涉及的类都import
+        importAllObjectType(classLoader, objectApiList);
+
+        GroovyObject functionInstance = getFunctionInstance(classLoader, functionName, isPreview);
+
+        Method handleMethod = FunctionUtils.getMethod(functionInstance, "handle");
+        List<ParameterMetadataVO> params = new ArrayList<>();
+        List<Parameter> parameters = FunctionUtils.getMethodParameterAnnotates(handleMethod);
+        List<OntologyType> types = FunctionUtils.getParameterTypes(handleMethod);
+        for (int i = 0; i < types.size(); i ++) {
+            OntologyType type = types.get(i);
+            Parameter parameter = parameters.get(i);
+            ParameterMetadataVO vo = new ParameterMetadataVO(parameter.name(), type.name(), parameter.description());
+            params.add(vo);
+        }
+        return params;
     }
 
 

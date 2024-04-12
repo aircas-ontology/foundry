@@ -21,6 +21,6 @@ class FunctionProxy {
                 params.add(parameterType.cast(parameters.get(name)))
             }
         }
-        method.invoke(instance, *params)
+        return method.invoke(instance, *params)
     }
 }

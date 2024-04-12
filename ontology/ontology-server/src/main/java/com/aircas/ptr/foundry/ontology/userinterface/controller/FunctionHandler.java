@@ -37,6 +37,18 @@ public class FunctionHandler {
         }
     }
 
+    @ApiOperation(value = "得到函数参数类型")
+    @GetMapping("/parameterMetadatas")
+    public ApiResult getParameterMetadatas(@RequestBody HashMap map) {
+        String functionName = (String) map.getOrDefault("functionName", null);
+        String objectTypes = (String) map.getOrDefault("objectTypes", null);
+        Boolean isPreview = (Boolean) map.getOrDefault("isPreview", true);
+        try {
+            return DataResult.ofData(functionService.getParameters(functionName, isPreview, objectTypes));
+        } catch (BaseException e) {
+            return DataResult.fail(e.getMessage(), e.code, e.getRootCause().getMessage());
+        }
+    }
 
     // 将函数
     @ApiOperation(value = "保存函数")

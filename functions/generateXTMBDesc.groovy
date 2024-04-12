@@ -4,7 +4,8 @@ import com.aircas.ptr.foundry.ontology.Xtmb
 
 class generateXTMBDesc {
 
-    String handle(@Parameter(name = "primaryKey", description = "舰船的主键") String primaryKey) {
+    String handle(
+            @Parameter(name = "primaryKey", description = "舰船的主键") String primaryKey) {
         if (primaryKey == null) {
             return null
         }
@@ -12,7 +13,7 @@ class generateXTMBDesc {
         def mbmc = xtmb.mbmc
         def jcgk = xtmb.jcgk
         def ds = xtmb.ds
-        def zbxh = xtmb.zbxh22
+        def zbxh = xtmb.zbxh
         def jxh = xtmb.jxh
         def desc = mbmc +
                 "所在的机场港口为:" + jcgk +
