@@ -65,6 +65,21 @@ public class FunctionServiceImpl implements FunctionService {
     }
 
     @Override
+    public int updateFunctionMetadata(FunctionBo functionBo) {
+//        int count = functionMapper.selectByApi(function.getApi());
+//        if (count != 0) {
+//            throw new DuplicatedDataException("函数已经存在");
+//        }
+
+        Function function = new Function();
+        BeanUtils.copyProperties(functionBo, function);
+        function.setStatus(1);
+        function.setUpdateTime(new Date());
+        int count = functionMapper.updateByApi(function);
+        return count;
+    }
+
+    @Override
     public FunctionVO getFunctionByApi(String api) {
         Function function = functionMapper.selectByApi(api);
         FunctionVO functionVO = new FunctionVO();
@@ -243,9 +258,7 @@ public class FunctionServiceImpl implements FunctionService {
     @Override
     public Boolean write(String functionName, String code, Boolean isPreview) {
         File file = getFile(functionName, isPreview);
-        if (isPreview) {
-            file.delete();
-        }
+        file.delete();
         try {
             if (file.createNewFile()) {
                 System.out.println("file created in path" +  file.getAbsolutePath());

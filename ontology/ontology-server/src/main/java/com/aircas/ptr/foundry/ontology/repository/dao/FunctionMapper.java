@@ -10,7 +10,7 @@ public interface FunctionMapper {
 
     int insert(Function function);
 
-    int insertSelective(Function function);
+    int updateByApi(Function function);
 
     Function selectByApi(String api);
 

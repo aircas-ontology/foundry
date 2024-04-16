@@ -23,6 +23,8 @@ public interface FunctionService {
 
     int saveFunctionMetadata(FunctionBo function);
 
+    int updateFunctionMetadata(FunctionBo functionBo);
+
     List<FunctionVO> functionMetadataList();
 
     FunctionVO getFunctionByApi(String api);

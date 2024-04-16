@@ -49,9 +49,7 @@
     <!-- @mbg.generated: generated automatically, do not modify! -->
     insert into function
     <trim prefix="(" suffix=")" suffixOverrides=",">
-      <if test="api != null">
         api,
-      </if>
       <if test="description != null">
         description,
       </if>
@@ -66,9 +64,7 @@
       </if>
     </trim>
     <trim prefix="values (" suffix=")" suffixOverrides=",">
-      <if test="api != null">
         #{api,jdbcType=VARCHAR},
-      </if>
       <if test="description != null">
         #{description,jdbcType=VARCHAR},
       </if>
@@ -83,4 +79,24 @@
       </if>
     </trim>
   </insert>
+
+  <update id="updateByApi" parameterType="com.aircas.ptr.foundry.model.po.Function">
+    update "function"
+    <set>
+      <if test="description != null">
+        "description" = #{description,jdbcType=INTEGER},
+      </if>
+      <if test="status != null">
+        "status" = #{status,jdbcType=INTEGER},
+      </if>
+      <if test="objectTypes != null">
+        "object_types" = #{objectTypes,jdbcType=INTEGER},
+      </if>
+      <if test="updateTime != null">
+        update_time = #{updateTime,jdbcType=TIMESTAMP},
+      </if>
+    </set>
+    where api = #{api,jdbcType=VARCHAR}
+  </update>
 </mapper>
+

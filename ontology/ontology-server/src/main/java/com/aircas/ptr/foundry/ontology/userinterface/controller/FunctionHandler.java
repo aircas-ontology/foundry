@@ -50,10 +50,16 @@ public class FunctionHandler {
     }
 
     // 将函数
-    @ApiOperation(value = "保存函数")
+    @ApiOperation(value = "保存函数Metadata")
     @PostMapping("/saveMetadata")
     public DataResult<Integer> saveFunctionMetadata(@RequestBody FunctionBo functionBo) {
         return DataResult.ofData(functionService.saveFunctionMetadata(functionBo));
+    }
+
+    @ApiOperation(value = "更新函数metadata")
+    @PostMapping("/updateMetadata")
+    public DataResult<Integer> updateFunctionMetadata(@RequestBody FunctionBo functionBo) {
+        return DataResult.ofData(functionService.updateFunctionMetadata(functionBo));
     }
 
     //读取函数列表
