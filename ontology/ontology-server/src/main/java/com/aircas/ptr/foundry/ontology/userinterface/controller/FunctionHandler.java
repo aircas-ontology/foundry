@@ -7,6 +7,8 @@ import com.aircas.ptr.foundry.ontology.application.service.FunctionService;
 import com.aircas.ptr.foundry.ontology.entity.bo.FunctionBo;
 import com.aircas.ptr.foundry.ontology.entity.vo.FunctionVO;
 import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiImplicitParam;
+import io.swagger.annotations.ApiImplicitParams;
 import io.swagger.annotations.ApiOperation;
 import org.springframework.web.bind.annotation.*;
 
@@ -15,7 +17,7 @@ import java.util.HashMap;
 import java.util.List;
 
 
-@Api(tags = "function")
+@Api(tags = "函数")
 @RestController
 @RequestMapping("/function")
 public class FunctionHandler {
@@ -39,10 +41,7 @@ public class FunctionHandler {
 
     @ApiOperation(value = "得到函数参数类型")
     @GetMapping("/parameterMetadatas")
-    public ApiResult getParameterMetadatas(@RequestBody HashMap map) {
-        String functionName = (String) map.getOrDefault("functionName", null);
-        String objectTypes = (String) map.getOrDefault("objectTypes", null);
-        Boolean isPreview = (Boolean) map.getOrDefault("isPreview", true);
+    public ApiResult getParameterMetadatas(@RequestParam String functionName, @RequestParam String objectTypes, @RequestParam boolean isPreview) {
         try {
             return DataResult.ofData(functionService.getParameters(functionName, isPreview, objectTypes));
         } catch (BaseException e) {
@@ -86,7 +85,7 @@ public class FunctionHandler {
         return DataResult.ofData(functionService.write(functionName, code, isPreview));
     }
 
-    @ApiOperation(value = "获取代码")
+    @ApiOperation(value = "获取函数代码")
     @GetMapping("/get")
     public DataResult<String> getCode(@RequestParam String functionName, @RequestParam Boolean isPreview) {
         return DataResult.ofData(functionService.get(functionName, isPreview));

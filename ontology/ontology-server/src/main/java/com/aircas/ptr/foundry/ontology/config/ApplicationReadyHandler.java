@@ -1,5 +1,6 @@
-package com.aircas.ptr.foundry.ontology;
+package com.aircas.ptr.foundry.ontology.config;
 
+import com.aircas.ptr.foundry.ontology.GroovyClassLoaderManager;
 import groovy.lang.GroovyClassLoader;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.ApplicationListener;

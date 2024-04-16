@@ -1,7 +1,6 @@
 package com.aircas.ptr.foundry.ontology.userinterface.controller;
 
 import com.aircas.ptr.foundry.common.base.DataResult;
-import com.aircas.ptr.foundry.ontology.OntologyClassGenerator;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyMetaService;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyMetaBO;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyMetaVO;
@@ -21,9 +20,6 @@ public class OntologyMetaController {
 
      @Resource
      private OntologyMetaService ontologyMetaService;
-
-     @Resource
-     private OntologyClassGenerator ontologyClassGenerator;
 
      @PostMapping("/add")
      @ApiOperation(value = "新增本体")
