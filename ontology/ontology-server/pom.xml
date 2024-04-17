@@ -56,7 +56,7 @@
         </dependency>
         <dependency>
             <groupId>net.sourceforge.owlapi</groupId>
-            <artifactId>owlapi-api</artifactId>
+            <artifactId>owlapi-distribution</artifactId>
         </dependency>
         <!-- druid-datasource -->
         <dependency>

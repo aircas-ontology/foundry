@@ -22,6 +22,7 @@ import lombok.RequiredArgsConstructor;
 import com.aircas.ptr.foundry.model.po.OntologyType;
 
 import org.apache.commons.io.FileUtils;
+import org.codehaus.groovy.control.CompilationFailedException;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 
@@ -230,6 +231,8 @@ public class FunctionServiceImpl implements FunctionService {
         try {
             groovyClass = classLoader.parseClass(file);
         } catch (IOException e) {
+            throw new FunctionFileNotCompiled(e);
+        } catch (CompilationFailedException e) {
             throw new FunctionFileNotCompiled(e);
         }
         try {
