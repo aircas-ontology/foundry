@@ -22,4 +22,8 @@ public class ExceptionFactory {
     public static OwlUriInvalidClassNotFoundException getOwlUriInvalidClassNotFoundException(Throwable cause) {
         return new OwlUriInvalidClassNotFoundException(cause);
     }
+
+    public static OwlUrilInvalidPrimaryKeyNotFoundException getOwlUrilInvalidPrimaryKeyNotFoundException(Throwable cause) {
+        return new OwlUrilInvalidPrimaryKeyNotFoundException(cause);
+    }
 }

@@ -4,8 +4,13 @@ package com.aircas.ptr.foundry.ontology.application.service.impl;
 import com.aircas.ptr.foundry.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.Exception.ExceptionFactory;
 import com.aircas.ptr.foundry.ontology.Exception.OwlUriInvalidClassNotFoundException;
+import com.aircas.ptr.foundry.ontology.Exception.OwlUrilInvalidPrimaryKeyNotFoundException;
+import com.aircas.ptr.foundry.ontology.application.service.ObjectService;
 import com.aircas.ptr.foundry.ontology.application.service.OwlService;
+import com.aircas.ptr.foundry.ontology.entity.vo.ObjectValueVo;
+import com.aircas.ptr.foundry.ontology.entity.vo.PropertyValueVO;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyMetaMapper;
+import com.aircas.ptr.foundry.ontology.repository.datalakeDao.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.semanticweb.owlapi.apibinding.OWLManager;
 import org.semanticweb.owlapi.model.*;
@@ -13,6 +18,8 @@ import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
 import java.io.ByteArrayOutputStream;
+import java.net.URI;
+import java.util.List;
 
 
 @Service
@@ -21,6 +28,9 @@ public class OwlServiceImpl implements OwlService {
 
     @Resource
     OntologyMetaMapper ontologyMetaMapper;
+
+    @Resource
+    ObjectService objectService;
 
     @Override
     public String getClassResource(String ontologyApi) throws OwlUriInvalidClassNotFoundException, OWLOntologyCreationException, OWLOntologyStorageException {
@@ -32,7 +42,6 @@ public class OwlServiceImpl implements OwlService {
         OWLOntologyManager owlOntologyManager = OWLManager.createOWLOntologyManager();
         OWLOntology ontology = owlOntologyManager.createOntology();
         this.injectClasses(owlOntologyManager, ontology, ontologyMeta);
-        this.injectClasses(owlOntologyManager, ontology, ontologyMeta);
 
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
         owlOntologyManager.saveOntology(ontology, outputStream);
@@ -41,34 +50,101 @@ public class OwlServiceImpl implements OwlService {
     }
 
     @Override
-    public String getIndividualResource(String ontologyApi, String primaryKey) {
-        return null;
+    public String getIndividualResource(String ontologyApi, String primaryKey)
+            throws OwlUriInvalidClassNotFoundException, OWLOntologyStorageException, OWLOntologyCreationException, OwlUrilInvalidPrimaryKeyNotFoundException {
+        OntologyMeta ontologyMeta = ontologyMetaMapper.selectByApi(ontologyApi);
+        if (ontologyMeta == null) {
+            throw ExceptionFactory.getOwlUriInvalidClassNotFoundException(null);
+        }
+        ObjectValueVo objectValueVo = objectService.queryObjectByApiAndPrimaryKey(ontologyApi, primaryKey);
+        if(objectValueVo == null || objectValueVo.getProperties().size() == 0) {
+            throw ExceptionFactory.getOwlUrilInvalidPrimaryKeyNotFoundException(null);
+        }
+        OWLOntologyManager owlOntologyManager = OWLManager.createOWLOntologyManager();
+        OWLOntology ontology = owlOntologyManager.createOntology();
+        OWLClass owlClass = this.injectClasses(owlOntologyManager, ontology, ontologyMeta);
+        OWLNamedIndividual namedIndividual = this.injectIndividual(owlOntologyManager, ontology, owlClass, ontologyMeta, objectValueVo);
+
+        this.injectProperties(owlOntologyManager, ontology, ontologyMeta, owlClass, namedIndividual, objectValueVo.getProperties());
+
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        owlOntologyManager.saveOntology(ontology, outputStream);
+
+        return outputStream.toString();
     }
 
 
     //插入class的metadata，应该有选择性的插入，不应该全部插入
     //包含api, uniqueIdentifier, 名称，主键, URI,描述, 属性？
     // 属性，关系，function?
-    private void injectClasses(OWLOntologyManager owlOntologyManager, OWLOntology ontology, OntologyMeta ontologyMeta) {
+    private OWLClass injectClasses(OWLOntologyManager owlOntologyManager, OWLOntology ontology, OntologyMeta ontologyMeta) {
         OWLDataFactory factory = owlOntologyManager.getOWLDataFactory();
         OWLClass class1 = factory.getOWLClass(contructOwlClassUri(ontologyMeta.getApiName()));
-//        OWLNamedIndividual namedIndividual = factory.getOWLNamedIndividual("华盛顿号");
-        OWLAxiom axiom = factory.getOWLDeclarationAxiom(class1);
-        owlOntologyManager.addAxiom(ontology, axiom);
+        owlOntologyManager.addAxiom(ontology, factory.getOWLDeclarationAxiom(class1));
+        return class1;
     }
 
     private String contructOwlClassUri(String ontologyApi) {
-        return "http://ontology.iecas.com/class#" + ontologyApi;
+        return "http://ontology.iecas.com/class/" + ontologyApi;
     }
 
 
     private String contructOwlIndividualUri(String ontologyApi, String primaryKey) {
-        return "http://ontology.iecas.com/" + ontologyApi + "/individual#" + primaryKey;
+        return "http://ontology.iecas.com/individual/" + ontologyApi + "/" + primaryKey;
     }
 
     //插入property，包含：取值，type
-    private void injectProperties() {
+    private OWLNamedIndividual injectIndividual(
+            OWLOntologyManager owlOntologyManager,
+            OWLOntology ontology,
+            OWLClass owlClass,
+            OntologyMeta ontologyMeta,
+            ObjectValueVo objectValueVo) {
+        OWLDataFactory factory = owlOntologyManager.getOWLDataFactory();
+        OWLNamedIndividual namedIndividual = factory.getOWLNamedIndividual(contructOwlIndividualUri(ontologyMeta.getApiName(), objectValueVo.getPrimaryKey()));
+        owlOntologyManager.addAxiom(ontology, factory.getOWLDeclarationAxiom(namedIndividual));
 
+        owlOntologyManager.addAxiom(ontology, factory.getOWLClassAssertionAxiom(owlClass, namedIndividual));
+        return namedIndividual;
+    }
+
+    //插入property，包含：取值，type
+    private void injectProperties(
+            OWLOntologyManager owlOntologyManager,
+            OWLOntology ontology,
+            OntologyMeta ontologyMeta,
+            OWLClass owlClass,
+            OWLNamedIndividual namedIndividual,
+            List<PropertyValueVO> properties) {
+        OWLDataFactory factory = owlOntologyManager.getOWLDataFactory();
+        for (PropertyValueVO propertyValueVO: properties) {
+            String displayName = propertyValueVO.getDisplayName();
+            String value = propertyValueVO.getValue();
+            String desc = propertyValueVO.getDescription();
+
+            OWLDataProperty dataProperty = factory.getOWLDataProperty(displayName);
+            owlOntologyManager.addAxiom(ontology, factory.getOWLDeclarationAxiom(dataProperty));
+
+            //属性和individual关联
+            OWLAxiom dataPropertyAssertionAxiom =  factory.getOWLDataPropertyAssertionAxiom(dataProperty, namedIndividual, value);
+            owlOntologyManager.addAxiom(ontology, dataPropertyAssertionAxiom);
+
+            //domain
+            OWLAxiom domainAxiom = factory.getOWLDataPropertyDomainAxiom(dataProperty, owlClass);
+            owlOntologyManager.addAxiom(ontology, domainAxiom);
+
+            //range
+            OWLDatatype owlDatatype = factory.getOWLDatatype("STRING");
+            OWLAxiom rangeAxiom = factory.getOWLDataPropertyRangeAxiom(dataProperty, owlDatatype);
+            owlOntologyManager.addAxiom(ontology, rangeAxiom);
+
+            //comment, 使用description
+            OWLAnnotationProperty labelProperty = factory.getRDFSLabel();
+            OWLAnnotation labelAnnotation = factory.getOWLAnnotation(labelProperty, factory.getOWLLiteral(desc));
+            OWLAxiom labelAxiom = factory.getOWLAnnotationAssertionAxiom(dataProperty.getIRI(), labelAnnotation);
+            owlOntologyManager.addAxiom(ontology, labelAxiom);
+
+        }
     }
 
     //目前只插入一层的link，link的link先不插入

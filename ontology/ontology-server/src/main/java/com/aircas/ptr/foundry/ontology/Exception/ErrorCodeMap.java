@@ -13,6 +13,7 @@ public class ErrorCodeMap {
     static Integer FUNCTION_CLASS_NOT_NEW_INSTANCE_CODE = 303;
     static Integer FUNCTION_RUNTIME_ERROR_CODE = 304;
     static Integer OWL_URI_INVALID_CLASS_NOT_FOUND_CODE = 401;
+    static Integer OWL_URI_INVALID_PRIMARY_KEY_NOT_FOUND_CODE = 402;
 
 
     private static Map codeMap = Maps.of(
@@ -20,7 +21,8 @@ public class ErrorCodeMap {
             FUNCTION_FILE_NOT_COMPILED_CODE,"函数文件无法编译",
             FUNCTION_CLASS_NOT_NEW_INSTANCE_CODE,"函数类不能创建实例",
             FUNCTION_RUNTIME_ERROR_CODE,"函数运行时错误",
-            OWL_URI_INVALID_CLASS_NOT_FOUND_CODE, "无法找到OWL URI中此本体"
+            OWL_URI_INVALID_CLASS_NOT_FOUND_CODE, "无法找到OWL URI中此本体",
+            OWL_URI_INVALID_PRIMARY_KEY_NOT_FOUND_CODE, "无法找到OWL URI中的主键对应的对象"
     );
 
     static String getErrorDesc(Integer code) {
