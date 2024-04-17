@@ -3,19 +3,19 @@ package com.aircas.ptr.foundry.ontology.application.service;
 
 import com.aircas.ptr.foundry.ontology.Exception.FunctionClassNotNewInstanceException;
 import com.aircas.ptr.foundry.ontology.Exception.FunctionFileNotCompiled;
-import com.aircas.ptr.foundry.ontology.Exception.FunctionRunTimeException;
+import com.aircas.ptr.foundry.ontology.Exception.FunctionNotFoundException;
+import com.aircas.ptr.foundry.ontology.Exception.FunctionRuntimeException;
 import com.aircas.ptr.foundry.ontology.entity.bo.FunctionBo;
 import com.aircas.ptr.foundry.ontology.entity.vo.FunctionVO;
 import com.aircas.ptr.foundry.ontology.entity.vo.ParameterMetadataVO;
 
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 
 public interface FunctionService {
-    Object handle(String functionName, Boolean isPreview, String objectTypes, HashMap<String, Object> parameters) throws FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionRunTimeException;
+    Object handle(String functionName, Boolean isPreview, String objectTypes, HashMap<String, Object> parameters) throws FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionRuntimeException, FunctionNotFoundException;
 
-    List<ParameterMetadataVO> getParameters(String functionName, Boolean isPreview, String objectTypes) throws FunctionClassNotNewInstanceException, FunctionFileNotCompiled;
+    List<ParameterMetadataVO> getParameters(String functionName, Boolean isPreview, String objectTypes) throws FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionNotFoundException;
 
     Boolean write(String functionName, String code, Boolean isPreview);
 

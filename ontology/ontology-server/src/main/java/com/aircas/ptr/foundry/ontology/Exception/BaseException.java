@@ -14,6 +14,9 @@ public class BaseException extends Exception {
 
     public Throwable getRootCause() {
         Throwable rootCause = cause;
+        if (rootCause == null) {
+            return null;
+        }
         while (rootCause.getCause() != null) {
             rootCause = rootCause.getCause();
         }

@@ -10,6 +10,9 @@ import java.net.URI;
 
 public interface OwlService {
 
-    String getResource(String uri) throws OWLOntologyCreationException, OWLOntologyStorageException;
+    String getClassResource(String ontologyApi) throws Exception;
+
+    String getIndividualResource(String ontologyApi, String primaryKey) throws Exception;
+
 
 }

@@ -1,38 +1,36 @@
 package com.aircas.ptr.foundry.ontology.userinterface.controller;
 
-import com.aircas.ptr.foundry.common.base.DataResult;
-import com.aircas.ptr.foundry.common.constant.Status;
-import com.aircas.ptr.foundry.ontology.application.service.ObjectService;
-import com.aircas.ptr.foundry.ontology.application.service.OntologyService;
 import com.aircas.ptr.foundry.ontology.application.service.OwlService;
-import com.aircas.ptr.foundry.ontology.entity.vo.*;
 import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
-import org.semanticweb.owlapi.model.OWLOntologyCreationException;
-import org.semanticweb.owlapi.model.OWLOntologyStorageException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
+import javax.servlet.http.HttpServletRequest;
 import java.net.URI;
-import java.util.List;
-import java.util.Map;
 
 @Api(tags = "以OWL格式返回本体")
 @RestController
 @RequestMapping("/owl")
 public class OwlController {
 
+    @Autowired
+    private HttpServletRequest request;
+
     @Resource
     OwlService owlService;
 
-    @GetMapping("/getResource")
-    public ResponseEntity<String> queryObjectByPrimaryKey(@RequestParam String uri) throws OWLOntologyCreationException, OWLOntologyStorageException {
-        String owlXml = owlService.getResource(uri);
-        return new ResponseEntity<String>(owlXml, HttpStatus.OK);
+    @GetMapping("/class/{ontologyApi}")
+    public ResponseEntity<String> getClassResource(@PathVariable String ontologyApi) throws Exception {
+        String owlXml = owlService.getClassResource(ontologyApi);
+        return new ResponseEntity(owlXml, HttpStatus.OK);
+    }
+
+    @GetMapping("/individual/{ontologyApi}/{primaryKey}")
+    public ResponseEntity<String> getResource(@PathVariable String ontologyApi,@PathVariable String primaryKey) throws Exception {
+        String owlXml = owlService.getIndividualResource(ontologyApi, primaryKey);
+        return new ResponseEntity(owlXml, HttpStatus.OK);
     }
 }

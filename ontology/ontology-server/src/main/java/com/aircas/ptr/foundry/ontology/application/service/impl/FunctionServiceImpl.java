@@ -20,6 +20,7 @@ import groovy.lang.GroovyClassLoader;
 import groovy.lang.GroovyObject;
 import lombok.RequiredArgsConstructor;
 import com.aircas.ptr.foundry.model.po.OntologyType;
+import com.aircas.ptr.foundry.ontology.Exception.ExceptionFactory;
 
 import org.apache.commons.io.FileUtils;
 import org.codehaus.groovy.control.CompilationFailedException;
@@ -163,13 +164,10 @@ public class FunctionServiceImpl implements FunctionService {
 
     @Override
     public Object handle(String functionName, Boolean isPreview, String objectTypes, HashMap<String, Object> parameters)
-            throws FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionRunTimeException {
+            throws FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionRuntimeException, FunctionNotFoundException {
 
             GroovyClassLoader classLoader = GroovyClassLoaderManager.getIndependentClassLoader();
-            List<String> objectApiList = new ArrayList<>();
-            if(objectTypes != null) {
-                objectApiList = Arrays.asList(objectTypes.split(","));
-            }
+            List<String> objectApiList = this.getObjectApiList(isPreview, objectTypes, functionName);
             //将本体涉及的类都import
             importAllObjectType(classLoader, objectApiList);
 
@@ -194,17 +192,15 @@ public class FunctionServiceImpl implements FunctionService {
             try {
                 return functionProxy.invokeMethod("invoke", functionProxyParameters);
             } catch (Exception exception) {
-                throw new FunctionRunTimeException(exception);
+                throw ExceptionFactory.getFunctionRuntimeException(exception);
             }
     }
 
     @Override
-    public List<ParameterMetadataVO> getParameters(String functionName, Boolean isPreview, String objectTypes) throws FunctionClassNotNewInstanceException, FunctionFileNotCompiled {
+    public List<ParameterMetadataVO> getParameters(String functionName, Boolean isPreview, String objectTypes)
+            throws FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionNotFoundException {
         GroovyClassLoader classLoader = GroovyClassLoaderManager.getIndependentClassLoader();
-        List<String> objectApiList = new ArrayList<>();
-        if(objectTypes != null) {
-            objectApiList = Arrays.asList(objectTypes.split(","));
-        }
+        List<String> objectApiList = this.getObjectApiList(isPreview, objectTypes, functionName);
         //将本体涉及的类都import
         importAllObjectType(classLoader, objectApiList);
 
@@ -223,24 +219,39 @@ public class FunctionServiceImpl implements FunctionService {
         return params;
     }
 
+    //如果api在production，则objectType从数据库读取，否则从参数读取。
+    private List<String> getObjectApiList(Boolean isPreview, String objectTypes, String functionName) {
+        List<String> objectApiList = new ArrayList<>();
+        if (!isPreview) {
+            Function function = functionMapper.selectByApi(functionName);
+            objectTypes = function.getObjectTypes();
+        }
+        if (objectTypes != null && objectTypes.length() != 0) {
+            objectApiList = Arrays.asList(objectTypes.split(","));
+        }
+        return objectApiList;
+    }
 
     static private GroovyObject getFunctionInstance(GroovyClassLoader classLoader, String functionName, boolean isPreview)
-            throws FunctionFileNotCompiled, FunctionClassNotNewInstanceException {
+            throws FunctionFileNotCompiled, FunctionClassNotNewInstanceException, FunctionNotFoundException {
         File file = getFile(functionName, isPreview);
+        if (!file.exists()) {
+            throw ExceptionFactory.getFunctionNotFoundException(null);
+        }
         Class groovyClass;
         try {
             groovyClass = classLoader.parseClass(file);
         } catch (IOException e) {
-            throw new FunctionFileNotCompiled(e);
+            throw ExceptionFactory.getFunctionFileNotCompiledException(e);
         } catch (CompilationFailedException e) {
-            throw new FunctionFileNotCompiled(e);
+            throw ExceptionFactory.getFunctionFileNotCompiledException(e);
         }
         try {
             return (GroovyObject)groovyClass.newInstance();
         }  catch (IllegalAccessException e) {
-            throw new FunctionClassNotNewInstanceException(e);
+            throw ExceptionFactory.getFunctionClassNotNewInstanceException(e);
         } catch (InstantiationException e) {
-            throw new FunctionClassNotNewInstanceException(e);
+            throw ExceptionFactory.getFunctionClassNotNewInstanceException(e);
         }
     }
 
