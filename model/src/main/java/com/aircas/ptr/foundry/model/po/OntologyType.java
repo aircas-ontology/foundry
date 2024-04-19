@@ -11,9 +11,18 @@ import java.util.Map;
  */
 
 public enum OntologyType {
-    STRING("String"),
-    INT("int"),
-    MAP("map");
+    Bool("Bool"),
+    Int("Int"),
+    Decimal("Decimal"),
+    Float("Float"),
+    Double("Double"),
+
+    String("String"),
+    MAP("Map"),
+
+    Date("Date"),
+    Time("Time"),
+    Timestamp("Timestamp");
 
     private final String value;
 
@@ -23,29 +32,57 @@ public enum OntologyType {
 
     //将数据库的数据类型转化为Java类型
     //
-    static OntologyType getClassFromDB(String dbType) {
-        return OntologyType.STRING;
-    }
 
     public static OntologyType valueOf(Class class1) {
         return (OntologyType)classToType.get(class1);
     }
 
-    private static Map typeToClass = Maps.of(
-            OntologyType.STRING, String.class,
-            OntologyType.INT, Integer.class,
-            OntologyType.MAP, HashMap.class
-    );
-
     private static Map classToType = Maps.of(
-            String.class,  OntologyType.STRING,
-            Integer.class, OntologyType.INT,
+            Boolean.class, OntologyType.Bool,
+            Integer.class, OntologyType.Int,
+            Float.class, OntologyType.Float,
+            Double.class, OntologyType.Double,
+
+            String.class,  OntologyType.String,
             HashMap.class, OntologyType.MAP
+            /**
+             * Date, time, timestamp未定
+             */
     );
 
-    public Class getClassFromType(OntologyType type) {
-       return (Class) typeToClass.get(type);
+    private static Map pgTypeMap = Maps.of(
+            "boolean", OntologyType.Bool,
+            "smallint", OntologyType.Int,
+            "integer", OntologyType.Int,
+            "bigint", OntologyType.Int,
+            "text", OntologyType.String,
+            "character varying", OntologyType.String,
+            "numeric", OntologyType.Decimal,
+            "double precision", OntologyType.Double,
+            "date", OntologyType.Date,
+            "time without time zone", OntologyType.Time,
+            "timestamp without time zone", OntologyType.Timestamp
+    );
+
+    static OntologyType valueFromPgType(String pgType) {
+        OntologyType type = (OntologyType) pgTypeMap.get(pgType);
+        assert (type == null);
+        return type;
     }
+
+//
+//    private static Map typeToClass = Maps.of(
+//            OntologyType.Bool, String.class,
+//            OntologyType.Int, Integer.class,
+//
+//            OntologyType.String, String.class,
+//            OntologyType.MAP, HashMap.class
+//    );
+//
+//    public Class getClassFromType(OntologyType type) {
+//        return (Class) typeToClass.get(type);
+//    }
+
 }
 
 
