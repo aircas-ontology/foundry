@@ -20,7 +20,7 @@ import java.util.List;
 @Api(tags = "函数")
 @RestController
 @RequestMapping("/function")
-public class FunctionHandler {
+public class FunctionController {
 
     @Resource
     FunctionService functionService;

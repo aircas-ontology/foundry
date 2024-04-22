@@ -16,13 +16,17 @@ import com.aircas.ptr.foundry.ontology.function.FunctionUtils;
 import com.aircas.ptr.foundry.ontology.function.Parameter;
 import com.aircas.ptr.foundry.ontology.repository.dao.FunctionMapper;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyMetaMapper;
+import com.google.common.net.UrlEscapers;
 import groovy.lang.GroovyClassLoader;
 import groovy.lang.GroovyObject;
 import lombok.RequiredArgsConstructor;
 import com.aircas.ptr.foundry.model.po.OntologyType;
 import com.aircas.ptr.foundry.ontology.Exception.ExceptionFactory;
 
+import org.apache.commons.codec.EncoderException;
+import org.apache.commons.codec.net.URLCodec;
 import org.apache.commons.io.FileUtils;
+import org.apache.http.client.utils.URLEncodedUtils;
 import org.codehaus.groovy.control.CompilationFailedException;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
@@ -32,6 +36,7 @@ import java.io.*;
 import java.lang.reflect.Method;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -294,8 +299,9 @@ public class FunctionServiceImpl implements FunctionService {
         File file = getFile(functionName, isPreview);
         try {
             String code = FileUtils.readFileToString(file, StandardCharsets.UTF_8);
-            String decodeCode = URLEncoder.encode(code, "UTF-8");
-            return decodeCode;
+            String encode = URLEncoder.encode(code, "UTF-8").replace("+", "%20");
+            System.out.println(code);
+            return encode;
         } catch (IOException e) {
             e.printStackTrace();
             return null;
