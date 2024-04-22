@@ -1,9 +1,6 @@
 package com.aircas.ptr.foundry.ontology.application.service.impl;
 
-import com.aircas.ptr.foundry.model.po.DirectoryItem;
-import com.aircas.ptr.foundry.model.po.OntologyChildLink;
-import com.aircas.ptr.foundry.model.po.OntologyLinkGroup;
-import com.aircas.ptr.foundry.model.po.OntologyProperty;
+import com.aircas.ptr.foundry.model.po.*;
 import com.aircas.ptr.foundry.ontology.application.service.ObjectService;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyLinkService;
 import com.aircas.ptr.foundry.ontology.entity.vo.*;
@@ -12,6 +9,7 @@ import com.aircas.ptr.foundry.ontology.repository.dao.OntologyLinkGroupMapper;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyMetaMapper;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyPropertyMapper;
 import com.aircas.ptr.foundry.ontology.repository.datalakeDao.ObjectMapper;
+import com.aircas.ptr.foundry.ontology.repository.datalakeDao.TableMetadataMapper;
 import lombok.RequiredArgsConstructor;
 import org.geotools.util.MapEntry;
 import org.springframework.beans.BeanUtils;
@@ -19,6 +17,7 @@ import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -36,6 +35,9 @@ public class ObjectServiceImpl implements ObjectService {
 
     @Resource
     private final ObjectMapper objectMapper;
+
+    @Resource
+    private final TableMetadataMapper tableMetadataMapper;
 
     @Resource
     private final OntologyLinkGroupMapper ontologyLinkGroupMapper;
@@ -124,6 +126,26 @@ public class ObjectServiceImpl implements ObjectService {
 
     private ObjectValueVo queryByPrimaryKey(String ontologyUniqueIdentifier, String primaryKey) {
         List<OntologyProperty> ontologyPropertyList = ontologyPropertyMapper.selectByOntologyUniqueIdentifier(ontologyUniqueIdentifier);
+        List<String> dataSouceIdList = ontologyPropertyList.stream().map(property -> property.getDatasourceId()).collect(Collectors.toList());
+        Map<String, Map<String, TableColumnDesc>> propertySourceMap = new HashMap<>();
+        for (String dataSourceId: dataSouceIdList) {
+            List<TableColumnDesc> tableColumnDescs = tableMetadataMapper.getColumnMetadata(dataSourceId);
+            Map<String, TableColumnDesc> columnNameDescMap = new HashMap<>();
+            for (TableColumnDesc tableColumnDesc: tableColumnDescs) {
+                columnNameDescMap.put(tableColumnDesc.getColumnName(), tableColumnDesc);
+            }
+            propertySourceMap.put(dataSourceId, columnNameDescMap);
+        }
+        for (OntologyProperty ontologyProperty: ontologyPropertyList) {
+            TableColumnDesc tableColumnDesc = propertySourceMap.get(ontologyProperty.getDatasourceId()).get(ontologyProperty.getDatasourceColumnName());
+            if (ontologyProperty!= null) {
+                ontologyProperty.setPropertyType(OntologyType.valueFromPgType(tableColumnDesc.getType()));
+            } else {
+                System.out.println("不可处理的数据类型:" + tableColumnDesc.getType());
+            }
+        }
+
+        //根据表，列，求解数据类型，填充到OntologyProperty中
         String primaryColumnName = getPrimaryKeyColumnName(ontologyPropertyList);
         List<ObjectValueVo> objectValueVoList = queryByColumnNameValue(ontologyPropertyList, primaryColumnName, primaryKey);
         if (objectValueVoList.size() == 0) {
@@ -161,8 +183,8 @@ public class ObjectServiceImpl implements ObjectService {
                 propertyValueVO.setIsPrimaryKey(property.getIsPrimaryKey());
                 propertyValueVO.setDisplayName(property.getDisplayName());
                 propertyValueVO.setDescription(property.getDescription());
-                propertyValueVO.setPropertyType(property.getPropertyType());
                 propertyValueVO.setApiName(property.getApiName());
+                propertyValueVO.setPropertyType(property.getPropertyType());
                 propertyValueVO.setUniqueIdentifier(property.getUniqueIdentifier());
                 String value = rawKeyValueMap.get(key).toString();
                 propertyValueVO.setValue(value);

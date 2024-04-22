@@ -2,6 +2,7 @@ package com.aircas.ptr.foundry.ontology.application.service.impl;
 
 
 import com.aircas.ptr.foundry.model.po.OntologyMeta;
+import com.aircas.ptr.foundry.model.po.OntologyType;
 import com.aircas.ptr.foundry.ontology.Exception.ExceptionFactory;
 import com.aircas.ptr.foundry.ontology.Exception.OwlUriInvalidClassNotFoundException;
 import com.aircas.ptr.foundry.ontology.Exception.OwlUrilInvalidPrimaryKeyNotFoundException;
@@ -14,6 +15,7 @@ import com.aircas.ptr.foundry.ontology.repository.datalakeDao.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.semanticweb.owlapi.apibinding.OWLManager;
 import org.semanticweb.owlapi.model.*;
+import org.semanticweb.owlapi.vocab.OWL2Datatype;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
@@ -121,6 +123,7 @@ public class OwlServiceImpl implements OwlService {
             String displayName = propertyValueVO.getDisplayName();
             String value = propertyValueVO.getValue();
             String desc = propertyValueVO.getDescription();
+            OntologyType propertyType = propertyValueVO.getPropertyType();
 
             OWLDataProperty dataProperty = factory.getOWLDataProperty(displayName);
             owlOntologyManager.addAxiom(ontology, factory.getOWLDeclarationAxiom(dataProperty));
@@ -134,7 +137,7 @@ public class OwlServiceImpl implements OwlService {
             owlOntologyManager.addAxiom(ontology, domainAxiom);
 
             //range
-            OWLDatatype owlDatatype = factory.getOWLDatatype("STRING");
+            OWL2Datatype owlDatatype = this.getOwlDataTypeFromPropertyType(propertyType);
             OWLAxiom rangeAxiom = factory.getOWLDataPropertyRangeAxiom(dataProperty, owlDatatype);
             owlOntologyManager.addAxiom(ontology, rangeAxiom);
 
@@ -145,6 +148,10 @@ public class OwlServiceImpl implements OwlService {
             owlOntologyManager.addAxiom(ontology, labelAxiom);
 
         }
+    }
+
+    private OWL2Datatype getOwlDataTypeFromPropertyType(OntologyType propertyType) {
+        return propertyType.owl2Datatype();
     }
 
     //目前只插入一层的link，link的link先不插入

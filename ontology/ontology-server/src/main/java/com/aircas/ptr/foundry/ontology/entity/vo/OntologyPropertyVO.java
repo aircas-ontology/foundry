@@ -44,7 +44,7 @@ public class OntologyPropertyVO {
     /**
      * 属性基础类型、时间、字符、数值
      */
-    private String propertyType;
+    private OntologyVO propertyType;
 
     /**
      * 属性名称

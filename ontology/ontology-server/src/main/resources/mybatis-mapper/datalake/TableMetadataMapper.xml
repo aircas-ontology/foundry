@@ -11,7 +11,7 @@
         select
         a.attname as column_name,
         col_description(a.attrelid, a.attnum) as description,
-        pg_catalog.format_type(a.atttypid, a.atttypmod) as type
+        pg_catalog.format_type(a.atttypid, null) as type
         from pg_class as c, pg_attribute as a
         where c.relname = #{tableName,jdbcType=VARCHAR} and a.attrelid = c.oid and a.attnum > 0
     </select>

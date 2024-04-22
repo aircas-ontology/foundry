@@ -1,6 +1,8 @@
 package com.aircas.ptr.foundry.model.po;
 
 import org.apache.groovy.util.Maps;
+import org.semanticweb.owlapi.model.OWLDatatype;
+import org.semanticweb.owlapi.vocab.OWL2Datatype;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -12,10 +14,11 @@ import java.util.Map;
 
 public enum OntologyType {
     Bool("Bool"),
+
     Int("Int"),
-    Decimal("Decimal"),
     Float("Float"),
     Double("Double"),
+    Decimal("Decimal"),
 
     String("String"),
     MAP("Map"),
@@ -39,6 +42,7 @@ public enum OntologyType {
 
     private static Map classToType = Maps.of(
             Boolean.class, OntologyType.Bool,
+
             Integer.class, OntologyType.Int,
             Float.class, OntologyType.Float,
             Double.class, OntologyType.Double,
@@ -52,21 +56,42 @@ public enum OntologyType {
 
     private static Map pgTypeMap = Maps.of(
             "boolean", OntologyType.Bool,
+
             "smallint", OntologyType.Int,
             "integer", OntologyType.Int,
             "bigint", OntologyType.Int,
-            "text", OntologyType.String,
-            "character varying", OntologyType.String,
-            "numeric", OntologyType.Decimal,
+
+            "real", OntologyType.Float,
             "double precision", OntologyType.Double,
+            "numeric", OntologyType.Decimal,
+
+            "text", OntologyType.String,
+            "character varying", OntologyType.String,
+
             "date", OntologyType.Date,
             "time without time zone", OntologyType.Time,
             "timestamp without time zone", OntologyType.Timestamp
     );
 
-    static OntologyType valueFromPgType(String pgType) {
+    private static Map toOwlDataType = Maps.of(
+        OntologyType.Bool, OWL2Datatype.XSD_BOOLEAN,
+        OntologyType.Int, OWL2Datatype.XSD_INT,
+        OntologyType.Float, OWL2Datatype.XSD_FLOAT,
+        OntologyType.Double, OWL2Datatype.XSD_DOUBLE,
+        OntologyType.Decimal, OWL2Datatype.XSD_DECIMAL,
+
+        OntologyType.String, OWL2Datatype.XSD_STRING
+ );
+
+    public static OntologyType valueFromPgType(String pgType) {
         OntologyType type = (OntologyType) pgTypeMap.get(pgType);
         assert (type == null);
+        return type;
+    }
+
+    public OWL2Datatype owl2Datatype() {
+        OWL2Datatype type = (OWL2Datatype) toOwlDataType.get(this);
+        assert (type != null);
         return type;
     }
 

@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.entity.bo;
 
+import com.aircas.ptr.foundry.model.po.OntologyType;
 import lombok.Data;
 import org.springframework.beans.BeanUtils;
 
@@ -45,7 +46,7 @@ public class OntologyPropertyBO {
     /**
      * 属性基础类型、时间、字符、数值
      */
-    private String propertyType;
+    private OntologyType propertyType;
 
     /**
      * 属性名称
