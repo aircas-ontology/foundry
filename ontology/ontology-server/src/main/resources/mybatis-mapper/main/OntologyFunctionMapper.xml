@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.aircas.ptr.foundry.ontology.repository.dao.OntologyFunctionMapper">
+  <resultMap id="BaseResultMap" type="com.aircas.ptr.foundry.model.po.OntologyFunction">
+    <!-- @mbg.generated: generated automatically, do not modify! -->
+    <result column="api" jdbcType="VARCHAR" property="api" />
+    <result column="original_api" jdbcType="VARCHAR" property="originalApi" />
+    <result column="ontology_unique_identifier" jdbcType="VARCHAR" property="ontologyUniqueIdentifier" />
+    <result column="description" jdbcType="VARCHAR" property="description" />
+    <result column="id" jdbcType="BIGINT" property="id" />
+    <result column="create_time" jdbcType="TIMESTAMP" property="createTime" />
+    <result column="update_time" jdbcType="TIMESTAMP" property="updateTime" />
+  </resultMap>
+  <insert id="insert" keyColumn="id" keyProperty="id" parameterType="com.aircas.ptr.foundry.model.po.OntologyFunction" useGeneratedKeys="true">
+    <!-- @mbg.generated: generated automatically, do not modify! -->
+    insert into ontology_function (api, original_api, ontology_unique_identifier, create_time, update_time
+      )
+    values (#{api,jdbcType=VARCHAR}, #{originalApi,jdbcType=VARCHAR}, #{ontologyUniqueIdentifier,jdbcType=VARCHAR}, 
+      #{createTime,jdbcType=TIMESTAMP}, #{updateTime,jdbcType=TIMESTAMP}
+      )
+  </insert>
+  <insert id="insertSelective" parameterType="com.aircas.ptr.foundry.model.po.OntologyFunction">
+    <!-- @mbg.generated: generated automatically, do not modify! -->
+    insert into ontology_function
+    <trim prefix="(" suffix=")" suffixOverrides=",">
+      <if test="api != null">
+        api,
+      </if>
+      <if test="originalApi != null">
+        original_api,
+      </if>
+      <if test="ontologyUniqueIdentifier != null">
+        ontology_unique_identifier,
+      </if>
+      <if test="id != null">
+        id,
+      </if>
+      <if test="createTime != null">
+        create_time,
+      </if>
+      <if test="updateTime != null">
+        update_time,
+      </if>
+    </trim>
+    <trim prefix="values (" suffix=")" suffixOverrides=",">
+      <if test="api != null">
+        #{api,jdbcType=VARCHAR},
+      </if>
+      <if test="originalApi != null">
+        #{originalApi,jdbcType=VARCHAR},
+      </if>
+      <if test="ontologyUniqueIdentifier != null">
+        #{ontologyUniqueIdentifier,jdbcType=VARCHAR},
+      </if>
+      <if test="id != null">
+        #{id,jdbcType=BIGINT},
+      </if>
+      <if test="createTime != null">
+        #{createTime,jdbcType=TIMESTAMP},
+      </if>
+      <if test="updateTime != null">
+        #{updateTime,jdbcType=TIMESTAMP},
+      </if>
+    </trim>
+  </insert>
+</mapper>

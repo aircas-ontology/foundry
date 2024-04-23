@@ -1,7 +1,6 @@
 package com.aircas.ptr.foundry.ontology.userinterface.controller;
 
 import com.aircas.ptr.foundry.common.base.DataResult;
-import com.aircas.ptr.foundry.ontology.application.service.FunctionService;
 
 import com.aircas.ptr.foundry.ontology.application.service.OntologyFunctionService;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyFunctionBo;
@@ -25,6 +24,7 @@ public class OntologyFunctionController {
     public DataResult<Integer> update(@RequestBody OntologyFunctionBo ontologyFunctionBo) {
         return DataResult.ofData(ontologyFunctionService.save(ontologyFunctionBo));
     }
+
 
 }
 
