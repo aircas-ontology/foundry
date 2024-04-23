@@ -12,7 +12,7 @@
   </resultMap>
   <sql id="Base_Column_List">
     <!-- @mbg.generated: generated automatically, do not modify! -->
-    id, ontology_function_id, `parameter_name`, property_unique_identifier, create_time, 
+    id, ontology_function_id, parameter_name, property_unique_identifier, create_time,
     update_time
   </sql>
   <select id="selectByPrimaryKey" parameterType="java.lang.Long" resultMap="BaseResultMap">
@@ -22,6 +22,15 @@
     from ontology_function_mapping_in
     where id = #{id,jdbcType=BIGINT}
   </select>
+
+  <select id="selectByOntologyFunctionId" parameterType="java.lang.Long" resultMap="BaseResultMap">
+    <!-- @mbg.generated: generated automatically, do not modify! -->
+    select
+    <include refid="Base_Column_List" />
+    from ontology_function_mapping_in
+    where ontology_function_id = #{ontologyFunctionId,jdbcType=BIGINT}
+  </select>
+
   <delete id="deleteByPrimaryKey" parameterType="java.lang.Long">
     <!-- @mbg.generated: generated automatically, do not modify! -->
     delete from ontology_function_mapping_in
@@ -47,7 +56,7 @@
         ontology_function_id,
       </if>
       <if test="parameterName != null">
-        `parameter_name`,
+        parameter_name,
       </if>
       <if test="propertyUniqueIdentifier != null">
         property_unique_identifier,

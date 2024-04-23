@@ -11,13 +11,17 @@
     <result column="create_time" jdbcType="TIMESTAMP" property="createTime" />
     <result column="update_time" jdbcType="TIMESTAMP" property="updateTime" />
   </resultMap>
+  <sql id="Base_Column_List">
+    <!-- @mbg.generated: generated automatically, do not modify! -->
+    api, original_api, ontology_unique_identifier, description, id, create_time, update_time
+  </sql>
   <insert id="insert" keyColumn="id" keyProperty="id" parameterType="com.aircas.ptr.foundry.model.po.OntologyFunction" useGeneratedKeys="true">
     <!-- @mbg.generated: generated automatically, do not modify! -->
-    insert into ontology_function (api, original_api, ontology_unique_identifier, create_time, update_time
+    insert into ontology_function (api, original_api, ontology_unique_identifier, create_time, update_time, description
       )
     values (#{api,jdbcType=VARCHAR}, #{originalApi,jdbcType=VARCHAR}, #{ontologyUniqueIdentifier,jdbcType=VARCHAR}, 
-      #{createTime,jdbcType=TIMESTAMP}, #{updateTime,jdbcType=TIMESTAMP}
-      )
+      #{createTime,jdbcType=TIMESTAMP}, #{updateTime,jdbcType=TIMESTAMP}, #{description,jdbcType=VARCHAR}
+    )
   </insert>
   <insert id="insertSelective" parameterType="com.aircas.ptr.foundry.model.po.OntologyFunction">
     <!-- @mbg.generated: generated automatically, do not modify! -->
@@ -63,4 +67,12 @@
       </if>
     </trim>
   </insert>
+
+  <select id="selectByOntologyIdentifierAndApi" parameterType="java.lang.String" resultMap="BaseResultMap">
+    <!-- @mbg.generated: generated automatically, do not modify! -->
+    select
+    <include refid="Base_Column_List" />
+    from ontology_function
+    where api = #{api,jdbcType=VARCHAR} and ontology_unique_identifier = #{ontologyUniqueIdentifier, jdbcType=VARCHAR}
+  </select>
 </mapper>

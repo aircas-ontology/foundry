@@ -1,14 +1,21 @@
 package com.aircas.ptr.foundry.ontology.userinterface.controller;
 
+import com.aircas.ptr.foundry.common.base.ApiResult;
 import com.aircas.ptr.foundry.common.base.DataResult;
 
+import com.aircas.ptr.foundry.ontology.Exception.BaseException;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyFunctionService;
+import com.aircas.ptr.foundry.ontology.entity.bo.FunctionRequestBodyBO;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyFunctionBo;
+import com.aircas.ptr.foundry.ontology.entity.vo.OntologyFunctionVO;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
+import io.swagger.annotations.ApiParam;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
+import java.util.HashMap;
+import java.util.List;
 
 
 @Api(tags = "函数")
@@ -25,7 +32,27 @@ public class OntologyFunctionController {
         return DataResult.ofData(ontologyFunctionService.save(ontologyFunctionBo));
     }
 
+    @ApiOperation(value = "执行当前函数")
+    @PostMapping("/execute")
+    public ApiResult execute(@RequestBody FunctionRequestBodyBO functionRequestBodyBO) {
+        try {
+            return DataResult.ofData(ontologyFunctionService.handle(functionRequestBodyBO));
+        } catch (BaseException e) {
+            return DataResult.fail(e.getMessage(), e.code, e.getRootCause() == null ? "" : e.getRootCause().getMessage());
+        }
+    }
 
+    @ApiOperation(value = "删除当前函数")
+    @PostMapping("/delete")
+    public DataResult<Integer> delete(@RequestBody  @ApiParam(value = "函数id", required = true) long id) {
+        return DataResult.ofData(ontologyFunctionService.delete(id));
+    }
+
+    @ApiOperation(value = "查询某个本体")
+    @GetMapping("/query")
+    public DataResult<List<OntologyFunctionVO>> queryByOntologyUniqueIdentifier(@RequestParam @ApiParam(value = "本体identifier", required = true) String ontologyUniqueIdentifier) {
+        return DataResult.ofData(ontologyFunctionService.queryByOntologyUniqueIdentifier(ontologyUniqueIdentifier));
+    }
 }
 
 

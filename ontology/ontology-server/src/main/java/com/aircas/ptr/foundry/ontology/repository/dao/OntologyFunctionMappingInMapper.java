@@ -2,6 +2,8 @@ package com.aircas.ptr.foundry.ontology.repository.dao;
 
 import com.aircas.ptr.foundry.model.po.OntologyFunctionMappingIn;
 
+import java.util.List;
+
 public interface OntologyFunctionMappingInMapper {
     /**
      * @mbg.generated generated automatically, do not modify!
@@ -22,6 +24,8 @@ public interface OntologyFunctionMappingInMapper {
      * @mbg.generated generated automatically, do not modify!
      */
     OntologyFunctionMappingIn selectByPrimaryKey(Long id);
+
+    List<OntologyFunctionMappingIn> selectByOntologyFunctionId(Long ontologyFunctionId);
 
     /**
      * @mbg.generated generated automatically, do not modify!
