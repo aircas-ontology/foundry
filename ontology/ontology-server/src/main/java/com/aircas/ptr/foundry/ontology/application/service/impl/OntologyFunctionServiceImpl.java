@@ -50,6 +50,8 @@ public class OntologyFunctionServiceImpl implements OntologyFunctionService {
     @Resource
     FunctionService functionService;
 
+    static String ontologySelfIdentifier = "-1";
+
     @Override
     public Object handle(FunctionRequestBodyBO functionRequestBodyBO)
             throws FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionRuntimeException, FunctionNotFoundException {
@@ -72,15 +74,18 @@ public class OntologyFunctionServiceImpl implements OntologyFunctionService {
         for (OntologyFunctionMappingInBO mappingIn : mappingInList) {
             String parameterName = mappingIn.getParameterName();
             String propertyUniqueIdentifier = mappingIn.getPropertyUniqueIdentifier();
-            PropertyValueVO propertyValueVO = propertyMap.get(propertyUniqueIdentifier);
-            String value = propertyValueVO.getValue();
-            parameters.put(parameterName, value);
+            if (ontologySelfIdentifier.equals(propertyUniqueIdentifier)) {
+                parameters.put(parameterName, functionRequestBodyBO.getCurrentObject());
+            } else {
+                PropertyValueVO propertyValueVO = propertyMap.get(propertyUniqueIdentifier);
+                String value = propertyValueVO.getValue();
+                parameters.put(parameterName, value);
+            }
         }
         //根据property的值，设置参数的值即可，如果是当前对象，则设置为当前对象，也就是currentObject即可，包含api 和primaryKey
         return functionService.handle(originalFunction,false,null,parameters);
     }
 
-    //实现该function
     private OntologyFunctionBo queryByOntologyIdentifierAndApi(String functionApi, String ontologyUniqueIdentifier) {
         OntologyFunction ontologyFunction = ontologyFunctionMapper.selectByOntologyIdentifierAndApi(ontologyUniqueIdentifier, functionApi);
         OntologyFunctionBo ontologyFunctionBo = new OntologyFunctionBo();

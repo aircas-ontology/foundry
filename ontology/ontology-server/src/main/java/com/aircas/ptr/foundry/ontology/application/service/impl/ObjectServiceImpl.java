@@ -2,7 +2,6 @@ package com.aircas.ptr.foundry.ontology.application.service.impl;
 
 import com.aircas.ptr.foundry.model.po.*;
 import com.aircas.ptr.foundry.ontology.application.service.ObjectService;
-import com.aircas.ptr.foundry.ontology.application.service.OntologyLinkService;
 import com.aircas.ptr.foundry.ontology.entity.vo.*;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyChildLinkMapper;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyLinkGroupMapper;
@@ -11,7 +10,6 @@ import com.aircas.ptr.foundry.ontology.repository.dao.OntologyPropertyMapper;
 import com.aircas.ptr.foundry.ontology.repository.datalakeDao.ObjectMapper;
 import com.aircas.ptr.foundry.ontology.repository.datalakeDao.TableMetadataMapper;
 import lombok.RequiredArgsConstructor;
-import org.geotools.util.MapEntry;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 
@@ -139,7 +137,7 @@ public class ObjectServiceImpl implements ObjectService {
         for (OntologyProperty ontologyProperty: ontologyPropertyList) {
             TableColumnDesc tableColumnDesc = propertySourceMap.get(ontologyProperty.getDatasourceId()).get(ontologyProperty.getDatasourceColumnName());
             if (ontologyProperty!= null) {
-                ontologyProperty.setPropertyType(OntologyType.valueFromPgType(tableColumnDesc.getType()));
+                ontologyProperty.setPropertyType(OntologyDataType.valueFromPgType(tableColumnDesc.getType()));
             } else {
                 System.out.println("不可处理的数据类型:" + tableColumnDesc.getType());
             }

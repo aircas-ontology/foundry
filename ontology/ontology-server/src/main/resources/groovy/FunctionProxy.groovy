@@ -1,5 +1,9 @@
 package com.aircas.ptr.foundry.ontology.function
 
+import com.aircas.ptr.foundry.ontology.entity.bo.OntologyBaseObjectBo
+import com.aircas.ptr.foundry.ontology.entity.bo.OntologyFunctionBo
+import com.github.jsonldjava.utils.Obj
+
 import java.lang.reflect.Method
 
 class FunctionProxy {
@@ -18,7 +22,18 @@ class FunctionProxy {
             if (name == null) {
                 params.add(null)
             } else {
-                params.add(parameterType.cast(parameters.get(name)))
+                def parameterValue = parameters.get(name);
+                if (parameterType.getSuperclass().getSimpleName().equals("OntologBaseObject")) {
+                    Class aClass = parameterType
+                    if (parameterValue instanceof Map) {
+                        parameterValue = new OntologyBaseObjectBo(parameterValue.get("api"), parameterValue.get("primaryKey"))
+                    }
+                    GroovyObject groovyObject = aClass.newInstance(parameterValue.getPrimaryKey())
+                    assert (parameterType.getSimpleName().toLowerCase().equals(parameterValue.getApi()))
+                    params.add(groovyObject)
+                } else {
+                    params.add(parameterType.cast(parameterValue))
+                }
             }
         }
         return method.invoke(instance, *params)

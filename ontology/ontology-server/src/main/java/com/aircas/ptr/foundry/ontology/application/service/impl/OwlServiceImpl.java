@@ -2,7 +2,7 @@ package com.aircas.ptr.foundry.ontology.application.service.impl;
 
 
 import com.aircas.ptr.foundry.model.po.OntologyMeta;
-import com.aircas.ptr.foundry.model.po.OntologyType;
+import com.aircas.ptr.foundry.model.po.OntologyDataType;
 import com.aircas.ptr.foundry.ontology.Exception.ExceptionFactory;
 import com.aircas.ptr.foundry.ontology.Exception.OwlUriInvalidClassNotFoundException;
 import com.aircas.ptr.foundry.ontology.Exception.OwlUrilInvalidPrimaryKeyNotFoundException;
@@ -11,7 +11,6 @@ import com.aircas.ptr.foundry.ontology.application.service.OwlService;
 import com.aircas.ptr.foundry.ontology.entity.vo.ObjectValueVo;
 import com.aircas.ptr.foundry.ontology.entity.vo.PropertyValueVO;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyMetaMapper;
-import com.aircas.ptr.foundry.ontology.repository.datalakeDao.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.semanticweb.owlapi.apibinding.OWLManager;
 import org.semanticweb.owlapi.model.*;
@@ -20,7 +19,6 @@ import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
 import java.io.ByteArrayOutputStream;
-import java.net.URI;
 import java.util.List;
 
 
@@ -123,7 +121,7 @@ public class OwlServiceImpl implements OwlService {
             String displayName = propertyValueVO.getDisplayName();
             String value = propertyValueVO.getValue();
             String desc = propertyValueVO.getDescription();
-            OntologyType propertyType = propertyValueVO.getPropertyType();
+            OntologyDataType propertyType = propertyValueVO.getPropertyType();
 
             OWLDataProperty dataProperty = factory.getOWLDataProperty(displayName);
             owlOntologyManager.addAxiom(ontology, factory.getOWLDeclarationAxiom(dataProperty));
@@ -150,7 +148,7 @@ public class OwlServiceImpl implements OwlService {
         }
     }
 
-    private OWL2Datatype getOwlDataTypeFromPropertyType(OntologyType propertyType) {
+    private OWL2Datatype getOwlDataTypeFromPropertyType(OntologyDataType propertyType) {
         return propertyType.owl2Datatype();
     }
 

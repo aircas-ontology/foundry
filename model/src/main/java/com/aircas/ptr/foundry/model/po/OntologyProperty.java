@@ -49,7 +49,7 @@ public class OntologyProperty implements Serializable {
     /**
      * 属性基础类型、时间、字符、数值
      */
-    private OntologyType propertyType;
+    private OntologyDataType propertyType;
 
     /**
      * 属性名称

@@ -16,17 +16,13 @@ import com.aircas.ptr.foundry.ontology.function.FunctionUtils;
 import com.aircas.ptr.foundry.ontology.function.Parameter;
 import com.aircas.ptr.foundry.ontology.repository.dao.FunctionMapper;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyMetaMapper;
-import com.google.common.net.UrlEscapers;
 import groovy.lang.GroovyClassLoader;
 import groovy.lang.GroovyObject;
 import lombok.RequiredArgsConstructor;
-import com.aircas.ptr.foundry.model.po.OntologyType;
+import com.aircas.ptr.foundry.model.po.OntologyDataType;
 import com.aircas.ptr.foundry.ontology.Exception.ExceptionFactory;
 
-import org.apache.commons.codec.EncoderException;
-import org.apache.commons.codec.net.URLCodec;
 import org.apache.commons.io.FileUtils;
-import org.apache.http.client.utils.URLEncodedUtils;
 import org.codehaus.groovy.control.CompilationFailedException;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
@@ -36,7 +32,6 @@ import java.io.*;
 import java.lang.reflect.Method;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
-import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -214,12 +209,17 @@ public class FunctionServiceImpl implements FunctionService {
         Method handleMethod = FunctionUtils.getMethod(functionInstance, "handle");
         List<ParameterMetadataVO> params = new ArrayList<>();
         List<Parameter> parameters = FunctionUtils.getMethodParameterAnnotates(handleMethod);
-        List<OntologyType> types = FunctionUtils.getParameterTypes(handleMethod);
+        List<OntologyDataType> types = FunctionUtils.getParameterTypes(handleMethod);
         for (int i = 0; i < types.size(); i ++) {
-            OntologyType type = types.get(i);
+            OntologyDataType type = types.get(i);
             Parameter parameter = parameters.get(i);
-            ParameterMetadataVO vo = new ParameterMetadataVO(parameter.name(), type.name(), parameter.description());
-            params.add(vo);
+            if (type.isOntologyDataType()) {
+                ParameterMetadataVO vo = new ParameterMetadataVO(parameter.name(), type.name(), parameter.description(),  type.getOntologyApi());
+                params.add(vo);
+            } else {
+                ParameterMetadataVO vo = new ParameterMetadataVO(parameter.name(), type.name(), parameter.description());
+                params.add(vo);
+            }
         }
         return params;
     }

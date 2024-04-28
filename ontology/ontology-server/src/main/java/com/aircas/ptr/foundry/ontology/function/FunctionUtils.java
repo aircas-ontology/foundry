@@ -1,8 +1,7 @@
 package com.aircas.ptr.foundry.ontology.function;
 
-import com.aircas.ptr.foundry.model.po.OntologyType;
+import com.aircas.ptr.foundry.model.po.OntologyDataType;
 import com.aircas.ptr.foundry.ontology.GroovyClassLoaderManager;
-import com.aircas.ptr.foundry.ontology.entity.vo.ParameterMetadataVO;
 import groovy.lang.GroovyObject;
 
 import java.lang.annotation.Annotation;
@@ -28,13 +27,21 @@ public class FunctionUtils {
         return parameters;
     }
 
-    public static List<OntologyType> getParameterTypes(Method method) {
+    public static List<OntologyDataType> getParameterTypes(Method method) {
         Class[] parameterTypes = method.getParameterTypes();
-        List<OntologyType> paramTypes = new ArrayList<>();
+        List<OntologyDataType> paramTypes = new ArrayList<>();
         for(int i = 0; i < parameterTypes.length; i ++) {
             Class parameterClass = parameterTypes[i];
-            OntologyType type = OntologyType.valueOf(parameterClass);
-            paramTypes.add(type);
+            //如果是本体，则参数为本体类型，且api从class获得。
+            //OntologBaseObject 为动态生成，因而无法获取其class， 写死了字符串
+            if (parameterClass.getSuperclass().getSimpleName().equals("OntologBaseObject")) {
+                OntologyDataType type = OntologyDataType.Ontology;
+                type.setOntologyApi(parameterClass.getSimpleName().toLowerCase());
+                paramTypes.add(type);
+            } else {
+                OntologyDataType type = OntologyDataType.valueOf(parameterClass);
+                paramTypes.add(type);
+            }
         }
         return paramTypes;
     }
