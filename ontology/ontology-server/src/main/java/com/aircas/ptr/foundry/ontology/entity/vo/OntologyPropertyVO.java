@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.entity.vo;
 
+import com.aircas.ptr.foundry.model.po.OntologyDataType;
 import lombok.Data;
 
 import java.util.Date;
@@ -44,7 +45,7 @@ public class OntologyPropertyVO {
     /**
      * 属性基础类型、时间、字符、数值
      */
-    private OntologyVO propertyType;
+    private OntologyDataType propertyType;
 
     /**
      * 属性名称

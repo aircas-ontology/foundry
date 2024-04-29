@@ -2,6 +2,7 @@ package com.aircas.ptr.foundry.ontology.application.service.impl;
 
 import com.aircas.ptr.foundry.model.po.*;
 import com.aircas.ptr.foundry.ontology.application.service.ObjectService;
+import com.aircas.ptr.foundry.ontology.application.service.OntologyPropertyService;
 import com.aircas.ptr.foundry.ontology.entity.vo.*;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyChildLinkMapper;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyLinkGroupMapper;
@@ -42,6 +43,9 @@ public class ObjectServiceImpl implements ObjectService {
 
     @Resource
     private final OntologyChildLinkMapper ontologyChildLinkMapper;
+
+    @Resource
+    private final OntologyPropertyService ontologyPropertyService;
 
     @Override
     public List<DirectoryItemVO> queryDirectories(String ontologyUniqueIdentifier) {
@@ -123,27 +127,9 @@ public class ObjectServiceImpl implements ObjectService {
 
 
     private ObjectValueVo queryByPrimaryKey(String ontologyUniqueIdentifier, String primaryKey) {
-        List<OntologyProperty> ontologyPropertyList = ontologyPropertyMapper.selectByOntologyUniqueIdentifier(ontologyUniqueIdentifier);
-        List<String> dataSouceIdList = ontologyPropertyList.stream().map(property -> property.getDatasourceId()).collect(Collectors.toList());
-        Map<String, Map<String, TableColumnDesc>> propertySourceMap = new HashMap<>();
-        for (String dataSourceId: dataSouceIdList) {
-            List<TableColumnDesc> tableColumnDescs = tableMetadataMapper.getColumnMetadata(dataSourceId);
-            Map<String, TableColumnDesc> columnNameDescMap = new HashMap<>();
-            for (TableColumnDesc tableColumnDesc: tableColumnDescs) {
-                columnNameDescMap.put(tableColumnDesc.getColumnName(), tableColumnDesc);
-            }
-            propertySourceMap.put(dataSourceId, columnNameDescMap);
-        }
-        for (OntologyProperty ontologyProperty: ontologyPropertyList) {
-            TableColumnDesc tableColumnDesc = propertySourceMap.get(ontologyProperty.getDatasourceId()).get(ontologyProperty.getDatasourceColumnName());
-            if (ontologyProperty!= null) {
-                ontologyProperty.setPropertyType(OntologyDataType.valueFromPgType(tableColumnDesc.getType()));
-            } else {
-                System.out.println("不可处理的数据类型:" + tableColumnDesc.getType());
-            }
-        }
+        List<OntologyPropertyVO> ontologyPropertyList = ontologyPropertyService.selectByOntologyUniqueIdentifier(ontologyUniqueIdentifier);
 
-        //根据表，列，求解数据类型，填充到OntologyProperty中
+       //根据表，列，求解数据类型，填充到OntologyProperty中
         String primaryColumnName = getPrimaryKeyColumnName(ontologyPropertyList);
         List<ObjectValueVo> objectValueVoList = queryByColumnNameValue(ontologyPropertyList, primaryColumnName, primaryKey);
         if (objectValueVoList.size() == 0) {
@@ -154,11 +140,11 @@ public class ObjectServiceImpl implements ObjectService {
 
 
     private List<ObjectValueVo> queryByColumnNameValue(String ontologyUniqueIdentifier, String columnName, String columnValue) {
-        List<OntologyProperty> ontologyPropertyList = ontologyPropertyMapper.selectByOntologyUniqueIdentifier(ontologyUniqueIdentifier);
+        List<OntologyPropertyVO> ontologyPropertyList = ontologyPropertyService.selectByOntologyUniqueIdentifier(ontologyUniqueIdentifier);
         return queryByColumnNameValue(ontologyPropertyList, columnName, columnValue);
     }
 
-    private List<ObjectValueVo> queryByColumnNameValue(List<OntologyProperty> ontologyPropertyList, String columnName, String columnValue) {
+    private List<ObjectValueVo> queryByColumnNameValue(List<OntologyPropertyVO> ontologyPropertyList, String columnName, String columnValue) {
         String sql = buildSQLByQueryKey(ontologyPropertyList, columnName, columnValue);
         if (sql == null) return null;
         List<Map<String, Object>> rawResult = objectMapper.queryAnySQL(sql);
@@ -176,7 +162,7 @@ public class ObjectServiceImpl implements ObjectService {
                 propertyList.add(propertyValueVO);
                 //index0 -> 0
                 int propertyIndex = Integer.valueOf(key.substring(5));
-                OntologyProperty property = ontologyPropertyList.get(propertyIndex);
+                OntologyPropertyVO property = ontologyPropertyList.get(propertyIndex);
                 propertyValueVO.setIsTitleKey(property.getIsTitleKey());
                 propertyValueVO.setIsPrimaryKey(property.getIsPrimaryKey());
                 propertyValueVO.setDisplayName(property.getDisplayName());
@@ -202,8 +188,8 @@ public class ObjectServiceImpl implements ObjectService {
         return ret;
     }
 
-    private String getPrimaryKeyColumnName(List<OntologyProperty> ontologyPropertyList) {
-        for (OntologyProperty property: ontologyPropertyList) {
+    private String getPrimaryKeyColumnName(List<OntologyPropertyVO> ontologyPropertyList) {
+        for (OntologyPropertyVO property: ontologyPropertyList) {
             if (property.getIsPrimaryKey() == 1) {
                 return property.getDatasourceColumnName();
             }
@@ -256,7 +242,7 @@ public class ObjectServiceImpl implements ObjectService {
     }
 
     //目前只支持单个table，多个table的先不考虑
-    private String buildSQLByQueryKey(List<OntologyProperty> ontologyPropertyList, String columnName, String value) {
+    private String buildSQLByQueryKey(List<OntologyPropertyVO> ontologyPropertyList, String columnName, String value) {
         if (columnName == null || value == null ||
             ontologyPropertyList == null || ontologyPropertyList.size() == 0) {
             return null;

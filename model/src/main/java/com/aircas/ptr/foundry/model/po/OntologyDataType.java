@@ -74,7 +74,7 @@ public enum OntologyDataType {
             "bigint", OntologyDataType.Int,
 
             "real", OntologyDataType.Float,
-            "double precision", OntologyDataType.Double,
+            "double precision", OntologyDataType.Double,
             "numeric", OntologyDataType.Decimal,
 
             "text", OntologyDataType.String,

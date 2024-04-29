@@ -1,23 +1,29 @@
 package com.aircas.ptr.foundry.ontology.application.service.impl;
 
+import com.aircas.ptr.foundry.model.po.OntologyDataType;
 import com.aircas.ptr.foundry.model.po.OntologyProperty;
+import com.aircas.ptr.foundry.model.po.TableColumnDesc;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyPropertyService;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyPropertyBO;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyPropertyVO;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyPropertyMapper;
+import com.aircas.ptr.foundry.ontology.repository.datalakeDao.TableMetadataMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
+import javax.annotation.Resource;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class OntologyPropertyServiceImpl implements OntologyPropertyService {
 
     private final OntologyPropertyMapper ontologyPropertyMapper;
+
+    @Resource
+    private final TableMetadataMapper tableMetadataMapper;
 
     @Override
     public Integer add(OntologyPropertyBO ontologyPropertyBO) {
@@ -71,12 +77,26 @@ public class OntologyPropertyServiceImpl implements OntologyPropertyService {
     public List<OntologyPropertyVO> selectByOntologyUniqueIdentifier(String uniqueIdentifier) {
         List<OntologyProperty> ontologyPropertyList = ontologyPropertyMapper.selectByOntologyUniqueIdentifier(uniqueIdentifier);
         List<OntologyPropertyVO> list = new ArrayList<>();
+
+        List<String> dataSouceIdList = ontologyPropertyList.stream().map(property -> property.getDatasourceId()).collect(Collectors.toList());
+        Map<String, Map<String, TableColumnDesc>> propertySourceMap = new HashMap<>();
+        for (String dataSourceId: dataSouceIdList) {
+            List<TableColumnDesc> tableColumnDescs = tableMetadataMapper.getColumnMetadata(dataSourceId);
+            Map<String, TableColumnDesc> columnNameDescMap = new HashMap<>();
+            for (TableColumnDesc tableColumnDesc: tableColumnDescs) {
+                columnNameDescMap.put(tableColumnDesc.getColumnName(), tableColumnDesc);
+            }
+            propertySourceMap.put(dataSourceId, columnNameDescMap);
+        }
+
         for (OntologyProperty ontologyProperty : ontologyPropertyList){
             OntologyPropertyVO propertyVO = new OntologyPropertyVO();
             BeanUtils.copyProperties(ontologyProperty, propertyVO);
+            TableColumnDesc tableColumnDesc = propertySourceMap.get(ontologyProperty.getDatasourceId()).get(ontologyProperty.getDatasourceColumnName());
+            OntologyDataType type = OntologyDataType.valueFromPgType(tableColumnDesc.getType());
+            propertyVO.setPropertyType(type);
             list.add(propertyVO);
         }
-
         return list;
     }
 

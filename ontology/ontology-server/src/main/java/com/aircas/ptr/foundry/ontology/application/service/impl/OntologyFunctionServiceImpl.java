@@ -82,7 +82,7 @@ public class OntologyFunctionServiceImpl implements OntologyFunctionService {
             }
         }
         //根据property的值，设置参数的值即可，如果是当前对象，则设置为当前对象，也就是currentObject即可，包含api 和primaryKey
-        return functionService.handle(originalFunction,false,null,parameters);
+        return functionService.handle(originalFunction,false,null, parameters);
     }
 
     private OntologyFunctionBo queryByOntologyIdentifierAndApi(String functionApi, String ontologyUniqueIdentifier) throws OntologyFunctionNotFoundException {
