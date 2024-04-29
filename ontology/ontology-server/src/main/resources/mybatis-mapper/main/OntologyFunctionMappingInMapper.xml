@@ -31,6 +31,13 @@
     where ontology_function_id = #{ontologyFunctionId,jdbcType=BIGINT}
   </select>
 
+  <select id="selectAllMappings" resultMap="BaseResultMap">
+    <!-- @mbg.generated: generated automatically, do not modify! -->
+    select
+    <include refid="Base_Column_List" />
+    from ontology_function_mapping_in
+  </select>
+
   <delete id="deleteByPrimaryKey" parameterType="java.lang.Long">
     <!-- @mbg.generated: generated automatically, do not modify! -->
     delete from ontology_function_mapping_in

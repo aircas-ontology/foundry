@@ -113,11 +113,6 @@ public class OntologyFunctionServiceImpl implements OntologyFunctionService {
     public int save(OntologyFunctionBo ontologyFunctionBo) {
         OntologyFunction ontologyFunction = new OntologyFunction();
         BeanUtils.copyProperties(ontologyFunctionBo, ontologyFunction);
-//        if (ontologyFunctionBo.isPreview()) {
-//            ontologyFunction.setIsPreview(1);
-//        } else {
-//            ontologyFunction.setIsPreview(0);
-//        }
         int status = ontologyFunctionMapper.insert(ontologyFunction);
         long id = ontologyFunction.getId();
         for (OntologyFunctionMappingInBO mappingInBO: ontologyFunctionBo.getMappingInList()) {
@@ -196,8 +191,24 @@ public class OntologyFunctionServiceImpl implements OntologyFunctionService {
 
     @Override
     public List<OntologyFunctionVO> queryByOntologyUniqueIdentifier(String ontologyUniqueIdentifier) {
-        return null;
+        List<OntologyFunction> list = ontologyFunctionMapper.selectByOntologyIdentifier(ontologyUniqueIdentifier);
+        List<OntologyFunctionVO> resultList = new ArrayList<>();
+        for(OntologyFunction function: list) {
+            OntologyFunctionVO ontologyFunctionVO = new OntologyFunctionVO();
+            BeanUtils.copyProperties(function, ontologyFunctionVO);
+            List<OntologyFunctionMappingIn> allMappings = ontologyFunctionMappingInMapper.selectAllMappings();
+            List<OntologyFunctionMappingIn> mappingInList = allMappings
+                    .stream()
+                    .filter(ontologyFunctionMappingIn -> ontologyFunctionMappingIn.getOntologyFunctionId() == ontologyFunctionVO.getId())
+                    .collect(Collectors.toList());
+            List<OntologyFunctionMappingInVO> mappingInVoList = mappingInList.stream().map(ontologyFunctionMappingIn -> {
+                OntologyFunctionMappingInVO ontologyFunctionMappingInVo = new OntologyFunctionMappingInVO();
+                BeanUtils.copyProperties(ontologyFunctionMappingIn, ontologyFunctionMappingInVo);
+                return ontologyFunctionMappingInVo;
+            }).collect(Collectors.toList());
+            ontologyFunctionVO.setMappingInList(mappingInVoList);
+            resultList.add(ontologyFunctionVO);
+        }
+        return resultList;
     }
-
-
 }

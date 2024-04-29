@@ -27,6 +27,8 @@ public interface OntologyFunctionMappingInMapper {
 
     List<OntologyFunctionMappingIn> selectByOntologyFunctionId(Long ontologyFunctionId);
 
+    List<OntologyFunctionMappingIn> selectAllMappings();
+
     /**
      * @mbg.generated generated automatically, do not modify!
      */

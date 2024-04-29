@@ -76,4 +76,13 @@
     from ontology_function
     where api = #{api,jdbcType=VARCHAR} and ontology_unique_identifier = #{ontologyUniqueIdentifier, jdbcType=VARCHAR} and is_preview = #{isPreview, jdbcType=BOOLEAN}
   </select>
+
+  <select id="selectByOntologyIdentifier" resultMap="BaseResultMap">
+    <!-- @mbg.generated: generated automatically, do not modify! -->
+    select
+    <include refid="Base_Column_List" />
+    from ontology_function
+    where ontology_unique_identifier = #{ontologyUniqueIdentifier, jdbcType=VARCHAR} and is_preview = false
+  </select>
+
 </mapper>
