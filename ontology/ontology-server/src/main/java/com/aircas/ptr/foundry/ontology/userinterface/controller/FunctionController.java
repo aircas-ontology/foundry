@@ -72,7 +72,7 @@ public class FunctionController {
     //读取函数列表
     @ApiOperation(value = "根据api获取函数metadata")
     @GetMapping("/getMetadataByApi")
-    public DataResult<FunctionVO> functionList(String api) {
+    public DataResult<FunctionVO> getMetadataByApi(String api) {
         return DataResult.ofData(functionService.getFunctionByApi(api));
     }
 

@@ -23,6 +23,10 @@ public class ExceptionFactory {
         return new OntologyFunctionNotFoundException(cause);
     }
 
+    public static OntologyFunctionMappedPropertyNotFoundException getOntologyFunctionMappedPropertyNotFoundException(Throwable cause) {
+        return new OntologyFunctionMappedPropertyNotFoundException(cause);
+    }
+
     public static OwlUriInvalidClassNotFoundException getOwlUriInvalidClassNotFoundException(Throwable cause) {
         return new OwlUriInvalidClassNotFoundException(cause);
     }

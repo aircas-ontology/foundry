@@ -15,9 +15,11 @@ public interface OntologyFunctionService {
 
     List<ParameterMetadataVO> getParameters(String functionApi, String ontologyUniqueIdentifier) throws FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionNotFoundException, OntologyFunctionNotFoundException;
 
-    int delete(long id);
+    OntologyFunctionVO getMetadata(String functionApi, String ontologyUniqueIdentifier) throws OntologyFunctionNotFoundException, OntologyFunctionMappedPropertyNotFoundException, FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionNotFoundException;
 
     List<OntologyFunctionVO> queryByOntologyUniqueIdentifier(String ontologyUniqueIdentifier);
 
-    Object handle(FunctionRequestBodyBO functionRequestBodyBO) throws FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionRuntimeException, FunctionNotFoundException;
+    Object handle(FunctionRequestBodyBO functionRequestBodyBO) throws FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionRuntimeException, FunctionNotFoundException, OntologyFunctionNotFoundException;
+
+    int delete(long id);
 }

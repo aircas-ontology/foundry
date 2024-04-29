@@ -7,6 +7,7 @@ import com.aircas.ptr.foundry.ontology.Exception.BaseException;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyFunctionService;
 import com.aircas.ptr.foundry.ontology.entity.bo.FunctionRequestBodyBO;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyFunctionBo;
+import com.aircas.ptr.foundry.ontology.entity.vo.FunctionVO;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyFunctionVO;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
@@ -30,6 +31,17 @@ public class OntologyFunctionController {
     @PostMapping("/update")
     public DataResult<Integer> update(@RequestBody OntologyFunctionBo ontologyFunctionBo) {
         return DataResult.ofData(ontologyFunctionService.save(ontologyFunctionBo));
+    }
+
+    //读取函数列表
+    @ApiOperation(value = "根据api获取函数metadata")
+    @GetMapping("/getMetadata")
+    public ApiResult getMetadata(@RequestParam String functionName, @RequestParam String ontologyUniqueIdentifier) {
+        try {
+            return DataResult.ofData(ontologyFunctionService.getMetadata(functionName, ontologyUniqueIdentifier));
+        } catch (BaseException e) {
+            return DataResult.fail(e.getMessage(), e.code, e.getRootCauseMessage());
+        }
     }
 
     @ApiOperation(value = "执行当前函数")
