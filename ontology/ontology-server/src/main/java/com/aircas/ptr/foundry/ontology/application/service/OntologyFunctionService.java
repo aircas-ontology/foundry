@@ -13,9 +13,9 @@ public interface OntologyFunctionService {
 
     int save(OntologyFunctionBo ontologyFunctionBo);
 
-    List<ParameterMetadataVO> getParameters(String functionApi, String ontologyUniqueIdentifier) throws FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionNotFoundException, OntologyFunctionNotFoundException;
+    List<ParameterMetadataVO> getParameters(String functionApi, String ontologyUniqueIdentifier, boolean isPreview) throws FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionNotFoundException, OntologyFunctionNotFoundException;
 
-    OntologyFunctionVO getMetadata(String functionApi, String ontologyUniqueIdentifier) throws OntologyFunctionNotFoundException, OntologyFunctionMappedPropertyNotFoundException, FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionNotFoundException;
+    OntologyFunctionVO getMetadata(String functionApi, String ontologyUniqueIdentifier, boolean isPreview) throws OntologyFunctionNotFoundException, OntologyFunctionMappedPropertyNotFoundException, FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionNotFoundException;
 
     List<OntologyFunctionVO> queryByOntologyUniqueIdentifier(String ontologyUniqueIdentifier);
 

@@ -18,6 +18,6 @@ public interface OntologyFunctionMapper {
     /**
      * @mbg.generated generated automatically, do not modify!
      */
-    OntologyFunction selectByOntologyIdentifierAndApi(String ontologyUniqueIdentifier, String api);
+    OntologyFunction selectByOntologyIdentifierAndApi(String ontologyUniqueIdentifier, String api, boolean isPreview);
 
 }

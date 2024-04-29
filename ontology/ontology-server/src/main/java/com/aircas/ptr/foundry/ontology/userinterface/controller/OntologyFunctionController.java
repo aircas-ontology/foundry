@@ -36,9 +36,9 @@ public class OntologyFunctionController {
     //读取函数列表
     @ApiOperation(value = "根据api获取函数metadata")
     @GetMapping("/getMetadata")
-    public ApiResult getMetadata(@RequestParam String functionName, @RequestParam String ontologyUniqueIdentifier) {
+    public ApiResult getMetadata(@RequestParam String functionName, @RequestParam String ontologyUniqueIdentifier, @RequestParam Boolean isPreview) {
         try {
-            return DataResult.ofData(ontologyFunctionService.getMetadata(functionName, ontologyUniqueIdentifier));
+            return DataResult.ofData(ontologyFunctionService.getMetadata(functionName, ontologyUniqueIdentifier, isPreview));
         } catch (BaseException e) {
             return DataResult.fail(e.getMessage(), e.code, e.getRootCauseMessage());
         }
@@ -56,9 +56,9 @@ public class OntologyFunctionController {
 
     @ApiOperation(value = "参数列表")
     @GetMapping("/parameterMetadatas")
-    public ApiResult getParameterMetadatas(@RequestParam String functionName, @RequestParam String ontologyUniqueIdentifier) {
+    public ApiResult getParameterMetadatas(@RequestParam String functionName, @RequestParam String ontologyUniqueIdentifier, @RequestParam Boolean isPreview) {
         try {
-            return DataResult.ofData(ontologyFunctionService.getParameters(functionName, ontologyUniqueIdentifier));
+            return DataResult.ofData(ontologyFunctionService.getParameters(functionName, ontologyUniqueIdentifier, isPreview));
         } catch (BaseException e) {
             return DataResult.fail(e.getMessage(), e.code, e.getRootCauseMessage());
         }

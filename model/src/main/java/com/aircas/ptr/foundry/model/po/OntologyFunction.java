@@ -30,6 +30,11 @@ public class OntologyFunction {
     private String description;
 
     /**
+     isPreview == 1, 则是测试模式下，使用完后要删除
+     */
+    private boolean isPreview;
+
+    /**
      * Column: create_time
      */
     private Date createTime;
