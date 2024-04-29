@@ -1,19 +1,19 @@
 package com.aircas.ptr.foundry.ontology.application.service;
 
 
-import com.aircas.ptr.foundry.ontology.Exception.FunctionClassNotNewInstanceException;
-import com.aircas.ptr.foundry.ontology.Exception.FunctionFileNotCompiled;
-import com.aircas.ptr.foundry.ontology.Exception.FunctionNotFoundException;
-import com.aircas.ptr.foundry.ontology.Exception.FunctionRuntimeException;
+import com.aircas.ptr.foundry.ontology.Exception.*;
 import com.aircas.ptr.foundry.ontology.entity.bo.FunctionRequestBodyBO;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyFunctionBo;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyFunctionVO;
+import com.aircas.ptr.foundry.ontology.entity.vo.ParameterMetadataVO;
 
 import java.util.List;
 
 public interface OntologyFunctionService {
 
     int save(OntologyFunctionBo ontologyFunctionBo);
+
+    List<ParameterMetadataVO> getParameters(String functionApi, String ontologyUniqueIdentifier) throws FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionNotFoundException, OntologyFunctionNotFoundException;
 
     int delete(long id);
 

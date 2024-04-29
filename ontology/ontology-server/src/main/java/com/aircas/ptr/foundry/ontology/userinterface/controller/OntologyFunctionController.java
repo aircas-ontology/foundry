@@ -38,7 +38,17 @@ public class OntologyFunctionController {
         try {
             return DataResult.ofData(ontologyFunctionService.handle(functionRequestBodyBO));
         } catch (BaseException e) {
-            return DataResult.fail(e.getMessage(), e.code, e.getRootCause() == null ? "" : e.getRootCause().getMessage());
+            return DataResult.fail(e.getMessage(), e.code, e.getRootCauseMessage());
+        }
+    }
+
+    @ApiOperation(value = "参数列表")
+    @GetMapping("/parameterMetadatas")
+    public ApiResult getParameterMetadatas(@RequestParam String functionName, @RequestParam String ontologyUniqueIdentifier) {
+        try {
+            return DataResult.ofData(ontologyFunctionService.getParameters(functionName, ontologyUniqueIdentifier));
+        } catch (BaseException e) {
+            return DataResult.fail(e.getMessage(), e.code, e.getRootCauseMessage());
         }
     }
 
@@ -48,7 +58,8 @@ public class OntologyFunctionController {
         return DataResult.ofData(ontologyFunctionService.delete(id));
     }
 
-    @ApiOperation(value = "查询某个本体")
+
+    @ApiOperation(value = "查询某个本体拥有的函数")
     @GetMapping("/query")
     public DataResult<List<OntologyFunctionVO>> queryByOntologyUniqueIdentifier(@RequestParam @ApiParam(value = "本体identifier", required = true) String ontologyUniqueIdentifier) {
         return DataResult.ofData(ontologyFunctionService.queryByOntologyUniqueIdentifier(ontologyUniqueIdentifier));

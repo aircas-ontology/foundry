@@ -3,10 +3,7 @@ package com.aircas.ptr.foundry.ontology.application.service.impl;
 import com.aircas.ptr.foundry.model.po.OntologyFunction;
 import com.aircas.ptr.foundry.model.po.OntologyFunctionMappingIn;
 import com.aircas.ptr.foundry.model.po.OntologyMeta;
-import com.aircas.ptr.foundry.ontology.Exception.FunctionClassNotNewInstanceException;
-import com.aircas.ptr.foundry.ontology.Exception.FunctionFileNotCompiled;
-import com.aircas.ptr.foundry.ontology.Exception.FunctionNotFoundException;
-import com.aircas.ptr.foundry.ontology.Exception.FunctionRuntimeException;
+import com.aircas.ptr.foundry.ontology.Exception.*;
 import com.aircas.ptr.foundry.ontology.application.service.FunctionService;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyFunctionService;
 import com.aircas.ptr.foundry.ontology.entity.bo.FunctionRequestBodyBO;
@@ -15,6 +12,7 @@ import com.aircas.ptr.foundry.ontology.entity.bo.OntologyFunctionBo;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyFunctionMappingInBO;
 import com.aircas.ptr.foundry.ontology.entity.vo.ObjectValueVo;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyFunctionVO;
+import com.aircas.ptr.foundry.ontology.entity.vo.ParameterMetadataVO;
 import com.aircas.ptr.foundry.ontology.entity.vo.PropertyValueVO;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyFunctionMappingInMapper;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyFunctionMapper;
@@ -26,6 +24,7 @@ import org.springframework.stereotype.Service;
 import lombok.RequiredArgsConstructor;
 
 import javax.annotation.Resource;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -117,6 +116,22 @@ public class OntologyFunctionServiceImpl implements OntologyFunctionService {
         }
         return status;
     }
+
+    public List<ParameterMetadataVO> getParameters(String functionApi, String ontologyUniqueIdentifier)
+            throws FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionNotFoundException, OntologyFunctionNotFoundException {
+        OntologyFunction ontologyFunction = ontologyFunctionMapper.selectByOntologyIdentifierAndApi(ontologyUniqueIdentifier, functionApi);
+        if (ontologyFunction == null) {
+            throw ExceptionFactory.getOntologyFunctionNotFoundException(null);
+        }
+        List<ParameterMetadataVO> parameterMetadataVOList = functionService.getParameters(ontologyFunction.getOriginalApi(), false, null);
+        List<OntologyFunctionMappingIn> mappingIns = ontologyFunctionMappingInMapper.selectByOntologyFunctionId(ontologyFunction.getId());
+        List<String> mappedParameters =  mappingIns.stream().map(ontologyFunctionMappingIn -> ontologyFunctionMappingIn.getParameterName()).collect(Collectors.toList());
+        parameterMetadataVOList.removeIf(parameterMetadataVO -> mappedParameters.contains(parameterMetadataVO.getName()));
+        return parameterMetadataVOList;
+    }
+
+
+
 
     @Override
     public int delete(long id) {

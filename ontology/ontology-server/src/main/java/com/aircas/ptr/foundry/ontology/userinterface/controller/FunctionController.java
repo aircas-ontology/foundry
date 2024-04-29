@@ -35,7 +35,7 @@ public class FunctionController {
         try {
             return DataResult.ofData(functionService.handle(functionName, isPreview, objectTypes, parameters));
         } catch (BaseException e) {
-            return DataResult.fail(e.getMessage(), e.code, e.getRootCause() == null ? "" : e.getRootCause().getMessage());
+            return DataResult.fail(e.getMessage(), e.code, e.getRootCauseMessage());
         }
     }
 
@@ -45,7 +45,7 @@ public class FunctionController {
         try {
             return DataResult.ofData(functionService.getParameters(functionName, isPreview, objectTypes));
         } catch (BaseException e) {
-            return DataResult.fail(e.getMessage(), e.code, e.getRootCause().getMessage());
+            return DataResult.fail(e.getMessage(), e.code, e.getRootCauseMessage());
         }
     }
 

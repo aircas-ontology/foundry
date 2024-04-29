@@ -12,7 +12,7 @@ public class BaseException extends Exception {
         this.cause = cause;
     }
 
-    public Throwable getRootCause() {
+    private Throwable getRootCause() {
         Throwable rootCause = cause;
         if (rootCause == null) {
             return null;
@@ -21,5 +21,13 @@ public class BaseException extends Exception {
             rootCause = rootCause.getCause();
         }
         return rootCause;
+    }
+
+    public String getRootCauseMessage() {
+        Throwable rootCause = this.getRootCause();
+        if (rootCause == null) {
+            return null;
+        }
+        return rootCause.getMessage();
     }
 }
