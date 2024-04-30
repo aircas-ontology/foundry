@@ -17,7 +17,7 @@ public interface OntologyFunctionService {
 
     OntologyFunctionVO getMetadata(String functionApi, String ontologyUniqueIdentifier, boolean isPreview) throws OntologyFunctionNotFoundException, OntologyFunctionMappedPropertyNotFoundException, FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionNotFoundException;
 
-    List<OntologyFunctionVO> queryByOntologyUniqueIdentifier(String ontologyUniqueIdentifier);
+    List<OntologyFunctionVO> queryByOntologyUniqueIdentifier(String ontologyUniqueIdentifier) throws OntologyFunctionMappedPropertyNotFoundException, FunctionFileNotCompiled, FunctionNotFoundException, FunctionClassNotNewInstanceException;
 
     Object handle(FunctionRequestBodyBO functionRequestBodyBO) throws FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionRuntimeException, FunctionNotFoundException, OntologyFunctionNotFoundException;
 

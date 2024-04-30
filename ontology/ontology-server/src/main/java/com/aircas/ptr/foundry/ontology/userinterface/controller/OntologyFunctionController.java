@@ -4,6 +4,7 @@ import com.aircas.ptr.foundry.common.base.ApiResult;
 import com.aircas.ptr.foundry.common.base.DataResult;
 
 import com.aircas.ptr.foundry.ontology.Exception.BaseException;
+import com.aircas.ptr.foundry.ontology.Exception.OntologyFunctionMappedPropertyNotFoundException;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyFunctionService;
 import com.aircas.ptr.foundry.ontology.entity.bo.FunctionRequestBodyBO;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyFunctionBo;
@@ -73,7 +74,11 @@ public class OntologyFunctionController {
 
     @ApiOperation(value = "查询某个本体拥有的函数")
     @GetMapping("/query")
-    public DataResult<List<OntologyFunctionVO>> queryByOntologyUniqueIdentifier(@RequestParam @ApiParam(value = "本体identifier", required = true) String ontologyUniqueIdentifier) {
-        return DataResult.ofData(ontologyFunctionService.queryByOntologyUniqueIdentifier(ontologyUniqueIdentifier));
+    public ApiResult queryByOntologyUniqueIdentifier(@RequestParam @ApiParam(value = "本体identifier", required = true) String ontologyUniqueIdentifier) {
+        try {
+            return DataResult.ofData(ontologyFunctionService.queryByOntologyUniqueIdentifier(ontologyUniqueIdentifier));
+        } catch (BaseException e) {
+            return DataResult.fail(e.getMessage(), e.code, e.getRootCauseMessage());
+        }
     }
 }

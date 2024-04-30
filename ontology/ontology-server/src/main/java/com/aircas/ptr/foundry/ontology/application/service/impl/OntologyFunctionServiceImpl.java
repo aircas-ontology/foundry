@@ -5,6 +5,7 @@ import com.aircas.ptr.foundry.model.po.*;
 import com.aircas.ptr.foundry.ontology.Exception.*;
 import com.aircas.ptr.foundry.ontology.application.service.FunctionService;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyFunctionService;
+import com.aircas.ptr.foundry.ontology.application.service.OntologyPropertyService;
 import com.aircas.ptr.foundry.ontology.entity.bo.FunctionRequestBodyBO;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyBaseObjectBo;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyFunctionBo;
@@ -17,15 +18,13 @@ import com.aircas.ptr.foundry.ontology.application.service.ObjectService;
 
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyPropertyMapper;
 import com.github.jsonldjava.utils.Obj;
+import org.apache.commons.lang.StringUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import lombok.RequiredArgsConstructor;
 
 import javax.annotation.Resource;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -48,9 +47,14 @@ public class OntologyFunctionServiceImpl implements OntologyFunctionService {
     private final ObjectService objectService;
 
     @Resource
+    private final OntologyPropertyService ontologyPropertyService;
+
+    @Resource
     FunctionService functionService;
 
     static String ontologySelfIdentifier = "-1";
+
+    static String currentObjectDesc = "当前本体对象";
 
     @Override
     public Object handle(FunctionRequestBodyBO functionRequestBodyBO)
@@ -131,42 +135,19 @@ public class OntologyFunctionServiceImpl implements OntologyFunctionService {
         if (ontologyFunction == null) {
             throw ExceptionFactory.getOntologyFunctionNotFoundException(null);
         }
-        OntologyFunctionBo ontologyFunctionBo = queryByOntologyIdentifierAndApi(functionApi, ontologyUniqueIdentifier, false);
-        OntologyFunctionVO ontologyFunctionVO = new OntologyFunctionVO();
-        BeanUtils.copyProperties(ontologyFunctionBo, ontologyFunctionVO, "mappingInList");
         OntologyMeta ontologyMeta = ontologyMetaMapper.selectByUniqueIdentifier(ontologyUniqueIdentifier);
-        ontologyFunctionVO.setOntologyDisplayName(ontologyMeta.getDisplayName());
-        //对mapping进行设置
-        List<OntologyProperty> ontologyProperties =  this.propertyMapper.selectByOntologyUniqueIdentifier(ontologyUniqueIdentifier);
-        Map<String, OntologyProperty> ontologyPropertiesMap = new HashMap<>();
+        Map<String, OntologyPropertyVO> ontologyPropertiesMap = queryPropertiesByOntologyUniqueIdentifier(ontologyUniqueIdentifier);
+        List<OntologyFunctionMappingIn> allMappings = ontologyFunctionMappingInMapper.selectByOntologyFunctionId(ontologyFunction.getId());
+        return getFunctionVO(ontologyFunction, ontologyMeta, allMappings, ontologyPropertiesMap);
+    }
+
+    private Map<String, OntologyPropertyVO> queryPropertiesByOntologyUniqueIdentifier(String ontologyUniqueIdentifier) {
+        Map<String, OntologyPropertyVO> ontologyPropertiesMap = new HashMap<>();
+        List<OntologyPropertyVO> ontologyProperties =  ontologyPropertyService.selectByOntologyUniqueIdentifier(ontologyUniqueIdentifier);
         ontologyProperties.forEach(ontologyProperty -> {
             ontologyPropertiesMap.put(ontologyProperty.getUniqueIdentifier(), ontologyProperty);
         });
-
-        List<OntologyFunctionMappingInVO> mappingInVOs = new ArrayList<>();
-        List<ParameterMetadataVO> parameterMetadataVOList = functionService.getParameters(ontologyFunction.getOriginalApi(), false, null);
-
-        for(OntologyFunctionMappingInBO mapping:  ontologyFunctionBo.getMappingInList()) {
-            OntologyFunctionMappingInVO mappingInVO = new OntologyFunctionMappingInVO();
-            BeanUtils.copyProperties(mapping, mappingInVO);
-            if (!ontologySelfIdentifier.equals(mapping.getPropertyUniqueIdentifier())) {
-                OntologyProperty ontologyProperty = ontologyPropertiesMap.get(mapping.getPropertyUniqueIdentifier());
-                if (ontologyProperty == null) {
-                    throw ExceptionFactory.getOntologyFunctionMappedPropertyNotFoundException(null);
-                }
-                mappingInVO.setPropertyName(ontologyProperty.getDisplayName());
-                mappingInVO.setPropertyType(ontologyProperty.getPropertyType() != null ? ontologyProperty.getPropertyType().name() : null);
-                List<ParameterMetadataVO> matchedParaList = parameterMetadataVOList.stream()
-                        .filter(parameterMetadataVO -> parameterMetadataVO.getName().equals(mappingInVO.getParameterName()))
-                        .collect(Collectors.toList());
-                if (matchedParaList.size() >= 1) {
-                    mappingInVO.setParameterType(matchedParaList.get(0).getType());
-                }
-            }
-            mappingInVOs.add(mappingInVO);
-        }
-        ontologyFunctionVO.setMappingInList(mappingInVOs);
-        return ontologyFunctionVO;
+        return ontologyPropertiesMap;
     }
 
 
@@ -185,30 +166,73 @@ public class OntologyFunctionServiceImpl implements OntologyFunctionService {
 
 
     @Override
+    public List<OntologyFunctionVO> queryByOntologyUniqueIdentifier(String ontologyUniqueIdentifier)
+            throws OntologyFunctionMappedPropertyNotFoundException, FunctionFileNotCompiled, FunctionNotFoundException, FunctionClassNotNewInstanceException {
+        List<OntologyFunction> list = ontologyFunctionMapper.selectByOntologyIdentifier(ontologyUniqueIdentifier);
+        List<Long> functionIds = list.stream().map(ontologyFunction -> ontologyFunction.getId() ).collect(Collectors.toList());
+        List<OntologyFunctionMappingIn> allMappings = ontologyFunctionMappingInMapper.selectByOntologyFunctionIds(functionIds);
+
+        OntologyMeta ontologyMeta = ontologyMetaMapper.selectByUniqueIdentifier(ontologyUniqueIdentifier);
+        Map<String, OntologyPropertyVO> ontologyPropertiesMap = queryPropertiesByOntologyUniqueIdentifier(ontologyUniqueIdentifier);
+        List<OntologyFunctionVO> result = new ArrayList();
+        for(OntologyFunction function: list) {
+            OntologyFunctionVO ontologyFunctionVO = getFunctionVO(function, ontologyMeta, allMappings, ontologyPropertiesMap);
+            result.add(ontologyFunctionVO);
+        }
+        return result;
+    }
+
+    private OntologyFunctionVO getFunctionVO(OntologyFunction function,
+                                             OntologyMeta ontologyMeta,
+                                             List<OntologyFunctionMappingIn> allMappingIns,
+                                             Map<String, OntologyPropertyVO> ontologyPropertiesMap
+    ) throws OntologyFunctionMappedPropertyNotFoundException,FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionNotFoundException {
+
+        OntologyFunctionVO ontologyFunctionVO = new OntologyFunctionVO();
+        BeanUtils.copyProperties(function, ontologyFunctionVO);
+        ontologyFunctionVO.setOntologyDisplayName(ontologyMeta.getDisplayName());
+
+        List<OntologyFunctionMappingIn> mappingInList = allMappingIns
+                .stream()
+                .filter(ontologyFunctionMappingIn -> ontologyFunctionMappingIn.getOntologyFunctionId() == ontologyFunctionVO.getId())
+                .collect(Collectors.toList());
+        List<OntologyFunctionMappingInVO> mappingInVOs = new ArrayList<>();
+        String ontologyType = StringUtils.capitalize(ontologyMeta.getApiName());
+        for(OntologyFunctionMappingIn mapping: mappingInList) {
+            boolean isOntologySelf = ontologySelfIdentifier.equals(mapping.getPropertyUniqueIdentifier());
+            OntologyFunctionMappingInVO mappingInVO = new OntologyFunctionMappingInVO();
+            BeanUtils.copyProperties(mapping, mappingInVO);
+            if (!isOntologySelf) {
+                OntologyPropertyVO ontologyPropertyVO = ontologyPropertiesMap.get(mapping.getPropertyUniqueIdentifier());
+                if (ontologyPropertyVO == null) {
+                    throw ExceptionFactory.getOntologyFunctionMappedPropertyNotFoundException(null);
+                }
+                mappingInVO.setPropertyName(ontologyPropertyVO.getDisplayName());
+                mappingInVO.setPropertyType(ontologyPropertyVO.getPropertyType() != null ? ontologyPropertyVO.getPropertyType().name() : null);
+            } else {
+                mappingInVO.setPropertyName(currentObjectDesc);
+                mappingInVO.setPropertyType(ontologyType);
+            }
+            List<ParameterMetadataVO> parameterMetadataVOList = functionService.getParameters(function.getOriginalApi(), false, null);
+            List<ParameterMetadataVO> matchedParaList = parameterMetadataVOList.stream()
+                    .filter(parameterMetadataVO -> parameterMetadataVO.getName().equals(mappingInVO.getParameterName()))
+                    .collect(Collectors.toList());
+            if (matchedParaList.size() >= 1) {
+                if (isOntologySelf) {
+                    mappingInVO.setParameterType(ontologyType);
+                } else {
+                    mappingInVO.setParameterType(matchedParaList.get(0).getType());
+                }
+            }
+            mappingInVOs.add(mappingInVO);
+        }
+        ontologyFunctionVO.setMappingInList(mappingInVOs);
+        return ontologyFunctionVO;
+    }
+
+    @Override
     public int delete(long id) {
         return 0;
     }
 
-    @Override
-    public List<OntologyFunctionVO> queryByOntologyUniqueIdentifier(String ontologyUniqueIdentifier) {
-        List<OntologyFunction> list = ontologyFunctionMapper.selectByOntologyIdentifier(ontologyUniqueIdentifier);
-        List<OntologyFunctionVO> resultList = new ArrayList<>();
-        for(OntologyFunction function: list) {
-            OntologyFunctionVO ontologyFunctionVO = new OntologyFunctionVO();
-            BeanUtils.copyProperties(function, ontologyFunctionVO);
-            List<OntologyFunctionMappingIn> allMappings = ontologyFunctionMappingInMapper.selectAllMappings();
-            List<OntologyFunctionMappingIn> mappingInList = allMappings
-                    .stream()
-                    .filter(ontologyFunctionMappingIn -> ontologyFunctionMappingIn.getOntologyFunctionId() == ontologyFunctionVO.getId())
-                    .collect(Collectors.toList());
-            List<OntologyFunctionMappingInVO> mappingInVoList = mappingInList.stream().map(ontologyFunctionMappingIn -> {
-                OntologyFunctionMappingInVO ontologyFunctionMappingInVo = new OntologyFunctionMappingInVO();
-                BeanUtils.copyProperties(ontologyFunctionMappingIn, ontologyFunctionMappingInVo);
-                return ontologyFunctionMappingInVo;
-            }).collect(Collectors.toList());
-            ontologyFunctionVO.setMappingInList(mappingInVoList);
-            resultList.add(ontologyFunctionVO);
-        }
-        return resultList;
-    }
 }

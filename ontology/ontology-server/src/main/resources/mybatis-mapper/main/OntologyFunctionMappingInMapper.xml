@@ -31,11 +31,15 @@
     where ontology_function_id = #{ontologyFunctionId,jdbcType=BIGINT}
   </select>
 
-  <select id="selectAllMappings" resultMap="BaseResultMap">
+  <select id="selectByOntologyFunctionIds" parameterType="java.util.List" resultMap="BaseResultMap">
     <!-- @mbg.generated: generated automatically, do not modify! -->
     select
     <include refid="Base_Column_List" />
     from ontology_function_mapping_in
+    where ontology_function_id in
+    <foreach collection="list" index="index" item="id" open="(" separator="," close=")">
+      #{id,jdbcType=BIGINT}
+    </foreach>
   </select>
 
   <delete id="deleteByPrimaryKey" parameterType="java.lang.Long">
