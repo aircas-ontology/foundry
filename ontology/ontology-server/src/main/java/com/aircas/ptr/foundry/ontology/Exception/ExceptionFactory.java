@@ -3,6 +3,10 @@ package com.aircas.ptr.foundry.ontology.Exception;
 
 public class ExceptionFactory {
 
+    public static OntologyApiNameNotFoundException getOntologyApiNameNotFoundException(Throwable cause) {
+        return new OntologyApiNameNotFoundException(cause);
+    }
+
     public static FunctionClassNotNewInstanceException getFunctionClassNotNewInstanceException(Throwable cause) {
         return new FunctionClassNotNewInstanceException(cause);
     }
@@ -25,6 +29,14 @@ public class ExceptionFactory {
 
     public static OntologyFunctionMappedPropertyNotFoundException getOntologyFunctionMappedPropertyNotFoundException(Throwable cause) {
         return new OntologyFunctionMappedPropertyNotFoundException(cause);
+    }
+
+    public static OntologyFunctionParameterPropertyTypeNotSameException getOntologyFunctionParameterPropertyTypeNotSameException(Throwable cause) {
+        return new OntologyFunctionParameterPropertyTypeNotSameException(cause);
+    }
+
+    public static OntologyFunctionBindingParameterNotFoundException getOntologyFunctionBindingParameterNotFoundException(Throwable cause) {
+        return new OntologyFunctionBindingParameterNotFoundException(cause);
     }
 
     public static OwlUriInvalidClassNotFoundException getOwlUriInvalidClassNotFoundException(Throwable cause) {

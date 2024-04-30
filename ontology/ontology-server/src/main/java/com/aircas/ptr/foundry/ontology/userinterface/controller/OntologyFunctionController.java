@@ -5,6 +5,7 @@ import com.aircas.ptr.foundry.common.base.DataResult;
 
 import com.aircas.ptr.foundry.ontology.Exception.BaseException;
 import com.aircas.ptr.foundry.ontology.Exception.OntologyFunctionMappedPropertyNotFoundException;
+import com.aircas.ptr.foundry.ontology.Exception.OntologyFunctionParameterPropertyTypeNotSameException;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyFunctionService;
 import com.aircas.ptr.foundry.ontology.entity.bo.FunctionRequestBodyBO;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyFunctionBo;
@@ -30,8 +31,12 @@ public class OntologyFunctionController {
 
     @ApiOperation(value = "保存当前函数")
     @PostMapping("/update")
-    public DataResult<Integer> update(@RequestBody OntologyFunctionBo ontologyFunctionBo) {
-        return DataResult.ofData(ontologyFunctionService.save(ontologyFunctionBo));
+    public ApiResult update(@RequestBody OntologyFunctionBo ontologyFunctionBo) throws OntologyFunctionParameterPropertyTypeNotSameException {
+        try {
+            return DataResult.ofData(ontologyFunctionService.save(ontologyFunctionBo));
+        } catch (BaseException e) {
+            return DataResult.fail(e.getMessage(), e.code, e.getRootCauseMessage());
+        }
     }
 
     //读取函数列表

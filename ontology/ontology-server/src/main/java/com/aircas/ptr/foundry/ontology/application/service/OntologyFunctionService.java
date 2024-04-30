@@ -11,7 +11,7 @@ import java.util.List;
 
 public interface OntologyFunctionService {
 
-    int save(OntologyFunctionBo ontologyFunctionBo);
+    int save(OntologyFunctionBo ontologyFunctionBo) throws OntologyFunctionParameterPropertyTypeNotSameException, FunctionFileNotCompiled, FunctionNotFoundException, FunctionClassNotNewInstanceException, OntologyFunctionBindingParameterNotFoundException, OntologyFunctionMappedPropertyNotFoundException;
 
     List<ParameterMetadataVO> getParameters(String functionApi, String ontologyUniqueIdentifier, boolean isPreview) throws FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionNotFoundException, OntologyFunctionNotFoundException;
 
@@ -19,7 +19,7 @@ public interface OntologyFunctionService {
 
     List<OntologyFunctionVO> queryByOntologyUniqueIdentifier(String ontologyUniqueIdentifier) throws OntologyFunctionMappedPropertyNotFoundException, FunctionFileNotCompiled, FunctionNotFoundException, FunctionClassNotNewInstanceException;
 
-    Object handle(FunctionRequestBodyBO functionRequestBodyBO) throws FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionRuntimeException, FunctionNotFoundException, OntologyFunctionNotFoundException;
+    Object handle(FunctionRequestBodyBO functionRequestBodyBO) throws FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionRuntimeException, FunctionNotFoundException, OntologyFunctionNotFoundException, OntologyApiNameNotFoundException;
 
     int delete(long id);
 }

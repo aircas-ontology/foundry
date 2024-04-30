@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.model.po;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 
 import java.util.Date;
@@ -34,14 +35,11 @@ public class OntologyFunction {
      */
     private boolean isPreview;
 
-    /**
-     * Column: create_time
-     */
+
+    @JsonFormat(shape = JsonFormat.Shape.NUMBER)
     private Date createTime;
 
-    /**
-     * Column: update_time
-     */
+    @JsonFormat(shape = JsonFormat.Shape.NUMBER)
     private Date updateTime;
 
     private static final long serialVersionUID = 1L;
