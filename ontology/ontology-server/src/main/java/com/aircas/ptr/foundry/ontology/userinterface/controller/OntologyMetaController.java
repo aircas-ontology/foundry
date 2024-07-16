@@ -4,6 +4,7 @@ import com.aircas.ptr.foundry.common.base.DataResult;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyMetaService;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyMetaBO;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyMetaVO;
+import com.aircas.ptr.foundry.ontology.entity.vo.OntologyPropertyVO;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
@@ -57,4 +58,5 @@ public class OntologyMetaController {
      public DataResult<List<OntologyMetaVO>> getAllOntologies() {
           return DataResult.ofData(ontologyMetaService.getAllOntologies());
      }
+
 }

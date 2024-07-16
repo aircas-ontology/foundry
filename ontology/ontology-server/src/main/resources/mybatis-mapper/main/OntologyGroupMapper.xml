@@ -7,9 +7,10 @@
     <result column="create_time" jdbcType="TIMESTAMP" property="createTime" />
     <result column="update_time" jdbcType="TIMESTAMP" property="updateTime" />
     <result column="group_name" jdbcType="VARCHAR" property="groupName" />
+    <result column="group_id" jdbcType="BIGINT" property="groupId"/>
   </resultMap>
   <sql id="Base_Column_List">
-    id, "status", create_time, update_time, group_name
+    id, "status", create_time, update_time, group_name,group_id
   </sql>
   <select id="selectByPrimaryKey" parameterType="java.lang.Long" resultMap="BaseResultMap">
     select 
@@ -40,9 +41,9 @@
   </update>
   <insert id="insert" keyColumn="id" keyProperty="id" parameterType="com.aircas.ptr.foundry.model.po.OntologyGroup" useGeneratedKeys="true">
     insert into "ontology_group" ("status", create_time, update_time, 
-      group_name)
+      group_name,group_id)
     values (#{status,jdbcType=INTEGER}, #{createTime,jdbcType=TIMESTAMP}, #{updateTime,jdbcType=TIMESTAMP}, 
-      #{groupName,jdbcType=VARCHAR})
+      #{groupName,jdbcType=VARCHAR}，#{groupId,jdbcType = BIGINT})
   </insert>
   <insert id="insertSelective" keyColumn="id" keyProperty="id" parameterType="com.aircas.ptr.foundry.model.po.OntologyGroup" useGeneratedKeys="true">
     insert into "ontology_group"
@@ -59,6 +60,9 @@
       <if test="groupName != null">
         group_name,
       </if>
+      <if test="groupId != null">
+        group_id,
+      </if>
     </trim>
     <trim prefix="values (" suffix=")" suffixOverrides=",">
       <if test="status != null">
@@ -72,6 +76,9 @@
       </if>
       <if test="groupName != null">
         #{groupName,jdbcType=VARCHAR},
+      </if>
+      <if test="groupId != null">
+        #{groupId,jdbcType = BIGINT}
       </if>
     </trim>
   </insert>
@@ -90,6 +97,9 @@
       <if test="groupName != null">
         group_name = #{groupName,jdbcType=VARCHAR},
       </if>
+      <if test="groupId != null">
+        group_id = #{groupId,jdbcType = BIGINT}
+      </if>
     </set>
     where id = #{id,jdbcType=BIGINT}
   </update>
@@ -99,6 +109,7 @@
       create_time = #{createTime,jdbcType=TIMESTAMP},
       update_time = #{updateTime,jdbcType=TIMESTAMP},
       group_name = #{groupName,jdbcType=VARCHAR}
+      group_id = #{groupId,jdbcType = BIGINT}
     where id = #{id,jdbcType=BIGINT}
   </update>
 </mapper>

@@ -36,4 +36,10 @@ public class OntologyGroupVO {
       * 本体分组名称
       */
      private String groupName;
+
+     /**
+      * 所属组别id
+      * @Auther：liuyang
+      */
+     private String groupId;
 }

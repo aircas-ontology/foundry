@@ -52,7 +52,7 @@
     where unique_identifier = #{uniqumeigeeIdentifier,jdbcType=BIGINT}
   </delete>
   <insert id="insert" keyColumn="id" keyProperty="id" parameterType="com.aircas.ptr.foundry.model.po.OntologyProperty" useGeneratedKeys="true">
-    insert into "ontology_property" ("status", unique_identifier, create_time, update_time,
+    insert into "ontology_property"  ("status", unique_identifier, create_time, update_time,
       ontology_unique_identifier, datasource_column_name, property_type,
       display_name, description, visibility, 
       experimental_status, api_name, is_primary_key, 

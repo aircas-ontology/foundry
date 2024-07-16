@@ -2,6 +2,8 @@ package com.aircas.ptr.foundry.model.po;
 
 import java.io.Serializable;
 import java.util.Date;
+
+import lombok.Builder;
 import lombok.Data;
 
 /**
@@ -44,6 +46,12 @@ public class OntologyMeta implements Serializable {
      * 本体名称
      */
     private String displayName;
+
+    /**
+     * 別名
+     * @Auther:liuyang
+     */
+    private String nickname;
 
     /**
      * 本体复数名称
