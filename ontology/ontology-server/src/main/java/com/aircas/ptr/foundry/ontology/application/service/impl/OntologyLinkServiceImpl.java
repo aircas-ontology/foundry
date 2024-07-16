@@ -1,5 +1,7 @@
 package com.aircas.ptr.foundry.ontology.application.service.impl;
 
+import com.aircas.ptr.foundry.common.base.RestResult;
+import com.aircas.ptr.foundry.common.base.ResultGenerator;
 import com.aircas.ptr.foundry.model.po.OntologyChildLink;
 import com.aircas.ptr.foundry.model.po.OntologyLinkGroup;
 import com.aircas.ptr.foundry.model.po.OntologyMeta;
@@ -110,21 +112,15 @@ public class OntologyLinkServiceImpl implements OntologyLinkService {
 
 
     @Override
-    public Integer deleteLinkByOntologyUniqueIdentifier(String uniqueIdentifier) {
-        List<OntologyLinkGroup> linkGroups = new ArrayList<>();
-        List<OntologyLinkGroup> forwardOntologyLinkGroups = ontologyLinkGroupMapper.selectByOntologyUniqueIdentifierFrom(uniqueIdentifier);
-        linkGroups.addAll(forwardOntologyLinkGroups);
-
-        List<OntologyLinkGroup> backwardOntologyLinkGroups = ontologyLinkGroupMapper.selectByOntologyUniqueIdentifierTo(uniqueIdentifier);
-        linkGroups.addAll(backwardOntologyLinkGroups);
-
-        for(OntologyLinkGroup group: linkGroups) {
-            long forwardChildLinkId = group.getForwardChildLinkId();
-            ontologyChildLinkMapper.deleteByPrimaryKey(forwardChildLinkId);
-            long backwardChildLinkId = group.getBackwardChildLinkId();
-            ontologyChildLinkMapper.deleteByPrimaryKey(backwardChildLinkId);
+    public RestResult deleteLinkByOntologyUniqueIdentifier(String uniqueIdentifier) {
+        OntologyLinkGroup ontologyLinkGroup = ontologyLinkGroupMapper.selectByUniqueIdentifier(uniqueIdentifier);
+        if (ontologyLinkGroup!= null){
+            ontologyChildLinkMapper.deleteByPrimaryKey(ontologyLinkGroup.getForwardChildLinkId());
+            ontologyChildLinkMapper.deleteByPrimaryKey(ontologyLinkGroup.getBackwardChildLinkId());
+            ontologyLinkGroupMapper.deleteByUniqueIdentifier(uniqueIdentifier);
+            return ResultGenerator.genSuccessResult();
         }
-        return ontologyLinkGroupMapper.deleteByUniqueIdentifier(uniqueIdentifier);
+        return ResultGenerator.genFailResult("未查询到该数据！");
     }
 
 

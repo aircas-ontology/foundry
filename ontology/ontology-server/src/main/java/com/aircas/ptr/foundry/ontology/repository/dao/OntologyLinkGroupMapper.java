@@ -33,6 +33,7 @@ public interface OntologyLinkGroupMapper {
      */
     OntologyLinkGroup selectByPrimaryKey(Long id);
 
+    OntologyLinkGroup selectByUniqueIdentifier(String uniqueIdentifier);
 
     List<OntologyLinkGroup> selectAll();
 
