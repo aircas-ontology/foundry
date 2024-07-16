@@ -28,4 +28,10 @@ public interface OntologyMetaService {
      Integer update(OntologyMetaBO ontologyMetaBO);
 
      List<OntologyMetaVO> getAllOntologies();
+
+     /**
+      * 统计本体数量
+      * @return
+      */
+     Integer getCountByStatus(int status);
 }

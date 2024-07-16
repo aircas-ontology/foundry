@@ -72,7 +72,12 @@
       and display_name = #{displayName}
     </if>
   </select>
-  <delete id="deleteByPrimaryKey" parameterType="java.lang.Long">
+
+  <select id="getCountByStatus" parameterType="int" resultType="java.lang.Integer">
+    select count(1) from ontology_meta where status = #{status}
+  </select>
+
+    <delete id="deleteByPrimaryKey" parameterType="java.lang.Long">
     delete from "ontology_meta"
     where id = #{id,jdbcType=BIGINT}
   </delete>

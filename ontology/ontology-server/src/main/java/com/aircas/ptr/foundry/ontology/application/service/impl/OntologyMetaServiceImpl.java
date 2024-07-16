@@ -93,4 +93,10 @@ public class OntologyMetaServiceImpl implements OntologyMetaService {
         }
         return retResult;
     }
+
+    @Override
+    public Integer getCountByStatus(int status) {
+        int count = ontologyMetaMapper.getCountByStatus(status);
+        return count;
+    }
 }

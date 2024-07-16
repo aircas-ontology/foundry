@@ -31,4 +31,11 @@ public interface OntologyMetaMapper {
     int deleteByUniqueIdentifier(String uniqueIdentifier);
 
     List<OntologyMeta> selectAllOntologies();
+
+    /**
+     * 根据status统计本体数量
+     * @param status
+     * @return
+     */
+    int getCountByStatus(Integer status);
 }
