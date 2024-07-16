@@ -2,6 +2,8 @@ package com.aircas.ptr.foundry.model.po;
 
 import java.io.Serializable;
 import java.util.Date;
+
+import lombok.Builder;
 import lombok.Data;
 
 /**

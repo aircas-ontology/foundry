@@ -35,5 +35,11 @@ public class OntologyGroup implements Serializable {
      */
     private String groupName;
 
+    /**
+     * 所属组别id
+     * @Auther：liuyang
+     */
+    private String groupId;
+
     private static final long serialVersionUID = 1L;
 }

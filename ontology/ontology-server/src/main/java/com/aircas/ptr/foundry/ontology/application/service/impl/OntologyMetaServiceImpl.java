@@ -1,18 +1,17 @@
 package com.aircas.ptr.foundry.ontology.application.service.impl;
 
 import com.aircas.ptr.foundry.common.exception.DuplicatedDataException;
-import com.aircas.ptr.foundry.model.po.OntologyMeta;
+import com.aircas.ptr.foundry.model.po.*;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyMetaService;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyMetaBO;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyMetaVO;
-import com.aircas.ptr.foundry.ontology.repository.dao.OntologyMetaMapper;
+import com.aircas.ptr.foundry.ontology.repository.dao.*;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
+import java.util.*;
+//import java.util.Map;
 
 /**
  * @author dongjunchuan
@@ -32,7 +31,7 @@ public class OntologyMetaServiceImpl implements OntologyMetaService {
         if (count != 0) {
             throw new DuplicatedDataException("本体名称已存在");
         }
-
+        // 进行本体插入
         OntologyMeta ontologyMeta = new OntologyMeta();
         BeanUtils.copyProperties(ontologyMetaBO, ontologyMeta);
         ontologyMeta.setStatus(1);
@@ -54,7 +53,9 @@ public class OntologyMetaServiceImpl implements OntologyMetaService {
         OntologyMeta ontologyMeta = ontologyMetaMapper.selectByPrimaryKey(ontologyMetaBO.getId());
         BeanUtils.copyProperties(ontologyMetaBO, ontologyMeta);
         ontologyMeta.setUpdateTime(new Date());
-        return ontologyMetaMapper.updateByPrimaryKeySelective(ontologyMeta);
+
+        int count = ontologyMetaMapper.updateByPrimaryKeySelective(ontologyMeta);
+        return count;
     }
 
     @Override

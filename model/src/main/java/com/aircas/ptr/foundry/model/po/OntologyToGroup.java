@@ -33,12 +33,12 @@ public class OntologyToGroup implements Serializable {
     /**
      * 本体id
      */
-    private Long ontologyId;
+    private Integer ontologyId;
 
     /**
      * 本体所属组id
      */
-    private Long ontologyGroupId;
+    private Integer ontologyGroupId;
 
     private static final long serialVersionUID = 1L;
 }
