@@ -1,9 +1,11 @@
 package com.aircas.ptr.foundry.ontology.userinterface.controller;
 
+import com.aircas.ptr.foundry.common.base.ApiResult;
 import com.aircas.ptr.foundry.common.base.DataResult;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyGroupService;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyGroupBO;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyGroupVO;
+import com.aircas.ptr.foundry.ontology.repository.param.OntologyGroupAddParam;
 import com.github.pagehelper.PageInfo;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
@@ -11,7 +13,6 @@ import io.swagger.annotations.ApiParam;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
-import javax.websocket.server.PathParam;
 import java.util.List;
 
 /**
@@ -30,8 +31,13 @@ public class OntologyGroupController {
 
     @PostMapping("/add")
     @ApiOperation(value = "新增本体分组")
-    public DataResult<Integer> add(@RequestBody OntologyGroupBO ontologyGroupBO) {
-        return DataResult.ofData(ontologyGroupService.add(ontologyGroupBO));
+    public ApiResult add(@RequestBody OntologyGroupAddParam param) {
+
+        Integer res = ontologyGroupService.add(param);
+        if (res > 0) {
+            return DataResult.success(res);
+        }
+        return DataResult.fail("新增失败");
     }
 
     @DeleteMapping("/delete")
@@ -42,7 +48,7 @@ public class OntologyGroupController {
 
     @PostMapping("/update")
     @ApiOperation(value = "修改本体分组")
-    public DataResult<Integer> update(@RequestBody OntologyGroupBO ontologyGroupBO) {
+    public ApiResult update(@RequestBody OntologyGroupBO ontologyGroupBO) {
         return DataResult.ofData(ontologyGroupService.update(ontologyGroupBO));
     }
 

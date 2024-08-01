@@ -2,6 +2,7 @@ package com.aircas.ptr.foundry.ontology.application.service;
 
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyGroupBO;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyGroupVO;
+import com.aircas.ptr.foundry.ontology.repository.param.OntologyGroupAddParam;
 import com.github.pagehelper.PageInfo;
 
 import java.util.List;
@@ -14,7 +15,8 @@ import java.util.List;
 
 
 public interface OntologyGroupService {
-    Integer add(OntologyGroupBO ontologyGroupBO);
+
+    Integer add(OntologyGroupAddParam param);
 
     Integer delete(List<Long> ids);
 

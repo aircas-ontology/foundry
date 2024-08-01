@@ -63,9 +63,13 @@ public class OntologyMetaServiceImpl implements OntologyMetaService {
                 property.setDisplayName(column.getColumnName());
                 if (column.getColumnName().equals(param.getTitleKey())) {
                     property.setIsTitleKey(1);
+                } else {
+                    property.setIsTitleKey(0);
                 }
                 if (column.getColumnName().equals(param.getPrimaryKey())) {
                     property.setIsPrimaryKey(1);
+                } else {
+                    property.setIsPrimaryKey(0);
                 }
                 property.setStatus(1);
                 property.setUniqueIdentifier(UUID.randomUUID().toString());
@@ -120,9 +124,9 @@ public class OntologyMetaServiceImpl implements OntologyMetaService {
 
     @Override
     public List<OntologyMetaVO> getAllOntologies() {
-        List <OntologyMeta> result = ontologyMetaMapper.selectAllOntologies();
+        List<OntologyMeta> result = ontologyMetaMapper.selectAllOntologies();
         List<OntologyMetaVO> retResult = new ArrayList();
-        for (OntologyMeta meta: result) {
+        for (OntologyMeta meta : result) {
             OntologyMetaVO ontologyMetaVO = new OntologyMetaVO();
             BeanUtils.copyProperties(meta, ontologyMetaVO);
             retResult.add(ontologyMetaVO);
@@ -139,9 +143,9 @@ public class OntologyMetaServiceImpl implements OntologyMetaService {
     @Override
     public List<OntologyMetaVO> searchOntologies(String keyword) {
 
-        List <OntologyMeta> result = ontologyMetaMapper.searchOntologies(keyword);
+        List<OntologyMeta> result = ontologyMetaMapper.searchOntologies(keyword);
         List<OntologyMetaVO> retResult = new ArrayList();
-        for (OntologyMeta meta: result) {
+        for (OntologyMeta meta : result) {
             OntologyMetaVO ontologyMetaVO = new OntologyMetaVO();
             BeanUtils.copyProperties(meta, ontologyMetaVO);
             retResult.add(ontologyMetaVO);

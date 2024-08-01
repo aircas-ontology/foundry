@@ -7,15 +7,16 @@ import com.aircas.ptr.foundry.ontology.entity.bo.OntologyGroupBO;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyGroupVO;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyGroupMapper;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyToGroupMapper;
+import com.aircas.ptr.foundry.ontology.repository.param.OntologyGroupAddParam;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
-import java.util.Collections;
 import java.util.Date;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -35,16 +36,19 @@ public class OntologyGroupServiceImpl implements OntologyGroupService {
 
 
     @Override
-    public Integer add(OntologyGroupBO ontologyGroupBO) {
-        int count = ontologyGroupMapper.selectByGroupName(ontologyGroupBO.getGroupName());
+    public Integer add(OntologyGroupAddParam param) {
+        int count = ontologyGroupMapper.selectByGroupName(param.getGroupName());
         if (count != 0) {
             throw new DuplicatedDataException("本体分组已存在");
         }
 
+        Date now = new Date();
         OntologyGroup ontologyGroup = new OntologyGroup();
-        BeanUtils.copyProperties(ontologyGroupBO, ontologyGroup);
+        BeanUtils.copyProperties(param, ontologyGroup);
+        ontologyGroup.setGroupId(UUID.randomUUID().toString());
         ontologyGroup.setStatus(1);
-        ontologyGroup.setCreateTime(new Date());
+        ontologyGroup.setCreateTime(now);
+        ontologyGroup.setUpdateTime(now);
         count = ontologyGroupMapper.insertSelective(ontologyGroup);
         return count;
     }
