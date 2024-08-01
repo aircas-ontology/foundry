@@ -88,4 +88,9 @@ public class OntologyMetaVO {
      * 本体修改是否可写回数据源，1是，0否
      */
     private Integer writebackFlag;
+
+    /**
+     * 分组ids，以“,”隔开
+     */
+    private String metaGroupId;
 }

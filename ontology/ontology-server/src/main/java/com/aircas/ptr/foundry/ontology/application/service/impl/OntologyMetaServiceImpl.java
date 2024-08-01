@@ -2,15 +2,19 @@ package com.aircas.ptr.foundry.ontology.application.service.impl;
 
 import com.aircas.ptr.foundry.common.exception.DuplicatedDataException;
 import com.aircas.ptr.foundry.model.po.*;
+import com.aircas.ptr.foundry.ontology.application.service.OntologyGroupService;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyMetaService;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyPropertyService;
 import com.aircas.ptr.foundry.ontology.application.service.TableMetadataService;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyMetaBO;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyPropertyBO;
+import com.aircas.ptr.foundry.ontology.entity.vo.OntologyGroupMetaVO;
+import com.aircas.ptr.foundry.ontology.entity.vo.OntologyGroupVO;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyMetaVO;
 import com.aircas.ptr.foundry.ontology.entity.vo.TableColumnDescVO;
 import com.aircas.ptr.foundry.ontology.repository.dao.*;
 import com.aircas.ptr.foundry.ontology.repository.param.OntologyMetaAddParam;
+import com.github.pagehelper.PageInfo;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -37,6 +41,9 @@ public class OntologyMetaServiceImpl implements OntologyMetaService {
 
     @Autowired
     private TableMetadataService tableMetadataService;
+
+    @Autowired
+    private OntologyGroupService ontologyGroupService;
 
     @Override
     public Integer add(OntologyMetaAddParam param) {
@@ -144,6 +151,35 @@ public class OntologyMetaServiceImpl implements OntologyMetaService {
     public List<OntologyMetaVO> searchOntologies(String keyword) {
 
         List<OntologyMeta> result = ontologyMetaMapper.searchOntologies(keyword);
+        List<OntologyMetaVO> retResult = new ArrayList();
+        for (OntologyMeta meta : result) {
+            OntologyMetaVO ontologyMetaVO = new OntologyMetaVO();
+            BeanUtils.copyProperties(meta, ontologyMetaVO);
+            retResult.add(ontologyMetaVO);
+        }
+        return retResult;
+    }
+
+    @Override
+    public PageInfo<OntologyGroupMetaVO> searchGroupOntologies(String keyword, Integer page, Integer size) {
+
+        PageInfo<OntologyGroupVO> list = ontologyGroupService.list(page, size);
+        List<OntologyGroupMetaVO> collect = list.getList().stream().map(group -> {
+            OntologyGroupMetaVO ontologyGroupMetaVO = new OntologyGroupMetaVO();
+            ontologyGroupMetaVO.setGroupId(group.getGroupId());
+            ontologyGroupMetaVO.setGroupName(group.getGroupName());
+            List<OntologyMetaVO> ontologyMetaVOS = listOntologiesByGroup(group.getGroupId());
+            ontologyGroupMetaVO.setOntologyCount(ontologyMetaVOS.size());
+            ontologyGroupMetaVO.setMetaVOS(ontologyMetaVOS);
+            return ontologyGroupMetaVO;
+        }).collect(Collectors.toList());
+        return new PageInfo<>(collect);
+    }
+
+    @Override
+    public List<OntologyMetaVO> listOntologiesByGroup(String groupId) {
+
+        List<OntologyMeta> result = ontologyMetaMapper.listOntologiesByGroup(groupId);
         List<OntologyMetaVO> retResult = new ArrayList();
         for (OntologyMeta meta : result) {
             OntologyMetaVO ontologyMetaVO = new OntologyMetaVO();

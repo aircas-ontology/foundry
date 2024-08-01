@@ -3,15 +3,18 @@ package com.aircas.ptr.foundry.ontology.userinterface.controller;
 import com.aircas.ptr.foundry.common.base.DataResult;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyMetaService;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyMetaBO;
+import com.aircas.ptr.foundry.ontology.entity.vo.OntologyGroupMetaVO;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyMetaVO;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyPropertyVO;
 import com.aircas.ptr.foundry.ontology.repository.param.OntologyMetaAddParam;
+import com.github.pagehelper.PageInfo;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
+import javax.websocket.server.PathParam;
 import java.util.List;
 
 
@@ -65,6 +68,23 @@ public class OntologyMetaController {
     public DataResult<List<OntologyMetaVO>> searchOntologies(@RequestParam @ApiParam(value = "关键字", defaultValue = "舰船", required = true) String keyword) {
 
         return DataResult.ofData(ontologyMetaService.searchOntologies(keyword));
+    }
+
+    @GetMapping("/search/group")
+    @ApiOperation(value = "本体搜索，并分组返回", notes = "通过关键字匹配本体，并以本体分组形式返回")
+    public DataResult<PageInfo<OntologyGroupMetaVO>> searchGroupOntologies(
+            @RequestParam @ApiParam(value = "关键字", defaultValue = "舰船", required = false) String keyword,
+            @RequestParam @ApiParam(value = "页数", required = false, defaultValue = "1") Integer page,
+            @RequestParam @ApiParam(value = "每页条数", required = false, defaultValue = "10") Integer size) {
+
+        return DataResult.ofData(ontologyMetaService.searchGroupOntologies(keyword, page, size));
+    }
+
+    @GetMapping("/list/{groupId}")
+    @ApiOperation(value = "查询分组下的本体列表", notes = "通过本体分组id，查询所有本体")
+    public DataResult<List<OntologyMetaVO>> listOntologiesByGroup(@PathVariable(value = "groupId") String groupId) {
+
+        return DataResult.ofData(ontologyMetaService.listOntologiesByGroup(groupId));
     }
 
 }

@@ -40,4 +40,6 @@ public interface OntologyMetaMapper {
     int getCountByStatus(Integer status);
 
     List<OntologyMeta> searchOntologies(String keyword);
+
+    List<OntologyMeta> listOntologiesByGroup(String groupId);
 }

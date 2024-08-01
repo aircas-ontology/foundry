@@ -94,4 +94,9 @@ public class OntologyMeta implements Serializable {
     private Integer writebackFlag;
 
     private static final long serialVersionUID = 1L;
+
+    /**
+     * 分组ids，以“,”隔开
+     */
+    private String metaGroupId;
 }
