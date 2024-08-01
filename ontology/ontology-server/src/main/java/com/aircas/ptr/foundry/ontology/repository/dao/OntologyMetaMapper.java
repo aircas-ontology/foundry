@@ -38,4 +38,6 @@ public interface OntologyMetaMapper {
      * @return
      */
     int getCountByStatus(Integer status);
+
+    List<OntologyMeta> searchOntologies(String keyword);
 }
