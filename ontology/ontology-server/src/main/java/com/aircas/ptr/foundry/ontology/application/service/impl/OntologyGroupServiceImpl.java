@@ -7,12 +7,16 @@ import com.aircas.ptr.foundry.ontology.entity.bo.OntologyGroupBO;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyGroupVO;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyGroupMapper;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyToGroupMapper;
+import com.github.pagehelper.PageHelper;
+import com.github.pagehelper.PageInfo;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * @author dongjunchuan
@@ -64,5 +68,18 @@ public class OntologyGroupServiceImpl implements OntologyGroupService {
         OntologyGroupVO ontologyGroupVO = new OntologyGroupVO();
         BeanUtils.copyProperties(ontologyGroup, ontologyGroupVO);
         return ontologyGroupVO;
+    }
+
+    @Override
+    public PageInfo<OntologyGroupVO> list(Integer page, Integer size) {
+
+        PageHelper.startPage(page, size);
+        PageInfo<OntologyGroup> pageInfo = new PageInfo<>(ontologyGroupMapper.selectAll());
+        List<OntologyGroupVO> collect = pageInfo.getList().stream().map(item -> {
+            OntologyGroupVO ontologyGroupVO = new OntologyGroupVO();
+            BeanUtils.copyProperties(item, ontologyGroupVO);
+            return ontologyGroupVO;
+        }).collect(Collectors.toList());
+        return new PageInfo<>(collect);
     }
 }

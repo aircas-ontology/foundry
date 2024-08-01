@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.ontology.repository.dao;
 
 import com.aircas.ptr.foundry.model.po.OntologyGroup;
+import com.aircas.ptr.foundry.ontology.entity.vo.OntologyGroupVO;
 import org.apache.ibatis.annotations.Mapper;
 
 import java.util.List;
@@ -22,4 +23,6 @@ public interface OntologyGroupMapper {
     int selectByGroupName(String groupName);
 
     int deleteByIds(List<Long> ids);
+
+    List<OntologyGroup> selectAll();
 }

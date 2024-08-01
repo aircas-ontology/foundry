@@ -2,6 +2,7 @@ package com.aircas.ptr.foundry.ontology.application.service;
 
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyGroupBO;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyGroupVO;
+import com.github.pagehelper.PageInfo;
 
 import java.util.List;
 
@@ -20,4 +21,6 @@ public interface OntologyGroupService {
     Integer update(OntologyGroupBO ontologyGroupBO);
 
     OntologyGroupVO getOntologyGroupById(Long id);
+
+    PageInfo<OntologyGroupVO> list(Integer page, Integer size);
 }
