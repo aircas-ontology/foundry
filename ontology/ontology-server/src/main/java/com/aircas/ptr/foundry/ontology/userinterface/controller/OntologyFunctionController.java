@@ -21,7 +21,7 @@ import java.util.HashMap;
 import java.util.List;
 
 
-@Api(tags = "函数")
+@Api(tags = "本体函数")
 @RestController
 @RequestMapping("/ontology_function")
 public class OntologyFunctionController {

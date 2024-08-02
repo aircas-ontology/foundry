@@ -8,6 +8,7 @@ import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
+import springfox.documentation.annotations.ApiIgnore;
 
 import javax.annotation.Resource;
 import java.util.List;
@@ -15,6 +16,7 @@ import java.util.stream.Collectors;
 
 @Api(tags = "数据目录")
 @RestController
+@ApiIgnore
 public class CatalogController {
 
     @Resource

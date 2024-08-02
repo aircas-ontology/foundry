@@ -13,5 +13,5 @@ public class LinkedValueVo {
     private String apiName;
 
     //可能查询出很多个object
-    private List<ObjectValueVo> joinedResults;
+    private List<ObjectOneInfoVO> joinedResults;
 }

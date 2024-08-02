@@ -13,7 +13,7 @@ import javax.annotation.Resource;
 import java.util.List;
 
 
-@Api(tags = "数据管理")
+@Api(tags = "数据源")
 @RestController
 @RequestMapping("/dataCatalog")
 public class DataCatalogController {

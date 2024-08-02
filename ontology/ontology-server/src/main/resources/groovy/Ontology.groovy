@@ -1,24 +1,16 @@
 package com.aircas.ptr.foundry.ontology.function
 
-import com.aircas.ptr.foundry.model.po.OntologyMeta
+
 import com.aircas.ptr.foundry.ontology.application.service.ObjectService
 import  com.aircas.ptr.foundry.ontology.OntologyServerApplication
 import com.aircas.ptr.foundry.ontology.application.service.OntologyMetaService
 import com.aircas.ptr.foundry.ontology.application.service.OntologyPropertyService
-import com.aircas.ptr.foundry.ontology.application.service.impl.OntologyMetaServiceImpl
 import com.aircas.ptr.foundry.ontology.entity.vo.LinkedValueVo
-import com.aircas.ptr.foundry.ontology.entity.vo.ObjectValueVo
+import com.aircas.ptr.foundry.ontology.entity.vo.ObjectOneInfoVO
 import com.aircas.ptr.foundry.ontology.entity.vo.ObjectWithLinkedInfoVO
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyMetaVO
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyPropertyVO
 import com.aircas.ptr.foundry.ontology.entity.vo.PropertyValueVO
-
-import java.lang.annotation.ElementType
-import java.lang.annotation.Retention
-import java.lang.annotation.RetentionPolicy
-import java.lang.annotation.Target;
-
-
 
 class Ontology {
 
@@ -32,7 +24,7 @@ class Ontology {
         return objectService.queryObjectByApiAndPrimaryKey(api, primaryKey)
     }
 
-    static getProperty(ObjectValueVo object, String propertyApi) {
+    static getProperty(ObjectOneInfoVO object, String propertyApi) {
         if (propertyApi == null || propertyApi.length() == 0) {
             return null;
         }
@@ -53,7 +45,7 @@ class Ontology {
         return propertyList
     }
 
-    static getTitle(ObjectValueVo object) {
+    static getTitle(ObjectOneInfoVO object) {
         List<PropertyValueVO> properties = object.properties;
         PropertyValueVO propertyValueVO = properties.find { a -> a.getIsTitleKey() == 1};
         if (propertyValueVO == null) {

@@ -14,7 +14,7 @@ import javax.annotation.Resource;
 /**
  * @author wangweigang
  */
-@Api(tags = "本体相关概览")
+@Api(tags = "概览")
 @RestController("/overview")
 public class OverviewController {
 

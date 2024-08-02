@@ -6,7 +6,7 @@ import java.util.List;
 
 
 @Data
-public class ObjectValueVo {
+public class ObjectOneInfoVO {
 
     String primaryKey;
 

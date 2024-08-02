@@ -8,7 +8,7 @@ import com.aircas.ptr.foundry.ontology.Exception.OwlUriInvalidClassNotFoundExcep
 import com.aircas.ptr.foundry.ontology.Exception.OwlUrilInvalidPrimaryKeyNotFoundException;
 import com.aircas.ptr.foundry.ontology.application.service.ObjectService;
 import com.aircas.ptr.foundry.ontology.application.service.OwlService;
-import com.aircas.ptr.foundry.ontology.entity.vo.ObjectValueVo;
+import com.aircas.ptr.foundry.ontology.entity.vo.ObjectOneInfoVO;
 import com.aircas.ptr.foundry.ontology.entity.vo.PropertyValueVO;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyMetaMapper;
 import lombok.RequiredArgsConstructor;
@@ -56,16 +56,16 @@ public class OwlServiceImpl implements OwlService {
         if (ontologyMeta == null) {
             throw ExceptionFactory.getOwlUriInvalidClassNotFoundException(null);
         }
-        ObjectValueVo objectValueVo = objectService.queryObjectByApiAndPrimaryKey(ontologyApi, primaryKey);
-        if(objectValueVo == null || objectValueVo.getProperties().size() == 0) {
+        ObjectOneInfoVO objectOneInfoVO = objectService.queryObjectByApiAndPrimaryKey(ontologyApi, primaryKey);
+        if(objectOneInfoVO == null || objectOneInfoVO.getProperties().size() == 0) {
             throw ExceptionFactory.getOwlUrilInvalidPrimaryKeyNotFoundException(null);
         }
         OWLOntologyManager owlOntologyManager = OWLManager.createOWLOntologyManager();
         OWLOntology ontology = owlOntologyManager.createOntology();
         OWLClass owlClass = this.injectClasses(owlOntologyManager, ontology, ontologyMeta);
-        OWLNamedIndividual namedIndividual = this.injectIndividual(owlOntologyManager, ontology, owlClass, ontologyMeta, objectValueVo);
+        OWLNamedIndividual namedIndividual = this.injectIndividual(owlOntologyManager, ontology, owlClass, ontologyMeta, objectOneInfoVO);
 
-        this.injectProperties(owlOntologyManager, ontology, ontologyMeta, owlClass, namedIndividual, objectValueVo.getProperties());
+        this.injectProperties(owlOntologyManager, ontology, ontologyMeta, owlClass, namedIndividual, objectOneInfoVO.getProperties());
 
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
         owlOntologyManager.saveOntology(ontology, outputStream);
@@ -99,9 +99,9 @@ public class OwlServiceImpl implements OwlService {
             OWLOntology ontology,
             OWLClass owlClass,
             OntologyMeta ontologyMeta,
-            ObjectValueVo objectValueVo) {
+            ObjectOneInfoVO objectOneInfoVO) {
         OWLDataFactory factory = owlOntologyManager.getOWLDataFactory();
-        OWLNamedIndividual namedIndividual = factory.getOWLNamedIndividual(contructOwlIndividualUri(ontologyMeta.getApiName(), objectValueVo.getPrimaryKey()));
+        OWLNamedIndividual namedIndividual = factory.getOWLNamedIndividual(contructOwlIndividualUri(ontologyMeta.getApiName(), objectOneInfoVO.getPrimaryKey()));
         owlOntologyManager.addAxiom(ontology, factory.getOWLDeclarationAxiom(namedIndividual));
 
         owlOntologyManager.addAxiom(ontology, factory.getOWLClassAssertionAxiom(owlClass, namedIndividual));

@@ -1,9 +1,7 @@
 package com.aircas.ptr.foundry.ontology.function
 
 import com.aircas.ptr.foundry.model.po.OntologyProperty
-import com.aircas.ptr.foundry.ontology.entity.vo.ObjectValueVo
-import com.aircas.ptr.foundry.ontology.function.Ontology
-import groovy.util.Proxy
+import com.aircas.ptr.foundry.ontology.entity.vo.ObjectOneInfoVO
 
 class OntologBaseObject extends Proxy implements GroovyInterceptable {
 
@@ -36,7 +34,7 @@ class OntologBaseObjectProxy {
     String objectTypeApi
     String primaryKey   //主键
 
-    private ObjectValueVo objectValueVo;
+    private ObjectOneInfoVO objectValueVo;
 
     def getPropertyValue(String key) {
         this.fetchIfNeeded();

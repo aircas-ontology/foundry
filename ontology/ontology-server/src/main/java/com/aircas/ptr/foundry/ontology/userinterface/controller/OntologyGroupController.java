@@ -21,7 +21,7 @@ import java.util.List;
  * @since 2023/12/15 11:00
  */
 
-@Api(tags = "本体分组")
+@Api(tags = "分组")
 @RestController
 @RequestMapping("/group")
 public class OntologyGroupController {

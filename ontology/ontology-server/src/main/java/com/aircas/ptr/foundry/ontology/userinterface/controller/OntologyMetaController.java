@@ -18,7 +18,7 @@ import javax.websocket.server.PathParam;
 import java.util.List;
 
 
-@Api(tags = "本体管理")
+@Api(tags = "元数据")
 @RestController
 @RequestMapping("/OntologyMeta")
 public class OntologyMetaController {

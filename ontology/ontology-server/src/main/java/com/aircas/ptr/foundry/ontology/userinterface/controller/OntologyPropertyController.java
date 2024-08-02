@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-@Api(tags = "本体属性关系")
+@Api(tags = "属性")
 @RestController
 @RequestMapping("/OntologyProperty")
 @RequiredArgsConstructor

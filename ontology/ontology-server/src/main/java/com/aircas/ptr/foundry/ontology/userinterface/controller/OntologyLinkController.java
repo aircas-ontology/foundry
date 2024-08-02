@@ -19,7 +19,7 @@ import java.util.List;
  * @since 2023/12/15 11:00
  */
 
-@Api(tags = "本体关系管理")
+@Api(tags = "关系")
 @RestController
 @RequestMapping("/OntologyLink")
 public class OntologyLinkController {

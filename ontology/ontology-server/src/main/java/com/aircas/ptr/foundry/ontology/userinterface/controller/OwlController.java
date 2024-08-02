@@ -11,7 +11,7 @@ import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import java.net.URI;
 
-@Api(tags = "以OWL格式返回本体")
+@Api(tags = "OWL")
 @RestController
 @RequestMapping("/owl")
 public class OwlController {

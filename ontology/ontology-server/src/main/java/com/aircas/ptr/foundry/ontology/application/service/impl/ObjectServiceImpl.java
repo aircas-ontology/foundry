@@ -86,13 +86,13 @@ public class ObjectServiceImpl implements ObjectService {
     }
 
     @Override
-    public ObjectValueVo queryObjectByPrimaryKey(String ontologyUniqueIdentifier, String primaryKey) {
+    public ObjectOneInfoVO queryObjectByPrimaryKey(String ontologyUniqueIdentifier, String primaryKey) {
         return queryByPrimaryKey(ontologyUniqueIdentifier, primaryKey);
     }
 
 
     @Override
-    public ObjectValueVo queryObjectByApiAndPrimaryKey(String api, String primaryKey) {
+    public ObjectOneInfoVO queryObjectByApiAndPrimaryKey(String api, String primaryKey) {
         String identifier = queryIdentifierByAPI(api);
         return queryObjectByPrimaryKey(identifier, primaryKey);
     }
@@ -107,17 +107,30 @@ public class ObjectServiceImpl implements ObjectService {
     }
 
     @Override
+    public PageInfo<Map<String, Object>> queryObjectList(String ontologyUniqueIdentifier, Integer page, Integer size) {
+
+        List<OntologyPropertyVO> ontologyPropertyList = ontologyPropertyService.selectByOntologyUniqueIdentifier(ontologyUniqueIdentifier);
+        String sql = buildSQL(ontologyPropertyList);
+        if (sql == null) return null;
+        PageHelper.startPage(page, size);
+        List<Map<String, Object>> rawResult = objectMapper.queryAnySQL(sql);
+        PageInfo pageResult = new PageInfo<>(rawResult);
+        BeanUtils.copyProperties(pageResult, rawResult);
+        return pageResult;
+    }
+
+    @Override
     public ObjectWithLinkedInfoVO queryObjectWithLinkedInfoByPrimaryKey(String ontologyUniqueIdentifier, String primaryKey) {
         ObjectWithLinkedInfoVO objectWithLinkedInfoVO = new ObjectWithLinkedInfoVO();
-        ObjectValueVo objectValueVo = queryByPrimaryKey(ontologyUniqueIdentifier, primaryKey);
-        objectWithLinkedInfoVO.setObjectValue(objectValueVo);
+        ObjectOneInfoVO objectOneInfoVO = queryByPrimaryKey(ontologyUniqueIdentifier, primaryKey);
+        objectWithLinkedInfoVO.setObjectValue(objectOneInfoVO);
 
         List<LinkedValueVo> linkedValueVoList = new ArrayList<>();
         objectWithLinkedInfoVO.setLinks(linkedValueVoList);
         List<OntologyLinkGroup> linksMetadata = getLinkedMetadata(ontologyUniqueIdentifier);
         for (int i = 0; i < linksMetadata.size(); i++) {
             OntologyLinkGroup ontologyLinkGroup = linksMetadata.get(i);
-            LinkedValueVo linkedValueVo = getLinkedValue(ontologyLinkGroup, objectValueVo);
+            LinkedValueVo linkedValueVo = getLinkedValue(ontologyLinkGroup, objectOneInfoVO);
             if (linkedValueVo != null) {
                 linkedValueVoList.add(linkedValueVo);
             }
@@ -126,29 +139,29 @@ public class ObjectServiceImpl implements ObjectService {
     }
 
 
-    private ObjectValueVo queryByPrimaryKey(String ontologyUniqueIdentifier, String primaryKey) {
+    private ObjectOneInfoVO queryByPrimaryKey(String ontologyUniqueIdentifier, String primaryKey) {
         List<OntologyPropertyVO> ontologyPropertyList = ontologyPropertyService.selectByOntologyUniqueIdentifier(ontologyUniqueIdentifier);
 
         //根据表，列，求解数据类型，填充到OntologyProperty中
         String primaryColumnName = getPrimaryKeyColumnName(ontologyPropertyList);
-        List<ObjectValueVo> objectValueVoList = queryByColumnNameValue(ontologyPropertyList, primaryColumnName, primaryKey);
-        if (objectValueVoList.size() == 0) {
+        List<ObjectOneInfoVO> objectOneInfoVOList = queryByColumnNameValue(ontologyPropertyList, primaryColumnName, primaryKey);
+        if (objectOneInfoVOList.size() == 0) {
             return null;
         }
-        return objectValueVoList.get(0);
+        return objectOneInfoVOList.get(0);
     }
 
 
-    private List<ObjectValueVo> queryByColumnNameValue(String ontologyUniqueIdentifier, String columnName, String columnValue) {
+    private List<ObjectOneInfoVO> queryByColumnNameValue(String ontologyUniqueIdentifier, String columnName, String columnValue) {
         List<OntologyPropertyVO> ontologyPropertyList = ontologyPropertyService.selectByOntologyUniqueIdentifier(ontologyUniqueIdentifier);
         return queryByColumnNameValue(ontologyPropertyList, columnName, columnValue);
     }
 
-    private List<ObjectValueVo> queryByColumnNameValue(List<OntologyPropertyVO> ontologyPropertyList, String columnName, String columnValue) {
+    private List<ObjectOneInfoVO> queryByColumnNameValue(List<OntologyPropertyVO> ontologyPropertyList, String columnName, String columnValue) {
         String sql = buildSQLByQueryKey(ontologyPropertyList, columnName, columnValue);
         if (sql == null) return null;
         List<Map<String, Object>> rawResult = objectMapper.queryAnySQL(sql);
-        List<ObjectValueVo> ret = new ArrayList();
+        List<ObjectOneInfoVO> ret = new ArrayList();
         if (rawResult.size() == 0) {
             return ret;
         }
@@ -179,11 +192,11 @@ public class ObjectServiceImpl implements ObjectService {
                     displayName = rawKeyValueMap.get(key).toString();
                 }
             }
-            ObjectValueVo objectValueVo = new ObjectValueVo();
-            objectValueVo.setProperties(propertyList);
-            objectValueVo.setPrimaryKey(primaryKeyValue);
-            objectValueVo.setDisplayName(displayName);
-            ret.add(objectValueVo);
+            ObjectOneInfoVO objectOneInfoVO = new ObjectOneInfoVO();
+            objectOneInfoVO.setProperties(propertyList);
+            objectOneInfoVO.setPrimaryKey(primaryKeyValue);
+            objectOneInfoVO.setDisplayName(displayName);
+            ret.add(objectOneInfoVO);
         }
         return ret;
     }
@@ -207,7 +220,7 @@ public class ObjectServiceImpl implements ObjectService {
         return linkGroups;
     }
 
-    private LinkedValueVo getLinkedValue(OntologyLinkGroup ontologyLinkGroup, ObjectValueVo objectValueVo) {
+    private LinkedValueVo getLinkedValue(OntologyLinkGroup ontologyLinkGroup, ObjectOneInfoVO objectOneInfoVO) {
         LinkedValueVo linkedValueVo = new LinkedValueVo();
         OntologyChildLink backwardChildLink = ontologyChildLinkMapper.selectByPrimaryKey(ontologyLinkGroup.getBackwardChildLinkId());
         String linkDisplayName = backwardChildLink.getDisplayName();
@@ -218,7 +231,7 @@ public class ObjectServiceImpl implements ObjectService {
         String propertyIdentifierFrom = ontologyLinkGroup.getPropertyUniqueIdentifierFrom();
         String propertyIdentifierTo = ontologyLinkGroup.getPropertyUniqueIdentifierTo();
         String columnValue = null;
-        for (PropertyValueVO propertyValueVO : objectValueVo.getProperties()) {
+        for (PropertyValueVO propertyValueVO : objectOneInfoVO.getProperties()) {
             //TODO: 这里有潜在风险，因为没有考虑join时的数据类型
             if (propertyValueVO.getUniqueIdentifier().equals(propertyIdentifierFrom)) {
                 columnValue = propertyValueVO.getValue();
@@ -232,12 +245,12 @@ public class ObjectServiceImpl implements ObjectService {
         OntologyProperty propertyTo = propertyToList.get(0);
 
         String toOntologyUniqueIdentifier = ontologyLinkGroup.getOntologyUniqueIdentifierTo();
-        List<ObjectValueVo> linkedObjectValueVo = queryByColumnNameValue(
+        List<ObjectOneInfoVO> linkedObjectOneInfoVO = queryByColumnNameValue(
                 toOntologyUniqueIdentifier,
                 propertyTo.getDatasourceColumnName(),
                 columnValue
         );
-        linkedValueVo.setJoinedResults(linkedObjectValueVo);
+        linkedValueVo.setJoinedResults(linkedObjectOneInfoVO);
         return linkedValueVo;
     }
 
@@ -260,7 +273,20 @@ public class ObjectServiceImpl implements ObjectService {
         String wherePart = " WHERE " + columnName + " = '" + value + "'";
         String limitPart = " LIMIT 1000";
         String sql = "SELECT " + colunmnsPart + fromPart + wherePart + limitPart;
-        System.out.println(sql);
         return sql;
+    }
+
+    private String buildSQL(List<OntologyPropertyVO> ontologyPropertyList) {
+
+        if (ontologyPropertyList == null || ontologyPropertyList.size() == 0) {
+            return null;
+        }
+        String columns = ontologyPropertyList
+                .stream()
+                .map(column -> column.getDatasourceColumnName() + " AS " + column.getApiName())
+                .collect(Collectors.joining(","));
+        String tableName = ontologyPropertyList.get(0).getDatasourceId();
+
+        return "SELECT " + columns + " FROM " + tableName;
     }
 }

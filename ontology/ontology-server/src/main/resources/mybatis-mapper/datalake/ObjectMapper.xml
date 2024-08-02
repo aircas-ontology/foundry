@@ -16,7 +16,7 @@
         from ${tableName}
     </select>
 
-    <select id="queryAnySQL" resultMap="ObjectResultMap" statementType="STATEMENT">
+    <select id="queryAnySQL" resultMap="ObjectResultMap">
         ${query}
     </select>
 

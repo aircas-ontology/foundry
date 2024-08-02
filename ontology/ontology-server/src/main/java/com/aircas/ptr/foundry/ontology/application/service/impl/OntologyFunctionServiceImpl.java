@@ -1,6 +1,5 @@
 package com.aircas.ptr.foundry.ontology.application.service.impl;
 
-import com.aircas.ptr.foundry.common.util.BeanUtil;
 import com.aircas.ptr.foundry.model.po.*;
 import com.aircas.ptr.foundry.ontology.Exception.*;
 import com.aircas.ptr.foundry.ontology.application.service.FunctionService;
@@ -17,7 +16,6 @@ import com.aircas.ptr.foundry.ontology.repository.dao.OntologyMetaMapper;
 import com.aircas.ptr.foundry.ontology.application.service.ObjectService;
 
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyPropertyMapper;
-import com.github.jsonldjava.utils.Obj;
 import org.apache.commons.lang.StringUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
@@ -73,8 +71,8 @@ public class OntologyFunctionServiceImpl implements OntologyFunctionService {
         String originalFunction = ontologyFunctionBo.getOriginalApi();
         //根据mapping结果，把property注入到parameters
         List<OntologyFunctionMappingInBO> mappingInList = ontologyFunctionBo.getMappingInList();
-        ObjectValueVo objectValueVo = objectService.queryObjectByPrimaryKey( ontologyMeta.getUniqueIdentifier(), currentObject.getPrimaryKey());
-        List<PropertyValueVO> propertyList = objectValueVo.getProperties();
+        ObjectOneInfoVO objectOneInfoVO = objectService.queryObjectByPrimaryKey( ontologyMeta.getUniqueIdentifier(), currentObject.getPrimaryKey());
+        List<PropertyValueVO> propertyList = objectOneInfoVO.getProperties();
         Map<String, PropertyValueVO> propertyMap = new HashMap<>();
         propertyList.forEach(propertyValueVO -> {
             propertyMap.put(propertyValueVO.getUniqueIdentifier(), propertyValueVO);
