@@ -4,6 +4,7 @@ import com.aircas.ptr.foundry.common.base.DataResult;
 import com.aircas.ptr.foundry.common.constant.Status;
 import com.aircas.ptr.foundry.ontology.application.service.ObjectService;
 import com.aircas.ptr.foundry.ontology.entity.vo.*;
+import com.github.pagehelper.PageInfo;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -25,8 +26,8 @@ public class ObjectController {
 
     @ApiOperation("查询某个本体下面所有的object instance")
     @GetMapping("/queryDirectory")
-    public DataResult<List<DirectoryItemVO>> queryDirectory(@RequestParam String uniqueIdentifier) {
-        List<DirectoryItemVO> OntologyInfoList = objectService.queryDirectories(uniqueIdentifier);
+    public DataResult<PageInfo<DirectoryItemVO>> queryDirectory(@RequestParam String uniqueIdentifier, @RequestParam Integer page, @RequestParam Integer size) {
+        PageInfo<DirectoryItemVO> OntologyInfoList = objectService.queryDirectories(uniqueIdentifier, page, size);
         return DataResult.ofData(OntologyInfoList);
     }
 

@@ -10,13 +10,14 @@ import com.aircas.ptr.foundry.ontology.repository.dao.OntologyMetaMapper;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyPropertyMapper;
 import com.aircas.ptr.foundry.ontology.repository.datalakeDao.ObjectMapper;
 import com.aircas.ptr.foundry.ontology.repository.datalakeDao.TableMetadataMapper;
+import com.github.pagehelper.PageHelper;
+import com.github.pagehelper.PageInfo;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -48,11 +49,12 @@ public class ObjectServiceImpl implements ObjectService {
     private final OntologyPropertyService ontologyPropertyService;
 
     @Override
-    public List<DirectoryItemVO> queryDirectories(String ontologyUniqueIdentifier) {
+    public PageInfo<DirectoryItemVO> queryDirectories(String ontologyUniqueIdentifier, Integer page, Integer size) {
+
         List<OntologyProperty> ontologyPropertyList = ontologyPropertyMapper.selectByOntologyUniqueIdentifier(ontologyUniqueIdentifier);
         OntologyProperty primaryKeyProperty = null;
         OntologyProperty titleKeyProperty = null;
-        for(OntologyProperty property: ontologyPropertyList) {
+        for (OntologyProperty property : ontologyPropertyList) {
             if (property.getIsPrimaryKey() == 1) {
                 primaryKeyProperty = property;
             }
@@ -63,23 +65,21 @@ public class ObjectServiceImpl implements ObjectService {
         if (primaryKeyProperty == null || titleKeyProperty == null) {
             return null;
         }
-        if (primaryKeyProperty.getDatasourceId() != null &&
-            primaryKeyProperty.getDatasourceId().equals(titleKeyProperty.getDatasourceId())) {
+        if (primaryKeyProperty.getDatasourceId() != null && primaryKeyProperty.getDatasourceId().equals(titleKeyProperty.getDatasourceId())) {
             String tableName = primaryKeyProperty.getDatasourceId();
             String primaryKeyColumnName = primaryKeyProperty.getDatasourceColumnName();
             String titleKeyColumnName = titleKeyProperty.getDatasourceColumnName();
-            List<DirectoryItem>  items = objectMapper.queryDirectory(
-                    tableName,
-                    primaryKeyColumnName,
-                    titleKeyColumnName
-            );
-            List<DirectoryItemVO> list = new ArrayList();
-            for (DirectoryItem item : items){
+            PageHelper.startPage(page, size);
+            PageInfo<DirectoryItem> pageInfo = new PageInfo<>(objectMapper.queryDirectory(tableName, primaryKeyColumnName, titleKeyColumnName));
+            List<DirectoryItemVO> collect = pageInfo.getList().stream().map(item -> {
                 DirectoryItemVO directoryItemVO = new DirectoryItemVO();
-                BeanUtils.copyProperties(item, directoryItemVO);
-                list.add(directoryItemVO);
-            }
-            return list;
+                directoryItemVO.setDisplayName(item.getDisplayName());
+                directoryItemVO.setPrimaryKey(item.getPrimaryKey());
+                return directoryItemVO;
+            }).collect(Collectors.toList());
+            PageInfo<DirectoryItemVO> pageResult = new PageInfo<>(collect);
+            BeanUtils.copyProperties(pageInfo, pageResult);
+            return pageResult;
         }
         //对于primaryKey 和 titleKey位于不同的datasource的 先不支持
         return null;
@@ -115,7 +115,7 @@ public class ObjectServiceImpl implements ObjectService {
         List<LinkedValueVo> linkedValueVoList = new ArrayList<>();
         objectWithLinkedInfoVO.setLinks(linkedValueVoList);
         List<OntologyLinkGroup> linksMetadata = getLinkedMetadata(ontologyUniqueIdentifier);
-        for(int i = 0; i < linksMetadata.size(); i ++) {
+        for (int i = 0; i < linksMetadata.size(); i++) {
             OntologyLinkGroup ontologyLinkGroup = linksMetadata.get(i);
             LinkedValueVo linkedValueVo = getLinkedValue(ontologyLinkGroup, objectValueVo);
             if (linkedValueVo != null) {
@@ -129,7 +129,7 @@ public class ObjectServiceImpl implements ObjectService {
     private ObjectValueVo queryByPrimaryKey(String ontologyUniqueIdentifier, String primaryKey) {
         List<OntologyPropertyVO> ontologyPropertyList = ontologyPropertyService.selectByOntologyUniqueIdentifier(ontologyUniqueIdentifier);
 
-       //根据表，列，求解数据类型，填充到OntologyProperty中
+        //根据表，列，求解数据类型，填充到OntologyProperty中
         String primaryColumnName = getPrimaryKeyColumnName(ontologyPropertyList);
         List<ObjectValueVo> objectValueVoList = queryByColumnNameValue(ontologyPropertyList, primaryColumnName, primaryKey);
         if (objectValueVoList.size() == 0) {
@@ -153,11 +153,11 @@ public class ObjectServiceImpl implements ObjectService {
             return ret;
         }
 
-        for (Map<String, Object> rawKeyValueMap: rawResult) {
+        for (Map<String, Object> rawKeyValueMap : rawResult) {
             List<PropertyValueVO> propertyList = new ArrayList<>();
             String primaryKeyValue = null;
             String displayName = null;
-            for (String key: rawKeyValueMap.keySet()) {
+            for (String key : rawKeyValueMap.keySet()) {
                 PropertyValueVO propertyValueVO = new PropertyValueVO();
                 propertyList.add(propertyValueVO);
                 //index0 -> 0
@@ -189,7 +189,7 @@ public class ObjectServiceImpl implements ObjectService {
     }
 
     private String getPrimaryKeyColumnName(List<OntologyPropertyVO> ontologyPropertyList) {
-        for (OntologyPropertyVO property: ontologyPropertyList) {
+        for (OntologyPropertyVO property : ontologyPropertyList) {
             if (property.getIsPrimaryKey() == 1) {
                 return property.getDatasourceColumnName();
             }
@@ -218,7 +218,7 @@ public class ObjectServiceImpl implements ObjectService {
         String propertyIdentifierFrom = ontologyLinkGroup.getPropertyUniqueIdentifierFrom();
         String propertyIdentifierTo = ontologyLinkGroup.getPropertyUniqueIdentifierTo();
         String columnValue = null;
-        for(PropertyValueVO propertyValueVO: objectValueVo.getProperties()) {
+        for (PropertyValueVO propertyValueVO : objectValueVo.getProperties()) {
             //TODO: 这里有潜在风险，因为没有考虑join时的数据类型
             if (propertyValueVO.getUniqueIdentifier().equals(propertyIdentifierFrom)) {
                 columnValue = propertyValueVO.getValue();
@@ -244,7 +244,7 @@ public class ObjectServiceImpl implements ObjectService {
     //目前只支持单个table，多个table的先不考虑
     private String buildSQLByQueryKey(List<OntologyPropertyVO> ontologyPropertyList, String columnName, String value) {
         if (columnName == null || value == null ||
-            ontologyPropertyList == null || ontologyPropertyList.size() == 0) {
+                ontologyPropertyList == null || ontologyPropertyList.size() == 0) {
             return null;
         }
         String colunmnsPart = "";

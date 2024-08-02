@@ -84,6 +84,8 @@ public class OntologyGroupServiceImpl implements OntologyGroupService {
             BeanUtils.copyProperties(item, ontologyGroupVO);
             return ontologyGroupVO;
         }).collect(Collectors.toList());
-        return new PageInfo<>(collect);
+        PageInfo<OntologyGroupVO> pageResult = new PageInfo<>(collect);
+        BeanUtils.copyProperties(pageInfo, pageResult);
+        return pageResult;
     }
 }
