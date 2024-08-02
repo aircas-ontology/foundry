@@ -154,6 +154,9 @@
             <if test="writebackFlag != null">
                 writeback_flag,
             </if>
+            <if test="metaGroupId != null">
+                meta_group_id,
+            </if>
         </trim>
         <trim prefix="values (" suffix=")" suffixOverrides=",">
             <if test="uniqueIdentifier != null">
@@ -200,6 +203,9 @@
             </if>
             <if test="writebackFlag != null">
                 #{writebackFlag,jdbcType=INTEGER},
+            </if>
+            <if test="metaGroupId != null">
+                #{metaGroupId}
             </if>
         </trim>
     </insert>

@@ -29,7 +29,10 @@ public class OntologyPropertyServiceImpl implements OntologyPropertyService {
     public Integer add(OntologyPropertyBO ontologyPropertyBO) {
         OntologyProperty ontologyProperty = new OntologyProperty();
         BeanUtils.copyProperties(ontologyPropertyBO,ontologyProperty);
-        ontologyProperty.setCreateTime(new Date());
+        ontologyProperty.setUniqueIdentifier(UUID.randomUUID().toString());
+        Date now = new Date();
+        ontologyProperty.setCreateTime(now);
+        ontologyProperty.setCreateTime(now);
         return ontologyPropertyMapper.insert(ontologyProperty);
     }
 

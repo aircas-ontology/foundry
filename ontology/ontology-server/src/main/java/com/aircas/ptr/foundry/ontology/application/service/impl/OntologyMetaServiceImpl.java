@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.application.service.impl;
 
+import com.aircas.ptr.foundry.common.constant.OntologyComponentEnum;
 import com.aircas.ptr.foundry.common.exception.DuplicatedDataException;
 import com.aircas.ptr.foundry.model.po.*;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyGroupService;
@@ -8,10 +9,7 @@ import com.aircas.ptr.foundry.ontology.application.service.OntologyPropertyServi
 import com.aircas.ptr.foundry.ontology.application.service.TableMetadataService;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyMetaBO;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyPropertyBO;
-import com.aircas.ptr.foundry.ontology.entity.vo.OntologyGroupMetaVO;
-import com.aircas.ptr.foundry.ontology.entity.vo.OntologyGroupVO;
-import com.aircas.ptr.foundry.ontology.entity.vo.OntologyMetaVO;
-import com.aircas.ptr.foundry.ontology.entity.vo.TableColumnDescVO;
+import com.aircas.ptr.foundry.ontology.entity.vo.*;
 import com.aircas.ptr.foundry.ontology.repository.dao.*;
 import com.aircas.ptr.foundry.ontology.repository.param.OntologyMetaAddParam;
 import com.alibaba.fastjson.JSON;
@@ -59,37 +57,84 @@ public class OntologyMetaServiceImpl implements OntologyMetaService {
         // 进行本体插入
         OntologyMeta ontologyMeta = new OntologyMeta();
         BeanUtils.copyProperties(param, ontologyMeta);
+        ontologyMeta.setUniqueIdentifier(UUID.randomUUID().toString());
         ontologyMeta.setStatus(1);
         ontologyMeta.setCreateTime(new Date());
         count = ontologyMetaMapper.insertSelective(ontologyMeta);
         // 如果datasource不为空，插入本体属性
         if (param.getIsMapAllParam()) {
-            List<TableColumnDescVO> columns = tableMetadataService.getColumns(param.getBackingDatasourceId());
-            List<OntologyPropertyBO> collect = columns.stream().map(column -> {
-                OntologyPropertyBO property = new OntologyPropertyBO();
-                property.setOntologyUniqueIdentifier(param.getUniqueIdentifier());
-                property.setApiName(column.getColumnName());
-                property.setDatasourceColumnName(column.getColumnName());
-                property.setDatasourceId(param.getBackingDatasourceId());
-                property.setDescription(column.getColumnName());
-                property.setDisplayName(column.getColumnName());
-                if (column.getColumnName().equals(param.getTitleKey())) {
-                    property.setIsTitleKey(1);
-                } else {
-                    property.setIsTitleKey(0);
+            creatAllProperties(param.getBackingDatasourceId(), ontologyMeta.getUniqueIdentifier(), param.getTitleKey(), param.getPrimaryKey());
+        }
+        // 如果本体需要继承
+        if (param.getParentUniqueIdentifier() != null &&
+                !param.getParentUniqueIdentifier().isEmpty() &&
+                param.getParentComponents() != null &&
+                param.getParentComponents().size() > 0) {
+            String parentUniqueIdentifier = param.getParentUniqueIdentifier();
+            List<OntologyComponentEnum> parentComponents = param.getParentComponents();
+            for (OntologyComponentEnum parent : parentComponents) {
+                switch (parent) {
+                    case LINK:
+                    case ACTION:
+                    case FUNCTION:
+                        // TODO: 补充连接、动作、函数、模型等继承
+                        break;
+                    case PROPERTY:
+                        List<OntologyPropertyVO> ontologyPropertyVOS = ontologyPropertyService.selectByOntologyUniqueIdentifier(parentUniqueIdentifier);
+                        List<OntologyPropertyBO> collect = ontologyPropertyVOS.stream().map(pro -> {
+                            OntologyPropertyBO ontologyPropertyBO = new OntologyPropertyBO();
+                            BeanUtils.copyProperties(pro, ontologyPropertyBO);
+                            ontologyPropertyBO.setUniqueIdentifier(null);
+                            Date now = new Date();
+                            ontologyPropertyBO.setCreateTime(now);
+                            ontologyPropertyBO.setUpdateTime(now);
+                            ontologyPropertyBO.setOntologyUniqueIdentifier(ontologyMeta.getUniqueIdentifier());
+                            ontologyPropertyBO.setDatasourceId(null);
+                            ontologyPropertyBO.setDatasourceColumnName(null);
+                            return ontologyPropertyBO;
+                        }).collect(Collectors.toList());
+                        ontologyPropertyService.batchAdd(collect);
+                        break;
                 }
-                if (column.getColumnName().equals(param.getPrimaryKey())) {
-                    property.setIsPrimaryKey(1);
-                } else {
-                    property.setIsPrimaryKey(0);
-                }
-                property.setStatus(1);
-                property.setUniqueIdentifier(UUID.randomUUID().toString());
-                return property;
-            }).collect(Collectors.toList());
-            ontologyPropertyService.batchAdd(collect);
+            }
         }
         return count;
+    }
+
+    /**
+     * 插入所有的datasource字段作为本体属性
+     *
+     * @param backingDatasourceId
+     * @param ontologyUniqueIdentifier
+     * @param titleKey
+     * @param primaryKey
+     * @return
+     */
+    private Integer creatAllProperties(String backingDatasourceId, String ontologyUniqueIdentifier, String titleKey, String primaryKey) {
+
+        List<TableColumnDescVO> columns = tableMetadataService.getColumns(backingDatasourceId);
+        List<OntologyPropertyBO> collect = columns.stream().map(column -> {
+            OntologyPropertyBO property = new OntologyPropertyBO();
+            property.setOntologyUniqueIdentifier(ontologyUniqueIdentifier);
+            property.setApiName(column.getColumnName());
+            property.setDatasourceColumnName(column.getColumnName());
+            property.setDatasourceId(backingDatasourceId);
+            property.setDescription(column.getColumnName());
+            property.setDisplayName(column.getColumnName());
+            if (column.getColumnName().equals(primaryKey)) {
+                property.setIsTitleKey(1);
+            } else {
+                property.setIsTitleKey(0);
+            }
+            if (column.getColumnName().equals(titleKey)) {
+                property.setIsPrimaryKey(1);
+            } else {
+                property.setIsPrimaryKey(0);
+            }
+            property.setStatus(1);
+            return property;
+        }).collect(Collectors.toList());
+        return ontologyPropertyService.batchAdd(collect);
     }
 
     @Override
