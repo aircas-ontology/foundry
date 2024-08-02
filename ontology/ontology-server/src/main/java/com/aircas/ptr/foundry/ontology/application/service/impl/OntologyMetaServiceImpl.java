@@ -14,7 +14,11 @@ import com.aircas.ptr.foundry.ontology.entity.vo.OntologyMetaVO;
 import com.aircas.ptr.foundry.ontology.entity.vo.TableColumnDescVO;
 import com.aircas.ptr.foundry.ontology.repository.dao.*;
 import com.aircas.ptr.foundry.ontology.repository.param.OntologyMetaAddParam;
+import com.alibaba.fastjson.JSON;
+import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -33,6 +37,7 @@ import java.util.stream.Collectors;
 @Service
 public class OntologyMetaServiceImpl implements OntologyMetaService {
 
+    private static final Logger log = LoggerFactory.getLogger(OntologyMetaServiceImpl.class);
     @Resource
     private OntologyMetaMapper ontologyMetaMapper;
 
@@ -43,7 +48,7 @@ public class OntologyMetaServiceImpl implements OntologyMetaService {
     private TableMetadataService tableMetadataService;
 
     @Autowired
-    private OntologyGroupService ontologyGroupService;
+    private OntologyGroupMapper ontologyGroupMapper;
 
     @Override
     public Integer add(OntologyMetaAddParam param) {
@@ -163,8 +168,9 @@ public class OntologyMetaServiceImpl implements OntologyMetaService {
     @Override
     public PageInfo<OntologyGroupMetaVO> searchGroupOntologies(String keyword, Integer page, Integer size) {
 
-        PageInfo<OntologyGroupVO> list = ontologyGroupService.list(page, size);
-        List<OntologyGroupMetaVO> collect = list.getList().stream().map(group -> {
+        PageHelper.startPage(page, size);
+        PageInfo<OntologyGroup> pageInfo = new PageInfo<>(ontologyGroupMapper.selectAll());
+        List<OntologyGroupMetaVO> collect = pageInfo.getList().stream().map(group -> {
             OntologyGroupMetaVO ontologyGroupMetaVO = new OntologyGroupMetaVO();
             ontologyGroupMetaVO.setGroupId(group.getGroupId());
             ontologyGroupMetaVO.setGroupName(group.getGroupName());
@@ -173,7 +179,10 @@ public class OntologyMetaServiceImpl implements OntologyMetaService {
             ontologyGroupMetaVO.setMetaVOS(ontologyMetaVOS);
             return ontologyGroupMetaVO;
         }).collect(Collectors.toList());
-        return new PageInfo<>(collect);
+        PageInfo<OntologyGroupMetaVO> pageResult = new PageInfo<>(collect);
+        BeanUtils.copyProperties(pageInfo, pageResult);
+        pageResult.setList(collect);
+        return pageResult;
     }
 
     @Override

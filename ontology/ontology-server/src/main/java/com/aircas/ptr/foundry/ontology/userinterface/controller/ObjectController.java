@@ -6,6 +6,7 @@ import com.aircas.ptr.foundry.ontology.entity.vo.*;
 import com.github.pagehelper.PageInfo;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
+import io.swagger.annotations.ApiParam;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -26,7 +27,7 @@ public class ObjectController {
     @ApiOperation(value = "实体分页查询（简要信息）", notes = "查询某个本体下面所有的实体列表，只显示主键和名称")
     @GetMapping("/list/simple")
     public DataResult<PageInfo<DirectoryItemVO>> queryDirectory(
-            @RequestParam(value = "本体id", required = true) String uniqueIdentifier,
+            @RequestParam @ApiParam(value = "本体id") String uniqueIdentifier,
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size) {
         PageInfo<DirectoryItemVO> OntologyInfoList = objectService.queryDirectories(uniqueIdentifier, page, size);
@@ -50,7 +51,7 @@ public class ObjectController {
     @ApiOperation(value = "实体分页查询", notes = "查询该本体下所有实体详情列表")
     @GetMapping("/list")
     public DataResult<PageInfo<Map<String, Object>>> queryObjectByPage(
-            @RequestParam(value = "本体id", required = true) String ontologyUniqueIdentifier,
+            @RequestParam @ApiParam(value = "本体id") String ontologyUniqueIdentifier,
             @RequestParam(required = false, defaultValue = "1") Integer page,
             @RequestParam(required = false, defaultValue = "10") Integer size) {
 
