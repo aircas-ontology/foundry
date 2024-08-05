@@ -6,7 +6,6 @@ import com.aircas.ptr.foundry.ontology.application.service.OntologyGroupService;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyGroupBO;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyGroupVO;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyGroupMapper;
-import com.aircas.ptr.foundry.ontology.repository.dao.OntologyToGroupMapper;
 import com.aircas.ptr.foundry.ontology.repository.param.OntologyGroupAddParam;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
@@ -30,10 +29,6 @@ public class OntologyGroupServiceImpl implements OntologyGroupService {
 
     @Resource
     private OntologyGroupMapper ontologyGroupMapper;
-
-    @Resource
-    private OntologyToGroupMapper ontologyToGroupMapper;
-
 
     @Override
     public Integer add(OntologyGroupAddParam param) {
