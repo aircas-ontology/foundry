@@ -65,7 +65,7 @@ public class OntologyMetaController {
 
     @GetMapping("/search")
     @ApiOperation(value = "搜索本体", notes = "通过关键字匹配本体，包括本体名称、本体描述、本体别名")
-    public DataResult<List<OntologyMetaVO>> searchOntologies(@RequestParam @ApiParam(value = "关键字", defaultValue = "舰船", required = true) String keyword) {
+    public DataResult<List<OntologyMetaVO>> searchOntologies(@RequestParam(required = false) String keyword) {
 
         return DataResult.ofData(ontologyMetaService.searchOntologies(keyword));
     }
