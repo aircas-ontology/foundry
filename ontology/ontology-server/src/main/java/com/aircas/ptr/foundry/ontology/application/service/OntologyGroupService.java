@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.ontology.application.service;
 
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyGroupBO;
+import com.aircas.ptr.foundry.ontology.entity.vo.OntologyGroupLinkVO;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyGroupVO;
 import com.aircas.ptr.foundry.ontology.repository.param.OntologyGroupAddParam;
 import com.github.pagehelper.PageInfo;
@@ -25,4 +26,6 @@ public interface OntologyGroupService {
     OntologyGroupVO getOntologyGroupById(Long id);
 
     PageInfo<OntologyGroupVO> list(Integer page, Integer size);
+
+    List<OntologyGroupLinkVO> getOntologyGroupLinks(String id);
 }

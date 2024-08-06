@@ -86,5 +86,4 @@ public class OntologyMetaController {
 
         return DataResult.ofData(ontologyMetaService.listOntologiesByGroup(groupId));
     }
-
 }

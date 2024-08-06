@@ -44,22 +44,30 @@ public class OntologyLinkGroupVO {
      */
     private String ontologyUniqueIdentifierFrom;
 
-
     /**
      * 开始本体名称
      */
     private String ontologyNameFrom;
 
     /**
+     * 开始本体icon
+     */
+    private String ontologyIconFrom;
+
+    /**
      * 结束本体id
      */
     private String ontologyUniqueIdentifierTo;
-
 
     /**
      * 结束本体名称
      */
     private String ontologyNameTo;
+
+    /**
+     * 开始本体icon
+     */
+    private String ontologyIconTO;
 
     /**
      * 开始本体的某个属性，作为连接键

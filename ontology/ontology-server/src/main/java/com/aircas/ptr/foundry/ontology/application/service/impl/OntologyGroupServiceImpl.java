@@ -3,16 +3,23 @@ package com.aircas.ptr.foundry.ontology.application.service.impl;
 import com.aircas.ptr.foundry.common.exception.DuplicatedDataException;
 import com.aircas.ptr.foundry.model.po.OntologyGroup;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyGroupService;
+import com.aircas.ptr.foundry.ontology.application.service.OntologyLinkService;
+import com.aircas.ptr.foundry.ontology.application.service.OntologyMetaService;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyGroupBO;
+import com.aircas.ptr.foundry.ontology.entity.vo.OntologyGroupLinkVO;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyGroupVO;
+import com.aircas.ptr.foundry.ontology.entity.vo.OntologyLinkGroupVO;
+import com.aircas.ptr.foundry.ontology.entity.vo.OntologyMetaVO;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyGroupMapper;
 import com.aircas.ptr.foundry.ontology.repository.param.OntologyGroupAddParam;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.UUID;
@@ -29,6 +36,12 @@ public class OntologyGroupServiceImpl implements OntologyGroupService {
 
     @Resource
     private OntologyGroupMapper ontologyGroupMapper;
+
+    @Autowired
+    private OntologyMetaService ontologyMetaService;
+
+    @Autowired
+    private OntologyLinkService ontologyLinkService;
 
     @Override
     public Integer add(OntologyGroupAddParam param) {
@@ -82,5 +95,31 @@ public class OntologyGroupServiceImpl implements OntologyGroupService {
         PageInfo<OntologyGroupVO> pageResult = new PageInfo<>(collect);
         BeanUtils.copyProperties(pageInfo, pageResult);
         return pageResult;
+    }
+
+    @Override
+    public List<OntologyGroupLinkVO> getOntologyGroupLinks(String id) {
+
+        List<OntologyMetaVO> metaVOs = ontologyMetaService.listOntologiesByGroup(id);
+        if (metaVOs.equals(null) || metaVOs.isEmpty()) {
+            return null;
+        }
+        List<OntologyGroupLinkVO> result = new ArrayList<>();
+        ontologyLinkService.getLinkByOntologies(metaVOs).stream().forEach(link -> {
+            OntologyGroupLinkVO ontologyGroupLinkVO = new OntologyGroupLinkVO();
+            ontologyGroupLinkVO.setOntologyId1(link.getOntologyUniqueIdentifierFrom());
+            ontologyGroupLinkVO.setOntologyIcon1(link.getOntologyIconFrom());
+            ontologyGroupLinkVO.setOntologyName1(link.getOntologyNameFrom());
+            ontologyGroupLinkVO.setOntologyId2(link.getOntologyUniqueIdentifierTo());
+            ontologyGroupLinkVO.setOntologyIcon2(link.getOntologyIconTO());
+            ontologyGroupLinkVO.setOntologyName2(link.getOntologyNameTo());
+            ontologyGroupLinkVO.setLinkCount(1);
+            if (result.contains(ontologyGroupLinkVO)) {
+                result.remove(ontologyGroupLinkVO);
+                ontologyGroupLinkVO.setLinkCount(2);
+            }
+            result.add(ontologyGroupLinkVO);
+        });
+        return result;
     }
 }

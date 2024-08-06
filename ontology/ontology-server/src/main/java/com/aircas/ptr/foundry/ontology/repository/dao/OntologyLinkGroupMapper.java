@@ -57,4 +57,6 @@ public interface OntologyLinkGroupMapper {
      * @mbg.generated generated automatically, do not modify!
      */
     int updateByPrimaryKey(OntologyLinkGroup record);
+
+    List<OntologyLinkGroup> getLinkByOntologies(List<String> ontologyIds);
 }

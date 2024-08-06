@@ -3,6 +3,7 @@ package com.aircas.ptr.foundry.ontology.application.service;
 import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyLinkGroupBo;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyLinkGroupVO;
+import com.aircas.ptr.foundry.ontology.entity.vo.OntologyMetaVO;
 
 import java.util.List;
 
@@ -21,4 +22,6 @@ public interface OntologyLinkService {
     RestResult deleteLinkByUniqueIdentifier(String uniqueIdentifier);
 
     List<OntologyLinkGroupVO> getAll();
+
+    List<OntologyLinkGroupVO> getLinkByOntologies(List<OntologyMetaVO> metaVOs);
 }
