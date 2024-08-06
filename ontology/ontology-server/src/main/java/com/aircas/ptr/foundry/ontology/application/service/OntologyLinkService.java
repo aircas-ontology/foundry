@@ -18,7 +18,7 @@ public interface OntologyLinkService {
 
     List<OntologyLinkGroupVO> getLinkByOntologyUniqueIdentifier(String uniqueIdentifier);
 
-    RestResult deleteLinkByOntologyUniqueIdentifier(String uniqueIdentifier);
+    RestResult deleteLinkByUniqueIdentifier(String uniqueIdentifier);
 
     List<OntologyLinkGroupVO> getAll();
 }

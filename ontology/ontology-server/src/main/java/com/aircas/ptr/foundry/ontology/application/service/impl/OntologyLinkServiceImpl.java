@@ -112,7 +112,7 @@ public class OntologyLinkServiceImpl implements OntologyLinkService {
 
 
     @Override
-    public RestResult deleteLinkByOntologyUniqueIdentifier(String uniqueIdentifier) {
+    public RestResult deleteLinkByUniqueIdentifier(String uniqueIdentifier) {
         OntologyLinkGroup ontologyLinkGroup = ontologyLinkGroupMapper.selectByUniqueIdentifier(uniqueIdentifier);
         if (ontologyLinkGroup!= null){
             ontologyChildLinkMapper.deleteByPrimaryKey(ontologyLinkGroup.getForwardChildLinkId());

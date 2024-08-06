@@ -4,6 +4,7 @@ import com.aircas.ptr.foundry.common.base.DataResult;
 import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyLinkService;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyLinkGroupBo;
+import com.aircas.ptr.foundry.ontology.entity.vo.OntologyGroupLinkVO;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyLinkGroupVO;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
@@ -21,7 +22,7 @@ import java.util.List;
 
 @Api(tags = "关系")
 @RestController
-@RequestMapping("/OntologyLink")
+@RequestMapping("/link")
 public class OntologyLinkController {
 
     @Resource
@@ -35,15 +36,15 @@ public class OntologyLinkController {
 
 
     @GetMapping("/queryByOntologyUniqueIdentifier")
-    @ApiOperation(value = "根据本体unique identifier 查询关系")
+    @ApiOperation(value = "根据本体id查询关系第一跳的所有本体关系")
     public DataResult<List<OntologyLinkGroupVO>> getLinkByOntologyUniqueIdentifier(@RequestParam @ApiParam(value = "本体id", required = true) String uniqueIdentifier) {
         return DataResult.ofData(ontologyLinkService.getLinkByOntologyUniqueIdentifier(uniqueIdentifier));
     }
 
-    @PostMapping("/deleteByOntologyUniqueIdentifier")
-    @ApiOperation(value = "根据本体unique identifier 删除关系")
-    public RestResult deleteLinkByOntologyUniqueIdentifier(@RequestParam @ApiParam(value = "本体id", required = true) String uniqueIdentifier) {
-        RestResult result = ontologyLinkService.deleteLinkByOntologyUniqueIdentifier(uniqueIdentifier);
+    @DeleteMapping("/{id}")
+    @ApiOperation(value = "根据本体id删除关系")
+    public RestResult deleteLinkByUniqueIdentifier(@PathVariable @ApiParam(value = "本体id", required = true) String id) {
+        RestResult result = ontologyLinkService.deleteLinkByUniqueIdentifier(id);
         return result;
     }
 
