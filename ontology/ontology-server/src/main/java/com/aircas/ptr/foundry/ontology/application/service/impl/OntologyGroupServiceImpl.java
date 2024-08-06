@@ -8,7 +8,6 @@ import com.aircas.ptr.foundry.ontology.application.service.OntologyMetaService;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyGroupBO;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyGroupLinkVO;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyGroupVO;
-import com.aircas.ptr.foundry.ontology.entity.vo.OntologyLinkGroupVO;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyMetaVO;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyGroupMapper;
 import com.aircas.ptr.foundry.ontology.repository.param.OntologyGroupAddParam;
@@ -121,5 +120,20 @@ public class OntologyGroupServiceImpl implements OntologyGroupService {
             result.add(ontologyGroupLinkVO);
         });
         return result;
+    }
+
+    @Override
+    public PageInfo<OntologyGroupVO> search(String keyword, Integer page, Integer size) {
+
+        PageHelper.startPage(page, size);
+        PageInfo<OntologyGroup> pageInfo = new PageInfo<>(ontologyGroupMapper.searchByKeyword(keyword));
+        List<OntologyGroupVO> collect = pageInfo.getList().stream().map(item -> {
+            OntologyGroupVO ontologyGroupVO = new OntologyGroupVO();
+            BeanUtils.copyProperties(item, ontologyGroupVO);
+            return ontologyGroupVO;
+        }).collect(Collectors.toList());
+        PageInfo<OntologyGroupVO> pageResult = new PageInfo<>(collect);
+        BeanUtils.copyProperties(pageInfo, pageResult);
+        return pageResult;
     }
 }

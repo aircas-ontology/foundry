@@ -68,6 +68,16 @@ public class OntologyGroupController {
         return DataResult.ofData(ontologyGroupService.list(page, size));
     }
 
+    @GetMapping("/search")
+    @ApiOperation("关键字检索本体分组")
+    public DataResult<PageInfo<OntologyGroupVO>> searchOntologyGroups(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "1") Integer page,
+            @RequestParam(defaultValue = "10") Integer size) {
+
+        return DataResult.ofData(ontologyGroupService.search(keyword, page, size));
+    }
+
     @GetMapping("/link/{id}")
     @ApiOperation("查询分组下所有本体的关系，不区分from和to")
     public DataResult<List<OntologyGroupLinkVO>> getOntologyGroupLinks(@PathVariable String id) {

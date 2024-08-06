@@ -25,4 +25,6 @@ public interface OntologyGroupMapper {
     int deleteByIds(List<Long> ids);
 
     List<OntologyGroup> selectAll();
+
+    List<OntologyGroup> searchByKeyword(String keyword);
 }

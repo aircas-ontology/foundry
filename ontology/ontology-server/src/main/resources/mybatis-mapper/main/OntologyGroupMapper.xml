@@ -120,4 +120,14 @@
         <include refid="Base_Column_List"/>
         from "ontology_group"
     </select>
+
+    <select id="searchByKeyword" parameterType="java.lang.String" resultMap="BaseResultMap">
+        select
+        <include refid="Base_Column_List"/>
+        from "ontology_group"
+        where status=1
+        <if test="keyword != null">
+            and group_name like CONCAT('%',#{keyword,jdbcType=VARCHAR},'%')
+        </if>
+    </select>
 </mapper>

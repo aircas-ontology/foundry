@@ -28,4 +28,6 @@ public interface OntologyGroupService {
     PageInfo<OntologyGroupVO> list(Integer page, Integer size);
 
     List<OntologyGroupLinkVO> getOntologyGroupLinks(String id);
+
+    PageInfo<OntologyGroupVO> search(String keyword, Integer page, Integer size);
 }
