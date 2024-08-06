@@ -61,8 +61,8 @@ public class OntologyMetaAddParam {
     @ApiModelProperty(name = "primaryKey", value = "主键列名，在backingDatasourceId存在时生效", example = "id")
     private String primaryKey;
 
-    @ApiModelProperty(name = "metaGroupId", value = "分组列表，以”,“分割", example = "fdfsa,feaf")
-    private String metaGroupId;
+    @ApiModelProperty(name = "metaGroupId", value = "分组列表，以”,“分割", example = "[\"fdsafdagf\",\"fdsafdsafd\"]")
+    private List<String> metaGroupId;
 
     @ApiModelProperty(value = "继承的本体id", example = "fdsafdsagf")
     private String parentUniqueIdentifier;

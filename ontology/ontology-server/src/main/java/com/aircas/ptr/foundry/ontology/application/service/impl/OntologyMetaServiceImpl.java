@@ -3,7 +3,6 @@ package com.aircas.ptr.foundry.ontology.application.service.impl;
 import com.aircas.ptr.foundry.common.constant.OntologyComponentEnum;
 import com.aircas.ptr.foundry.common.exception.DuplicatedDataException;
 import com.aircas.ptr.foundry.model.po.*;
-import com.aircas.ptr.foundry.ontology.application.service.OntologyGroupService;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyMetaService;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyPropertyService;
 import com.aircas.ptr.foundry.ontology.application.service.TableMetadataService;
@@ -12,7 +11,6 @@ import com.aircas.ptr.foundry.ontology.entity.bo.OntologyPropertyBO;
 import com.aircas.ptr.foundry.ontology.entity.vo.*;
 import com.aircas.ptr.foundry.ontology.repository.dao.*;
 import com.aircas.ptr.foundry.ontology.repository.param.OntologyMetaAddParam;
-import com.alibaba.fastjson.JSON;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import org.slf4j.Logger;
@@ -60,6 +58,7 @@ public class OntologyMetaServiceImpl implements OntologyMetaService {
         ontologyMeta.setUniqueIdentifier(UUID.randomUUID().toString());
         ontologyMeta.setStatus(1);
         ontologyMeta.setCreateTime(new Date());
+        ontologyMeta.setMetaGroupId(param.getMetaGroupId().stream().collect(Collectors.joining(",")));
         count = ontologyMetaMapper.insertSelective(ontologyMeta);
         // 如果datasource不为空，插入本体属性
         if (param.getIsMapAllParam()) {
