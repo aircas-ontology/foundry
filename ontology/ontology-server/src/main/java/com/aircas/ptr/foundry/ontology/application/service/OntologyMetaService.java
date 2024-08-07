@@ -5,6 +5,7 @@ import com.aircas.ptr.foundry.ontology.entity.vo.OntologyGroupMetaVO;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyMetaVO;
 import com.aircas.ptr.foundry.ontology.repository.param.OntologyMetaAddParam;
 import com.github.pagehelper.PageInfo;
+import org.springframework.beans.factory.ObjectProvider;
 
 import java.util.List;
 
@@ -41,4 +42,6 @@ public interface OntologyMetaService {
     PageInfo<OntologyGroupMetaVO> searchGroupOntologies(String keyword, Integer page, Integer size);
 
     List<OntologyMetaVO> listOntologiesByGroup(String groupId);
+
+    List<OntologyMetaVO> selectByUniqueIdentifiers(List<String> ontologyUniqueIdentifiers);
 }

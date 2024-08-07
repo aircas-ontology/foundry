@@ -1,9 +1,13 @@
 package com.aircas.ptr.foundry.ontology.entity.vo;
 
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyChildLinkBo;
+import com.alibaba.fastjson.annotation.JSONField;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 
 import java.util.Date;
+
+import static com.aircas.ptr.foundry.common.constant.DateFormat.DATE_FORMAT;
 
 
 @Data
@@ -32,11 +36,13 @@ public class OntologyLinkGroupVO {
     /**
      * 记录创建时间
      */
+    @JsonFormat(pattern = DATE_FORMAT)
     private Date createTime;
 
     /**
      * 记录修改时间
      */
+    @JSONField(format = DATE_FORMAT)
     private Date updateTime;
 
     /**
@@ -90,7 +96,6 @@ public class OntologyLinkGroupVO {
      * 3: 多对1
      * 4: 多对多
      */
-
     private Integer mapping;
 
     private OntologyChildLinkVO forwardLink;

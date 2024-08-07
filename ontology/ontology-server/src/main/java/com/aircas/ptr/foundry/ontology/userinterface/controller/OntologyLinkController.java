@@ -4,7 +4,7 @@ import com.aircas.ptr.foundry.common.base.DataResult;
 import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyLinkService;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyLinkGroupBo;
-import com.aircas.ptr.foundry.ontology.entity.vo.OntologyGroupLinkVO;
+import com.aircas.ptr.foundry.ontology.entity.vo.OntologyLinkGraphVO;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyLinkGroupVO;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
@@ -35,17 +35,24 @@ public class OntologyLinkController {
     }
 
 
-    @GetMapping("/queryByOntologyUniqueIdentifier")
-    @ApiOperation(value = "根据本体id查询关系第一跳的所有本体关系")
-    public DataResult<List<OntologyLinkGroupVO>> getLinkByOntologyUniqueIdentifier(@RequestParam @ApiParam(value = "本体id", required = true) String uniqueIdentifier) {
-        return DataResult.ofData(ontologyLinkService.getLinkByOntologyUniqueIdentifier(uniqueIdentifier));
+    @GetMapping("/by_ontology/{oId}")
+    @ApiOperation(value = "根据本体id查询关系(1跳)")
+    public DataResult<List<OntologyLinkGroupVO>> getLinkByOntologyUniqueIdentifier(@PathVariable String oId) {
+        return DataResult.ofData(ontologyLinkService.getLinkByOntologyUniqueIdentifier(oId));
     }
 
-    @DeleteMapping("/{id}")
+    @DeleteMapping("/by_ontology/{oId}")
     @ApiOperation(value = "根据本体id删除关系")
-    public RestResult deleteLinkByUniqueIdentifier(@PathVariable @ApiParam(value = "本体id", required = true) String id) {
-        RestResult result = ontologyLinkService.deleteLinkByUniqueIdentifier(id);
+    public RestResult deleteLinkByUniqueIdentifier(@PathVariable @ApiParam(value = "本体id", required = true) String oId) {
+        RestResult result = ontologyLinkService.deleteLinkByOntologyUniqueIdentifier(oId);
         return result;
+    }
+
+    @GetMapping("/by_ontology/graph/{oId}")
+    @ApiOperation(value = "根据本体id查询关系(1跳)(graph)")
+    public DataResult<List<OntologyLinkGraphVO>> getLinkGraphByOntologyUniqueIdentifier(@PathVariable String oId) {
+
+        return DataResult.ofData(ontologyLinkService.getLinkGraphByOntologyUniqueIdentifier(oId));
     }
 
     @GetMapping("/all")

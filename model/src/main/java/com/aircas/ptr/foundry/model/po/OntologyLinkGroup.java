@@ -1,10 +1,13 @@
 package com.aircas.ptr.foundry.model.po;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 import org.springframework.beans.BeanUtils;
 
 import java.io.Serializable;
 import java.util.Date;
+
+import static com.aircas.ptr.foundry.common.constant.DateFormat.DATE_FORMAT;
 
 
 @Data
@@ -32,11 +35,13 @@ public class OntologyLinkGroup implements Serializable {
     /**
      * 记录创建时间
      */
+    @JsonFormat(pattern = DATE_FORMAT)
     private Date createTime;
 
     /**
      * 记录修改时间
      */
+    @JsonFormat(pattern = DATE_FORMAT)
     private Date updateTime;
 
     /**

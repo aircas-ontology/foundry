@@ -6,7 +6,7 @@ import lombok.Data;
 
 @Data
 @ApiModel(description = "分组下所有本体的关系")
-public class OntologyGroupLinkVO {
+public class OntologyLinkGraphVO {
 
     @ApiModelProperty(value = "本体1的名称", example = "轨迹")
     private String ontologyName1;
@@ -31,10 +31,10 @@ public class OntologyGroupLinkVO {
         if (obj.equals(this)) {
             return true;
         }
-        if (!(obj instanceof OntologyGroupLinkVO)) {
+        if (!(obj instanceof OntologyLinkGraphVO)) {
             return false;
         }
-        OntologyGroupLinkVO other = (OntologyGroupLinkVO) obj;
+        OntologyLinkGraphVO other = (OntologyLinkGraphVO) obj;
         if (this.ontologyId1.equals(other.getOntologyId1()) && this.ontologyId2.equals(other.getOntologyId2())) {
             return true;
         }

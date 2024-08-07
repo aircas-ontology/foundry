@@ -101,6 +101,18 @@ public class OntologyMetaServiceImpl implements OntologyMetaService {
         return ontologyMetaVO;
     }
 
+    @Override
+    public List<OntologyMetaVO> selectByUniqueIdentifiers(List<String> uniqueIdentifiers) {
+        List<OntologyMeta> ontologyMetaList = ontologyMetaMapper.selectByUniqueIdentifiers(uniqueIdentifiers);
+        List<OntologyMetaVO> ontologyMetaVOList = new ArrayList<>();
+        for (OntologyMeta ontologyMeta : ontologyMetaList) {
+            OntologyMetaVO ontologyMetaVO = new OntologyMetaVO();
+            BeanUtils.copyProperties(ontologyMeta, ontologyMetaVO);
+            ontologyMetaVOList.add(ontologyMetaVO);
+        }
+        return ontologyMetaVOList;
+    }
+
     /**
      * 插入所有的datasource字段作为本体属性
      *
