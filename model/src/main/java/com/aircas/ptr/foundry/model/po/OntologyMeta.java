@@ -99,4 +99,15 @@ public class OntologyMeta implements Serializable {
      * 分组ids，以“,”隔开
      */
     private String metaGroupId;
+
+    public OntologyMeta() {
+        Date now = new Date();
+        setCreateTime(now);
+        setUpdateTime(now);
+        setStatus(1);
+        setVisibility(1);
+        setIndexStatus(1);
+        setWritebackFlag(0);
+        setExperimentalStatus(0);
+    }
 }

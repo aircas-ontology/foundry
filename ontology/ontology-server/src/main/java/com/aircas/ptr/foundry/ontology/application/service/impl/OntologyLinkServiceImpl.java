@@ -157,6 +157,9 @@ public class OntologyLinkServiceImpl implements OntologyLinkService {
         ontologyUniqueIdentifiers.addAll(ontologyUniqueIdentifiersFrom);
         ontologyUniqueIdentifiers.addAll(ontologyUniqueIdentifiersTo);
 
+        if (ontologyUniqueIdentifiers.isEmpty()) {
+            return;
+        }
         Map<String, OntologyMeta> ontologyMetaMap = ontologyMetaMapper
                 .selectByUniqueIdentifiers(ontologyUniqueIdentifiers)
                 .stream()
@@ -173,7 +176,6 @@ public class OntologyLinkServiceImpl implements OntologyLinkService {
                 ontologyLinkGroupVO.setOntologyNameTo(ontologyTo.getDisplayName());
             }
         });
-
     }
 
     private Map.Entry<String, OntologyMeta> getEntry(OntologyMeta ontologyMeta) {

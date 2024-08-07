@@ -123,6 +123,7 @@ public class FunctionServiceImpl implements FunctionService {
     }
 
     private void setOntologyList(List<FunctionVO> functionVOList) {
+
         Map<String, OntologyMeta> ontologyMetas = ontologyMetaMapper
                 .selectAllOntologies()
                 .stream()

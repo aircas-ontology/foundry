@@ -47,7 +47,7 @@ public class OntologyMetaServiceImpl implements OntologyMetaService {
     private OntologyGroupMapper ontologyGroupMapper;
 
     @Override
-    public Integer add(OntologyMetaAddParam param) {
+    public OntologyMetaVO add(OntologyMetaAddParam param) {
         int count = ontologyMetaMapper.selectByDisplayName(param.getDisplayName());
         if (count != 0) {
             throw new DuplicatedDataException("本体名称已存在");
@@ -56,8 +56,6 @@ public class OntologyMetaServiceImpl implements OntologyMetaService {
         OntologyMeta ontologyMeta = new OntologyMeta();
         BeanUtils.copyProperties(param, ontologyMeta);
         ontologyMeta.setUniqueIdentifier(UUID.randomUUID().toString());
-        ontologyMeta.setStatus(1);
-        ontologyMeta.setCreateTime(new Date());
         ontologyMeta.setMetaGroupId(param.getMetaGroupId().stream().collect(Collectors.joining(",")));
         count = ontologyMetaMapper.insertSelective(ontologyMeta);
         // 如果datasource不为空，插入本体属性
@@ -97,7 +95,10 @@ public class OntologyMetaServiceImpl implements OntologyMetaService {
                 }
             }
         }
-        return count;
+        OntologyMetaVO ontologyMetaVO = new OntologyMetaVO();
+        OntologyMeta resMeta = ontologyMetaMapper.selectByUniqueIdentifier(ontologyMeta.getUniqueIdentifier());
+        BeanUtils.copyProperties(resMeta, ontologyMetaVO);
+        return ontologyMetaVO;
     }
 
     /**

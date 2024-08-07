@@ -1,9 +1,12 @@
 package com.aircas.ptr.foundry.ontology.entity.vo;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
 
 import java.util.Date;
+
+import static com.aircas.ptr.foundry.common.constant.DateFormat.DATE_FORMAT2;
 
 /**
  * @author dongjunchuan
@@ -31,6 +34,7 @@ public class OntologyMetaVO {
     /**
      * 记录创建时间
      */
+    @JsonFormat(pattern = DATE_FORMAT2)
     private Date createTime;
 
     /**

@@ -28,7 +28,7 @@ public class OntologyMetaController {
 
     @PostMapping("/add")
     @ApiOperation(value = "新增本体")
-    public DataResult<Integer> add(@RequestBody OntologyMetaAddParam param) {
+    public DataResult<OntologyMetaVO> add(@RequestBody OntologyMetaAddParam param) {
 
         return DataResult.ofData(ontologyMetaService.add(param));
     }

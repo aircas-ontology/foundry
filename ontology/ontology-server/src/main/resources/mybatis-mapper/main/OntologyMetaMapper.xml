@@ -24,7 +24,7 @@
         id
         , "unique_identifier", "status", create_time, update_time, icon, display_name, plural_display_name,
     backing_datasource_id, description, api_name, visibility, experimental_status, index_status,nickname,
-    writeback_flag
+    writeback_flag,meta_group_id
     </sql>
 
     <select id="selectByPrimaryKey" parameterType="java.lang.Long" resultMap="BaseResultMap">
