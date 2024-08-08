@@ -8,6 +8,7 @@ import com.aircas.ptr.foundry.ontology.application.service.OntologyMetaService;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyGroupBO;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyLinkCountVO;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyGroupVO;
+import com.aircas.ptr.foundry.ontology.entity.vo.OntologyLinkGraphVO;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyMetaVO;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyGroupMapper;
 import com.aircas.ptr.foundry.ontology.repository.param.OntologyGroupAddParam;
@@ -97,13 +98,13 @@ public class OntologyGroupServiceImpl implements OntologyGroupService {
     }
 
     @Override
-    public List<OntologyLinkCountVO> getOntologyGroupLinks(String id) {
+    public OntologyLinkGraphVO getOntologyGroupLinks(String id) {
 
         List<OntologyMetaVO> metaVOs = ontologyMetaService.listOntologiesByGroup(id);
         if (metaVOs.equals(null) || metaVOs.isEmpty()) {
             return null;
         }
-        List<OntologyLinkCountVO> result = new ArrayList<>();
+        List<OntologyLinkCountVO> links = new ArrayList<>();
         ontologyLinkService.getLinkByOntologies(metaVOs).stream().forEach(link -> {
             OntologyLinkCountVO ontologyLinkCountVO = new OntologyLinkCountVO();
             ontologyLinkCountVO.setOntologyId1(link.getOntologyUniqueIdentifierFrom());
@@ -111,13 +112,14 @@ public class OntologyGroupServiceImpl implements OntologyGroupService {
             ontologyLinkCountVO.setOntologyId2(link.getOntologyUniqueIdentifierTo());
             ontologyLinkCountVO.setOntologyName2(link.getOntologyNameTo());
             ontologyLinkCountVO.setLinkCount(1);
-            if (result.contains(ontologyLinkCountVO)) {
-                result.remove(ontologyLinkCountVO);
+            if (links.contains(ontologyLinkCountVO)) {
+                links.remove(ontologyLinkCountVO);
                 ontologyLinkCountVO.setLinkCount(2);
             }
-            result.add(ontologyLinkCountVO);
+            links.add(ontologyLinkCountVO);
         });
-        return result;
+
+        return new OntologyLinkGraphVO(metaVOs, links);
     }
 
     @Override

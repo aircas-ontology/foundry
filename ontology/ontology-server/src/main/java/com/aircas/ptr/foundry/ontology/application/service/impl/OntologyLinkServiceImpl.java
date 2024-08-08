@@ -140,8 +140,6 @@ public class OntologyLinkServiceImpl implements OntologyLinkService {
         if (metaVOs.equals(null) || metaVOs.isEmpty()) {
             return null;
         }
-        OntologyLinkGraphVO linkGraphVO = new OntologyLinkGraphVO();
-        linkGraphVO.setNodes(metaVOs);
         List<OntologyLinkCountVO> links = new ArrayList<>();
         getLinkByOntologies(metaVOs).stream().forEach(link -> {
             OntologyLinkCountVO ontologyLinkCountVO = new OntologyLinkCountVO();
@@ -156,8 +154,7 @@ public class OntologyLinkServiceImpl implements OntologyLinkService {
             }
             links.add(ontologyLinkCountVO);
         });
-        linkGraphVO.setLinks(links);
-        return linkGraphVO;
+        return new OntologyLinkGraphVO(metaVOs, links);
     }
 
     private void setChildLinks(OntologyLinkGroupVO linkGroupVO, long forwardChildLinkId, long backwardChildLinkId) {

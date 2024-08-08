@@ -2,11 +2,15 @@ package com.aircas.ptr.foundry.ontology.entity.vo;
 
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.util.List;
 
 @Data
+@AllArgsConstructor
+@NoArgsConstructor
 @ApiModel(description = "本体关系graph")
 public class OntologyLinkGraphVO {
 
