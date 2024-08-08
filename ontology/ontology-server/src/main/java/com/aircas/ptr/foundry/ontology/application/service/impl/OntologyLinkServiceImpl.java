@@ -4,17 +4,12 @@ import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.common.base.ResultGenerator;
 import com.aircas.ptr.foundry.model.po.OntologyChildLink;
 import com.aircas.ptr.foundry.model.po.OntologyLinkGroup;
-import com.aircas.ptr.foundry.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyLinkService;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyMetaService;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyLinkGroupBo;
-import com.aircas.ptr.foundry.ontology.entity.vo.OntologyChildLinkVO;
-import com.aircas.ptr.foundry.ontology.entity.vo.OntologyLinkGraphVO;
-import com.aircas.ptr.foundry.ontology.entity.vo.OntologyLinkGroupVO;
-import com.aircas.ptr.foundry.ontology.entity.vo.OntologyMetaVO;
+import com.aircas.ptr.foundry.ontology.entity.vo.*;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyChildLinkMapper;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyLinkGroupMapper;
-import com.aircas.ptr.foundry.ontology.repository.dao.OntologyMetaMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeanUtils;
@@ -124,7 +119,7 @@ public class OntologyLinkServiceImpl implements OntologyLinkService {
     }
 
     @Override
-    public List<OntologyLinkGraphVO> getLinkGraphByOntologyUniqueIdentifier(String oId) {
+    public OntologyLinkGraphVO getLinkGraphByOntologyUniqueIdentifier(String oId) {
 
         List<OntologyLinkGroup> linkGroups = new ArrayList<>();
         List<OntologyLinkGroup> forwardOntologyLinkGroups = ontologyLinkGroupMapper.selectByOntologyUniqueIdentifierFrom(oId);
@@ -145,23 +140,24 @@ public class OntologyLinkServiceImpl implements OntologyLinkService {
         if (metaVOs.equals(null) || metaVOs.isEmpty()) {
             return null;
         }
-        List<OntologyLinkGraphVO> result = new ArrayList<>();
+        OntologyLinkGraphVO linkGraphVO = new OntologyLinkGraphVO();
+        linkGraphVO.setNodes(metaVOs);
+        List<OntologyLinkCountVO> links = new ArrayList<>();
         getLinkByOntologies(metaVOs).stream().forEach(link -> {
-            OntologyLinkGraphVO ontologyLinkGraphVO = new OntologyLinkGraphVO();
-            ontologyLinkGraphVO.setOntologyId1(link.getOntologyUniqueIdentifierFrom());
-            ontologyLinkGraphVO.setOntologyIcon1(link.getOntologyIconFrom());
-            ontologyLinkGraphVO.setOntologyName1(link.getOntologyNameFrom());
-            ontologyLinkGraphVO.setOntologyId2(link.getOntologyUniqueIdentifierTo());
-            ontologyLinkGraphVO.setOntologyIcon2(link.getOntologyIconTO());
-            ontologyLinkGraphVO.setOntologyName2(link.getOntologyNameTo());
-            ontologyLinkGraphVO.setLinkCount(1);
-            if (result.contains(ontologyLinkGraphVO)) {
-                result.remove(ontologyLinkGraphVO);
-                ontologyLinkGraphVO.setLinkCount(2);
+            OntologyLinkCountVO ontologyLinkCountVO = new OntologyLinkCountVO();
+            ontologyLinkCountVO.setOntologyId1(link.getOntologyUniqueIdentifierFrom());
+            ontologyLinkCountVO.setOntologyName1(link.getOntologyNameFrom());
+            ontologyLinkCountVO.setOntologyId2(link.getOntologyUniqueIdentifierTo());
+            ontologyLinkCountVO.setOntologyName2(link.getOntologyNameTo());
+            ontologyLinkCountVO.setLinkCount(1);
+            if (links.contains(ontologyLinkCountVO)) {
+                links.remove(ontologyLinkCountVO);
+                ontologyLinkCountVO.setLinkCount(2);
             }
-            result.add(ontologyLinkGraphVO);
+            links.add(ontologyLinkCountVO);
         });
-        return result;
+        linkGraphVO.setLinks(links);
+        return linkGraphVO;
     }
 
     private void setChildLinks(OntologyLinkGroupVO linkGroupVO, long forwardChildLinkId, long backwardChildLinkId) {

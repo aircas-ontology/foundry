@@ -6,7 +6,7 @@ import com.aircas.ptr.foundry.ontology.application.service.OntologyGroupService;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyLinkService;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyMetaService;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyGroupBO;
-import com.aircas.ptr.foundry.ontology.entity.vo.OntologyLinkGraphVO;
+import com.aircas.ptr.foundry.ontology.entity.vo.OntologyLinkCountVO;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyGroupVO;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyMetaVO;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyGroupMapper;
@@ -97,27 +97,25 @@ public class OntologyGroupServiceImpl implements OntologyGroupService {
     }
 
     @Override
-    public List<OntologyLinkGraphVO> getOntologyGroupLinks(String id) {
+    public List<OntologyLinkCountVO> getOntologyGroupLinks(String id) {
 
         List<OntologyMetaVO> metaVOs = ontologyMetaService.listOntologiesByGroup(id);
         if (metaVOs.equals(null) || metaVOs.isEmpty()) {
             return null;
         }
-        List<OntologyLinkGraphVO> result = new ArrayList<>();
+        List<OntologyLinkCountVO> result = new ArrayList<>();
         ontologyLinkService.getLinkByOntologies(metaVOs).stream().forEach(link -> {
-            OntologyLinkGraphVO ontologyLinkGraphVO = new OntologyLinkGraphVO();
-            ontologyLinkGraphVO.setOntologyId1(link.getOntologyUniqueIdentifierFrom());
-            ontologyLinkGraphVO.setOntologyIcon1(link.getOntologyIconFrom());
-            ontologyLinkGraphVO.setOntologyName1(link.getOntologyNameFrom());
-            ontologyLinkGraphVO.setOntologyId2(link.getOntologyUniqueIdentifierTo());
-            ontologyLinkGraphVO.setOntologyIcon2(link.getOntologyIconTO());
-            ontologyLinkGraphVO.setOntologyName2(link.getOntologyNameTo());
-            ontologyLinkGraphVO.setLinkCount(1);
-            if (result.contains(ontologyLinkGraphVO)) {
-                result.remove(ontologyLinkGraphVO);
-                ontologyLinkGraphVO.setLinkCount(2);
+            OntologyLinkCountVO ontologyLinkCountVO = new OntologyLinkCountVO();
+            ontologyLinkCountVO.setOntologyId1(link.getOntologyUniqueIdentifierFrom());
+            ontologyLinkCountVO.setOntologyName1(link.getOntologyNameFrom());
+            ontologyLinkCountVO.setOntologyId2(link.getOntologyUniqueIdentifierTo());
+            ontologyLinkCountVO.setOntologyName2(link.getOntologyNameTo());
+            ontologyLinkCountVO.setLinkCount(1);
+            if (result.contains(ontologyLinkCountVO)) {
+                result.remove(ontologyLinkCountVO);
+                ontologyLinkCountVO.setLinkCount(2);
             }
-            result.add(ontologyLinkGraphVO);
+            result.add(ontologyLinkCountVO);
         });
         return result;
     }

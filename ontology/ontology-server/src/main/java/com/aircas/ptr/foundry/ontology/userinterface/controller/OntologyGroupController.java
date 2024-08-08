@@ -4,7 +4,7 @@ import com.aircas.ptr.foundry.common.base.ApiResult;
 import com.aircas.ptr.foundry.common.base.DataResult;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyGroupService;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyGroupBO;
-import com.aircas.ptr.foundry.ontology.entity.vo.OntologyLinkGraphVO;
+import com.aircas.ptr.foundry.ontology.entity.vo.OntologyLinkCountVO;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyGroupVO;
 import com.aircas.ptr.foundry.ontology.repository.param.OntologyGroupAddParam;
 import com.github.pagehelper.PageInfo;
@@ -80,7 +80,7 @@ public class OntologyGroupController {
 
     @GetMapping("/link/graph/{id}")
     @ApiOperation("查询分组下所有本体的关系(graph)")
-    public DataResult<List<OntologyLinkGraphVO>> getOntologyGroupLinks(@PathVariable String id) {
+    public DataResult<List<OntologyLinkCountVO>> getOntologyGroupLinks(@PathVariable String id) {
 
         return DataResult.ofData(ontologyGroupService.getOntologyGroupLinks(id));
     }

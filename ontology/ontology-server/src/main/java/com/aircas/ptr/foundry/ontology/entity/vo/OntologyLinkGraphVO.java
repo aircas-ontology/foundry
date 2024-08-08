@@ -4,43 +4,15 @@ import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
 
+import java.util.List;
+
 @Data
-@ApiModel(description = "分组下所有本体的关系")
+@ApiModel(description = "本体关系graph")
 public class OntologyLinkGraphVO {
 
-    @ApiModelProperty(value = "本体1的名称", example = "轨迹")
-    private String ontologyName1;
-    @ApiModelProperty(value = "本体2的uid", example = "deb6c235-4b0b-4dff-95c0-7e2a594b24d8")
-    private String ontologyId1;
-    @ApiModelProperty(value = "本体2的图标", example = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0NCIgaGVpZ2h0PSI0NCIgdmlld0JveD0iMCAwIDQ0IDQ0Ij48ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSgtNDM1LjIxOSAtMzQwLjIxOSkiPjxyZWN0IHdpZHRoPSI0NCIgaGVpZ2h0PSI0NCIgcng9IjYiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDQzNS4yMTkgMzQwLjIxOSkiIGZpbGw9IiMxMTM5NDUiLz48cGF0aCBkPSJNODUuMTEsMzYwOS4wNzd2LTEuN2EuNDc5LjQ3OSwwLDEsMSwuOTU4LDB2MS43aDIuODA4di0xLjdhLjQ3OS40NzksMCwwLDEsLjk1OCwwdjEuN2gyLjgwOHYtMS43YS40NzkuNDc5LDAsMCwxLC45NTgsMHYxLjdIOTYuNDF2LTEuN2EuNDc5LjQ3OSwwLDAsMSwuOTU4LDB2MS43aDIuODA4di0xLjdhLjQ3OS40NzksMCwwLDEsLjk1OCwwdjEuN2gzLjc3M2wtMjMuNTcxLTIzLjU3MXY0LjYyaDEuN2EuNDc5LjQ3OSwwLDEsMSwwLC45NThoLTEuN3YyLjgwOGgxLjdhLjQ3OS40NzksMCwwLDEsMCwuOTU4aC0xLjd2Mi44MDhoMS43YS40NzkuNDc5LDAsMSwxLDAsLjk1OGgtMS43djIuODA5aDEuN2EuNDc5LjQ3OSwwLDEsMSwwLC45NThoLTEuN3YyLjgwOWgxLjdhLjQ3OS40NzksMCwwLDEsMCwuOTU4aC0xLjd2Mi45MjZabS4yMTgtMTMuOTM0LDkuOTQyLDkuOTQySDg1LjMyOVoiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDM2Ni4wOTYgLTMyMzUuMDczKSIgZmlsbD0iI2ZmZiIvPjwvZz48L3N2Zz4=")
-    private String ontologyIcon1;
+    @ApiModelProperty(value = "节点，本体列表")
+    private List<OntologyMetaVO> nodes;
 
-    @ApiModelProperty(value = "本体2的名称", example = "舰船")
-    private String ontologyName2;
-    @ApiModelProperty(value = "本体2的uid", example = "545649a4-8bba-4d0c-b265-362e95fd4ffb")
-    private String ontologyId2;
-    @ApiModelProperty(value = "本体2的图标", example = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0NCIgaGVpZ2h0PSI0NCIgdmlld0JveD0iMCAwIDQ0IDQ0Ij48ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSgtNDM1LjIxOSAtMzQwLjIxOSkiPjxyZWN0IHdpZHRoPSI0NCIgaGVpZ2h0PSI0NCIgcng9IjYiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDQzNS4yMTkgMzQwLjIxOSkiIGZpbGw9IiMxMTM5NDUiLz48ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSg0NDYuMTAzIDM1MS4xMDIpIj48cGF0aCBkPSJNNTM1LjY3NCwyODY2LjY3OWEyLjYsMi42LDAsMCwxLTEuNDIzLS40bC0uMzcxLS4yNDZhMS43NDYsMS43NDYsMCwwLDAtMS43NDUsMGwtLjM3Mi4yNDVhMi43NSwyLjc1LDAsMCwxLTIuODM0LS4wMDZsLS4zNzEtLjI0NmExLjczOSwxLjczOSwwLDAsMC0xLjc0NCwwbC0uMzcyLjI0NGEyLjc0OSwyLjc0OSwwLDAsMS0yLjgzNC0uMDA3bC0uMzcxLS4yNDZhMS43NDIsMS43NDIsMCwwLDAtMS43NDUsMCwuNDkzLjQ5MywwLDAsMS0uNjU5LS4xMDguNDI1LjQyNSwwLDAsMSwuMTE2LS42MTcsMi43NDgsMi43NDgsMCwwLDEsMi44MzQuMDA2bC4zNzEuMjQ2YTEuNzQyLDEuNzQyLDAsMCwwLDEuNzQ1LDBsLjM3Mi0uMjQ0YTIuNzQ4LDIuNzQ4LDAsMCwxLDIuODM0LjAwN2wuMzcxLjI0NmExLjc0MiwxLjc0MiwwLDAsMCwxLjc0NSwwbC4zNzItLjI0NGEyLjc1MSwyLjc1MSwwLDAsMSwyLjgzNC4wMDZsLjM3MS4yNDdhMS43NDIsMS43NDIsMCwwLDAsMS43NDQsMGwuMzcyLS4yNDVhMi43NDksMi43NDksMCwwLDEsMi44MzQuMDA2bC4zNzEuMjQ2YTQuNDg3LDQuNDg3LDAsMCwwLDIuMjM0LS4zLjQ4MS40ODEsMCwwLDEsLjYuMjc0LjQzNi40MzYsMCwwLDEtLjI5Mi41NjNjLS41My4xNzItMi4zMi42OTMtMy4wODkuMTgybC0uMzcxLS4yNDZhMS43NDQsMS43NDQsMCwwLDAtMS43NDUsMGwtLjM3Mi4yNDRBMi42LDIuNiwwLDAsMSw1MzUuNjc0LDI4NjYuNjc5WiIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoLTUyMC43NDggLTI4NDQuNDQ3KSIgZmlsbD0iI2ZmZiIvPjxyZWN0IHdpZHRoPSIyLjA2MSIgaGVpZ2h0PSIzLjA1NCIgdHJhbnNmb3JtPSJtYXRyaXgoMC4wMDMsIC0xLCAxLCAwLjAwMywgOS42MzgsIDIuMDYxKSIgZmlsbD0iI2ZmZiIvPjxwYXRoIGQ9Ik01NjkuNjkzLDI3NjkuMWwuMDA5LTMuNC03Ljc4My0uMDE3LS4wMDksMy40Wm0tMy4wNDQtMS43MDZoMGwxLjM2NiwwYS40NDQuNDQ0LDAsMSwxLDAsLjg4NmgwbC0xLjM2NSwwYS40NDQuNDQ0LDAsMSwxLDAtLjg4NVptLTMuMDU0LS4wMDdoMGwxLjM2NSwwYS40NDQuNDQ0LDAsMSwxLDAsLjg4NmgwbC0xLjM2NiwwYS40NDQuNDQ0LDAsMSwxLDAtLjg4NloiIHRyYW5zZm9ybT0idHJhbnNsYXRlKC01NTQuNjQ3IC0yNzYyLjc0MykiIGZpbGw9IiNmZmYiLz48cGF0aCBkPSJNNTU0LjA1NywyNzkzLjkxN2w2LjM4NSwxLjQ0Ny4wMTQtNS40MS0xMi43NzgtLjAyOS0uMDE0LDUuNDFabTIuOTQyLTEuOTY5aDBsMS4zNjYsMGEuNDQ0LjQ0NCwwLDEsMSwwLC44ODZoMGwtMS4zNjYsMGEuNDQ0LjQ0NCwwLDEsMSwwLS44ODVabS0zLjYyLS4wMDhoMGwxLjM2NiwwYS40NDQuNDQ0LDAsMSwxLDAsLjg4NmgwbC0xLjM2NiwwYS40NDQuNDQ0LDAsMSwxLDAtLjg4NVptLTMuNjItLjAwOGgwbDEuMzY1LDBhLjQ0NC40NDQsMCwxLDEsMCwuODg2aDBsLTEuMzY1LDBhLjQ0NC40NDQsMCwxLDEsMC0uODg1WiIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoLTU0Mi45MTUgLTI3ODIuNzA2KSIgZmlsbD0iI2ZmZiIvPjxwYXRoIGQ9Ik01MzcuMjIzLDI4MjUuMTZhMy41OTIsMy41OTIsMCwwLDEsMS45NjkuNTZsLjM3MS4yNDZhLjY2OC42NjgsMCwwLDAsLjMzLjA3My42NTkuNjU5LDAsMCwwLC4zMjYtLjA3MWwuMzcyLS4yNDVhMy43NDcsMy43NDcsMCwwLDEsMy45MjMuMDA5bC4zNzEuMjQ3YS43NzkuNzc5LDAsMCwwLC42NTUsMGwuMzcyLS4yNDVhMy41NjEsMy41NjEsMCwwLDEsMS44MzMtLjU0NmwyLjc2OC01LjQyMS05LjA4NS0yLjA1OS05LjEsMi4wMTgsMyw1Ljk0N0EzLjYxMywzLjYxMywwLDAsMSw1MzcuMjIzLDI4MjUuMTZaIiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgtNTMwLjI4OSAtMjgwNS41ODgpIiBmaWxsPSIjZmZmIi8+PC9nPjwvZz48L3N2Zz4=")
-    private String ontologyIcon2;
-
-    @ApiModelProperty(value = "本体间链接数量", example = "2")
-    private Integer linkCount;
-
-    @Override
-    public boolean equals(Object obj) {
-
-        if (obj.equals(this)) {
-            return true;
-        }
-        if (!(obj instanceof OntologyLinkGraphVO)) {
-            return false;
-        }
-        OntologyLinkGraphVO other = (OntologyLinkGraphVO) obj;
-        if (this.ontologyId1.equals(other.getOntologyId1()) && this.ontologyId2.equals(other.getOntologyId2())) {
-            return true;
-        }
-        if (this.ontologyId1.equals(other.getOntologyId2()) && this.ontologyId2.equals(other.getOntologyId1())) {
-            return true;
-        }
-        return false;
-    }
+    @ApiModelProperty(value = "关系，关系列表")
+    private List<OntologyLinkCountVO> links;
 }
