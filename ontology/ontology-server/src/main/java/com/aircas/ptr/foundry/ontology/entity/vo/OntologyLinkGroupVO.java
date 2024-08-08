@@ -7,7 +7,7 @@ import lombok.Data;
 
 import java.util.Date;
 
-import static com.aircas.ptr.foundry.common.constant.DateFormat.DATE_FORMAT;
+import static com.aircas.ptr.foundry.common.constant.DateFormat.*;
 
 
 @Data
@@ -36,13 +36,13 @@ public class OntologyLinkGroupVO {
     /**
      * 记录创建时间
      */
-    @JsonFormat(pattern = DATE_FORMAT)
+    @JsonFormat(pattern = DATE_FORMAT2)
     private Date createTime;
 
     /**
      * 记录修改时间
      */
-    @JSONField(format = DATE_FORMAT)
+    @JSONField(format = DATE_FORMAT2)
     private Date updateTime;
 
     /**

@@ -3,14 +3,13 @@ package com.aircas.ptr.foundry.ontology.userinterface.controller;
 import com.aircas.ptr.foundry.common.base.DataResult;
 import com.aircas.ptr.foundry.ontology.application.service.ObjectService;
 import com.aircas.ptr.foundry.ontology.entity.vo.*;
+import com.aircas.ptr.foundry.ontology.repository.param.FilterParam;
+import com.aircas.ptr.foundry.ontology.repository.param.OntologyObjectQueryParam;
 import com.github.pagehelper.PageInfo;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
 import java.util.List;
@@ -42,7 +41,8 @@ public class ObjectController {
         return DataResult.ofData(objectOneInfoVO);
     }
 
-    @GetMapping("/queryObjectWithLinkedInfoByPrimaryKey")
+    @GetMapping("/link_object")
+    @ApiOperation(value = "查询本体的链接的所有动态数据")
     public DataResult<ObjectWithLinkedInfoVO> queryObjectWithLinkedInfoByPrimaryKey(@RequestParam String uniqueIdentifier, @RequestParam String key) {
         ObjectWithLinkedInfoVO objectWithLinkedInfoVO = objectService.queryObjectWithLinkedInfoByPrimaryKey(uniqueIdentifier, key);
         return DataResult.ofData(objectWithLinkedInfoVO);
@@ -50,11 +50,18 @@ public class ObjectController {
 
     @ApiOperation(value = "实体分页查询", notes = "查询该本体下所有实体详情列表")
     @GetMapping("/list")
-    public DataResult<PageInfo<Map<String, Object>>> queryObjectByPage(
+    public DataResult<PageInfo<Map<String, Object>>> queryObject(
             @RequestParam @ApiParam(value = "本体id") String ontologyUniqueIdentifier,
             @RequestParam(required = false, defaultValue = "1") Integer page,
             @RequestParam(required = false, defaultValue = "10") Integer size) {
 
         return DataResult.ofData(objectService.queryObjectList(ontologyUniqueIdentifier, page, size));
+    }
+
+    @PostMapping("/list/by_filter")
+    @ApiOperation(value = "实体分页条件查询", notes = "根据条件查询本体下实体详情列表")
+    public DataResult<PageInfo<Map<String, Object>>> queryObjectByFilter(@RequestBody OntologyObjectQueryParam param) {
+
+        return DataResult.ofData(objectService.queryObjectByFilter(param.getOntologyId(), param.getFilter(), param.getPage(), param.getSize()));
     }
 }

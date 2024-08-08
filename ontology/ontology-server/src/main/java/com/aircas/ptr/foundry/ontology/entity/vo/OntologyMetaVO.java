@@ -40,6 +40,7 @@ public class OntologyMetaVO {
     /**
      * 记录修改时间
      */
+    @JsonFormat(pattern = DATE_FORMAT2)
     private Date updateTime;
 
     /**
