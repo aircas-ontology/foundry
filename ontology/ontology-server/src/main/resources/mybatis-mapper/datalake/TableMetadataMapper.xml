@@ -2,18 +2,33 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.aircas.ptr.foundry.ontology.repository.datalakeDao.TableMetadataMapper">
     <resultMap id="BaseResultMap" type="com.aircas.ptr.foundry.model.po.TableColumnDesc">
-        <result column="column_name" jdbcType="VARCHAR" property="columnName" />
-        <result column="description" jdbcType="VARCHAR" property="description" />
-        <result column="type" jdbcType="VARCHAR" property="type" />
+        <result column="column_name" jdbcType="VARCHAR" property="columnName"/>
+        <result column="description" jdbcType="VARCHAR" property="description"/>
+        <result column="type" jdbcType="VARCHAR" property="type"/>
+    </resultMap>
+
+    <resultMap id="TableResultMap" type="com.aircas.ptr.foundry.model.po.DatasourceTable">
+        <result column="table_name" jdbcType="VARCHAR" property="tableName"/>
+        <result column="description" jdbcType="VARCHAR" property="description"/>
     </resultMap>
 
     <select id="getColumnMetadata" parameterType="java.lang.String" resultMap="BaseResultMap">
-        select
-        a.attname as column_name,
-        col_description(a.attrelid, a.attnum) as description,
-        pg_catalog.format_type(a.atttypid, null) as type
-        from pg_class as c, pg_attribute as a
-        where c.relname = #{tableName,jdbcType=VARCHAR} and a.attrelid = c.oid and a.attnum > 0
+        select a.attname                                as column_name,
+               col_description(a.attrelid, a.attnum)    as description,
+               pg_catalog.format_type(a.atttypid, null) as type
+        from pg_class as c,
+             pg_attribute as a
+        where c.relname = #{tableName,jdbcType=VARCHAR}
+          and a.attrelid = c.oid
+          and a.attnum > 0
+    </select>
+
+    <select id="listTables" resultMap="TableResultMap">
+        SELECT relname AS table_name, obj_description(relfilenode, 'pg_class') AS description
+        from pg_class
+        WHERE relkind = 'r'
+          and relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'public')
+        ORDER BY table_name
     </select>
 </mapper>
 

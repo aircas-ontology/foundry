@@ -134,14 +134,14 @@ public class OntologyMetaServiceImpl implements OntologyMetaService {
             property.setDescription(column.getColumnName());
             property.setDisplayName(column.getColumnName());
             if (column.getColumnName().equals(primaryKey)) {
-                property.setIsTitleKey(1);
-            } else {
-                property.setIsTitleKey(0);
-            }
-            if (column.getColumnName().equals(titleKey)) {
                 property.setIsPrimaryKey(1);
             } else {
                 property.setIsPrimaryKey(0);
+            }
+            if (column.getColumnName().equals(titleKey)) {
+                property.setIsTitleKey(1);
+            } else {
+                property.setIsTitleKey(0);
             }
             property.setStatus(1);
             return property;
