@@ -4,7 +4,7 @@ import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.common.base.ResultGenerator;
 import com.aircas.ptr.foundry.model.po.OntologyChildLink;
 import com.aircas.ptr.foundry.model.po.OntologyLinkGroup;
-import com.aircas.ptr.foundry.ontology.application.service.OntologyLinkService;
+import com.aircas.ptr.foundry.ontology.application.service.OntologyLinkGroupService;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyMetaService;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyLinkGroupBo;
 import com.aircas.ptr.foundry.ontology.entity.vo.*;
@@ -26,9 +26,9 @@ import java.util.stream.Collectors;
  */
 
 @Service
-public class OntologyLinkServiceImpl implements OntologyLinkService {
+public class OntologyLinkGroupServiceImpl implements OntologyLinkGroupService {
 
-    private static final Logger log = LoggerFactory.getLogger(OntologyLinkServiceImpl.class);
+    private static final Logger log = LoggerFactory.getLogger(OntologyLinkGroupServiceImpl.class);
     @Resource
     private OntologyLinkGroupMapper ontologyLinkGroupMapper;
 
@@ -155,6 +155,24 @@ public class OntologyLinkServiceImpl implements OntologyLinkService {
             links.add(ontologyLinkCountVO);
         });
         return new OntologyLinkGraphVO(metaVOs, links);
+    }
+
+    @Override
+    public List<OntologyLinkGroup> selectByOntologyUniqueIdentifierFrom(String ontologyUniqueIdentifier) {
+
+        return ontologyLinkGroupMapper.selectByOntologyUniqueIdentifierFrom(ontologyUniqueIdentifier);
+    }
+
+    @Override
+    public List<OntologyLinkGroup> selectByOntologyUniqueIdentifierTo(String ontologyUniqueIdentifier) {
+
+        return ontologyLinkGroupMapper.selectByOntologyUniqueIdentifierTo(ontologyUniqueIdentifier);
+    }
+
+    @Override
+    public OntologyLinkGroup selectByUniqueIdentifier(String uniqueIdentifier) {
+
+        return ontologyLinkGroupMapper.selectByUniqueIdentifier(uniqueIdentifier);
     }
 
     private void setChildLinks(OntologyLinkGroupVO linkGroupVO, long forwardChildLinkId, long backwardChildLinkId) {

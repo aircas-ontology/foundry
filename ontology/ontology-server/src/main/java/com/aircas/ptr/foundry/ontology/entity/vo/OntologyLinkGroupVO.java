@@ -1,9 +1,11 @@
 package com.aircas.ptr.foundry.ontology.entity.vo;
 
+import com.aircas.ptr.foundry.model.po.OntologyLinkGroup;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyChildLinkBo;
 import com.alibaba.fastjson.annotation.JSONField;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
+import org.springframework.beans.BeanUtils;
 
 import java.util.Date;
 

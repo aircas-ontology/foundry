@@ -2,10 +2,10 @@ package com.aircas.ptr.foundry.ontology.application.service.impl;
 
 import com.aircas.ptr.foundry.model.po.*;
 import com.aircas.ptr.foundry.ontology.application.service.ObjectService;
+import com.aircas.ptr.foundry.ontology.application.service.OntologyLinkGroupService;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyPropertyService;
 import com.aircas.ptr.foundry.ontology.entity.vo.*;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyChildLinkMapper;
-import com.aircas.ptr.foundry.ontology.repository.dao.OntologyLinkGroupMapper;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyMetaMapper;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyPropertyMapper;
 import com.aircas.ptr.foundry.ontology.repository.datalakeDao.ObjectMapper;
@@ -13,15 +13,15 @@ import com.aircas.ptr.foundry.ontology.repository.datalakeDao.TableMetadataMappe
 import com.aircas.ptr.foundry.ontology.repository.param.FilterParam;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
+import javafx.collections.transformation.FilteredList;
 import joptsimple.internal.Strings;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 
@@ -41,8 +41,8 @@ public class ObjectServiceImpl implements ObjectService {
     @Resource
     private final TableMetadataMapper tableMetadataMapper;
 
-    @Resource
-    private final OntologyLinkGroupMapper ontologyLinkGroupMapper;
+    @Autowired
+    private OntologyLinkGroupService ontologyLinkGroupService;
 
     @Resource
     private final OntologyChildLinkMapper ontologyChildLinkMapper;
@@ -136,7 +136,36 @@ public class ObjectServiceImpl implements ObjectService {
     }
 
     @Override
+    public PageInfo<Map<String, Object>> queryObjectByLink(String linkId, String ontologyId, ObjectOneInfoVO obj, Integer page, Integer size) {
+
+        OntologyLinkGroup ontologyLinkGroup = ontologyLinkGroupService.selectByUniqueIdentifier(linkId);
+        String propertyIdentifierFrom = ontologyLinkGroup.getPropertyUniqueIdentifierFrom();
+        String propertyIdentifierTo = ontologyLinkGroup.getPropertyUniqueIdentifierTo();
+        //TODO: 这里有潜在风险，因为没有考虑join时的数据类型
+        String filterValue = Strings.EMPTY;
+        for (PropertyValueVO propertyValueVO : obj.getProperties()) {
+            //TODO: 这里有潜在风险，因为没有考虑join时的数据类型，沒有考虑是to的情况
+            if (propertyValueVO.getUniqueIdentifier().equals(propertyIdentifierFrom)) {
+                filterValue = propertyValueVO.getValue();
+                break;
+            }
+        }
+        if (filterValue == null || filterValue.isEmpty()) return null;
+        List<OntologyProperty> propertyToList = ontologyPropertyMapper.selectByUniqueIdentifier(propertyIdentifierTo);
+        if (propertyToList.size() == 0) {
+            return null;
+        }
+        String filterKey = propertyToList.get(0).getDatasourceColumnName();
+        String dataOntologyId = ontologyLinkGroup.getOntologyUniqueIdentifierTo();
+
+        List<FilterParam> filter = new ArrayList<>();
+        filter.add(new FilterParam(filterKey, filterValue));
+        return queryObjectByFilter(dataOntologyId, filter, page, size);
+    }
+
+    @Override
     public ObjectWithLinkedInfoVO queryObjectWithLinkedInfoByPrimaryKey(String ontologyUniqueIdentifier, String primaryKey) {
+
         ObjectWithLinkedInfoVO objectWithLinkedInfoVO = new ObjectWithLinkedInfoVO();
         ObjectOneInfoVO objectOneInfoVO = queryByPrimaryKey(ontologyUniqueIdentifier, primaryKey);
         objectWithLinkedInfoVO.setObjectValue(objectOneInfoVO);
@@ -169,6 +198,7 @@ public class ObjectServiceImpl implements ObjectService {
 
 
     private List<ObjectOneInfoVO> queryByColumnNameValue(String ontologyUniqueIdentifier, String columnName, String columnValue) {
+
         List<OntologyPropertyVO> ontologyPropertyList = ontologyPropertyService.selectByOntologyUniqueIdentifier(ontologyUniqueIdentifier);
         return queryByColumnNameValue(ontologyPropertyList, columnName, columnValue);
     }
@@ -228,10 +258,10 @@ public class ObjectServiceImpl implements ObjectService {
 
     private List<OntologyLinkGroup> getLinkedMetadata(String ontologyUniqueIdentifier) {
         List<OntologyLinkGroup> linkGroups = new ArrayList<>();
-        List<OntologyLinkGroup> forwardOntologyLinkGroups = ontologyLinkGroupMapper.selectByOntologyUniqueIdentifierFrom(ontologyUniqueIdentifier);
+        List<OntologyLinkGroup> forwardOntologyLinkGroups = ontologyLinkGroupService.selectByOntologyUniqueIdentifierFrom(ontologyUniqueIdentifier);
         linkGroups.addAll(forwardOntologyLinkGroups);
 
-        List<OntologyLinkGroup> backwardOntologyLinkGroups = ontologyLinkGroupMapper.selectByOntologyUniqueIdentifierTo(ontologyUniqueIdentifier);
+        List<OntologyLinkGroup> backwardOntologyLinkGroups = ontologyLinkGroupService.selectByOntologyUniqueIdentifierTo(ontologyUniqueIdentifier);
         linkGroups.addAll(backwardOntologyLinkGroups.stream().map(OntologyLinkGroup::revertForwardToBackward).collect(Collectors.toList()));
         return linkGroups;
     }

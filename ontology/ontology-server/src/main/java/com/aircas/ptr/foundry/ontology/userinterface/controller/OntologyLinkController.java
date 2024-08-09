@@ -2,9 +2,8 @@ package com.aircas.ptr.foundry.ontology.userinterface.controller;
 
 import com.aircas.ptr.foundry.common.base.DataResult;
 import com.aircas.ptr.foundry.common.base.RestResult;
-import com.aircas.ptr.foundry.ontology.application.service.OntologyLinkService;
+import com.aircas.ptr.foundry.ontology.application.service.OntologyLinkGroupService;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyLinkGroupBo;
-import com.aircas.ptr.foundry.ontology.entity.vo.OntologyLinkCountVO;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyLinkGraphVO;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyLinkGroupVO;
 import io.swagger.annotations.Api;
@@ -27,25 +26,25 @@ import java.util.List;
 public class OntologyLinkController {
 
     @Resource
-    private OntologyLinkService ontologyLinkService;
+    private OntologyLinkGroupService ontologyLinkGroupService;
 
     @PostMapping("/add")
     @ApiOperation(value = "新增本体之间的关系")
     public DataResult<Integer> add(@RequestBody OntologyLinkGroupBo ontologyLinkGroupBo) {
-        return DataResult.ofData(ontologyLinkService.add(ontologyLinkGroupBo));
+        return DataResult.ofData(ontologyLinkGroupService.add(ontologyLinkGroupBo));
     }
 
 
     @GetMapping("/by_ontology/{oId}")
     @ApiOperation(value = "根据本体id查询关系(1跳)")
     public DataResult<List<OntologyLinkGroupVO>> getLinkByOntologyUniqueIdentifier(@PathVariable String oId) {
-        return DataResult.ofData(ontologyLinkService.getLinkByOntologyUniqueIdentifier(oId));
+        return DataResult.ofData(ontologyLinkGroupService.getLinkByOntologyUniqueIdentifier(oId));
     }
 
     @DeleteMapping("/by_ontology/{oId}")
     @ApiOperation(value = "根据本体id删除关系")
     public RestResult deleteLinkByUniqueIdentifier(@PathVariable @ApiParam(value = "本体id", required = true) String oId) {
-        RestResult result = ontologyLinkService.deleteLinkByOntologyUniqueIdentifier(oId);
+        RestResult result = ontologyLinkGroupService.deleteLinkByOntologyUniqueIdentifier(oId);
         return result;
     }
 
@@ -53,12 +52,12 @@ public class OntologyLinkController {
     @ApiOperation(value = "根据本体id查询关系(1跳)(graph)")
     public DataResult<OntologyLinkGraphVO> getLinkGraphByOntologyUniqueIdentifier(@PathVariable String oId) {
 
-        return DataResult.ofData(ontologyLinkService.getLinkGraphByOntologyUniqueIdentifier(oId));
+        return DataResult.ofData(ontologyLinkGroupService.getLinkGraphByOntologyUniqueIdentifier(oId));
     }
 
     @GetMapping("/all")
     @ApiOperation(value = "得到所有的关系")
     public DataResult<List<OntologyLinkGroupVO>> getAllLinks() {
-        return DataResult.ofData(ontologyLinkService.getAll());
+        return DataResult.ofData(ontologyLinkGroupService.getAll());
     }
 }

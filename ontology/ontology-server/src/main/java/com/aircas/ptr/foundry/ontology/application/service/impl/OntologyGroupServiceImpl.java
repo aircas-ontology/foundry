@@ -3,7 +3,7 @@ package com.aircas.ptr.foundry.ontology.application.service.impl;
 import com.aircas.ptr.foundry.common.exception.DuplicatedDataException;
 import com.aircas.ptr.foundry.model.po.OntologyGroup;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyGroupService;
-import com.aircas.ptr.foundry.ontology.application.service.OntologyLinkService;
+import com.aircas.ptr.foundry.ontology.application.service.OntologyLinkGroupService;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyMetaService;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyGroupBO;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyLinkCountVO;
@@ -41,7 +41,7 @@ public class OntologyGroupServiceImpl implements OntologyGroupService {
     private OntologyMetaService ontologyMetaService;
 
     @Autowired
-    private OntologyLinkService ontologyLinkService;
+    private OntologyLinkGroupService ontologyLinkGroupService;
 
     @Override
     public Integer add(OntologyGroupAddParam param) {
@@ -105,7 +105,7 @@ public class OntologyGroupServiceImpl implements OntologyGroupService {
             return null;
         }
         List<OntologyLinkCountVO> links = new ArrayList<>();
-        ontologyLinkService.getLinkByOntologies(metaVOs).stream().forEach(link -> {
+        ontologyLinkGroupService.getLinkByOntologies(metaVOs).stream().forEach(link -> {
             OntologyLinkCountVO ontologyLinkCountVO = new OntologyLinkCountVO();
             ontologyLinkCountVO.setOntologyId1(link.getOntologyUniqueIdentifierFrom());
             ontologyLinkCountVO.setOntologyName1(link.getOntologyNameFrom());

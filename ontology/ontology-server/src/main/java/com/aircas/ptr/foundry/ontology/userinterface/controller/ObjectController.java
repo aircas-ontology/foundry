@@ -4,6 +4,7 @@ import com.aircas.ptr.foundry.common.base.DataResult;
 import com.aircas.ptr.foundry.ontology.application.service.ObjectService;
 import com.aircas.ptr.foundry.ontology.entity.vo.*;
 import com.aircas.ptr.foundry.ontology.repository.param.FilterParam;
+import com.aircas.ptr.foundry.ontology.repository.param.OntologyObjectQueryByLinkParam;
 import com.aircas.ptr.foundry.ontology.repository.param.OntologyObjectQueryParam;
 import com.github.pagehelper.PageInfo;
 import io.swagger.annotations.Api;
@@ -63,5 +64,12 @@ public class ObjectController {
     public DataResult<PageInfo<Map<String, Object>>> queryObjectByFilter(@RequestBody OntologyObjectQueryParam param) {
 
         return DataResult.ofData(objectService.queryObjectByFilter(param.getOntologyId(), param.getFilter(), param.getPage(), param.getSize()));
+    }
+
+    @PostMapping("/list/by_link")
+    @ApiOperation(value = "实体查询，依据关系id", notes = "根据关系id查询本体下实体详情列表")
+    public DataResult<PageInfo<Map<String, Object>>> queryObjectByFilter(@RequestBody OntologyObjectQueryByLinkParam param) {
+
+        return DataResult.ofData(objectService.queryObjectByLink(param.getLinkId(), param.getOntologyId(), param.getObj(),param.getPage(), param.getSize()));
     }
 }
