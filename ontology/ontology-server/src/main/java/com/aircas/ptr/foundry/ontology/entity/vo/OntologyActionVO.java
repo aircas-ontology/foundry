@@ -1,14 +1,13 @@
 package com.aircas.ptr.foundry.ontology.entity.vo;
 
-import com.aircas.ptr.foundry.model.po.OntologyFunction;
-import com.aircas.ptr.foundry.ontology.entity.bo.OntologyFunctionMappingInBO;
+import com.aircas.ptr.foundry.model.po.OntologyAction;
 import lombok.Data;
 
 import java.util.List;
 
 
 @Data
-public class OntologyFunctionVO extends OntologyFunction {
+public class OntologyActionVO extends OntologyAction {
     //mapping的列表
     private List<OntologyFunctionMappingInVO> mappingInList;
 

@@ -6,7 +6,8 @@ import lombok.Data;
 import java.util.HashMap;
 
 @Data
-public class FunctionRequestBodyBO {
+public class ActionRequestBodyBO {
+
     private boolean isPreview;
     private OntologyBaseObjectBo currentObject;
     private String functionName;

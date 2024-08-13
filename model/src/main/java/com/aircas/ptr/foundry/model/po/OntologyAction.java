@@ -7,16 +7,16 @@ import java.util.Date;
 
 
 @Data
-public class OntologyFunction {
+public class OntologyAction {
     /**
      * Column: api
      */
     private String api;
 
     /**
-     * Column: original_api
+     * Column: function_api
      */
-    private String originalApi;
+    private String functionApi;
 
     /**
      * Column: ontology_unique_identifier
@@ -31,16 +31,35 @@ public class OntologyFunction {
     private String description;
 
     /**
-     isPreview == 1, 则是测试模式下，使用完后要删除
+     * isPreview == 1, 则是测试模式下，使用完后要删除
      */
     private boolean isPreview;
-
 
     @JsonFormat(shape = JsonFormat.Shape.NUMBER)
     private Date createTime;
 
     @JsonFormat(shape = JsonFormat.Shape.NUMBER)
     private Date updateTime;
+
+    /**
+     * 名称
+     */
+    private String displayName;
+
+    /**
+     * 任务开始时间
+     */
+    private Date taskStartTime;
+
+    /**
+     * 任务结束时间
+     */
+    private Date taskEndTime;
+
+    /**
+     * 定时任务表达式
+     */
+    private String taskCorn;
 
     private static final long serialVersionUID = 1L;
 }
