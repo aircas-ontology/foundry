@@ -8,6 +8,7 @@ import java.io.Serializable;
 import java.util.Date;
 
 import static com.aircas.ptr.foundry.common.constant.DateFormat.DATE_FORMAT;
+import static com.aircas.ptr.foundry.common.constant.DateFormat.DATE_FORMAT2;
 
 
 @Data
@@ -35,13 +36,13 @@ public class OntologyLinkGroup implements Serializable {
     /**
      * 记录创建时间
      */
-    @JsonFormat(pattern = DATE_FORMAT)
+    @JsonFormat(pattern = DATE_FORMAT2, timezone = "GMT+8")
     private Date createTime;
 
     /**
      * 记录修改时间
      */
-    @JsonFormat(pattern = DATE_FORMAT)
+    @JsonFormat(pattern = DATE_FORMAT2, timezone = "GMT+8")
     private Date updateTime;
 
     /**

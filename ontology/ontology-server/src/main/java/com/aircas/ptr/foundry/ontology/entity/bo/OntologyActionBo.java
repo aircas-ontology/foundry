@@ -10,6 +10,6 @@ import java.util.List;
 public class OntologyActionBo extends OntologyAction {
 
     //mapping的列表
-    private List<OntologyFunctionMappingInBO> mappingInList;
+    private List<OntologyActionMappingInBO> mappingIns;
 
 }

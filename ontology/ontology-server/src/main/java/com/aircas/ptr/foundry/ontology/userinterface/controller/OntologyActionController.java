@@ -3,17 +3,23 @@ package com.aircas.ptr.foundry.ontology.userinterface.controller;
 import com.aircas.ptr.foundry.common.base.ApiResult;
 import com.aircas.ptr.foundry.common.base.DataResult;
 
+import com.aircas.ptr.foundry.common.util.BeanUtil;
 import com.aircas.ptr.foundry.ontology.Exception.BaseException;
 import com.aircas.ptr.foundry.ontology.Exception.OntologyFunctionParameterPropertyTypeNotSameException;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyActionService;
 import com.aircas.ptr.foundry.ontology.entity.bo.ActionRequestBodyBO;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyActionBo;
+import com.aircas.ptr.foundry.ontology.entity.bo.OntologyActionMappingInBO;
+import com.aircas.ptr.foundry.ontology.repository.param.ActionAddParam;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
+import org.springframework.beans.BeanUtils;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
+import java.util.List;
+import java.util.stream.Collectors;
 
 
 @Api(tags = "行为")
@@ -26,9 +32,18 @@ public class OntologyActionController {
 
     @ApiOperation(value = "新增行为")
     @PostMapping("/meta")
-    public ApiResult update(@RequestBody OntologyActionBo ontologyFunctionBo) throws OntologyFunctionParameterPropertyTypeNotSameException {
+    public ApiResult update(@RequestBody ActionAddParam param) throws OntologyFunctionParameterPropertyTypeNotSameException {
+
         try {
-            return DataResult.ofData(ontologyActionService.save(ontologyFunctionBo));
+            OntologyActionBo ontologyActionBo = new OntologyActionBo();
+            BeanUtils.copyProperties(param, ontologyActionBo);
+            List<OntologyActionMappingInBO> collect = param.getMappingIns().stream().map(item -> {
+                OntologyActionMappingInBO ontologyActionMappingInBO = new OntologyActionMappingInBO();
+                BeanUtils.copyProperties(item, ontologyActionMappingInBO);
+                return ontologyActionMappingInBO;
+            }).collect(Collectors.toList());
+            ontologyActionBo.setMappingIns(collect);
+            return DataResult.ofData(ontologyActionService.save(ontologyActionBo));
         } catch (BaseException e) {
             return DataResult.fail(e.getMessage(), e.code, e.getRootCauseMessage());
         }

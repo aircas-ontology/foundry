@@ -34,13 +34,13 @@ public class OntologyMetaVO {
     /**
      * 记录创建时间
      */
-    @JsonFormat(pattern = DATE_FORMAT2)
+    @JsonFormat(pattern = DATE_FORMAT2, timezone = "GMT+8")
     private Date createTime;
 
     /**
      * 记录修改时间
      */
-    @JsonFormat(pattern = DATE_FORMAT2)
+    @JsonFormat(pattern = DATE_FORMAT2, timezone = "GMT+8")
     private Date updateTime;
 
     /**

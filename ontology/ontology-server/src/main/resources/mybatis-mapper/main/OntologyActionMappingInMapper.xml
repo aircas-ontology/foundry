@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.aircas.ptr.foundry.ontology.repository.dao.OntologyActionMappingInMapper">
+    <resultMap id="BaseResultMap" type="com.aircas.ptr.foundry.model.po.OntologyActionMappingIn">
+        <!-- @mbg.generated: generated automatically, do not modify! -->
+        <id column="id" jdbcType="BIGINT" property="id"/>
+        <result column="ontology_action_id" jdbcType="BIGINT" property="ontologyActionId"/>
+        <result column="parameter_name" jdbcType="VARCHAR" property="parameterName"/>
+        <result column="property_unique_identifier" jdbcType="VARCHAR" property="propertyUniqueIdentifier"/>
+        <result column="create_time" jdbcType="TIMESTAMP" property="createTime"/>
+        <result column="update_time" jdbcType="TIMESTAMP" property="updateTime"/>
+    </resultMap>
+    <sql id="Base_Column_List">
+        <!-- @mbg.generated: generated automatically, do not modify! -->
+        id, ontology_action_id, parameter_name, property_unique_identifier, create_time,
+        update_time
+    </sql>
+
+    <select id="selectByOntologyFunctionId" parameterType="java.lang.Long" resultMap="BaseResultMap">
+        <!-- @mbg.generated: generated automatically, do not modify! -->
+        select
+        <include refid="Base_Column_List"/>
+        from ontology_action_mapping_in
+        where ontology_action_id = #{ontologyFunctionId,jdbcType=BIGINT}
+    </select>
+
+    <select id="selectByOntologyFunctionIds" parameterType="java.util.List" resultMap="BaseResultMap">
+        <!-- @mbg.generated: generated automatically, do not modify! -->
+        select
+        <include refid="Base_Column_List"/>
+        from ontology_action_mapping_in
+        where ontology_action_id in
+        <foreach collection="list" index="index" item="id" open="(" separator="," close=")">
+            #{id,jdbcType=BIGINT}
+        </foreach>
+    </select>
+</mapper>

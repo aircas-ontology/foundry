@@ -3,21 +3,29 @@ package com.aircas.ptr.foundry.model.po;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 
+import javax.persistence.Column;
+import javax.persistence.Entity;
+import javax.persistence.Id;
 import java.util.Date;
+
+import static com.aircas.ptr.foundry.common.constant.DateFormat.DATE_FORMAT2;
 
 
 @Data
-public class OntologyFunctionMappingIn {
+@Entity
+public class OntologyActionMappingIn {
     /**
      * Column: id
      */
+    @Id
+    @Column(name = "id")
     private Long id;
 
     /**
      * Column: ontology_function_id
      * Remark: function的名称
      */
-    private Long ontologyFunctionId;
+    private Long ontologyActionId;
 
     /**
      * Column: parameter_name
@@ -31,10 +39,10 @@ public class OntologyFunctionMappingIn {
      */
     private String propertyUniqueIdentifier;
 
-    @JsonFormat(shape = JsonFormat.Shape.NUMBER)
+    @JsonFormat(pattern = DATE_FORMAT2, timezone = "GMT+8")
     private Date createTime;
 
-    @JsonFormat(shape = JsonFormat.Shape.NUMBER)
+    @JsonFormat(pattern = DATE_FORMAT2, timezone = "GMT+8")
     private Date updateTime;
 
     private static final long serialVersionUID = 1L;

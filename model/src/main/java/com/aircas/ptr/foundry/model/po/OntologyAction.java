@@ -3,10 +3,16 @@ package com.aircas.ptr.foundry.model.po;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 
+import javax.persistence.Column;
+import javax.persistence.Entity;
+import javax.persistence.Id;
+import javax.persistence.Table;
 import java.util.Date;
 
 
 @Data
+@Entity
+@Table(name = "ontology_action")
 public class OntologyAction {
     /**
      * Column: api
@@ -26,6 +32,8 @@ public class OntologyAction {
     /**
      * Column: id
      */
+    @Id
+    @Column(name = "id")
     private Long id;
 
     private String description;
