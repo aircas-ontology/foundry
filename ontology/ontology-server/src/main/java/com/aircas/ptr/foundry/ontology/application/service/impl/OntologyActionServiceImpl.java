@@ -201,7 +201,7 @@ public class OntologyActionServiceImpl implements OntologyActionService {
     public List<ParameterMetadataVO> getParametersByApi(String functionApi)
             throws FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionNotFoundException, OntologyFunctionNotFoundException {
 
-        OntologyAction ontologyAction = ontologyActionMapper.selectByApi(functionApi, true);
+        OntologyAction ontologyAction = ontologyActionMapper.selectByApi(functionApi, false);
         if (ontologyAction == null) {
             throw ExceptionFactory.getOntologyFunctionNotFoundException(null);
         }

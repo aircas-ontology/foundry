@@ -25,7 +25,7 @@ public class OntologyActionController {
     OntologyActionService ontologyActionService;
 
     @ApiOperation(value = "新增行为")
-    @PostMapping
+    @PostMapping("/meta")
     public ApiResult update(@RequestBody OntologyActionBo ontologyFunctionBo) throws OntologyFunctionParameterPropertyTypeNotSameException {
         try {
             return DataResult.ofData(ontologyActionService.save(ontologyFunctionBo));
@@ -35,15 +35,15 @@ public class OntologyActionController {
     }
 
     @ApiOperation(value = "依据id删除行为")
-    @DeleteMapping("/{id}")
+    @DeleteMapping("/meta/{id}")
     public DataResult<Integer> delete(@PathVariable Long id) {
         return DataResult.ofData(ontologyActionService.delete(id));
     }
 
     //读取函数列表
     @ApiOperation(value = "根据api获取行为元数据")
-    @GetMapping("/meta")
-    public ApiResult getMetadataByApi(@RequestParam @ApiParam(value = "函数api") String apiName) {
+    @GetMapping("/meta/{apiName}")
+    public ApiResult getMetadataByApi(@PathVariable String apiName) {
         try {
             return DataResult.ofData(ontologyActionService.getMetadataByApi(apiName));
         } catch (BaseException e) {
@@ -52,8 +52,8 @@ public class OntologyActionController {
     }
 
     @ApiOperation(value = "行为参数列表")
-    @GetMapping("/parameter")
-    public ApiResult getParameterByApi(@RequestParam String apiName) {
+    @GetMapping("/parameter/{apiName}")
+    public ApiResult getParameterByApi(@PathVariable String apiName) {
         try {
             return DataResult.ofData(ontologyActionService.getParametersByApi(apiName));
         } catch (BaseException e) {

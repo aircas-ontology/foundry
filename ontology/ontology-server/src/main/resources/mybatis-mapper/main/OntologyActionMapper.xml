@@ -125,7 +125,7 @@
         </trim>
     </insert>
 
-    <select id="selectByOntologyIdentifierAndApi" resultMap="BaseResultMap">
+    <select id="selectByApi" resultMap="BaseResultMap">
         <!-- @mbg.generated: generated automatically, do not modify! -->
         select
         <include refid="Base_Column_List"/>
