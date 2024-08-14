@@ -65,16 +65,30 @@ public class FunctionController {
     }
 
     @ApiOperation(value = "根据api获取函数metadata")
-    @GetMapping("/meta/{api}")
+    @GetMapping("/meta/by_api/{api}")
     public DataResult<FunctionVO> getMetadataByApi(@PathVariable String api) {
         return DataResult.ofData(functionService.getFunctionByApi(api));
     }
 
+    @ApiOperation(value = "根据函数id获取函数的元数据")
+    @GetMapping("/meta/by_id/{id}")
+    public DataResult<FunctionVO> getFunctionById(@PathVariable Long id) {
+
+        return DataResult.ofData(functionService.queryById(id));
+    }
+
     @ApiOperation(value = "删除函数")
-    @DeleteMapping("/meta/{api}")
+    @DeleteMapping("/meta/by_api/{api}")
     public DataResult<Boolean> delete(@PathVariable String api) {
 
-        return DataResult.ofData(functionService.delete(api));
+        return DataResult.ofData(functionService.deleteByApi(api));
+    }
+
+    @ApiOperation(value = "根据id删除函数")
+    @DeleteMapping("/meta/by_id/{id}")
+    public DataResult<Boolean> deleteById(@PathVariable Long id) {
+
+        return DataResult.ofData(functionService.deleteById(id));
     }
 
     @ApiOperation(value = "读取函数列表")

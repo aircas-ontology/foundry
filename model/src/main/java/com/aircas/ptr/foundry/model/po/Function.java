@@ -2,10 +2,16 @@ package com.aircas.ptr.foundry.model.po;
 
 import lombok.Data;
 
+import javax.persistence.Column;
+import javax.persistence.Entity;
+import javax.persistence.Id;
+import javax.persistence.Table;
 import java.util.Date;
 
 
 @Data
+@Entity
+@Table(name = "function")
 public class Function {
 
 
@@ -38,6 +44,8 @@ public class Function {
     /**
      * Column: id
      */
+    @Id
+    @Column(name = "id")
     private Long id;
 
     /**

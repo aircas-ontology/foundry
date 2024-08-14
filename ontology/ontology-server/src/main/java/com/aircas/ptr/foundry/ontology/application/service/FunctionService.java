@@ -29,5 +29,9 @@ public interface FunctionService {
 
     FunctionVO getFunctionByApi(String api);
 
-    Boolean delete(String functionName);
+    Boolean deleteByApi(String functionName);
+
+    FunctionVO queryById(Long id);
+
+    Boolean deleteById(Long id);
 }

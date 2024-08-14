@@ -6,7 +6,7 @@ import org.apache.ibatis.annotations.Mapper;
 import java.util.List;
 
 @Mapper
-public interface FunctionMapper {
+public interface FunctionMapper extends tk.mybatis.mapper.common.Mapper<Function> {
 
     int insert(Function function);
 

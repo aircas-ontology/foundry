@@ -44,7 +44,7 @@ import java.util.stream.Collectors;
 
 public class FunctionServiceImpl implements FunctionService {
 
-    static String baseDir = "functions";
+    final static String baseDir = "functions";
 
     @Resource
     FunctionMapper functionMapper;
@@ -97,9 +97,8 @@ public class FunctionServiceImpl implements FunctionService {
     }
 
     @Override
-    public Boolean delete(String functionName) {
+    public Boolean deleteByApi(String functionName) {
         Integer status = functionMapper.deleteByApi(functionName);
-        System.out.println(status);
         if (status == 0) {
             return false;
         }
@@ -114,10 +113,25 @@ public class FunctionServiceImpl implements FunctionService {
     }
 
     @Override
+    public FunctionVO queryById(Long id) {
+
+        Function function = functionMapper.selectByPrimaryKey(id);
+        FunctionVO functionVO = new FunctionVO();
+        BeanUtils.copyProperties(function, functionVO);
+        return functionVO;
+    }
+
+    @Override
+    public Boolean deleteById(Long id) {
+
+        return functionMapper.deleteByPrimaryKey(id) > 0 ? true : false;
+    }
+
+    @Override
     public List<FunctionVO> functionMetadataList() {
         List<Function> list = functionMapper.getAllFunctions();
         List<FunctionVO> retResult = new ArrayList();
-        for (Function function: list) {
+        for (Function function : list) {
             FunctionVO functionVO = new FunctionVO();
             BeanUtils.copyProperties(function, functionVO);
             retResult.add(functionVO);
@@ -155,7 +169,7 @@ public class FunctionServiceImpl implements FunctionService {
                 return;
             }
             String[] ontologyApis = objectTypes.split(",");
-            List<OntologyMetaVO> list =  Arrays.stream(ontologyApis)
+            List<OntologyMetaVO> list = Arrays.stream(ontologyApis)
                     .map(api -> ontologyMetas.get(api))
                     .map(meta -> {
                         OntologyMetaVO vo = new OntologyMetaVO();
@@ -171,34 +185,34 @@ public class FunctionServiceImpl implements FunctionService {
     public Object handle(String functionName, Boolean isPreview, String objectTypes, HashMap<String, Object> parameters)
             throws FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionRuntimeException, FunctionNotFoundException {
 
-            GroovyClassLoader classLoader = GroovyClassLoaderManager.getIndependentClassLoader();
-            List<String> objectApiList = this.getObjectApiList(isPreview, objectTypes, functionName);
-            //将本体涉及的类都import
-            importAllObjectType(classLoader, objectApiList);
+        GroovyClassLoader classLoader = GroovyClassLoaderManager.getIndependentClassLoader();
+        List<String> objectApiList = this.getObjectApiList(isPreview, objectTypes, functionName);
+        //将本体涉及的类都import
+        importAllObjectType(classLoader, objectApiList);
 
-            GroovyObject functionInstance = getFunctionInstance(classLoader, functionName, isPreview);
+        GroovyObject functionInstance = getFunctionInstance(classLoader, functionName, isPreview);
 
-            HashMap functionProxyParameters = new HashMap();
-            Method handleMethod = FunctionUtils.getMethod(functionInstance, "handle");
-            functionProxyParameters.put("parameters", parameters);
-            functionProxyParameters.put("parameterNames",
-                    FunctionUtils.getMethodParameterAnnotates(handleMethod)
-                            .stream()
-                            .map((annotate) -> annotate.name())
-                            .collect(Collectors.toList())
-            );
-            functionProxyParameters.put("instance", functionInstance);
-            functionProxyParameters.put("method", handleMethod);
-            GroovyObject functionProxy = FunctionUtils.getFunctionProxyInstance();
-            if (functionProxy == null) {
-                System.out.println("functionProxy没有初始化成功");
-                return null;
-            }
-            try {
-                return functionProxy.invokeMethod("invoke", functionProxyParameters);
-            } catch (Exception exception) {
-                throw ExceptionFactory.getFunctionRuntimeException(exception);
-            }
+        HashMap functionProxyParameters = new HashMap();
+        Method handleMethod = FunctionUtils.getMethod(functionInstance, "handle");
+        functionProxyParameters.put("parameters", parameters);
+        functionProxyParameters.put("parameterNames",
+                FunctionUtils.getMethodParameterAnnotates(handleMethod)
+                        .stream()
+                        .map((annotate) -> annotate.name())
+                        .collect(Collectors.toList())
+        );
+        functionProxyParameters.put("instance", functionInstance);
+        functionProxyParameters.put("method", handleMethod);
+        GroovyObject functionProxy = FunctionUtils.getFunctionProxyInstance();
+        if (functionProxy == null) {
+            System.out.println("functionProxy没有初始化成功");
+            return null;
+        }
+        try {
+            return functionProxy.invokeMethod("invoke", functionProxyParameters);
+        } catch (Exception exception) {
+            throw ExceptionFactory.getFunctionRuntimeException(exception);
+        }
     }
 
     @Override
@@ -216,11 +230,11 @@ public class FunctionServiceImpl implements FunctionService {
         List<ParameterMetadataVO> params = new ArrayList<>();
         List<Parameter> parameters = FunctionUtils.getMethodParameterAnnotates(handleMethod);
         List<OntologyDataType> types = FunctionUtils.getParameterTypes(handleMethod);
-        for (int i = 0; i < types.size(); i ++) {
+        for (int i = 0; i < types.size(); i++) {
             OntologyDataType type = types.get(i);
             Parameter parameter = parameters.get(i);
             if (type.isOntologyDataType()) {
-                ParameterMetadataVO vo = new ParameterMetadataVO(parameter.name(), type.name(), parameter.description(),  type.getOntologyApi());
+                ParameterMetadataVO vo = new ParameterMetadataVO(parameter.name(), type.name(), parameter.description(), type.getOntologyApi());
                 params.add(vo);
             } else {
                 ParameterMetadataVO vo = new ParameterMetadataVO(parameter.name(), type.name(), parameter.description());
@@ -258,8 +272,8 @@ public class FunctionServiceImpl implements FunctionService {
             throw ExceptionFactory.getFunctionFileNotCompiledException(e);
         }
         try {
-            return (GroovyObject)groovyClass.newInstance();
-        }  catch (IllegalAccessException e) {
+            return (GroovyObject) groovyClass.newInstance();
+        } catch (IllegalAccessException e) {
             throw ExceptionFactory.getFunctionClassNotNewInstanceException(e);
         } catch (InstantiationException e) {
             throw ExceptionFactory.getFunctionClassNotNewInstanceException(e);
@@ -267,8 +281,8 @@ public class FunctionServiceImpl implements FunctionService {
     }
 
     private void importAllObjectType(GroovyClassLoader loader, List<String> objectApis) {
-        for(String objectApi: objectApis) {
-            String  className = StringUtil.capitalize(objectApi);
+        for (String objectApi : objectApis) {
+            String className = StringUtil.capitalize(objectApi);
             String classImplString = "" +
                     "package com.aircas.ptr.foundry.ontology;" +
                     "import com.aircas.ptr.foundry.ontology.function.OntologBaseObject; " +
@@ -286,7 +300,7 @@ public class FunctionServiceImpl implements FunctionService {
         file.delete();
         try {
             if (file.createNewFile()) {
-                System.out.println("file created in path" +  file.getAbsolutePath());
+                System.out.println("file created in path" + file.getAbsolutePath());
                 String decodeCode = URLDecoder.decode(code, "UTF-8");
                 FileUtils.writeStringToFile(file, decodeCode);
             } else {
@@ -313,7 +327,6 @@ public class FunctionServiceImpl implements FunctionService {
             return null;
         }
     }
-
 
 
     private static File getFile(String functionName, Boolean isPreview) {
