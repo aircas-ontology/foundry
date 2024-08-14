@@ -15,7 +15,7 @@ import java.util.List;
 public interface FunctionService {
     Object handle(String functionName, Boolean isPreview, String objectTypes, HashMap<String, Object> parameters) throws FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionRuntimeException, FunctionNotFoundException;
 
-    List<ParameterMetadataVO> getParameters(String functionName, Boolean isPreview, String objectTypes) throws FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionNotFoundException;
+    List<ParameterMetadataVO> getParameters(String functionName) throws FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionNotFoundException;
 
     Boolean write(String functionName, String code, Boolean isPreview);
 

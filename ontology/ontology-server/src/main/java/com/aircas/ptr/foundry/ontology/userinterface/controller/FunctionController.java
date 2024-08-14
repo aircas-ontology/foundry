@@ -7,8 +7,6 @@ import com.aircas.ptr.foundry.ontology.application.service.FunctionService;
 import com.aircas.ptr.foundry.ontology.entity.bo.FunctionBo;
 import com.aircas.ptr.foundry.ontology.entity.vo.FunctionVO;
 import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiImplicitParam;
-import io.swagger.annotations.ApiImplicitParams;
 import io.swagger.annotations.ApiOperation;
 import org.springframework.web.bind.annotation.*;
 
@@ -31,7 +29,7 @@ public class FunctionController {
         String functionName = (String) map.getOrDefault("functionName", null);
         String objectTypes = (String) map.getOrDefault("objectTypes", null);
         Boolean isPreview = (Boolean) map.getOrDefault("isPreview", true);
-        HashMap<String, Object> parameters= (HashMap<String, Object>) map.getOrDefault("parameters", null);
+        HashMap<String, Object> parameters = (HashMap<String, Object>) map.getOrDefault("parameters", null);
         try {
             return DataResult.ofData(functionService.handle(functionName, isPreview, objectTypes, parameters));
         } catch (BaseException e) {
@@ -40,44 +38,48 @@ public class FunctionController {
     }
 
     @ApiOperation(value = "得到函数参数类型")
-    @GetMapping("/parameterMetadatas")
-    public ApiResult getParameterMetadatas(@RequestParam String functionName, @RequestParam String objectTypes, @RequestParam boolean isPreview) {
+    @GetMapping("/parameter/{api}")
+    public ApiResult queryParameter(@PathVariable String api) {
         try {
-            return DataResult.ofData(functionService.getParameters(functionName, isPreview, objectTypes));
+            return DataResult.ofData(functionService.getParameters(api));
         } catch (BaseException e) {
             return DataResult.fail(e.getMessage(), e.code, e.getRootCauseMessage());
         }
     }
 
-    // 将函数
     @ApiOperation(value = "保存函数Metadata")
-    @PostMapping("/saveMetadata")
+    @PostMapping("/meta")
     public DataResult<Integer> saveFunctionMetadata(@RequestBody FunctionBo functionBo) {
         return DataResult.ofData(functionService.saveFunctionMetadata(functionBo));
     }
 
     @ApiOperation(value = "更新函数metadata")
-    @PostMapping("/updateMetadata")
+    @PutMapping("/meta")
     public DataResult<Integer> updateFunctionMetadata(@RequestBody FunctionBo functionBo) {
         return DataResult.ofData(functionService.updateFunctionMetadata(functionBo));
     }
 
-    //读取函数列表
+    @ApiOperation(value = "根据api获取函数metadata")
+    @GetMapping("/meta/{api}")
+    public DataResult<FunctionVO> getMetadataByApi(@PathVariable String api) {
+        return DataResult.ofData(functionService.getFunctionByApi(api));
+    }
+
+    @ApiOperation(value = "删除函数")
+    @DeleteMapping("/meta/{api}")
+    public DataResult<Boolean> delete(@PathVariable String api) {
+
+        return DataResult.ofData(functionService.delete(api));
+    }
+
     @ApiOperation(value = "读取函数列表")
-    @GetMapping("/list")
+    @GetMapping("/meta/list")
     public DataResult<List<FunctionVO>> functionList() {
         return DataResult.ofData(functionService.functionMetadataList());
     }
 
-    //读取函数列表
-    @ApiOperation(value = "根据api获取函数metadata")
-    @GetMapping("/getMetadataByApi")
-    public DataResult<FunctionVO> getMetadataByApi(String api) {
-        return DataResult.ofData(functionService.getFunctionByApi(api));
-    }
-
     @ApiOperation(value = "保存代码")
-    @PostMapping("/write")
+    @PostMapping("/code")
     public DataResult<Boolean> saveCode(@RequestBody HashMap map) {
         String functionName = (String) map.getOrDefault("functionName", null);
         if (functionName == null) {
@@ -92,15 +94,12 @@ public class FunctionController {
     }
 
     @ApiOperation(value = "获取函数代码")
-    @GetMapping("/get")
-    public DataResult<String> getCode(@RequestParam String functionName, @RequestParam Boolean isPreview) {
-        return DataResult.ofData(functionService.get(functionName, isPreview));
+    @GetMapping("/code/{api}")
+    public DataResult<String> getCode(@PathVariable String api) {
+
+        return DataResult.ofData(functionService.get(api,false));
     }
 
-    @ApiOperation(value = "删除函数")
-    @PostMapping("/delete")
-    public DataResult<Boolean> delete(@RequestParam String functionName) {
-        return DataResult.ofData(functionService.delete(functionName));
-    }
+
 
 }

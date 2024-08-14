@@ -198,14 +198,15 @@ public class FunctionServiceImpl implements FunctionService {
     }
 
     @Override
-    public List<ParameterMetadataVO> getParameters(String functionName, Boolean isPreview, String objectTypes)
+    public List<ParameterMetadataVO> getParameters(String functionName)
             throws FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionNotFoundException {
+
         GroovyClassLoader classLoader = GroovyClassLoaderManager.getIndependentClassLoader();
-        List<String> objectApiList = this.getObjectApiList(isPreview, objectTypes, functionName);
+        List<String> objectApiList = Arrays.stream(functionMapper.selectByApi(functionName).getObjectTypes().split(",")).collect(Collectors.toList());
         //将本体涉及的类都import
         importAllObjectType(classLoader, objectApiList);
 
-        GroovyObject functionInstance = getFunctionInstance(classLoader, functionName, isPreview);
+        GroovyObject functionInstance = getFunctionInstance(classLoader, functionName, false);
 
         Method handleMethod = FunctionUtils.getMethod(functionInstance, "handle");
         List<ParameterMetadataVO> params = new ArrayList<>();

@@ -118,6 +118,7 @@ public class OntologyActionServiceImpl implements OntologyActionService {
     public int save(OntologyActionBo ontologyActionBo)
             throws OntologyFunctionParameterPropertyTypeNotSameException, FunctionFileNotCompiled, FunctionNotFoundException,
             FunctionClassNotNewInstanceException, OntologyFunctionBindingParameterNotFoundException, OntologyFunctionMappedPropertyNotFoundException {
+
         checkBindingConsistence(ontologyActionBo);
         OntologyAction ontologyAction = new OntologyAction();
         BeanUtils.copyProperties(ontologyActionBo, ontologyAction);
@@ -138,6 +139,7 @@ public class OntologyActionServiceImpl implements OntologyActionService {
 
     private void checkBindingConsistence(OntologyActionBo ontologyFunctionBo)
             throws OntologyFunctionParameterPropertyTypeNotSameException, FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionNotFoundException, OntologyFunctionBindingParameterNotFoundException, OntologyFunctionMappedPropertyNotFoundException {
+
         String ontologUniqueIdentifier = ontologyFunctionBo.getOntologyUniqueIdentifier();
         List<OntologyPropertyVO> propertyVOS = ontologyPropertyService.selectByOntologyUniqueIdentifier(ontologUniqueIdentifier);
         Map<String, OntologyPropertyVO> propertyMap = new HashMap<>();
@@ -145,9 +147,7 @@ public class OntologyActionServiceImpl implements OntologyActionService {
             propertyMap.put(propertyVO.getUniqueIdentifier(), propertyVO);
         });
 
-        List<ParameterMetadataVO> parameterMetadataVOS = functionService.getParameters(ontologyFunctionBo.getFunctionApi(),
-                false,
-                null);
+        List<ParameterMetadataVO> parameterMetadataVOS = functionService.getParameters(ontologyFunctionBo.getFunctionApi());
         Map<String, ParameterMetadataVO> parameterMetadataMap = new HashMap<>();
         parameterMetadataVOS.forEach(parameterMetadataVO -> {
             parameterMetadataMap.put(parameterMetadataVO.getName(), parameterMetadataVO);
@@ -205,7 +205,7 @@ public class OntologyActionServiceImpl implements OntologyActionService {
         if (ontologyAction == null) {
             throw ExceptionFactory.getOntologyFunctionNotFoundException(null);
         }
-        List<ParameterMetadataVO> parameterMetadataVOList = functionService.getParameters(ontologyAction.getFunctionApi(), false, null);
+        List<ParameterMetadataVO> parameterMetadataVOList = functionService.getParameters(ontologyAction.getFunctionApi());
         List<OntologyFunctionMappingIn> mappingIns = ontologyFunctionMappingInMapper.selectByOntologyFunctionId(ontologyAction.getId());
         List<String> mappedParameters = mappingIns.stream().map(ontologyFunctionMappingIn -> ontologyFunctionMappingIn.getParameterName()).collect(Collectors.toList());
         parameterMetadataVOList.removeIf(parameterMetadataVO -> mappedParameters.contains(parameterMetadataVO.getName()));
@@ -261,7 +261,7 @@ public class OntologyActionServiceImpl implements OntologyActionService {
                 mappingInVO.setPropertyName(currentObjectDesc);
                 mappingInVO.setPropertyType(ontologyType);
             }
-            List<ParameterMetadataVO> parameterMetadataVOList = functionService.getParameters(function.getFunctionApi(), false, null);
+            List<ParameterMetadataVO> parameterMetadataVOList = functionService.getParameters(function.getFunctionApi());
             List<ParameterMetadataVO> matchedParaList = parameterMetadataVOList.stream()
                     .filter(parameterMetadataVO -> parameterMetadataVO.getName().equals(mappingInVO.getParameterName()))
                     .collect(Collectors.toList());
@@ -280,6 +280,8 @@ public class OntologyActionServiceImpl implements OntologyActionService {
 
     @Override
     public int delete(long id) {
+
+        // TODO:未实现
         return 0;
     }
 
