@@ -1,7 +1,9 @@
 package com.aircas.ptr.foundry.ontology.application.service.impl;
 
 
+import com.aircas.ptr.foundry.common.exception.DuplicatedDataException;
 import com.aircas.ptr.foundry.common.util.FileUtil;
+import com.aircas.ptr.foundry.common.util.SnowflakeIdUtil;
 import com.aircas.ptr.foundry.common.util.StringUtil;
 import com.aircas.ptr.foundry.model.po.Function;
 import com.aircas.ptr.foundry.model.po.OntologyMeta;
@@ -52,18 +54,20 @@ public class FunctionServiceImpl implements FunctionService {
 
     @Override
     public int saveFunctionMetadata(FunctionBo functionBo) {
-//        int count = functionMapper.selectByApi(function.getApi());
-//        if (count != 0) {
-//            throw new DuplicatedDataException("函数已经存在");
-//        }
+
+        Function selectByApi = functionMapper.selectByApi(functionBo.getApi());
+        if (selectByApi != null) {
+            throw new DuplicatedDataException("函数已经存在");
+        }
 
         Function function = new Function();
         BeanUtils.copyProperties(functionBo, function);
+        Date now = new Date();
         function.setStatus(1);
-        function.setCreateTime(new Date());
-        function.setUpdateTime(new Date());
-        int count = functionMapper.insert(function);
-        return count;
+        function.setCreateTime(now);
+        function.setUpdateTime(now);
+        function.setId(SnowflakeIdUtil.get());
+        return functionMapper.insert(function);
     }
 
     @Override

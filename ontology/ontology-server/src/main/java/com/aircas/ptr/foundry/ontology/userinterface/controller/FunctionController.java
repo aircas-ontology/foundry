@@ -6,8 +6,10 @@ import com.aircas.ptr.foundry.ontology.Exception.BaseException;
 import com.aircas.ptr.foundry.ontology.application.service.FunctionService;
 import com.aircas.ptr.foundry.ontology.entity.bo.FunctionBo;
 import com.aircas.ptr.foundry.ontology.entity.vo.FunctionVO;
+import com.aircas.ptr.foundry.ontology.repository.param.FunctionAddParam;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
+import org.springframework.beans.BeanUtils;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
@@ -49,7 +51,10 @@ public class FunctionController {
 
     @ApiOperation(value = "保存函数Metadata")
     @PostMapping("/meta")
-    public DataResult<Integer> saveFunctionMetadata(@RequestBody FunctionBo functionBo) {
+    public DataResult<Integer> saveFunctionMetadata(@RequestBody FunctionAddParam addParam) {
+
+        FunctionBo functionBo = new FunctionBo();
+        BeanUtils.copyProperties(addParam, functionBo);
         return DataResult.ofData(functionService.saveFunctionMetadata(functionBo));
     }
 
@@ -81,6 +86,7 @@ public class FunctionController {
     @ApiOperation(value = "保存代码")
     @PostMapping("/code")
     public DataResult<Boolean> saveCode(@RequestBody HashMap map) {
+
         String functionName = (String) map.getOrDefault("functionName", null);
         if (functionName == null) {
             return DataResult.ofData(false);
