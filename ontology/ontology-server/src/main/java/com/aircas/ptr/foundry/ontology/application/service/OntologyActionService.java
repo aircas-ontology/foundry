@@ -6,6 +6,7 @@ import com.aircas.ptr.foundry.ontology.entity.bo.ActionRequestBodyBO;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyActionBo;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyActionVO;
 import com.aircas.ptr.foundry.ontology.entity.vo.ParameterMetadataVO;
+import com.github.pagehelper.PageInfo;
 
 import java.util.List;
 
@@ -22,4 +23,6 @@ public interface OntologyActionService {
     Object handle(ActionRequestBodyBO actionRequestBodyBO) throws FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionRuntimeException, FunctionNotFoundException, OntologyFunctionNotFoundException, OntologyApiNameNotFoundException;
 
     int delete(long id);
+
+    PageInfo<OntologyActionVO> metaList(Integer page, Integer size);
 }

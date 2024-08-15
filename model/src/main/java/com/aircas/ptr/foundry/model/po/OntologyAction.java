@@ -9,6 +9,8 @@ import javax.persistence.Id;
 import javax.persistence.Table;
 import java.util.Date;
 
+import static com.aircas.ptr.foundry.common.constant.DateFormat.DATE_FORMAT2;
+
 
 @Data
 @Entity
@@ -43,10 +45,10 @@ public class OntologyAction {
      */
     private boolean isPreview;
 
-    @JsonFormat(shape = JsonFormat.Shape.NUMBER)
+    @JsonFormat(pattern = DATE_FORMAT2, timezone = "GMT+8")
     private Date createTime;
 
-    @JsonFormat(shape = JsonFormat.Shape.NUMBER)
+    @JsonFormat(pattern = DATE_FORMAT2, timezone = "GMT+8")
     private Date updateTime;
 
     /**

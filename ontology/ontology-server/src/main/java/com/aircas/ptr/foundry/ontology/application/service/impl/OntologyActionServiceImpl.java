@@ -17,6 +17,8 @@ import com.aircas.ptr.foundry.ontology.repository.dao.OntologyMetaMapper;
 import com.aircas.ptr.foundry.ontology.application.service.ObjectService;
 
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyPropertyMapper;
+import com.github.pagehelper.PageHelper;
+import com.github.pagehelper.PageInfo;
 import org.apache.commons.lang.StringUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
@@ -232,8 +234,8 @@ public class OntologyActionServiceImpl implements OntologyActionService {
         OntologyMeta ontologyMeta = ontologyMetaMapper.selectByUniqueIdentifier(ontologyUniqueIdentifier);
         Map<String, OntologyPropertyVO> ontologyPropertiesMap = queryPropertiesByOntologyUniqueIdentifier(ontologyUniqueIdentifier);
         List<OntologyActionVO> result = new ArrayList();
-        for (OntologyAction function : list) {
-            OntologyActionVO ontologyFunctionVO = getFunctionVO(function, ontologyMeta, allMappings, ontologyPropertiesMap);
+        for (OntologyAction action : list) {
+            OntologyActionVO ontologyFunctionVO = getFunctionVO(action, ontologyMeta, allMappings, ontologyPropertiesMap);
             result.add(ontologyFunctionVO);
         }
         return result;
@@ -292,6 +294,24 @@ public class OntologyActionServiceImpl implements OntologyActionService {
 
         // TODO:未实现
         return 0;
+    }
+
+    @Override
+    public PageInfo<OntologyActionVO> metaList(Integer page, Integer size) {
+
+        PageHelper.startPage(page, size);
+        PageInfo<OntologyAction> pageInfo = new PageInfo<>(ontologyActionMapper.selectAll());
+        List<OntologyActionVO> collect = pageInfo.getList().stream().map(item -> {
+            OntologyActionVO ontologyActionVO = new OntologyActionVO();
+            BeanUtils.copyProperties(item, ontologyActionVO);
+            OntologyMeta ontologyMeta = ontologyMetaMapper.selectByUniqueIdentifier(ontologyActionVO.getOntologyUniqueIdentifier());
+            ontologyActionVO.setOntologyDisplayName(ontologyMeta.getDisplayName());
+            return ontologyActionVO;
+        }).collect(Collectors.toList());
+        PageInfo<OntologyActionVO> pageResult = new PageInfo<>(collect);
+        BeanUtils.copyProperties(pageInfo, pageResult);
+        pageResult.setList(collect);
+        return pageResult;
     }
 
 }

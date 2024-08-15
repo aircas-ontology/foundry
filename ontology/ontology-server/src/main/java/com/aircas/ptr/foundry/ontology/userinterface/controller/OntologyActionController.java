@@ -10,7 +10,9 @@ import com.aircas.ptr.foundry.ontology.application.service.OntologyActionService
 import com.aircas.ptr.foundry.ontology.entity.bo.ActionRequestBodyBO;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyActionBo;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyActionMappingInBO;
+import com.aircas.ptr.foundry.ontology.entity.vo.OntologyActionVO;
 import com.aircas.ptr.foundry.ontology.repository.param.ActionAddParam;
+import com.github.pagehelper.PageInfo;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
@@ -56,7 +58,7 @@ public class OntologyActionController {
     }
 
     //读取函数列表
-    @ApiOperation(value = "根据api获取行为元数据")
+    @ApiOperation(value = "根据api获取行为")
     @GetMapping("/meta/{apiName}")
     public ApiResult getMetadataByApi(@PathVariable String apiName) {
         try {
@@ -64,6 +66,13 @@ public class OntologyActionController {
         } catch (BaseException e) {
             return DataResult.fail(e.getMessage(), e.code, e.getRootCauseMessage());
         }
+    }
+
+    @ApiOperation(value = "行为列表")
+    @GetMapping("/meta/list")
+    public DataResult<PageInfo<OntologyActionVO>> queryMetadataList(@RequestParam(required = false, defaultValue = "1") Integer page, @RequestParam(required = false, defaultValue = "10") Integer size) {
+
+        return DataResult.ofData(ontologyActionService.metaList(page, size));
     }
 
     @ApiOperation(value = "行为参数列表")
@@ -76,7 +85,7 @@ public class OntologyActionController {
         }
     }
 
-    @ApiOperation(value = "执行当前函数")
+    @ApiOperation(value = "执行行为")
     @PostMapping("/execute")
     public ApiResult execute(@RequestBody ActionRequestBodyBO actionRequestBodyBO) {
         try {
@@ -86,7 +95,7 @@ public class OntologyActionController {
         }
     }
 
-    @ApiOperation(value = "查询某个本体拥有的函数")
+    @ApiOperation(value = "根据本体id查询行为")
     @GetMapping("/by_ontology")
     public ApiResult queryByOntologyUniqueIdentifier(@RequestParam @ApiParam(value = "本体identifier", required = true) String ontologyUniqueIdentifier) {
         try {
