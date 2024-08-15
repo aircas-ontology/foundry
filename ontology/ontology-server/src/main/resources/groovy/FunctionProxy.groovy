@@ -7,7 +7,7 @@ import java.lang.reflect.Method
 class FunctionProxy {
 
     def invoke(HashMap map) {
-        System.out.println(map)
+//        System.out.println(map)
         HashMap parameters = map.get("parameters")
         List<String> parameterNames = map.get("parameterNames")
         GroovyObject instance = map.get("instance")

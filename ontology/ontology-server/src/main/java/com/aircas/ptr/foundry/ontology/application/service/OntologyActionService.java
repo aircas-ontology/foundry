@@ -2,7 +2,7 @@ package com.aircas.ptr.foundry.ontology.application.service;
 
 
 import com.aircas.ptr.foundry.ontology.Exception.*;
-import com.aircas.ptr.foundry.ontology.entity.bo.ActionRequestBodyBO;
+import com.aircas.ptr.foundry.ontology.repository.param.ActionHandleParam;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyActionBo;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyActionVO;
 import com.aircas.ptr.foundry.ontology.entity.vo.ParameterMetadataVO;
@@ -20,7 +20,7 @@ public interface OntologyActionService {
 
     List<OntologyActionVO> queryByOntologyUniqueIdentifier(String ontologyUniqueIdentifier) throws OntologyFunctionMappedPropertyNotFoundException, FunctionFileNotCompiled, FunctionNotFoundException, FunctionClassNotNewInstanceException;
 
-    Object handle(ActionRequestBodyBO actionRequestBodyBO) throws FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionRuntimeException, FunctionNotFoundException, OntologyFunctionNotFoundException, OntologyApiNameNotFoundException;
+    Object handle(ActionHandleParam actionHandleParam) throws FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionRuntimeException, FunctionNotFoundException, OntologyFunctionNotFoundException, OntologyApiNameNotFoundException, OntologyFunctionMappedPropertyNotFoundException;
 
     int delete(long id);
 

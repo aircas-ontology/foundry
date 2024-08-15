@@ -6,8 +6,7 @@ import com.aircas.ptr.foundry.ontology.Exception.*;
 import com.aircas.ptr.foundry.ontology.application.service.FunctionService;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyActionService;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyPropertyService;
-import com.aircas.ptr.foundry.ontology.entity.bo.ActionRequestBodyBO;
-import com.aircas.ptr.foundry.ontology.entity.bo.OntologyBaseObjectBo;
+import com.aircas.ptr.foundry.ontology.repository.param.ActionHandleParam;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyActionBo;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyActionMappingInBO;
 import com.aircas.ptr.foundry.ontology.entity.vo.*;
@@ -19,6 +18,7 @@ import com.aircas.ptr.foundry.ontology.application.service.ObjectService;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyPropertyMapper;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang.StringUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
@@ -30,6 +30,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class OntologyActionServiceImpl implements OntologyActionService {
 
     @Resource
@@ -53,37 +54,43 @@ public class OntologyActionServiceImpl implements OntologyActionService {
     @Resource
     FunctionService functionService;
 
-    static String ontologySelfIdentifier = "-1";
+    private final static String ONTOLOGY_SELF_IDENTIFIER = "-1";
 
-    static String currentObjectDesc = "当前本体对象";
+    private final static String DEFAULT_OBJECT_DESC = "当前本体对象";
 
     @Override
-    public Object handle(ActionRequestBodyBO actionRequestBodyBO)
-            throws FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionRuntimeException, FunctionNotFoundException, OntologyFunctionNotFoundException, OntologyApiNameNotFoundException {
-        HashMap<String, Object> parameters = actionRequestBodyBO.getParameters();
-        OntologyBaseObjectBo currentObject = actionRequestBodyBO.getCurrentObject();
-        OntologyMeta ontologyMeta = ontologyMetaMapper.selectByApi(currentObject.getApi());
+    public Object handle(ActionHandleParam actionHandleParam)
+            throws FunctionClassNotNewInstanceException,
+            FunctionFileNotCompiled,
+            FunctionRuntimeException,
+            FunctionNotFoundException,
+            OntologyFunctionNotFoundException,
+            OntologyApiNameNotFoundException,
+            OntologyFunctionMappedPropertyNotFoundException {
+
+        HashMap<String, Object> parameters = new HashMap<>();
+        OntologyActionVO actionVO = getMetadataByApi(actionHandleParam.getApi());
+        OntologyMeta ontologyMeta = ontologyMetaMapper.selectByUniqueIdentifier(actionVO.getOntologyUniqueIdentifier());
         if (ontologyMeta == null) {
             throw ExceptionFactory.getOntologyApiNameNotFoundException(null);
         }
-        OntologyActionBo ontologyFunctionBo = queryByApi(
-                actionRequestBodyBO.getFunctionName(),
-                actionRequestBodyBO.isPreview()
-        );
-        String originalFunction = ontologyFunctionBo.getFunctionApi();
+
         //根据mapping结果，把property注入到parameters
-        List<OntologyActionMappingInBO> mappingInList = ontologyFunctionBo.getMappingIns();
-        ObjectOneInfoVO objectOneInfoVO = objectService.queryObjectByPrimaryKey(ontologyMeta.getUniqueIdentifier(), currentObject.getPrimaryKey());
+        ObjectOneInfoVO objectOneInfoVO = objectService.queryObjectByPrimaryKey(ontologyMeta.getUniqueIdentifier(), actionHandleParam.getPrimaryKey());
         List<PropertyValueVO> propertyList = objectOneInfoVO.getProperties();
         Map<String, PropertyValueVO> propertyMap = new HashMap<>();
-        propertyList.forEach(propertyValueVO -> {
-            propertyMap.put(propertyValueVO.getUniqueIdentifier(), propertyValueVO);
-        });
-        for (OntologyActionMappingInBO mappingIn : mappingInList) {
+        propertyList.forEach(propertyValueVO -> propertyMap.put(propertyValueVO.getUniqueIdentifier(), propertyValueVO));
+
+        List<OntologyActionMappingInVO> mappingIns = actionVO.getMappingIns();
+        for (OntologyActionMappingInVO mappingIn : mappingIns) {
             String parameterName = mappingIn.getParameterName();
             String propertyUniqueIdentifier = mappingIn.getPropertyUniqueIdentifier();
-            if (ontologySelfIdentifier.equals(propertyUniqueIdentifier)) {
-                parameters.put(parameterName, actionRequestBodyBO.getCurrentObject());
+            // TODO:如果参数是实体本身，需要将实体作为参数传入，现在逻辑还不完善
+            if (ONTOLOGY_SELF_IDENTIFIER.equals(propertyUniqueIdentifier)) {
+                Map<String, Object> objectMap = new HashMap<>();
+                objectMap.put("primaryKey", actionHandleParam.getPrimaryKey());
+                objectMap.put("api", actionHandleParam.getApi());
+                parameters.put(parameterName, objectMap);
             } else {
                 PropertyValueVO propertyValueVO = propertyMap.get(propertyUniqueIdentifier);
                 String value = propertyValueVO.getValue();
@@ -91,30 +98,9 @@ public class OntologyActionServiceImpl implements OntologyActionService {
             }
         }
         //根据property的值，设置参数的值即可，如果是当前对象，则设置为当前对象，也就是currentObject即可，包含api 和primaryKey
-        Object result = functionService.handle(originalFunction, false, null, parameters);
-        if (actionRequestBodyBO.isPreview()) {
-            //如果是在preview模式下，执行后，就删除
-            delete(ontologyFunctionBo.getId());
-        }
+        Object result = functionService.handle(actionVO.getFunctionApi(), false, null, parameters);
+        log.info(result.toString());
         return result;
-    }
-
-    private OntologyActionBo queryByApi(String functionApi, boolean isPreview) throws OntologyFunctionNotFoundException {
-
-        OntologyAction ontologyAction = ontologyActionMapper.selectByApi(functionApi, isPreview);
-        OntologyActionBo ontologyFunctionBo = new OntologyActionBo();
-        if (ontologyAction == null) {
-            throw ExceptionFactory.getOntologyFunctionNotFoundException(null);
-        }
-        BeanUtils.copyProperties(ontologyAction, ontologyFunctionBo);
-        List<OntologyActionMappingIn> mappingInList = ontologyActionMappingInMapper.selectByOntologyFunctionId(ontologyAction.getId());
-        List<OntologyActionMappingInBO> mappingInBoList = mappingInList.stream().map(ontologyActionMappingIn -> {
-            OntologyActionMappingInBO ontologyFunctionMappingInBo = new OntologyActionMappingInBO();
-            BeanUtils.copyProperties(ontologyActionMappingIn, ontologyFunctionMappingInBo);
-            return ontologyFunctionMappingInBo;
-        }).collect(Collectors.toList());
-        ontologyFunctionBo.setMappingIns(mappingInBoList);
-        return ontologyFunctionBo;
     }
 
     @Override
@@ -184,7 +170,7 @@ public class OntologyActionServiceImpl implements OntologyActionService {
         for (OntologyActionMappingInBO mappingInBO : ontologyFunctionBo.getMappingIns()) {
             String parameterName = mappingInBO.getParameterName();
             String propertyUniqueIdentifier = mappingInBO.getPropertyUniqueIdentifier();
-            if (ontologySelfIdentifier.equals(propertyUniqueIdentifier)) {
+            if (ONTOLOGY_SELF_IDENTIFIER.equals(propertyUniqueIdentifier)) {
 
             } else {
                 ParameterMetadataVO parameterMetadataVO = parameterMetadataMap.get(parameterName);
@@ -207,7 +193,7 @@ public class OntologyActionServiceImpl implements OntologyActionService {
 
             throws OntologyFunctionMappedPropertyNotFoundException, OntologyFunctionNotFoundException, FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionNotFoundException {
 
-        OntologyAction ontologyAction = ontologyActionMapper.selectByApi(apiName, false);
+        OntologyAction ontologyAction = ontologyActionMapper.selectByApi(apiName);
         if (ontologyAction == null) {
             throw ExceptionFactory.getOntologyFunctionNotFoundException(null);
         }
@@ -230,10 +216,11 @@ public class OntologyActionServiceImpl implements OntologyActionService {
     public List<ParameterMetadataVO> getParametersByApi(String functionApi)
             throws FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionNotFoundException, OntologyFunctionNotFoundException {
 
-        OntologyAction ontologyAction = ontologyActionMapper.selectByApi(functionApi, false);
+        OntologyAction ontologyAction = ontologyActionMapper.selectByApi(functionApi);
         if (ontologyAction == null) {
             throw ExceptionFactory.getOntologyFunctionNotFoundException(null);
         }
+        // TODO: 为什么要函数的参数和行为的参数对比
         List<ParameterMetadataVO> parameterMetadataVOList = functionService.getParameters(ontologyAction.getFunctionApi());
         List<OntologyActionMappingIn> mappingIns = ontologyActionMappingInMapper.selectByOntologyFunctionId(ontologyAction.getId());
         List<String> mappedParameters = mappingIns.stream().map(ontologyActionMappingIn -> ontologyActionMappingIn.getParameterName()).collect(Collectors.toList());
@@ -269,14 +256,10 @@ public class OntologyActionServiceImpl implements OntologyActionService {
         BeanUtils.copyProperties(function, ontologyActionVO);
         ontologyActionVO.setOntologyDisplayName(ontologyMeta.getDisplayName());
 
-        List<OntologyActionMappingIn> mappingInList = allMappingIns
-                .stream()
-                .filter(ontologyActionMappingIn -> ontologyActionMappingIn.getOntologyActionId() == ontologyActionVO.getId())
-                .collect(Collectors.toList());
         List<OntologyActionMappingInVO> mappingInVOs = new ArrayList<>();
         String ontologyType = StringUtils.capitalize(ontologyMeta.getApiName());
-        for (OntologyActionMappingIn mapping : mappingInList) {
-            boolean isOntologySelf = ontologySelfIdentifier.equals(mapping.getPropertyUniqueIdentifier());
+        for (OntologyActionMappingIn mapping : allMappingIns) {
+            boolean isOntologySelf = ONTOLOGY_SELF_IDENTIFIER.equals(mapping.getPropertyUniqueIdentifier());
             OntologyActionMappingInVO mappingInVO = new OntologyActionMappingInVO();
             BeanUtils.copyProperties(mapping, mappingInVO);
             if (!isOntologySelf) {
@@ -287,7 +270,7 @@ public class OntologyActionServiceImpl implements OntologyActionService {
                 mappingInVO.setPropertyName(ontologyPropertyVO.getDisplayName());
                 mappingInVO.setPropertyType(ontologyPropertyVO.getPropertyType() != null ? ontologyPropertyVO.getPropertyType().name() : null);
             } else {
-                mappingInVO.setPropertyName(currentObjectDesc);
+                mappingInVO.setPropertyName(DEFAULT_OBJECT_DESC);
                 mappingInVO.setPropertyType(ontologyType);
             }
             List<ParameterMetadataVO> parameterMetadataVOList = functionService.getParameters(function.getFunctionApi());
@@ -303,15 +286,14 @@ public class OntologyActionServiceImpl implements OntologyActionService {
             }
             mappingInVOs.add(mappingInVO);
         }
-        ontologyActionVO.setMappingInList(mappingInVOs);
+        ontologyActionVO.setMappingIns(mappingInVOs);
         return ontologyActionVO;
     }
 
     @Override
     public int delete(long id) {
 
-        // TODO:未实现
-        return 0;
+        return ontologyActionMapper.deleteByPrimaryKey(id);
     }
 
     @Override

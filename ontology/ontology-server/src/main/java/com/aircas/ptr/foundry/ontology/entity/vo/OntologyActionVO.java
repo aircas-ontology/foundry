@@ -8,8 +8,9 @@ import java.util.List;
 
 @Data
 public class OntologyActionVO extends OntologyAction {
+
     //mapping的列表
-    private List<OntologyActionMappingInVO> mappingInList;
+    private List<OntologyActionMappingInVO> mappingIns;
 
     private String ontologyDisplayName;
 }

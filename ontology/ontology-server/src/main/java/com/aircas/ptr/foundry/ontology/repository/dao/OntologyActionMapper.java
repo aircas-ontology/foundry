@@ -8,7 +8,7 @@ import java.util.List;
 @Mapper
 public interface OntologyActionMapper extends tk.mybatis.mapper.common.Mapper<OntologyAction> {
 
-    OntologyAction selectByApi(String api, boolean isPreview);
+    OntologyAction selectByApi(String api);
 
     List<OntologyAction> selectByOntologyIdentifier(String ontologyUniqueIdentifier);
 

@@ -6,7 +6,7 @@ import com.aircas.ptr.foundry.common.base.DataResult;
 import com.aircas.ptr.foundry.ontology.Exception.BaseException;
 import com.aircas.ptr.foundry.ontology.Exception.OntologyFunctionParameterPropertyTypeNotSameException;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyActionService;
-import com.aircas.ptr.foundry.ontology.entity.bo.ActionRequestBodyBO;
+import com.aircas.ptr.foundry.ontology.repository.param.ActionHandleParam;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyActionBo;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyActionMappingInBO;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyActionVO;
@@ -90,21 +90,11 @@ public class OntologyActionController {
         return DataResult.ofData(ontologyActionService.metaList(page, size));
     }
 
-    @ApiOperation(value = "行为参数列表")
+    @ApiOperation(value = "根据api获取行为参数")
     @GetMapping("/parameter/{apiName}")
     public ApiResult getParameterByApi(@PathVariable String apiName) {
         try {
             return DataResult.ofData(ontologyActionService.getParametersByApi(apiName));
-        } catch (BaseException e) {
-            return DataResult.fail(e.getMessage(), e.code, e.getRootCauseMessage());
-        }
-    }
-
-    @ApiOperation(value = "执行行为")
-    @PostMapping("/execute")
-    public ApiResult execute(@RequestBody ActionRequestBodyBO actionRequestBodyBO) {
-        try {
-            return DataResult.ofData(ontologyActionService.handle(actionRequestBodyBO));
         } catch (BaseException e) {
             return DataResult.fail(e.getMessage(), e.code, e.getRootCauseMessage());
         }
@@ -115,6 +105,16 @@ public class OntologyActionController {
     public ApiResult queryByOntologyUniqueIdentifier(@RequestParam @ApiParam(value = "本体identifier", required = true) String ontologyUniqueIdentifier) {
         try {
             return DataResult.ofData(ontologyActionService.queryByOntologyUniqueIdentifier(ontologyUniqueIdentifier));
+        } catch (BaseException e) {
+            return DataResult.fail(e.getMessage(), e.code, e.getRootCauseMessage());
+        }
+    }
+
+    @ApiOperation(value = "执行行为")
+    @PostMapping("/execute")
+    public ApiResult execute(@RequestBody ActionHandleParam param) {
+        try {
+            return DataResult.ofData(ontologyActionService.handle(param));
         } catch (BaseException e) {
             return DataResult.fail(e.getMessage(), e.code, e.getRootCauseMessage());
         }

@@ -40,11 +40,6 @@ public class OntologyAction {
 
     private String description;
 
-    /**
-     * isPreview == 1, 则是测试模式下，使用完后要删除
-     */
-    private boolean isPreview;
-
     @JsonFormat(pattern = DATE_FORMAT2, timezone = "GMT+8")
     private Date createTime;
 

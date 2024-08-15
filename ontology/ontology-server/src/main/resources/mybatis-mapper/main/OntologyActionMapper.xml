@@ -8,7 +8,6 @@
         <result column="ontology_unique_identifier" jdbcType="VARCHAR" property="ontologyUniqueIdentifier"/>
         <result column="description" jdbcType="VARCHAR" property="description"/>
         <result column="id" jdbcType="BIGINT" property="id"/>
-        <result column="is_preview" jdbcType="INTEGER" property="isPreview"/>
         <result column="create_time" jdbcType="TIMESTAMP" property="createTime"/>
         <result column="update_time" jdbcType="TIMESTAMP" property="updateTime"/>
         <result column="display_name" jdbcType="VARCHAR" property="displayName"/>
@@ -26,7 +25,7 @@
         select
         <include refid="Base_Column_List"/>
         from ontology_action
-        where api = #{api,jdbcType=VARCHAR} and is_preview = #{isPreview, jdbcType=BOOLEAN}
+        where api = #{api,jdbcType=VARCHAR}
     </select>
 
     <select id="selectByOntologyIdentifier" resultMap="BaseResultMap">
@@ -34,7 +33,7 @@
         select
         <include refid="Base_Column_List"/>
         from ontology_action
-        where ontology_unique_identifier = #{ontologyUniqueIdentifier, jdbcType=VARCHAR} and is_preview = false
+        where ontology_unique_identifier = #{ontologyUniqueIdentifier, jdbcType=VARCHAR}
     </select>
 
 </mapper>

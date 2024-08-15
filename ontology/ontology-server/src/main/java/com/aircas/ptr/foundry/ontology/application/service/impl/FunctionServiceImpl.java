@@ -281,6 +281,7 @@ public class FunctionServiceImpl implements FunctionService {
     }
 
     private void importAllObjectType(GroovyClassLoader loader, List<String> objectApis) {
+        // TODO: 这个类被加载了3次，需要调试。
         for (String objectApi : objectApis) {
             String className = StringUtil.capitalize(objectApi);
             String classImplString = "" +
@@ -289,7 +290,6 @@ public class FunctionServiceImpl implements FunctionService {
                     "class " + className + "  extends OntologBaseObject {  " +
                     className + "(String primaryKey) { super(\"" + objectApi + "\", primaryKey)}" +
                     "}";
-            System.out.println(classImplString);
             loader.parseClass(classImplString);
         }
     }
