@@ -9,7 +9,7 @@ import javax.persistence.Id;
 import javax.persistence.Table;
 import java.util.Date;
 
-import static com.aircas.ptr.foundry.common.constant.DateFormat.DATE_FORMAT2;
+import static com.aircas.ptr.foundry.common.constant.DateFormat.DATE_FORMAT_DEFAULT;
 
 
 @Data
@@ -40,10 +40,10 @@ public class OntologyAction {
 
     private String description;
 
-    @JsonFormat(pattern = DATE_FORMAT2, timezone = "GMT+8")
+    @JsonFormat(pattern = DATE_FORMAT_DEFAULT, timezone = "GMT+8")
     private Date createTime;
 
-    @JsonFormat(pattern = DATE_FORMAT2, timezone = "GMT+8")
+    @JsonFormat(pattern = DATE_FORMAT_DEFAULT, timezone = "GMT+8")
     private Date updateTime;
 
     /**
@@ -52,19 +52,24 @@ public class OntologyAction {
     private String displayName;
 
     /**
-     * 任务开始时间
+     * 临时，任务开始时间
      */
     private Date taskStartTime;
 
     /**
-     * 任务结束时间
+     * 临时，任务结束时间
      */
     private Date taskEndTime;
 
     /**
-     * 定时任务表达式
+     * 临时，定时任务表达式
      */
     private String taskCorn;
+
+    /**
+     * 临时，任务的实体主键列表，以逗号分隔
+     */
+    private String objectPrimaryKey;
 
     private static final long serialVersionUID = 1L;
 }

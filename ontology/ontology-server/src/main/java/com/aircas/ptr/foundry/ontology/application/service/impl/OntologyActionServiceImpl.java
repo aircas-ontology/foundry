@@ -140,7 +140,7 @@ public class OntologyActionServiceImpl implements OntologyActionService {
         OntologyAction ontologyAction = new OntologyAction();
         BeanUtils.copyProperties(ontologyActionBo, ontologyAction);
         int status = ontologyActionMapper.updateByPrimaryKeySelective(ontologyAction);
-        if (ontologyActionBo.getMappingIns() == null && ontologyActionBo.getMappingIns().size() == 0) {
+        if (ontologyActionBo.getMappingIns() == null || ontologyActionBo.getMappingIns().size() == 0) {
             return status;
         }
         for (OntologyActionMappingInBO mappingInBO : ontologyActionBo.getMappingIns()) {

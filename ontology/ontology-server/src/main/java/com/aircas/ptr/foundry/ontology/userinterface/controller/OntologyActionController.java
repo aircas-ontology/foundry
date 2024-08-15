@@ -38,12 +38,18 @@ public class OntologyActionController {
         try {
             OntologyActionBo ontologyActionBo = new OntologyActionBo();
             BeanUtils.copyProperties(param, ontologyActionBo);
-            List<OntologyActionMappingInBO> collect = param.getMappingIns().stream().map(item -> {
-                OntologyActionMappingInBO ontologyActionMappingInBO = new OntologyActionMappingInBO();
-                BeanUtils.copyProperties(item, ontologyActionMappingInBO);
-                return ontologyActionMappingInBO;
-            }).collect(Collectors.toList());
-            ontologyActionBo.setMappingIns(collect);
+            if (param.getMappingIns() != null && param.getMappingIns().size() > 0) {
+                List<OntologyActionMappingInBO> collect = param.getMappingIns().stream().map(item -> {
+                    OntologyActionMappingInBO ontologyActionMappingInBO = new OntologyActionMappingInBO();
+                    BeanUtils.copyProperties(item, ontologyActionMappingInBO);
+                    return ontologyActionMappingInBO;
+                }).collect(Collectors.toList());
+                ontologyActionBo.setMappingIns(collect);
+            }
+            if (param.getObjectPrimaryKeys() != null && param.getObjectPrimaryKeys().size() > 0) {
+                String objectKeys = param.getObjectPrimaryKeys().stream().collect(Collectors.joining(","));
+                ontologyActionBo.setObjectPrimaryKey(objectKeys);
+            }
             return DataResult.ofData(ontologyActionService.save(ontologyActionBo));
         } catch (BaseException e) {
             return DataResult.fail(e.getMessage(), e.code, e.getRootCauseMessage());
@@ -57,12 +63,18 @@ public class OntologyActionController {
         OntologyActionBo ontologyActionBo = new OntologyActionBo();
         BeanUtils.copyProperties(param, ontologyActionBo);
         ontologyActionBo.setApi(null);
-        List<OntologyActionMappingInBO> collect = param.getMappingIns().stream().map(item -> {
-            OntologyActionMappingInBO ontologyActionMappingInBO = new OntologyActionMappingInBO();
-            BeanUtils.copyProperties(item, ontologyActionMappingInBO);
-            return ontologyActionMappingInBO;
-        }).collect(Collectors.toList());
-        ontologyActionBo.setMappingIns(collect);
+        if (param.getMappingIns() != null && param.getMappingIns().size() > 0) {
+            List<OntologyActionMappingInBO> collect = param.getMappingIns().stream().map(item -> {
+                OntologyActionMappingInBO ontologyActionMappingInBO = new OntologyActionMappingInBO();
+                BeanUtils.copyProperties(item, ontologyActionMappingInBO);
+                return ontologyActionMappingInBO;
+            }).collect(Collectors.toList());
+            ontologyActionBo.setMappingIns(collect);
+        }
+        if (param.getObjectPrimaryKeys() != null && param.getObjectPrimaryKeys().size() > 0) {
+            String objectKeys = param.getObjectPrimaryKeys().stream().collect(Collectors.joining(","));
+            ontologyActionBo.setObjectPrimaryKey(objectKeys);
+        }
         return DataResult.ofData(ontologyActionService.update(ontologyActionBo));
     }
 

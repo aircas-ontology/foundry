@@ -6,7 +6,7 @@ import lombok.Data;
 
 import java.util.Date;
 
-import static com.aircas.ptr.foundry.common.constant.DateFormat.DATE_FORMAT2;
+import static com.aircas.ptr.foundry.common.constant.DateFormat.DATE_FORMAT_DEFAULT;
 
 /**
  * @author dongjunchuan
@@ -34,13 +34,13 @@ public class OntologyMetaVO {
     /**
      * 记录创建时间
      */
-    @JsonFormat(pattern = DATE_FORMAT2, timezone = "GMT+8")
+    @JsonFormat(pattern = DATE_FORMAT_DEFAULT, timezone = "GMT+8")
     private Date createTime;
 
     /**
      * 记录修改时间
      */
-    @JsonFormat(pattern = DATE_FORMAT2, timezone = "GMT+8")
+    @JsonFormat(pattern = DATE_FORMAT_DEFAULT, timezone = "GMT+8")
     private Date updateTime;
 
     /**

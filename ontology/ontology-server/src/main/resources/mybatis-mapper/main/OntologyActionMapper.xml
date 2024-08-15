@@ -14,6 +14,7 @@
         <result column="task_start_time" jdbcType="TIMESTAMP" property="taskStartTime"/>
         <result column="task_end_time" jdbcType="TIMESTAMP" property="taskEndTime"/>
         <result column="task_corn" jdbcType="VARCHAR" property="taskCorn"/>
+        <result column="object_primary_key" jdbcType="VARCHAR" property="objectPrimaryKey"/>
     </resultMap>
     <sql id="Base_Column_List">
         <!-- @mbg.generated: generated automatically, do not modify! -->

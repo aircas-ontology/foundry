@@ -8,7 +8,7 @@ import javax.persistence.Entity;
 import javax.persistence.Id;
 import java.util.Date;
 
-import static com.aircas.ptr.foundry.common.constant.DateFormat.DATE_FORMAT2;
+import static com.aircas.ptr.foundry.common.constant.DateFormat.DATE_FORMAT_DEFAULT;
 
 
 @Data
@@ -39,10 +39,10 @@ public class OntologyActionMappingIn {
      */
     private String propertyUniqueIdentifier;
 
-    @JsonFormat(pattern = DATE_FORMAT2, timezone = "GMT+8")
+    @JsonFormat(pattern = DATE_FORMAT_DEFAULT, timezone = "GMT+8")
     private Date createTime;
 
-    @JsonFormat(pattern = DATE_FORMAT2, timezone = "GMT+8")
+    @JsonFormat(pattern = DATE_FORMAT_DEFAULT, timezone = "GMT+8")
     private Date updateTime;
 
     private static final long serialVersionUID = 1L;
