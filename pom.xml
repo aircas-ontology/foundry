@@ -72,6 +72,7 @@
         <elasticsearch-rest-high-level-client.version>7.14.2</elasticsearch-rest-high-level-client.version>
         <locationtech-jts-core.version>1.16.0-RC1</locationtech-jts-core.version>
         <owl-api-version>5.5.0</owl-api-version>
+        <quartz.version>2.3.0</quartz.version>
     </properties>
     <dependencyManagement>
         <dependencies>
@@ -254,6 +255,16 @@
                 <groupId>net.sourceforge.owlapi</groupId>
                 <artifactId>owlapi-distribution</artifactId>
                 <version>${owl-api-version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.quartz-scheduler</groupId>
+                <artifactId>quartz</artifactId>
+                <version>${quartz.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.quartz-scheduler</groupId>
+                <artifactId>quartz-jobs</artifactId>
+                <version>${quartz.version}</version>
             </dependency>
 <!--            <dependency>-->
 <!--                <groupId>org.springframework.cloud</groupId>-->

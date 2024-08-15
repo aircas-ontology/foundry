@@ -3,17 +3,13 @@ package com.aircas.ptr.foundry.ontology.application.service.impl;
 import com.aircas.ptr.foundry.common.util.SnowflakeIdUtil;
 import com.aircas.ptr.foundry.model.po.*;
 import com.aircas.ptr.foundry.ontology.Exception.*;
-import com.aircas.ptr.foundry.ontology.application.service.FunctionService;
-import com.aircas.ptr.foundry.ontology.application.service.OntologyActionService;
-import com.aircas.ptr.foundry.ontology.application.service.OntologyPropertyService;
-import com.aircas.ptr.foundry.ontology.repository.param.ActionHandleParam;
+import com.aircas.ptr.foundry.ontology.application.service.*;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyActionBo;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyActionMappingInBO;
 import com.aircas.ptr.foundry.ontology.entity.vo.*;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyActionMappingInMapper;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyActionMapper;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyMetaMapper;
-import com.aircas.ptr.foundry.ontology.application.service.ObjectService;
 
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyPropertyMapper;
 import com.github.pagehelper.PageHelper;
@@ -21,6 +17,7 @@ import com.github.pagehelper.PageInfo;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang.StringUtils;
 import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import lombok.RequiredArgsConstructor;
 
@@ -59,7 +56,7 @@ public class OntologyActionServiceImpl implements OntologyActionService {
     private final static String DEFAULT_OBJECT_DESC = "当前本体对象";
 
     @Override
-    public Object handle(ActionHandleParam actionHandleParam)
+    public Object handle(String primaryKey, String api)
             throws FunctionClassNotNewInstanceException,
             FunctionFileNotCompiled,
             FunctionRuntimeException,
@@ -69,14 +66,14 @@ public class OntologyActionServiceImpl implements OntologyActionService {
             OntologyFunctionMappedPropertyNotFoundException {
 
         HashMap<String, Object> parameters = new HashMap<>();
-        OntologyActionVO actionVO = getMetadataByApi(actionHandleParam.getApi());
+        OntologyActionVO actionVO = getMetadataByApi(api);
         OntologyMeta ontologyMeta = ontologyMetaMapper.selectByUniqueIdentifier(actionVO.getOntologyUniqueIdentifier());
         if (ontologyMeta == null) {
             throw ExceptionFactory.getOntologyApiNameNotFoundException(null);
         }
 
         //根据mapping结果，把property注入到parameters
-        ObjectOneInfoVO objectOneInfoVO = objectService.queryObjectByPrimaryKey(ontologyMeta.getUniqueIdentifier(), actionHandleParam.getPrimaryKey());
+        ObjectOneInfoVO objectOneInfoVO = objectService.queryObjectByPrimaryKey(ontologyMeta.getUniqueIdentifier(), primaryKey);
         List<PropertyValueVO> propertyList = objectOneInfoVO.getProperties();
         Map<String, PropertyValueVO> propertyMap = new HashMap<>();
         propertyList.forEach(propertyValueVO -> propertyMap.put(propertyValueVO.getUniqueIdentifier(), propertyValueVO));
@@ -88,8 +85,8 @@ public class OntologyActionServiceImpl implements OntologyActionService {
             // TODO:如果参数是实体本身，需要将实体作为参数传入，现在逻辑还不完善
             if (ONTOLOGY_SELF_IDENTIFIER.equals(propertyUniqueIdentifier)) {
                 Map<String, Object> objectMap = new HashMap<>();
-                objectMap.put("primaryKey", actionHandleParam.getPrimaryKey());
-                objectMap.put("api", actionHandleParam.getApi());
+                objectMap.put("primaryKey", primaryKey);
+                objectMap.put("api", api);
                 parameters.put(parameterName, objectMap);
             } else {
                 PropertyValueVO propertyValueVO = propertyMap.get(propertyUniqueIdentifier);
@@ -149,6 +146,36 @@ public class OntologyActionServiceImpl implements OntologyActionService {
             status = ontologyActionMappingInMapper.updateByPrimaryKeySelective(mappingIn);
         }
         return status;
+    }
+
+    @Override
+    public boolean handleTask(String api) {
+
+        OntologyAction action = ontologyActionMapper.selectByApi(api);
+        String objectPrimaryKeys = action.getObjectPrimaryKey();
+        if (StringUtils.isBlank(objectPrimaryKeys)) {
+            return false;
+        }
+        Arrays.stream(objectPrimaryKeys.split(",")).forEach(objectKey -> {
+            try {
+                handle(objectKey, api);
+            } catch (FunctionClassNotNewInstanceException e) {
+                throw new RuntimeException(e);
+            } catch (FunctionFileNotCompiled e) {
+                throw new RuntimeException(e);
+            } catch (FunctionRuntimeException e) {
+                throw new RuntimeException(e);
+            } catch (FunctionNotFoundException e) {
+                throw new RuntimeException(e);
+            } catch (OntologyFunctionNotFoundException e) {
+                throw new RuntimeException(e);
+            } catch (OntologyApiNameNotFoundException e) {
+                throw new RuntimeException(e);
+            } catch (OntologyFunctionMappedPropertyNotFoundException e) {
+                throw new RuntimeException(e);
+            }
+        });
+        return true;
     }
 
     private void checkBindingConsistence(OntologyActionBo ontologyFunctionBo)

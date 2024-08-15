@@ -18,7 +18,8 @@
     </resultMap>
     <sql id="Base_Column_List">
         <!-- @mbg.generated: generated automatically, do not modify! -->
-        api, function_api, ontology_unique_identifier, description, id, create_time, update_time, display_name
+        api, function_api, ontology_unique_identifier, description, id, create_time, update_time, display_name,
+        task_start_time, task_end_time, task_corn, object_primary_key
     </sql>
 
     <select id="selectByApi" resultMap="BaseResultMap">

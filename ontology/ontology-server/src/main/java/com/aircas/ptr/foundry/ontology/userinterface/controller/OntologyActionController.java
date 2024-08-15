@@ -3,8 +3,8 @@ package com.aircas.ptr.foundry.ontology.userinterface.controller;
 import com.aircas.ptr.foundry.common.base.ApiResult;
 import com.aircas.ptr.foundry.common.base.DataResult;
 
-import com.aircas.ptr.foundry.ontology.Exception.BaseException;
-import com.aircas.ptr.foundry.ontology.Exception.OntologyFunctionParameterPropertyTypeNotSameException;
+import com.aircas.ptr.foundry.ontology.Exception.*;
+import com.aircas.ptr.foundry.ontology.application.service.DynamicActionTaskService;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyActionService;
 import com.aircas.ptr.foundry.ontology.repository.param.ActionHandleParam;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyActionBo;
@@ -15,7 +15,9 @@ import com.github.pagehelper.PageInfo;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
+import org.quartz.SchedulerException;
 import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
@@ -30,6 +32,9 @@ public class OntologyActionController {
 
     @Resource
     OntologyActionService ontologyActionService;
+
+    @Autowired
+    DynamicActionTaskService dynamicActionTaskService;
 
     @ApiOperation(value = "新增行为")
     @PostMapping("/meta")
@@ -122,13 +127,51 @@ public class OntologyActionController {
         }
     }
 
-    @ApiOperation(value = "执行行为")
+    @ApiOperation(value = "用具体实体执行行为")
     @PostMapping("/execute")
     public ApiResult execute(@RequestBody ActionHandleParam param) {
         try {
-            return DataResult.ofData(ontologyActionService.handle(param));
+            return DataResult.ofData(ontologyActionService.handle(param.getPrimaryKey(), param.getApi()));
         } catch (BaseException e) {
             return DataResult.fail(e.getMessage(), e.code, e.getRootCauseMessage());
+        }
+    }
+
+    @ApiOperation(value = "执行行为")
+    @GetMapping("/execute/{api}")
+    public ApiResult execute(@PathVariable String api) throws
+            FunctionNotFoundException,
+            OntologyFunctionNotFoundException,
+            FunctionFileNotCompiled,
+            OntologyFunctionMappedPropertyNotFoundException,
+            FunctionClassNotNewInstanceException,
+            SchedulerException {
+
+        OntologyActionVO actionVO = ontologyActionService.getMetadataByApi(api);
+        boolean res = dynamicActionTaskService.addActionTask(actionVO.getApi(), actionVO.getTaskCorn());
+        if (res) {
+            return DataResult.success();
+        } else {
+            return DataResult.fail("行为执行失败");
+        }
+    }
+
+    @ApiOperation(value = "停止行为")
+    @GetMapping("/stop/{api}")
+    public ApiResult stop(@PathVariable String api) throws
+            FunctionNotFoundException,
+            OntologyFunctionNotFoundException,
+            FunctionFileNotCompiled,
+            OntologyFunctionMappedPropertyNotFoundException,
+            FunctionClassNotNewInstanceException,
+            SchedulerException {
+
+        OntologyActionVO actionVO = ontologyActionService.getMetadataByApi(api);
+        boolean res = dynamicActionTaskService.removeActionTask(actionVO.getApi());
+        if (res) {
+            return DataResult.success();
+        } else {
+            return DataResult.fail("行为停止失败");
         }
     }
 }
