@@ -147,6 +147,24 @@ public class OntologyActionServiceImpl implements OntologyActionService {
         return status;
     }
 
+
+    @Override
+    public int update(OntologyActionBo ontologyActionBo) {
+
+        OntologyAction ontologyAction = new OntologyAction();
+        BeanUtils.copyProperties(ontologyActionBo, ontologyAction);
+        int status = ontologyActionMapper.updateByPrimaryKeySelective(ontologyAction);
+        if (ontologyActionBo.getMappingIns() == null && ontologyActionBo.getMappingIns().size() == 0) {
+            return status;
+        }
+        for (OntologyActionMappingInBO mappingInBO : ontologyActionBo.getMappingIns()) {
+            OntologyActionMappingIn mappingIn = new OntologyActionMappingIn();
+            BeanUtils.copyProperties(mappingInBO, mappingIn);
+            status = ontologyActionMappingInMapper.updateByPrimaryKeySelective(mappingIn);
+        }
+        return status;
+    }
+
     private void checkBindingConsistence(OntologyActionBo ontologyFunctionBo)
             throws OntologyFunctionParameterPropertyTypeNotSameException, FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionNotFoundException, OntologyFunctionBindingParameterNotFoundException, OntologyFunctionMappedPropertyNotFoundException {
 

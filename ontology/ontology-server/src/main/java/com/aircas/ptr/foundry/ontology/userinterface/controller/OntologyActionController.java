@@ -3,7 +3,6 @@ package com.aircas.ptr.foundry.ontology.userinterface.controller;
 import com.aircas.ptr.foundry.common.base.ApiResult;
 import com.aircas.ptr.foundry.common.base.DataResult;
 
-import com.aircas.ptr.foundry.common.util.BeanUtil;
 import com.aircas.ptr.foundry.ontology.Exception.BaseException;
 import com.aircas.ptr.foundry.ontology.Exception.OntologyFunctionParameterPropertyTypeNotSameException;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyActionService;
@@ -34,7 +33,7 @@ public class OntologyActionController {
 
     @ApiOperation(value = "新增行为")
     @PostMapping("/meta")
-    public ApiResult update(@RequestBody ActionAddParam param) throws OntologyFunctionParameterPropertyTypeNotSameException {
+    public ApiResult metaSave(@RequestBody ActionAddParam param) throws OntologyFunctionParameterPropertyTypeNotSameException {
 
         try {
             OntologyActionBo ontologyActionBo = new OntologyActionBo();
@@ -49,6 +48,22 @@ public class OntologyActionController {
         } catch (BaseException e) {
             return DataResult.fail(e.getMessage(), e.code, e.getRootCauseMessage());
         }
+    }
+
+    @ApiOperation(value = "修改行为")
+    @PutMapping("/meta")
+    public ApiResult metaUpdate(@RequestBody ActionAddParam param) throws OntologyFunctionParameterPropertyTypeNotSameException {
+
+        OntologyActionBo ontologyActionBo = new OntologyActionBo();
+        BeanUtils.copyProperties(param, ontologyActionBo);
+        ontologyActionBo.setApi(null);
+        List<OntologyActionMappingInBO> collect = param.getMappingIns().stream().map(item -> {
+            OntologyActionMappingInBO ontologyActionMappingInBO = new OntologyActionMappingInBO();
+            BeanUtils.copyProperties(item, ontologyActionMappingInBO);
+            return ontologyActionMappingInBO;
+        }).collect(Collectors.toList());
+        ontologyActionBo.setMappingIns(collect);
+        return DataResult.ofData(ontologyActionService.update(ontologyActionBo));
     }
 
     @ApiOperation(value = "依据id删除行为")

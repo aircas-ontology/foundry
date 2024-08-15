@@ -25,4 +25,6 @@ public interface OntologyActionService {
     int delete(long id);
 
     PageInfo<OntologyActionVO> metaList(Integer page, Integer size);
+
+    int update(OntologyActionBo ontologyActionBo);
 }

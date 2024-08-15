@@ -19,6 +19,9 @@ import static com.aircas.ptr.foundry.common.constant.DateFormat.DATE_FORMAT2;
 @ApiModel(description = "行为新增模型")
 public class ActionAddParam {
 
+    @ApiModelProperty(value = "id", example = "1264894134988943")
+    private Long id;
+
     @ApiModelProperty(value = "行为api，用来调用", required = true, example = "cal")
     private String api;
 
