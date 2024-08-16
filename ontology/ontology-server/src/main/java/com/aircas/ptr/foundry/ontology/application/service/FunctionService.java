@@ -34,4 +34,6 @@ public interface FunctionService {
     FunctionVO queryById(Long id);
 
     Boolean deleteById(Long id);
+
+    int getCountByStatus(int status);
 }

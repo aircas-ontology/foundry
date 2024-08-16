@@ -71,5 +71,7 @@ public class OntologyAction {
      */
     private String objectPrimaryKey;
 
+    private Integer status;
+
     private static final long serialVersionUID = 1L;
 }

@@ -34,4 +34,6 @@ public interface OntologyLinkGroupService {
     List<OntologyLinkGroup> selectByOntologyUniqueIdentifierTo(String ontologyUniqueIdentifier);
 
     OntologyLinkGroup selectByUniqueIdentifier(String uniqueIdentifier);
+
+    int getCountByStatus(int status);
 }

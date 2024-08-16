@@ -127,6 +127,14 @@ public class FunctionServiceImpl implements FunctionService {
     }
 
     @Override
+    public int getCountByStatus(int status) {
+
+        Function function = new Function();
+        function.setStatus(status);
+        return functionMapper.selectCount(function);
+    }
+
+    @Override
     public List<FunctionVO> functionMetadataList() {
         List<Function> list = functionMapper.getAllFunctions();
         List<FunctionVO> retResult = new ArrayList();

@@ -59,4 +59,6 @@ public interface OntologyLinkGroupMapper {
     int updateByPrimaryKey(OntologyLinkGroup record);
 
     List<OntologyLinkGroup> getLinkByOntologies(List<String> ontologyIds);
+
+    Integer countByStatus(int status);
 }

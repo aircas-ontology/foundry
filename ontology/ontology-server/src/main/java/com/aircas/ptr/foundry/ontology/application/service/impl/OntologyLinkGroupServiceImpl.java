@@ -175,6 +175,12 @@ public class OntologyLinkGroupServiceImpl implements OntologyLinkGroupService {
         return ontologyLinkGroupMapper.selectByUniqueIdentifier(uniqueIdentifier);
     }
 
+    @Override
+    public int getCountByStatus(int status) {
+
+        return ontologyLinkGroupMapper.countByStatus(status);
+    }
+
     private void setChildLinks(OntologyLinkGroupVO linkGroupVO, long forwardChildLinkId, long backwardChildLinkId) {
         OntologyChildLink forwardChildLink = ontologyChildLinkMapper.selectByPrimaryKey(forwardChildLinkId);
         OntologyChildLinkVO forwardChildLinkVO = new OntologyChildLinkVO();

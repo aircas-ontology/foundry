@@ -178,6 +178,14 @@ public class OntologyActionServiceImpl implements OntologyActionService {
         return true;
     }
 
+    @Override
+    public int getCountByStatus(int status) {
+
+        OntologyAction action = new OntologyAction();
+        action.setStatus(status);
+        return ontologyActionMapper.selectCount(action);
+    }
+
     private void checkBindingConsistence(OntologyActionBo ontologyFunctionBo)
             throws OntologyFunctionParameterPropertyTypeNotSameException, FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionNotFoundException, OntologyFunctionBindingParameterNotFoundException, OntologyFunctionMappedPropertyNotFoundException {
 

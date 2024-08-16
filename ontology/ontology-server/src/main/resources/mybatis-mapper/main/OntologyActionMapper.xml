@@ -15,11 +15,12 @@
         <result column="task_end_time" jdbcType="TIMESTAMP" property="taskEndTime"/>
         <result column="task_corn" jdbcType="VARCHAR" property="taskCorn"/>
         <result column="object_primary_key" jdbcType="VARCHAR" property="objectPrimaryKey"/>
+        <result column="status" jdbcType="BIGINT" property="status"/>
     </resultMap>
     <sql id="Base_Column_List">
         <!-- @mbg.generated: generated automatically, do not modify! -->
         api, function_api, ontology_unique_identifier, description, id, create_time, update_time, display_name,
-        task_start_time, task_end_time, task_corn, object_primary_key
+        task_start_time, task_end_time, task_corn, object_primary_key,status
     </sql>
 
     <select id="selectByApi" resultMap="BaseResultMap">

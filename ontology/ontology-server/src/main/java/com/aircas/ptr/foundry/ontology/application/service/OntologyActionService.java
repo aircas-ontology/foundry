@@ -28,4 +28,6 @@ public interface OntologyActionService {
     int update(OntologyActionBo ontologyActionBo);
 
     boolean handleTask(String api);
+
+    int getCountByStatus(int status);
 }
