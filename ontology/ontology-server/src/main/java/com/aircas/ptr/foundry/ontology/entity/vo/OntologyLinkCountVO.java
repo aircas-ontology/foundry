@@ -24,9 +24,6 @@ public class OntologyLinkCountVO {
     @Override
     public boolean equals(Object obj) {
 
-        if (obj.equals(this)) {
-            return true;
-        }
         if (!(obj instanceof OntologyLinkCountVO)) {
             return false;
         }
