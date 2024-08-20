@@ -1,7 +1,6 @@
 import com.aircas.ptr.foundry.ontology.Xtmb;
 import com.aircas.ptr.foundry.ontology.function.Parameter
 
-
 class generateXTMBDesc {
 
     String handle(@Parameter(name = "primaryKey", description = "舰船的主键") String primaryKey,
