@@ -7,6 +7,7 @@ import com.aircas.ptr.foundry.ontology.application.service.FunctionService;
 import com.aircas.ptr.foundry.ontology.entity.bo.FunctionBo;
 import com.aircas.ptr.foundry.ontology.entity.vo.FunctionVO;
 import com.aircas.ptr.foundry.ontology.repository.param.FunctionAddParam;
+import com.alibaba.fastjson.JSONObject;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import org.springframework.beans.BeanUtils;
@@ -33,7 +34,7 @@ public class FunctionController {
         Boolean isPreview = (Boolean) map.getOrDefault("isPreview", true);
         HashMap<String, Object> parameters = (HashMap<String, Object>) map.getOrDefault("parameters", null);
         try {
-            return DataResult.ofData(functionService.handle(functionName, isPreview, objectTypes, parameters));
+            return DataResult.ofData(functionService.handle(functionName, false, objectTypes, parameters));
         } catch (BaseException e) {
             return DataResult.fail(e.getMessage(), e.code, e.getRootCauseMessage());
         }

@@ -137,7 +137,7 @@ public class OntologyActionController {
         }
     }
 
-    @ApiOperation(value = "执行行为")
+    @ApiOperation(value = "启动行为")
     @GetMapping("/execute/{api}")
     public ApiResult execute(@PathVariable String api) throws
             FunctionNotFoundException,
