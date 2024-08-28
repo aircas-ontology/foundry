@@ -3,9 +3,11 @@ package com.aircas.ptr.foundry.ontology.userinterface.controller;
 import com.aircas.ptr.foundry.common.base.ApiResult;
 import com.aircas.ptr.foundry.common.base.DataResult;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyGroupService;
+import com.aircas.ptr.foundry.ontology.application.service.OntologyMetaService;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyGroupBO;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyGroupVO;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyLinkGraphVO;
+import com.aircas.ptr.foundry.ontology.entity.vo.OntologyMetaVO;
 import com.aircas.ptr.foundry.ontology.repository.param.OntologyGroupAddParam;
 import com.github.pagehelper.PageInfo;
 import io.swagger.annotations.Api;
@@ -29,6 +31,9 @@ public class OntologyGroupController {
 
     @Resource
     private OntologyGroupService ontologyGroupService;
+
+    @Resource
+    private OntologyMetaService ontologyMetaService;
 
     @PostMapping("/add")
     @ApiOperation(value = "新增本体分组")
@@ -83,5 +88,12 @@ public class OntologyGroupController {
     public DataResult<OntologyLinkGraphVO> getOntologyGroupLinks(@PathVariable String id) {
 
         return DataResult.ofData(ontologyGroupService.getOntologyGroupLinks(id));
+    }
+
+    @GetMapping("/meta/{groupId}")
+    @ApiOperation(value = "查询分组下所有本体元数据", notes = "通过本体分组id，查询所有本体元数据")
+    public DataResult<List<OntologyMetaVO>> listOntologiesByGroup(@PathVariable(value = "groupId") String groupId) {
+
+        return DataResult.ofData(ontologyMetaService.listOntologiesByGroup(groupId));
     }
 }

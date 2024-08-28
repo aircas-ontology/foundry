@@ -79,11 +79,4 @@ public class OntologyMetaController {
 
         return DataResult.ofData(ontologyMetaService.searchGroupOntologies(keyword, page, size));
     }
-
-    @GetMapping("/list/{groupId}")
-    @ApiOperation(value = "查询分组下的本体列表", notes = "通过本体分组id，查询所有本体")
-    public DataResult<List<OntologyMetaVO>> listOntologiesByGroup(@PathVariable(value = "groupId") String groupId) {
-
-        return DataResult.ofData(ontologyMetaService.listOntologiesByGroup(groupId));
-    }
 }

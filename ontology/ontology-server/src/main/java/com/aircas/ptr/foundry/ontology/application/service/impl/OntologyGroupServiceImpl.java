@@ -90,10 +90,12 @@ public class OntologyGroupServiceImpl implements OntologyGroupService {
         List<OntologyGroupVO> collect = pageInfo.getList().stream().map(item -> {
             OntologyGroupVO ontologyGroupVO = new OntologyGroupVO();
             BeanUtils.copyProperties(item, ontologyGroupVO);
+            ontologyGroupVO.setCount(ontologyMetaService.countByGroup(item.getGroupId()));
             return ontologyGroupVO;
         }).collect(Collectors.toList());
-        PageInfo<OntologyGroupVO> pageResult = new PageInfo<>(collect);
+        PageInfo<OntologyGroupVO> pageResult = new PageInfo<>();
         BeanUtils.copyProperties(pageInfo, pageResult);
+        pageResult.setList(collect);
         return pageResult;
     }
 

@@ -297,4 +297,11 @@
         where meta_group_id like CONCAT('%',#{groupId,jdbcType=VARCHAR},'%')
         and status = 1
     </select>
+
+    <select id="sumByGroup" resultType="java.lang.Integer">
+        select count(1)
+        from ontology_meta
+        where meta_group_id like CONCAT('%', #{groupId,jdbcType=VARCHAR}, '%')
+          and status = 1
+    </select>
 </mapper>

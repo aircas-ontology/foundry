@@ -113,6 +113,12 @@ public class OntologyMetaServiceImpl implements OntologyMetaService {
         return ontologyMetaVOList;
     }
 
+    @Override
+    public Integer countByGroup(String groupId) {
+
+        return ontologyMetaMapper.sumByGroup(groupId);
+    }
+
     /**
      * 插入所有的datasource字段作为本体属性
      *

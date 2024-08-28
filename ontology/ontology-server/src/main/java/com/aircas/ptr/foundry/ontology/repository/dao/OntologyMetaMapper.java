@@ -42,4 +42,6 @@ public interface OntologyMetaMapper {
     List<OntologyMeta> searchOntologies(String keyword);
 
     List<OntologyMeta> listOntologiesByGroup(String groupId);
+
+    int sumByGroup(String groupId);
 }

@@ -16,6 +16,7 @@ import java.util.List;
  */
 
 public interface OntologyMetaService {
+
     OntologyMetaVO getOntologyById(Long id);
 
     OntologyMetaVO getOntologyByApi(String api);
@@ -30,11 +31,6 @@ public interface OntologyMetaService {
 
     List<OntologyMetaVO> getAllOntologies();
 
-    /**
-     * 统计本体数量
-     *
-     * @return
-     */
     Integer getCountByStatus(int status);
 
     List<OntologyMetaVO> searchOntologies(String keyword);
@@ -44,4 +40,6 @@ public interface OntologyMetaService {
     List<OntologyMetaVO> listOntologiesByGroup(String groupId);
 
     List<OntologyMetaVO> selectByUniqueIdentifiers(List<String> ontologyUniqueIdentifiers);
+
+    Integer countByGroup(String groupId);
 }
