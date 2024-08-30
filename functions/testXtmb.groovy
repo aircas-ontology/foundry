@@ -5,6 +5,7 @@ import com.aircas.ptr.foundry.ontology.function.Parameter
 class testXtmb{
 
     String handle(@Parameter(name = "xtmb", description = "舰船对象作为参数") Xtmb xtmb) {
+
         def mbmc = xtmb.mbmc
         def jcgk = xtmb.jcgk
         def ds = xtmb.ds

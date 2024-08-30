@@ -21,5 +21,5 @@ public interface OntologyPropertyService {
 
     OntologyPropertyVO selectByUniqueIdentifier(String uniqueIdentifier);
 
-//    OntologyPropertyVO selectById(Long id);
+    List<OntologyPropertyVO> selectByOntologyApi(String api);
 }

@@ -11,9 +11,9 @@ import com.aircas.ptr.foundry.ontology.repository.dao.OntologyPropertyMapper;
 import com.aircas.ptr.foundry.ontology.repository.datalakeDao.ObjectMapper;
 import com.aircas.ptr.foundry.ontology.repository.datalakeDao.TableMetadataMapper;
 import com.aircas.ptr.foundry.ontology.repository.param.FilterParam;
+import com.aircas.ptr.foundry.ontology.repository.param.QuerySortParam;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
-import javafx.collections.transformation.FilteredList;
 import joptsimple.internal.Strings;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
@@ -122,14 +122,20 @@ public class ObjectServiceImpl implements ObjectService {
     }
 
     @Override
-    public PageInfo<Map<String, Object>> queryObjectByFilter(String ontologyUniqueIdentifier, List<FilterParam> filter, Integer page, Integer size) {
+    public PageInfo<Map<String, Object>> queryObjectByFilter(String ontologyApi, List<FilterParam> filter, Integer page, Integer size, List<QuerySortParam> sorts) {
 
-        List<OntologyPropertyVO> ontologyPropertyList = ontologyPropertyService.selectByOntologyUniqueIdentifier(ontologyUniqueIdentifier);
+        List<OntologyPropertyVO> ontologyPropertyList = ontologyPropertyService.selectByOntologyApi(ontologyApi);
         String sql = buildBaseSQL(ontologyPropertyList);
+        assert filter != null;
+        assert !filter.isEmpty();
         String where = filter.stream().map(item -> item.getFilterKey() + "='" + item.getFilterValue() + "'").collect(Collectors.joining(" and "));
         if (sql.equals(null) || sql.isEmpty() || where.equals(null) || where.isEmpty()) return null;
         PageHelper.startPage(page, size);
-        List<Map<String, Object>> rawResult = objectMapper.queryAnySQL(sql + " where " + where);
+        sql += " where " + where;
+        if (sorts != null && !sorts.isEmpty()) {
+            sql += " order by " + sorts.stream().map(QuerySortParam::formatOrder).collect(Collectors.joining(","));
+        }
+        List<Map<String, Object>> rawResult = objectMapper.queryAnySQL(sql);
         PageInfo pageResult = new PageInfo<>(rawResult);
         BeanUtils.copyProperties(pageResult, rawResult);
         return pageResult;
@@ -160,7 +166,7 @@ public class ObjectServiceImpl implements ObjectService {
 
         List<FilterParam> filter = new ArrayList<>();
         filter.add(new FilterParam(filterKey, filterValue));
-        return queryObjectByFilter(dataOntologyId, filter, page, size);
+        return queryObjectByFilter(dataOntologyId, filter, page, size, null);
     }
 
     @Override

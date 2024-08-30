@@ -10,7 +10,7 @@ import tk.mybatis.mapper.autoconfigure.MapperAutoConfiguration;
 @SpringBootApplication(scanBasePackages = "com.aircas.ptr", exclude = {DataSourceAutoConfiguration.class, DruidDataSourceAutoConfigure.class, MapperAutoConfiguration.class})
 public class OntologyServerApplication {
 
-    private static ApplicationContext context;
+    public static ApplicationContext context;
 
     public static void main(String[] args) {
         context = SpringApplication.run(OntologyServerApplication.class, args);

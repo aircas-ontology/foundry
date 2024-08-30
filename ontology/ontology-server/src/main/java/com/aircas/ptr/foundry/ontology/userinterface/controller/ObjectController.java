@@ -1,11 +1,14 @@
 package com.aircas.ptr.foundry.ontology.userinterface.controller;
 
 import com.aircas.ptr.foundry.common.base.DataResult;
+import com.aircas.ptr.foundry.common.constant.QuerySortEnum;
+import com.aircas.ptr.foundry.ontology.OntologyServerApplication;
 import com.aircas.ptr.foundry.ontology.application.service.ObjectService;
 import com.aircas.ptr.foundry.ontology.entity.vo.*;
 import com.aircas.ptr.foundry.ontology.repository.param.FilterParam;
 import com.aircas.ptr.foundry.ontology.repository.param.OntologyObjectQueryByLinkParam;
 import com.aircas.ptr.foundry.ontology.repository.param.OntologyObjectQueryParam;
+import com.aircas.ptr.foundry.ontology.repository.param.QuerySortParam;
 import com.github.pagehelper.PageInfo;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
@@ -13,6 +16,7 @@ import io.swagger.annotations.ApiParam;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -63,7 +67,8 @@ public class ObjectController {
     @ApiOperation(value = "实体分页条件查询", notes = "根据条件查询本体下实体详情列表")
     public DataResult<PageInfo<Map<String, Object>>> queryObjectByFilter(@RequestBody OntologyObjectQueryParam param) {
 
-        return DataResult.ofData(objectService.queryObjectByFilter(param.getOntologyId(), param.getFilter(), param.getPage(), param.getSize()));
+
+        return DataResult.ofData(objectService.queryObjectByFilter(param.getOntologyApi(), param.getFilter(), param.getPage(), param.getSize(), param.getSorts()));
     }
 
     @PostMapping("/list/by_link")

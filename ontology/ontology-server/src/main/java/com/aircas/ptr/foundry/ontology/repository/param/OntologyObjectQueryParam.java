@@ -16,8 +16,8 @@ import java.util.List;
 @ApiModel(description = "实体数据条件查询参数")
 public class OntologyObjectQueryParam {
 
-    @ApiModelProperty(value = "本体id", example = "545649a4-8bba-4d0c-b265-362e95fd4ffb", required = true)
-    private String ontologyId;
+    @ApiModelProperty(value = "本体api", example = "mbgjd", required = true)
+    private String ontologyApi;
 
     @ApiModelProperty(value = "页数", required = false, example = "1")
     private Integer page;
@@ -25,6 +25,9 @@ public class OntologyObjectQueryParam {
     @ApiModelProperty(value = "条数", required = false, example = "10")
     private Integer size;
 
-    @ApiModelProperty(value = "查询条件", required = true, example = "[{\"filterKey\":\"mbbh\",\"filterValue\":7}]")
+    @ApiModelProperty(value = "查询条件", required = true, example = "[{\"filterKey\":\"mbbh\",\"filterValue\":342454}]")
     private List<FilterParam> filter;
+
+    @ApiModelProperty(value = "查询条件", required = true, example = "[{\"colum\":\"wzsj\",\"order\":\"DESC\"}]")
+    private List<QuerySortParam> sorts;
 }

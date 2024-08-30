@@ -5,6 +5,7 @@ import com.aircas.ptr.foundry.ontology.entity.vo.DirectoryItemVO;
 import com.aircas.ptr.foundry.ontology.entity.vo.ObjectOneInfoVO;
 import com.aircas.ptr.foundry.ontology.entity.vo.ObjectWithLinkedInfoVO;
 import com.aircas.ptr.foundry.ontology.repository.param.FilterParam;
+import com.aircas.ptr.foundry.ontology.repository.param.QuerySortParam;
 import com.github.pagehelper.PageInfo;
 
 import java.util.List;
@@ -24,7 +25,7 @@ public interface ObjectService {
 
     PageInfo<Map<String, Object>> queryObjectList(String uniqueIdentifier, Integer page, Integer size);
 
-    PageInfo<Map<String, Object>> queryObjectByFilter(String ontologyUniqueIdentifier, List<FilterParam> filter, Integer page, Integer size);
+    PageInfo<Map<String, Object>> queryObjectByFilter(String ontologyApi, List<FilterParam> filter, Integer page, Integer size, List<QuerySortParam> sorts);
 
     PageInfo<Map<String, Object>> queryObjectByLink(String linkId, String ontologyId, ObjectOneInfoVO obj, Integer page, Integer size);
 }
