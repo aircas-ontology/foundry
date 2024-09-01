@@ -4,8 +4,11 @@ import com.aircas.ptr.foundry.common.base.ApiResult;
 import com.aircas.ptr.foundry.common.base.DataResult;
 
 import com.aircas.ptr.foundry.ontology.Exception.*;
+import com.aircas.ptr.foundry.ontology.application.service.ActionHandleTaskService;
 import com.aircas.ptr.foundry.ontology.application.service.DynamicActionTaskService;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyActionService;
+import com.aircas.ptr.foundry.ontology.entity.bo.ActionHandleTaskBO;
+import com.aircas.ptr.foundry.ontology.repository.param.ActionHandleConfigParam;
 import com.aircas.ptr.foundry.ontology.repository.param.ActionHandleParam;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyActionBo;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyActionMappingInBO;
@@ -31,10 +34,13 @@ import java.util.stream.Collectors;
 public class OntologyActionController {
 
     @Resource
-    OntologyActionService ontologyActionService;
+    private OntologyActionService ontologyActionService;
 
     @Autowired
-    DynamicActionTaskService dynamicActionTaskService;
+    private DynamicActionTaskService dynamicActionTaskService;
+
+    @Autowired
+    private ActionHandleTaskService actionHandleTaskService;
 
     @ApiOperation(value = "新增行为")
     @PostMapping("/meta")
@@ -50,10 +56,6 @@ public class OntologyActionController {
                     return ontologyActionMappingInBO;
                 }).collect(Collectors.toList());
                 ontologyActionBo.setMappingIns(collect);
-            }
-            if (param.getObjectPrimaryKeys() != null && param.getObjectPrimaryKeys().size() > 0) {
-                String objectKeys = param.getObjectPrimaryKeys().stream().collect(Collectors.joining(","));
-                ontologyActionBo.setObjectPrimaryKey(objectKeys);
             }
             return DataResult.ofData(ontologyActionService.save(ontologyActionBo));
         } catch (BaseException e) {
@@ -75,10 +77,6 @@ public class OntologyActionController {
                 return ontologyActionMappingInBO;
             }).collect(Collectors.toList());
             ontologyActionBo.setMappingIns(collect);
-        }
-        if (param.getObjectPrimaryKeys() != null && param.getObjectPrimaryKeys().size() > 0) {
-            String objectKeys = param.getObjectPrimaryKeys().stream().collect(Collectors.joining(","));
-            ontologyActionBo.setObjectPrimaryKey(objectKeys);
         }
         return DataResult.ofData(ontologyActionService.update(ontologyActionBo));
     }
@@ -127,6 +125,20 @@ public class OntologyActionController {
         }
     }
 
+    @ApiOperation(value = "配置行为执行逻辑")
+    @PostMapping("/config")
+    public ApiResult config(@RequestBody ActionHandleConfigParam param) {
+
+        switch (param.getHandleType()) {
+            case RULE:
+                return DataResult.ofData(ontologyActionService.configRule(param.getActionApi(), param.getObjectPrimaryKeys(), param.getRules(), param.getRuleConnectType()));
+            case TASK:
+                return DataResult.ofData(ontologyActionService.configTask(param.getActionApi(), param.getObjectPrimaryKeys(), param.getTaskStartTime(), param.getTaskEndTime(), param.getTaskCorn()));
+            default:
+                return DataResult.ofData("操作不允许");
+        }
+    }
+
     @ApiOperation(value = "执行行为")
     @PostMapping("/execute")
     public ApiResult execute(@RequestBody ActionHandleParam param) {
@@ -148,7 +160,8 @@ public class OntologyActionController {
             SchedulerException {
 
         OntologyActionVO actionVO = ontologyActionService.getMetadataByApi(api);
-        boolean res = dynamicActionTaskService.addActionTask(actionVO.getApi(), actionVO.getTaskCorn());
+        ActionHandleTaskBO actionHandleTaskBO = actionHandleTaskService.selectByActionId(actionVO.getId());
+        boolean res = dynamicActionTaskService.addActionTask(actionHandleTaskBO.getId(), actionHandleTaskBO.getCorn());
         if (res) {
             return DataResult.success();
         } else {
@@ -159,15 +172,16 @@ public class OntologyActionController {
     @ApiOperation(value = "停止行为（定时任务）")
     @GetMapping("/task/stop/{api}")
     public ApiResult stop(@PathVariable String api) throws
+            SchedulerException,
             FunctionNotFoundException,
             OntologyFunctionNotFoundException,
             FunctionFileNotCompiled,
             OntologyFunctionMappedPropertyNotFoundException,
-            FunctionClassNotNewInstanceException,
-            SchedulerException {
+            FunctionClassNotNewInstanceException {
 
         OntologyActionVO actionVO = ontologyActionService.getMetadataByApi(api);
-        boolean res = dynamicActionTaskService.removeActionTask(actionVO.getApi());
+        ActionHandleTaskBO actionHandleTaskBO = actionHandleTaskService.selectByActionId(actionVO.getId());
+        boolean res = dynamicActionTaskService.removeActionTask(actionHandleTaskBO.getId());
         if (res) {
             return DataResult.success();
         } else {

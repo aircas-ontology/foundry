@@ -1,9 +1,12 @@
 package com.aircas.ptr.foundry.ontology.application.service.impl;
 
+import com.aircas.ptr.foundry.common.constant.ActionRuleConnectType;
 import com.aircas.ptr.foundry.common.util.SnowflakeIdUtil;
 import com.aircas.ptr.foundry.model.po.*;
 import com.aircas.ptr.foundry.ontology.Exception.*;
 import com.aircas.ptr.foundry.ontology.application.service.*;
+import com.aircas.ptr.foundry.ontology.entity.bo.ActionHandleRuleBO;
+import com.aircas.ptr.foundry.ontology.entity.bo.ActionHandleTaskBO;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyActionBo;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyActionMappingInBO;
 import com.aircas.ptr.foundry.ontology.entity.vo.*;
@@ -13,11 +16,14 @@ import com.aircas.ptr.foundry.ontology.repository.dao.OntologyMetaMapper;
 
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyPropertyMapper;
 import com.aircas.ptr.foundry.ontology.repository.param.ActionHandleMappingInParam;
+import com.aircas.ptr.foundry.ontology.repository.param.ActionHandleRuleAddParam;
+import com.alibaba.fastjson.JSON;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang.StringUtils;
 import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import lombok.RequiredArgsConstructor;
 
@@ -25,6 +31,8 @@ import javax.annotation.Resource;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import static com.aircas.ptr.foundry.common.constant.ActionHandleTypeEnum.RULE;
+import static com.aircas.ptr.foundry.common.constant.ActionHandleTypeEnum.TASK;
 import static com.aircas.ptr.foundry.common.constant.ActionMappingInTypeEnum.ONTOLOGY;
 
 @Service
@@ -52,6 +60,12 @@ public class OntologyActionServiceImpl implements OntologyActionService {
 
     @Resource
     private FunctionService functionService;
+
+    @Autowired
+    private ActionHandleRuleService actionHandleRuleService;
+
+    @Autowired
+    private ActionHandleTaskService actionHandleTaskService;
 
     private final static String DEFAULT_OBJECT_DESC = "当前本体对象";
 
@@ -158,16 +172,17 @@ public class OntologyActionServiceImpl implements OntologyActionService {
     }
 
     @Override
-    public void handleTask(String api) {
+    public void handleTask(Long actionHandleTaskId) {
 
-        OntologyAction action = ontologyActionMapper.selectByApi(api);
-        String objectPrimaryKeys = action.getObjectPrimaryKey();
+        ActionHandleTaskBO actionHandleTaskBO = actionHandleTaskService.selectById(actionHandleTaskId);
+        String objectPrimaryKeys = actionHandleTaskBO.getObjectPrimaryKey();
+        OntologyAction action = ontologyActionMapper.selectByPrimaryKey(actionHandleTaskBO.getActionId());
         if (StringUtils.isBlank(objectPrimaryKeys)) {
             return;
         }
         Arrays.stream(objectPrimaryKeys.split(",")).forEach(objectKey -> {
             try {
-                handle(objectKey, api, null);
+                handle(objectKey, action.getApi(), null);
             } catch (FunctionClassNotNewInstanceException e) {
                 throw new RuntimeException(e);
             } catch (FunctionFileNotCompiled e) {
@@ -192,6 +207,43 @@ public class OntologyActionServiceImpl implements OntologyActionService {
         OntologyAction action = new OntologyAction();
         action.setStatus(status);
         return ontologyActionMapper.selectCount(action);
+    }
+
+    @Override
+    public boolean configRule(String actionApi, List<String> objectPrimaryKeys, List<ActionHandleRuleAddParam> rules, ActionRuleConnectType ruleConnectType) {
+
+        // 0.更新action的handle类型
+        OntologyAction action = ontologyActionMapper.selectByApi(actionApi);
+        action.setHandleType(RULE.getCode());
+        ontologyActionMapper.updateByPrimaryKeySelective(action);
+        // 1.插入数据库
+        ActionHandleRuleBO actionHandleRuleBO = new ActionHandleRuleBO();
+        actionHandleRuleBO.setActionId(action.getId());
+        // TODO: 需要考虑所有实体情况
+        actionHandleRuleBO.setObjectPrimaryKey(String.join(",", objectPrimaryKeys));
+        actionHandleRuleBO.setRuleConnectType(ruleConnectType.getCode());
+        actionHandleRuleBO.setRules(JSON.toJSONString(rules));
+        actionHandleRuleService.insert(actionHandleRuleBO);
+        // TODO: 2.调用数据更改任务，插入任务
+        return true;
+    }
+
+    @Override
+    public boolean configTask(String actionApi, List<String> objectPrimaryKeys, Date taskStartTime, Date taskEndTime, String taskCorn) {
+
+        // 0.更新action的handle类型
+        OntologyAction action = ontologyActionMapper.selectByApi(actionApi);
+        action.setHandleType(TASK.getCode());
+        ontologyActionMapper.updateByPrimaryKeySelective(action);
+
+        ActionHandleTaskBO actionHandleTaskBO = new ActionHandleTaskBO();
+        actionHandleTaskBO.setActionId(action.getId());
+        actionHandleTaskBO.setObjectPrimaryKey(String.join(",", objectPrimaryKeys));
+        actionHandleTaskBO.setStartTime(taskStartTime);
+        actionHandleTaskBO.setEndTime(taskEndTime);
+        actionHandleTaskBO.setCorn(taskCorn);
+
+        return actionHandleTaskService.insert(actionHandleTaskBO) > 0;
     }
 
     private void checkBindingConsistence(OntologyActionBo ontologyFunctionBo)
@@ -275,6 +327,8 @@ public class OntologyActionServiceImpl implements OntologyActionService {
     @Override
     public List<OntologyActionVO> queryByOntologyUniqueIdentifier(String ontologyUniqueIdentifier)
             throws OntologyFunctionMappedPropertyNotFoundException, FunctionFileNotCompiled, FunctionNotFoundException, FunctionClassNotNewInstanceException {
+
+        // TODO：参数错误
         List<OntologyAction> list = ontologyActionMapper.selectByOntologyIdentifier(ontologyUniqueIdentifier);
         List<Long> functionIds = list.stream().map(ontologyAction -> ontologyAction.getId()).collect(Collectors.toList());
         List<OntologyActionMappingIn> allMappings = ontologyActionMappingInMapper.selectByIds(functionIds);
@@ -342,6 +396,7 @@ public class OntologyActionServiceImpl implements OntologyActionService {
     @Override
     public PageInfo<OntologyActionVO> metaList(Integer page, Integer size) {
 
+        // TODO: 参数获取失败
         PageHelper.startPage(page, size);
         PageInfo<OntologyAction> pageInfo = new PageInfo<>(ontologyActionMapper.selectAll());
         List<OntologyActionVO> collect = pageInfo.getList().stream().map(item -> {

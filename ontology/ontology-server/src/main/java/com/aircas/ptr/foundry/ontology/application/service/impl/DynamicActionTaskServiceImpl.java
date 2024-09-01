@@ -17,39 +17,39 @@ public class DynamicActionTaskServiceImpl implements DynamicActionTaskService {
 
     private final static String ACTION_TASK_GROUP = "DynamicActionTask";
     private final static String ACTION_TASK_TRIGGER = "DynamicActionTaskTrigger";
-    private final static String ACTION_TASK_API = "actionApi";
-    private Map<String, JobKey> tasks = new ConcurrentHashMap<>();
+    private final static String ACTION_TASK_ID = "taskId";
+    private final Map<Long, JobKey> tasks = new ConcurrentHashMap<>();
 
     @Autowired
     private Scheduler scheduler;
 
     @Override
-    public boolean addActionTask(String taskApi, String corn) throws SchedulerException {
+    public boolean addActionTask(Long taskId, String corn) throws SchedulerException {
 
-        if (tasks.containsKey(taskApi)) {
-            boolean b = removeActionTask(taskApi);
+        if (tasks.containsKey(taskId)) {
+            boolean b = removeActionTask(taskId);
             if (!b) {
                 return false;
             }
         }
         JobDetail jobDetail = JobBuilder.newJob(ActionTaskJob.class)
-                .withIdentity(taskApi.toString(), ACTION_TASK_GROUP)
-                .usingJobData(ACTION_TASK_API, taskApi)
+                .withIdentity(taskId.toString(), ACTION_TASK_GROUP)
+                .usingJobData(ACTION_TASK_ID, taskId)
                 .build();
         CronTrigger trigger = TriggerBuilder.newTrigger()
-                .withIdentity(taskApi.toString(), ACTION_TASK_TRIGGER)
+                .withIdentity(taskId.toString(), ACTION_TASK_TRIGGER)
                 .withSchedule(CronScheduleBuilder.cronSchedule(corn))
                 .build();
         scheduler.scheduleJob(jobDetail, trigger);
-        tasks.put(taskApi, jobDetail.getKey());
+        tasks.put(taskId, jobDetail.getKey());
 
         return true;
     }
 
     @Override
-    public boolean removeActionTask(String taskApi) throws SchedulerException {
+    public boolean removeActionTask(Long taskId) throws SchedulerException {
 
-        JobKey jobKey = tasks.remove(taskApi);
+        JobKey jobKey = tasks.remove(taskId);
         if (jobKey != null) {
             return scheduler.deleteJob(jobKey);
         }

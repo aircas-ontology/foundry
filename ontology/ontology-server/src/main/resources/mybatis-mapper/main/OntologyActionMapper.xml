@@ -11,16 +11,13 @@
         <result column="create_time" jdbcType="TIMESTAMP" property="createTime"/>
         <result column="update_time" jdbcType="TIMESTAMP" property="updateTime"/>
         <result column="display_name" jdbcType="VARCHAR" property="displayName"/>
-        <result column="task_start_time" jdbcType="TIMESTAMP" property="taskStartTime"/>
-        <result column="task_end_time" jdbcType="TIMESTAMP" property="taskEndTime"/>
-        <result column="task_corn" jdbcType="VARCHAR" property="taskCorn"/>
-        <result column="object_primary_key" jdbcType="VARCHAR" property="objectPrimaryKey"/>
         <result column="status" jdbcType="BIGINT" property="status"/>
+        <result column="handle_type" jdbcType="BIGINT" property="handleType"/>
     </resultMap>
     <sql id="Base_Column_List">
         <!-- @mbg.generated: generated automatically, do not modify! -->
         api, function_api, ontology_unique_identifier, description, id, create_time, update_time, display_name,
-        task_start_time, task_end_time, task_corn, object_primary_key,status
+        status,handle_type
     </sql>
 
     <select id="selectByApi" resultMap="BaseResultMap">
@@ -36,7 +33,7 @@
         select
         <include refid="Base_Column_List"/>
         from ontology_action
-        where ontology_unique_identifier = #{ontologyUniqueIdentifier, jdbcType=VARCHAR}
+        where ontology_unique_identifier = #{ontologyUniqueIdentifier,jdbcType=VARCHAR}
     </select>
 
 </mapper>

@@ -1,13 +1,16 @@
 package com.aircas.ptr.foundry.ontology.application.service;
 
 
+import com.aircas.ptr.foundry.common.constant.ActionRuleConnectType;
 import com.aircas.ptr.foundry.ontology.Exception.*;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyActionBo;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyActionVO;
 import com.aircas.ptr.foundry.ontology.entity.vo.ParameterMetadataVO;
 import com.aircas.ptr.foundry.ontology.repository.param.ActionHandleMappingInParam;
+import com.aircas.ptr.foundry.ontology.repository.param.ActionHandleRuleAddParam;
 import com.github.pagehelper.PageInfo;
 
+import java.util.Date;
 import java.util.List;
 
 public interface OntologyActionService {
@@ -28,7 +31,11 @@ public interface OntologyActionService {
 
     int update(OntologyActionBo ontologyActionBo);
 
-    void handleTask(String api);
+    void handleTask(Long actionHandleTaskId);
 
     int getCountByStatus(int status);
+
+    boolean configRule(String actionApi, List<String> objectPrimaryKeys, List<ActionHandleRuleAddParam> rules, ActionRuleConnectType ruleConnectType);
+
+    boolean configTask(String actionApi, List<String> objectPrimaryKeys, Date taskStartTime, Date taskEndTime, String taskCorn);
 }

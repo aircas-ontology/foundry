@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.aircas.ptr.foundry.ontology.repository.dao.ActionHandleRuleMapper">
+
+    <select id="selectByActionId"
+            resultType="com.aircas.ptr.foundry.ontology.repository.dao.ActionHandleRuleMapper">
+        select *
+        from action_handle_rule
+        where action_id = #{actionId,jdbcType=INTEGER}
+    </select>
+</mapper>
