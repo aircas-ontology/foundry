@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.aircas.ptr.foundry.sync.repository.dao.ObjectMapper">
+    <resultMap id="BaseResultMap" type="com.aircas.ptr.foundry.model.po.DirectoryItem">
+        <result column="primaryKey" jdbcType="VARCHAR" property="primaryKey"/>
+        <result column="displayName" jdbcType="VARCHAR" property="displayName"/>
+    </resultMap>
+
+    <resultMap id="ObjectResultMap" type="java.util.HashMap">
+
+    </resultMap>
+
+    <select id="queryDirectory" resultMap="BaseResultMap">
+        select ${primaryKey} as primaryKey,
+               ${titleKey}   as displayName
+        from ${tableName}
+    </select>
+
+    <select id="queryAnySQL" resultMap="ObjectResultMap">
+        ${query}
+    </select>
+
+</mapper>
+

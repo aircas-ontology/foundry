@@ -1,0 +1,51 @@
+server:
+  port: 36003
+  servlet:
+    context-path: /sync
+
+spring:
+  application:
+    name: sync
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    #url: jdbc:postgresql://${PG_DB_HOST}:${PG_DB_PORT}/${PG_DB_NAME}?currentSchema=ontology
+    url: jdbc:postgresql://192.168.9.17:35432/postgres?currentSchema=ontology
+    username: iecas
+    password: iecas123
+    validation-query: SELECT 1
+    test-on-borrow: true
+
+mybatis:
+  configuration:
+    lazy-loading-enabled: true
+    aggressive-lazy-loading: false
+    map-underscore-to-camel-case: true
+  mapper-locations: classpath*:/mybatis-mapper/*Mapper.xml
+
+postgres:
+  slot:
+    name: sync
+    size: 100
+  table:
+    schema: ontology
+    prefix: ontology_meta
+#eureka:
+#  instance:
+#    prefer-ip-address: true
+#    lease-renewal-interval-in-seconds: 5
+#    lease-expiration-duration-in-seconds: 30
+#    secure-port-enabled: false
+#    non-secure-port-enabled: true
+#  client:
+#    register-with-eureka: true
+#    registry-fetch-interval-seconds: 5
+#    fetch-registry: true
+#    service-url:
+#      defaultZone: http://localhost:36000/eureka/
+
+ontology:
+  swagger:
+    enable: true
+
+elasticsearch:
+  addr: 192.168.9.101:9200
