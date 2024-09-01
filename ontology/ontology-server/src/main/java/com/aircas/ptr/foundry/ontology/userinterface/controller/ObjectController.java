@@ -9,6 +9,7 @@ import com.aircas.ptr.foundry.ontology.repository.param.FilterParam;
 import com.aircas.ptr.foundry.ontology.repository.param.OntologyObjectQueryByLinkParam;
 import com.aircas.ptr.foundry.ontology.repository.param.OntologyObjectQueryParam;
 import com.aircas.ptr.foundry.ontology.repository.param.QuerySortParam;
+import com.alibaba.fastjson.JSONObject;
 import com.github.pagehelper.PageInfo;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;

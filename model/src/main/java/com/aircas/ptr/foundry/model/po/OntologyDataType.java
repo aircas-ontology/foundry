@@ -5,6 +5,7 @@ import org.semanticweb.owlapi.vocab.OWL2Datatype;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * 目前本体属性类型的string
@@ -15,6 +16,7 @@ public enum OntologyDataType {
     Bool("Bool"),
 
     Int("Int"),
+    Long("Long"),
     Float("Float"),
     Double("Double"),
     Decimal("Decimal"),
@@ -41,7 +43,8 @@ public enum OntologyDataType {
     }
 
     public Boolean isOntologyDataType() {
-        return this.value == Ontology.value;
+
+        return Objects.equals(this.value, Ontology.value);
     }
 
     public String getOntologyApi() {
@@ -56,6 +59,7 @@ public enum OntologyDataType {
             Boolean.class, OntologyDataType.Bool,
 
             Integer.class, OntologyDataType.Int,
+            Long.class, OntologyDataType.Long,
             Float.class, OntologyDataType.Float,
             Double.class, OntologyDataType.Double,
 
@@ -71,7 +75,7 @@ public enum OntologyDataType {
 
             "smallint", OntologyDataType.Int,
             "integer", OntologyDataType.Int,
-            "bigint", OntologyDataType.Int,
+            "bigint", OntologyDataType.Long,
 
             "real", OntologyDataType.Float,
             "double precision", OntologyDataType.Double,
@@ -88,6 +92,7 @@ public enum OntologyDataType {
     private static Map toOwlDataType = Maps.of(
         OntologyDataType.Bool, OWL2Datatype.XSD_BOOLEAN,
         OntologyDataType.Int, OWL2Datatype.XSD_INT,
+        OntologyDataType.Long, OWL2Datatype.XSD_LONG,
         OntologyDataType.Float, OWL2Datatype.XSD_FLOAT,
         OntologyDataType.Double, OWL2Datatype.XSD_DOUBLE,
         OntologyDataType.Decimal, OWL2Datatype.XSD_DECIMAL,
