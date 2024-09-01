@@ -4,6 +4,9 @@ package com.aircas.ptr.foundry.ontology.entity.vo;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 
+/**
+ * @author Lenovo
+ */
 @Data
 public class ParameterMetadataVO {
 

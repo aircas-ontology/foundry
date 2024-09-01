@@ -127,18 +127,18 @@ public class OntologyActionController {
         }
     }
 
-    @ApiOperation(value = "用具体实体执行行为")
+    @ApiOperation(value = "执行行为")
     @PostMapping("/execute")
     public ApiResult execute(@RequestBody ActionHandleParam param) {
         try {
-            return DataResult.ofData(ontologyActionService.handle(param.getPrimaryKey(), param.getApi()));
+            return DataResult.ofData(ontologyActionService.handle(param.getPrimaryKey(), param.getApi(), param.getParams()));
         } catch (BaseException e) {
             return DataResult.fail(e.getMessage(), e.code, e.getRootCauseMessage());
         }
     }
 
-    @ApiOperation(value = "启动行为")
-    @GetMapping("/execute/{api}")
+    @ApiOperation(value = "启动行为（定时任务）")
+    @GetMapping("/task/start/{api}")
     public ApiResult execute(@PathVariable String api) throws
             FunctionNotFoundException,
             OntologyFunctionNotFoundException,
@@ -156,8 +156,8 @@ public class OntologyActionController {
         }
     }
 
-    @ApiOperation(value = "停止行为")
-    @GetMapping("/stop/{api}")
+    @ApiOperation(value = "停止行为（定时任务）")
+    @GetMapping("/task/stop/{api}")
     public ApiResult stop(@PathVariable String api) throws
             FunctionNotFoundException,
             OntologyFunctionNotFoundException,

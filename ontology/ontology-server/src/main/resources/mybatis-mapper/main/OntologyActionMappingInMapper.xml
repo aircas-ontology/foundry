@@ -16,15 +16,15 @@
         update_time
     </sql>
 
-    <select id="selectByOntologyFunctionId" parameterType="java.lang.Long" resultMap="BaseResultMap">
+    <select id="selectById" parameterType="java.lang.Long" resultMap="BaseResultMap">
         <!-- @mbg.generated: generated automatically, do not modify! -->
         select
         <include refid="Base_Column_List"/>
         from ontology_action_mapping_in
-        where ontology_action_id = #{ontologyFunctionId,jdbcType=BIGINT}
+        where ontology_action_id = #{actionId,jdbcType=BIGINT}
     </select>
 
-    <select id="selectByOntologyFunctionIds" parameterType="java.util.List" resultMap="BaseResultMap">
+    <select id="selectByIds" parameterType="java.util.List" resultMap="BaseResultMap">
         <!-- @mbg.generated: generated automatically, do not modify! -->
         select
         <include refid="Base_Column_List"/>

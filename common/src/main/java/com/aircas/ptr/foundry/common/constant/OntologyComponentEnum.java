@@ -3,6 +3,10 @@ package com.aircas.ptr.foundry.common.constant;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
+/**
+ * @author yangj
+ */
+
 @AllArgsConstructor
 @Getter
 public enum OntologyComponentEnum {
@@ -13,6 +17,6 @@ public enum OntologyComponentEnum {
     FUNCTION(4, "函数"),
     MODEL(5, "模型");
 
-    private Integer value;
-    private String name;
+    private final Integer value;
+    private final String name;
 }

@@ -8,7 +8,7 @@ import java.util.List;
 @Mapper
 public interface OntologyActionMappingInMapper extends tk.mybatis.mapper.common.Mapper<OntologyActionMappingIn> {
 
-    List<OntologyActionMappingIn> selectByOntologyFunctionId(Long ontologyFunctionId);
+    List<OntologyActionMappingIn> selectById(Long actionId);
 
-    List<OntologyActionMappingIn> selectByOntologyFunctionIds(List<Long> ontologyFunctionIds);
+    List<OntologyActionMappingIn> selectByIds(List<Long> actionIds);
 }
