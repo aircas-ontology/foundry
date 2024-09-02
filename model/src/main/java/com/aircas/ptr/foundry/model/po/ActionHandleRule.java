@@ -1,7 +1,9 @@
 package com.aircas.ptr.foundry.model.po;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import javax.persistence.Column;
 import javax.persistence.Entity;
@@ -11,34 +13,21 @@ import java.util.Date;
 
 import static com.aircas.ptr.foundry.common.constant.DateFormat.DATE_FORMAT_DEFAULT;
 
-
+/**
+ * @className: ActionHandleRule
+ * @author: yangj
+ * @date: 2024/9/1 18:00
+ * @version: 1.0
+ * @description: 本体行为执行规则
+ */
 @Data
 @Entity
-@Table(name = "ontology_action")
-public class OntologyAction {
-    /**
-     * Column: api
-     */
-    private String api;
+@Table(name = "action_handle_rule")
+public class ActionHandleRule {
 
-    /**
-     * Column: function_api
-     */
-    private String functionApi;
-
-    /**
-     * Column: ontology_unique_identifier
-     */
-    private String ontologyUniqueIdentifier;
-
-    /**
-     * Column: id
-     */
     @Id
     @Column(name = "id")
     private Long id;
-
-    private String description;
 
     @JsonFormat(pattern = DATE_FORMAT_DEFAULT, timezone = "GMT+8")
     private Date createTime;
@@ -46,14 +35,16 @@ public class OntologyAction {
     @JsonFormat(pattern = DATE_FORMAT_DEFAULT, timezone = "GMT+8")
     private Date updateTime;
 
-    /**
-     * 名称
-     */
-    private String displayName;
-
     private Integer status;
 
-    private Integer handleType;
+    private Long actionId;
 
-    private static final long serialVersionUID = 1L;
+    /**
+     * 实体主键列表，以逗号分隔
+     */
+    private String objectPrimaryKey;
+
+    private String rules;
+
+    private Integer ruleConnectType;
 }
