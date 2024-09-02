@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.ontology.entity.vo;
 
 
+import io.swagger.annotations.ApiModel;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 
@@ -8,6 +9,7 @@ import lombok.Data;
  * @author Lenovo
  */
 @Data
+@ApiModel(description = "参数对象")
 public class ParameterMetadataVO {
 
     private String name;

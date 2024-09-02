@@ -115,7 +115,7 @@ public class OntologyActionController {
         }
     }
 
-    @ApiOperation(value = "根据本体id查询行为")
+    @ApiOperation(value = "获取本体关联的行为")
     @GetMapping("/by_ontology")
     public ApiResult queryByOntologyUniqueIdentifier(@RequestParam @ApiParam(value = "本体identifier", required = true) String ontologyUniqueIdentifier) {
         try {
