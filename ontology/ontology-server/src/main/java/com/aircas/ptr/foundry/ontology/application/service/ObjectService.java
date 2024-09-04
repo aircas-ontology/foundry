@@ -27,5 +27,5 @@ public interface ObjectService {
 
     PageInfo<Map<String, Object>> queryObjectByFilter(String ontologyApi, List<FilterParam> filter, Integer page, Integer size, List<QuerySortParam> sorts);
 
-    PageInfo<Map<String, Object>> queryObjectByLink(String linkId, String ontologyId, ObjectOneInfoVO obj, Integer page, Integer size);
+    PageInfo<Map<String, Object>> queryObjectByLink(String linkId, String dataOntologyId, ObjectOneInfoVO obj, Integer page, Integer size);
 }

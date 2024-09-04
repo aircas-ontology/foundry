@@ -147,26 +147,23 @@ public class ObjectServiceImpl implements ObjectService {
     }
 
     @Override
-    public PageInfo<Map<String, Object>> queryObjectByLink(String linkId, String ontologyId, ObjectOneInfoVO obj, Integer page, Integer size) {
+    public PageInfo<Map<String, Object>> queryObjectByLink(String linkId, String dataOntologyId, ObjectOneInfoVO obj, Integer page, Integer size) {
 
         OntologyLinkGroup ontologyLinkGroup = ontologyLinkGroupService.selectByUniqueIdentifier(linkId);
-        String dataOntologyId = null;
-        String propertyIdentifierFrom = null;
-        String propertyIdentifierTo = null;
-        if (ontologyLinkGroup.getOntologyUniqueIdentifierFrom().equals(ontologyId)) {
-            dataOntologyId = ontologyLinkGroup.getOntologyUniqueIdentifierTo();
-            propertyIdentifierTo = ontologyLinkGroup.getPropertyUniqueIdentifierTo();
-            propertyIdentifierFrom = ontologyLinkGroup.getPropertyUniqueIdentifierFrom();
+        String ontologypropertyId = null;
+        String dataOntologyPropertyId = null;
+        if (ontologyLinkGroup.getOntologyUniqueIdentifierFrom().equals(dataOntologyId)) {
+            dataOntologyPropertyId = ontologyLinkGroup.getPropertyUniqueIdentifierFrom();
+            ontologypropertyId = ontologyLinkGroup.getPropertyUniqueIdentifierTo();
         } else {
-            dataOntologyId = ontologyLinkGroup.getOntologyUniqueIdentifierFrom();
-            propertyIdentifierTo = ontologyLinkGroup.getPropertyUniqueIdentifierFrom();
-            propertyIdentifierFrom = ontologyLinkGroup.getPropertyUniqueIdentifierTo();
+            dataOntologyPropertyId = ontologyLinkGroup.getPropertyUniqueIdentifierTo();
+            ontologypropertyId = ontologyLinkGroup.getPropertyUniqueIdentifierFrom();
         }
         //TODO: 这里有潜在风险，因为没有考虑join时的数据类型
         String filterValue = Strings.EMPTY;
         for (PropertyValueVO propertyValueVO : obj.getProperties()) {
             //TODO: 这里有潜在风险，因为没有考虑join时的数据类型，沒有考虑是to的情况
-            if (propertyValueVO.getUniqueIdentifier().equals(propertyIdentifierFrom)) {
+            if (propertyValueVO.getUniqueIdentifier().equals(ontologypropertyId)) {
                 filterValue = propertyValueVO.getValue();
                 break;
             }
@@ -174,7 +171,7 @@ public class ObjectServiceImpl implements ObjectService {
         if (filterValue == null || filterValue.isEmpty()) {
             return null;
         }
-        List<OntologyProperty> propertyToList = ontologyPropertyMapper.selectByUniqueIdentifier(propertyIdentifierTo);
+        List<OntologyProperty> propertyToList = ontologyPropertyMapper.selectByUniqueIdentifier(dataOntologyPropertyId);
         if (propertyToList.isEmpty()) {
             return null;
         }

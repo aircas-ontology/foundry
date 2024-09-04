@@ -15,7 +15,7 @@ import java.util.List;
 @ApiModel(description = "本体数据查询，依据链接id")
 public class OntologyObjectQueryByLinkParam {
 
-    @ApiModelProperty(value = "本体id", example = "545649a4-8bba-4d0c-b265-362e95fd4ffb", required = true)
+    @ApiModelProperty(value = "本体id（不是当前本体）", example = "545649a4-8bba-4d0c-b265-362e95fd4ffb", required = true)
     private String ontologyId;
 
     @ApiModelProperty(value = "关系id", example = "7b4ff29f-44b5-425a-9979-4305b6f60293", required = true)
