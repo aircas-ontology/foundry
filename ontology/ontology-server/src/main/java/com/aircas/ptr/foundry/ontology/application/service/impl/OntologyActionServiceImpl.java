@@ -124,9 +124,7 @@ public class OntologyActionServiceImpl implements OntologyActionService {
     }
 
     @Override
-    public int save(OntologyActionBo ontologyActionBo)
-            throws OntologyFunctionParameterPropertyTypeNotSameException, FunctionFileNotCompiled, FunctionNotFoundException,
-            FunctionClassNotNewInstanceException, OntologyFunctionBindingParameterNotFoundException, OntologyFunctionMappedPropertyNotFoundException {
+    public int save(OntologyActionBo ontologyActionBo) {
 
         // TODO:暂时不校验
 //        checkBindingConsistence(ontologyActionBo);
@@ -137,7 +135,7 @@ public class OntologyActionServiceImpl implements OntologyActionService {
         ontologyAction.setUpdateTime(now);
         ontologyAction.setId(SnowflakeIdUtil.get());
         int status = ontologyActionMapper.insert(ontologyAction);
-        if (ontologyActionBo.getMappingIns() == null && ontologyActionBo.getMappingIns().size() == 0) {
+        if (ontologyActionBo.getMappingIns() == null || ontologyActionBo.getMappingIns().isEmpty()) {
             return status;
         }
         long id = ontologyAction.getId();
@@ -183,19 +181,9 @@ public class OntologyActionServiceImpl implements OntologyActionService {
         Arrays.stream(objectPrimaryKeys.split(",")).forEach(objectKey -> {
             try {
                 handle(objectKey, action.getApi(), null);
-            } catch (FunctionClassNotNewInstanceException e) {
-                throw new RuntimeException(e);
-            } catch (FunctionFileNotCompiled e) {
-                throw new RuntimeException(e);
-            } catch (FunctionRuntimeException e) {
-                throw new RuntimeException(e);
-            } catch (FunctionNotFoundException e) {
-                throw new RuntimeException(e);
-            } catch (OntologyFunctionNotFoundException e) {
-                throw new RuntimeException(e);
-            } catch (OntologyApiNameNotFoundException e) {
-                throw new RuntimeException(e);
-            } catch (OntologyFunctionMappedPropertyNotFoundException e) {
+            } catch (FunctionClassNotNewInstanceException | FunctionFileNotCompiled | FunctionRuntimeException |
+                     FunctionNotFoundException | OntologyFunctionNotFoundException | OntologyApiNameNotFoundException |
+                     OntologyFunctionMappedPropertyNotFoundException e) {
                 throw new RuntimeException(e);
             }
         });
@@ -294,8 +282,11 @@ public class OntologyActionServiceImpl implements OntologyActionService {
 
     @Override
     public OntologyActionVO getMetadataByApi(String apiName)
-
-            throws OntologyFunctionMappedPropertyNotFoundException, OntologyFunctionNotFoundException, FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionNotFoundException {
+            throws OntologyFunctionMappedPropertyNotFoundException,
+            OntologyFunctionNotFoundException,
+            FunctionClassNotNewInstanceException,
+            FunctionFileNotCompiled,
+            FunctionNotFoundException {
 
         OntologyAction ontologyAction = ontologyActionMapper.selectByApi(apiName);
         if (ontologyAction == null) {
@@ -304,7 +295,8 @@ public class OntologyActionServiceImpl implements OntologyActionService {
         OntologyMeta ontologyMeta = ontologyMetaMapper.selectByUniqueIdentifier(ontologyAction.getOntologyUniqueIdentifier());
         Map<String, OntologyPropertyVO> ontologyPropertiesMap = queryPropertiesByOntologyUniqueIdentifier(ontologyAction.getOntologyUniqueIdentifier());
         List<OntologyActionMappingIn> allMappings = ontologyActionMappingInMapper.selectById(ontologyAction.getId());
-        return getFunctionVO(ontologyAction, ontologyMeta, allMappings, ontologyPropertiesMap);
+        List<ParameterMetadataVO> parameters = functionService.getParameters(ontologyAction.getFunctionApi());
+        return getActionVO(ontologyAction, ontologyMeta, allMappings, ontologyPropertiesMap, parameters);
     }
 
     private Map<String, OntologyPropertyVO> queryPropertiesByOntologyUniqueIdentifier(String ontologyUniqueIdentifier) {
@@ -334,32 +326,32 @@ public class OntologyActionServiceImpl implements OntologyActionService {
 
 
     @Override
-    public List<OntologyActionVO> queryByOntologyUniqueIdentifier(String ontologyUniqueIdentifier)
-            throws OntologyFunctionMappedPropertyNotFoundException, FunctionFileNotCompiled, FunctionNotFoundException, FunctionClassNotNewInstanceException {
+    public List<OntologyActionVO> queryByOntologyUniqueIdentifier(String ontologyUniqueIdentifier) {
 
-        // TODO：参数错误
         List<OntologyAction> list = ontologyActionMapper.selectByOntologyIdentifier(ontologyUniqueIdentifier);
-        List<Long> functionIds = list.stream().map(ontologyAction -> ontologyAction.getId()).collect(Collectors.toList());
-        List<OntologyActionMappingIn> allMappings = ontologyActionMappingInMapper.selectByIds(functionIds);
-
-        OntologyMeta ontologyMeta = ontologyMetaMapper.selectByUniqueIdentifier(ontologyUniqueIdentifier);
-        Map<String, OntologyPropertyVO> ontologyPropertiesMap = queryPropertiesByOntologyUniqueIdentifier(ontologyUniqueIdentifier);
-        List<OntologyActionVO> result = new ArrayList();
-        for (OntologyAction action : list) {
-            OntologyActionVO ontologyFunctionVO = getFunctionVO(action, ontologyMeta, allMappings, ontologyPropertiesMap);
-            result.add(ontologyFunctionVO);
-        }
-        return result;
+        return list.stream().map(item -> {
+            try {
+                return getMetadataByApi(item.getApi());
+            } catch (OntologyFunctionMappedPropertyNotFoundException | OntologyFunctionNotFoundException |
+                     FunctionClassNotNewInstanceException | FunctionFileNotCompiled | FunctionNotFoundException e) {
+                throw new RuntimeException(e);
+            }
+        }).collect(Collectors.toList());
     }
 
-    private OntologyActionVO getFunctionVO(OntologyAction function,
-                                           OntologyMeta ontologyMeta,
-                                           List<OntologyActionMappingIn> allMappingIns,
-                                           Map<String, OntologyPropertyVO> ontologyPropertiesMap
-    ) throws OntologyFunctionMappedPropertyNotFoundException, FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionNotFoundException {
+    private OntologyActionVO getActionVO(
+            OntologyAction action,
+            OntologyMeta ontologyMeta,
+            List<OntologyActionMappingIn> allMappingIns,
+            Map<String, OntologyPropertyVO> ontologyPropertiesMap,
+            List<ParameterMetadataVO> parameters)
+            throws OntologyFunctionMappedPropertyNotFoundException,
+            FunctionClassNotNewInstanceException,
+            FunctionFileNotCompiled,
+            FunctionNotFoundException {
 
         OntologyActionVO ontologyActionVO = new OntologyActionVO();
-        BeanUtils.copyProperties(function, ontologyActionVO);
+        BeanUtils.copyProperties(action, ontologyActionVO);
         ontologyActionVO.setOntologyDisplayName(ontologyMeta.getDisplayName());
 
         List<OntologyActionMappingInVO> mappingInVOs = new ArrayList<>();
@@ -379,11 +371,11 @@ public class OntologyActionServiceImpl implements OntologyActionService {
                 mappingInVO.setPropertyName(DEFAULT_OBJECT_DESC);
                 mappingInVO.setPropertyType(ontologyType);
             }
-            List<ParameterMetadataVO> parameterMetadataVOList = functionService.getParameters(function.getFunctionApi());
+            List<ParameterMetadataVO> parameterMetadataVOList = functionService.getParameters(action.getFunctionApi());
             List<ParameterMetadataVO> matchedParaList = parameterMetadataVOList.stream()
                     .filter(parameterMetadataVO -> parameterMetadataVO.getName().equals(mappingInVO.getParameterName()))
                     .collect(Collectors.toList());
-            if (matchedParaList.size() >= 1) {
+            if (!matchedParaList.isEmpty()) {
                 if (isOntologySelf) {
                     mappingInVO.setParameterType(ontologyType);
                 } else {
@@ -393,6 +385,9 @@ public class OntologyActionServiceImpl implements OntologyActionService {
             mappingInVOs.add(mappingInVO);
         }
         ontologyActionVO.setMappingIns(mappingInVOs);
+        List<String> mappedParameters = mappingInVOs.stream().map(OntologyActionMappingIn::getParameterName).collect(Collectors.toList());
+        parameters.removeIf(parameterMetadataVO -> mappedParameters.contains(parameterMetadataVO.getName()));
+        ontologyActionVO.setParameters(parameters);
         return ontologyActionVO;
     }
 
@@ -405,15 +400,15 @@ public class OntologyActionServiceImpl implements OntologyActionService {
     @Override
     public PageInfo<OntologyActionVO> metaList(Integer page, Integer size) {
 
-        // TODO: 参数获取失败
         PageHelper.startPage(page, size);
         PageInfo<OntologyAction> pageInfo = new PageInfo<>(ontologyActionMapper.selectAll());
         List<OntologyActionVO> collect = pageInfo.getList().stream().map(item -> {
-            OntologyActionVO ontologyActionVO = new OntologyActionVO();
-            BeanUtils.copyProperties(item, ontologyActionVO);
-            OntologyMeta ontologyMeta = ontologyMetaMapper.selectByUniqueIdentifier(ontologyActionVO.getOntologyUniqueIdentifier());
-            ontologyActionVO.setOntologyDisplayName(ontologyMeta.getDisplayName());
-            return ontologyActionVO;
+            try {
+                return getMetadataByApi(item.getApi());
+            } catch (OntologyFunctionMappedPropertyNotFoundException | OntologyFunctionNotFoundException |
+                     FunctionClassNotNewInstanceException | FunctionFileNotCompiled | FunctionNotFoundException e) {
+                throw new RuntimeException(e);
+            }
         }).collect(Collectors.toList());
         PageInfo<OntologyActionVO> pageResult = new PageInfo<>(collect);
         BeanUtils.copyProperties(pageInfo, pageResult);
