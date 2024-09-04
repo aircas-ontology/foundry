@@ -8,4 +8,24 @@
         from action_handle_rule
         where action_id = #{actionId,jdbcType=INTEGER}
     </select>
+
+    <select id="queryRulesById"
+            resultType="com.aircas.ptr.foundry.model.po.ActionHandleRule">
+        select *
+        from action_handle_rule
+        where action_id in
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </select>
+
+    <update id="updateRulesById" parameterType="com.aircas.ptr.foundry.model.po.ActionHandleRule">
+        update "action_handle_rule"
+        <set>
+            <if test="rules != null">
+                "rules" = #{rules,jdbcType=VARCHAR},
+            </if>
+        </set>
+        where id = #{id,jdbcType=INTEGER}
+    </update>
 </mapper>

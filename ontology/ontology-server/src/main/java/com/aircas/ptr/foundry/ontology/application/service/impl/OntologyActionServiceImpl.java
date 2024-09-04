@@ -217,6 +217,15 @@ public class OntologyActionServiceImpl implements OntologyActionService {
     }
 
     @Override
+    public List<ActionHandleRule> getActionRulesById(List<String> ids){
+        return actionHandleRuleService.queryRulesByIds(ids);
+    }
+
+    public int updateActionRulesById(ActionHandleRule rule){
+        return actionHandleRuleService.updateRules(rule);
+    }
+
+    @Override
     public boolean configTask(String actionApi, List<String> objectPrimaryKeys, Date taskStartTime, Date taskEndTime, String taskCorn) {
 
         // 0.更新action的handle类型

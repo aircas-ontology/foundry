@@ -19,6 +19,8 @@ public interface OntologyPropertyService {
 
     List<OntologyPropertyVO> selectByOntologyUniqueIdentifier(String uniqueIdentifier);
 
+    List<OntologyPropertyVO> getAllProperty(int justPrimary);
+
     OntologyPropertyVO selectByUniqueIdentifier(String uniqueIdentifier);
 
     List<OntologyPropertyVO> selectByOntologyApi(String api);

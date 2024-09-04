@@ -3,6 +3,7 @@ package com.aircas.ptr.foundry.ontology.userinterface.controller;
 import com.aircas.ptr.foundry.common.base.ApiResult;
 import com.aircas.ptr.foundry.common.base.DataResult;
 
+import com.aircas.ptr.foundry.model.po.ActionHandleRule;
 import com.aircas.ptr.foundry.ontology.Exception.*;
 import com.aircas.ptr.foundry.ontology.application.service.ActionHandleTaskService;
 import com.aircas.ptr.foundry.ontology.application.service.DynamicActionTaskService;
@@ -24,6 +25,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -137,6 +140,29 @@ public class OntologyActionController {
             default:
                 return DataResult.ofData("操作不允许");
         }
+    }
+
+
+    @ApiOperation(value = "更新行为规则")
+    @PostMapping("/updateActionRules")
+    public ApiResult updateActionRules(@RequestBody ActionHandleRule rule) {
+        ontologyActionService.updateActionRulesById(rule);
+        return ApiResult.fail("success");
+    }
+
+
+    @ApiOperation(value = "查询行为信息")
+    @PostMapping("/getActionRulesByIds")
+    public ApiResult getActionByIds(String ids) {
+        if (ids.trim().length()==0){
+            return ApiResult.fail("参数错误");
+        }
+        String[] idArr = ids.split(",");
+        List<ActionHandleRule> rules = ontologyActionService.getActionRulesById(Arrays.asList(idArr));
+        if (rules==null || rules.size()==0){
+            return ApiResult.fail("没有匹配到行为信息");
+        }
+        return DataResult.ofData(rules);
     }
 
     @ApiOperation(value = "执行行为")

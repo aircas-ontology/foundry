@@ -20,6 +20,9 @@ public interface OntologyPropertyMapper {
 
     List<OntologyProperty> selectByUniqueIdentifier(String uniqueIdentifier);
 
+
+    List<OntologyProperty> getAllProperty(int justPrimary);
+
     int updateSelective(OntologyProperty ontologyProperty);
 
 }

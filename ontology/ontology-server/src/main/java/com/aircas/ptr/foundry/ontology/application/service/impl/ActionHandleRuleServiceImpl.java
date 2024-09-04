@@ -9,6 +9,8 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
 /**
  * @className: ActionHandleRuleServiceImpl
  * @author: yangj
@@ -30,5 +32,18 @@ public class ActionHandleRuleServiceImpl implements ActionHandleRuleService {
         BeanUtils.copyProperties(actionHandleRuleBO, actionHandleRule);
 
         return actionHandleRuleMapper.insert(actionHandleRule);
+    }
+
+    @Override
+    public List<ActionHandleRule> queryRulesByIds(List<String> ids) {
+        if (ids==null || ids.size()==0){
+            return null;
+        }
+        return actionHandleRuleMapper.queryRulesById(ids);
+    }
+
+    @Override
+    public int updateRules(ActionHandleRule rule) {
+        return actionHandleRuleMapper.updateRulesById(rule);
     }
 }

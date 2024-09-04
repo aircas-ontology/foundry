@@ -47,6 +47,17 @@
     and status = 1
   </select>
 
+
+  <select id="getAllProperty" resultMap="BaseResultMap">
+    select
+    <include refid="Base_Column_List" />
+    from "ontology_property"
+    where  status = 1
+    <if test="justPrimary==1">
+        and is_primary_key = 1
+    </if>
+  </select>
+
   <delete id="deleteByUniqueIdentifier" parameterType="java.lang.String">
     delete from "ontology_property"
     where unique_identifier = #{uniqumeigeeIdentifier,jdbcType=BIGINT}
