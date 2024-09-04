@@ -3,6 +3,7 @@ package com.aircas.ptr.foundry.sync.controller;
 import com.aircas.ptr.foundry.common.dto.OntologyActionRuleDTO;
 import com.aircas.ptr.foundry.common.response.Result;
 import com.aircas.ptr.foundry.common.response.ResultUtil;
+import com.aircas.ptr.foundry.common.util.StringUtil;
 import com.aircas.ptr.foundry.common.vo.OntologyActionRuleVO;
 import com.aircas.ptr.foundry.sync.domain.entity.OntologyActionRule;
 import com.aircas.ptr.foundry.sync.server.OntologyActionRuleService;
@@ -16,20 +17,21 @@ import java.util.List;
 
 @Api(tags = "本体行为配置")
 @RestController
-@RequestMapping(value = "OntologyActionRule")
+@RequestMapping(value = "ontologyActionRule")
 @CrossOrigin("*")
 public class OntologyActionRuleController {
 
     @Autowired
-    OntologyActionRuleService ontologyActionRuleService;
+    private OntologyActionRuleService ontologyActionRuleService;
 
     @ApiOperation("新增或修改本体行为配置")
     @PostMapping("add")
     public Result<String> addOntologyActionRule(@RequestBody OntologyActionRuleVO vo) {
         OntologyActionRule entity = new OntologyActionRule();
         BeanUtils.copyProperties(vo, entity);
-        boolean b = ontologyActionRuleService.saveOrUpdate(entity);
-        return ResultUtil.success();
+        entity.setFields(String.join(",",vo.getFields()));
+
+        return ontologyActionRuleService.saveOrUpdate(entity)?ResultUtil.success("删除成功!"):ResultUtil.error("删除失败!");
     }
 
     @ApiOperation("查询本体行为配置")
@@ -38,6 +40,7 @@ public class OntologyActionRuleController {
         OntologyActionRule ontologyActionRule = ontologyActionRuleService.getById(id);
         OntologyActionRuleDTO dto = new OntologyActionRuleDTO();
         BeanUtils.copyProperties(ontologyActionRule, dto);
+        dto.setFields(StringUtil.asList(ontologyActionRule.getFields(),","));
         return ResultUtil.success(dto);
     }
 

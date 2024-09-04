@@ -1,4 +1,4 @@
-package com.aircas.ptr.foundry.sync.repository.dao;
+package com.aircas.ptr.foundry.sync.mapper;
 
 import com.aircas.ptr.foundry.sync.domain.entity.OntologyMeta;
 import org.apache.ibatis.annotations.Mapper;

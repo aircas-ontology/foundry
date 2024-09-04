@@ -2,6 +2,8 @@ package com.aircas.ptr.foundry.sync.config;
 
 import com.alibaba.druid.pool.DruidDataSource;
 import com.alibaba.druid.spring.boot.autoconfigure.DruidDataSourceBuilder;
+import org.apache.ibatis.session.SqlSessionFactory;
+import org.mybatis.spring.SqlSessionFactoryBean;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -22,20 +24,26 @@ import javax.sql.DataSource;
  * @since 1.0
  *
  */
-@Configuration
+//@Configuration
 //@MapperScan(basePackages = "com.aircas.ptr.foundry.sync.repository.dao", sqlSessionFactoryRef = "pgSqlSessionFactory")
-public class DataSouceConfig {
-
-//    @Bean(name = "pgDB")
-//    @ConfigurationProperties(prefix = "spring.datasource.druid.postgres-db")
+public class DataSouceConfig {}
+//
 //    @Primary
-//    public DruidDataSource pgDataSource() {
+//    @Bean("datalakeDataSource")
+//    @ConfigurationProperties("spring.datasource.datalake")
+//    public DataSource createMainDataSource() {
 //        return DruidDataSourceBuilder.create().build();
 //    }
-	
-//    @Bean(name = "jdbcTemplate")
-//    public JdbcTemplate jdbcTemplate(DataSource dataSource) {
-//        return new JdbcTemplate(dataSource);
-//    }
 //
-}
+////    @Bean(name = "jdbcTemplate")
+////    public JdbcTemplate jdbcTemplate(DataSource dataSource) {
+////        return new JdbcTemplate(dataSource);
+////    }
+//        @Bean
+//        public SqlSessionFactory sqlSessionFactory(@Qualifier("datalakeDataSource")DataSource dataSource)throws Exception {
+//            SqlSessionFactoryBean sessionFactoryBean = new SqlSessionFactoryBean();
+//            sessionFactoryBean.setDataSource(dataSource);
+//            return sessionFactoryBean.getObject();
+//        }
+////
+//}

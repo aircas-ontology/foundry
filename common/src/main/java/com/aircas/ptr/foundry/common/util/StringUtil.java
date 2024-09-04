@@ -1,6 +1,12 @@
 package com.aircas.ptr.foundry.common.util;
 
 
+import org.opengis.filter.expression.Add;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
 public class StringUtil extends org.apache.commons.lang3.StringUtils {
     public StringUtil() {
     }
@@ -39,5 +45,21 @@ public class StringUtil extends org.apache.commons.lang3.StringUtils {
 
     public static boolean universalNamingConvention(String name) {
         return !name.matches("^.*[/|\\\\\\\\:|\\\\*|\\\\?|\\\"|<|>].*$");
+    }
+
+    /**
+     * 字符串转list
+     * @param string
+     * @param delimiter
+     * @return
+     */
+    public static List<String> asList(String string, String delimiter) {
+        if (string.equals(delimiter)) {
+            return Arrays.asList(string.split(delimiter));
+        } else if (string != null) {
+            return Arrays.asList(string);
+        }else {
+            return new ArrayList<>();
+        }
     }
 }

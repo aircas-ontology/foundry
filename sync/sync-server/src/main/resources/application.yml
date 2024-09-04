@@ -29,6 +29,11 @@ postgres:
   table:
     schema: ontology
     prefix: ontology_meta
+
+rocketmq:
+  name-server: 192.168.9.17:9876
+  producer:
+    group: grp_sync
 #eureka:
 #  instance:
 #    prefer-ip-address: true

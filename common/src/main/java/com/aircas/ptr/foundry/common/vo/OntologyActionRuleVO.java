@@ -3,6 +3,7 @@ package com.aircas.ptr.foundry.common.vo;
 import lombok.Data;
 
 import java.util.Date;
+import java.util.List;
 
 @Data
 public class OntologyActionRuleVO {
@@ -29,7 +30,7 @@ public class OntologyActionRuleVO {
     /**
      * 字段:多个值用逗号分隔
      */
-    private String field;
+    private List<String> fields;
     /**
      * 脚本内容
      */

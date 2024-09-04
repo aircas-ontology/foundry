@@ -11,8 +11,7 @@
     <artifactId>sync</artifactId>
     <packaging>pom</packaging>
     <modules>
-<!--        <module>sync-common</module>-->
+        <!--        <module>sync-common</module>-->
         <module>sync-server</module>
     </modules>
-
 </project>
