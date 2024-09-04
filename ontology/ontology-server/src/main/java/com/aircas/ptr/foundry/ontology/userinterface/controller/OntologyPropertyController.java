@@ -55,4 +55,10 @@ public class OntologyPropertyController {
     public DataResult<List<OntologyPropertyVO>> getOntologyById(@RequestParam @ApiParam(value = "本体uniqueIdentifier", required = true) String uniqueIdentifier) {
         return DataResult.ofData(ontologyPropertyService.selectByOntologyUniqueIdentifier(uniqueIdentifier));
     }
+
+    @GetMapping("/getAllProperty")
+    @ApiOperation(value = "查询所有的本体属性列表")
+    public DataResult<List<OntologyPropertyVO>> getAllProperty(@RequestParam @ApiParam(value = "紧查询主键", required = true) int justPrimary) {
+        return DataResult.ofData(ontologyPropertyService.getAllProperty(justPrimary==1?1:0));
+    }
 }

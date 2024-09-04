@@ -113,6 +113,20 @@ public class OntologyPropertyServiceImpl implements OntologyPropertyService {
         return list;
     }
 
+    public List<OntologyPropertyVO> getAllProperty(int justPrimary){
+        List<OntologyPropertyVO> list = new ArrayList<>();
+        List<OntologyProperty> ontologyPropertyList = ontologyPropertyMapper.getAllProperty(justPrimary);
+        for (OntologyProperty ontologyProperty : ontologyPropertyList) {
+            OntologyPropertyVO propertyVO = new OntologyPropertyVO();
+            BeanUtils.copyProperties(ontologyProperty, propertyVO);
+//            TableColumnDesc tableColumnDesc = propertySourceMap.get(ontologyProperty.getDatasourceId()).get(ontologyProperty.getDatasourceColumnName());
+//            OntologyDataType type = OntologyDataType.valueFromPgType(tableColumnDesc.getType());
+//            propertyVO.setPropertyType(type);
+            list.add(propertyVO);
+        }
+        return list;
+    }
+
     @Override
     public OntologyPropertyVO selectByUniqueIdentifier(String uniqueIdentifier) {
         List<OntologyProperty> ontologyPropertyList = ontologyPropertyMapper.selectByUniqueIdentifier(uniqueIdentifier);

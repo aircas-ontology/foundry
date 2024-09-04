@@ -4,6 +4,8 @@ import com.aircas.ptr.foundry.model.po.ActionHandleRule;
 import com.aircas.ptr.foundry.ontology.entity.bo.ActionHandleRuleBO;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
 /**
  * @interfaceName: ActionHandleRule
  * @author: yangj
@@ -14,4 +16,9 @@ import org.springframework.stereotype.Service;
 public interface ActionHandleRuleService {
 
     int insert(ActionHandleRuleBO actionHandleRuleBO);
+
+
+    List<ActionHandleRule> queryRulesByIds(List<String> ids);
+
+    int updateRules(ActionHandleRule rule);
 }

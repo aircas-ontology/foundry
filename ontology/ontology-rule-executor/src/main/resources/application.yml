@@ -1,0 +1,32 @@
+server:
+  port: 36010
+  servlet:
+    context-path: /rule-executor
+
+spring:
+  application:
+    name: ontology-rule-executor
+  datasource:
+    driver-class-name: org.postgresql.Driver
+      #url: jdbc:postgresql://${PG_DB_HOST}:${PG_DB_PORT}/${PG_DB_NAME}?currentSchema=ontology
+    url: jdbc:postgresql://192.168.9.17:35432/postgres?currentSchema=ontology
+    username: iecas
+    password: iecas123
+    validation-query: SELECT 1
+    test-on-borrow: true
+
+#mybatis:
+#  configuration:
+#    lazy-loading-enabled: true
+#    aggressive-lazy-loading: false
+#    map-underscore-to-camel-case: true
+#  mapper-locations: classpath*:/mybatis-mapper/*Mapper.xml
+
+
+ontology:
+  swagger:
+    enable: true
+  server: http://${ONTOLOGY_SERVER}:36002/ontology
+
+#elasticsearch:
+#  addr: 192.168.9.101:9200
