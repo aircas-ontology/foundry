@@ -11,8 +11,8 @@
     </resultMap>
 
     <select id="queryDirectory" resultMap="BaseResultMap">
-        select ${primaryKey} as primaryKey,
-               ${titleKey}   as displayName
+        select "${primaryKey}" as primaryKey,
+               "${titleKey}"   as displayName
         from ${tableName}
     </select>
 
