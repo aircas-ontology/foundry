@@ -67,10 +67,15 @@ public class RuleController {
                         return null;
                     }
                     // 执行规则绑定的函数信息
-                    ActionHandleParam param = new ActionHandleParam();
-                    param.setApi(meta.getApiName());
-                    param.setPrimaryKey(value.toString());
-                    ontologyServer.actionExecute(param);
+                    for (OntologyAction action : ontologyActions){
+                        if (action.getId().longValue() == rule.getActionId().longValue()){
+                            ActionHandleParam param = new ActionHandleParam();
+                            param.setApi(action.getApi());
+                            param.setPrimaryKey(value.toString());
+                            ontologyServer.actionExecute(param);
+                        }
+                    }
+
                 }else{
                     log.info("规则校验未通过，规则内容："+rule.getRules());
                 }
