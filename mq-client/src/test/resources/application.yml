@@ -1,0 +1,47 @@
+server:
+  port: 9999
+
+spring:
+  application:
+    name: mq-test
+  servlet:
+  #限制默认上传文件的大小不设置的话默认好像是10M
+    multipart:
+      maxRequestSize: 50MB
+      maxFileSize: 50MB
+# remove rabbitmq
+#配置rabbitMq 服务器
+#  rabbitmq:
+#    host: 192.168.56.101
+#    port: 5672
+#    username: admin
+#    password: admin
+#    virtual-host: /
+#    #确认消息已发送到交换机(Exchange)
+#    publisher-confirms: true
+#    #确认消息已发送到队列(Queue)
+#    publisher-returns: true
+#    #开启ack https://blog.csdn.net/qq_38322527/article/details/103701101
+#    listener:
+#      direct:
+#        acknowledge-mode: manual
+#      simple:
+#        acknowledge-mode: manual #采取手动应答
+#        #concurrency: 1 # 指定最小的消费者数量
+#        #max-concurrency: 1 #指定最大的消费者数量
+#        retry:
+#          enabled: true # 是否支持重试
+
+snowflake:
+  workerId: 1
+  dataCenterId: 2
+
+logger:
+  level:
+    root: INFO
+    db: INFO
+
+mq:
+  enable: true
+  exchange: testExchange
+  topic: testTopic

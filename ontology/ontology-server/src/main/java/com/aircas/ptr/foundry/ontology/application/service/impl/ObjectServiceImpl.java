@@ -3,13 +3,13 @@ package com.aircas.ptr.foundry.ontology.application.service.impl;
 import com.aircas.ptr.foundry.model.po.*;
 import com.aircas.ptr.foundry.ontology.application.service.ObjectService;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyLinkGroupService;
+import com.aircas.ptr.foundry.ontology.application.service.OntologyMetaService;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyPropertyService;
 import com.aircas.ptr.foundry.ontology.entity.vo.*;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyChildLinkMapper;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyMetaMapper;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyPropertyMapper;
 import com.aircas.ptr.foundry.ontology.repository.datalakeDao.ObjectMapper;
-import com.aircas.ptr.foundry.ontology.repository.datalakeDao.TableMetadataMapper;
 import com.aircas.ptr.foundry.ontology.repository.param.FilterParam;
 import com.aircas.ptr.foundry.ontology.repository.param.QuerySortParam;
 import com.github.pagehelper.PageHelper;
@@ -38,9 +38,6 @@ public class ObjectServiceImpl implements ObjectService {
     @Resource
     private final ObjectMapper objectMapper;
 
-    @Resource
-    private final TableMetadataMapper tableMetadataMapper;
-
     @Autowired
     private OntologyLinkGroupService ontologyLinkGroupService;
 
@@ -49,6 +46,9 @@ public class ObjectServiceImpl implements ObjectService {
 
     @Resource
     private final OntologyPropertyService ontologyPropertyService;
+
+    @Autowired
+    private OntologyMetaService ontologyMetaService;
 
     @Override
     public PageInfo<DirectoryItemVO> queryDirectories(String ontologyUniqueIdentifier, Integer page, Integer size) {
@@ -103,6 +103,7 @@ public class ObjectServiceImpl implements ObjectService {
         return ontologyMetaMapper.selectByApi(api).getUniqueIdentifier();
     }
 
+    @Override
     public ObjectWithLinkedInfoVO queryObjectWithLinkedInfoByApiAndPrimaryKey(String api, String primaryKey) {
         String identifier = queryIdentifierByAPI(api);
         return queryObjectWithLinkedInfoByPrimaryKey(identifier, primaryKey);
@@ -113,7 +114,9 @@ public class ObjectServiceImpl implements ObjectService {
 
         List<OntologyPropertyVO> ontologyPropertyList = ontologyPropertyService.selectByOntologyUniqueIdentifier(ontologyUniqueIdentifier);
         String sql = buildBaseSQL(ontologyPropertyList);
-        if (sql == null) return null;
+        if (sql == null) {
+            return null;
+        }
         PageHelper.startPage(page, size);
         List<Map<String, Object>> rawResult = objectMapper.queryAnySQL(sql);
         PageInfo pageResult = new PageInfo<>(rawResult);
@@ -128,8 +131,10 @@ public class ObjectServiceImpl implements ObjectService {
         String sql = buildBaseSQL(ontologyPropertyList);
         assert filter != null;
         assert !filter.isEmpty();
-        String where = filter.stream().map(item -> item.getFilterKey() + "='" + item.getFilterValue() + "'").collect(Collectors.joining(" and "));
-        if (sql.equals(null) || sql.isEmpty() || where.equals(null) || where.isEmpty()) return null;
+        String where = filter.stream().map(item -> "\"" + item.getFilterKey() + "\"='" + item.getFilterValue() + "'").collect(Collectors.joining(" and "));
+        if (sql.equals(null) || sql.isEmpty() || where.equals(null) || where.isEmpty()) {
+            return null;
+        }
         PageHelper.startPage(page, size);
         sql += " where " + where;
         if (sorts != null && !sorts.isEmpty()) {
@@ -145,8 +150,18 @@ public class ObjectServiceImpl implements ObjectService {
     public PageInfo<Map<String, Object>> queryObjectByLink(String linkId, String ontologyId, ObjectOneInfoVO obj, Integer page, Integer size) {
 
         OntologyLinkGroup ontologyLinkGroup = ontologyLinkGroupService.selectByUniqueIdentifier(linkId);
-        String propertyIdentifierFrom = ontologyLinkGroup.getPropertyUniqueIdentifierFrom();
-        String propertyIdentifierTo = ontologyLinkGroup.getPropertyUniqueIdentifierTo();
+        String dataOntologyId = null;
+        String propertyIdentifierFrom = null;
+        String propertyIdentifierTo = null;
+        if (ontologyLinkGroup.getOntologyUniqueIdentifierFrom().equals(ontologyId)) {
+            dataOntologyId = ontologyLinkGroup.getOntologyUniqueIdentifierTo();
+            propertyIdentifierTo = ontologyLinkGroup.getPropertyUniqueIdentifierTo();
+            propertyIdentifierFrom = ontologyLinkGroup.getPropertyUniqueIdentifierFrom();
+        } else {
+            dataOntologyId = ontologyLinkGroup.getOntologyUniqueIdentifierFrom();
+            propertyIdentifierTo = ontologyLinkGroup.getPropertyUniqueIdentifierFrom();
+            propertyIdentifierFrom = ontologyLinkGroup.getPropertyUniqueIdentifierTo();
+        }
         //TODO: 这里有潜在风险，因为没有考虑join时的数据类型
         String filterValue = Strings.EMPTY;
         for (PropertyValueVO propertyValueVO : obj.getProperties()) {
@@ -156,17 +171,17 @@ public class ObjectServiceImpl implements ObjectService {
                 break;
             }
         }
-        if (filterValue == null || filterValue.isEmpty()) return null;
+        if (filterValue == null || filterValue.isEmpty()) {
+            return null;
+        }
         List<OntologyProperty> propertyToList = ontologyPropertyMapper.selectByUniqueIdentifier(propertyIdentifierTo);
-        if (propertyToList.size() == 0) {
+        if (propertyToList.isEmpty()) {
             return null;
         }
         String filterKey = propertyToList.get(0).getDatasourceColumnName();
-        String dataOntologyId = ontologyLinkGroup.getOntologyUniqueIdentifierTo();
-
         List<FilterParam> filter = new ArrayList<>();
         filter.add(new FilterParam(filterKey, filterValue));
-        return queryObjectByFilter(dataOntologyId, filter, page, size, null);
+        return queryObjectByFilter(ontologyMetaService.getOntologyByUniqueIdentifier(dataOntologyId).getApiName(), filter, page, size, null);
     }
 
     @Override
@@ -211,7 +226,9 @@ public class ObjectServiceImpl implements ObjectService {
 
     private List<ObjectOneInfoVO> queryByColumnNameValue(List<OntologyPropertyVO> ontologyPropertyList, String columnName, String columnValue) {
         String sql = buildSQLByQueryKey(ontologyPropertyList, columnName, columnValue);
-        if (sql == null) return null;
+        if (sql == null) {
+            return null;
+        }
         List<Map<String, Object>> rawResult = objectMapper.queryAnySQL(sql);
         List<ObjectOneInfoVO> ret = new ArrayList();
         if (rawResult.size() == 0) {
@@ -322,7 +339,7 @@ public class ObjectServiceImpl implements ObjectService {
         }
         String tableName = ontologyPropertyList.get(0).getDatasourceId();
         String fromPart = " FROM " + tableName;
-        String wherePart = " WHERE " + columnName + " = '" + value + "'";
+        String wherePart = " WHERE \"" + columnName + "\" = '" + value + "'";
         String limitPart = " LIMIT 1000";
         String sql = "SELECT " + colunmnsPart + fromPart + wherePart + limitPart;
         return sql;
@@ -335,7 +352,7 @@ public class ObjectServiceImpl implements ObjectService {
         }
         String columns = ontologyPropertyList
                 .stream()
-                .map(column -> column.getDatasourceColumnName() + " AS " + column.getApiName())
+                .map(column -> "\"" + column.getDatasourceColumnName() + "\" AS " + column.getApiName())
                 .collect(Collectors.joining(","));
         String tableName = ontologyPropertyList.get(0).getDatasourceId();
 
