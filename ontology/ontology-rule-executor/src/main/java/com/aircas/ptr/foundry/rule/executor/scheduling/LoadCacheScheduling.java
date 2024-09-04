@@ -28,7 +28,7 @@ public class LoadCacheScheduling {
     private void loadOntologyProperty(){
         log.info("========= 更新实体属性信息 ===========");
         List<OntologyProperty> propertyList = ontologyServer.getAllOntologProprety();
-        Map<String,List<OntologyProperty>>  map = propertyList.stream().collect(Collectors.groupingBy(OntologyProperty::getDatasourceId));
+        Map<String,List<OntologyProperty>>  map = propertyList.stream().collect(Collectors.groupingBy(OntologyProperty::getOntologyUniqueIdentifier));
         LocalCacheUtils.ontologyPropertyMap = map;
     }
 

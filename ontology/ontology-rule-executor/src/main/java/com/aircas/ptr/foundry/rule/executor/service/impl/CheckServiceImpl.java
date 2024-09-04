@@ -60,7 +60,7 @@ public class CheckServiceImpl implements ICheckService {
         }
 
         if (!primaryCheck){
-            System.out.println("规则校验未通过:观察数据组件不满足");
+            System.out.println("规则校验未通过:观察数据主键不满足条件");
             return false;
         }
 

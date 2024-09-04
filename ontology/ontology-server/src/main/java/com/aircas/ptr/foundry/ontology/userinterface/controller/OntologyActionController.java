@@ -152,13 +152,17 @@ public class OntologyActionController {
 
 
     @ApiOperation(value = "查询行为信息")
-    @PostMapping("/getActionRulesByIds")
+    @GetMapping("/getActionRulesByIds")
     public ApiResult getActionByIds(String ids) {
         if (ids.trim().length()==0){
             return ApiResult.fail("参数错误");
         }
         String[] idArr = ids.split(",");
-        List<ActionHandleRule> rules = ontologyActionService.getActionRulesById(Arrays.asList(idArr));
+        List<Long> idList = new ArrayList<>(idArr.length);
+        for (String id : idArr){
+            idList.add(Long.parseLong(id));
+        }
+        List<ActionHandleRule> rules = ontologyActionService.getActionRulesById(idList);
         if (rules==null || rules.size()==0){
             return ApiResult.fail("没有匹配到行为信息");
         }

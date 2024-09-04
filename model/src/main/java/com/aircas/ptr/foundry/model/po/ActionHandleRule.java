@@ -42,9 +42,11 @@ public class ActionHandleRule {
     /**
      * 实体主键列表，以逗号分隔
      */
+    @Column(name = "object_primary_key")
     private String objectPrimaryKey;
 
     private String rules;
 
+    @Column(name = "rule_connect_type")
     private Integer ruleConnectType;
 }

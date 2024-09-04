@@ -38,7 +38,7 @@ public interface OntologyActionService {
 
     boolean configRule(String actionApi, List<String> objectPrimaryKeys, List<ActionHandleRuleAddParam> rules, ActionRuleConnectType ruleConnectType);
 
-    List<ActionHandleRule> getActionRulesById(List<String> ids);
+    List<ActionHandleRule> getActionRulesById(List<Long> ids);
 
     int updateActionRulesById(ActionHandleRule rule);
 

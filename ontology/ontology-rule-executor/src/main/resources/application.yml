@@ -26,6 +26,7 @@ spring:
 ontology:
   swagger:
     enable: true
+  # ontoloogy 服务地址
   server: http://${ONTOLOGY_SERVER}:36002/ontology
 
 #elasticsearch:
