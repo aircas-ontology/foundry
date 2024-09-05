@@ -24,6 +24,7 @@ import lombok.RequiredArgsConstructor;
 import com.aircas.ptr.foundry.model.po.OntologyDataType;
 import com.aircas.ptr.foundry.ontology.Exception.ExceptionFactory;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FileUtils;
 import org.codehaus.groovy.control.CompilationFailedException;
 import org.springframework.beans.BeanUtils;
@@ -38,7 +39,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.stream.Collectors;
 
-
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class FunctionServiceImpl implements FunctionService {
@@ -297,6 +298,7 @@ public class FunctionServiceImpl implements FunctionService {
                     "class " + className + "  extends OntologBaseObject {  " +
                     className + "(String primaryKey) { super(\"" + objectApi + "\", primaryKey)}" +
                     "}";
+            log.info("在这里输出本体类信息："+classImplString);
             loader.parseClass(classImplString);
         }
     }

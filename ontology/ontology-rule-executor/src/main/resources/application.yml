@@ -21,7 +21,10 @@ spring:
 #    aggressive-lazy-loading: false
 #    map-underscore-to-camel-case: true
 #  mapper-locations: classpath*:/mybatis-mapper/*Mapper.xml
-
+rocketmq:
+  name-server: 192.168.9.17:9876
+  consumer:
+    group: grp_group
 
 ontology:
   swagger:
