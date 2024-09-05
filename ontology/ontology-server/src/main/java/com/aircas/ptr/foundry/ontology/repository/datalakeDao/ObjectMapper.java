@@ -12,4 +12,6 @@ public interface ObjectMapper {
     List<DirectoryItem> queryDirectory(String tableName, String primaryKey, String titleKey);
     List<Map<String, Object>> queryAnySQL(String sql);
 
+    int updateAnySQL(String updateSql);
+
 }

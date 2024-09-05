@@ -20,5 +20,10 @@
         ${query}
     </select>
 
+
+    <update id="updateAnySQL">
+        ${updateSql}
+    </update>
+
 </mapper>
 
