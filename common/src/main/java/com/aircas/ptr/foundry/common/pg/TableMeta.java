@@ -1,4 +1,4 @@
-package com.aircas.ptr.foundry.sync.pg;
+package com.aircas.ptr.foundry.common.pg;
 
 import com.aircas.ptr.foundry.common.exception.DmException;
 import lombok.AllArgsConstructor;

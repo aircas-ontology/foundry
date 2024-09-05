@@ -1,4 +1,4 @@
-package com.aircas.ptr.foundry.sync.pg;
+package com.aircas.ptr.foundry.common.pg;
 
 /**
  * 支持的事件Event类型定义
@@ -38,7 +38,7 @@ public enum EventTypeEnum{
     TRUNCATE;
 
     public static EventTypeEnum getEventType(String event) {
-        if (EventTypeEnum.INSERT.name().equalsIgnoreCase(event)) {
+        if (event.equalsIgnoreCase(EventTypeEnum.INSERT.name())) {
             return EventTypeEnum.INSERT;
         } else if (EventTypeEnum.UPDATE.name().equalsIgnoreCase(event)) {
             return EventTypeEnum.UPDATE;

@@ -1,4 +1,4 @@
-package com.aircas.ptr.foundry.sync.pg;
+package com.aircas.ptr.foundry.common.pg;
 
 /**
  * Postgresql相关的常量值定义

@@ -1,10 +1,9 @@
 package com.aircas.ptr.foundry.sync.server;
 
-import com.aircas.ptr.foundry.sync.pg.EventParser;
-import com.aircas.ptr.foundry.sync.pg.PostgresqlConstants;
-import com.aircas.ptr.foundry.sync.pg.SyncEventContext;
+import com.aircas.ptr.foundry.common.pg.EventParser;
+import com.aircas.ptr.foundry.common.pg.PostgresqlConstants;
+import com.aircas.ptr.foundry.common.pg.SyncEventContext;
 import com.aircas.ptr.foundry.sync.util.TimeUtils;
-import io.transwarp.studio.dm.mq.RocketMQClient;
 import io.transwarp.studio.dm.mq.topic.MetaDataMQTopics;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;

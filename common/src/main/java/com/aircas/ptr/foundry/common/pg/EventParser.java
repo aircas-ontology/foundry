@@ -1,5 +1,7 @@
-package com.aircas.ptr.foundry.sync.pg;
+package com.aircas.ptr.foundry.common.pg;
 
+
+import static com.aircas.ptr.foundry.common.pg.EventTypeEnum.*;
 
 /**
  * PostgreSQL的事件日志解析
@@ -57,10 +59,10 @@ public class EventParser {
 
         event.setSchema(schema.replace("\"", ""));
         event.setTable(table.replace("\"", ""));
-        event.setEventType(EventTypeEnum.getEventType(eventType));
+        event.setEventType(getEventType(eventType));
         lexer.skip(1);
 
-		if (event.getEventType() != EventTypeEnum.TRUNCATE) {
+		if (event.getEventType() != TRUNCATE) {
 			while (lexer.hasNext()) {
 				FieldData data = new FieldData();
 				String name = parseName(lexer);
@@ -75,8 +77,8 @@ public class EventParser {
 				data.setName(name.replace("\"", ""));
 				data.setDataType(type);
 				data.setValue(value);
-				event.getDatas().add(data);
-			}
+                event.getDatas().add(data);
+            }
 		}
         return event;
     }
