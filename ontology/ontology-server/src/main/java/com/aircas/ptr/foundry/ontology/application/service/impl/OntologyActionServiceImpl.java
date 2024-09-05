@@ -5,16 +5,10 @@ import com.aircas.ptr.foundry.common.util.SnowflakeIdUtil;
 import com.aircas.ptr.foundry.model.po.*;
 import com.aircas.ptr.foundry.ontology.Exception.*;
 import com.aircas.ptr.foundry.ontology.application.service.*;
-import com.aircas.ptr.foundry.ontology.entity.bo.ActionHandleRuleBO;
-import com.aircas.ptr.foundry.ontology.entity.bo.ActionHandleTaskBO;
-import com.aircas.ptr.foundry.ontology.entity.bo.OntologyActionBo;
-import com.aircas.ptr.foundry.ontology.entity.bo.OntologyActionMappingInBO;
+import com.aircas.ptr.foundry.ontology.entity.bo.*;
 import com.aircas.ptr.foundry.ontology.entity.vo.*;
-import com.aircas.ptr.foundry.ontology.repository.dao.OntologyActionMappingInMapper;
-import com.aircas.ptr.foundry.ontology.repository.dao.OntologyActionMapper;
-import com.aircas.ptr.foundry.ontology.repository.dao.OntologyMetaMapper;
+import com.aircas.ptr.foundry.ontology.repository.dao.*;
 
-import com.aircas.ptr.foundry.ontology.repository.dao.OntologyPropertyMapper;
 import com.aircas.ptr.foundry.ontology.repository.param.ActionHandleMappingInParam;
 import com.aircas.ptr.foundry.ontology.repository.param.ActionHandleRuleAddParam;
 import com.alibaba.fastjson.JSON;
@@ -48,6 +42,9 @@ public class OntologyActionServiceImpl implements OntologyActionService {
 
     @Resource
     private final OntologyMetaMapper ontologyMetaMapper;
+
+    @Resource
+    private final ActionHandleCommitFlashMermoryMapper actionHandleCommitFlashMermoryMapper;
 
     @Resource
     private final OntologyPropertyMapper propertyMapper;
@@ -223,6 +220,15 @@ public class OntologyActionServiceImpl implements OntologyActionService {
 
     public int updateActionRulesById(ActionHandleRule rule){
         return actionHandleRuleService.updateRules(rule);
+    }
+
+
+    public ActionHandleCommitFlashMemory getActionDataLogByAction(long actionId,String primaryValue){
+        return actionHandleCommitFlashMermoryMapper.getActionFlashMemoryByActionAndPrimary(actionId,primaryValue);
+    }
+
+    public int updateActionDataById(ActionHandleCommitFlashMemory flashMemory){
+        return actionHandleCommitFlashMermoryMapper.updateActionDataLogById(flashMemory);
     }
 
     @Override

@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.rule.executor.service.impl;
 
 import com.aircas.ptr.foundry.common.base.DataResult;
+import com.aircas.ptr.foundry.model.po.ActionHandleCommitFlashMemory;
 import com.aircas.ptr.foundry.rule.executor.config.RuleConfig;
 import com.aircas.ptr.foundry.rule.executor.entity.ActionHandleRule;
 import com.aircas.ptr.foundry.rule.executor.entity.OntologyAction;
@@ -72,6 +73,23 @@ public class OntologyServerImpl implements IOntologyServer {
         String url = ruleConfig.getOntologyServerRemote()+"/action/updateActionRules";
         DataResult  dd = RestUtil.post(url,rule,DataResult.class);
         return dd.succeed();
+    }
+
+
+    public ActionHandleCommitFlashMemory getActionDataLog(long actionId, String primaryValue){
+        String url = ruleConfig.getOntologyServerRemote()+"/action/getActionDataLogByAction?actionId="+actionId+"&primaryValue="+primaryValue;
+        ParameterizedTypeReference<DataResult<ActionHandleCommitFlashMemory>> responseType = new ParameterizedTypeReference<DataResult<ActionHandleCommitFlashMemory>>() {};
+        DataResult<ActionHandleCommitFlashMemory>  dd = RestUtil.get(url,responseType);
+        if (dd.succeed()){
+            return dd.getDetail();
+        }
+        return null;
+    }
+
+    public int updateActionDataLog(ActionHandleCommitFlashMemory memory){
+        String url = ruleConfig.getOntologyServerRemote()+"/action/updateActionDataLogByAction";
+        DataResult  dd = RestUtil.post(url,memory,DataResult.class);
+        return dd.succeed()?1:0;
     }
 
     @Override

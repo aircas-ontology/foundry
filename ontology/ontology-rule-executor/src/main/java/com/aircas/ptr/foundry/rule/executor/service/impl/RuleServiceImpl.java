@@ -6,6 +6,7 @@ import com.aircas.ptr.foundry.rule.executor.entity.ActionHandleRule;
 import com.aircas.ptr.foundry.rule.executor.entity.OntologyAction;
 import com.aircas.ptr.foundry.rule.executor.entity.OntologyMeta;
 import com.aircas.ptr.foundry.rule.executor.entity.OntologyProperty;
+import com.aircas.ptr.foundry.rule.executor.entity.dynamics.CheckRuleStatus;
 import com.aircas.ptr.foundry.rule.executor.entity.param.ActionHandleParam;
 import com.aircas.ptr.foundry.rule.executor.entity.vo.CheckDataVO;
 import com.aircas.ptr.foundry.rule.executor.service.ICheckService;
@@ -50,12 +51,13 @@ public class RuleServiceImpl implements IRuleService {
             }
             List<ActionHandleRule> ruls= ontologyServer.queryActionRules(ids);
             for (ActionHandleRule rule : ruls){
-                if (checkService.checkRule(checkDataVO,rule,propertyList)){
+                CheckRuleStatus checkRuleStatus = checkService.checkRule(checkDataVO,rule,propertyList);
+                if (checkRuleStatus.isStatus()){
                     // 规则检验通过
                     // 更新规则历史信息
-                    String rules = checkService.getNewRules(checkDataVO,rule);
-                    rule.setRules(rules);
-                    if (ontologyServer.updateRuleInfo(rule)){
+//                    String rules = checkService.getNewRules(checkDataVO,rule);
+//                    rule.setRules(rules);
+                    if (ontologyServer.updateActionDataLog(checkService.getNewflashmemory(checkDataVO,rule,checkRuleStatus))==0){
                         //TODO 如果执行失败 是否要停止执行函数？
                     }
                     Object value = checkService.getPrimaryValue(checkDataVO,propertyList);

@@ -11,7 +11,7 @@ import tk.mybatis.spring.annotation.MapperScan;
 
 @EnableScheduling
 //@MapperScan({"com.aircas.ptr.foundry.rule.executor.mapper"})
-@SpringBootApplication
+@SpringBootApplication(scanBasePackages={"com.aircas.ptr.foundry.rule.executor","com.aircas.ptr.foundry.common"})
 public class OntologyRuleExecutorApplication {
 
     public static ApplicationContext context;
