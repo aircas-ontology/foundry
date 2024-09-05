@@ -7,11 +7,7 @@ import com.aircas.ptr.foundry.common.util.HttpUtil;
 import com.aircas.ptr.foundry.ontology.OntologyServerApplication;
 import com.aircas.ptr.foundry.ontology.application.service.ObjectService;
 import com.aircas.ptr.foundry.ontology.entity.vo.*;
-import com.aircas.ptr.foundry.ontology.repository.param.FilterParam;
-import com.aircas.ptr.foundry.ontology.repository.param.OntologyObjectQueryByLinkParam;
-import com.aircas.ptr.foundry.ontology.repository.param.OntologyObjectQueryParam;
-import com.aircas.ptr.foundry.ontology.repository.param.QuerySortParam;
-import com.alibaba.fastjson.JSONArray;
+import com.aircas.ptr.foundry.ontology.repository.param.*;
 import com.alibaba.fastjson.JSONObject;
 import com.github.pagehelper.PageInfo;
 import io.swagger.annotations.Api;
@@ -65,6 +61,13 @@ public class ObjectController {
             @RequestParam(required = false, defaultValue = "10") Integer size) {
 
         return DataResult.ofData(objectService.queryObjectList(ontologyUniqueIdentifier, page, size));
+    }
+
+
+    @ApiOperation(value = "更新实体属性", notes = "更新本体下指定实体的属性信息")
+    @PostMapping("/updateOntologyEntity")
+    public DataResult updateOntologyEntity(@RequestBody UpdateOntologyEntityParam param) {
+        return DataResult.ofData(objectService.updateObjectData(param.getOntologyUniqueIdentifier(),param.getUpdateData(),param.getUpdateWhere()));
     }
 
     @PostMapping("/list/by_filter")

@@ -35,7 +35,7 @@ public class ActionHandleRuleServiceImpl implements ActionHandleRuleService {
     }
 
     @Override
-    public List<ActionHandleRule> queryRulesByIds(List<String> ids) {
+    public List<ActionHandleRule> queryRulesByIds(List<Long> ids) {
         if (ids==null || ids.size()==0){
             return null;
         }

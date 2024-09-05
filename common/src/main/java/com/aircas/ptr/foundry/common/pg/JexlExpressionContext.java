@@ -1,4 +1,4 @@
-package com.aircas.ptr.foundry.sync.pg;
+package com.aircas.ptr.foundry.common.pg;
 
 import org.apache.commons.jexl2.Expression;
 import org.apache.commons.jexl2.JexlEngine;

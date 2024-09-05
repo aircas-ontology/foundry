@@ -15,6 +15,7 @@
         <module>ontology-common</module>
         <module>ontology-server</module>
         <module>ontology-rule-executor</module>
+        <module>ontology-db-service</module>
     </modules>
 
     <dependencies>

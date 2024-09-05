@@ -18,7 +18,7 @@ public interface ActionHandleRuleService {
     int insert(ActionHandleRuleBO actionHandleRuleBO);
 
 
-    List<ActionHandleRule> queryRulesByIds(List<String> ids);
+    List<ActionHandleRule> queryRulesByIds(List<Long> ids);
 
     int updateRules(ActionHandleRule rule);
 }

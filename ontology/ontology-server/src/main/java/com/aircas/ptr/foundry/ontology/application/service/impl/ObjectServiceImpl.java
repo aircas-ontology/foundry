@@ -12,6 +12,7 @@ import com.aircas.ptr.foundry.ontology.repository.dao.OntologyPropertyMapper;
 import com.aircas.ptr.foundry.ontology.repository.datalakeDao.ObjectMapper;
 import com.aircas.ptr.foundry.ontology.repository.param.FilterParam;
 import com.aircas.ptr.foundry.ontology.repository.param.QuerySortParam;
+import com.github.jsonldjava.utils.Obj;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import joptsimple.internal.Strings;
@@ -122,6 +123,15 @@ public class ObjectServiceImpl implements ObjectService {
         PageInfo pageResult = new PageInfo<>(rawResult);
         BeanUtils.copyProperties(pageResult, rawResult);
         return pageResult;
+    }
+
+
+    @Override
+    public int updateObjectData(String ontologyUniqueIdentifier,Map<String, Object> datamap,Map<String, Object> whereMap){
+        OntologyMetaVO ontologyMetaVO = ontologyMetaService.getOntologyByUniqueIdentifier(ontologyUniqueIdentifier);
+        String sql = buildUpdateSQL(ontologyMetaVO.getBackingDatasourceId(),datamap,whereMap);
+        int  r = objectMapper.updateAnySQL(sql);
+        return r;
     }
 
     @Override
@@ -354,5 +364,27 @@ public class ObjectServiceImpl implements ObjectService {
         String tableName = ontologyPropertyList.get(0).getDatasourceId();
 
         return "SELECT " + columns + " FROM " + tableName;
+    }
+
+
+    private String buildUpdateSQL(String tableName,Map<String,Object> dataMap,Map<String,Object> whereMap) {
+
+        String SET = "";
+        Iterator<String> keys = dataMap.keySet().iterator();
+        while (keys.hasNext()){
+            String key = keys.next();
+            SET += key+"= '"+dataMap.get(key)+"' ,";
+        }
+        SET = SET.substring(0,SET.length()-1);
+
+        String WHERE = "";
+        Iterator<String> wherekeys = whereMap.keySet().iterator();
+        while (wherekeys.hasNext()){
+            String key = wherekeys.next();
+            WHERE += key+"= '"+whereMap.get(key)+"' ,";
+        }
+        WHERE = WHERE.substring(0,WHERE.length()-1);
+
+        return "UPDATE " + tableName + " SET " + SET +(WHERE.equals("")?"":"WHERE "+WHERE);
     }
 }

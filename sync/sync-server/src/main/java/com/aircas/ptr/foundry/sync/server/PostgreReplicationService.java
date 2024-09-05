@@ -1,13 +1,13 @@
 package com.aircas.ptr.foundry.sync.server;
 
-import com.aircas.ptr.foundry.sync.pg.EventParser;
-import com.aircas.ptr.foundry.sync.pg.PostgresqlConstants;
-import com.aircas.ptr.foundry.sync.pg.SyncEventContext;
+import com.aircas.ptr.foundry.common.pg.EventParser;
+import com.aircas.ptr.foundry.common.pg.PostgresqlConstants;
+import com.aircas.ptr.foundry.common.pg.SyncEventContext;
+import com.aircas.ptr.foundry.sync.common.DataSourceConfig;
 import com.aircas.ptr.foundry.sync.util.TimeUtils;
 import io.transwarp.studio.dm.mq.RocketMQClient;
 import io.transwarp.studio.dm.mq.topic.MetaDataMQTopics;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.StringUtils;
 import org.apache.rocketmq.client.producer.SendResult;
 import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.postgresql.PGConnection;
@@ -15,6 +15,7 @@ import org.postgresql.PGProperty;
 import org.postgresql.replication.LogSequenceNumber;
 import org.postgresql.replication.PGReplicationStream;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.jdbc.DataSourceProperties;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -26,7 +27,6 @@ import java.nio.ByteBuffer;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
-import java.util.Locale;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
@@ -46,27 +46,14 @@ import java.util.concurrent.TimeUnit;
 @Service
 public class PostgreReplicationService {
 
-    @Value("${postgres.slot.name}")
-    private String postgresSlotName;
-
-    @Value("${postgres.slot.size}")
-    private Integer postgresSlotSize;
-
-    @Value("${postgres.table.schema}")
-    private String postgresTableSchema;
-
-    @Value("${postgres.table.prefix}")
-    private String postgresTablePrefix;
-
-//	@Resource
-//	public RocketMQClient rocketMQClient;
+    @Autowired
+    private DataSourceConfig dataSourceConfig;
 
     @Resource
     private RocketMQTemplate rocketMQTemplate;
 
     @Autowired
     private DataSourceProperties dataSourceProperties;
-
 
     private Connection connection;
     private PGConnection rplConnection;
@@ -121,14 +108,15 @@ public class PostgreReplicationService {
      * @throws SQLException
      */
     private void createReplicationConnection() throws SQLException {
+
         Properties props = new Properties();
-        PGProperty.USER.set(props, dataSourceProperties.getUsername());
-        PGProperty.PASSWORD.set(props, dataSourceProperties.getPassword());
+        PGProperty.USER.set(props, dataSourceConfig.getPostgresDatalakeUserName());
+        PGProperty.PASSWORD.set(props, dataSourceConfig.getPostgresDatalakePassword());
         PGProperty.ASSUME_MIN_SERVER_VERSION.set(props, PostgresqlConstants.minVersion);
         PGProperty.REPLICATION.set(props, PostgresqlConstants.rplLevel);
         PGProperty.PREFER_QUERY_MODE.set(props, PostgresqlConstants.queryMode);
+        this.connection = DriverManager.getConnection(dataSourceConfig.getPostgresDatalakeUrl(), props);
 
-        this.connection = DriverManager.getConnection(dataSourceProperties.getUrl(), props);
         this.rplConnection = this.connection.unwrap(PGConnection.class);
         log.info("Get PostgreSQL Replication Connection success!");
     }
@@ -139,6 +127,7 @@ public class PostgreReplicationService {
      * @throws SQLException
      */
     private void createReplicationSlot() throws SQLException {
+        String postgresSlotName = dataSourceConfig.getPostgresSlotName();
         try {
             this.rplConnection.getReplicationAPI()
                     .createReplicationSlot()
@@ -148,6 +137,7 @@ public class PostgreReplicationService {
                     .make();
         } catch (SQLException e) {
             String msg = "ERROR: replication slot \"" + postgresSlotName + "\" already exists";
+//            this.rplConnection.getReplicationAPI().dropReplicationSlot(postgresSlotName);
             if (msg.equals(e.getMessage())) {
                 return;
             }
@@ -162,6 +152,7 @@ public class PostgreReplicationService {
      * @throws SQLException
      */
     private void createReplicationStream() throws SQLException {
+        String postgresSlotName = dataSourceConfig.getPostgresSlotName();
         this.stream = this.rplConnection.getReplicationAPI()
                 .replicationStream()
                 .logical()
@@ -215,24 +206,15 @@ public class PostgreReplicationService {
      * @param context 事件上下文
      */
     private void handleEventContext(SyncEventContext context) {
-        if (!postgresTableSchema.equalsIgnoreCase(context.getSchema())) {
+        if (!dataSourceConfig.getPostgresTableSchema().equalsIgnoreCase(context.getSchema())) {
             return;
         }
 
-        if (StringUtils.isNotEmpty(postgresTablePrefix)
-                && !context.getTable().toLowerCase(Locale.ROOT).startsWith(postgresTablePrefix.toLowerCase(Locale.ROOT))) {
-            if (log.isDebugEnabled()) {
-                log.debug("Producer Filter :{}", context);
-            }
-            return;
-        }
         /**
          * 消息处理业务逻辑
          */
         log.info("message context:{}", context);
         SendResult sendResult = rocketMQTemplate.syncSend(MetaDataMQTopics.ONTOLOGY_META_CHANGE_NOTIFY, context);
-        log.info("发送结果:{}", sendResult);
-//        rocketMQClient.send(MetaDataMQTopics.ONTOLOGY_META_CHANGE_NOTIFY, context);
-
+        log.info("send result:{}", sendResult);
     }
 }

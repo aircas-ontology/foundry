@@ -14,6 +14,11 @@ spring:
     password: iecas123
     validation-query: SELECT 1
     test-on-borrow: true
+  datalake:
+    driver-class-name: org.postgresql.Driver
+    url: jdbc:postgresql://192.168.9.17:35432/foudry_datasource?currentSchema=public
+    username: iecas
+    password: iecas123
 
 mybatis:
   configuration:
@@ -27,7 +32,7 @@ postgres:
     name: sync
     size: 100
   table:
-    schema: ontology
+    schema: public
     prefix: ontology_meta
 
 rocketmq:

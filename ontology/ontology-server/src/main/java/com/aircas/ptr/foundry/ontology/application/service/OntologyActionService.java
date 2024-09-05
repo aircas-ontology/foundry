@@ -2,8 +2,10 @@ package com.aircas.ptr.foundry.ontology.application.service;
 
 
 import com.aircas.ptr.foundry.common.constant.ActionRuleConnectType;
+import com.aircas.ptr.foundry.model.po.ActionHandleCommitFlashMemory;
 import com.aircas.ptr.foundry.model.po.ActionHandleRule;
 import com.aircas.ptr.foundry.ontology.Exception.*;
+import com.aircas.ptr.foundry.ontology.entity.bo.ActionHandleCommitFlashMemoryBO;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyActionBo;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyActionVO;
 import com.aircas.ptr.foundry.ontology.entity.vo.ParameterMetadataVO;
@@ -38,9 +40,13 @@ public interface OntologyActionService {
 
     boolean configRule(String actionApi, List<String> objectPrimaryKeys, List<ActionHandleRuleAddParam> rules, ActionRuleConnectType ruleConnectType);
 
-    List<ActionHandleRule> getActionRulesById(List<String> ids);
+    List<ActionHandleRule> getActionRulesById(List<Long> ids);
 
     int updateActionRulesById(ActionHandleRule rule);
+
+    ActionHandleCommitFlashMemory getActionDataLogByAction(long actionId,String primaryValue);
+
+    int updateActionDataById(ActionHandleCommitFlashMemory flashMemory);
 
     boolean configTask(String actionApi, List<String> objectPrimaryKeys, Date taskStartTime, Date taskEndTime, String taskCorn);
 }

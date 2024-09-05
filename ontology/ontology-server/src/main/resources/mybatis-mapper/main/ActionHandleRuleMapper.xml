@@ -1,6 +1,20 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
 <mapper namespace="com.aircas.ptr.foundry.ontology.repository.dao.ActionHandleRuleMapper">
+    <resultMap id="BaseResultMap" type="com.aircas.ptr.foundry.model.po.ActionHandleRule">
+        <id column="id" jdbcType="BIGINT" property="id" />
+        <result column="status" jdbcType="VARCHAR" property="status" />
+        <result column="create_time" jdbcType="TIMESTAMP" property="createTime" />
+        <result column="update_time" jdbcType="TIMESTAMP" property="updateTime" />
+        <result column="action_id" jdbcType="BIGINT" property="actionId" />
+        <result column="object_primary_key" jdbcType="VARCHAR" property="objectPrimaryKey" />
+        <result column="rules" jdbcType="VARCHAR" property="rules" />
+        <result column="rule_connect_type" jdbcType="VARCHAR" property="ruleConnectType" />
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, status, "status", create_time, update_time, action_id, object_primary_key, rules,rule_connect_type
+    </sql>
 
     <select id="selectByActionId"
             resultType="com.aircas.ptr.foundry.ontology.repository.dao.ActionHandleRuleMapper">
@@ -10,8 +24,10 @@
     </select>
 
     <select id="queryRulesById"
-            resultType="com.aircas.ptr.foundry.model.po.ActionHandleRule">
-        select *
+            resultMap="BaseResultMap"
+             parameterType="java.util.List">
+        select
+        <include refid="Base_Column_List" />
         from action_handle_rule
         where action_id in
         <foreach collection="ids" item="id" open="(" separator="," close=")">

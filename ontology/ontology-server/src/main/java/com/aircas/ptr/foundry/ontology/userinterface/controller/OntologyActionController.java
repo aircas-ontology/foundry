@@ -3,11 +3,13 @@ package com.aircas.ptr.foundry.ontology.userinterface.controller;
 import com.aircas.ptr.foundry.common.base.ApiResult;
 import com.aircas.ptr.foundry.common.base.DataResult;
 
+import com.aircas.ptr.foundry.model.po.ActionHandleCommitFlashMemory;
 import com.aircas.ptr.foundry.model.po.ActionHandleRule;
 import com.aircas.ptr.foundry.ontology.Exception.*;
 import com.aircas.ptr.foundry.ontology.application.service.ActionHandleTaskService;
 import com.aircas.ptr.foundry.ontology.application.service.DynamicActionTaskService;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyActionService;
+import com.aircas.ptr.foundry.ontology.entity.bo.ActionHandleCommitFlashMemoryBO;
 import com.aircas.ptr.foundry.ontology.entity.bo.ActionHandleTaskBO;
 import com.aircas.ptr.foundry.ontology.repository.param.ActionHandleConfigParam;
 import com.aircas.ptr.foundry.ontology.repository.param.ActionHandleParam;
@@ -151,18 +153,34 @@ public class OntologyActionController {
     }
 
 
-    @ApiOperation(value = "查询行为信息")
-    @PostMapping("/getActionRulesByIds")
+    @ApiOperation(value = "查询行为规则信息")
+    @GetMapping("/getActionRulesByIds")
     public ApiResult getActionByIds(String ids) {
         if (ids.trim().length()==0){
             return ApiResult.fail("参数错误");
         }
         String[] idArr = ids.split(",");
-        List<ActionHandleRule> rules = ontologyActionService.getActionRulesById(Arrays.asList(idArr));
+        List<Long> idList = new ArrayList<>(idArr.length);
+        for (String id : idArr){
+            idList.add(Long.parseLong(id));
+        }
+        List<ActionHandleRule> rules = ontologyActionService.getActionRulesById(idList);
         if (rules==null || rules.size()==0){
             return ApiResult.fail("没有匹配到行为信息");
         }
         return DataResult.ofData(rules);
+    }
+
+    @ApiOperation(value = "查询行为规则上一次数据记录")
+    @GetMapping("/getActionDataLogByAction")
+    public ApiResult getActionDataLogByAction(long actionId,String primaryValue) {
+        return DataResult.ofData(ontologyActionService.getActionDataLogByAction(actionId,primaryValue));
+    }
+
+    @ApiOperation(value = "更新行为执行数据")
+    @PostMapping("/updateActionDataLogByAction")
+    public ApiResult getActionDataLogByAction(@RequestBody ActionHandleCommitFlashMemory memory) {
+        return DataResult.ofData(ontologyActionService.updateActionDataById(memory));
     }
 
     @ApiOperation(value = "执行行为")

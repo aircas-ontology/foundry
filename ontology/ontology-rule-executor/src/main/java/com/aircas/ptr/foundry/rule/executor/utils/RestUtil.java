@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.rule.executor.utils;
 
 import com.alibaba.fastjson.JSONObject;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -10,6 +11,7 @@ import org.springframework.http.converter.StringHttpMessageConverter;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 
+import java.lang.reflect.ParameterizedType;
 import java.nio.charset.Charset;
 import java.util.Arrays;
 
@@ -57,6 +59,13 @@ public final class RestUtil {
         return result;
     }
 
+    public static <T> T get(String url, ParameterizedTypeReference<T> type) {
+        RestTemplate restTemplate = new RestTemplate(requestFactory);
+        HttpEntity<String> entity = new HttpEntity<>("parameters", getHttpHeader());
+        T result = restTemplate.exchange(url, HttpMethod.GET, entity, type).getBody();
+        return result;
+    }
+
     /**
      * post 请求
      *
@@ -74,6 +83,18 @@ public final class RestUtil {
 
         RestTemplate restTemplate = new RestTemplate(requestFactory);
         T result = restTemplate.exchange(url, HttpMethod.POST, requestEntity, clazz).getBody();
+        return result;
+    }
+
+
+    public static <T> T post(String url, Object bean, ParameterizedTypeReference<T> type) {
+        HttpHeaders httpHeader = getHttpHeader();
+        // 表单提交方式
+        httpHeader.setContentType(MediaType.APPLICATION_JSON);
+        HttpEntity<String> requestEntity = new HttpEntity<>(JSONObject.toJSONString(bean), httpHeader);
+
+        RestTemplate restTemplate = new RestTemplate(requestFactory);
+        T result = restTemplate.exchange(url, HttpMethod.POST, requestEntity, type).getBody();
         return result;
     }
 

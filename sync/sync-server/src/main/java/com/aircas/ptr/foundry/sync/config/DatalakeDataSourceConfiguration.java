@@ -5,6 +5,7 @@ import com.alibaba.druid.spring.boot.autoconfigure.DruidDataSourceBuilder;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.mybatis.spring.SqlSessionFactoryBean;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.autoconfigure.jdbc.DataSourceProperties;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -21,7 +22,7 @@ public class DatalakeDataSourceConfiguration {
 
     @Primary
     @Bean("datalakeDataSource")
-    @ConfigurationProperties("spring.datasource.datalake")
+    @ConfigurationProperties("spring.datalake")
     public DataSource createMainDataSource() {
         return DruidDataSourceBuilder.create().build();
     }
@@ -40,4 +41,10 @@ public class DatalakeDataSourceConfiguration {
     public DataSourceTransactionManager mainTransactionManager(@Qualifier("datalakeDataSource")DataSource dataSource) {
         return new DataSourceTransactionManager(dataSource);
     }
+
+//    @Bean(name = "datalakeDataSourceProperties")
+////    @ConfigurationProperties(prefix = "spring.datalake")
+//    public DataSourceProperties datalakeDataSourceProperties() {
+//        return new DataSourceProperties();
+//    }
 }

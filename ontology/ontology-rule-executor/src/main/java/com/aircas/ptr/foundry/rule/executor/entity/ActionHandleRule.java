@@ -1,30 +1,36 @@
 package com.aircas.ptr.foundry.rule.executor.entity;
 
-import com.aircas.ptr.foundry.common.util.SnowflakeIdUtil;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
+import javax.persistence.Column;
+import javax.persistence.Id;
 import java.util.Date;
 
-import static com.aircas.ptr.foundry.common.constant.Status.ENABLE;
+import static com.aircas.ptr.foundry.common.constant.DateFormat.DATE_FORMAT_DEFAULT;
 
-/**
- * @className: ActionHandleRuleBO
- * @author: yangj
- * @date: 2024/9/1 19:43
- * @version: 1.0
- * @description: 行为执行规则
- */
-@EqualsAndHashCode(callSuper = true)
 @Data
-public class ActionHandleRule extends com.aircas.ptr.foundry.model.po.ActionHandleRule {
+public class ActionHandleRule{
 
-    public ActionHandleRule() {
+    private Long id;
 
-        setId(SnowflakeIdUtil.get());
-        Date now = new Date();
-        setCreateTime(now);
-        setUpdateTime(now);
-        setStatus(ENABLE.getValue());
-    }
+    @JsonFormat(pattern = DATE_FORMAT_DEFAULT, timezone = "GMT+8")
+    private Date createTime;
+
+    @JsonFormat(pattern = DATE_FORMAT_DEFAULT, timezone = "GMT+8")
+    private Date updateTime;
+
+    private Integer status;
+
+    private Long actionId;
+
+    /**
+     * 实体主键列表，以逗号分隔
+     */
+    private String objectPrimaryKey;
+
+    private String rules;
+
+    private Integer ruleConnectType;
 }
