@@ -2,6 +2,7 @@ package com.aircas.ptr.foundry.ontology.repository.dao;
 
 import com.aircas.ptr.foundry.model.po.ActionHandleRule;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
 
@@ -18,7 +19,7 @@ public interface ActionHandleRuleMapper extends tk.mybatis.mapper.common.Mapper<
     ActionHandleRule selectByActionId(String actionId);
 
 
-    List<ActionHandleRule> queryRulesById(List<String> ids);
+    List<ActionHandleRule> queryRulesById(@Param("ids") List<Long> ids);
 
 
     int updateRulesById(ActionHandleRule rule);

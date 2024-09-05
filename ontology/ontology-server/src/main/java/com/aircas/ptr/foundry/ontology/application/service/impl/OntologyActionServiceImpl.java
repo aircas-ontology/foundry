@@ -217,7 +217,7 @@ public class OntologyActionServiceImpl implements OntologyActionService {
     }
 
     @Override
-    public List<ActionHandleRule> getActionRulesById(List<String> ids){
+    public List<ActionHandleRule> getActionRulesById(List<Long> ids){
         return actionHandleRuleService.queryRulesByIds(ids);
     }
 

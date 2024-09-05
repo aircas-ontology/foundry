@@ -13,14 +13,16 @@
     </resultMap>
 
     <select id="getColumnMetadata" parameterType="java.lang.String" resultMap="BaseResultMap">
-        select a.attname                                as column_name,
+        SELECT a.attname                                as column_name,
                col_description(a.attrelid, a.attnum)    as description,
                pg_catalog.format_type(a.atttypid, null) as type
-        from pg_class as c,
-             pg_attribute as a
-        where c.relname = #{tableName,jdbcType=VARCHAR}
-          and a.attrelid = c.oid
-          and a.attnum > 0
+        FROM pg_class c
+                 JOIN pg_namespace n on n.oid = c.relnamespace
+                 JOIN pg_attribute a on a.attrelid = c.oid
+        WHERE n.nspname = 'public'
+          AND c.relkind = 'r'
+          AND a.attnum > 0
+          AND c.relname = #{tableName,jdbcType=VARCHAR}
     </select>
 
     <select id="listTables" resultMap="TableResultMap">
