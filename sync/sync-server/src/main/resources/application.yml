@@ -29,7 +29,7 @@ mybatis:
 
 postgres:
   slot:
-    name: sync2
+    name: sync
     size: 100
   table:
     schema: public

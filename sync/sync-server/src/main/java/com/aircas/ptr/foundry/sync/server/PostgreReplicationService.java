@@ -137,6 +137,7 @@ public class PostgreReplicationService {
                     .make();
         } catch (SQLException e) {
             String msg = "ERROR: replication slot \"" + postgresSlotName + "\" already exists";
+//            this.rplConnection.getReplicationAPI().dropReplicationSlot(postgresSlotName);
             if (msg.equals(e.getMessage())) {
                 return;
             }
