@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.common.util;
 
 import com.alibaba.fastjson.JSONObject;
+import com.sun.javafx.collections.MappingChange;
 import org.apache.commons.httpclient.HttpClient;
 import org.apache.commons.httpclient.HttpException;
 import org.apache.commons.httpclient.HttpMethod;
@@ -12,7 +13,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class HttpUtil {
 
@@ -76,8 +79,7 @@ public class HttpUtil {
 	}
 
 	public static void main(String[] args) throws HttpException {
-		String tle1 = JSONObject.parseArray("", JSONObject.class).get(0).getString("tle1");
-		String tle2 = JSONObject.parseArray("", JSONObject.class).get(0).getString("tle2");
+
 	}
 
 }
