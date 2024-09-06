@@ -1,0 +1,23 @@
+spring:
+  application:
+    name: ontology
+  cloud:
+    nacos:
+      config:
+        server-addr: 192.168.9.12:8849
+        namespace: iecas-ptr
+        prefix: ${spring.application.name}
+        file-extension: yml
+#
+#        # 公共基础配置文件
+#        extension-configs[0]:
+#          dataId: network-base-config.yml
+#          refresh: true
+#        # 公共配置文件
+#        extension-configs[1]:
+#          dataId: rwqd-commons.yml
+#          refresh: true
+      discovery:
+        server-addr: 192.168.9.12:8849
+        namespace: iecas-ptr
+

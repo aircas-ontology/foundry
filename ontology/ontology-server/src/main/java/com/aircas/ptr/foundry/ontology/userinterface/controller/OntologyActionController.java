@@ -9,7 +9,6 @@ import com.aircas.ptr.foundry.ontology.Exception.*;
 import com.aircas.ptr.foundry.ontology.application.service.ActionHandleTaskService;
 import com.aircas.ptr.foundry.ontology.application.service.DynamicActionTaskService;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyActionService;
-import com.aircas.ptr.foundry.ontology.entity.bo.ActionHandleCommitFlashMemoryBO;
 import com.aircas.ptr.foundry.ontology.entity.bo.ActionHandleTaskBO;
 import com.aircas.ptr.foundry.ontology.repository.param.ActionHandleConfigParam;
 import com.aircas.ptr.foundry.ontology.repository.param.ActionHandleParam;

@@ -23,12 +23,31 @@ spring:
             maxAge: 3600
       routes:
         - id: ontology
-          uri: lb://ontology
+          uri: http://localhost:36002/ontology
           predicates:
             - Path=/api/ontology/**
           filters:
             - StripPrefix=1
-
+        - id: ontology-rule-executor
+          uri: http://localhost:36010/rule-executor
+          predicates:
+            - Path=/api/rule-executor/**
+          filters:
+            - StripPrefix=1
+#      routes:
+#        - id: ontology
+#          uri: lb://ontology
+#          predicates:
+#            - Path=/api/ontology/**
+#          filters:
+#            - StripPrefix=1
+knife4j:
+  gateway:
+    enabled: true
+    strategy: discover
+    discover:
+      version: openapi3
+      enabled: true
 #eureka:
 #  instance:
 #    prefer-ip-address: true
