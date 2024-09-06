@@ -1,5 +1,6 @@
 import com.aircas.ptr.foundry.ontology.function.Parameter
 import com.alibaba.fastjson.JSONObject
+import com.alibaba.fastjson.JSONArray;
 import com.aircas.ptr.foundry.common.constant.QuerySortEnum
 import com.aircas.ptr.foundry.common.util.HttpUtil
 import com.aircas.ptr.foundry.ontology.repository.param.FilterParam
@@ -8,6 +9,8 @@ import com.aircas.ptr.foundry.ontology.repository.param.QuerySortParam
 import com.aircas.ptr.foundry.ontology.OntologyServerApplication
 import com.aircas.ptr.foundry.ontology.application.service.ObjectService
 import com.aircas.ptr.foundry.ontology.Destroyer
+
+import java.util.stream.Collectors
 
 class trajectoryPredict {
 
@@ -48,10 +51,16 @@ class trajectoryPredict {
             floats[11] = lonStart
             collect.add(floats)
         }
-        float[][] array = (float[][]) collect.toArray()
+        float[][] inputArr = (float[][]) collect.toArray()
         Map<String, Object> data = new HashMap<String, Object>()
-        data.put("trace_data", array)
+        data.put("trace_data", inputArr)
         def resp = HttpUtil.doPost(url, data)
-        return JSONObject.parseObject(resp).getJSONArray("res")
+        JSONArray res = JSONObject.parseObject(resp).getJSONArray("res");
+        List<float[]> arr = new ArrayList<>()
+        for (int i = 0; i < res.size(); i++) {
+            arr.add(new float[]{res.getJSONArray(i).getFloat(1), res.getJSONArray(i).getFloat(0)});
+        }
+        float[][] array = (float[][]) arr.toArray()
+        return array
     }
 }
