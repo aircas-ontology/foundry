@@ -14,6 +14,46 @@ spring:
     password: iecas123
     validation-query: SELECT 1
     test-on-borrow: true
+http:
+  # 最大连接数
+  maxTotal: 30
+  # 并发数
+  defaultMaxPerRoute: 20
+  # 创建连接的最长时间
+  connectTimeout: 30000
+  # 从连接池中获取到连接的最长时间
+  connectionRequestTimeout: 10000
+  # 数据传输的最长时间
+  socketTimeout: 120000
+  # 提交请求前测试连接是否可用
+  staleConnectionCheckEnabled: true
+#ribbon:
+#  # 设置连接超时时间
+#  ConnectTimeout: 120000
+#  # 设置读取超时时间
+#  ReadTimeout: 6000
+#  # 对所有操作请求都进行重试
+#  OkToRetryOnAllOperations: false
+#  # 切换实例的重试次数
+#  MaxAutoRetriesNextServer: 2
+#  # 对当前实例的重试次数
+#  MaxAutoRetries: 1
+okhttp:
+  connect-timeout-ms: 1000
+  keep-alive-duration-sec: 5000
+  max-idle: 100
+  read-timeout-ms: 5000
+  write-timeout-ms: 5000
+feign:
+  client:
+    config:
+      default:
+        connectTimeout: 2000
+        readTimeout: 2000
+ribbon:
+  readTimeout: 120000
+  connectTimeout: 120000
+
 
 #mybatis:
 #  configuration:

@@ -42,6 +42,7 @@ public class RuleServiceImpl implements IRuleService {
 
             List<OntologyAction> ontologyActions = ontologyServer.queryByOntologyUniqueIdentifier(meta.getUniqueIdentifier());
             if (ontologyActions==null || ontologyActions.size()==0){
+                log.info(meta.getApiName()+" 实体没有绑定行为信息...:"+meta.getUniqueIdentifier());
                 continue;
             }
             // 查询行为规则
@@ -50,6 +51,7 @@ public class RuleServiceImpl implements IRuleService {
                 ids.add(action.getId()+"");
             }
             List<ActionHandleRule> ruls= ontologyServer.queryActionRules(ids);
+            log.info(String.join(",",ids)+" 绑定的行为规则数量:"+ruls.size());
             for (ActionHandleRule rule : ruls){
                 CheckRuleStatus checkRuleStatus = checkService.checkRule(checkDataVO,rule,propertyList);
                 if (checkRuleStatus.isStatus()){

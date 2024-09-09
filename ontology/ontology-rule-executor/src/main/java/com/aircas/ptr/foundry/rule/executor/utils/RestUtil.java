@@ -28,9 +28,9 @@ public final class RestUtil {
     private static SimpleClientHttpRequestFactory createFactory() {
         requestFactory = new SimpleClientHttpRequestFactory();
         // 连接超时时间
-        requestFactory.setConnectTimeout(10000);
+        requestFactory.setConnectTimeout(300000);
         // 读取超时时间
-        requestFactory.setReadTimeout(10000);
+        requestFactory.setReadTimeout(300000);
         return requestFactory;
     }
 

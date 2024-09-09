@@ -13,6 +13,7 @@ import com.aircas.ptr.foundry.rule.executor.utils.CompareUtil;
 import com.aircas.ptr.foundry.rule.executor.utils.LocalCacheUtils;
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.beanutils.BeanUtils;
 import org.aspectj.bridge.MessageUtil;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,6 +24,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @Service
 public class CheckServiceImpl implements ICheckService {
 
@@ -101,7 +103,7 @@ public class CheckServiceImpl implements ICheckService {
             String value = item.getString("columnValue");
             String condition = item.getString("condition");
             String dataMapValue = dataMap.get(key)+"";
-            if (CompareUtil.compare(condition,dataMapValue,value,mermoryMap)){
+            if (CompareUtil.compare(key,condition,dataMapValue,value,mermoryMap)){
                 flagCount++;
                 if (connectType==2){
                     return new CheckRuleStatus(true,dataKeyValue,lastFlashMermory!=null?lastFlashMermory.getId().toString():null);
@@ -170,6 +172,7 @@ public class CheckServiceImpl implements ICheckService {
         memory.setActionId(rule.getActionId());
         memory.setPrimaryKey(status.getPrimaryValue());
         memory.setData(JSONObject.toJSONString(vo.getData()));
+        log.info("保存当前数据缓存："+JSONObject.toJSONString(memory));
         return memory;
     }
 
