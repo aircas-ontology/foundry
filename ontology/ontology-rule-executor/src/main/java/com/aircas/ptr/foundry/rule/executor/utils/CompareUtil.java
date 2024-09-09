@@ -4,7 +4,7 @@ import java.util.Map;
 
 public class CompareUtil {
 
-    public static boolean compare(String condition,Object value1, Object value2,Map<String,String> data){
+    public static boolean compare(String key,String condition,Object value1, Object value2,Map<String,String> data){
         if (condition.equals("GT")){
             return gt(value1,value2,data);
         }else if (condition.equals("LT")){
@@ -12,7 +12,7 @@ public class CompareUtil {
         }else if (condition.equals("EQ")){
             return eq(value1,value2,data);
         }else if (condition.equals("CH")){
-            return change(value1,value2);
+            return change(key,value1,value2,data);
         }
         return false;
     }
@@ -80,10 +80,10 @@ public class CompareUtil {
     }
 
 
-    public static boolean change(Object value1, Object value2){
+    public static boolean change(String key,Object value1, Object value2,Map<String,String> data){
         try{
             String tmp1 = value1+"";
-            String tmp2 = value2+"";
+            String tmp2 = data.get(key)+"";
             if (!tmp1.equals(tmp2)){
                 return true;
             }

@@ -94,10 +94,16 @@ public class OntologyServerImpl implements IOntologyServer {
 
     @Override
     public boolean actionExecute(ActionHandleParam param) {
-        String url = ruleConfig.getOntologyServerRemote()+"/action/execute";
-        DataResult  dd = RestUtil.post(url,param,DataResult.class);
-        log.info("执行行为 ["+param.getApi()+"] 结果:"+dd.succeed()+" 内容:"+ JSONObject.toJSONString(dd));
-        return dd.succeed();
+        try{
+            String url = ruleConfig.getOntologyServerRemote()+"/action/execute";
+            DataResult  dd = RestUtil.post(url,param,DataResult.class);
+            log.info("执行行为 ["+param.getApi()+"] 结果:"+dd.succeed()+" 内容:"+ JSONObject.toJSONString(dd));
+            return dd.succeed();
+        }catch (Exception e){
+            log.error("执行行为超时");
+        }
+        return false;
+
     }
 
 }

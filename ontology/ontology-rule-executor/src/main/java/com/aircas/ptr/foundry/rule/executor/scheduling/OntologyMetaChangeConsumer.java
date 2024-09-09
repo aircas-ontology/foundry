@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
 @Service
@@ -42,7 +43,12 @@ public class OntologyMetaChangeConsumer implements RocketMQListener<SyncEventCon
             checkDataVO.setDb(context.getSchema());
             checkDataVO.setTable(context.getTable());
             checkDataVO.setData(dataMap);
-            ruleService.checkData(checkDataVO);
+            try{
+                ruleService.checkData(checkDataVO);
+            }catch (Exception e){
+                System.out.println("接收消息失败:"+e.getMessage());
+            }
+
         }
     }
 }
