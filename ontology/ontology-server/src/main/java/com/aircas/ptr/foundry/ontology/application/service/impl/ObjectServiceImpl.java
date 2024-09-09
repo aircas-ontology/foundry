@@ -127,10 +127,10 @@ public class ObjectServiceImpl implements ObjectService {
 
 
     @Override
-    public int updateObjectData(String ontologyUniqueIdentifier,Map<String, Object> datamap,Map<String, Object> whereMap){
+    public int updateObjectData(String ontologyUniqueIdentifier, Map<String, Object> datamap, Map<String, Object> whereMap) {
         OntologyMetaVO ontologyMetaVO = ontologyMetaService.getOntologyByUniqueIdentifier(ontologyUniqueIdentifier);
-        String sql = buildUpdateSQL(ontologyMetaVO.getBackingDatasourceId(),datamap,whereMap);
-        int  r = objectMapper.updateAnySQL(sql);
+        String sql = buildUpdateSQL(ontologyMetaVO.getBackingDatasourceId(), datamap, whereMap);
+        int r = objectMapper.updateAnySQL(sql);
         return r;
     }
 
@@ -367,24 +367,24 @@ public class ObjectServiceImpl implements ObjectService {
     }
 
 
-    private String buildUpdateSQL(String tableName,Map<String,Object> dataMap,Map<String,Object> whereMap) {
+    private String buildUpdateSQL(String tableName, Map<String, Object> dataMap, Map<String, Object> whereMap) {
 
         String SET = "";
         Iterator<String> keys = dataMap.keySet().iterator();
-        while (keys.hasNext()){
+        while (keys.hasNext()) {
             String key = keys.next();
-            SET += key+"= '"+dataMap.get(key)+"' ,";
+            SET += "\"" + key + "\"= '" + dataMap.get(key) + "' ,";
         }
-        SET = SET.substring(0,SET.length()-1);
+        SET = SET.substring(0, SET.length() - 1);
 
         String WHERE = "";
         Iterator<String> wherekeys = whereMap.keySet().iterator();
-        while (wherekeys.hasNext()){
+        while (wherekeys.hasNext()) {
             String key = wherekeys.next();
-            WHERE += key+"= '"+whereMap.get(key)+"' ,";
+            WHERE += "\"" + key + "\"= '" + whereMap.get(key) + "' ,";
         }
-        WHERE = WHERE.substring(0,WHERE.length()-1);
+        WHERE = WHERE.substring(0, WHERE.length() - 1);
 
-        return "UPDATE " + tableName + " SET " + SET +(WHERE.equals("")?"":"WHERE "+WHERE);
+        return "UPDATE " + tableName + " SET " + SET + (WHERE.equals("") ? "" : "WHERE " + WHERE);
     }
 }
