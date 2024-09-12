@@ -22,6 +22,7 @@
         WHERE n.nspname = 'public'
           AND c.relkind = 'r'
           AND a.attnum > 0
+          AND a.atttypid != 0
           AND c.relname = #{tableName,jdbcType=VARCHAR}
     </select>
 

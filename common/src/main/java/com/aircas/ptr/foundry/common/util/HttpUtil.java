@@ -9,24 +9,12 @@ import org.apache.commons.httpclient.methods.GetMethod;
 import org.apache.commons.httpclient.methods.PostMethod;
 import org.apache.commons.httpclient.methods.RequestEntity;
 import org.apache.commons.httpclient.methods.StringRequestEntity;
-import org.apache.http.HttpEntity;
-import org.apache.http.client.methods.CloseableHttpResponse;
-import org.apache.http.client.methods.HttpGet;
-import org.apache.http.client.utils.URIBuilder;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClientBuilder;
-import org.apache.http.util.EntityUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import static com.github.pagehelper.util.MetaObjectUtil.method;
 
 public class HttpUtil {
 
@@ -49,25 +37,6 @@ public class HttpUtil {
             method.releaseConnection();
         } catch (IOException e) {
             logger.error(e.getMessage());
-            e.printStackTrace();
-            responseStr = "IOException";
-        }
-        return responseStr;
-    }
-
-    public static String doGetBody(String url, String obj) {
-
-        String responseStr = "";
-        try {
-            CloseableHttpClient httpClient = HttpClientBuilder.create().build();
-            URIBuilder uriBuilder = new URIBuilder(url);
-            uriBuilder.setParameter("data", obj);
-            URI uri = uriBuilder.build();
-            HttpGet httpGet = new HttpGet(uri);
-            CloseableHttpResponse response = httpClient.execute(httpGet);
-            HttpEntity entity = response.getEntity();
-            responseStr = EntityUtils.toString(entity);
-        } catch (IOException | URISyntaxException e) {
             e.printStackTrace();
             responseStr = "IOException";
         }
