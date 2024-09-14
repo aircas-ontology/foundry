@@ -174,7 +174,7 @@ public class ObjectServiceImpl implements ObjectService {
         for (PropertyValueVO propertyValueVO : obj.getProperties()) {
             //TODO: 这里有潜在风险，因为没有考虑join时的数据类型，沒有考虑是to的情况
             if (propertyValueVO.getUniqueIdentifier().equals(ontologypropertyId)) {
-                filterValue = (String) propertyValueVO.getValue();
+                filterValue = propertyValueVO.getValue().toString();
                 break;
             }
         }
@@ -310,7 +310,7 @@ public class ObjectServiceImpl implements ObjectService {
         for (PropertyValueVO propertyValueVO : objectOneInfoVO.getProperties()) {
             //TODO: 这里有潜在风险，因为没有考虑join时的数据类型
             if (propertyValueVO.getUniqueIdentifier().equals(propertyIdentifierFrom)) {
-                columnValue = (String) propertyValueVO.getValue();
+                columnValue = propertyValueVO.getValue().toString();
                 break;
             }
         }
