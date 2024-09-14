@@ -42,7 +42,7 @@ public class OntologyPropertyServiceImpl implements OntologyPropertyService {
         ontologyProperty.setUniqueIdentifier(UUID.randomUUID().toString());
         Date now = new Date();
         ontologyProperty.setCreateTime(now);
-        ontologyProperty.setCreateTime(now);
+        ontologyProperty.setUpdateTime(now);
         return ontologyPropertyMapper.insert(ontologyProperty);
     }
 

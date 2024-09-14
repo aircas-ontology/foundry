@@ -101,7 +101,7 @@ public class OntologyActionServiceImpl implements OntologyActionService {
                 parameters.put(parameterName, objectMap);
             } else {
                 PropertyValueVO propertyValueVO = propertyMap.get(propertyUniqueIdentifier);
-                String value = propertyValueVO.getValue();
+                Object value = propertyValueVO.getValue();
                 parameters.put(parameterName, value);
             }
         }

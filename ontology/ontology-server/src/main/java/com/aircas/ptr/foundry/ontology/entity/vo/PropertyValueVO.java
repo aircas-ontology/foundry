@@ -19,7 +19,7 @@ public class PropertyValueVO {
 
     private String apiName;
 
-    private String value;
+    private Object value;
 
     private String uniqueIdentifier;
 }

@@ -119,7 +119,7 @@ public class OwlServiceImpl implements OwlService {
         OWLDataFactory factory = owlOntologyManager.getOWLDataFactory();
         for (PropertyValueVO propertyValueVO: properties) {
             String displayName = propertyValueVO.getDisplayName();
-            String value = propertyValueVO.getValue();
+            String value = (String) propertyValueVO.getValue();
             String desc = propertyValueVO.getDescription();
             OntologyDataType propertyType = propertyValueVO.getPropertyType();
 

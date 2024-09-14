@@ -35,14 +35,14 @@ public class CheckServiceImpl implements ICheckService {
 
     @Override
     public List<OntologyMeta> getMeta(String table) {
-        if (LocalCacheUtils.ontologyMetaMap == null){
+        if (LocalCacheUtils.ontologyMetaMap == null) {
             return null;
         }
         return LocalCacheUtils.ontologyMetaMap.get(table);
     }
 
-    public List<OntologyProperty> getPropertyList(String ontologyUniqueIdentifier){
-        if (LocalCacheUtils.ontologyPropertyMap == null){
+    public List<OntologyProperty> getPropertyList(String ontologyUniqueIdentifier) {
+        if (LocalCacheUtils.ontologyPropertyMap == null) {
             return null;
         }
         return LocalCacheUtils.ontologyPropertyMap.get(ontologyUniqueIdentifier);
@@ -51,7 +51,7 @@ public class CheckServiceImpl implements ICheckService {
     @Override
     public CheckRuleStatus checkRule(CheckDataVO vo, ActionHandleRule rule, List<OntologyProperty> propertyList) {
 
-        Map<String,Object> dataMap = vo.getData();
+        Map<String, Object> dataMap = vo.getData();
         String primaryKeys = rule.getObjectPrimaryKey();
         // 1 and  2 or
         int connectType = rule.getRuleConnectType();
@@ -59,57 +59,57 @@ public class CheckServiceImpl implements ICheckService {
         boolean primaryCheck = false;
         // 数据主键信息（如果配置了要校验主键）
         String dataKeyValue = "action_data_default_primary_value";
-        if (primaryKeys.length()>0){
+        if (primaryKeys.length() > 0) {
             String[] primaryValus = primaryKeys.split(",");
             OntologyProperty currentProperty = null;
-            for (OntologyProperty property : propertyList){
-                if (property.getIsPrimaryKey()==1){
+            for (OntologyProperty property : propertyList) {
+                if (property.getIsPrimaryKey() == 1) {
                     currentProperty = property;
                     break;
                 }
             }
-            if (currentProperty!=null){
-                dataKeyValue = dataMap.get(currentProperty.getDatasourceColumnName())+"";
-                for (String primaryValue : primaryValus){
-                    if (dataKeyValue.equals(primaryValue)){
+            if (currentProperty != null) {
+                dataKeyValue = dataMap.get(currentProperty.getDatasourceColumnName()) + "";
+                for (String primaryValue : primaryValus) {
+                    if (dataKeyValue.equals(primaryValue)) {
                         primaryCheck = true;
                     }
                 }
             }
-        }else{
+        } else {
             primaryCheck = true;
         }
 
-        if (!primaryCheck){
+        if (!primaryCheck) {
             System.out.println("规则校验未通过:观察数据主键不满足条件");
-            return new CheckRuleStatus(false,dataKeyValue,null);
+            return new CheckRuleStatus(false, dataKeyValue, null);
         }
 
         // 拿到上次缓存的数据
-        ActionHandleCommitFlashMemory lastFlashMermory = ontologyServer.getActionDataLog(rule.getActionId(),dataKeyValue);
-        Map<String,String> mermoryMap = null;
+        ActionHandleCommitFlashMemory lastFlashMermory = ontologyServer.getActionDataLog(rule.getActionId(), dataKeyValue);
+        Map<String, String> mermoryMap = null;
         try {
-            if (lastFlashMermory!=null && lastFlashMermory.getData()!=null)
-                mermoryMap = JSONObject.parseObject(lastFlashMermory.getData(),Map.class);
+            if (lastFlashMermory != null && lastFlashMermory.getData() != null)
+                mermoryMap = JSONObject.parseObject(lastFlashMermory.getData(), Map.class);
         } catch (Exception e) {
             e.printStackTrace();
         }
         int flagCount = 0;
         // 在这里开始执行规则
-        for (int i=0;i<array.size();i++){
+        for (int i = 0; i < array.size(); i++) {
             JSONObject item = array.getJSONObject(i);
             String key = item.getString("columnName");
             String value = item.getString("columnValue");
             String condition = item.getString("condition");
-            String dataMapValue = dataMap.get(key)+"";
-            if (CompareUtil.compare(key,condition,dataMapValue,value,mermoryMap)){
+            String dataMapValue = dataMap.get(key) + "";
+            if (CompareUtil.compare(key, condition, dataMapValue, value, mermoryMap)) {
                 flagCount++;
-                if (connectType==2){
-                    return new CheckRuleStatus(true,dataKeyValue,lastFlashMermory!=null?lastFlashMermory.getId().toString():null);
+                if (connectType == 2) {
+                    return new CheckRuleStatus(true, dataKeyValue, lastFlashMermory != null ? lastFlashMermory.getId().toString() : null);
                 }
-            }else{
-                if (connectType==1){
-                    return new CheckRuleStatus(false,dataKeyValue,lastFlashMermory!=null?lastFlashMermory.getId().toString():null);
+            } else {
+                if (connectType == 1) {
+                    return new CheckRuleStatus(false, dataKeyValue, lastFlashMermory != null ? lastFlashMermory.getId().toString() : null);
                 }
             }
 //            if (condition.equals("gt")){
@@ -149,43 +149,43 @@ public class CheckServiceImpl implements ICheckService {
 //            }
 
         }
-        return new CheckRuleStatus(flagCount>0,dataKeyValue,lastFlashMermory!=null?lastFlashMermory.getId().toString():null);
+        return new CheckRuleStatus(flagCount > 0, dataKeyValue, lastFlashMermory != null ? lastFlashMermory.getId().toString() : null);
     }
 
-    public String getNewRules(CheckDataVO vo,ActionHandleRule rule){
-        Map<String,Object> dataMap = vo.getData();
+    public String getNewRules(CheckDataVO vo, ActionHandleRule rule) {
+        Map<String, Object> dataMap = vo.getData();
         JSONArray array = JSONArray.parseArray(rule.getRules());
-        for (int i=0;i<array.size();i++){
+        for (int i = 0; i < array.size(); i++) {
             JSONObject item = array.getJSONObject(i);
             String key = item.getString("columnName");
-            String dataMapValue = dataMap.get(key)+"";
-            item.put("columnValue",dataMapValue);
+            String dataMapValue = dataMap.get(key) + "";
+            item.put("columnValue", dataMapValue);
         }
         return JSONObject.toJSONString(array);
     }
 
-    public ActionHandleCommitFlashMemory getNewflashmemory(CheckDataVO vo,ActionHandleRule rule,CheckRuleStatus status){
+    public ActionHandleCommitFlashMemory getNewflashmemory(CheckDataVO vo, ActionHandleRule rule, CheckRuleStatus status) {
         ActionHandleCommitFlashMemory memory = new ActionHandleCommitFlashMemory();
-        memory.setId(status.getDataLogId()==null?snowflakeIdUtil.get():Long.parseLong(status.getDataLogId()));
+        memory.setId(status.getDataLogId() == null ? snowflakeIdUtil.get() : Long.parseLong(status.getDataLogId()));
         memory.setTableName(vo.getTable());
         memory.setActionId(rule.getActionId());
         memory.setPrimaryKey(status.getPrimaryValue());
         memory.setData(JSONObject.toJSONString(vo.getData()));
-        log.info("保存当前数据缓存："+JSONObject.toJSONString(memory));
+        log.info("保存当前数据缓存：" + JSONObject.toJSONString(memory));
         return memory;
     }
 
     @Override
     public Object getPrimaryValue(CheckDataVO vo, List<OntologyProperty> propertyList) {
-        Map<String,Object> dataMap = vo.getData();
+        Map<String, Object> dataMap = vo.getData();
         OntologyProperty currentProperty = null;
-        for (OntologyProperty property : propertyList){
-            if (property.getIsPrimaryKey()==1){
+        for (OntologyProperty property : propertyList) {
+            if (property.getIsPrimaryKey() == 1) {
                 currentProperty = property;
                 break;
             }
         }
-        if (currentProperty!=null){
+        if (currentProperty != null) {
             return dataMap.get(currentProperty.getDatasourceColumnName());
         }
         return null;

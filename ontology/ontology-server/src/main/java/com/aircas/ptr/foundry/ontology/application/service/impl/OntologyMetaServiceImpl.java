@@ -136,8 +136,9 @@ public class OntologyMetaServiceImpl implements OntologyMetaService {
             property.setOntologyUniqueIdentifier(ontologyUniqueIdentifier);
             property.setApiName(column.getColumnName());
             property.setDatasourceColumnName(column.getColumnName());
+            property.setPropertyType(OntologyDataType.valueFromPgType(column.getType()));
             property.setDatasourceId(backingDatasourceId);
-            property.setDescription(column.getColumnName());
+            property.setDescription(column.getDescription());
             property.setDisplayName(column.getDescription());
             if (column.getColumnName().equals(primaryKey)) {
                 property.setIsPrimaryKey(1);

@@ -2,12 +2,14 @@ package com.aircas.ptr.foundry.ontology.userinterface.controller;
 
 import com.aircas.ptr.foundry.common.base.DataResult;
 import com.aircas.ptr.foundry.common.constant.QuerySortEnum;
+import com.aircas.ptr.foundry.common.util.DataSensorUtil;
 import com.aircas.ptr.foundry.common.util.DateUtils;
 import com.aircas.ptr.foundry.common.util.HttpUtil;
 import com.aircas.ptr.foundry.ontology.OntologyServerApplication;
 import com.aircas.ptr.foundry.ontology.application.service.ObjectService;
 import com.aircas.ptr.foundry.ontology.entity.vo.*;
 import com.aircas.ptr.foundry.ontology.repository.param.*;
+import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
 import com.github.pagehelper.PageInfo;
@@ -87,10 +89,6 @@ public class ObjectController {
     }
 
     public void test() throws HttpException {
-        Map<String, Object> dataMap = new HashMap<>();
-        dataMap.put("zcck", JSONObject.toJSONString("res"));
-        Map<String, Object> whereMap = new HashMap<>();
-        whereMap.put("GUID", "hsfw-dataship-0000000000001032");
-        objectService.updateObjectData("f524f896-536c-481d-8e0a-43ccac5279f3", dataMap, whereMap);
+
     }
 }
