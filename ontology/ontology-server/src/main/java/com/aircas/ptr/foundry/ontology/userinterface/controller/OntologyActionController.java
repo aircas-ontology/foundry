@@ -20,6 +20,7 @@ import com.github.pagehelper.PageInfo;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
+import org.quartz.JobKey;
 import org.quartz.SchedulerException;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,6 +30,7 @@ import javax.annotation.Resource;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 
@@ -155,16 +157,16 @@ public class OntologyActionController {
     @ApiOperation(value = "查询行为规则信息")
     @GetMapping("/getActionRulesByIds")
     public ApiResult getActionByIds(String ids) {
-        if (ids.trim().length()==0){
+        if (ids.trim().length() == 0) {
             return ApiResult.fail("参数错误");
         }
         String[] idArr = ids.split(",");
         List<Long> idList = new ArrayList<>(idArr.length);
-        for (String id : idArr){
+        for (String id : idArr) {
             idList.add(Long.parseLong(id));
         }
         List<ActionHandleRule> rules = ontologyActionService.getActionRulesById(idList);
-        if (rules==null || rules.size()==0){
+        if (rules == null || rules.size() == 0) {
             return ApiResult.fail("没有匹配到行为信息");
         }
         return DataResult.ofData(rules);
@@ -172,8 +174,8 @@ public class OntologyActionController {
 
     @ApiOperation(value = "查询行为规则上一次数据记录")
     @GetMapping("/getActionDataLogByAction")
-    public ApiResult getActionDataLogByAction(long actionId,String primaryValue) {
-        return DataResult.ofData(ontologyActionService.getActionDataLogByAction(actionId,primaryValue));
+    public ApiResult getActionDataLogByAction(long actionId, String primaryValue) {
+        return DataResult.ofData(ontologyActionService.getActionDataLogByAction(actionId, primaryValue));
     }
 
     @ApiOperation(value = "更新行为执行数据")
@@ -230,5 +232,12 @@ public class OntologyActionController {
         } else {
             return DataResult.fail("行为停止失败");
         }
+    }
+
+    @ApiOperation(value = "当前定时执行的行为列表")
+    @GetMapping("/task/list")
+    public DataResult<Map<Long, JobKey>> list() {
+
+        return DataResult.ofData(dynamicActionTaskService.listActionTask());
     }
 }

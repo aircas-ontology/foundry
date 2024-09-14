@@ -7,6 +7,7 @@ import org.quartz.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -54,5 +55,11 @@ public class DynamicActionTaskServiceImpl implements DynamicActionTaskService {
             return scheduler.deleteJob(jobKey);
         }
         return false;
+    }
+
+    @Override
+    public Map<Long, JobKey> listActionTask() {
+
+        return Collections.unmodifiableMap(tasks);
     }
 }
