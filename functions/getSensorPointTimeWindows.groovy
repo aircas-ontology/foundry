@@ -1,16 +1,13 @@
 import com.aircas.ptr.foundry.ontology.Destroyer
 import com.aircas.ptr.foundry.ontology.function.Parameter
 import com.alibaba.fastjson.JSONObject
-import com.aircas.ptr.foundry.common.util.RestUtil
 import com.aircas.ptr.foundry.common.util.HttpUtil
-import com.aircas.ptr.foundry.common.util.DateUtils;
-import com.aircas.ptr.foundry.common.util.DataSensorUtil;
 import com.aircas.ptr.foundry.ontology.OntologyServerApplication
 import com.aircas.ptr.foundry.ontology.application.service.ObjectService
 
 class getSensorPointTimeWindows {
 
-    def handle(@Parameter(name = "primaryKey", description = "舰船的主键") String primaryKey,
+    def handle(@Parameter(name = "primaryKey", description = "舰船的主键") Integer primaryKey,
                @Parameter(name = "lon", description = "经度") Float lon,
                @Parameter(name = "lat", description = "纬度") Float lat) {
 
