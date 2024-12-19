@@ -185,7 +185,7 @@ public class OntologyActionController {
     }
 
     @ApiOperation(value = "执行行为")
-    @PostMapping("/execute")
+    @PostMapping(value = "/execute")
     public ApiResult execute(@RequestBody ActionHandleParam param) {
         try {
             return DataResult.ofData(ontologyActionService.handle(param.getPrimaryKey(), param.getApi(), param.getParams()));

@@ -39,6 +39,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import static org.codehaus.groovy.runtime.DefaultGroovyMethods.collect;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -228,10 +230,12 @@ public class FunctionServiceImpl implements FunctionService {
             throws FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionNotFoundException {
 
         GroovyClassLoader classLoader = GroovyClassLoaderManager.getIndependentClassLoader();
-        List<String> objectApiList = Arrays.stream(functionMapper.selectByApi(functionName).getObjectTypes().split(",")).collect(Collectors.toList());
-        //将本体涉及的类都import
-        importAllObjectType(classLoader, objectApiList);
-
+        Function function = functionMapper.selectByApi(functionName);
+        if (function.getObjectTypes() != null && !function.getObjectTypes().isEmpty()) {
+            List<String> objectApiList = Arrays.stream(function.getObjectTypes().split(",")).collect(Collectors.toList());
+            //将本体涉及的类都import
+            importAllObjectType(classLoader, objectApiList);
+        }
         GroovyObject functionInstance = getFunctionInstance(classLoader, functionName, false);
 
         Method handleMethod = FunctionUtils.getMethod(functionInstance, "handle");
@@ -298,7 +302,7 @@ public class FunctionServiceImpl implements FunctionService {
                     "class " + className + "  extends OntologBaseObject {  " +
                     className + "(String primaryKey) { super(\"" + objectApi + "\", primaryKey)}" +
                     "}";
-            log.info("在这里输出本体类信息："+classImplString);
+            log.info("在这里输出本体类信息：" + classImplString);
             loader.parseClass(classImplString);
         }
     }

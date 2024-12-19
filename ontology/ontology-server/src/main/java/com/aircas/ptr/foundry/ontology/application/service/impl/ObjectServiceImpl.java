@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.application.service.impl;
 
+import com.aircas.ptr.foundry.common.constant.ActionHandleRuleAddConditionEnum;
 import com.aircas.ptr.foundry.model.po.*;
 import com.aircas.ptr.foundry.ontology.application.service.ObjectService;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyLinkGroupService;
@@ -137,23 +138,21 @@ public class ObjectServiceImpl implements ObjectService {
     @Override
     public PageInfo<Map<String, Object>> queryObjectByFilter(String ontologyApi, List<FilterParam> filter, Integer page, Integer size, List<QuerySortParam> sorts) {
 
-        List<OntologyPropertyVO> ontologyPropertyList = ontologyPropertyService.selectByOntologyApi(ontologyApi);
-        String sql = buildBaseSQL(ontologyPropertyList);
-        assert filter != null;
-        assert !filter.isEmpty();
-        String where = filter.stream().map(item -> "\"" + item.getFilterKey() + "\"='" + item.getFilterValue() + "'").collect(Collectors.joining(" and "));
-        if (sql.equals(null) || sql.isEmpty() || where.equals(null) || where.isEmpty()) {
-            return null;
-        }
+        String sql = buildFilterSortSQL(ontologyApi, filter, sorts);
+        if (sql == null) return null;
         PageHelper.startPage(page, size);
-        sql += " where " + where;
-        if (sorts != null && !sorts.isEmpty()) {
-            sql += " order by " + sorts.stream().map(QuerySortParam::formatOrder).collect(Collectors.joining(","));
-        }
         List<Map<String, Object>> rawResult = objectMapper.queryAnySQL(sql);
         PageInfo pageResult = new PageInfo<>(rawResult);
         BeanUtils.copyProperties(pageResult, rawResult);
         return pageResult;
+    }
+
+    @Override
+    public List<Map<String, Object>> queryObjectByFilter(String ontologyApi, List<FilterParam> filter, List<QuerySortParam> sorts) {
+
+        String sql = buildFilterSortSQL(ontologyApi, filter, sorts);
+        if (sql == null) return null;
+        return objectMapper.queryAnySQL(sql);
     }
 
     @Override
@@ -187,7 +186,7 @@ public class ObjectServiceImpl implements ObjectService {
         }
         String filterKey = propertyToList.get(0).getDatasourceColumnName();
         List<FilterParam> filter = new ArrayList<>();
-        filter.add(new FilterParam(filterKey, filterValue));
+        filter.add(new FilterParam(filterKey, filterValue, ActionHandleRuleAddConditionEnum.EQ));
         return queryObjectByFilter(ontologyMetaService.getOntologyByUniqueIdentifier(dataOntologyId).getApiName(), filter, page, size, null);
     }
 
@@ -366,7 +365,6 @@ public class ObjectServiceImpl implements ObjectService {
         return "SELECT " + columns + " FROM " + tableName;
     }
 
-
     private String buildUpdateSQL(String tableName, Map<String, Object> dataMap, Map<String, Object> whereMap) {
 
         String SET = "";
@@ -386,5 +384,22 @@ public class ObjectServiceImpl implements ObjectService {
         WHERE = WHERE.substring(0, WHERE.length() - 1);
 
         return "UPDATE " + tableName + " SET " + SET + (WHERE.equals("") ? "" : "WHERE " + WHERE);
+    }
+
+    private String buildFilterSortSQL(String ontologyApi, List<FilterParam> filter, List<QuerySortParam> sorts) {
+
+        List<OntologyPropertyVO> ontologyPropertyList = ontologyPropertyService.selectByOntologyApi(ontologyApi);
+        String sql = buildBaseSQL(ontologyPropertyList);
+        assert filter != null;
+        assert !filter.isEmpty();
+        String where = filter.stream().map(FilterParam::toString).collect(Collectors.joining(" and "));
+        if (sql.equals(null) || sql.isEmpty() || where.equals(null) || where.isEmpty()) {
+            return null;
+        }
+        sql += " where " + where;
+        if (sorts != null && !sorts.isEmpty()) {
+            sql += " order by " + sorts.stream().map(QuerySortParam::formatOrder).collect(Collectors.joining(","));
+        }
+        return sql;
     }
 }

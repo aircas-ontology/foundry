@@ -21,7 +21,7 @@ class trajectoryPredict {
         List<QuerySortParam> sorts = new ArrayList<>()
         sorts.add(new QuerySortParam("wzsj", QuerySortEnum.DESC))
         List<FilterParam> filters = new ArrayList<>()
-        filters.add(new FilterParam("mbbh", primaryKey))
+        filters.add(new FilterParam("mbbh", primaryKey, ActionHandleRuleAddConditionEnum.EQ))
         PageInfo<Map<String, Object>> mapPageInfo = objectService.queryObjectByFilter("mbgjd", filters, 1, 10, sorts)
         List<float[]> collect = new ArrayList<>()
         float latStart = 0

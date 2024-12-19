@@ -15,7 +15,7 @@ class getXtmbLonLat {
 
       ObjectService objectService = OntologyServerApplication.context.getBean(ObjectService.class);
       List<FilterParam> filter = new ArrayList<>();
-      filter.add(new FilterParam("mbbh", primaryKey));
+      filter.add(new FilterParam("mbbh", primaryKey, ActionHandleRuleAddConditionEnum.EQ));
       List<QuerySortParam> sort = new ArrayList<>();
       sort.add(new QuerySortParam("wzsj", QuerySortEnum.DESC));
       PageInfo<Map<String, Object>> mbgjd = objectService.queryObjectByFilter("mbgjd", filter, 1, 1, sort);

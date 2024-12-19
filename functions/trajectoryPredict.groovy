@@ -5,6 +5,7 @@ import com.aircas.ptr.foundry.common.constant.QuerySortEnum
 import com.aircas.ptr.foundry.common.util.HttpUtil
 import com.aircas.ptr.foundry.common.util.DateUtils
 import com.aircas.ptr.foundry.ontology.repository.param.FilterParam
+import com.aircas.ptr.foundry.common.constant.ActionHandleRuleAddConditionEnum;
 import com.github.pagehelper.PageInfo
 import com.aircas.ptr.foundry.ontology.repository.param.QuerySortParam
 import com.aircas.ptr.foundry.ontology.OntologyServerApplication
@@ -22,7 +23,7 @@ class trajectoryPredict {
         List<QuerySortParam> sorts = new ArrayList<>()
         sorts.add(new QuerySortParam("wzsj", QuerySortEnum.DESC))
         List<FilterParam> filters = new ArrayList<>()
-        filters.add(new FilterParam("mbbh", primaryKey))
+        filters.add(new FilterParam("mbbh", primaryKey, ActionHandleRuleAddConditionEnum.EQ))
         List<double[]> collect = new ArrayList<>()
         PageInfo<Map<String, Object>> mapPageInfo = objectService.queryObjectByFilter("mbgjd", filters, 1, 9, sorts)
         for (int i = 0; i < mapPageInfo.getList().size(); i++) {

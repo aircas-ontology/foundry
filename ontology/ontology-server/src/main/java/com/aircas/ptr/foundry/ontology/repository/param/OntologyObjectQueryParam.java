@@ -25,9 +25,9 @@ public class OntologyObjectQueryParam {
     @ApiModelProperty(value = "条数", required = false, example = "10")
     private Integer size;
 
-    @ApiModelProperty(value = "查询条件", required = true, example = "[{\"filterKey\":\"mbbh\",\"filterValue\":342454}]")
+    @ApiModelProperty(value = "查询条件", required = true, example = "[{\"filterKey\":\"mbbh\",\"filterValue\":342454, \"condition\":\"EQ\"}]")
     private List<FilterParam> filter;
 
-    @ApiModelProperty(value = "查询条件", required = true, example = "[{\"colum\":\"wzsj\",\"order\":\"DESC\"}]")
+    @ApiModelProperty(value = "排序", required = true, example = "[{\"colum\":\"wzsj\",\"order\":\"DESC\"}]")
     private List<QuerySortParam> sorts;
 }
