@@ -64,6 +64,18 @@ class trajectoryPredict {
             arr.add(new float[]{res.getJSONArray(i).getFloat(1), res.getJSONArray(i).getFloat(0)});
         }
         float[][] resArr = (float[][]) arr.toArray()
+        JSONArray ccw_res = JSONObject.parseObject(resp).getJSONArray("ccw_res");
+        arr.clear()
+        for (int i = 0; i < ccw_res.size(); i++) {
+            arr.add(new float[]{ccw_res.getJSONArray(i).getFloat(1), ccw_res.getJSONArray(i).getFloat(0)});
+        }
+        float[][] ccw_resArr = (float[][]) arr.toArray()
+        JSONArray cw_res = JSONObject.parseObject(resp).getJSONArray("cw_res");
+        arr.clear()
+        for (int i = 0; i < cw_res.size(); i++) {
+            arr.add(new float[]{cw_res.getJSONArray(i).getFloat(1), cw_res.getJSONArray(i).getFloat(0)});
+        }
+        float[][] cw_resArr = (float[][]) arr.toArray()
         JSONArray circle_res = JSONObject.parseObject(resp).getJSONArray("circle_res");
         arr.clear()
         for (int i = 0; i < circle_res.size(); i++) {
@@ -72,6 +84,8 @@ class trajectoryPredict {
         float[][] circle_resArr = (float[][]) arr.toArray()
         Map<String, Object> data = new HashMap<String, Object>()
         data.put("res", resArr)
+        data.put("ccw_res", ccw_resArr)
+        data.put("cw_res", cw_resArr)
         data.put("circle_res", circle_resArr)
         return data
     }

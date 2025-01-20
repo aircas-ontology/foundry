@@ -32,7 +32,7 @@ public class HttpUtil {
             // logger.info(method.getStatusLine());
             // 打印返回的信息
             responseStr = method.getResponseBodyAsString();
-            logger.info(method.getResponseBodyAsString());
+//            logger.info(method.getResponseBodyAsString());
             // 释放连接
             method.releaseConnection();
         } catch (IOException e) {

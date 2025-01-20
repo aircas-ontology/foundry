@@ -302,7 +302,7 @@ public class FunctionServiceImpl implements FunctionService {
                     "class " + className + "  extends OntologBaseObject {  " +
                     className + "(String primaryKey) { super(\"" + objectApi + "\", primaryKey)}" +
                     "}";
-            log.info("在这里输出本体类信息：" + classImplString);
+//            log.info("在这里输出本体类信息：" + classImplString);
             loader.parseClass(classImplString);
         }
     }
