@@ -29,6 +29,7 @@ public interface OntologyMetaService {
 
     Integer update(OntologyMetaBO ontologyMetaBO);
 
+
     List<OntologyMetaVO> getAllOntologies();
 
     Integer getCountByStatus(int status);

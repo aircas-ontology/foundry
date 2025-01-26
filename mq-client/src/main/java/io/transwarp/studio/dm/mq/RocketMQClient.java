@@ -30,6 +30,8 @@ public class RocketMQClient {
 
     }
 
+
+
     /**
      * 向mq发送一个topic的消息
      */

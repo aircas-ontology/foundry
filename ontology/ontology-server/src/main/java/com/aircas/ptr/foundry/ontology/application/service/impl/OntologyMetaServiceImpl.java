@@ -103,6 +103,9 @@ public class OntologyMetaServiceImpl implements OntologyMetaService {
 
     @Override
     public List<OntologyMetaVO> selectByUniqueIdentifiers(List<String> uniqueIdentifiers) {
+        if (uniqueIdentifiers.size() == 0) {
+            return new ArrayList<>();
+        }
         List<OntologyMeta> ontologyMetaList = ontologyMetaMapper.selectByUniqueIdentifiers(uniqueIdentifiers);
         List<OntologyMetaVO> ontologyMetaVOList = new ArrayList<>();
         for (OntologyMeta ontologyMeta : ontologyMetaList) {
