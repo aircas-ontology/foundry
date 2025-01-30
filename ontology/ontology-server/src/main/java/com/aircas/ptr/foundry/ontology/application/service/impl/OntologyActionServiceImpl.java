@@ -356,6 +356,9 @@ public class OntologyActionServiceImpl implements OntologyActionService {
             FunctionFileNotCompiled,
             FunctionNotFoundException {
 
+        if (ontologyMeta == null) {
+            return null;
+        }
         OntologyActionVO ontologyActionVO = new OntologyActionVO();
         BeanUtils.copyProperties(action, ontologyActionVO);
         ontologyActionVO.setOntologyDisplayName(ontologyMeta.getDisplayName());
@@ -392,8 +395,10 @@ public class OntologyActionServiceImpl implements OntologyActionService {
         }
         ontologyActionVO.setMappingIns(mappingInVOs);
         List<String> mappedParameters = mappingInVOs.stream().map(OntologyActionMappingIn::getParameterName).collect(Collectors.toList());
-        parameters.removeIf(parameterMetadataVO -> mappedParameters.contains(parameterMetadataVO.getName()));
-        ontologyActionVO.setParameters(parameters);
+        if (parameters != null) {
+            parameters.removeIf(parameterMetadataVO -> mappedParameters.contains(parameterMetadataVO.getName()));
+            ontologyActionVO.setParameters(parameters);
+        }
         return ontologyActionVO;
     }
 
@@ -408,6 +413,7 @@ public class OntologyActionServiceImpl implements OntologyActionService {
 
         PageHelper.startPage(page, size);
         PageInfo<OntologyAction> pageInfo = new PageInfo<>(ontologyActionMapper.selectAll());
+        //把这部分代码先注释
         List<OntologyActionVO> collect = pageInfo.getList().stream().map(item -> {
             try {
                 return getMetadataByApi(item.getApi());
@@ -416,6 +422,17 @@ public class OntologyActionServiceImpl implements OntologyActionService {
                 throw new RuntimeException(e);
             }
         }).collect(Collectors.toList());
+
+        /**
+        OntologyAction action = pageInfo.getList().get(0);
+        List<OntologyActionVO> collect = new ArrayList<>();
+        try {
+            OntologyActionVO ontologyActionVO = getMetadataByApi(action.getApi());
+            collect.add(ontologyActionVO);
+        } catch (Exception e) {
+
+        }
+         **/
         PageInfo<OntologyActionVO> pageResult = new PageInfo<>(collect);
         BeanUtils.copyProperties(pageInfo, pageResult);
         pageResult.setList(collect);

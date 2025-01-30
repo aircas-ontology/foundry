@@ -8,7 +8,7 @@ import com.github.pagehelper.PageInfo
 import com.aircas.ptr.foundry.ontology.repository.param.QuerySortParam
 import com.aircas.ptr.foundry.ontology.OntologyServerApplication
 import com.aircas.ptr.foundry.ontology.application.service.ObjectService
-import com.aircas.ptr.foundry.ontology.Destroyer
+
 
 import java.util.stream.Collectors
 

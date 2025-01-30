@@ -106,9 +106,9 @@ public class OntologyPropertyServiceImpl implements OntologyPropertyService {
             OntologyPropertyVO propertyVO = new OntologyPropertyVO();
             BeanUtils.copyProperties(ontologyProperty, propertyVO);
             String dataSourceId = ontologyProperty.getDatasourceId();
-            if (dataSourceId != null) {
+            if (dataSourceId != null && dataSourceId.length() > 0) {
                 Map<String, TableColumnDesc> tableColumnsDesc = propertySourceMap.get(dataSourceId);
-                if (tableColumnsDesc != null) {
+                if (tableColumnsDesc != null &&  tableColumnsDesc.size() > 0) {
                     TableColumnDesc tableColumnDesc = tableColumnsDesc.get(ontologyProperty.getDatasourceColumnName());
                     OntologyDataType type = OntologyDataType.valueFromPgType(tableColumnDesc.getType());
                     propertyVO.setPropertyType(type);

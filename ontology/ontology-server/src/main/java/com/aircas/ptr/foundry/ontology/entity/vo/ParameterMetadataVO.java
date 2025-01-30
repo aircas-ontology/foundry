@@ -2,7 +2,6 @@ package com.aircas.ptr.foundry.ontology.entity.vo;
 
 
 import io.swagger.annotations.ApiModel;
-import lombok.AllArgsConstructor;
 import lombok.Data;
 
 /**

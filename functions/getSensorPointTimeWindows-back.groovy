@@ -1,4 +1,3 @@
-import com.aircas.ptr.foundry.ontology.Destroyer
 import com.aircas.ptr.foundry.ontology.function.Parameter
 import com.alibaba.fastjson.JSONObject
 import com.aircas.ptr.foundry.common.util.RestUtil

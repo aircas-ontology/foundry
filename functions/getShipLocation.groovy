@@ -1,4 +1,4 @@
-import com.aircas.ptr.foundry.ontology.ArleighBurkeClassDestroyer;
+import com.aircas.ptr.foundry.ontology.ArleighBurkeClassDestroyer
 import com.aircas.ptr.foundry.ontology.function.Parameter
 
 class getShipLocation {
