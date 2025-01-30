@@ -10,7 +10,6 @@ import com.aircas.ptr.foundry.ontology.ArleighBurkeClassDestroyer
 class updateLocation {
 
     def handle(@Parameter(name = "mbbh", description = "驱逐舰的目标编号") String mbbh) {
-
         ObjectService objectService = OntologyServerApplication.context.getBean(ObjectService.class)
         def url = 'http://192.168.9.25:7000/web_ts_api/v1.0/get_mz_ts_zxgjd?is_read_grid_height=0'
         String resp = HttpUtil.doGet(url);
