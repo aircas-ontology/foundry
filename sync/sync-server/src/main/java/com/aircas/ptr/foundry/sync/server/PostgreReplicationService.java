@@ -55,6 +55,8 @@ public class PostgreReplicationService {
     @Autowired
     private DataSourceProperties dataSourceProperties;
 
+
+
     private Connection connection;
     private PGConnection rplConnection;
     private PGReplicationStream stream;
@@ -157,7 +159,7 @@ public class PostgreReplicationService {
                 .replicationStream()
                 .logical()
                 .withSlotName(postgresSlotName)
-//                .withSlotOption("include-", true)
+//                .withSlotOption("include-table-data", true)
                 .withSlotOption("skip-empty-xacts", true)
                 .withStatusInterval(5, TimeUnit.SECONDS)
                 .start();
