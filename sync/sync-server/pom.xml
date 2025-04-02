@@ -108,14 +108,14 @@
     </dependencies>
 
     <build>
-        <finalName>ptr_ontology</finalName>
+        <finalName>ptr_sync</finalName>
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
                     <executable>true</executable>
-                    <mainClass>com.aircas.ptr.foundry.ontology.OntologyServerApplication</mainClass>
+                    <mainClass>com.aircas.ptr.foundry.sync.SyncServerApplication</mainClass>
                 </configuration>
                 <executions>
                     <execution>

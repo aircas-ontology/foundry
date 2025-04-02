@@ -5,6 +5,7 @@ import com.sun.javafx.collections.MappingChange;
 import org.apache.commons.httpclient.HttpClient;
 import org.apache.commons.httpclient.HttpException;
 import org.apache.commons.httpclient.HttpMethod;
+import org.apache.commons.httpclient.NameValuePair;
 import org.apache.commons.httpclient.methods.GetMethod;
 import org.apache.commons.httpclient.methods.PostMethod;
 import org.apache.commons.httpclient.methods.RequestEntity;
@@ -15,6 +16,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.Map;
 
 public class HttpUtil {
 
@@ -76,8 +78,39 @@ public class HttpUtil {
         return responseStr;
     }
 
+    /**
+     * 发送POST请求，添加表单参数
+     *
+     * @param url    接口地址
+     * @param params 表单参数
+     * @return 响应结果
+     */
+    public static String doPostWithForm(String url, Map<String, String> params) {
+        HttpClient client = new HttpClient();
+        PostMethod method = new PostMethod(url);
+
+        // 设置表单参数
+        NameValuePair[] dataPairs = new NameValuePair[params.size()];
+        int i = 0;
+        for (Map.Entry<String, String> entry : params.entrySet()) {
+            dataPairs[i++] = new NameValuePair(entry.getKey(), entry.getValue());
+        }
+        method.setRequestBody(dataPairs);
+        // 设置请求头
+        method.addRequestHeader("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8");
+        try {
+            client.executeMethod(method);
+            return method.getResponseBodyAsString();
+        } catch (IOException e) {
+            e.printStackTrace();
+            return "IOException";
+        } finally {
+            method.releaseConnection();
+        }
+    }
+
     public static void main(String[] args) throws HttpException {
 
-	}
+    }
 
 }
