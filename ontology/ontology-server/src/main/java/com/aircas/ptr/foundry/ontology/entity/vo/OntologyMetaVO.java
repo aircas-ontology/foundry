@@ -98,4 +98,9 @@ public class OntologyMetaVO {
      * 分组ids，以“,”隔开
      */
     private String metaGroupId;
+
+    /**
+     * 父本体的唯一标识符
+     */
+    private String parentUniqueIdentifier;
 }

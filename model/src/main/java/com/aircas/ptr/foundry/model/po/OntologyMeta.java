@@ -100,6 +100,11 @@ public class OntologyMeta implements Serializable {
      */
     private String metaGroupId;
 
+    /**
+     * 父本体的唯一标识符
+     */
+    private String parentUniqueIdentifier;
+
     public OntologyMeta() {
         Date now = new Date();
         setCreateTime(now);

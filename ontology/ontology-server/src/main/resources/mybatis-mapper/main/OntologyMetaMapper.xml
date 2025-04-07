@@ -19,12 +19,14 @@
         <result column="nickname" jdbcType="VARCHAR" property="nickname"/>
         <result column="writeback_flag" jdbcType="INTEGER" property="writebackFlag"/>
         <result column="meta_group_id" jdbcType="VARCHAR" property="metaGroupId"/>
+        <result column="meta_group_id" jdbcType="VARCHAR" property="metaGroupId"/>
+        <result column="parent_unique_identifier" jdbcType="VARCHAR" property="parentUniqueIdentifier"/>
     </resultMap>
     <sql id="Base_Column_List">
         id
         , "unique_identifier", "status", create_time, update_time, icon, display_name, plural_display_name,
     backing_datasource_id, description, api_name, visibility, experimental_status, index_status,nickname,
-    writeback_flag,meta_group_id
+    writeback_flag,meta_group_id, parent_unique_identifier
     </sql>
 
     <select id="selectByPrimaryKey" parameterType="java.lang.Long" resultMap="BaseResultMap">
@@ -157,6 +159,9 @@
             <if test="metaGroupId != null">
                 meta_group_id,
             </if>
+            <if test="parentUniqueIdentifier != null">
+                parent_unique_identifier,
+            </if>
         </trim>
         <trim prefix="values (" suffix=")" suffixOverrides=",">
             <if test="uniqueIdentifier != null">
@@ -205,7 +210,10 @@
                 #{writebackFlag,jdbcType=INTEGER},
             </if>
             <if test="metaGroupId != null">
-                #{metaGroupId}
+                #{metaGroupId},
+            </if>
+            <if test="parentUniqueIdentifier != null">
+                #{parentUniqueIdentifier}
             </if>
         </trim>
     </insert>
