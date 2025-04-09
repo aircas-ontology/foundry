@@ -6,10 +6,7 @@ import org.apache.commons.httpclient.HttpClient;
 import org.apache.commons.httpclient.HttpException;
 import org.apache.commons.httpclient.HttpMethod;
 import org.apache.commons.httpclient.NameValuePair;
-import org.apache.commons.httpclient.methods.GetMethod;
-import org.apache.commons.httpclient.methods.PostMethod;
-import org.apache.commons.httpclient.methods.RequestEntity;
-import org.apache.commons.httpclient.methods.StringRequestEntity;
+import org.apache.commons.httpclient.methods.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -22,7 +19,7 @@ public class HttpUtil {
 
     private static final Logger logger = LoggerFactory.getLogger(HttpUtil.class);
 
-    public static String doGet(String url) throws HttpException {
+    public static String doGet(String url) {
 
         HttpClient client = new HttpClient();
         // 使用 GET 方法 ，如果服务器需要通过 HTTPS 连接，那只需要将下面 URL 中的 http 换成 https
@@ -104,6 +101,31 @@ public class HttpUtil {
         } catch (IOException e) {
             e.printStackTrace();
             return "IOException";
+        } finally {
+            method.releaseConnection();
+        }
+    }
+
+    /**
+     * 发送DELETE请求
+     *
+     * @param url 请求的URL
+     * @return 响应结果
+     */
+    public static boolean doDelete(String url) {
+        HttpClient client = new HttpClient();
+        DeleteMethod method = new DeleteMethod(url);
+        try {
+            int statusCode = client.executeMethod(method);
+            if (statusCode == 200) {
+                return true;
+            } else {
+                logger.error("HTTP DELETE request failed with status code: {}", statusCode);
+                return false;
+            }
+        } catch (IOException e) {
+            logger.error("IOException occurred during HTTP DELETE request", e);
+            return false;
         } finally {
             method.releaseConnection();
         }
