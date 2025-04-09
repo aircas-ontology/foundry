@@ -19,7 +19,6 @@
         <result column="nickname" jdbcType="VARCHAR" property="nickname"/>
         <result column="writeback_flag" jdbcType="INTEGER" property="writebackFlag"/>
         <result column="meta_group_id" jdbcType="VARCHAR" property="metaGroupId"/>
-        <result column="meta_group_id" jdbcType="VARCHAR" property="metaGroupId"/>
         <result column="parent_unique_identifier" jdbcType="VARCHAR" property="parentUniqueIdentifier"/>
     </resultMap>
     <sql id="Base_Column_List">
