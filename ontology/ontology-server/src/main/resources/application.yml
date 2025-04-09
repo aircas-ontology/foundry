@@ -48,3 +48,8 @@ ontology:
 
 elasticsearch:
   addr: 192.168.9.101:9200
+
+entity-table-rul:
+  create: "http://192.168.9.11:8088/api/postgres/tables"
+  delete: "http://192.168.9.11:8088/api/postgres/tables/{table_name}"
+  exist: "http://192.168.9.11:8088/api/postgres/tables/{table_name}/exists"
