@@ -31,7 +31,7 @@ class getSensorPointTimeWindows {
             def shipOne = objectService.queryObjectByPrimaryKey(shipObjID, primaryKey.toString())
             def nodeCreateUrl = "http://192.168.9.11:8088/api/ontology/nodes"
             //检查舰船节点是否存在
-            def urlNodeCheck = "http://192.168.9.11:8088/api/ontology/nodes/" + shipObjID + "-" + primaryKey.toString()
+            def urlNodeCheck = "http://192.168.9.11:8088/api/ontology/nodes/" + shipObjID + "@" + primaryKey.toString()
             def respNodeCheck = HttpUtil.doGet(urlNodeCheck)
             if (respNodeCheck == null || respNodeCheck.isEmpty()) {
                 println "舰船节点未在线，创建舰船节点"
@@ -42,15 +42,15 @@ class getSensorPointTimeWindows {
                         put("createBy", "ontology")
                         put("createTime", "2025-04-01T03:13:24.174Z")
                         put("description", shipOne.getDisplayName())
-                        put("id", shipObjID + "-" + primaryKey.toString())
+                        put("id", shipObjID + "@" + primaryKey.toString())
                         put("isDeleted", false)
-                        put("key", shipObjID + "-" + primaryKey.toString())
+                        put("key", shipObjID + "@" + primaryKey.toString())
                         put("name", shipOne.getDisplayName())
                         put("properties", {})
                         put("remarks", "导弹驱逐舰")
                         put("source", "xtmb")
                         put("status", "active")
-                        put("type", "舰船")
+                        put("type", "船")
                         put("updateBy", "ontology")
                         put("updateTime", "2025-04-01T03:13:24.174Z")
                         put("version", 1)
@@ -60,7 +60,7 @@ class getSensorPointTimeWindows {
                 println resp.toString()
             }
             //检查卫星节点是否在线
-            urlNodeCheck = "http://192.168.9.11:8088/api/ontology/nodes/" + satelliteObjID + "-" + "33446"
+            urlNodeCheck = "http://192.168.9.11:8088/api/ontology/nodes/" + satelliteObjID + "@" + "33446"
             respNodeCheck = HttpUtil.doGet(urlNodeCheck)
             if (respNodeCheck == null || respNodeCheck.isEmpty()) {
                 println "卫星节点未在线，创建卫星节点"
@@ -71,15 +71,15 @@ class getSensorPointTimeWindows {
                         put("createBy", "ontology")
                         put("createTime", "2025-04-01T03:13:24.174Z")
                         put("description", "尖兵六号02星")
-                        put("id", satelliteObjID + "-" + "33446")
+                        put("id", satelliteObjID + "@" + "33446")
                         put("isDeleted", false)
-                        put("key", satelliteObjID + "-" + "33446")
+                        put("key", satelliteObjID + "@" + "33446")
                         put("name", "尖兵六号02星")
                         put("properties", {})
                         put("remarks", "尖兵卫星")
                         put("source", "satellite")
                         put("status", "active")
-                        put("type", "卫星")
+                        put("type", "侦察卫星")
                         put("updateBy", "ontology")
                         put("updateTime", "2025-04-01T03:13:24.174Z")
                         put("version", 1)
@@ -101,13 +101,13 @@ class getSensorPointTimeWindows {
                     put("confidence", 1)
                     put("createTime", "2025-04-01T03:13:24.174Z")
                     put("description", "侦察关系")
-                    put("from", satelliteObjID + "-" + "33446")
+                    put("from", satelliteObjID + "@" + "33446")
                     put("id", SnowflakeIdUtil.get())
                     put("key", SnowflakeIdUtil.get())
                     put("properties", prop)
                     put("source", "ontology")
                     put("status", "active")
-                    put("to", shipObjID + "-" + primaryKey.toString())
+                    put("to", shipObjID + "@" + primaryKey.toString())
                     put("type", "侦察")
                     put("updateTime", "2025-04-01T03:13:24.174Z")
                     put("weight", 0)

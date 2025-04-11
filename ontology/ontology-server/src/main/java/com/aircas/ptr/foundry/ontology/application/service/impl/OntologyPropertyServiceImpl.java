@@ -1,10 +1,10 @@
 package com.aircas.ptr.foundry.ontology.application.service.impl;
 
-import com.aircas.ptr.foundry.model.po.OntologyDataType;
+import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
+import com.aircas.ptr.foundry.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.model.po.OntologyProperty;
 import com.aircas.ptr.foundry.model.po.TableColumnDesc;
 import com.aircas.ptr.foundry.ontology.application.service.EntityService;
-import com.aircas.ptr.foundry.ontology.application.service.OntologyMetaService;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyPropertyService;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyPropertyBO;
 import com.aircas.ptr.foundry.ontology.entity.vo.OntologyMetaVO;
@@ -14,6 +14,8 @@ import com.aircas.ptr.foundry.ontology.repository.dao.OntologyPropertyMapper;
 import com.aircas.ptr.foundry.ontology.repository.datalakeDao.TableMetadataMapper;
 import com.aircas.ptr.foundry.ontology.repository.param.EntityTableFieldParam;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -26,19 +28,25 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class OntologyPropertyServiceImpl implements OntologyPropertyService {
 
+    private static final Logger log = LoggerFactory.getLogger(OntologyPropertyServiceImpl.class);
     private final OntologyPropertyMapper ontologyPropertyMapper;
 
     @Resource
     private final TableMetadataMapper tableMetadataMapper;
 
     @Autowired
-    private OntologyMetaService ontologyMetaService;
+    private OntologyMetaMapper ontologyMetaMapper;
 
     @Autowired
     private EntityService entityService;
 
     @Override
     public Integer add(OntologyPropertyBO ontologyPropertyBO) {
+
+        if (ontologyPropertyMapper.selectByApiName(ontologyPropertyBO.getOntologyUniqueIdentifier(), ontologyPropertyBO.getApiName()) != null) {
+            log.warn("apiName:{} existed", ontologyPropertyBO.getApiName());
+            return 0;
+        }
         OntologyProperty ontologyProperty = new OntologyProperty();
         BeanUtils.copyProperties(ontologyPropertyBO, ontologyProperty);
         ontologyProperty.setUniqueIdentifier(UUID.randomUUID().toString());
@@ -72,7 +80,7 @@ public class OntologyPropertyServiceImpl implements OntologyPropertyService {
             return 0;
         }
         for (OntologyPropertyBO bo : ontologyPropertyBOs) {
-            if (isExist(bo.getUniqueIdentifier())) {
+            if (isExist(bo.getOntologyUniqueIdentifier(), bo.getApiName())) {
                 update(bo);
             } else {
                 add(bo);
@@ -82,8 +90,9 @@ public class OntologyPropertyServiceImpl implements OntologyPropertyService {
         return entityTableMake(ontologyPropertyBOs.get(0).getOntologyUniqueIdentifier()) ? 1 : 0;
     }
 
-    private Boolean isExist(String uniqueIdentifier) {
-        return selectByUniqueIdentifier(uniqueIdentifier) != null;
+    private Boolean isExist(String ontologyUniqueIdentifier, String apiName) {
+
+        return ontologyPropertyMapper.selectByApiName(ontologyUniqueIdentifier, apiName) != null;
     }
 
 
@@ -132,7 +141,7 @@ public class OntologyPropertyServiceImpl implements OntologyPropertyService {
                 Map<String, TableColumnDesc> tableColumnsDesc = propertySourceMap.get(dataSourceId);
                 if (tableColumnsDesc != null && tableColumnsDesc.size() > 0) {
                     TableColumnDesc tableColumnDesc = tableColumnsDesc.get(ontologyProperty.getDatasourceColumnName());
-                    OntologyDataType type = OntologyDataType.valueFromPgType(tableColumnDesc.getType());
+                    OntologyDataTypeEnum type = OntologyDataTypeEnum.valueOfPg(tableColumnDesc.getType());
                     propertyVO.setPropertyType(type);
                 }
             }
@@ -169,25 +178,33 @@ public class OntologyPropertyServiceImpl implements OntologyPropertyService {
     @Override
     public List<OntologyPropertyVO> selectByOntologyApi(String api) {
 
-        OntologyMetaVO metaVO = ontologyMetaService.getOntologyByApi(api);
-        return selectByOntologyUniqueIdentifier(metaVO.getUniqueIdentifier());
+        return selectByOntologyUniqueIdentifier(ontologyMetaMapper.selectByApi(api).getUniqueIdentifier());
     }
 
     private Boolean entityTableMake(String ontologyUniqueIdentifier) {
 
-        OntologyMetaVO metaVO = ontologyMetaService.getOntologyByUniqueIdentifier(ontologyUniqueIdentifier);
-        if (metaVO == null || metaVO.getApiName() == null) {
-            return false;
-        }
-        Boolean existsed = entityService.existsEntityTable(metaVO.getApiName());
-        // TODO: 检索表中是否存在数据，存在数据不可删除或修改
-        if (existsed && !entityService.deleteEntityTable(metaVO.getApiName())) {
+        OntologyMeta ontologyMeta = ontologyMetaMapper.selectByUniqueIdentifier(ontologyUniqueIdentifier);
+        if (ontologyMeta == null || ontologyMeta.getApiName() == null) {
             return false;
         }
         List<EntityTableFieldParam> collect = ontologyPropertyMapper.selectByOntologyUniqueIdentifier(ontologyUniqueIdentifier)
                 .stream()
-                .map(property -> new EntityTableFieldParam(property.getDescription(), property.getApiName(), property.getPropertyType().name(), property.getIsPrimaryKey() == 1, property.getIsPrimaryKey() == 1))
+                .map(property -> new EntityTableFieldParam(
+                        property.getDescription(),
+                        property.getApiName(),
+                        property.getPropertyType().transfer2Pg(),
+                        property.getIsPrimaryKey() != 1,
+                        property.getIsPrimaryKey() == 1))
                 .collect(Collectors.toList());
-        return entityService.createEntityTable(metaVO.getApiName(), metaVO.getDescription(), collect);
+        if (collect.isEmpty()) {
+            log.warn("本体{}没有属性，跳过建表", ontologyUniqueIdentifier);
+            return false;
+        }
+        Boolean existed = entityService.existsEntityTable(ontologyMeta.getApiName());
+        if (existed && entityService.countEntityTable(ontologyMeta.getApiName()) <= 0 && !entityService.deleteEntityTable(ontologyMeta.getApiName())) {
+            return false;
+        }
+
+        return entityService.createEntityTable(ontologyMeta.getApiName(), ontologyMeta.getDescription(), collect);
     }
 }

@@ -1,6 +1,6 @@
 package com.aircas.ptr.foundry.ontology.function;
 
-import com.aircas.ptr.foundry.model.po.OntologyDataType;
+import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import com.aircas.ptr.foundry.ontology.GroovyClassLoaderManager;
 import groovy.lang.GroovyObject;
 
@@ -27,19 +27,19 @@ public class FunctionUtils {
         return parameters;
     }
 
-    public static List<OntologyDataType> getParameterTypes(Method method) {
+    public static List<OntologyDataTypeEnum> getParameterTypes(Method method) {
         Class[] parameterTypes = method.getParameterTypes();
-        List<OntologyDataType> paramTypes = new ArrayList<>();
+        List<OntologyDataTypeEnum> paramTypes = new ArrayList<>();
         for(int i = 0; i < parameterTypes.length; i ++) {
             Class parameterClass = parameterTypes[i];
             //如果是本体，则参数为本体类型，且api从class获得。
             //OntologBaseObject 为动态生成，因而无法获取其class， 写死了字符串
             if (parameterClass.getSuperclass().getSimpleName().equals("OntologBaseObject")) {
-                OntologyDataType type = OntologyDataType.Ontology;
+                OntologyDataTypeEnum type = OntologyDataTypeEnum.Ontology;
                 type.setOntologyApi(parameterClass.getSimpleName().toLowerCase());
                 paramTypes.add(type);
             } else {
-                OntologyDataType type = OntologyDataType.valueOf(parameterClass);
+                OntologyDataTypeEnum type = OntologyDataTypeEnum.valueOfClass(parameterClass);
                 paramTypes.add(type);
             }
         }

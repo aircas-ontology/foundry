@@ -1,6 +1,6 @@
 package com.aircas.ptr.foundry.rule.executor.entity;
 
-import com.aircas.ptr.foundry.model.po.OntologyDataType;
+import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import lombok.Data;
 
 import java.util.Date;
@@ -45,7 +45,7 @@ public class OntologyProperty {
     /**
      * 属性基础类型、时间、字符、数值
      */
-    private OntologyDataType propertyType;
+    private OntologyDataTypeEnum propertyType;
 
     /**
      * 属性名称

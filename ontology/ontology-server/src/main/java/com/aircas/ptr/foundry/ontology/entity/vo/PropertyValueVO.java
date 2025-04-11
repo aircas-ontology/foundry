@@ -1,7 +1,7 @@
 package com.aircas.ptr.foundry.ontology.entity.vo;
 
 
-import com.aircas.ptr.foundry.model.po.OntologyDataType;
+import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import lombok.Data;
 
 @Data
@@ -15,7 +15,7 @@ public class PropertyValueVO {
 
     private String description;
 
-    private OntologyDataType propertyType;
+    private OntologyDataTypeEnum propertyType;
 
     private String apiName;
 

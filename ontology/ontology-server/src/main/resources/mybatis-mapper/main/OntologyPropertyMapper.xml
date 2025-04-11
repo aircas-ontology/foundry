@@ -1,237 +1,253 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.aircas.ptr.foundry.ontology.repository.dao.OntologyPropertyMapper">
-  <resultMap id="BaseResultMap" type="com.aircas.ptr.foundry.model.po.OntologyProperty">
-    <id column="id" jdbcType="BIGINT" property="id" />
-    <result column="unique_identifier" jdbcType="VARCHAR" property="uniqueIdentifier" />
-    <result column="status" jdbcType="INTEGER" property="status" />
-    <result column="create_time" jdbcType="TIMESTAMP" property="createTime" />
-    <result column="update_time" jdbcType="TIMESTAMP" property="updateTime" />
-    <result column="ontology_unique_identifier" jdbcType="VARCHAR" property="ontologyUniqueIdentifier" />
-    <result column="datasource_column_name" jdbcType="VARCHAR" property="datasourceColumnName" />
-    <result column="property_type" jdbcType="VARCHAR" property="propertyType" />
-    <result column="display_name" jdbcType="VARCHAR" property="displayName" />
-    <result column="description" jdbcType="VARCHAR" property="description" />
-    <result column="visibility" jdbcType="INTEGER" property="visibility" />
-    <result column="experimental_status" jdbcType="INTEGER" property="experimentalStatus" />
-    <result column="api_name" jdbcType="VARCHAR" property="apiName" />
-    <result column="is_primary_key" jdbcType="INTEGER" property="isPrimaryKey" />
-    <result column="is_title_key" jdbcType="INTEGER" property="isTitleKey" />
-    <result column="datasource_id" jdbcType="VARCHAR" property="datasourceId" />
-  </resultMap>
-  <sql id="Base_Column_List">
-    id, unique_identifier, "status", create_time, update_time, ontology_unique_identifier, datasource_column_name, property_type,
+    <resultMap id="BaseResultMap" type="com.aircas.ptr.foundry.model.po.OntologyProperty">
+        <id column="id" jdbcType="BIGINT" property="id"/>
+        <result column="unique_identifier" jdbcType="VARCHAR" property="uniqueIdentifier"/>
+        <result column="status" jdbcType="INTEGER" property="status"/>
+        <result column="create_time" jdbcType="TIMESTAMP" property="createTime"/>
+        <result column="update_time" jdbcType="TIMESTAMP" property="updateTime"/>
+        <result column="ontology_unique_identifier" jdbcType="VARCHAR" property="ontologyUniqueIdentifier"/>
+        <result column="datasource_column_name" jdbcType="VARCHAR" property="datasourceColumnName"/>
+        <result column="property_type" jdbcType="VARCHAR" property="propertyType"/>
+        <result column="display_name" jdbcType="VARCHAR" property="displayName"/>
+        <result column="description" jdbcType="VARCHAR" property="description"/>
+        <result column="visibility" jdbcType="INTEGER" property="visibility"/>
+        <result column="experimental_status" jdbcType="INTEGER" property="experimentalStatus"/>
+        <result column="api_name" jdbcType="VARCHAR" property="apiName"/>
+        <result column="is_primary_key" jdbcType="INTEGER" property="isPrimaryKey"/>
+        <result column="is_title_key" jdbcType="INTEGER" property="isTitleKey"/>
+        <result column="datasource_id" jdbcType="VARCHAR" property="datasourceId"/>
+    </resultMap>
+    <sql id="Base_Column_List">
+        id
+        , unique_identifier, "status", create_time, update_time, ontology_unique_identifier, datasource_column_name, property_type,
     display_name, description, visibility, experimental_status, api_name, is_primary_key, 
     is_title_key, datasource_id
-  </sql>
-  <select id="selectByPrimaryKey" parameterType="java.lang.Long" resultMap="BaseResultMap">
-    select 
-    <include refid="Base_Column_List" />
-    from "ontology_property"
-    where id = #{id,jdbcType=BIGINT}
-  </select>
+    </sql>
+    <select id="selectByPrimaryKey" parameterType="java.lang.Long" resultMap="BaseResultMap">
+        select
+        <include refid="Base_Column_List"/>
+        from "ontology_property"
+        where id = #{id,jdbcType=BIGINT}
+    </select>
 
-  <select id="selectByOntologyUniqueIdentifier" resultMap="BaseResultMap">
-    select
-    <include refid="Base_Column_List" />
-    from "ontology_property"
-    where ontology_unique_identifier = #{uniqueIdentifier,jdbcType=VARCHAR}
-    and status = 1
-  </select>
+    <select id="selectByOntologyUniqueIdentifier" resultMap="BaseResultMap">
+        select
+        <include refid="Base_Column_List"/>
+        from "ontology_property"
+        where ontology_unique_identifier = #{uniqueIdentifier,jdbcType=VARCHAR}
+        and status = 1
+    </select>
 
-  <select id="selectByUniqueIdentifier" resultMap="BaseResultMap">
-    select
-    <include refid="Base_Column_List" />
-    from "ontology_property"
-    where unique_identifier = #{uniqueIdentifier,jdbcType=VARCHAR}
-    and status = 1
-  </select>
+    <select id="selectByUniqueIdentifier" resultMap="BaseResultMap">
+        select
+        <include refid="Base_Column_List"/>
+        from "ontology_property"
+        where unique_identifier = #{uniqueIdentifier,jdbcType=VARCHAR}
+        and status = 1
+    </select>
 
 
-  <select id="getAllProperty" resultMap="BaseResultMap">
-    select
-    <include refid="Base_Column_List" />
-    from "ontology_property"
-    where  status = 1
-    <if test="justPrimary==1">
-        and is_primary_key = 1
-    </if>
-  </select>
+    <select id="getAllProperty" resultMap="BaseResultMap">
+        select
+        <include refid="Base_Column_List"/>
+        from "ontology_property"
+        where status = 1
+        <if test="justPrimary==1">
+            and is_primary_key = 1
+        </if>
+    </select>
 
-  <delete id="deleteByUniqueIdentifier" parameterType="java.lang.String">
-    delete from "ontology_property"
-    where unique_identifier = #{uniqumeigeeIdentifier,jdbcType=BIGINT}
-  </delete>
-  <insert id="insert" keyColumn="id" keyProperty="id" parameterType="com.aircas.ptr.foundry.model.po.OntologyProperty" useGeneratedKeys="true">
-    insert into "ontology_property"  ("status", unique_identifier, create_time, update_time,
-      ontology_unique_identifier, datasource_column_name, property_type,
-      display_name, description, visibility, 
-      experimental_status, api_name, is_primary_key, 
-      is_title_key, datasource_id)
-    values (#{status,jdbcType=INTEGER}, #{uniqueIdentifier,jdbcType=VARCHAR}, #{createTime,jdbcType=TIMESTAMP}, #{updateTime,jdbcType=TIMESTAMP},
-      #{ontologyUniqueIdentifier,jdbcType=VARCHAR}, #{datasourceColumnName,jdbcType=VARCHAR}, #{propertyType,jdbcType=VARCHAR},
-      #{displayName,jdbcType=VARCHAR}, #{description,jdbcType=VARCHAR}, #{visibility,jdbcType=INTEGER}, 
-      #{experimentalStatus,jdbcType=INTEGER}, #{apiName,jdbcType=VARCHAR}, #{isPrimaryKey,jdbcType=INTEGER}, 
-      #{isTitleKey,jdbcType=INTEGER}, #{datasourceId,jdbcType=VARCHAR})
-  </insert>
-  <insert id="insertSelective" keyColumn="id" keyProperty="id" parameterType="com.aircas.ptr.foundry.model.po.OntologyProperty" useGeneratedKeys="true">
-    insert into "ontology_property"
-    <trim prefix="(" suffix=")" suffixOverrides=",">
-      <if test="uniqueIdentifier != null">
-        uniqueIdentifier,
-      </if>
-      <if test="status != null">
-        "status",
-      </if>
-      <if test="createTime != null">
-        create_time,
-      </if>
-      <if test="updateTime != null">
-        update_time,
-      </if>
-      <if test="ontologyUniqueIdentifier != null">
-        ontology_unique_identifier,
-      </if>
-      <if test="datasourceColumnName != null">
-        datasource_column_name,
-      </if>
-      <if test="propertyType != null">
-        property_type,
-      </if>
-      <if test="displayName != null">
-        display_name,
-      </if>
-      <if test="description != null">
-        description,
-      </if>
-      <if test="visibility != null">
-        visibility,
-      </if>
-      <if test="experimentalStatus != null">
-        experimental_status,
-      </if>
-      <if test="apiName != null">
-        api_name,
-      </if>
-      <if test="isPrimaryKey != null">
-        is_primary_key,
-      </if>
-      <if test="isTitleKey != null">
-        is_title_key,
-      </if>
-      <if test="datasourceId != null">
-        datasource_id,
-      </if>
-    </trim>
-    <trim prefix="values (" suffix=")" suffixOverrides=",">
-      <if test="status != null">
-        #{status,jdbcType=INTEGER},
-      </if>
-      <if test="createTime != null">
-        #{createTime,jdbcType=TIMESTAMP},
-      </if>
-      <if test="updateTime != null">
-        #{updateTime,jdbcType=TIMESTAMP},
-      </if>
-      <if test="ontologyUniqueIdentifier != null">
-        #{ontologyUniqueIdentifier,jdbcType=VARCHAR},
-      </if>
-      <if test="datasourceColumnName != null">
-        #{datasourceColumnName,jdbcType=VARCHAR},
-      </if>
-      <if test="propertyType != null">
-        #{propertyType,jdbcType=VARCHAR},
-      </if>
-      <if test="displayName != null">
-        #{displayName,jdbcType=VARCHAR},
-      </if>
-      <if test="description != null">
-        #{description,jdbcType=VARCHAR},
-      </if>
-      <if test="visibility != null">
-        #{visibility,jdbcType=INTEGER},
-      </if>
-      <if test="experimentalStatus != null">
-        #{experimentalStatus,jdbcType=INTEGER},
-      </if>
-      <if test="apiName != null">
-        #{apiName,jdbcType=VARCHAR},
-      </if>
-      <if test="isPrimaryKey != null">
-        #{isPrimaryKey,jdbcType=INTEGER},
-      </if>
-      <if test="isTitleKey != null">
-        #{isTitleKey,jdbcType=INTEGER},
-      </if>
-      <if test="datasourceId != null">
-        #{datasourceId,jdbcType=VARCHAR},
-      </if>
-    </trim>
-  </insert>
-  <update id="updateSelective" parameterType="com.aircas.ptr.foundry.model.po.OntologyProperty">
-    update "ontology_property"
-    <set>
-      <if test="status != null">
-        "status" = #{status,jdbcType=INTEGER},
-      </if>
-      <if test="createTime != null">
-        create_time = #{createTime,jdbcType=TIMESTAMP},
-      </if>
-      <if test="updateTime != null">
-        update_time = #{updateTime,jdbcType=TIMESTAMP},
-      </if>
-      <if test="ontologyUniqueIdentifier != null">
-        ontology_unique_identifier = #{ontologyUniqueIdentifier,jdbcType=VARCHAR},
-      </if>
-      <if test="datasourceColumnName != null">
-        datasource_column_name = #{datasourceColumnName,jdbcType=VARCHAR},
-      </if>
-      <if test="propertyType != null">
-        property_type = #{propertyType,jdbcType=VARCHAR},
-      </if>
-      <if test="displayName != null">
-        display_name = #{displayName,jdbcType=VARCHAR},
-      </if>
-      <if test="description != null">
-        description = #{description,jdbcType=VARCHAR},
-      </if>
-      <if test="visibility != null">
-        visibility = #{visibility,jdbcType=INTEGER},
-      </if>
-      <if test="experimentalStatus != null">
-        experimental_status = #{experimentalStatus,jdbcType=INTEGER},
-      </if>
-      <if test="apiName != null">
-        api_name = #{apiName,jdbcType=VARCHAR},
-      </if>
-      <if test="isPrimaryKey != null">
-        is_primary_key = #{isPrimaryKey,jdbcType=INTEGER},
-      </if>
-      <if test="isTitleKey != null">
-        is_title_key = #{isTitleKey,jdbcType=INTEGER},
-      </if>
-      <if test="datasourceId != null">
-        datasource_id = #{datasourceId,jdbcType=VARCHAR},
-      </if>
-    </set>
-    where unique_Identifier = #{uniqueIdentifier,jdbcType=VARCHAR}
-  </update>
-  <update id="updateByUniqueIdentifier" parameterType="com.aircas.ptr.foundry.model.po.OntologyProperty">
-    update "ontology_property"
-    set "status" = #{status,jdbcType=INTEGER},
-      create_time = #{createTime,jdbcType=TIMESTAMP},
-      update_time = #{updateTime,jdbcType=TIMESTAMP},
-      ontology_unique_identifier = #{ontologyUniqueIdentifier,jdbcType=VARCHAR},
-      datasource_column_name = #{datasourceColumnName,jdbcType=VARCHAR},
-      property_type = #{propertyType,jdbcType=VARCHAR},
-      display_name = #{displayName,jdbcType=VARCHAR},
-      description = #{description,jdbcType=VARCHAR},
-      visibility = #{visibility,jdbcType=INTEGER},
-      experimental_status = #{experimentalStatus,jdbcType=INTEGER},
-      api_name = #{apiName,jdbcType=VARCHAR},
-      is_primary_key = #{isPrimaryKey,jdbcType=INTEGER},
-      is_title_key = #{isTitleKey,jdbcType=INTEGER},
-      datasource_id = #{datasourceId,jdbcType=VARCHAR}
-    where unique_Identifier = #{uniqueIdentifier,jdbcType=VARCHAR}
-  </update>
+    <select id="selectByApiName" resultType="com.aircas.ptr.foundry.model.po.OntologyProperty"
+            parameterType="java.lang.String">
+        select
+        <include refid="Base_Column_List"/>
+        from "ontology_property"
+        where ontology_unique_identifier = #{ontologyUniqueIdentifier,jdbcType=VARCHAR}
+        and api_name = #{apiName,jdbcType=VARCHAR}
+        and status = 1
+    </select>
+
+    <delete id="deleteByUniqueIdentifier" parameterType="java.lang.String">
+        delete
+        from "ontology_property"
+        where unique_identifier = #{uniqumeigeeIdentifier,jdbcType=BIGINT}
+    </delete>
+    <insert id="insert" keyColumn="id" keyProperty="id" parameterType="com.aircas.ptr.foundry.model.po.OntologyProperty"
+            useGeneratedKeys="true">
+        insert into "ontology_property" ("status", unique_identifier, create_time, update_time,
+                                         ontology_unique_identifier, datasource_column_name, property_type,
+                                         display_name, description, visibility,
+                                         experimental_status, api_name, is_primary_key,
+                                         is_title_key, datasource_id)
+        values (#{status,jdbcType=INTEGER}, #{uniqueIdentifier,jdbcType=VARCHAR}, #{createTime,jdbcType=TIMESTAMP},
+                #{updateTime,jdbcType=TIMESTAMP},
+                #{ontologyUniqueIdentifier,jdbcType=VARCHAR}, #{datasourceColumnName,jdbcType=VARCHAR},
+                #{propertyType,jdbcType=VARCHAR},
+                #{displayName,jdbcType=VARCHAR}, #{description,jdbcType=VARCHAR}, #{visibility,jdbcType=INTEGER},
+                #{experimentalStatus,jdbcType=INTEGER}, #{apiName,jdbcType=VARCHAR}, #{isPrimaryKey,jdbcType=INTEGER},
+                #{isTitleKey,jdbcType=INTEGER}, #{datasourceId,jdbcType=VARCHAR})
+    </insert>
+    <insert id="insertSelective" keyColumn="id" keyProperty="id"
+            parameterType="com.aircas.ptr.foundry.model.po.OntologyProperty" useGeneratedKeys="true">
+        insert into "ontology_property"
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="uniqueIdentifier != null">
+                uniqueIdentifier,
+            </if>
+            <if test="status != null">
+                "status",
+            </if>
+            <if test="createTime != null">
+                create_time,
+            </if>
+            <if test="updateTime != null">
+                update_time,
+            </if>
+            <if test="ontologyUniqueIdentifier != null">
+                ontology_unique_identifier,
+            </if>
+            <if test="datasourceColumnName != null">
+                datasource_column_name,
+            </if>
+            <if test="propertyType != null">
+                property_type,
+            </if>
+            <if test="displayName != null">
+                display_name,
+            </if>
+            <if test="description != null">
+                description,
+            </if>
+            <if test="visibility != null">
+                visibility,
+            </if>
+            <if test="experimentalStatus != null">
+                experimental_status,
+            </if>
+            <if test="apiName != null">
+                api_name,
+            </if>
+            <if test="isPrimaryKey != null">
+                is_primary_key,
+            </if>
+            <if test="isTitleKey != null">
+                is_title_key,
+            </if>
+            <if test="datasourceId != null">
+                datasource_id,
+            </if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="status != null">
+                #{status,jdbcType=INTEGER},
+            </if>
+            <if test="createTime != null">
+                #{createTime,jdbcType=TIMESTAMP},
+            </if>
+            <if test="updateTime != null">
+                #{updateTime,jdbcType=TIMESTAMP},
+            </if>
+            <if test="ontologyUniqueIdentifier != null">
+                #{ontologyUniqueIdentifier,jdbcType=VARCHAR},
+            </if>
+            <if test="datasourceColumnName != null">
+                #{datasourceColumnName,jdbcType=VARCHAR},
+            </if>
+            <if test="propertyType != null">
+                #{propertyType,jdbcType=VARCHAR},
+            </if>
+            <if test="displayName != null">
+                #{displayName,jdbcType=VARCHAR},
+            </if>
+            <if test="description != null">
+                #{description,jdbcType=VARCHAR},
+            </if>
+            <if test="visibility != null">
+                #{visibility,jdbcType=INTEGER},
+            </if>
+            <if test="experimentalStatus != null">
+                #{experimentalStatus,jdbcType=INTEGER},
+            </if>
+            <if test="apiName != null">
+                #{apiName,jdbcType=VARCHAR},
+            </if>
+            <if test="isPrimaryKey != null">
+                #{isPrimaryKey,jdbcType=INTEGER},
+            </if>
+            <if test="isTitleKey != null">
+                #{isTitleKey,jdbcType=INTEGER},
+            </if>
+            <if test="datasourceId != null">
+                #{datasourceId,jdbcType=VARCHAR},
+            </if>
+        </trim>
+    </insert>
+    <update id="updateSelective" parameterType="com.aircas.ptr.foundry.model.po.OntologyProperty">
+        update "ontology_property"
+        <set>
+            <if test="status != null">
+                "status" = #{status,jdbcType=INTEGER},
+            </if>
+            <if test="createTime != null">
+                create_time = #{createTime,jdbcType=TIMESTAMP},
+            </if>
+            <if test="updateTime != null">
+                update_time = #{updateTime,jdbcType=TIMESTAMP},
+            </if>
+            <if test="ontologyUniqueIdentifier != null">
+                ontology_unique_identifier = #{ontologyUniqueIdentifier,jdbcType=VARCHAR},
+            </if>
+            <if test="datasourceColumnName != null">
+                datasource_column_name = #{datasourceColumnName,jdbcType=VARCHAR},
+            </if>
+            <if test="propertyType != null">
+                property_type = #{propertyType,jdbcType=VARCHAR},
+            </if>
+            <if test="displayName != null">
+                display_name = #{displayName,jdbcType=VARCHAR},
+            </if>
+            <if test="description != null">
+                description = #{description,jdbcType=VARCHAR},
+            </if>
+            <if test="visibility != null">
+                visibility = #{visibility,jdbcType=INTEGER},
+            </if>
+            <if test="experimentalStatus != null">
+                experimental_status = #{experimentalStatus,jdbcType=INTEGER},
+            </if>
+            <if test="apiName != null">
+                api_name = #{apiName,jdbcType=VARCHAR},
+            </if>
+            <if test="isPrimaryKey != null">
+                is_primary_key = #{isPrimaryKey,jdbcType=INTEGER},
+            </if>
+            <if test="isTitleKey != null">
+                is_title_key = #{isTitleKey,jdbcType=INTEGER},
+            </if>
+            <if test="datasourceId != null">
+                datasource_id = #{datasourceId,jdbcType=VARCHAR},
+            </if>
+        </set>
+        where unique_Identifier = #{uniqueIdentifier,jdbcType=VARCHAR}
+    </update>
+    <update id="updateByUniqueIdentifier" parameterType="com.aircas.ptr.foundry.model.po.OntologyProperty">
+        update "ontology_property"
+        set "status"                   = #{status,jdbcType=INTEGER},
+            create_time                = #{createTime,jdbcType=TIMESTAMP},
+            update_time                = #{updateTime,jdbcType=TIMESTAMP},
+            ontology_unique_identifier = #{ontologyUniqueIdentifier,jdbcType=VARCHAR},
+            datasource_column_name     = #{datasourceColumnName,jdbcType=VARCHAR},
+            property_type              = #{propertyType,jdbcType=VARCHAR},
+            display_name               = #{displayName,jdbcType=VARCHAR},
+            description                = #{description,jdbcType=VARCHAR},
+            visibility                 = #{visibility,jdbcType=INTEGER},
+            experimental_status        = #{experimentalStatus,jdbcType=INTEGER},
+            api_name                   = #{apiName,jdbcType=VARCHAR},
+            is_primary_key             = #{isPrimaryKey,jdbcType=INTEGER},
+            is_title_key               = #{isTitleKey,jdbcType=INTEGER},
+            datasource_id              = #{datasourceId,jdbcType=VARCHAR}
+        where unique_Identifier = #{uniqueIdentifier,jdbcType=VARCHAR}
+    </update>
 </mapper>

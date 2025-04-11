@@ -4,7 +4,6 @@ import com.aircas.ptr.foundry.common.constant.ActionHandleRuleAddConditionEnum;
 import com.aircas.ptr.foundry.model.po.*;
 import com.aircas.ptr.foundry.ontology.application.service.ObjectService;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyLinkGroupService;
-import com.aircas.ptr.foundry.ontology.application.service.OntologyMetaService;
 import com.aircas.ptr.foundry.ontology.application.service.OntologyPropertyService;
 import com.aircas.ptr.foundry.ontology.entity.vo.*;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyChildLinkMapper;
@@ -13,7 +12,6 @@ import com.aircas.ptr.foundry.ontology.repository.dao.OntologyPropertyMapper;
 import com.aircas.ptr.foundry.ontology.repository.datalakeDao.ObjectMapper;
 import com.aircas.ptr.foundry.ontology.repository.param.FilterParam;
 import com.aircas.ptr.foundry.ontology.repository.param.QuerySortParam;
-import com.github.jsonldjava.utils.Obj;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import joptsimple.internal.Strings;
@@ -48,9 +46,6 @@ public class ObjectServiceImpl implements ObjectService {
 
     @Resource
     private final OntologyPropertyService ontologyPropertyService;
-
-    @Autowired
-    private OntologyMetaService ontologyMetaService;
 
     @Override
     public PageInfo<DirectoryItemVO> queryDirectories(String ontologyUniqueIdentifier, Integer page, Integer size) {
@@ -129,8 +124,8 @@ public class ObjectServiceImpl implements ObjectService {
 
     @Override
     public int updateObjectData(String ontologyUniqueIdentifier, Map<String, Object> datamap, Map<String, Object> whereMap) {
-        OntologyMetaVO ontologyMetaVO = ontologyMetaService.getOntologyByUniqueIdentifier(ontologyUniqueIdentifier);
-        String sql = buildUpdateSQL(ontologyMetaVO.getBackingDatasourceId(), datamap, whereMap);
+
+        String sql = buildUpdateSQL(ontologyMetaMapper.selectByUniqueIdentifier(ontologyUniqueIdentifier).getBackingDatasourceId(), datamap, whereMap);
         int r = objectMapper.updateAnySQL(sql);
         return r;
     }
@@ -187,7 +182,7 @@ public class ObjectServiceImpl implements ObjectService {
         String filterKey = propertyToList.get(0).getDatasourceColumnName();
         List<FilterParam> filter = new ArrayList<>();
         filter.add(new FilterParam(filterKey, filterValue, ActionHandleRuleAddConditionEnum.EQ));
-        return queryObjectByFilter(ontologyMetaService.getOntologyByUniqueIdentifier(dataOntologyId).getApiName(), filter, page, size, null);
+        return queryObjectByFilter(ontologyMetaMapper.selectByUniqueIdentifier(dataOntologyId).getApiName(), filter, page, size, null);
     }
 
     @Override

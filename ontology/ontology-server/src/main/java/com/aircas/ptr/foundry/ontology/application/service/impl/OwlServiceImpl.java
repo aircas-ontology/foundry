@@ -2,7 +2,7 @@ package com.aircas.ptr.foundry.ontology.application.service.impl;
 
 
 import com.aircas.ptr.foundry.model.po.OntologyMeta;
-import com.aircas.ptr.foundry.model.po.OntologyDataType;
+import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import com.aircas.ptr.foundry.ontology.Exception.ExceptionFactory;
 import com.aircas.ptr.foundry.ontology.Exception.OwlUriInvalidClassNotFoundException;
 import com.aircas.ptr.foundry.ontology.Exception.OwlUrilInvalidPrimaryKeyNotFoundException;
@@ -121,7 +121,7 @@ public class OwlServiceImpl implements OwlService {
             String displayName = propertyValueVO.getDisplayName();
             String value = propertyValueVO.getValue().toString();
             String desc = propertyValueVO.getDescription();
-            OntologyDataType propertyType = propertyValueVO.getPropertyType();
+            OntologyDataTypeEnum propertyType = propertyValueVO.getPropertyType();
 
             OWLDataProperty dataProperty = factory.getOWLDataProperty(displayName);
             owlOntologyManager.addAxiom(ontology, factory.getOWLDeclarationAxiom(dataProperty));
@@ -148,8 +148,8 @@ public class OwlServiceImpl implements OwlService {
         }
     }
 
-    private OWL2Datatype getOwlDataTypeFromPropertyType(OntologyDataType propertyType) {
-        return propertyType.owl2Datatype();
+    private OWL2Datatype getOwlDataTypeFromPropertyType(OntologyDataTypeEnum propertyType) {
+        return propertyType.transfer2Owl();
     }
 
     //目前只插入一层的link，link的link先不插入

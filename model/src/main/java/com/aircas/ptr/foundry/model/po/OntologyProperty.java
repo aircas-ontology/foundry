@@ -3,7 +3,7 @@ package com.aircas.ptr.foundry.model.po;
 import java.io.Serializable;
 import java.util.Date;
 
-import lombok.Builder;
+import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import lombok.Data;
 
 /**
@@ -51,7 +51,7 @@ public class OntologyProperty implements Serializable {
     /**
      * 属性基础类型、时间、字符、数值
      */
-    private OntologyDataType propertyType;
+    private OntologyDataTypeEnum propertyType;
 
     /**
      * 属性名称

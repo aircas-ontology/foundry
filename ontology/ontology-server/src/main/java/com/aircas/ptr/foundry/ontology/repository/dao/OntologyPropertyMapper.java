@@ -16,6 +16,8 @@ public interface OntologyPropertyMapper {
 
     OntologyProperty selectByPrimaryKey(Long id);
 
+    OntologyProperty selectByApiName(String ontologyUniqueIdentifier,String apiName);
+
     List<OntologyProperty> selectByOntologyUniqueIdentifier(String uniqueIdentifier);
 
     List<OntologyProperty> selectByUniqueIdentifier(String uniqueIdentifier);

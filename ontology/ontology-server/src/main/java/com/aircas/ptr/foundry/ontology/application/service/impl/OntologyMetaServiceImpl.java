@@ -1,15 +1,17 @@
 package com.aircas.ptr.foundry.ontology.application.service.impl;
 
 import com.aircas.ptr.foundry.common.constant.OntologyComponentEnum;
+import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import com.aircas.ptr.foundry.common.exception.DuplicatedDataException;
+import com.aircas.ptr.foundry.common.util.StringUtil;
 import com.aircas.ptr.foundry.model.po.*;
-import com.aircas.ptr.foundry.ontology.application.service.OntologyMetaService;
-import com.aircas.ptr.foundry.ontology.application.service.OntologyPropertyService;
-import com.aircas.ptr.foundry.ontology.application.service.TableMetadataService;
+import com.aircas.ptr.foundry.ontology.application.service.*;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyMetaBO;
 import com.aircas.ptr.foundry.ontology.entity.bo.OntologyPropertyBO;
 import com.aircas.ptr.foundry.ontology.entity.vo.*;
 import com.aircas.ptr.foundry.ontology.repository.dao.*;
+import com.aircas.ptr.foundry.ontology.repository.param.EntityNodeParam;
+import com.aircas.ptr.foundry.ontology.repository.param.EntityTableFieldParam;
 import com.aircas.ptr.foundry.ontology.repository.param.OntologyMetaAddParam;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
@@ -46,6 +48,12 @@ public class OntologyMetaServiceImpl implements OntologyMetaService {
     @Autowired
     private OntologyGroupMapper ontologyGroupMapper;
 
+    @Autowired
+    private ObjectService objectService;
+
+    @Autowired
+    private EntityService entityService;
+
     @Override
     public OntologyMetaVO add(OntologyMetaAddParam param) {
         int count = ontologyMetaMapper.selectByDisplayName(param.getDisplayName());
@@ -56,7 +64,7 @@ public class OntologyMetaServiceImpl implements OntologyMetaService {
         OntologyMeta ontologyMeta = new OntologyMeta();
         BeanUtils.copyProperties(param, ontologyMeta);
         ontologyMeta.setUniqueIdentifier(UUID.randomUUID().toString());
-        ontologyMeta.setMetaGroupId(param.getMetaGroupId().stream().collect(Collectors.joining(",")));
+        ontologyMeta.setMetaGroupId(String.join(",", param.getMetaGroupId()));
         count = ontologyMetaMapper.insertSelective(ontologyMeta);
         // 如果datasource不为空，插入本体属性
         if (param.getIsMapAllParam()) {
@@ -66,7 +74,7 @@ public class OntologyMetaServiceImpl implements OntologyMetaService {
         if (param.getParentUniqueIdentifier() != null &&
                 !param.getParentUniqueIdentifier().isEmpty() &&
                 param.getParentComponents() != null &&
-                param.getParentComponents().size() > 0) {
+                !param.getParentComponents().isEmpty()) {
             String parentUniqueIdentifier = param.getParentUniqueIdentifier();
             List<OntologyComponentEnum> parentComponents = param.getParentComponents();
             for (OntologyComponentEnum parent : parentComponents) {
@@ -95,15 +103,53 @@ public class OntologyMetaServiceImpl implements OntologyMetaService {
                 }
             }
         }
+
+        if (param.getBackingDatasourceId() != null) {
+            // 插入实体数据\创建node节点
+            int num = batchInsertEntity(ontologyMeta.getUniqueIdentifier(), ontologyMeta.getApiName(), ontologyMeta.getDisplayName());
+            log.info("插入实体数据{}条", num);
+        }
+
         OntologyMetaVO ontologyMetaVO = new OntologyMetaVO();
         OntologyMeta resMeta = ontologyMetaMapper.selectByUniqueIdentifier(ontologyMeta.getUniqueIdentifier());
         BeanUtils.copyProperties(resMeta, ontologyMetaVO);
         return ontologyMetaVO;
     }
 
+    private int batchInsertEntity(String uniqueIdentifier, String apiName, String displayName) {
+
+        List<OntologyPropertyVO> propertyVOS = ontologyPropertyService.selectByOntologyApi(apiName);
+        String key = Objects.requireNonNull(propertyVOS.stream().filter(prop -> prop.getIsPrimaryKey() == 1).findFirst().orElse(null)).getApiName();
+        String title = Objects.requireNonNull(propertyVOS.stream().filter(prop -> prop.getIsTitleKey() == 1).findFirst().orElse(null)).getApiName();
+
+        int pageNum = 1, count = 0;
+        while (true) {
+            PageInfo<Map<String, Object>> mapPageInfo = objectService.queryObjectList(uniqueIdentifier, pageNum, 200);
+            if (mapPageInfo == null || mapPageInfo.getList() == null || mapPageInfo.getList().isEmpty()) {
+                break;
+            }
+            // 插入实体数据
+            Integer num = entityService.batchInsertEntityTable(apiName, mapPageInfo.getList());
+            // 创建节点
+            List<EntityNodeParam> collect = mapPageInfo.getList().stream().map(item -> new EntityNodeParam(
+                    uniqueIdentifier + "@" + item.get(key),
+                    (String) item.get(title),
+                    "",
+                    apiName,
+                    displayName
+            )).collect(Collectors.toList());
+            if (!entityService.createEntityNode(collect)) {
+                log.warn("创建实体失败");
+            }
+            pageNum++;
+            count += num;
+        }
+        return count;
+    }
+
     @Override
     public List<OntologyMetaVO> selectByUniqueIdentifiers(List<String> uniqueIdentifiers) {
-        if (uniqueIdentifiers.size() == 0) {
+        if (uniqueIdentifiers.isEmpty()) {
             return new ArrayList<>();
         }
         List<OntologyMeta> ontologyMetaList = ontologyMetaMapper.selectByUniqueIdentifiers(uniqueIdentifiers);
@@ -139,7 +185,7 @@ public class OntologyMetaServiceImpl implements OntologyMetaService {
             property.setOntologyUniqueIdentifier(ontologyUniqueIdentifier);
             property.setApiName(column.getColumnName());
             property.setDatasourceColumnName(column.getColumnName());
-            property.setPropertyType(OntologyDataType.valueFromPgType(column.getType()));
+            property.setPropertyType(OntologyDataTypeEnum.valueOfPg(column.getType()));
             property.setDatasourceId(backingDatasourceId);
             property.setDescription(column.getDescription());
             property.setDisplayName(column.getDescription());

@@ -18,11 +18,10 @@ import com.aircas.ptr.foundry.ontology.function.FunctionUtils;
 import com.aircas.ptr.foundry.ontology.function.Parameter;
 import com.aircas.ptr.foundry.ontology.repository.dao.FunctionMapper;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyMetaMapper;
-import com.alibaba.fastjson.JSONObject;
 import groovy.lang.GroovyClassLoader;
 import groovy.lang.GroovyObject;
 import lombok.RequiredArgsConstructor;
-import com.aircas.ptr.foundry.model.po.OntologyDataType;
+import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import com.aircas.ptr.foundry.ontology.Exception.ExceptionFactory;
 
 import lombok.extern.slf4j.Slf4j;
@@ -246,9 +245,9 @@ public class FunctionServiceImpl implements FunctionService {
         Method handleMethod = FunctionUtils.getMethod(functionInstance, "handle");
         List<ParameterMetadataVO> params = new ArrayList<>();
         List<Parameter> parameters = FunctionUtils.getMethodParameterAnnotates(handleMethod);
-        List<OntologyDataType> types = FunctionUtils.getParameterTypes(handleMethod);
+        List<OntologyDataTypeEnum> types = FunctionUtils.getParameterTypes(handleMethod);
         for (int i = 0; i < types.size(); i++) {
-            OntologyDataType type = types.get(i);
+            OntologyDataTypeEnum type = types.get(i);
             Parameter parameter = parameters.get(i);
             if (type.isOntologyDataType()) {
                 ParameterMetadataVO vo = new ParameterMetadataVO(parameter.name(), type.name(), parameter.description(), type.getOntologyApi());
