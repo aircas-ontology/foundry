@@ -1,6 +1,6 @@
 package com.aircas.ptr.foundry.ontology.function
 
-import com.aircas.ptr.foundry.ontology.entity.bo.OntologyBaseObjectBo
+import com.aircas.ptr.foundry.ontology.model.bo.OntologyBaseObjectBo
 
 import java.lang.reflect.Method
 

@@ -1,8 +1,6 @@
 package com.aircas.ptr.foundry.ontology;
 
-import com.aircas.ptr.foundry.ontology.repository.param.FilterParam;
 import com.alibaba.druid.spring.boot.autoconfigure.DruidDataSourceAutoConfigure;
-import com.alibaba.fastjson.JSON;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;

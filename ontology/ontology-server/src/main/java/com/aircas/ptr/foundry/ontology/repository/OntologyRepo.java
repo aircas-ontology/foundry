@@ -3,7 +3,7 @@ package com.aircas.ptr.foundry.ontology.repository;
 import com.aircas.ptr.foundry.common.constant.Status;
 import com.aircas.ptr.foundry.model.po.Ontology;
 import com.aircas.ptr.foundry.model.repo.BaseRepo;
-import com.aircas.ptr.foundry.ontology.entity.bo.OntologyBO;
+import com.aircas.ptr.foundry.ontology.model.bo.OntologyBO;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyMapper;
 import org.springframework.stereotype.Repository;
 

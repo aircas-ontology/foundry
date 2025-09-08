@@ -1,23 +1,16 @@
 package com.aircas.ptr.foundry.ontology.function
 
-import com.aircas.ptr.foundry.model.po.OntologyMeta
-import com.aircas.ptr.foundry.ontology.application.service.ObjectService
+
+import com.aircas.ptr.foundry.ontology.service.ObjectService
 import com.aircas.ptr.foundry.ontology.OntologyServerApplication
-import com.aircas.ptr.foundry.ontology.application.service.OntologyMetaService
-import com.aircas.ptr.foundry.ontology.application.service.OntologyPropertyService
-import com.aircas.ptr.foundry.ontology.application.service.impl.OntologyMetaServiceImpl
-import com.aircas.ptr.foundry.ontology.entity.vo.LinkedValueVo
-import com.aircas.ptr.foundry.ontology.entity.vo.ObjectOneInfoVO
-import com.aircas.ptr.foundry.ontology.entity.vo.ObjectWithLinkedInfoVO
-import com.aircas.ptr.foundry.ontology.entity.vo.OntologyMetaVO
-import com.aircas.ptr.foundry.ontology.entity.vo.OntologyPropertyVO
-import com.aircas.ptr.foundry.ontology.entity.vo.PropertyValueVO
-
-import java.lang.annotation.ElementType
-import java.lang.annotation.Retention
-import java.lang.annotation.RetentionPolicy
-import java.lang.annotation.Target;
-
+import com.aircas.ptr.foundry.ontology.service.OntologyMetaService
+import com.aircas.ptr.foundry.ontology.service.OntologyPropertyService
+import com.aircas.ptr.foundry.ontology.model.vo.LinkedValueVo
+import com.aircas.ptr.foundry.ontology.model.vo.ObjectOneInfoVO
+import com.aircas.ptr.foundry.ontology.model.vo.ObjectWithLinkedInfoVO
+import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaVO
+import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyVO
+import com.aircas.ptr.foundry.ontology.model.vo.PropertyValueVO
 
 class Ontology {
 

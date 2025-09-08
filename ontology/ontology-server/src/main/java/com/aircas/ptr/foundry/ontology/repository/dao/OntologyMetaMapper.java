@@ -1,7 +1,6 @@
 package com.aircas.ptr.foundry.ontology.repository.dao;
 
 import com.aircas.ptr.foundry.model.po.OntologyMeta;
-import com.aircas.ptr.foundry.ontology.entity.vo.OntologyMetaVO;
 import org.apache.ibatis.annotations.Mapper;
 
 import java.util.List;

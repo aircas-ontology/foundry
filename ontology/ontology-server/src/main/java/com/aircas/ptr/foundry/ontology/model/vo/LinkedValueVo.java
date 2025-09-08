@@ -1,0 +1,17 @@
+package com.aircas.ptr.foundry.ontology.model.vo;
+
+import lombok.Data;
+
+import java.util.List;
+
+
+@Data
+public class LinkedValueVo {
+
+    private String name; // 关系的名字
+
+    private String apiName;
+
+    //可能查询出很多个object
+    private List<ObjectOneInfoVO> joinedResults;
+}
