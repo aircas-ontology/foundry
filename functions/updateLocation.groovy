@@ -4,7 +4,7 @@ import com.alibaba.fastjson.JSONArray
 import com.aircas.ptr.foundry.common.util.HttpUtil
 import com.aircas.ptr.foundry.common.util.DateUtils
 import com.aircas.ptr.foundry.ontology.OntologyServerApplication
-import com.aircas.ptr.foundry.ontology.application.service.ObjectService
+import com.aircas.ptr.foundry.ontology.service.ObjectService
 import com.aircas.ptr.foundry.ontology.ArleighBurkeClassDestroyer
 
 class updateLocation {

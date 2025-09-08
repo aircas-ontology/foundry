@@ -1,8 +1,8 @@
-import com.aircas.ptr.foundry.ontology.Satellite;
-import com.aircas.ptr.foundry.ontology.Satellitedb;
+import com.aircas.ptr.foundry.ontology.Satellite
+import com.aircas.ptr.foundry.ontology.Satellitedb
 import com.aircas.ptr.foundry.ontology.function.Parameter
 import com.aircas.ptr.foundry.common.util.HttpUtil
-import com.alibaba.fastjson.JSONObject;
+import com.alibaba.fastjson.JSONObject
 
 class satelliteOrbitmath {
 

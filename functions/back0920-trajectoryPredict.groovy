@@ -1,13 +1,13 @@
 import com.aircas.ptr.foundry.ontology.function.Parameter
 import com.alibaba.fastjson.JSONObject
-import com.alibaba.fastjson.JSONArray;
+import com.alibaba.fastjson.JSONArray
 import com.aircas.ptr.foundry.common.constant.QuerySortEnum
 import com.aircas.ptr.foundry.common.util.HttpUtil
-import com.aircas.ptr.foundry.ontology.repository.param.FilterParam
+import com.aircas.ptr.foundry.ontology.model.request.FilterParam
 import com.github.pagehelper.PageInfo
-import com.aircas.ptr.foundry.ontology.repository.param.QuerySortParam
+import com.aircas.ptr.foundry.ontology.model.request.QuerySortParam
 import com.aircas.ptr.foundry.ontology.OntologyServerApplication
-import com.aircas.ptr.foundry.ontology.application.service.ObjectService
+import com.aircas.ptr.foundry.ontology.service.ObjectService
 
 
 import java.util.stream.Collectors

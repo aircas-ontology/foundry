@@ -1,7 +1,7 @@
-import com.aircas.ptr.foundry.ontology.Xtmb;
+import com.aircas.ptr.foundry.ontology.Xtmb
 import com.aircas.ptr.foundry.ontology.function.Parameter
 import com.aircas.ptr.foundry.common.util.HttpUtil
-import com.alibaba.fastjson.JSONObject;
+import com.alibaba.fastjson.JSONObject
 
 class lastedByRange {
 

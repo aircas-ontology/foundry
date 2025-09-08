@@ -1,4 +1,4 @@
-import com.aircas.ptr.foundry.ontology.Xtmb;
+import com.aircas.ptr.foundry.ontology.Xtmb
 import com.aircas.ptr.foundry.ontology.function.Parameter
 
 

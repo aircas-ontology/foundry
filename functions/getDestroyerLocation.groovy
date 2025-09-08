@@ -1,11 +1,10 @@
 import com.aircas.ptr.foundry.ontology.function.Parameter
 import com.aircas.ptr.foundry.common.util.DateUtils
-import com.aircas.ptr.foundry.ontology.repository.param.FilterParam
+import com.aircas.ptr.foundry.ontology.model.request.FilterParam
 import com.aircas.ptr.foundry.common.constant.ActionHandleRuleAddConditionEnum
 import com.github.pagehelper.PageInfo
-import com.aircas.ptr.foundry.ontology.repository.param.QuerySortParam
 import com.aircas.ptr.foundry.ontology.OntologyServerApplication
-import com.aircas.ptr.foundry.ontology.application.service.ObjectService
+import com.aircas.ptr.foundry.ontology.service.ObjectService
 
 class getDestroyerLocation {
 

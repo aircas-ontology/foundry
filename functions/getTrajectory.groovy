@@ -1,10 +1,10 @@
 import com.aircas.ptr.foundry.ontology.function.Parameter
 import com.aircas.ptr.foundry.ontology.OntologyServerApplication
-import com.aircas.ptr.foundry.ontology.application.service.ObjectService
+import com.aircas.ptr.foundry.ontology.service.ObjectService
 import com.aircas.ptr.foundry.common.constant.ActionHandleRuleAddConditionEnum
-import com.aircas.ptr.foundry.ontology.repository.param.QuerySortParam
+import com.aircas.ptr.foundry.ontology.model.request.QuerySortParam
 import com.aircas.ptr.foundry.common.constant.QuerySortEnum
-import com.aircas.ptr.foundry.ontology.repository.param.FilterParam
+import com.aircas.ptr.foundry.ontology.model.request.FilterParam
 
 class getTrajectory {
 

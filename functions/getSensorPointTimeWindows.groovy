@@ -3,7 +3,7 @@ import com.alibaba.fastjson.JSONObject
 import com.aircas.ptr.foundry.common.util.HttpUtil
 import com.aircas.ptr.foundry.common.util.SnowflakeIdUtil
 import com.aircas.ptr.foundry.ontology.OntologyServerApplication
-import com.aircas.ptr.foundry.ontology.application.service.ObjectService
+import com.aircas.ptr.foundry.ontology.service.ObjectService
 
 class getSensorPointTimeWindows {
 
