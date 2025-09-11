@@ -4,8 +4,8 @@ package com.aircas.ptr.foundry.ontology.service;
 import com.aircas.ptr.foundry.ontology.model.vo.DirectoryItemVO;
 import com.aircas.ptr.foundry.ontology.model.vo.ObjectOneInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.ObjectWithLinkedInfoVO;
-import com.aircas.ptr.foundry.ontology.model.request.FilterParam;
-import com.aircas.ptr.foundry.ontology.model.request.QuerySortParam;
+import com.aircas.ptr.foundry.ontology.model.param.FilterParam;
+import com.aircas.ptr.foundry.ontology.model.param.QuerySortParam;
 import com.github.pagehelper.PageInfo;
 
 import java.util.List;

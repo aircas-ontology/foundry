@@ -1,7 +1,7 @@
 package com.aircas.ptr.foundry.ontology.service;
 
-import com.aircas.ptr.foundry.ontology.model.request.EntityNodeParam;
-import com.aircas.ptr.foundry.ontology.model.request.EntityTableFieldParam;
+import com.aircas.ptr.foundry.ontology.model.param.EntityNodeParam;
+import com.aircas.ptr.foundry.ontology.model.param.EntityTableFieldParam;
 
 import java.util.List;
 import java.util.Map;

@@ -6,7 +6,7 @@ import com.aircas.ptr.foundry.ontology.exception.BaseException;
 import com.aircas.ptr.foundry.ontology.service.FunctionService;
 import com.aircas.ptr.foundry.ontology.model.bo.FunctionBo;
 import com.aircas.ptr.foundry.ontology.model.vo.FunctionVO;
-import com.aircas.ptr.foundry.ontology.model.request.FunctionAddParam;
+import com.aircas.ptr.foundry.ontology.model.param.FunctionAddParam;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import org.springframework.beans.BeanUtils;

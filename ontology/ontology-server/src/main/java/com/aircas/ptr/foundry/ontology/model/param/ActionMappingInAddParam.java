@@ -1,4 +1,4 @@
-package com.aircas.ptr.foundry.ontology.model.request;
+package com.aircas.ptr.foundry.ontology.model.param;
 
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;

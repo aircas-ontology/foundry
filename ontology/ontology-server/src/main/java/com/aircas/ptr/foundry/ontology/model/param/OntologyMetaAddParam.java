@@ -1,4 +1,4 @@
-package com.aircas.ptr.foundry.ontology.model.request;
+package com.aircas.ptr.foundry.ontology.model.param;
 
 import com.aircas.ptr.foundry.common.constant.OntologyComponentEnum;
 import io.swagger.annotations.ApiModel;

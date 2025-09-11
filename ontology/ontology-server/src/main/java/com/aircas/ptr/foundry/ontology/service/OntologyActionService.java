@@ -8,8 +8,8 @@ import com.aircas.ptr.foundry.ontology.exception.*;
 import com.aircas.ptr.foundry.ontology.model.bo.OntologyActionBo;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyActionVO;
 import com.aircas.ptr.foundry.ontology.model.vo.ParameterMetadataVO;
-import com.aircas.ptr.foundry.ontology.model.request.ActionHandleMappingInParam;
-import com.aircas.ptr.foundry.ontology.model.request.ActionHandleRuleAddParam;
+import com.aircas.ptr.foundry.ontology.model.param.ActionHandleMappingInParam;
+import com.aircas.ptr.foundry.ontology.model.param.ActionHandleRuleAddParam;
 import com.github.pagehelper.PageInfo;
 
 import java.util.Date;

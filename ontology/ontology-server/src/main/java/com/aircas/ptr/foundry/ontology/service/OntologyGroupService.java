@@ -3,7 +3,7 @@ package com.aircas.ptr.foundry.ontology.service;
 import com.aircas.ptr.foundry.ontology.model.bo.OntologyGroupBO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyGroupVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkGraphVO;
-import com.aircas.ptr.foundry.ontology.model.request.OntologyGroupAddParam;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyGroupAddParam;
 import com.github.pagehelper.PageInfo;
 
 import java.util.List;

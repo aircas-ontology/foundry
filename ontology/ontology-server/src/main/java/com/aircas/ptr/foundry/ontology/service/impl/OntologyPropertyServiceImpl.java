@@ -11,7 +11,7 @@ import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyVO;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyMetaMapper;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyPropertyMapper;
 import com.aircas.ptr.foundry.ontology.repository.datalakeDao.TableMetadataMapper;
-import com.aircas.ptr.foundry.ontology.model.request.EntityTableFieldParam;
+import com.aircas.ptr.foundry.ontology.model.param.EntityTableFieldParam;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

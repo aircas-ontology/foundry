@@ -1,15 +1,17 @@
 package com.aircas.ptr.foundry.ontology.controller;
 
 import com.aircas.ptr.foundry.common.base.DataResult;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyCreateParam;
 import com.aircas.ptr.foundry.ontology.service.OntologyMetaService;
 import com.aircas.ptr.foundry.ontology.model.bo.OntologyMetaBO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyGroupMetaVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaVO;
-import com.aircas.ptr.foundry.ontology.model.request.OntologyMetaAddParam;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyMetaAddParam;
 import com.github.pagehelper.PageInfo;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
@@ -18,11 +20,18 @@ import java.util.List;
 
 @Api(tags = "元数据")
 @RestController
-@RequestMapping("/OntologyMeta")
+@RequestMapping("/meta")
 public class OntologyMetaController {
 
     @Resource
     private OntologyMetaService ontologyMetaService;
+
+    @PostMapping("/create")
+    @ApiOperation(value = "创建本体")
+    public DataResult<OntologyMetaVO> createOntology(@RequestBody @Validated OntologyCreateParam ontologyCreateParam) {
+        return null;
+    }
+
 
     @PostMapping("/add")
     @ApiOperation(value = "新增本体")
@@ -30,11 +39,6 @@ public class OntologyMetaController {
 
         return DataResult.ofData(ontologyMetaService.add(param));
     }
-
-
-
-
-
 
 
     @PostMapping("/delete")

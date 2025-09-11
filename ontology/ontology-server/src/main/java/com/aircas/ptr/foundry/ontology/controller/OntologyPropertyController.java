@@ -14,7 +14,7 @@ import java.util.List;
 
 @Api(tags = "属性")
 @RestController
-@RequestMapping("/OntologyProperty")
+@RequestMapping("/property")
 @RequiredArgsConstructor
 public class OntologyPropertyController {
     private final OntologyPropertyService ontologyPropertyService;

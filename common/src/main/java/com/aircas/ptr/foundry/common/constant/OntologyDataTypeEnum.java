@@ -5,6 +5,9 @@ import lombok.Getter;
 import lombok.Setter;
 import org.semanticweb.owlapi.vocab.OWL2Datatype;
 
+import java.sql.Time;
+import java.sql.Timestamp;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -27,18 +30,28 @@ import java.util.Objects;
 @AllArgsConstructor
 public enum OntologyDataTypeEnum {
 
-    Bool("Bool"),
-    Int("Int"),
+    Bool("Boolean"),
+    Int("Integer"),
     Long("Long"),
     Float("Float"),
+    Short("Short"),
+    Byte("Byte"),
     Double("Double"),
     Decimal("Decimal"),
     String("String"),
-    MAP("Map"),
     Date("Date"),
-    Time("Time"),
+    Array("Array"),
+    Map("Map"),
+    Vector("Vector"),
     Timestamp("Timestamp"),
-    Ontology("Ontology");
+    MediaReference("MediaReference"),
+    TimeSeries("TimeSeries"),
+    Attachment("Attachment"),
+    Geohash("Geohash"),
+    Geoshape("Geoshape"),
+    Cipher("Cipher"),
+    Ontology("Ontology"),
+    ;
 
     private static final Map<Class<?>, OntologyDataTypeEnum> CLASS_2_TYPE = new HashMap<Class<?>, OntologyDataTypeEnum>() {{
         put(Boolean.class, OntologyDataTypeEnum.Bool);
@@ -47,23 +60,26 @@ public enum OntologyDataTypeEnum {
         put(Float.class, OntologyDataTypeEnum.Float);
         put(Double.class, OntologyDataTypeEnum.Double);
         put(String.class, OntologyDataTypeEnum.String);
-        put(HashMap.class, OntologyDataTypeEnum.MAP);
-        //TODO：Date, time, timestamp未定
+        put(HashMap.class, OntologyDataTypeEnum.Map);
+        put(Date.class, OntologyDataTypeEnum.Date);
+        put(Timestamp.class, OntologyDataTypeEnum.Timestamp);
+        put(Time.class, OntologyDataTypeEnum.Timestamp);
     }};
 
     private static final Map<String, OntologyDataTypeEnum> PG_2_TYPE = new HashMap<String, OntologyDataTypeEnum>() {{
-        put("boolean", OntologyDataTypeEnum.Bool);
-        put("smallint", OntologyDataTypeEnum.Int);
-        put("integer", OntologyDataTypeEnum.Int);
-        put("bigint", OntologyDataTypeEnum.Long);
-        put("real", OntologyDataTypeEnum.Float);
-        put("double precision", OntologyDataTypeEnum.Double);
-        put("numeric", OntologyDataTypeEnum.Decimal);
-        put("text", OntologyDataTypeEnum.String);
-        put("character varying", OntologyDataTypeEnum.String);
-        put("date", OntologyDataTypeEnum.Date);
-        put("time without time zone", OntologyDataTypeEnum.Time);
-        put("timestamp without time zone", OntologyDataTypeEnum.Timestamp);
+        put(PostgresDataTypeEnum.Boolean.getValue(), OntologyDataTypeEnum.Bool);
+        put(PostgresDataTypeEnum.Smallint.getValue(), OntologyDataTypeEnum.Int);
+        put(PostgresDataTypeEnum.Integer.getValue(), OntologyDataTypeEnum.Int);
+        put(PostgresDataTypeEnum.Bigint.getValue(), OntologyDataTypeEnum.Long);
+        put(PostgresDataTypeEnum.Real.getValue(), OntologyDataTypeEnum.Float);
+        put(PostgresDataTypeEnum.Double.getValue(), OntologyDataTypeEnum.Double);
+        put(PostgresDataTypeEnum.Decimal.getValue(), OntologyDataTypeEnum.Decimal);
+        put(PostgresDataTypeEnum.Numeric.getValue(), OntologyDataTypeEnum.Decimal);
+        put(PostgresDataTypeEnum.Text.getValue(), OntologyDataTypeEnum.String);
+        put(PostgresDataTypeEnum.Varchar.getValue(), OntologyDataTypeEnum.String);
+        put(PostgresDataTypeEnum.Date.getValue(), OntologyDataTypeEnum.Date);
+        put(PostgresDataTypeEnum.Time.getValue(), OntologyDataTypeEnum.Timestamp);
+        put(PostgresDataTypeEnum.Timestamp.getValue(), OntologyDataTypeEnum.Timestamp);
     }};
 
     private static final Map<OntologyDataTypeEnum, String> TYPE_2_PG = new HashMap<OntologyDataTypeEnum, String>() {{
@@ -73,10 +89,8 @@ public enum OntologyDataTypeEnum {
         put(OntologyDataTypeEnum.Float, "float4");
         put(OntologyDataTypeEnum.Double, "float8");
         put(OntologyDataTypeEnum.Decimal, "numeric(255)");
-        //TODO: specify precision
         put(OntologyDataTypeEnum.String, "text");
         put(OntologyDataTypeEnum.Date, "date");
-        put(OntologyDataTypeEnum.Time, "time(6)");
         put(OntologyDataTypeEnum.Timestamp, "timestamp(6)");
     }};
 
@@ -120,7 +134,7 @@ public enum OntologyDataTypeEnum {
      * @return 对应的OntologyDataTypeEnum枚举
      */
     public static OntologyDataTypeEnum valueOfPg(String pgType) {
-        OntologyDataTypeEnum type = (OntologyDataTypeEnum) PG_2_TYPE.get(pgType);
+        OntologyDataTypeEnum type = PG_2_TYPE.get(pgType);
         assert (type != null);
         return type;
     }

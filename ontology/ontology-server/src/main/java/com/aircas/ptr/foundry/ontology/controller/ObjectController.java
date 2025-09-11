@@ -3,7 +3,7 @@ package com.aircas.ptr.foundry.ontology.controller;
 import com.aircas.ptr.foundry.common.base.DataResult;
 import com.aircas.ptr.foundry.ontology.service.ObjectService;
 import com.aircas.ptr.foundry.ontology.model.vo.*;
-import com.aircas.ptr.foundry.ontology.model.request.*;
+import com.aircas.ptr.foundry.ontology.model.param.*;
 import com.github.pagehelper.PageInfo;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
