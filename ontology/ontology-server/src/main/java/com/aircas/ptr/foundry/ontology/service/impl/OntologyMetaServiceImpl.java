@@ -8,6 +8,7 @@ import com.aircas.ptr.foundry.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.model.bo.OntologyMetaBO;
 import com.aircas.ptr.foundry.ontology.model.bo.OntologyPropertyBO;
 import com.aircas.ptr.foundry.ontology.model.param.EntityNodeParam;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyMetaAddParam;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyGroupMetaVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaVO;
@@ -39,8 +40,10 @@ import java.util.stream.Collectors;
 public class OntologyMetaServiceImpl implements OntologyMetaService {
 
     private static final Logger log = LoggerFactory.getLogger(OntologyMetaServiceImpl.class);
+
     @Resource
     private OntologyMetaMapper ontologyMetaMapper;
+
 
     @Autowired
     private OntologyPropertyService ontologyPropertyService;
@@ -56,6 +59,14 @@ public class OntologyMetaServiceImpl implements OntologyMetaService {
 
     @Autowired
     private EntityService entityService;
+
+
+    @Override
+    public String createOntology(OntologyCreateParam ontologyCreateParam) {
+        return null;
+    }
+
+
 
     @Override
     public OntologyMetaVO add(OntologyMetaAddParam param) {

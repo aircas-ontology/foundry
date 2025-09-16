@@ -69,11 +69,8 @@
     <select id="selectByDisplayName" resultType="java.lang.Integer">
         select
         count(1)
-        from "ontology_meta"
-        where status = 1
-        <if test="displayName != null and displayName != ''">
-            and display_name = #{displayName}
-        </if>
+        from ontology_meta
+        where display_name = #{displayName}
     </select>
 
     <select id="getCountByStatus" parameterType="int" resultType="java.lang.Integer">

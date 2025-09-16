@@ -69,5 +69,12 @@ public class RestResult<T> {
         this.data = data;
         return this;
     }
+    public static <T> RestResult<T> ofData(T data) {
+        return new RestResult(ResultCode.SUCCESS, data);
+    }
+
+    public static <T> RestResult<T> success() {
+        return new RestResult(ResultCode.SUCCESS);
+    }
 
 }

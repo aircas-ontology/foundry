@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.ontology.service;
 
 import com.aircas.ptr.foundry.ontology.model.bo.OntologyMetaBO;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyCreateParam;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyGroupMetaVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaVO;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyMetaAddParam;
@@ -42,4 +43,6 @@ public interface OntologyMetaService {
     List<OntologyMetaVO> selectByUniqueIdentifiers(List<String> ontologyUniqueIdentifiers);
 
     Integer countByGroup(String groupId);
+
+    String createOntology(OntologyCreateParam ontologyCreateParam);
 }

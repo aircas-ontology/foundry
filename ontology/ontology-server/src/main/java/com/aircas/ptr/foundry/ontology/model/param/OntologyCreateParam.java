@@ -2,6 +2,7 @@ package com.aircas.ptr.foundry.ontology.model.param;
 
 import com.aircas.ptr.foundry.common.constant.OntologyComponentEnum;
 import com.aircas.ptr.foundry.common.constant.OntologyCreateModeEnum;
+import com.aircas.ptr.foundry.ontology.controller.validator.DisplayNameVerify;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.AllArgsConstructor;
@@ -28,6 +29,7 @@ public class OntologyCreateParam {
 
     @ApiModelProperty(name = "displayName", value = "本体名称", dataType = "java.lang.String", example = "飞机", required = true)
     @NotBlank(message = "displayName is empty")
+    @DisplayNameVerify
     private String displayName;
 
     @ApiModelProperty(name = "primaryDataSource", value = "本体对应主数据源", dataType = "OntologyPrimaryDataSourceParam")

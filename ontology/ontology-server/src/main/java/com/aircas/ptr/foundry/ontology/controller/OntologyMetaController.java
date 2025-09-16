@@ -1,7 +1,9 @@
 package com.aircas.ptr.foundry.ontology.controller;
 
 import com.aircas.ptr.foundry.common.base.DataResult;
+import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyCreateParam;
+import com.aircas.ptr.foundry.ontology.model.vo.IdentifierVO;
 import com.aircas.ptr.foundry.ontology.service.OntologyMetaService;
 import com.aircas.ptr.foundry.ontology.model.bo.OntologyMetaBO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyGroupMetaVO;
@@ -15,6 +17,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
+import javax.validation.Valid;
 import java.util.List;
 
 
@@ -26,17 +29,18 @@ public class OntologyMetaController {
     @Resource
     private OntologyMetaService ontologyMetaService;
 
-    @PostMapping("/create")
+    @PostMapping("/v2/create")
     @ApiOperation(value = "创建本体")
-    public DataResult<OntologyMetaVO> createOntology(@RequestBody @Validated OntologyCreateParam ontologyCreateParam) {
-        return null;
+    public RestResult<IdentifierVO> createOntology(@RequestBody @Valid OntologyCreateParam ontologyCreateParam) {
+        String uniqIdentifier = ontologyMetaService.createOntology(ontologyCreateParam);
+        return RestResult.ofData(IdentifierVO.builder().uniqueIdentifier(uniqIdentifier).build());
     }
+
 
 
     @PostMapping("/add")
     @ApiOperation(value = "新增本体")
     public DataResult<OntologyMetaVO> add(@RequestBody OntologyMetaAddParam param) {
-
         return DataResult.ofData(ontologyMetaService.add(param));
     }
 
