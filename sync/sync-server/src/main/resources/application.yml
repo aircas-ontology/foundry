@@ -1,5 +1,5 @@
 server:
-  port: 36003
+  port: 37003
   servlet:
     context-path: /sync
 

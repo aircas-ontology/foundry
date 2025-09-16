@@ -1,7 +1,7 @@
 server:
-  port: 36010
+  port: 37010
   servlet:
-    context-path: /rule-executor
+    context-path: /rule_executor
 
 spring:
   application:

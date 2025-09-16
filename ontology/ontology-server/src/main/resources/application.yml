@@ -1,5 +1,5 @@
 server:
-  port: 36002
+  port: 37002
   servlet:
     context-path: /ontology
 

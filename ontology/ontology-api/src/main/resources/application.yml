@@ -1,7 +1,7 @@
 server:
-  port: 36010
+  port: 37009
   servlet:
-    context-path: /ontology-api
+    context-path: /ontology_api
 
 spring:
   application:

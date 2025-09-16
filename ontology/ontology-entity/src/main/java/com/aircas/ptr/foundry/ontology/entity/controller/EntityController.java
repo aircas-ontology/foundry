@@ -1,7 +1,7 @@
 package com.aircas.ptr.foundry.ontology.entity.controller;
 
 
-import com.aircas.ptr.foundry.ontology.entity.model.base.RestResult;
+import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.entity.model.param.EntityCreateParam;
 import com.aircas.ptr.foundry.ontology.entity.service.EntityService;
 import io.swagger.annotations.Api;
