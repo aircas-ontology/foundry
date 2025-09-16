@@ -1,0 +1,48 @@
+server:
+  port: 36005
+  servlet:
+    context-path: /api
+
+spring:
+  # ArangoDB配置
+  data:
+    arangodb:
+      host: 192.168.9.11
+      port: 8529
+      database: entity
+      user: root
+      password: root
+      connections:
+        max: 8
+        ttl: 1800
+      timeout:
+        connect: 5000
+        request: 10000
+  mvc:
+    pathmatch:
+      matching-strategy: ant_path_matcher
+  # PostgreSQL配置
+  datasource:
+    url: jdbc:postgresql://192.168.9.11:35432/postgres
+    username: postgres
+    password: iecas123
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      idle-timeout: 300000
+      connection-timeout: 20000
+      pool-name: HikariPool
+
+# 日志配置
+logging:
+  level:
+    org.springframework.data.arangodb: INFO
+    org.springframework.jdbc: DEBUG
+    com.example.ontology: DEBUG
+
+springfox:
+  documentation:
+    swagger-ui:
+      enabled: true
+    enabled: true

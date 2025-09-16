@@ -1,0 +1,83 @@
+package com.aircas.ptr.foundry.ontology.entity.model.base;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+import lombok.Data;
+
+/**
+ *
+ * <p>封装统一的返回结果</p>
+ *
+ */
+@Data
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public class RestResult<T> {
+
+    private int code;
+
+
+    private String message;
+
+
+    private  T data;
+
+    public int getCode() {
+        return code;
+    }
+
+    public RestResult() {
+    }
+
+    public RestResult(ResultCode resultCode){
+        this.code = resultCode.getCode();
+        this.message = resultCode.getMessage();
+    }
+    public RestResult(ResultCode resultCode, T data){
+        this(resultCode);
+        this.data = data;
+    }
+
+    public RestResult(Integer code, String  message){
+        this.code = code;
+        this.message = message;
+    }
+
+    public RestResult(Integer code, String message, T data){
+        this.code = code;
+        this.message = message;
+        this.data = data;
+    }
+
+    public RestResult setCode(int code) {
+        this.code = code;
+        return this;
+    }
+
+    public String getMessage() {
+        return message;
+    }
+
+    public RestResult setMessage(String message) {
+        this.message = message;
+        return this;
+    }
+
+    public T getData() {
+        return data;
+    }
+
+    public RestResult setData(T data) {
+        this.data = data;
+        return this;
+    }
+
+    public static <T> RestResult<T> ofData(T data) {
+        return new RestResult(ResultCode.SUCCESS, data);
+    }
+
+    public static <T> RestResult<T> success() {
+        return new RestResult(ResultCode.SUCCESS);
+    }
+
+
+
+}
