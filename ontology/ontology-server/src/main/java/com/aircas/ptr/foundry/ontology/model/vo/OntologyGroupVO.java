@@ -20,17 +20,6 @@ import java.util.Date;
 @ApiModel(description = "本体分组视图")
 public class OntologyGroupVO {
 
-     private Long id;
-
-     @ApiModelProperty(value = "软删除状态位，1有效，0无效", example = "1")
-     private Integer status;
-
-     @ApiModelProperty(value = "记录创建时间", example = "2021-10-10 00:00:00")
-     private Date createTime;
-
-     @ApiModelProperty(value = "记录修改时间", example = "2021-10-10 00:00:00")
-     private Date updateTime;
-
      @ApiModelProperty(value = "分组名称", example = "远海远域")
      private String groupName;
 

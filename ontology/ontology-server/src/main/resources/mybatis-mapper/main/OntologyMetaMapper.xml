@@ -284,13 +284,11 @@
         where id = #{id,jdbcType=BIGINT}
     </update>
 
-    <select id="searchOntologies" parameterType="java.lang.String" resultMap="BaseResultMap">
+    <select id="searchByKeyword" parameterType="java.lang.String" resultMap="BaseResultMap">
         select
         <include refid="Base_Column_List"/>
         from "ontology_meta"
-        where (display_name like CONCAT('%',#{keyword,jdbcType=VARCHAR},'%')
-        or nickname like CONCAT('%',#{keyword,jdbcType=VARCHAR},'%')
-        or description like CONCAT('%',#{keyword,jdbcType=VARCHAR},'%'))
+        where (display_name like CONCAT('%',#{keyword,jdbcType=VARCHAR},'%') or description like CONCAT('%',#{keyword,jdbcType=VARCHAR},'%'))
         and status = 1
     </select>
 

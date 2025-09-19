@@ -9,7 +9,7 @@ import javax.annotation.Resource;
 import java.util.List;
 
 @Service
-public class OntologyService {
+public class OntologyDomainService {
 
     @Resource
     private OntologyRepo ontologyRepo;

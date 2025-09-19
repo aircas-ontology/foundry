@@ -39,7 +39,7 @@ public interface OntologyMetaMapper extends BaseMapper<OntologyMeta> {
      */
     int getCountByStatus(Integer status);
 
-    List<OntologyMeta> searchOntologies(String keyword);
+    List<OntologyMeta> searchByKeyword(String keyword);
 
     List<OntologyMeta> listOntologiesByGroup(String groupId);
 

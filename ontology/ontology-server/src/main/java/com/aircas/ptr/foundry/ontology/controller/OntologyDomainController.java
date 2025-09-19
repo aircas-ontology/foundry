@@ -2,7 +2,7 @@ package com.aircas.ptr.foundry.ontology.controller;
 
 import com.aircas.ptr.foundry.common.base.DataResult;
 import com.aircas.ptr.foundry.common.constant.Status;
-import com.aircas.ptr.foundry.ontology.service.OntologyService;
+import com.aircas.ptr.foundry.ontology.service.OntologyDomainService;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyVO;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
@@ -21,13 +21,13 @@ import java.util.stream.Collectors;
 public class OntologyDomainController {
 
     @Resource
-    OntologyService ontologyService;
+    OntologyDomainService ontologyDomainService;
 
     @ApiOperation("查询某一领域下可用的本体")
     @GetMapping("/getOntologyByDomain")
     public DataResult<List<OntologyVO>> getOntologyByDomain(@RequestParam String domain, @RequestParam String name) {
 
-        List<OntologyVO> OntologyInfoList = ontologyService.getOntologyByDomain(domain, name)
+        List<OntologyVO> OntologyInfoList = ontologyDomainService.getOntologyByDomain(domain, name)
                 .stream()
                 .filter(catalogBO -> catalogBO.getStatus().equals(Status.ENABLE.getValue()))
                 .map(e -> {
@@ -46,6 +46,6 @@ public class OntologyDomainController {
     @ApiOperation("统计某领域下的本体数量")
     @GetMapping("/getCountByDomain")
     public DataResult<Long> getCountByDomain(@RequestParam String domain) {
-        return DataResult.ofData(ontologyService.getCountByDomain(domain));
+        return DataResult.ofData(ontologyDomainService.getCountByDomain(domain));
     }
 }

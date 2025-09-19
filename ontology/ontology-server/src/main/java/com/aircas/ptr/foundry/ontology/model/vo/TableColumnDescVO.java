@@ -11,4 +11,6 @@ public class TableColumnDescVO {
     private String description;
 
     private String type;
+
+    private Boolean isPrimaryKey;
 }

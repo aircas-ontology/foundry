@@ -3,21 +3,17 @@ package com.aircas.ptr.foundry.ontology.service.impl;
 import com.aircas.ptr.foundry.common.constant.OntologyComponentEnum;
 import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import com.aircas.ptr.foundry.common.exception.DuplicatedDataException;
-import com.aircas.ptr.foundry.model.po.OntologyGroup;
 import com.aircas.ptr.foundry.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.model.bo.OntologyMetaBO;
 import com.aircas.ptr.foundry.ontology.model.bo.OntologyPropertyBO;
 import com.aircas.ptr.foundry.ontology.model.param.EntityNodeParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyMetaAddParam;
-import com.aircas.ptr.foundry.ontology.model.vo.OntologyGroupMetaVO;
-import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaVO;
-import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyVO;
-import com.aircas.ptr.foundry.ontology.model.vo.TableColumnDescVO;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyUpdateParam;
+import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyGroupMapper;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyMetaMapper;
 import com.aircas.ptr.foundry.ontology.service.*;
-import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,6 +44,8 @@ public class OntologyMetaServiceImpl implements OntologyMetaService {
     @Autowired
     private OntologyPropertyService ontologyPropertyService;
 
+
+
     @Autowired
     private TableMetadataService tableMetadataService;
 
@@ -63,6 +61,12 @@ public class OntologyMetaServiceImpl implements OntologyMetaService {
 
     @Override
     public String createOntology(OntologyCreateParam ontologyCreateParam) {
+        /**
+         * todo
+         * 1 创建元数据
+         * 2 创建属性、关系、函数、行为
+         * 3 创建实体
+         */
         return null;
     }
 
@@ -220,8 +224,16 @@ public class OntologyMetaServiceImpl implements OntologyMetaService {
     }
 
     @Override
-    public Integer delete(String uniqueIdentifier) {
-        return ontologyMetaMapper.deleteByUniqueIdentifier(uniqueIdentifier);
+    public void deleteOntology(String uniqueIdentifier) {
+        /**
+         * todo:
+         * 1 删除本体元数据
+         * 2 删除属性
+         * 3 删除关系
+         * 4 删除函数
+         * 5 删除行为
+         * 6 删除所有实体
+         */
     }
 
     @Override
@@ -235,6 +247,11 @@ public class OntologyMetaServiceImpl implements OntologyMetaService {
 
         int count = ontologyMetaMapper.updateByPrimaryKeySelective(ontologyMeta);
         return count;
+    }
+
+    @Override
+    public void updateMeta(OntologyUpdateParam updateParam) {
+
     }
 
     @Override
@@ -254,11 +271,18 @@ public class OntologyMetaServiceImpl implements OntologyMetaService {
     }
 
     @Override
-    public OntologyMetaVO getOntologyByUniqueIdentifier(String uniqueIdentifier) {
+    public OntologyMetaInfoVO getMetaByUniqueIdentifier(String uniqueIdentifier) {
         OntologyMeta ontologyMeta = ontologyMetaMapper.selectByUniqueIdentifier(uniqueIdentifier);
-        OntologyMetaVO ontologyMetaVO = new OntologyMetaVO();
-        BeanUtils.copyProperties(ontologyMeta, ontologyMetaVO);
-        return ontologyMetaVO;
+        return OntologyMetaInfoVO.builder()
+                .uniqueIdentifier(ontologyMeta.getUniqueIdentifier())
+                .apiName(ontologyMeta.getApiName())
+                .createTime(ontologyMeta.getCreateTime())
+                .updateTime(ontologyMeta.getUpdateTime())
+                .description(ontologyMeta.getDescription())
+                .icon(ontologyMeta.getIcon())
+                .metaGroupId(Arrays.stream(ontologyMeta.getMetaGroupId().split(",")).collect(Collectors.toList()))
+                .displayName(ontologyMeta.getDisplayName())
+                .build();
     }
 
     @Override
@@ -280,37 +304,45 @@ public class OntologyMetaServiceImpl implements OntologyMetaService {
     }
 
     @Override
-    public List<OntologyMetaVO> searchOntologies(String keyword) {
-
-        List<OntologyMeta> result = ontologyMetaMapper.searchOntologies(keyword);
-        List<OntologyMetaVO> retResult = new ArrayList();
-        for (OntologyMeta meta : result) {
-            OntologyMetaVO ontologyMetaVO = new OntologyMetaVO();
-            BeanUtils.copyProperties(meta, ontologyMetaVO);
-            retResult.add(ontologyMetaVO);
-        }
-        return retResult;
+    public List<OntologyMetaInfoVO> searchByKeyword(String keyword) {
+        return ontologyMetaMapper.searchByKeyword(keyword).stream().map(v->{
+           return OntologyMetaInfoVO.builder()
+                   .uniqueIdentifier(v.getUniqueIdentifier())
+                   .apiName(v.getApiName())
+                   .createTime(v.getCreateTime())
+                   .updateTime(v.getUpdateTime())
+                   .description(v.getDescription())
+                   .icon(v.getIcon())
+                   .metaGroupId(Arrays.stream(v.getMetaGroupId().split(",")).collect(Collectors.toList()))
+                   .displayName(v.getDisplayName())
+                   .build();
+        }).collect(Collectors.toList());
     }
 
     @Override
-    public PageInfo<OntologyGroupMetaVO> searchGroupOntologies(String keyword, Integer page, Integer size) {
-
-        PageHelper.startPage(page, size);
-        PageInfo<OntologyGroup> pageInfo = new PageInfo<>(ontologyGroupMapper.selectAll());
-        List<OntologyGroupMetaVO> collect = pageInfo.getList().stream().map(group -> {
-            OntologyGroupMetaVO ontologyGroupMetaVO = new OntologyGroupMetaVO();
-            ontologyGroupMetaVO.setGroupId(group.getGroupId());
-            ontologyGroupMetaVO.setGroupName(group.getGroupName());
-            List<OntologyMetaVO> ontologyMetaVOS = listOntologiesByGroup(group.getGroupId());
-            ontologyGroupMetaVO.setOntologyCount(ontologyMetaVOS.size());
-            ontologyGroupMetaVO.setMetaVOS(ontologyMetaVOS);
-            return ontologyGroupMetaVO;
-        }).collect(Collectors.toList());
-        PageInfo<OntologyGroupMetaVO> pageResult = new PageInfo<>(collect);
-        BeanUtils.copyProperties(pageInfo, pageResult);
-        pageResult.setList(collect);
-        return pageResult;
+    public List<OntologyGroupMetaVO> getByGroupId(String groupId) {
+        return null;
     }
+
+//    @Override
+//    public PageInfo<OntologyGroupMetaVO> searchGroupOntologies(String keyword, Integer page, Integer size) {
+//
+//        PageHelper.startPage(page, size);
+//        PageInfo<OntologyGroup> pageInfo = new PageInfo<>(ontologyGroupMapper.selectAll());
+//        List<OntologyGroupMetaVO> collect = pageInfo.getList().stream().map(group -> {
+//            OntologyGroupMetaVO ontologyGroupMetaVO = new OntologyGroupMetaVO();
+//            ontologyGroupMetaVO.setGroupId(group.getGroupId());
+//            ontologyGroupMetaVO.setGroupName(group.getGroupName());
+//            List<OntologyMetaVO> ontologyMetaVOS = listOntologiesByGroup(group.getGroupId());
+//            ontologyGroupMetaVO.setOntologyCount(ontologyMetaVOS.size());
+//            ontologyGroupMetaVO.setMetaVOS(ontologyMetaVOS);
+//            return ontologyGroupMetaVO;
+//        }).collect(Collectors.toList());
+//        PageInfo<OntologyGroupMetaVO> pageResult = new PageInfo<>(collect);
+//        BeanUtils.copyProperties(pageInfo, pageResult);
+//        pageResult.setList(collect);
+//        return pageResult;
+//    }
 
     @Override
     public List<OntologyMetaVO> listOntologiesByGroup(String groupId) {

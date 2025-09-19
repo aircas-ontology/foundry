@@ -1,1 +1,0 @@
-package com.aircas.ptr.foundry.ontology.entity.service.impl;

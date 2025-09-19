@@ -18,10 +18,10 @@ import lombok.experimental.SuperBuilder;
 @ApiModel(description = "实体关联的其他数据源")
 public class AssociateDataSourceParam extends PrimaryDataSourceParam {
 
-    @ApiModelProperty(value = "tableName中与主数据源关联的列名，必须存在于选择的列参数中", required = true, example = "id")
+    @ApiModelProperty(name = "associateKey", value = "tableName中与主数据源关联的列名，必须存在于选择的列参数中", required = true, example = "id")
     private String associateKey;
 
-    @ApiModelProperty(value = "关联的主数据源表的列名，必须存在于主数据源表的列中", required = true, example = "id")
+    @ApiModelProperty(name = "primaryDataSourceKey", value = "关联的主数据源表的列名，必须存在于主数据源表的列中", required = true, example = "id")
     private String primaryDataSourceKey;
 
 }

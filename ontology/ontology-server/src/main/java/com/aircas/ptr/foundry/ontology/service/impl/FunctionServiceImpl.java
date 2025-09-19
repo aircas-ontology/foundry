@@ -192,7 +192,7 @@ public class FunctionServiceImpl implements FunctionService {
     }
 
     @Override
-    public Object handle(String functionName, Boolean isPreview, String objectTypes, HashMap<String, Object> parameters)
+    public Object handle(String functionName, Boolean isPreview, List<String> objectTypes, HashMap<String, Object> parameters)
             throws FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionRuntimeException, FunctionNotFoundException {
 
         GroovyClassLoader classLoader = GroovyClassLoaderManager.getIndependentClassLoader();
@@ -261,16 +261,12 @@ public class FunctionServiceImpl implements FunctionService {
     }
 
     //如果api在production，则objectType从数据库读取，否则从参数读取。
-    private List<String> getObjectApiList(Boolean isPreview, String objectTypes, String functionName) {
-        List<String> objectApiList = new ArrayList<>();
+    private List<String> getObjectApiList(Boolean isPreview, List<String> objectTypes, String functionName) {
         if (!isPreview) {
             Function function = functionMapper.selectByApi(functionName);
-            objectTypes = function.getObjectTypes();
+            objectTypes = Arrays.asList(function.getObjectTypes().split(","));
         }
-        if (objectTypes != null && objectTypes.length() != 0) {
-            objectApiList = Arrays.asList(objectTypes.split(","));
-        }
-        return objectApiList;
+        return objectTypes;
     }
 
     static private GroovyObject getFunctionInstance(GroovyClassLoader classLoader, String functionName, boolean isPreview)

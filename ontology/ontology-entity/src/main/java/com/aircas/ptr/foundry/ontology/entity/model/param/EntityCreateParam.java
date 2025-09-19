@@ -18,10 +18,10 @@ import java.util.List;
 @ApiModel(description = "实体创建请求")
 public class EntityCreateParam {
 
-    @ApiModelProperty(name = "primaryDataSource", value = "实体表对应主数据源", dataType = "PrimaryDataSourceParam", required = true)
+    @ApiModelProperty(name = "primaryDataSource", value = "实体表对应主数据源",  required = true)
     private PrimaryDataSourceParam primaryDataSource;
 
-    @ApiModelProperty(name = "associateDataSources", value = "实体表关联的其他数据源", dataType = "AssociateDataSourceParam")
+    @ApiModelProperty(name = "associateDataSources", value = "实体表关联的其他数据源")
     private List<AssociateDataSourceParam> associateDataSources;
 
 }

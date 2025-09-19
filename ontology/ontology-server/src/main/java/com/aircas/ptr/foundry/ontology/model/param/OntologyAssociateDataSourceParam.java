@@ -19,9 +19,6 @@ import java.util.List;
 @ApiModel(description = "本体关联的其他数据源")
 public class OntologyAssociateDataSourceParam {
 
-    @ApiModelProperty(value = "表名", required = true, example = "xtmb")
-    private String tableName;
-
     @ApiModelProperty(value = "tableName中与主数据源关联的列名，必须存在于选择的列参数中", required = true, example = "id")
     private String associateKey;
 

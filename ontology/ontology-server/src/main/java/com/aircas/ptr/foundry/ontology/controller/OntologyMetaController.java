@@ -1,19 +1,17 @@
 package com.aircas.ptr.foundry.ontology.controller;
 
-import com.aircas.ptr.foundry.common.base.DataResult;
 import com.aircas.ptr.foundry.common.base.RestResult;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyIdentifierParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyCreateParam;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.vo.IdentifierVO;
-import com.aircas.ptr.foundry.ontology.service.OntologyMetaService;
-import com.aircas.ptr.foundry.ontology.model.bo.OntologyMetaBO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyGroupMetaVO;
-import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaVO;
-import com.aircas.ptr.foundry.ontology.model.param.OntologyMetaAddParam;
-import com.github.pagehelper.PageInfo;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaInfoVO;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaNodeVO;
+import com.aircas.ptr.foundry.ontology.service.OntologyMetaService;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
-import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
@@ -29,7 +27,7 @@ public class OntologyMetaController {
     @Resource
     private OntologyMetaService ontologyMetaService;
 
-    @PostMapping("/v2/create")
+    @PostMapping("")
     @ApiOperation(value = "创建本体")
     public RestResult<IdentifierVO> createOntology(@RequestBody @Valid OntologyCreateParam ontologyCreateParam) {
         String uniqIdentifier = ontologyMetaService.createOntology(ontologyCreateParam);
@@ -37,58 +35,45 @@ public class OntologyMetaController {
     }
 
 
-
-    @PostMapping("/add")
-    @ApiOperation(value = "新增本体")
-    public DataResult<OntologyMetaVO> add(@RequestBody OntologyMetaAddParam param) {
-        return DataResult.ofData(ontologyMetaService.add(param));
-    }
-
-
-    @PostMapping("/delete")
+    @DeleteMapping("/{ontologyIdentifier}")
     @ApiOperation(value = "删除本体")
-    public DataResult<Integer> delete(@RequestParam @ApiParam(value = "本体id", required = true) String uniqueIdentifier) {
-        return DataResult.ofData(ontologyMetaService.delete(uniqueIdentifier));
+    public RestResult deleteOntology(@PathVariable(required = true,name = "ontologyIdentifier") String  ontologyIdentifier) {
+        ontologyMetaService.deleteOntology(ontologyIdentifier);
+        return RestResult.success();
     }
 
-    @PostMapping("/update")
-    @ApiOperation(value = "修改本体")
-    public DataResult<Integer> update(@RequestBody OntologyMetaBO ontologyMetaBO) {
-        return DataResult.ofData(ontologyMetaService.update(ontologyMetaBO));
+    @PutMapping("")
+    @ApiOperation(value = "修改本体元数据")
+    public RestResult updateMeta(@RequestBody @Valid OntologyUpdateParam updateParam) {
+        ontologyMetaService.updateMeta(updateParam);
+        return RestResult.success();
     }
 
-    @GetMapping("/queryById")
-    @ApiOperation(value = "根据id查询一个本体")
-    public DataResult<OntologyMetaVO> getOntologyById(@RequestParam @ApiParam(value = "本体id", required = true) Long id) {
-        return DataResult.ofData(ontologyMetaService.getOntologyById(id));
+
+    @GetMapping("")
+    @ApiOperation(value = "根据unique identifier查询一个本体元数据")
+    public RestResult<OntologyMetaInfoVO> getMetaByUniqueIdentifier(@RequestParam(name = "uniqueIdentifier", required = true) @ApiParam(name = "uniqueIdentifier", value = "本体unique identifer", required = true) String uniqueIdentifier) {
+        return RestResult.ofData(ontologyMetaService.getMetaByUniqueIdentifier(uniqueIdentifier));
     }
 
-    @GetMapping("/queryByUniqueIdentifier")
-    @ApiOperation(value = "根据unique identifier查询一个本体")
-    public DataResult<OntologyMetaVO> getOntologyById(@RequestParam @ApiParam(value = "本体unique identifer", required = true) String uniqueIdentifier) {
-        return DataResult.ofData(ontologyMetaService.getOntologyByUniqueIdentifier(uniqueIdentifier));
-    }
-
-    @GetMapping("/getAll")
-    @ApiOperation(value = "查询所有本体的metadata")
-    public DataResult<List<OntologyMetaVO>> getAllOntologies() {
-        return DataResult.ofData(ontologyMetaService.getAllOntologies());
-    }
 
     @GetMapping("/search")
-    @ApiOperation(value = "搜索本体", notes = "通过关键字匹配本体，包括本体名称、本体描述、本体别名")
-    public DataResult<List<OntologyMetaVO>> searchOntologies(@RequestParam(required = false) String keyword) {
-
-        return DataResult.ofData(ontologyMetaService.searchOntologies(keyword));
+    @ApiOperation(value = "搜索本体", notes = "通过关键字匹配本体，包括本体名称、本体描述")
+    public RestResult<List<OntologyMetaInfoVO>> searchByKeyword(@RequestParam(name = "keyword", required = false) @ApiParam(name = "keyword", value = "搜索关键词", required = false) String keyword) {
+        return RestResult.ofData(ontologyMetaService.searchByKeyword(keyword));
     }
 
-    @GetMapping("/search/group")
-    @ApiOperation(value = "本体搜索，并分组返回", notes = "通过关键字匹配本体，并以本体分组形式返回")
-    public DataResult<PageInfo<OntologyGroupMetaVO>> searchGroupOntologies(
-            @RequestParam @ApiParam(value = "关键字", defaultValue = "舰船", required = false) String keyword,
-            @RequestParam @ApiParam(value = "页数", required = false, defaultValue = "1") Integer page,
-            @RequestParam @ApiParam(value = "每页条数", required = false, defaultValue = "10") Integer size) {
-
-        return DataResult.ofData(ontologyMetaService.searchGroupOntologies(keyword, page, size));
+    @GetMapping("/group")
+    @ApiOperation(value = "根据groupId查询本体分组")
+    public RestResult<List<OntologyGroupMetaVO>> getByGroupId(@RequestParam(name = "groupId", required = false) @ApiParam(name = "groupId", value = "groupId", required = false) String groupId) {
+        return RestResult.ofData(ontologyMetaService.getByGroupId(groupId));
     }
+
+
+    @GetMapping("/tree")
+    @ApiOperation(value = "查询本体树")
+    public RestResult<OntologyMetaNodeVO> getOntologyTree() {
+        return RestResult.success();
+    }
+
 }

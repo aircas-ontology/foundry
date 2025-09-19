@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.common.exception;
 
 import com.aircas.ptr.foundry.common.base.ApiResult;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ControllerAdvice;
@@ -14,6 +15,7 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
  */
 
 @ControllerAdvice
+@Slf4j
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
      @ExceptionHandler(DuplicatedDataException.class)
      public ResponseEntity<ApiResult> handleDuplicateDataException(DuplicatedDataException exception) {

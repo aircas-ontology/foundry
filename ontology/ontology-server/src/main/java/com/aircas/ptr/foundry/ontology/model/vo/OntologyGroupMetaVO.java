@@ -16,8 +16,5 @@ public class OntologyGroupMetaVO {
     @ApiModelProperty(name = "groupId", value = "分组id", example = "fafd-fdasgf-ewgffds")
     private String groupId;
 
-    @ApiModelProperty(name = "ontologyCount", value = "本体数量", example = "12")
-    private Integer ontologyCount;
-
-    private List<OntologyMetaVO> metaVOS;
+    private List<OntologyMetaInfoVO> metaVOS;
 }

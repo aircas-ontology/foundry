@@ -2,10 +2,11 @@ package com.aircas.ptr.foundry.ontology.service;
 
 import com.aircas.ptr.foundry.ontology.model.bo.OntologyMetaBO;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyCreateParam;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyGroupMetaVO;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaVO;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyMetaAddParam;
-import com.github.pagehelper.PageInfo;
 
 import java.util.List;
 
@@ -21,22 +22,21 @@ public interface OntologyMetaService {
 
     OntologyMetaVO getOntologyByApi(String api);
 
-    OntologyMetaVO getOntologyByUniqueIdentifier(String uniqueIdentifier);
+    OntologyMetaInfoVO getMetaByUniqueIdentifier(String uniqueIdentifier);
 
     OntologyMetaVO add(OntologyMetaAddParam param);
 
-    Integer delete(String uniqueIdentifier);
+    void deleteOntology(String uniqueIdentifier);
 
     Integer update(OntologyMetaBO ontologyMetaBO);
 
+    void updateMeta(OntologyUpdateParam updateParam);
 
     List<OntologyMetaVO> getAllOntologies();
 
     Integer getCountByStatus(int status);
 
-    List<OntologyMetaVO> searchOntologies(String keyword);
-
-    PageInfo<OntologyGroupMetaVO> searchGroupOntologies(String keyword, Integer page, Integer size);
+    List<OntologyMetaInfoVO> searchByKeyword(String keyword);
 
     List<OntologyMetaVO> listOntologiesByGroup(String groupId);
 
@@ -45,4 +45,6 @@ public interface OntologyMetaService {
     Integer countByGroup(String groupId);
 
     String createOntology(OntologyCreateParam ontologyCreateParam);
+
+    List<OntologyGroupMetaVO> getByGroupId(String groupId);
 }

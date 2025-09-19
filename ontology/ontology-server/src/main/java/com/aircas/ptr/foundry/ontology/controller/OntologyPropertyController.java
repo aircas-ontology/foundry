@@ -1,15 +1,16 @@
 package com.aircas.ptr.foundry.ontology.controller;
 
-import com.aircas.ptr.foundry.common.base.DataResult;
-import com.aircas.ptr.foundry.ontology.service.OntologyPropertyService;
-import com.aircas.ptr.foundry.ontology.model.bo.OntologyPropertyBO;
+import com.aircas.ptr.foundry.common.base.RestResult;
+import com.aircas.ptr.foundry.ontology.model.param.*;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyVO;
+import com.aircas.ptr.foundry.ontology.service.OntologyPropertyService;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import javax.validation.Valid;
 import java.util.List;
 
 @Api(tags = "属性")
@@ -19,46 +20,44 @@ import java.util.List;
 public class OntologyPropertyController {
     private final OntologyPropertyService ontologyPropertyService;
 
-    @PostMapping("/add")
-    @ApiOperation(value = "新增本体属性")
-    public DataResult<Integer> add(@RequestBody OntologyPropertyBO ontologyPropertyBO) {
-        return DataResult.ofData(ontologyPropertyService.add(ontologyPropertyBO));
+    @PostMapping("/create_datasource")
+    @ApiOperation(value = "新增数据源")
+    public RestResult createDatasource(@RequestBody @Valid OntologyDataSourceCreateParamOntology dataSourceCreateParam) {
+        return RestResult.success();
     }
 
-    @PostMapping("/batch_add")
-    @ApiOperation(value = "新增多个本体属性")
-    public DataResult<Integer> add(@RequestBody List<OntologyPropertyBO> ontologyPropertyBOs) {
-        return DataResult.ofData(ontologyPropertyService.batchAdd(ontologyPropertyBOs));
-    }
-
-    @PostMapping("/batch_update")
-    @ApiOperation(value = "更新多个本体属性")
-    public DataResult<Integer> update(@RequestBody List<OntologyPropertyBO> ontologyPropertyBOs) {
-        return DataResult.ofData(ontologyPropertyService.batchUpdate(ontologyPropertyBOs));
+    @PostMapping("")
+    @ApiOperation(value = "新增属性")
+    public RestResult createProperty(@RequestBody @Valid OntologyPropertyCreateParamOntology propertyCreateParam) {
+        return RestResult.success();
     }
 
 
-    @PostMapping("/delete")
+    @PutMapping("")
+    @ApiOperation(value = "更新本体属性")
+    public RestResult updateProperty(@RequestBody @Valid List<OntologyPropertyUpdateParam> propertyUpdateParams) {
+        return RestResult.success();
+    }
+
+
+    @DeleteMapping("/{propertyId}")
     @ApiOperation(value = "删除本体属性")
-    public DataResult<Integer> delete(@RequestParam @ApiParam(value = "本体属性id", required = true) String uniqueIdentifier) {
-        return DataResult.ofData(ontologyPropertyService.delete(uniqueIdentifier));
+    public RestResult delete(@PathVariable(name = "propertyId",required = true) String propertyId) {
+        return RestResult.success();
     }
 
-    @PostMapping("/update")
-    @ApiOperation(value = "修改本体属性")
-    public DataResult<Integer> update(@RequestBody OntologyPropertyBO ontologyPropertyBO) {
-        return DataResult.ofData(ontologyPropertyService.update(ontologyPropertyBO));
+
+    @DeleteMapping("/delete_datasource")
+    @ApiOperation(value = "删除数据源下的所有属性")
+    public RestResult deleteDatasource(@RequestBody @Valid OntologyDatasourceParam datasourceParam) {
+        return RestResult.success();
     }
 
-    @GetMapping("/queryByOntologyUniqueIdentifier")
+    @GetMapping
     @ApiOperation(value = "根据本体identifier查询本体属性列表")
-    public DataResult<List<OntologyPropertyVO>> getOntologyById(@RequestParam @ApiParam(value = "本体uniqueIdentifier", required = true) String uniqueIdentifier) {
-        return DataResult.ofData(ontologyPropertyService.selectByOntologyUniqueIdentifier(uniqueIdentifier));
+    public RestResult<List<OntologyPropertyVO>> getOntologyById(@RequestParam(required = true, name = "ontologyUniqueIdentifier") @ApiParam(value = "本体uniqueIdentifier", required = true) String ontologyUniqueIdentifier) {
+        return RestResult.ofData(null);
     }
 
-    @GetMapping("/getAllProperty")
-    @ApiOperation(value = "查询所有的本体属性列表")
-    public DataResult<List<OntologyPropertyVO>> getAllProperty(@RequestParam @ApiParam(value = "紧查询主键", required = true) int justPrimary) {
-        return DataResult.ofData(ontologyPropertyService.getAllProperty(justPrimary==1?1:0));
-    }
+
 }

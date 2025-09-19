@@ -1,23 +1,26 @@
 package com.aircas.ptr.foundry.ontology.controller;
 
 import com.aircas.ptr.foundry.common.base.DataResult;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyObjectQueryByLinkParam;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyObjectQueryParam;
+import com.aircas.ptr.foundry.ontology.model.param.UpdateOntologyEntityParam;
+import com.aircas.ptr.foundry.ontology.model.vo.DirectoryItemVO;
+import com.aircas.ptr.foundry.ontology.model.vo.ObjectOneInfoVO;
+import com.aircas.ptr.foundry.ontology.model.vo.ObjectWithLinkedInfoVO;
 import com.aircas.ptr.foundry.ontology.service.ObjectService;
-import com.aircas.ptr.foundry.ontology.model.vo.*;
-import com.aircas.ptr.foundry.ontology.model.param.*;
 import com.github.pagehelper.PageInfo;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
-import org.apache.commons.httpclient.HttpException;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
-import java.util.*;
+import java.util.Map;
 
 @Api(tags = "实体")
 @RestController
-@RequestMapping("/object")
-public class ObjectController {
+@RequestMapping("/entity")
+public class EntityController {
 
     @Resource
     ObjectService objectService;
@@ -67,19 +70,14 @@ public class ObjectController {
     @PostMapping("/list/by_filter")
     @ApiOperation(value = "实体分页条件查询", notes = "根据条件查询本体下实体详情列表")
     public DataResult<PageInfo<Map<String, Object>>> queryObjectByFilter(@RequestBody OntologyObjectQueryParam param) {
-
-
         return DataResult.ofData(objectService.queryObjectByFilter(param.getOntologyApi(), param.getFilter(), param.getPage(), param.getSize(), param.getSorts()));
     }
 
     @PostMapping("/list/by_link")
     @ApiOperation(value = "实体查询，依据关系id", notes = "根据关系id查询本体下实体详情列表")
     public DataResult<PageInfo<Map<String, Object>>> queryObjectByFilter(@RequestBody OntologyObjectQueryByLinkParam param) {
-
         return DataResult.ofData(objectService.queryObjectByLink(param.getLinkId(), param.getOntologyId(), param.getObj(), param.getPage(), param.getSize()));
     }
 
-    public void test() throws HttpException {
 
-    }
 }

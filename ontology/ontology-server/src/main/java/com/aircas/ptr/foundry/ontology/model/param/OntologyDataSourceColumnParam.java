@@ -31,4 +31,15 @@ public class OntologyDataSourceColumnParam {
 
     @ApiModelProperty(name="apiName",value = "在代码里用的属性名称", required = true, example = "name")
     private String apiName;
+
+    @ApiModelProperty(name = "tableName", value = "表名", required = true, example = "xtmb")
+    private String tableName;
+
+    @ApiModelProperty(name ="isPrimaryKey",value = "是否为主键", required = true, example = "true")
+    private Boolean isPrimaryKey;
+
+    @ApiModelProperty(name ="isTitleKey",value = "是否为名称键", required = true, example = "true")
+    private Boolean isTitleKey;
+
+
 }

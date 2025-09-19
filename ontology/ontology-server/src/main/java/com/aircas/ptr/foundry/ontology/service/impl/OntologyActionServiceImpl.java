@@ -118,6 +118,7 @@ public class OntologyActionServiceImpl implements OntologyActionService {
         Object result = functionService.handle(actionVO.getFunctionApi(), false, null, parameters);
         // TODO: 临时添加，模拟行为具体执行日志。
         log.info(result.toString());
+        // TODO: 保存行为执行结果。
 
         return result;
     }
