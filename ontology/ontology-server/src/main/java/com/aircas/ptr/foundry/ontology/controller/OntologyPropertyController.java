@@ -2,6 +2,7 @@ package com.aircas.ptr.foundry.ontology.controller;
 
 import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.model.param.*;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyVO;
 import com.aircas.ptr.foundry.ontology.service.OntologyPropertyService;
 import io.swagger.annotations.Api;
@@ -55,7 +56,7 @@ public class OntologyPropertyController {
 
     @GetMapping
     @ApiOperation(value = "根据本体identifier查询本体属性列表")
-    public RestResult<List<OntologyPropertyVO>> getOntologyById(@RequestParam(required = true, name = "ontologyUniqueIdentifier") @ApiParam(value = "本体uniqueIdentifier", required = true) String ontologyUniqueIdentifier) {
+    public RestResult<List<OntologyPropertyInfoVO>> getOntologyById(@RequestParam(required = true, name = "ontologyUniqueIdentifier") @ApiParam(value = "本体uniqueIdentifier", required = true) String ontologyUniqueIdentifier) {
         return RestResult.ofData(null);
     }
 
