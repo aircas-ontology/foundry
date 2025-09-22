@@ -1,0 +1,34 @@
+package com.aircas.ptr.foundry.ontology.model.vo;
+
+import com.aircas.ptr.foundry.common.constant.ActionRuleConnectType;
+import com.aircas.ptr.foundry.ontology.model.param.ActionHandleRuleAddParam;
+import io.swagger.annotations.ApiModel;
+import io.swagger.annotations.ApiModelProperty;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.experimental.Accessors;
+
+import java.util.List;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+@Accessors(chain = true)
+@ApiModel(value = "行为规则信息VO")
+public class ActionHandleRuleVO {
+
+    @ApiModelProperty(name = "entityNames", value = "实体名称列表")
+    private List<String> entityNames;
+
+    @ApiModelProperty(name = "rules", value = "行为规则执行，规则list", example = "[{\"columnName\":\"longitude\",\"columnValue\":\"20.0\",\"condition\":\"CH\"}]")
+    private List<ActionHandleRuleAddParam> rules;
+
+    @ApiModelProperty(name = "ruleConnectType", value = "行为规则拼接类型", example = "AND")
+    private ActionRuleConnectType ruleConnectType;
+
+    @ApiModelProperty(name = "ontologyName", value = "本体名称", example = "名称")
+    private String ontologyName;
+}

@@ -14,7 +14,6 @@ import java.util.List;
 @ApiModel(value = "函数信息")
 public class FunctionInfoVO {
 
-
     @ApiModelProperty(name = "functionId",value = "函数id")
     private String functionId;
 
@@ -29,5 +28,8 @@ public class FunctionInfoVO {
 
     @ApiModelProperty(name = "code",value = "函数代码")
     private String code;
+
+    @ApiModelProperty(name = "params",value = "函数参数列表")
+    private List<FunctionParameterVO> params;
 
 }

@@ -22,6 +22,6 @@ public class OntologyIdentifierParam {
 
 
     @NotBlank(message = "ontologyIdentifier is empty")
-    @ApiModelProperty(name = "ontologyIdentifier", value = "ontologyIdentifier", dataType = "java.lang.String", example = "abcdef")
+    @ApiModelProperty(name = "ontologyIdentifier", value = "本体id", dataType = "java.lang.String", example = "abcdef",required = true)
     private String ontologyIdentifier;
 }

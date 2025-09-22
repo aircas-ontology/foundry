@@ -20,4 +20,7 @@ public class ActionMappingInAddParam {
 
     @ApiModelProperty(value = "参数对应的本体属性ID", required = true, example = "fdsfa-gfdsagf-dfs")
     private String propertyUniqueIdentifier;
+
+    @ApiModelProperty(value = "参数对应的本体", required = true, example = "fdsfa-gfdsagf-dfs")
+    private String ontologyUniqueIdentifier;
 }

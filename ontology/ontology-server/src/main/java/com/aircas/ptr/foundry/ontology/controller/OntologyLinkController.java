@@ -6,6 +6,8 @@ import com.aircas.ptr.foundry.ontology.model.param.IdentifierParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyLinkCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyLinkUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.vo.EntityLinkInfoVO;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologyGroupLinkVO;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkGraphVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkInfoVO;
 import com.aircas.ptr.foundry.ontology.service.OntologyLinkGroupService;
 import io.swagger.annotations.Api;
@@ -63,6 +65,12 @@ public class OntologyLinkController {
     @GetMapping("/by_ontology")
     @ApiOperation(value = "根据本体id查询关系(1跳)")
     public RestResult<List<OntologyLinkInfoVO>> getLinkByOntologyUniqueIdentifier(@RequestParam(required = true, name = "ontologyUniqueIdentifier") @ApiParam(value = "本体uniqueIdentifier", required = true) String ontologyUniqueIdentifier) {
+        return RestResult.ofData(null);
+    }
+
+    @GetMapping("/by_group")
+    @ApiOperation(value = "根据group id查询组内本体所有关系(1跳)")
+    public RestResult<List<OntologyGroupLinkVO>> getLinkByGroupId(@RequestParam(required = true, name = "groupId") @ApiParam(value = "分组id", required = true) String groupId) {
         return RestResult.ofData(null);
     }
 

@@ -16,6 +16,6 @@ import lombok.experimental.SuperBuilder;
 @ApiModel(description = "查询实体关系请求")
 public class EntityLinkQueryParam extends OntologyIdentifierParam {
 
-    @ApiModelProperty(name = "entityId", value = "实体id", dataType = "java.lang.String", example = "abcdef")
+    @ApiModelProperty(name = "entityId", value = "实体id", dataType = "java.lang.String", example = "abcdef",required = false)
     private String entityId;
 }
