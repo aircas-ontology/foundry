@@ -2,6 +2,8 @@ package com.aircas.ptr.foundry.ontology.config;
 
 
 import com.alibaba.druid.spring.boot.autoconfigure.DruidDataSourceBuilder;
+import com.baomidou.mybatisplus.core.MybatisConfiguration;
+import com.baomidou.mybatisplus.extension.spring.MybatisSqlSessionFactoryBean;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.mybatis.spring.SqlSessionFactoryBean;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -29,11 +31,22 @@ public class MainDataSourceConfiguration {
     @Primary
     @Bean("mainSqlSessionFactory")
     public SqlSessionFactory createMainSqlSessionFactory(@Qualifier("mainDataSource")DataSource dataSource) throws Exception {
-        SqlSessionFactoryBean sqlSessionFactoryBean = new SqlSessionFactoryBean();
-        sqlSessionFactoryBean.setDataSource(dataSource);
+        MybatisSqlSessionFactoryBean sessionFactoryBean = new MybatisSqlSessionFactoryBean();
+        sessionFactoryBean.setDataSource(dataSource);
         String resourcePath = "classpath:mybatis-mapper/main/*.xml";
-        sqlSessionFactoryBean.setMapperLocations(new PathMatchingResourcePatternResolver().getResources(resourcePath));
-        return sqlSessionFactoryBean.getObject();
+        sessionFactoryBean.setMapperLocations(new PathMatchingResourcePatternResolver().getResources(resourcePath));
+
+        MybatisConfiguration configuration = new MybatisConfiguration();
+        configuration.setMapUnderscoreToCamelCase(true);
+        sessionFactoryBean.setConfiguration(configuration);
+
+        return sessionFactoryBean.getObject();
+
+//        SqlSessionFactoryBean sqlSessionFactoryBean = new SqlSessionFactoryBean();
+//        sqlSessionFactoryBean.setDataSource(dataSource);
+//        String resourcePath = "classpath:mybatis-mapper/main/*.xml";
+//        sqlSessionFactoryBean.setMapperLocations(new PathMatchingResourcePatternResolver().getResources(resourcePath));
+//        return sqlSessionFactoryBean.getObject();
     }
 
     @Bean(name = "mainTransactionManager")

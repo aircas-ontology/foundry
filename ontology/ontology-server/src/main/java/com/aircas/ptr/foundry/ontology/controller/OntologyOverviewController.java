@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.ontology.controller;
 
 import com.aircas.ptr.foundry.common.base.DataResult;
+import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.service.OverviewService;
 import com.aircas.ptr.foundry.ontology.model.vo.OverviewCountVo;
 import io.swagger.annotations.Api;
@@ -17,16 +18,16 @@ import javax.annotation.Resource;
 @Api(tags = "概览")
 @RequestMapping("/overview")
 @RestController
-public class OverviewController {
+public class OntologyOverviewController {
 
     @Resource
     OverviewService overviewService;
 
     @ApiOperation("获取概览页面统计数据")
     @GetMapping("/count")
-    public DataResult<OverviewCountVo> getCount(){
+    public RestResult<OverviewCountVo> getCount(){
 
         OverviewCountVo count = overviewService.getCountNotDel();
-        return DataResult.ofData(count);
+        return RestResult.ofData(count);
     }
 }

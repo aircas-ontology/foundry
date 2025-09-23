@@ -13,13 +13,16 @@ public enum ResultCode {
      */
     SUCCESS(200, "SUCCESS"),
 
-    ERROR(500, "服务器内部错误"),
+    ERROR(500, "业务异常"),
 
     NOT_FOUND(404, "接口不存在"),
 
-    FAIL(400, "接口异常,请联系管理员"),
+    PARAM_ERROR(400, "参数异常"),
 
     UNAUTHORIZED(401, "未认证（签名错误）"),
+
+    DUPLICATION(409, "参数冲突"),
+
 
     /**
      * security

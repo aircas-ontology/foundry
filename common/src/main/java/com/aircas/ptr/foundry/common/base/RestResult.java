@@ -35,13 +35,13 @@ public class RestResult<T> {
         this.data = data;
     }
 
-    public RestResult(Integer code, String message) {
-        this.code = code;
+    public RestResult(ResultCode resultCode, String message) {
+        this.code = resultCode.code;
         this.message = message;
     }
 
-    public RestResult(Integer code, String message, T data) {
-        this.code = code;
+    public RestResult(ResultCode resultCode, String message, T data) {
+        this.code = resultCode.code;
         this.message = message;
         this.data = data;
     }
@@ -72,6 +72,7 @@ public class RestResult<T> {
     public static <T> RestResult<T> ofData(T data) {
         return new RestResult(ResultCode.SUCCESS, data);
     }
+
 
     public static <T> RestResult<T> success() {
         return new RestResult(ResultCode.SUCCESS);

@@ -21,12 +21,19 @@ spring:
       username: iecas
       password: iecas123
 
-mybatis:
+#mybatis:
+#  configuration:
+#    lazy-loading-enabled: true
+#    aggressive-lazy-loading: false
+#    map-underscore-to-camel-case: true
+#  mapper-locations: classpath*:/mybatis-mapper/*Mapper.xml
+
+mybatis-plus:
   configuration:
-    lazy-loading-enabled: true
-    aggressive-lazy-loading: false
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
     map-underscore-to-camel-case: true
-  mapper-locations: classpath*:/mybatis-mapper/*Mapper.xml
+    cache-enabled: false
+
 
 #eureka:
 #  instance:

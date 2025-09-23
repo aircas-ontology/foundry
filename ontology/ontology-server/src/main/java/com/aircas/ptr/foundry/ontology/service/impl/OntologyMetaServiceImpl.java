@@ -1,8 +1,11 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
 import com.aircas.ptr.foundry.common.constant.OntologyComponentEnum;
+import com.aircas.ptr.foundry.common.constant.OntologyCreateModeEnum;
 import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
+import com.aircas.ptr.foundry.common.constant.Status;
 import com.aircas.ptr.foundry.common.exception.DuplicatedDataException;
+import com.aircas.ptr.foundry.common.util.IdGenerator;
 import com.aircas.ptr.foundry.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.model.bo.OntologyMetaBO;
 import com.aircas.ptr.foundry.ontology.model.bo.OntologyPropertyBO;
@@ -15,11 +18,13 @@ import com.aircas.ptr.foundry.ontology.repository.dao.OntologyGroupMapper;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyMetaMapper;
 import com.aircas.ptr.foundry.ontology.service.*;
 import com.github.pagehelper.PageInfo;
+import lombok.var;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
 import java.util.*;
@@ -45,7 +50,6 @@ public class OntologyMetaServiceImpl implements OntologyMetaService {
     private OntologyPropertyService ontologyPropertyService;
 
 
-
     @Autowired
     private TableMetadataService tableMetadataService;
 
@@ -60,6 +64,7 @@ public class OntologyMetaServiceImpl implements OntologyMetaService {
 
 
     @Override
+    @Transactional(value = "mainTransactionManager")
     public String createOntology(OntologyCreateParam ontologyCreateParam) {
         /**
          * todo
@@ -67,72 +72,92 @@ public class OntologyMetaServiceImpl implements OntologyMetaService {
          * 2 创建属性、关系、函数、行为
          * 3 创建实体
          */
-        return null;
+        var meta = OntologyMeta.builder()
+                .uniqueIdentifier(IdGenerator.generateUUID())
+                .apiName(ontologyCreateParam.getApiName())
+                .description(ontologyCreateParam.getDescription())
+                .displayName(ontologyCreateParam.getDisplayName())
+                .status(Status.ENABLE.getValue())
+                .icon(ontologyCreateParam.getIcon())
+                .parentUniqueIdentifier(ontologyCreateParam.getParentOntologyUniqueIdentifier())
+                .metaGroupId(String.join(",", ontologyCreateParam.getGroupIds()))
+                .build();
+
+        switch (ontologyCreateParam.getCreateMode()) {
+            case NONE:
+                ontologyMetaMapper.insert(meta);
+                break;
+            case INHERIT:
+                break;
+            case DATASOURCE:
+                break;
+
+        }
+        return meta.getUniqueIdentifier();
     }
 
 
-
-    @Override
-    public OntologyMetaVO add(OntologyMetaAddParam param) {
-        int count = ontologyMetaMapper.selectByDisplayName(param.getDisplayName());
-        if (count != 0) {
-            throw new DuplicatedDataException("本体名称已存在");
-        }
-        // 进行本体插入
-        OntologyMeta ontologyMeta = new OntologyMeta();
-        BeanUtils.copyProperties(param, ontologyMeta);
-        ontologyMeta.setUniqueIdentifier(UUID.randomUUID().toString());
-        ontologyMeta.setMetaGroupId(String.join(",", param.getMetaGroupId()));
-        count = ontologyMetaMapper.insertSelective(ontologyMeta);
-        // 如果datasource不为空，插入本体属性
-        if (param.getIsMapAllParam()) {
-            creatAllProperties(param.getBackingDatasourceId(), ontologyMeta.getUniqueIdentifier(), param.getTitleKey(), param.getPrimaryKey());
-        }
-        // 如果本体需要继承
-        if (param.getParentUniqueIdentifier() != null &&
-                !param.getParentUniqueIdentifier().isEmpty() &&
-                param.getParentComponents() != null &&
-                !param.getParentComponents().isEmpty()) {
-            String parentUniqueIdentifier = param.getParentUniqueIdentifier();
-            List<OntologyComponentEnum> parentComponents = param.getParentComponents();
-            for (OntologyComponentEnum parent : parentComponents) {
-                switch (parent) {
-                    case LINK:
-                    case ACTION:
-                    case FUNCTION:
-                        // TODO: 补充连接、动作、函数、模型等继承
-                        break;
-                    case PROPERTY:
-                        List<OntologyPropertyVO> ontologyPropertyVOS = ontologyPropertyService.selectByOntologyUniqueIdentifier(parentUniqueIdentifier);
-                        List<OntologyPropertyBO> collect = ontologyPropertyVOS.stream().map(pro -> {
-                            OntologyPropertyBO ontologyPropertyBO = new OntologyPropertyBO();
-                            BeanUtils.copyProperties(pro, ontologyPropertyBO);
-                            ontologyPropertyBO.setUniqueIdentifier(null);
-                            Date now = new Date();
-                            ontologyPropertyBO.setCreateTime(now);
-                            ontologyPropertyBO.setUpdateTime(now);
-                            ontologyPropertyBO.setOntologyUniqueIdentifier(ontologyMeta.getUniqueIdentifier());
-                            ontologyPropertyBO.setDatasourceId(null);
-                            ontologyPropertyBO.setDatasourceColumnName(null);
-                            return ontologyPropertyBO;
-                        }).collect(Collectors.toList());
-                        ontologyPropertyService.batchAdd(collect);
-                        break;
-                }
-            }
-        }
-
-        if (param.getBackingDatasourceId() != null) {
-            // 插入实体数据\创建node节点
-            int num = batchInsertEntity(ontologyMeta.getUniqueIdentifier(), ontologyMeta.getApiName(), ontologyMeta.getDisplayName());
-            log.info("插入实体数据{}条", num);
-        }
-
-        OntologyMetaVO ontologyMetaVO = new OntologyMetaVO();
-        OntologyMeta resMeta = ontologyMetaMapper.selectByUniqueIdentifier(ontologyMeta.getUniqueIdentifier());
-        BeanUtils.copyProperties(resMeta, ontologyMetaVO);
-        return ontologyMetaVO;
-    }
+//    @Override
+//    public OntologyMetaVO add(OntologyMetaAddParam param) {
+//        int count = ontologyMetaMapper.selectByDisplayName(param.getDisplayName());
+//        if (count != 0) {
+//            throw new DuplicatedDataException("本体名称已存在");
+//        }
+//        // 进行本体插入
+//        OntologyMeta ontologyMeta = new OntologyMeta();
+//        BeanUtils.copyProperties(param, ontologyMeta);
+//        ontologyMeta.setUniqueIdentifier(UUID.randomUUID().toString());
+//        ontologyMeta.setMetaGroupId(String.join(",", param.getMetaGroupId()));
+//        count = ontologyMetaMapper.insertSelective(ontologyMeta);
+//        // 如果datasource不为空，插入本体属性
+//        if (param.getIsMapAllParam()) {
+//            creatAllProperties(param.getBackingDatasourceId(), ontologyMeta.getUniqueIdentifier(), param.getTitleKey(), param.getPrimaryKey());
+//        }
+//        // 如果本体需要继承
+//        if (param.getParentUniqueIdentifier() != null &&
+//                !param.getParentUniqueIdentifier().isEmpty() &&
+//                param.getParentComponents() != null &&
+//                !param.getParentComponents().isEmpty()) {
+//            String parentUniqueIdentifier = param.getParentUniqueIdentifier();
+//            List<OntologyComponentEnum> parentComponents = param.getParentComponents();
+//            for (OntologyComponentEnum parent : parentComponents) {
+//                switch (parent) {
+//                    case LINK:
+//                    case ACTION:
+//                    case FUNCTION:
+//                        // TODO: 补充连接、动作、函数、模型等继承
+//                        break;
+//                    case PROPERTY:
+//                        List<OntologyPropertyVO> ontologyPropertyVOS = ontologyPropertyService.selectByOntologyUniqueIdentifier(parentUniqueIdentifier);
+//                        List<OntologyPropertyBO> collect = ontologyPropertyVOS.stream().map(pro -> {
+//                            OntologyPropertyBO ontologyPropertyBO = new OntologyPropertyBO();
+//                            BeanUtils.copyProperties(pro, ontologyPropertyBO);
+//                            ontologyPropertyBO.setUniqueIdentifier(null);
+//                            Date now = new Date();
+//                            ontologyPropertyBO.setCreateTime(now);
+//                            ontologyPropertyBO.setUpdateTime(now);
+//                            ontologyPropertyBO.setOntologyUniqueIdentifier(ontologyMeta.getUniqueIdentifier());
+//                            ontologyPropertyBO.setDatasourceId(null);
+//                            ontologyPropertyBO.setDatasourceColumnName(null);
+//                            return ontologyPropertyBO;
+//                        }).collect(Collectors.toList());
+//                        ontologyPropertyService.batchAdd(collect);
+//                        break;
+//                }
+//            }
+//        }
+//
+//        if (param.getBackingDatasourceId() != null) {
+//            // 插入实体数据\创建node节点
+//            int num = batchInsertEntity(ontologyMeta.getUniqueIdentifier(), ontologyMeta.getApiName(), ontologyMeta.getDisplayName());
+//            log.info("插入实体数据{}条", num);
+//        }
+//
+//        OntologyMetaVO ontologyMetaVO = new OntologyMetaVO();
+//        OntologyMeta resMeta = ontologyMetaMapper.selectByUniqueIdentifier(ontologyMeta.getUniqueIdentifier());
+//        BeanUtils.copyProperties(resMeta, ontologyMetaVO);
+//        return ontologyMetaVO;
+//    }
 
     private int batchInsertEntity(String uniqueIdentifier, String apiName, String displayName) {
 
@@ -305,17 +330,17 @@ public class OntologyMetaServiceImpl implements OntologyMetaService {
 
     @Override
     public List<OntologyMetaInfoVO> searchByKeyword(String keyword) {
-        return ontologyMetaMapper.searchByKeyword(keyword).stream().map(v->{
-           return OntologyMetaInfoVO.builder()
-                   .uniqueIdentifier(v.getUniqueIdentifier())
-                   .apiName(v.getApiName())
-                   .createTime(v.getCreateTime())
-                   .updateTime(v.getUpdateTime())
-                   .description(v.getDescription())
-                   .icon(v.getIcon())
-                   .metaGroupId(Arrays.stream(v.getMetaGroupId().split(",")).collect(Collectors.toList()))
-                   .displayName(v.getDisplayName())
-                   .build();
+        return ontologyMetaMapper.searchByKeyword(keyword).stream().map(v -> {
+            return OntologyMetaInfoVO.builder()
+                    .uniqueIdentifier(v.getUniqueIdentifier())
+                    .apiName(v.getApiName())
+                    .createTime(v.getCreateTime())
+                    .updateTime(v.getUpdateTime())
+                    .description(v.getDescription())
+                    .icon(v.getIcon())
+                    .metaGroupId(Arrays.stream(v.getMetaGroupId().split(",")).collect(Collectors.toList()))
+                    .displayName(v.getDisplayName())
+                    .build();
         }).collect(Collectors.toList());
     }
 

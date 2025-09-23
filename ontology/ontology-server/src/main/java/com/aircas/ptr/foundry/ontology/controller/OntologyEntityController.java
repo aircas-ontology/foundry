@@ -22,7 +22,7 @@ import java.util.Map;
 @Api(tags = "实体")
 @RestController
 @RequestMapping("/entity")
-public class EntityController {
+public class OntologyEntityController {
 
     @Resource
     ObjectService objectService;

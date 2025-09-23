@@ -2,7 +2,9 @@ package com.aircas.ptr.foundry.ontology.model.param;
 
 import com.aircas.ptr.foundry.common.constant.OntologyComponentEnum;
 import com.aircas.ptr.foundry.common.constant.OntologyCreateModeEnum;
+import com.aircas.ptr.foundry.ontology.controller.validator.ApiNameVerify;
 import com.aircas.ptr.foundry.ontology.controller.validator.DisplayNameVerify;
+import com.aircas.ptr.foundry.ontology.controller.validator.GroupIdsVerify;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.AllArgsConstructor;
@@ -15,6 +17,7 @@ import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotEmpty;
 import javax.validation.constraints.NotNull;
 import java.util.List;
+import java.util.Set;
 
 @Data
 @AllArgsConstructor
@@ -43,11 +46,13 @@ public class OntologyCreateParam {
 
     @ApiModelProperty(name = "apiName", value = "在代码里用的本体名称", dataType = "java.lang.String", example = "airplane", required = true)
     @NotBlank(message = "apiName is empty")
+    @ApiNameVerify
     private String apiName;
 
     @ApiModelProperty(name = "groupIds", value = "分组ids", example = "[123,456]", required = true)
     @NotEmpty(message = "groupIds is empty")
-    private List<String> groupIds;
+    @GroupIdsVerify
+    private Set<String> groupIds;
 
     @ApiModelProperty(name = "parentOntologyUniqueIdentifier", value = "继承的本体id", example = "8039c5f9-5579-4ee4-ba94-b2f25f785dd6")
     private String parentOntologyUniqueIdentifier;

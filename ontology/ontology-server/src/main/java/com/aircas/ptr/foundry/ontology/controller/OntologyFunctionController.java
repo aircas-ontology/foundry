@@ -18,7 +18,7 @@ import java.util.List;
 @Api(tags = "函数")
 @RestController
 @RequestMapping("/function")
-public class FunctionController {
+public class OntologyFunctionController {
 
     @Resource
     FunctionService functionService;

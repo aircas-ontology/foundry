@@ -2,6 +2,10 @@ package com.aircas.ptr.foundry.model.po;
 
 import java.io.Serializable;
 import java.util.Date;
+
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 /**
@@ -9,10 +13,12 @@ import lombok.Data;
  * @author 
  */
 @Data
+@TableName("ontology_group")
 public class OntologyGroup implements Serializable {
     /**
      * 主键自增
      */
+    @TableId(type = IdType.AUTO)
     private Long id;
 
     /**

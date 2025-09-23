@@ -3,18 +3,28 @@ package com.aircas.ptr.foundry.model.po;
 import java.io.Serializable;
 import java.util.Date;
 
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.experimental.Accessors;
 
 /**
  * ontology_meta
  * @author 
  */
 @Data
+@Builder
+@Accessors(chain = true)
+@TableName("ontology_meta")
 public class OntologyMeta implements Serializable {
     /**
      * 主键自增
      */
+    @TableId(type = IdType.AUTO)
     private Long id;
 
     /**
@@ -105,14 +115,14 @@ public class OntologyMeta implements Serializable {
      */
     private String parentUniqueIdentifier;
 
-    public OntologyMeta() {
-        Date now = new Date();
-        setCreateTime(now);
-        setUpdateTime(now);
-        setStatus(1);
-        setVisibility(1);
-        setIndexStatus(1);
-        setWritebackFlag(0);
-        setExperimentalStatus(0);
-    }
+//    public OntologyMeta() {
+//        Date now = new Date();
+//        setCreateTime(now);
+//        setUpdateTime(now);
+//        setStatus(1);
+//        setVisibility(1);
+//        setIndexStatus(1);
+//        setWritebackFlag(0);
+//        setExperimentalStatus(0);
+//    }
 }

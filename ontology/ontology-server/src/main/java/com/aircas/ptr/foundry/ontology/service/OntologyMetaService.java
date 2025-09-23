@@ -24,7 +24,7 @@ public interface OntologyMetaService {
 
     OntologyMetaInfoVO getMetaByUniqueIdentifier(String uniqueIdentifier);
 
-    OntologyMetaVO add(OntologyMetaAddParam param);
+    //OntologyMetaVO add(OntologyMetaAddParam param);
 
     void deleteOntology(String uniqueIdentifier);
 

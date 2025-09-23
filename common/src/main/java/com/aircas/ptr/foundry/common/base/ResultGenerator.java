@@ -6,13 +6,9 @@ public class ResultGenerator {
         return new RestResult(ResultCode.SUCCESS);
     }
 
-    public static <T> RestResult<T> genSuccessResult(T data) {
-
-        return new RestResult(200, "SUCCESS", data);
-    }
 
     public static RestResult genFailResult(String message) {
-        return new RestResult(ResultCode.FAIL.getCode(), message);
+        return new RestResult(ResultCode.ERROR, message);
     }
 
     /**
