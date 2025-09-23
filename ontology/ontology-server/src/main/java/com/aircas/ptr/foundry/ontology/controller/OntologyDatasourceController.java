@@ -1,15 +1,16 @@
 package com.aircas.ptr.foundry.ontology.controller;
 
-import com.aircas.ptr.foundry.common.base.DataResult;
 import com.aircas.ptr.foundry.common.base.RestResult;
-import com.aircas.ptr.foundry.ontology.service.TableMetadataService;
-import com.aircas.ptr.foundry.ontology.model.vo.TableColumnDescVO;
 import com.aircas.ptr.foundry.ontology.model.vo.DatasourceTableVO;
+import com.aircas.ptr.foundry.ontology.model.vo.TableColumnDescVO;
+import com.aircas.ptr.foundry.ontology.service.TableMetadataService;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
-import org.springframework.web.bind.annotation.*;
-
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import javax.annotation.Resource;
 import java.util.List;
@@ -18,7 +19,7 @@ import java.util.List;
 @Api(tags = "数据源")
 @RestController
 @RequestMapping("/datasource")
-public class DataCatalogController {
+public class OntologyDatasourceController {
 
     @Resource
     private TableMetadataService tableMetadataService;
@@ -32,7 +33,7 @@ public class DataCatalogController {
 
     @GetMapping("/table/list")
     @ApiOperation(value = "查询数据源列表")
-    public RestResult<List<DatasourceTableVO>> queryTables(){
+    public RestResult<List<DatasourceTableVO>> queryTables() {
 
         return RestResult.ofData(tableMetadataService.listTables());
     }
