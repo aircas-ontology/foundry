@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.model.po;
 
+import com.baomidou.mybatisplus.annotation.TableName;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 
@@ -13,6 +14,7 @@ import static com.aircas.ptr.foundry.common.constant.DateFormat.DATE_FORMAT_DEFA
 
 @Data
 @Entity
+@TableName("ontology_action_mapping_in")
 public class OntologyActionMappingIn {
     /**
      * Column: id

@@ -24,7 +24,7 @@ import java.util.Map;
 @Api(tags = "本体管理接口")
 @RestController
 @RequestMapping("/api/ontology")
-public class OntologyController {
+public class EntityNodeController {
 
     @Autowired
     private OntologyService ontologyService;

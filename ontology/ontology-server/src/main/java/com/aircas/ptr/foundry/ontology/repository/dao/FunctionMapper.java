@@ -1,12 +1,13 @@
 package com.aircas.ptr.foundry.ontology.repository.dao;
 
 import com.aircas.ptr.foundry.model.po.Function;
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
 
 import java.util.List;
 
 @Mapper
-public interface FunctionMapper extends tk.mybatis.mapper.common.Mapper<Function> {
+public interface FunctionMapper extends BaseMapper<Function> {
 
     int insert(Function function);
 

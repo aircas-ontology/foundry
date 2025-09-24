@@ -18,6 +18,8 @@ import com.aircas.ptr.foundry.ontology.function.FunctionUtils;
 import com.aircas.ptr.foundry.ontology.function.Parameter;
 import com.aircas.ptr.foundry.ontology.repository.dao.FunctionMapper;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyMetaMapper;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import groovy.lang.GroovyClassLoader;
 import groovy.lang.GroovyObject;
 import lombok.RequiredArgsConstructor;
@@ -117,7 +119,7 @@ public class FunctionServiceImpl implements FunctionService {
     @Override
     public FunctionVO queryById(Long id) {
 
-        Function function = functionMapper.selectByPrimaryKey(id);
+        Function function = functionMapper.selectById(id);
         FunctionVO functionVO = new FunctionVO();
         BeanUtils.copyProperties(function, functionVO);
         return functionVO;
@@ -126,15 +128,12 @@ public class FunctionServiceImpl implements FunctionService {
     @Override
     public Boolean deleteById(Long id) {
 
-        return functionMapper.deleteByPrimaryKey(id) > 0 ? true : false;
+        return functionMapper.deleteById(id) > 0 ? true : false;
     }
 
     @Override
     public int getCountByStatus(int status) {
-
-        Function function = new Function();
-        function.setStatus(status);
-        return functionMapper.selectCount(function);
+        return functionMapper.selectCount(new QueryWrapper<Function>().eq("status",status));
     }
 
     @Override

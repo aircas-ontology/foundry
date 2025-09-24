@@ -4,6 +4,7 @@ import java.io.Serializable;
 import java.util.Date;
 
 import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
+import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 /**
@@ -11,6 +12,7 @@ import lombok.Data;
  * @author 
  */
 @Data
+@TableName("ontology_property")
 public class OntologyProperty implements Serializable {
     /**
      * 主键自增

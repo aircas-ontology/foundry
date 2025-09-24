@@ -3,7 +3,6 @@ package com.aircas.ptr.foundry.ontology.controller;
 import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.model.param.*;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyInfoVO;
-import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyVO;
 import com.aircas.ptr.foundry.ontology.service.OntologyPropertyService;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
@@ -19,6 +18,7 @@ import java.util.List;
 @RequestMapping("/property")
 @RequiredArgsConstructor
 public class OntologyPropertyController {
+
     private final OntologyPropertyService ontologyPropertyService;
 
     @PostMapping("/create_datasource")
@@ -29,7 +29,7 @@ public class OntologyPropertyController {
 
     @PostMapping("")
     @ApiOperation(value = "新增属性")
-    public RestResult createProperty(@RequestBody @Valid OntologyPropertyCreateParamOntology propertyCreateParam) {
+    public RestResult createProperty(@RequestBody @Valid OntologyPropertyCreateParam propertyCreateParam) {
         return RestResult.success();
     }
 

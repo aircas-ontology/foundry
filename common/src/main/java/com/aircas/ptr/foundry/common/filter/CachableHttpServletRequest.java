@@ -1,4 +1,4 @@
-package com.aircas.ptr.foundry.ontology.filter;
+package com.aircas.ptr.foundry.common.filter;
 
 import javax.servlet.ReadListener;
 import javax.servlet.ServletInputStream;

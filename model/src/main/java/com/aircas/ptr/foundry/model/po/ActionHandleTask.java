@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.model.po;
 
+import com.baomidou.mybatisplus.annotation.TableName;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 import lombok.Getter;
@@ -21,7 +22,7 @@ import static com.aircas.ptr.foundry.common.constant.DateFormat.DATE_FORMAT_DEFA
  */
 @Data
 @Entity
-@Table(name = "action_handle_task")
+@TableName(value = "action_handle_task")
 public class ActionHandleTask {
 
     @Id

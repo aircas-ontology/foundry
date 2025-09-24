@@ -1,4 +1,4 @@
-package com.aircas.ptr.foundry.ontology.filter;
+package com.aircas.ptr.foundry.common.filter;
 
 import com.aircas.ptr.foundry.common.util.IdGenerator;
 import lombok.extern.slf4j.Slf4j;

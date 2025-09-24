@@ -14,6 +14,7 @@ import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.aircas.ptr.foundry.ontology.repository.dao.*;
 import com.aircas.ptr.foundry.ontology.service.*;
 import com.alibaba.fastjson.JSON;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import lombok.RequiredArgsConstructor;
@@ -157,14 +158,14 @@ public class OntologyActionServiceImpl implements OntologyActionService {
 
         OntologyAction ontologyAction = new OntologyAction();
         BeanUtils.copyProperties(ontologyActionBo, ontologyAction);
-        int status = ontologyActionMapper.updateByPrimaryKeySelective(ontologyAction);
+        int status = ontologyActionMapper.updateById(ontologyAction);
         if (ontologyActionBo.getMappingIns() == null || ontologyActionBo.getMappingIns().size() == 0) {
             return status;
         }
         for (OntologyActionMappingInBO mappingInBO : ontologyActionBo.getMappingIns()) {
             OntologyActionMappingIn mappingIn = new OntologyActionMappingIn();
             BeanUtils.copyProperties(mappingInBO, mappingIn);
-            status = ontologyActionMappingInMapper.updateByPrimaryKeySelective(mappingIn);
+            status = ontologyActionMappingInMapper.updateById(mappingIn);
         }
         return status;
     }
@@ -174,7 +175,7 @@ public class OntologyActionServiceImpl implements OntologyActionService {
 
         ActionHandleTaskBO actionHandleTaskBO = actionHandleTaskService.selectById(actionHandleTaskId);
         String objectPrimaryKeys = actionHandleTaskBO.getObjectPrimaryKey();
-        OntologyAction action = ontologyActionMapper.selectByPrimaryKey(actionHandleTaskBO.getActionId());
+        OntologyAction action = ontologyActionMapper.selectById(actionHandleTaskBO.getActionId());
         if (StringUtils.isBlank(objectPrimaryKeys)) {
             return;
         }
@@ -191,10 +192,7 @@ public class OntologyActionServiceImpl implements OntologyActionService {
 
     @Override
     public int getCountByStatus(int status) {
-
-        OntologyAction action = new OntologyAction();
-        action.setStatus(status);
-        return ontologyActionMapper.selectCount(action);
+        return ontologyActionMapper.selectCount(new QueryWrapper<OntologyAction>().eq("status",status));
     }
 
     @Override
@@ -203,7 +201,7 @@ public class OntologyActionServiceImpl implements OntologyActionService {
         // 0.更新action的handle类型
         OntologyAction action = ontologyActionMapper.selectByApi(actionApi);
         action.setHandleType(RULE.getCode());
-        ontologyActionMapper.updateByPrimaryKeySelective(action);
+        ontologyActionMapper.updateById(action);
         // 1.插入数据库
         ActionHandleRuleBO actionHandleRuleBO = new ActionHandleRuleBO();
         actionHandleRuleBO.setActionId(action.getId());
@@ -240,7 +238,7 @@ public class OntologyActionServiceImpl implements OntologyActionService {
         // 0.更新action的handle类型
         OntologyAction action = ontologyActionMapper.selectByApi(actionApi);
         action.setHandleType(TASK.getCode());
-        ontologyActionMapper.updateByPrimaryKeySelective(action);
+        ontologyActionMapper.updateById(action);
 
         ActionHandleTaskBO actionHandleTaskBO = new ActionHandleTaskBO();
         actionHandleTaskBO.setActionId(action.getId());
@@ -408,14 +406,14 @@ public class OntologyActionServiceImpl implements OntologyActionService {
     @Override
     public int delete(long id) {
 
-        return ontologyActionMapper.deleteByPrimaryKey(id);
+        return ontologyActionMapper.deleteById(id);
     }
 
     @Override
     public PageInfo<OntologyActionVO> metaList(Integer page, Integer size) {
 
         PageHelper.startPage(page, size);
-        PageInfo<OntologyAction> pageInfo = new PageInfo<>(ontologyActionMapper.selectAll());
+        PageInfo<OntologyAction> pageInfo = new PageInfo<>(ontologyActionMapper.selectList(new QueryWrapper<>()));
         //把这部分代码先注释
         List<OntologyActionVO> collect = pageInfo.getList().stream().map(item -> {
             try {

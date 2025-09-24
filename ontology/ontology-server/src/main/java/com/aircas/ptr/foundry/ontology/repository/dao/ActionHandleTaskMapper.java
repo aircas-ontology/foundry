@@ -1,7 +1,8 @@
 package com.aircas.ptr.foundry.ontology.repository.dao;
 
 import com.aircas.ptr.foundry.model.po.ActionHandleTask;
-import org.mapstruct.Mapper;
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import org.apache.ibatis.annotations.Mapper;
 
 /**
  * @interfaceName: ActionHandleTaskMapper
@@ -11,7 +12,7 @@ import org.mapstruct.Mapper;
  * @description: 行为执行任务mapper
  */
 @Mapper
-public interface ActionHandleTaskMapper extends tk.mybatis.mapper.common.Mapper<ActionHandleTask> {
+public interface ActionHandleTaskMapper extends BaseMapper<ActionHandleTask> {
 
 
 }

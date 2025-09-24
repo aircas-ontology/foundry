@@ -1,11 +1,13 @@
 package com.aircas.ptr.foundry.model.po;
 
+import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.io.Serializable;
 import java.util.Date;
 
 @Data
+@TableName("ontology_child_link")
 public class OntologyChildLink implements Serializable {
 
     /**

@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.model.po;
 
 import com.aircas.ptr.foundry.model.po.base.Bean;
+import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import javax.persistence.Column;
@@ -12,7 +13,7 @@ import javax.persistence.Table;
  */
 @Data
 @Entity
-@Table(name = "catalog")
+@TableName(value = "catalog")
 public class Catalog extends Bean {
 
     /**

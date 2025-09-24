@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.model.po;
 
+import com.baomidou.mybatisplus.annotation.TableName;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 import org.springframework.beans.BeanUtils;
@@ -11,6 +12,7 @@ import static com.aircas.ptr.foundry.common.constant.DateFormat.DATE_FORMAT_DEFA
 
 
 @Data
+@TableName("ontology_link_group")
 public class OntologyLinkGroup implements Serializable {
     /**
      * 主键自增

@@ -8,11 +8,12 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
+import lombok.experimental.SuperBuilder;
 
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-@Builder
+@SuperBuilder
 @Accessors(chain = true)
 @ApiModel(description = "ontology datasource column param")
 public class OntologyDataSourceColumnParam {
@@ -40,6 +41,12 @@ public class OntologyDataSourceColumnParam {
 
     @ApiModelProperty(name ="isTitleKey",value = "是否为名称键", required = true, example = "true")
     private Boolean isTitleKey;
+
+    @ApiModelProperty(value = "是否为与主数据源关联的列名", example = "false")
+    private Boolean isAssociateKey;
+
+    @ApiModelProperty(value = "关联的主数据源表的列名，必须存在于主数据源表的列中", example = "id")
+    private String primaryDataSourceKey;
 
 
 }

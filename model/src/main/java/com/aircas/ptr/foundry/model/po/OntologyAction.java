@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.model.po;
 
+import com.baomidou.mybatisplus.annotation.TableName;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 
@@ -14,7 +15,7 @@ import static com.aircas.ptr.foundry.common.constant.DateFormat.DATE_FORMAT_DEFA
 
 @Data
 @Entity
-@Table(name = "ontology_action")
+@TableName(value = "ontology_action")
 public class OntologyAction {
     /**
      * Column: api

@@ -1,13 +1,14 @@
 package com.aircas.ptr.foundry.ontology.repository.dao;
 
 import com.aircas.ptr.foundry.model.po.OntologyLinkGroup;
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
 
 import java.util.List;
 
 
 @Mapper
-public interface OntologyLinkGroupMapper {
+public interface OntologyLinkGroupMapper extends BaseMapper<OntologyLinkGroup> {
     /**
      * @mbg.generated generated automatically, do not modify!
      */

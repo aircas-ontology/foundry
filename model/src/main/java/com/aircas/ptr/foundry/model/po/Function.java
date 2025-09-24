@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.model.po;
 
+import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import javax.persistence.Column;
@@ -11,7 +12,7 @@ import java.util.Date;
 
 @Data
 @Entity
-@Table(name = "function")
+@TableName(value = "function")
 public class Function {
 
 

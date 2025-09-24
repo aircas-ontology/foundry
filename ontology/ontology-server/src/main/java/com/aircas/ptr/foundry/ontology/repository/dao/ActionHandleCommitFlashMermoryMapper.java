@@ -1,11 +1,9 @@
 package com.aircas.ptr.foundry.ontology.repository.dao;
 
 import com.aircas.ptr.foundry.model.po.ActionHandleCommitFlashMemory;
-import com.aircas.ptr.foundry.model.po.ActionHandleRule;
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
-
-import java.util.List;
 
 /**
  * @interfaceName: ActionHandleRule
@@ -15,9 +13,9 @@ import java.util.List;
  * @description: 行为执行规则
  */
 @Mapper
-public interface ActionHandleCommitFlashMermoryMapper extends tk.mybatis.mapper.common.Mapper<ActionHandleCommitFlashMemory> {
+public interface ActionHandleCommitFlashMermoryMapper extends BaseMapper<ActionHandleCommitFlashMemory> {
 
-    ActionHandleCommitFlashMemory getActionFlashMemoryByActionAndPrimary(@Param("actionId")long actionId,@Param("primaryKey")String primaryKey);
+    ActionHandleCommitFlashMemory getActionFlashMemoryByActionAndPrimary(@Param("actionId") long actionId, @Param("primaryKey") String primaryKey);
 
     int updateActionDataLogById(ActionHandleCommitFlashMemory memory);
 

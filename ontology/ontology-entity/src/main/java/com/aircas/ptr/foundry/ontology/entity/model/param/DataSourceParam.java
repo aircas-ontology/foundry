@@ -10,6 +10,7 @@ import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
 
+import javax.validation.constraints.NotEmpty;
 import java.util.List;
 
 @Data
@@ -17,16 +18,11 @@ import java.util.List;
 @NoArgsConstructor
 @SuperBuilder
 @Accessors(chain = true)
-@ApiModel(description = "实体主数据源")
-public class PrimaryDataSourceParam {
-
-    @ApiModelProperty(name = "tableName",value = "表名", required = true, example = "xtmb")
-    private String tableName;
-
-    @ApiModelProperty(name ="primaryKey",value = "主键的列名，必须存在于选择的列参数中", required = true, example = "id")
-    private String primaryKey;
+@ApiModel(description = "实体数据源")
+public class DataSourceParam {
 
     @ApiModelProperty(name="columnParamList", value = "列参数", required = true)
+    @NotEmpty(message = "columnParamList is empty")
     private List<DataSourceColumnParam> columnParamList;
 
 }

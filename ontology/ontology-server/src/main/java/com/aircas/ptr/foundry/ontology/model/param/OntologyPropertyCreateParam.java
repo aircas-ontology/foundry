@@ -9,6 +9,7 @@ import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
 
+import javax.validation.constraints.NotEmpty;
 import java.util.List;
 
 @Data
@@ -17,13 +18,11 @@ import java.util.List;
 @SuperBuilder
 @Accessors(chain = true)
 @ApiModel(description = "属性创建请求")
-public class OntologyPropertyCreateParamOntology extends OntologyIdentifierParam {
+public class OntologyPropertyCreateParam extends OntologyIdentifierParam {
 
-    @ApiModelProperty(name = "existDataSources", value = "已存在的数据源添加列")
-    private List<OntologyDataSourceColumnParam> existDataSources;
+    @ApiModelProperty(name = "columnParamList", value = "属性列表", required = true)
+    @NotEmpty(message = "columnParamList is empty")
+    private List<OntologyDataSourceColumnParam> columnParamList;
 
-
-    @ApiModelProperty(name = "newDataSources", value = "新的其他数据源")
-    private List<OntologyAssociateDataSourceParam> newDataSources;
 
 }
