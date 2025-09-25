@@ -1,10 +1,7 @@
 package com.aircas.ptr.foundry.ontology.function
 
-import com.aircas.ptr.foundry.model.po.OntologyProperty
+import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty
 import com.aircas.ptr.foundry.ontology.model.vo.ObjectOneInfoVO
-import com.aircas.ptr.foundry.ontology.function.Ontology
-import groovy.util.Proxy
-import groovy.lang.GeneratedGroovyProxy;
 
 class OntologBaseObject extends Proxy implements GroovyInterceptable {
 

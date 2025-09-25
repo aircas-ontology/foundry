@@ -9,7 +9,7 @@ spring:
     arangodb:
       host: 192.168.9.11
       port: 8529
-      database: entity
+      database: ontology
       user: root
       password: root
       connections:
@@ -23,16 +23,16 @@ spring:
       matching-strategy: ant_path_matcher
   # PostgreSQL配置
   datasource:
-    url: jdbc:postgresql://192.168.9.11:35432/postgres?currentSchema=ontology_entity
-    username: postgres
-    password: iecas123
-    driver-class-name: org.postgresql.Driver
-    hikari:
-      maximum-pool-size: 10
-      minimum-idle: 5
-      idle-timeout: 300000
-      connection-timeout: 20000
-      pool-name: HikariPool
+    main:
+      url: jdbc:postgresql://192.168.9.11:35432/postgres?currentSchema=ontology_entity&rewriteBatchedStatements=true
+      username: postgres
+      password: iecas123
+      driver-class-name: org.postgresql.Driver
+    datalake:
+      driver-class-name: org.postgresql.Driver
+      url: jdbc:postgresql://192.168.9.11:35432/foudry_datasource?currentSchema=public
+      username: iecas
+      password: iecas123
 
 # 日志配置
 logging:

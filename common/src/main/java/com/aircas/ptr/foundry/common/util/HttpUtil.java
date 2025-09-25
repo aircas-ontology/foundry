@@ -1,138 +1,106 @@
 package com.aircas.ptr.foundry.common.util;
 
-import com.alibaba.fastjson.JSONObject;
-import com.sun.javafx.collections.MappingChange;
-import org.apache.commons.httpclient.HttpClient;
-import org.apache.commons.httpclient.HttpException;
-import org.apache.commons.httpclient.HttpMethod;
-import org.apache.commons.httpclient.NameValuePair;
-import org.apache.commons.httpclient.methods.*;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.aircas.ptr.foundry.common.exception.BusinessException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
+import okhttp3.*;
+import org.apache.commons.collections4.MapUtils;
 
-import java.io.IOException;
-import java.net.URI;
-import java.net.URISyntaxException;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
+@Slf4j
 public class HttpUtil {
 
-    private static final Logger logger = LoggerFactory.getLogger(HttpUtil.class);
+    private static final MediaType JSON = MediaType.parse("application/json;charset=utf-8");
 
-    public static String doGet(String url) {
+    private static final OkHttpClient client;
 
-        HttpClient client = new HttpClient();
-        // 使用 GET 方法 ，如果服务器需要通过 HTTPS 连接，那只需要将下面 URL 中的 http 换成 https
-        HttpMethod method = new GetMethod(url);
-        String responseStr = "";
-        try {
-            client.executeMethod(method);
-            // 打印服务器返回的状态
-            // logger.info(method.getStatusLine());
-            // 打印返回的信息
-            responseStr = method.getResponseBodyAsString();
-//            logger.info(method.getResponseBodyAsString());
-            // 释放连接
-            method.releaseConnection();
-        } catch (IOException e) {
-            logger.error(e.getMessage());
-            e.printStackTrace();
-            responseStr = "IOException";
-        }
-        return responseStr;
+    private static final ObjectMapper objectMapper = new ObjectMapper();
+
+    static {
+        client = new OkHttpClient().newBuilder()
+                .connectTimeout(300, TimeUnit.SECONDS)
+                .readTimeout(300, TimeUnit.SECONDS)
+                .writeTimeout(300, TimeUnit.SECONDS)
+                .build();
     }
 
-    /**
-     * http调用Post接口，返回结果
-     *
-     * @param url
-     * @param obj 传输对象
-     * @return
-     * @throws HttpException
-     */
-    public static String doPost(String url, Object obj) {
 
-        HttpClient client = new HttpClient();
-        // 使用POST方法
-        PostMethod method = new PostMethod(url);
-        RequestEntity re = new StringRequestEntity(JSONObject.toJSONString(obj));
-        method.setRequestEntity(re);
-        method.addRequestHeader("Content-Type", "application/json; charset=UTF-8");
-        String responseStr = "";
-        try {
-            client.executeMethod(method);
-            // 打印服务器返回的状态
-            // System.out.println(method.getStatusLine());
-            // 打印返回的信息
-            responseStr = method.getResponseBodyAsString();
-            // System.out.println(responseStr);
-            // 释放连接
-            method.releaseConnection();
-        } catch (IOException e) {
-            e.printStackTrace();
-            responseStr = "IOException";
+    public static <T> T get(String url, Map<String, String> params, TypeReference<T> responseType) {
+        HttpUrl.Builder urlBuilder = HttpUrl.parse(url).newBuilder();
+        if (MapUtils.isNotEmpty(params)) {
+            params.entrySet().forEach(entry -> urlBuilder.addQueryParameter(entry.getKey(), entry.getValue()));
         }
-        return responseStr;
+
+        Request.Builder requestBuilder = new Request.Builder()
+                .url(urlBuilder.build());
+
+        Request request = requestBuilder.build();
+
+        return executeRequest(request, responseType);
     }
 
-    /**
-     * 发送POST请求，添加表单参数
-     *
-     * @param url    接口地址
-     * @param params 表单参数
-     * @return 响应结果
-     */
-    public static String doPostWithForm(String url, Map<String, String> params) {
-        HttpClient client = new HttpClient();
-        PostMethod method = new PostMethod(url);
+    public static <T> T postJson(String url, Map<String, String> params, String jsonString, TypeReference<T> responseType) {
+        HttpUrl.Builder urlBuilder = HttpUrl.parse(url).newBuilder();
+        if (MapUtils.isNotEmpty(params)) {
+            params.entrySet().forEach(entry -> urlBuilder.addQueryParameter(entry.getKey(), entry.getValue()));
+        }
 
-        // 设置表单参数
-        NameValuePair[] dataPairs = new NameValuePair[params.size()];
-        int i = 0;
-        for (Map.Entry<String, String> entry : params.entrySet()) {
-            dataPairs[i++] = new NameValuePair(entry.getKey(), entry.getValue());
-        }
-        method.setRequestBody(dataPairs);
-        // 设置请求头
-        method.addRequestHeader("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8");
-        try {
-            client.executeMethod(method);
-            return method.getResponseBodyAsString();
-        } catch (IOException e) {
-            e.printStackTrace();
-            return "IOException";
-        } finally {
-            method.releaseConnection();
-        }
+        RequestBody body = RequestBody.create(JSON, jsonString);
+        Request.Builder requestBuilder = new Request.Builder()
+                .post(body)
+                .url(urlBuilder.build());
+
+        Request request = requestBuilder.build();
+
+        return executeRequest(request, responseType);
     }
 
-    /**
-     * 发送DELETE请求
-     *
-     * @param url 请求的URL
-     * @return 响应结果
-     */
-    public static boolean doDelete(String url) {
-        HttpClient client = new HttpClient();
-        DeleteMethod method = new DeleteMethod(url);
-        try {
-            int statusCode = client.executeMethod(method);
-            if (statusCode == 200) {
-                return true;
-            } else {
-                logger.error("HTTP DELETE request failed with status code: {}", statusCode);
-                return false;
+    public static <T> T putJson(String url, Map<String, String> params, String jsonString, TypeReference<T> responseType) {
+        HttpUrl.Builder urlBuilder = HttpUrl.parse(url).newBuilder();
+        if (MapUtils.isNotEmpty(params)) {
+            params.entrySet().forEach(entry -> urlBuilder.addQueryParameter(entry.getKey(), entry.getValue()));
+        }
+
+        RequestBody body = RequestBody.create(JSON, jsonString);
+        Request.Builder requestBuilder = new Request.Builder()
+                .put(body)
+                .url(urlBuilder.build());
+
+        Request request = requestBuilder.build();
+
+        return executeRequest(request, responseType);
+    }
+
+    public static <T> T deletePathVariable(String url, List<String> pathVariable, TypeReference<T> responseType) {
+        url = String.format(url, pathVariable);
+        Request.Builder requestBuilder = new Request.Builder()
+                .delete()
+                .url(url);
+        Request request = requestBuilder.build();
+        return executeRequest(request, responseType);
+    }
+
+
+    private static <T> T executeRequest(Request request, TypeReference<T> responseType) {
+        try (Response response = client.newCall(request).execute()) {
+            if (!response.isSuccessful()) {
+                throw new BusinessException("unexpected code :" + response);
             }
-        } catch (IOException e) {
-            logger.error("IOException occurred during HTTP DELETE request", e);
-            return false;
-        } finally {
-            method.releaseConnection();
+            ResponseBody responseBody = response.body();
+            if (responseBody != null) {
+                String respStr = responseBody.string();
+                return objectMapper.readValue(respStr, responseType);
+            }
+            return null;
+        } catch (Exception e) {
+            log.error("executeRequest failed", e);
+            throw new BusinessException("远程调用出错");
         }
     }
 
-    public static void main(String[] args) throws HttpException {
-
-    }
 
 }

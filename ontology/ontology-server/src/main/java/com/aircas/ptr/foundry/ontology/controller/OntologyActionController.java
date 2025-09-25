@@ -1,36 +1,26 @@
 package com.aircas.ptr.foundry.ontology.controller;
 
 import com.aircas.ptr.foundry.common.base.ApiResult;
-import com.aircas.ptr.foundry.common.base.DataResult;
 import com.aircas.ptr.foundry.common.base.RestResult;
-import com.aircas.ptr.foundry.model.po.ActionHandleCommitFlashMemory;
-import com.aircas.ptr.foundry.model.po.ActionHandleRule;
-import com.aircas.ptr.foundry.model.po.OntologyAction;
 import com.aircas.ptr.foundry.ontology.exception.*;
 import com.aircas.ptr.foundry.ontology.model.bo.ActionHandleTaskBO;
-import com.aircas.ptr.foundry.ontology.model.bo.OntologyActionBo;
-import com.aircas.ptr.foundry.ontology.model.bo.OntologyActionMappingInBO;
 import com.aircas.ptr.foundry.ontology.model.param.*;
 import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.aircas.ptr.foundry.ontology.service.ActionHandleTaskService;
 import com.aircas.ptr.foundry.ontology.service.DynamicActionTaskService;
 import com.aircas.ptr.foundry.ontology.service.OntologyActionService;
-import com.github.pagehelper.PageInfo;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import org.quartz.JobKey;
 import org.quartz.SchedulerException;
-import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
 import javax.validation.Valid;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 
 @Api(tags = "行为")

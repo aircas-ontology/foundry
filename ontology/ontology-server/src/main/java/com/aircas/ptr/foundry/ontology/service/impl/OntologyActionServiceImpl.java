@@ -2,7 +2,6 @@ package com.aircas.ptr.foundry.ontology.service.impl;
 
 import com.aircas.ptr.foundry.common.constant.ActionRuleConnectType;
 import com.aircas.ptr.foundry.common.util.SnowflakeIdUtil;
-import com.aircas.ptr.foundry.model.po.*;
 import com.aircas.ptr.foundry.ontology.exception.*;
 import com.aircas.ptr.foundry.ontology.model.bo.ActionHandleRuleBO;
 import com.aircas.ptr.foundry.ontology.model.bo.ActionHandleTaskBO;
@@ -10,6 +9,7 @@ import com.aircas.ptr.foundry.ontology.model.bo.OntologyActionBo;
 import com.aircas.ptr.foundry.ontology.model.bo.OntologyActionMappingInBO;
 import com.aircas.ptr.foundry.ontology.model.param.ActionHandleMappingInParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionHandleRuleAddParam;
+import com.aircas.ptr.foundry.ontology.model.po.*;
 import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.aircas.ptr.foundry.ontology.repository.dao.*;
 import com.aircas.ptr.foundry.ontology.service.*;
@@ -37,35 +37,26 @@ import static com.aircas.ptr.foundry.common.constant.ActionMappingInTypeEnum.ONT
 @Slf4j
 public class OntologyActionServiceImpl implements OntologyActionService {
 
-    @Resource
     private final OntologyActionMapper ontologyActionMapper;
 
-    @Resource
     private final OntologyActionMappingInMapper ontologyActionMappingInMapper;
 
-    @Resource
     private final OntologyMetaMapper ontologyMetaMapper;
 
-    @Resource
+
     private final ActionHandleCommitFlashMermoryMapper actionHandleCommitFlashMermoryMapper;
 
-    @Resource
     private final OntologyPropertyMapper propertyMapper;
 
-    @Resource
     private final ObjectService objectService;
 
-    @Resource
     private final OntologyPropertyService ontologyPropertyService;
 
-    @Resource
-    private FunctionService functionService;
+    private final FunctionService functionService;
 
-    @Autowired
-    private ActionHandleRuleService actionHandleRuleService;
+    private final ActionHandleRuleService actionHandleRuleService;
 
-    @Autowired
-    private ActionHandleTaskService actionHandleTaskService;
+    private final ActionHandleTaskService actionHandleTaskService;
 
     private final static String DEFAULT_OBJECT_DESC = "当前本体对象";
 

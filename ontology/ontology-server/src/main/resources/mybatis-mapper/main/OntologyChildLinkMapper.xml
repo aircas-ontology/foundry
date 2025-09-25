@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.aircas.ptr.foundry.ontology.repository.dao.OntologyChildLinkMapper">
-  <resultMap id="BaseResultMap" type="com.aircas.ptr.foundry.model.po.OntologyChildLink">
+  <resultMap id="BaseResultMap" type="com.aircas.ptr.foundry.ontology.model.po.OntologyChildLink">
     <!-- @mbg.generated: generated automatically, do not modify! -->
     <id column="id" jdbcType="BIGINT" property="id" />
     <result column="create_time" jdbcType="TIMESTAMP" property="createTime" />
@@ -26,7 +26,7 @@
     delete from ontology_child_link
     where id = #{id,jdbcType=BIGINT}
   </delete>
-  <insert id="insert"  keyColumn="id" keyProperty="id" parameterType="com.aircas.ptr.foundry.model.po.OntologyChildLink" useGeneratedKeys="true">
+  <insert id="insert" keyColumn="id" keyProperty="id" parameterType="com.aircas.ptr.foundry.ontology.model.po.OntologyChildLink" useGeneratedKeys="true">
     <!-- @mbg.generated: generated automatically, do not modify! -->
     insert into ontology_child_link (create_time, update_time,
       display_name, visibility, api_name)
@@ -34,7 +34,7 @@
       #{displayName,jdbcType=VARCHAR}, #{visibility,jdbcType=INTEGER},
       #{apiName,jdbcType=INTEGER})
   </insert>
-  <insert id="insertSelective" parameterType="com.aircas.ptr.foundry.model.po.OntologyChildLink">
+  <insert id="insertSelective" parameterType="com.aircas.ptr.foundry.ontology.model.po.OntologyChildLink">
     <!-- @mbg.generated: generated automatically, do not modify! -->
     insert into ontology_child_link
     <trim prefix="(" suffix=")" suffixOverrides=",">
@@ -78,7 +78,7 @@
       </if>
     </trim>
   </insert>
-  <update id="updateByPrimaryKeySelective" parameterType="com.aircas.ptr.foundry.model.po.OntologyChildLink">
+  <update id="updateByPrimaryKeySelective" parameterType="com.aircas.ptr.foundry.ontology.model.po.OntologyChildLink">
     <!-- @mbg.generated: generated automatically, do not modify! -->
     update ontology_child_link
     <set>
@@ -100,7 +100,7 @@
     </set>
     where id = #{id,jdbcType=BIGINT}
   </update>
-  <update id="updateByPrimaryKey" parameterType="com.aircas.ptr.foundry.model.po.OntologyChildLink">
+  <update id="updateByPrimaryKey" parameterType="com.aircas.ptr.foundry.ontology.model.po.OntologyChildLink">
     <!-- @mbg.generated: generated automatically, do not modify! -->
     update ontology_child_link
     set create_time = #{createTime,jdbcType=TIMESTAMP},

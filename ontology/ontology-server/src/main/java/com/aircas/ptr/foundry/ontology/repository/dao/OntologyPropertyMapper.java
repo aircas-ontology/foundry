@@ -1,6 +1,6 @@
 package com.aircas.ptr.foundry.ontology.repository.dao;
 
-import com.aircas.ptr.foundry.model.po.OntologyProperty;
+import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
 
@@ -11,7 +11,7 @@ public interface OntologyPropertyMapper extends BaseMapper<OntologyProperty> {
 
     int deleteByUniqueIdentifier(String uniqueIdentifier);
 
-    int insert(OntologyProperty record);
+    //int insert(OntologyProperty record);
 
     int insertSelective(OntologyProperty record);
 

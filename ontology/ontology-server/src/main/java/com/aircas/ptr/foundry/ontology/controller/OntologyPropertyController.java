@@ -48,9 +48,9 @@ public class OntologyPropertyController {
     }
 
 
-    @DeleteMapping("/delete_datasource")
+    @DeleteMapping("/delete_datasource/{datasource}")
     @ApiOperation(value = "删除数据源下的所有属性")
-    public RestResult deleteDatasource(@RequestBody @Valid OntologyDatasourceParam datasourceParam) {
+    public RestResult deleteDatasource(@PathVariable(required = true,name = "datasource") String datasource) {
         return RestResult.success();
     }
 

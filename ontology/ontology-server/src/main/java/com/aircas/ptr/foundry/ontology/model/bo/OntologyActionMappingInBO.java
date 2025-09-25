@@ -1,6 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.bo;
 
-import com.aircas.ptr.foundry.model.po.OntologyActionMappingIn;
+import com.aircas.ptr.foundry.ontology.model.po.OntologyActionMappingIn;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 

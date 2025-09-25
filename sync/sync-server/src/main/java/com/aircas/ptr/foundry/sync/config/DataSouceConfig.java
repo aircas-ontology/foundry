@@ -24,7 +24,7 @@ import javax.sql.DataSource;
  * @since 1.0
  */
 @Configuration
-@MapperScan(basePackages = "com.aircas.ptr.foundry.sync.repository.dao", sqlSessionFactoryRef = "pgSqlSessionFactory")
+@MapperScan(basePackages = "com.aircas.ptr.foundry.sync.repository.mapper", sqlSessionFactoryRef = "pgSqlSessionFactory")
 public class DataSouceConfig {
 
 //    @Primary

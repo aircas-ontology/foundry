@@ -7,7 +7,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
-@EnableArangoRepositories(basePackages = {"com.aircas.ptr.foundry.ontology.entity.repository"})
+@EnableArangoRepositories(basePackages = {"com.aircas.ptr.foundry.ontology.entity.repository.arangodb"})
 public class ArangoConfig implements ArangoConfiguration {
 
     @Value("${spring.data.arangodb.host}")
@@ -31,6 +31,9 @@ public class ArangoConfig implements ArangoConfiguration {
     @Value("${spring.data.arangodb.timeout.request:10000}")
     private Long requestTimeout;
 
+    @Value("${spring.data.arangodb.database}")
+    private String database;
+
     @Override
     public ArangoDB.Builder arango() {
         return new ArangoDB.Builder()
@@ -46,6 +49,6 @@ public class ArangoConfig implements ArangoConfiguration {
 
     @Override
     public String database() {
-        return "entity";
+        return database;
     }
 } 

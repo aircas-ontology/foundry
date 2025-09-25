@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.aircas.ptr.foundry.ontology.repository.dao.OntologyMetaMapper">
-    <resultMap id="BaseResultMap" type="com.aircas.ptr.foundry.model.po.OntologyMeta">
+    <resultMap id="BaseResultMap" type="com.aircas.ptr.foundry.ontology.model.po.OntologyMeta">
         <id column="id" jdbcType="BIGINT" property="id"/>
         <result column="unique_identifier" jdbcType="VARCHAR" property="uniqueIdentifier"/>
         <result column="status" jdbcType="INTEGER" property="status"/>
@@ -89,7 +89,7 @@
         set status = 0
         where unique_identifier = #{uniqueIdentifier, jdbcType=VARCHAR}
     </update>
-<!--    <insert id="insert" keyColumn="id" keyProperty="id" parameterType="com.aircas.ptr.foundry.model.po.OntologyMeta"-->
+<!--    <insert id="insert" keyColumn="id" keyProperty="id" parameterType="com.aircas.ptr.foundry.ontology.model.po.OntologyMeta"-->
 <!--            useGeneratedKeys="true">-->
 <!--        insert into "ontology_meta" ("status", create_time, update_time,-->
 <!--                                     icon, display_name, plural_display_name,-->
@@ -104,7 +104,7 @@
 <!--      #{writebackFlag,jdbcType=INTEGER})-->
 <!--    </insert>-->
     <insert id="insertSelective" keyColumn="id" keyProperty="id"
-            parameterType="com.aircas.ptr.foundry.model.po.OntologyMeta" useGeneratedKeys="true">
+            parameterType="com.aircas.ptr.foundry.ontology.model.po.OntologyMeta" useGeneratedKeys="true">
         insert into "ontology_meta"
         <trim prefix="(" suffix=")" suffixOverrides=",">
             <if test="uniqueIdentifier != null">
@@ -213,7 +213,7 @@
             </if>
         </trim>
     </insert>
-    <update id="updateByPrimaryKeySelective" parameterType="com.aircas.ptr.foundry.model.po.OntologyMeta">
+    <update id="updateByPrimaryKeySelective" parameterType="com.aircas.ptr.foundry.ontology.model.po.OntologyMeta">
         update "ontology_meta"
         <set>
             <if test="uniqueIdentifier != null">
@@ -264,7 +264,7 @@
         </set>
         where id = #{id,jdbcType=BIGINT}
     </update>
-    <update id="updateByPrimaryKey" parameterType="com.aircas.ptr.foundry.model.po.OntologyMeta">
+    <update id="updateByPrimaryKey" parameterType="com.aircas.ptr.foundry.ontology.model.po.OntologyMeta">
         update "ontology_meta"
         set "status"              = #{status,jdbcType=INTEGER},
             unique_identifier     = #{uniqueIdentifier,jdbcType=VARCHAR},

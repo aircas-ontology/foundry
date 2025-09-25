@@ -1,6 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.vo;
 
-import com.aircas.ptr.foundry.model.po.Function;
+import com.aircas.ptr.foundry.ontology.model.po.Function;
 import lombok.Data;
 
 import java.util.List;

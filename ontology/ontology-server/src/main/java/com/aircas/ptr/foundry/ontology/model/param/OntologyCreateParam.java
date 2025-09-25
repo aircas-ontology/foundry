@@ -1,6 +1,5 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
-import com.aircas.ptr.foundry.common.constant.OntologyComponentEnum;
 import com.aircas.ptr.foundry.common.constant.OntologyCreateModeEnum;
 import com.aircas.ptr.foundry.ontology.controller.validator.ApiNameVerify;
 import com.aircas.ptr.foundry.ontology.controller.validator.DisplayNameVerify;
@@ -13,6 +12,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 
+import javax.validation.Valid;
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotEmpty;
 import javax.validation.constraints.NotNull;
@@ -36,10 +36,14 @@ public class OntologyCreateParam {
     private String displayName;
 
     @ApiModelProperty(name = "primaryDataSource", value = "本体对应主数据源", dataType = "OntologyPrimaryDataSourceParam")
-    private OntologyPrimaryDataSourceParam primaryDataSource;
+    //todo  数据源参数有效性校验
+    @Valid
+    private OntologyDatasourceParam primaryDataSource;
 
     @ApiModelProperty(name = "associateDataSources", value = "本体关联的其他数据源", dataType = "OntologyAssociateDataSourceParam")
-    private List<OntologyAssociateDataSourceParam> associateDataSources;
+    //todo  数据源参数有效性校验
+    @Valid
+    private List<OntologyDatasourceParam> associateDataSources;
 
     @ApiModelProperty(name = "description", value = "本体描述", dataType = "java.lang.String", example = "这是一架我方战斗机")
     private String description;

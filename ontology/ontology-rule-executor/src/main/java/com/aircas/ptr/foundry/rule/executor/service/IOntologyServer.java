@@ -1,6 +1,5 @@
 package com.aircas.ptr.foundry.rule.executor.service;
 
-import com.aircas.ptr.foundry.common.base.DataResult;
 import com.aircas.ptr.foundry.model.po.ActionHandleCommitFlashMemory;
 import com.aircas.ptr.foundry.rule.executor.entity.ActionHandleRule;
 import com.aircas.ptr.foundry.rule.executor.entity.OntologyAction;

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.aircas.ptr.foundry.ontology.repository.dao.OntologyLinkGroupMapper">
-    <resultMap id="BaseResultMap" type="com.aircas.ptr.foundry.model.po.OntologyLinkGroup">
+    <resultMap id="BaseResultMap" type="com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup">
         <!-- @mbg.generated: generated automatically, do not modify! -->
         <id column="id" jdbcType="BIGINT" property="id"/>
         <id column="unique_identifier" jdbcType="VARCHAR" property="uniqueIdentifier"/>
@@ -76,7 +76,7 @@
         where unique_identifier = #{uniqueIdentifier,jdbcType=VARCHAR}
     </delete>
 
-    <insert id="insert" parameterType="com.aircas.ptr.foundry.model.po.OntologyLinkGroup">
+    <insert id="insert" parameterType="com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup">
         <!-- @mbg.generated: generated automatically, do not modify! -->
         insert into ontology_link_group (unique_identifier, "status", create_time,
         update_time, ontology_unique_identifier_from,
@@ -92,7 +92,7 @@
         #{mapping,jdbcType=INTEGER}, #{forwardChildLinkId,jdbcType=INTEGER}, #{backwardChildLinkId,jdbcType=INTEGER}
         )
     </insert>
-    <insert id="insertSelective" parameterType="com.aircas.ptr.foundry.model.po.OntologyLinkGroup">
+    <insert id="insertSelective" parameterType="com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup">
         <!-- @mbg.generated: generated automatically, do not modify! -->
         insert into ontology_link_group
         <trim prefix="(" suffix=")" suffixOverrides=",">
@@ -184,7 +184,7 @@
             </if>
         </trim>
     </insert>
-    <update id="updateByPrimaryKeySelective" parameterType="com.aircas.ptr.foundry.model.po.OntologyLinkGroup">
+    <update id="updateByPrimaryKeySelective" parameterType="com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup">
         <!-- @mbg.generated: generated automatically, do not modify! -->
         update ontology_link_group
         <set>
@@ -227,7 +227,7 @@
         </set>
         where id = #{id,jdbcType=BIGINT}
     </update>
-    <update id="updateByPrimaryKey" parameterType="com.aircas.ptr.foundry.model.po.OntologyLinkGroup">
+    <update id="updateByPrimaryKey" parameterType="com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup">
         <!-- @mbg.generated: generated automatically, do not modify! -->
         update ontology_link_group
         set "status" = #{status,jdbcType=INTEGER},

@@ -6,7 +6,6 @@ import com.aircas.ptr.foundry.rule.executor.entity.OntologyMeta;
 import com.aircas.ptr.foundry.rule.executor.entity.OntologyProperty;
 import com.aircas.ptr.foundry.rule.executor.entity.dynamics.CheckRuleStatus;
 import com.aircas.ptr.foundry.rule.executor.entity.vo.CheckDataVO;
-import com.github.jsonldjava.utils.Obj;
 
 import java.util.List;
 

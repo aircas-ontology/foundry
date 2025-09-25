@@ -1,7 +1,7 @@
 package com.aircas.ptr.foundry.ontology.repository.datalakeDao;
 
-import com.aircas.ptr.foundry.model.po.DatasourceTable;
-import com.aircas.ptr.foundry.model.po.TableColumnDesc;
+import com.aircas.ptr.foundry.ontology.model.po.DatasourceTable;
+import com.aircas.ptr.foundry.ontology.model.po.TableColumnDesc;
 import org.apache.ibatis.annotations.Mapper;
 
 import java.util.List;

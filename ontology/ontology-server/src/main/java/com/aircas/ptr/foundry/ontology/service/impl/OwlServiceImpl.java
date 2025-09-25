@@ -1,7 +1,7 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
 
-import com.aircas.ptr.foundry.model.po.OntologyMeta;
+import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import com.aircas.ptr.foundry.ontology.exception.ExceptionFactory;
 import com.aircas.ptr.foundry.ontology.exception.OwlUriInvalidClassNotFoundException;

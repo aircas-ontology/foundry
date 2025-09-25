@@ -21,10 +21,10 @@ public class OntologyDataSourceCreateParamOntology extends OntologyIdentifierPar
 
     @ApiModelProperty(name = "primaryDataSource", value = "本体对应主数据源", dataType = "OntologyPrimaryDataSourceParam", required = true)
     @NotNull(message = "primaryDataSource is null")
-    private OntologyPrimaryDataSourceParam primaryDataSource;
+    private OntologyDatasourceParam primaryDataSource;
 
     @ApiModelProperty(name = "associateDataSources", value = "本体关联的其他数据源", dataType = "OntologyAssociateDataSourceParam")
-    private List<OntologyAssociateDataSourceParam> associateDataSources;
+    private List<OntologyDatasourceParam> associateDataSources;
 
 
 }

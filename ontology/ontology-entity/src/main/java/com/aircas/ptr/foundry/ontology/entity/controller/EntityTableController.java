@@ -1,13 +1,10 @@
 package com.aircas.ptr.foundry.ontology.entity.controller;
 
 import com.aircas.ptr.foundry.common.base.RestResult;
-import com.aircas.ptr.foundry.ontology.entity.model.dto.TableCreateDTO;
-import com.aircas.ptr.foundry.ontology.entity.model.dto.TableQueryDTO;
 import com.aircas.ptr.foundry.ontology.entity.model.param.DataSourceParam;
 import com.aircas.ptr.foundry.ontology.entity.model.param.EntityCreateParam;
 import com.aircas.ptr.foundry.ontology.entity.model.param.TableColumnRelationUpdateParam;
-import com.aircas.ptr.foundry.ontology.entity.model.vo.EntityVO;
-import com.aircas.ptr.foundry.ontology.entity.service.EntityService;
+import com.aircas.ptr.foundry.ontology.entity.service.EntityTableService;
 import com.aircas.ptr.foundry.ontology.entity.service.PostgresService;
 import io.swagger.annotations.*;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,8 +12,6 @@ import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
 import javax.validation.Valid;
-import java.util.List;
-import java.util.Map;
 
 @Api(tags = "实体表管理接口")
 @RestController
@@ -27,7 +22,7 @@ public class EntityTableController {
     private PostgresService postgresService;
 
     @Resource
-    private EntityService entityService;
+    private EntityTableService entityTableService;
 
     @ApiOperation("创建实体表、实体数据、实体节点和关系")
     @ApiResponses({
@@ -35,7 +30,7 @@ public class EntityTableController {
     })
     @PostMapping("")
     public RestResult createEntities(@RequestBody @Valid EntityCreateParam entityCreateParam) {
-        entityService.createEntities(entityCreateParam);
+        entityTableService.createEntities(entityCreateParam);
         return RestResult.success();
     }
 
@@ -60,7 +55,7 @@ public class EntityTableController {
 
 
     @ApiOperation("修改table关联健")
-    @PutMapping("/column")
+    @PutMapping("/column_relation")
     public RestResult modifyColumnRelation(@RequestBody @Valid TableColumnRelationUpdateParam param) {
         return RestResult.success();
     }

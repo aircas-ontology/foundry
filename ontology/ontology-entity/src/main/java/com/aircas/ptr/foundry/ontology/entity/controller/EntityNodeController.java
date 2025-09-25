@@ -1,7 +1,7 @@
 package com.aircas.ptr.foundry.ontology.entity.controller;
 
-import com.aircas.ptr.foundry.ontology.entity.entity.OntologyNode;
-import com.aircas.ptr.foundry.ontology.entity.entity.OntologyRelation;
+import com.aircas.ptr.foundry.ontology.entity.model.document.OntologyNode;
+import com.aircas.ptr.foundry.ontology.entity.model.document.OntologyRelation;
 import com.aircas.ptr.foundry.ontology.entity.model.dto.BatchImportDTO;
 import com.aircas.ptr.foundry.ontology.entity.model.dto.OntologyRelationDTO;
 import com.aircas.ptr.foundry.ontology.entity.service.ExcelService;

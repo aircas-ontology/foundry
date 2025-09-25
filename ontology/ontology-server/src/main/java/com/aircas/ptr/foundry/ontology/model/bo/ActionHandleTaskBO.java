@@ -1,7 +1,7 @@
 package com.aircas.ptr.foundry.ontology.model.bo;
 
 import com.aircas.ptr.foundry.common.util.SnowflakeIdUtil;
-import com.aircas.ptr.foundry.model.po.ActionHandleTask;
+import com.aircas.ptr.foundry.ontology.model.po.ActionHandleTask;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 

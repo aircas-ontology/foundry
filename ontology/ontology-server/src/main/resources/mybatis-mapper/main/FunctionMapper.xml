@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.aircas.ptr.foundry.ontology.repository.dao.FunctionMapper">
-    <resultMap id="BaseResultMap" type="com.aircas.ptr.foundry.model.po.Function">
+    <resultMap id="BaseResultMap" type="com.aircas.ptr.foundry.ontology.model.po.Function">
         <!-- @mbg.generated: generated automatically, do not modify! -->
         <result column="api" jdbcType="VARCHAR" property="api"/>
         <result column="description" jdbcType="VARCHAR" property="description"/>
@@ -40,7 +40,7 @@
         where status = 1
     </select>
 
-    <insert id="insert" parameterType="com.aircas.ptr.foundry.model.po.Function">
+    <insert id="insert" parameterType="com.aircas.ptr.foundry.ontology.model.po.Function">
         <!-- @mbg.generated: generated automatically, do not modify! -->
         insert into function (id, api, description, status, object_types, create_time, update_time)
         values (#{id,jdbcType=BIGINT},#{api,jdbcType=VARCHAR}, #{description,jdbcType=VARCHAR},
@@ -48,7 +48,7 @@
         #{objectTypes,jdbcType=VARCHAR}, #{createTime,jdbcType=TIMESTAMP}, #{updateTime,jdbcType=TIMESTAMP})
     </insert>
 
-    <update id="updateByApi" parameterType="com.aircas.ptr.foundry.model.po.Function">
+    <update id="updateByApi" parameterType="com.aircas.ptr.foundry.ontology.model.po.Function">
         update "function"
         <set>
             <if test="description != null">

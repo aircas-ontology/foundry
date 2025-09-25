@@ -1,32 +1,32 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
-import com.aircas.ptr.foundry.common.constant.OntologyComponentEnum;
-import com.aircas.ptr.foundry.common.constant.OntologyCreateModeEnum;
 import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import com.aircas.ptr.foundry.common.constant.Status;
-import com.aircas.ptr.foundry.common.exception.DuplicatedDataException;
 import com.aircas.ptr.foundry.common.util.IdGenerator;
-import com.aircas.ptr.foundry.model.po.OntologyMeta;
+import com.aircas.ptr.foundry.common.util.PreconditionUtils;
+import com.aircas.ptr.foundry.ontology.client.EntityClient;
+import com.aircas.ptr.foundry.ontology.client.param.EntityCreateParam;
+import com.aircas.ptr.foundry.ontology.converter.ClientParamConverter;
+import com.aircas.ptr.foundry.ontology.converter.ParamToEntityConverter;
 import com.aircas.ptr.foundry.ontology.model.bo.OntologyMetaBO;
 import com.aircas.ptr.foundry.ontology.model.bo.OntologyPropertyBO;
 import com.aircas.ptr.foundry.ontology.model.param.EntityNodeParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyCreateParam;
-import com.aircas.ptr.foundry.ontology.model.param.OntologyMetaAddParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyUpdateParam;
+import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyGroupMapper;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyMetaMapper;
 import com.aircas.ptr.foundry.ontology.service.*;
 import com.github.pagehelper.PageInfo;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import lombok.var;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.beans.BeanUtils;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import javax.annotation.Resource;
 import java.util.*;
 import java.util.stream.Collectors;
 //import java.util.Map;
@@ -38,36 +38,31 @@ import java.util.stream.Collectors;
  */
 
 @Service
+@RequiredArgsConstructor
+@Slf4j
 public class OntologyMetaServiceImpl implements OntologyMetaService {
 
-    private static final Logger log = LoggerFactory.getLogger(OntologyMetaServiceImpl.class);
+    private final OntologyMetaMapper ontologyMetaMapper;
 
-    @Resource
-    private OntologyMetaMapper ontologyMetaMapper;
-
-
-    @Autowired
-    private OntologyPropertyService ontologyPropertyService;
+    private final OntologyPropertyService ontologyPropertyService;
 
 
-    @Autowired
-    private TableMetadataService tableMetadataService;
+    private final TableMetadataService tableMetadataService;
 
-    @Autowired
-    private OntologyGroupMapper ontologyGroupMapper;
+    private final OntologyGroupMapper ontologyGroupMapper;
 
-    @Autowired
-    private ObjectService objectService;
+    private final ObjectService objectService;
 
-    @Autowired
-    private EntityService entityService;
+    private final EntityService entityService;
+
+    private final EntityClient entityClient;
 
 
     @Override
     @Transactional(value = "mainTransactionManager")
     public String createOntology(OntologyCreateParam ontologyCreateParam) {
         /**
-         * todo
+         *
          * 1 创建元数据
          * 2 创建属性、关系、函数、行为
          * 3 创建实体
@@ -88,8 +83,52 @@ public class OntologyMetaServiceImpl implements OntologyMetaService {
                 ontologyMetaMapper.insert(meta);
                 break;
             case INHERIT:
+
                 break;
             case DATASOURCE:
+                //1 创建本体元数据
+                var primaryDataSource = ontologyCreateParam.getPrimaryDataSource();
+                PreconditionUtils.checkArgument(primaryDataSource != null && CollectionUtils.isNotEmpty(primaryDataSource.getColumnParamList()), "primaryDataSource is null");
+                var primaryTableName = primaryDataSource.getColumnParamList().get(0).getTableName();
+                meta.setBackingDatasourceId(primaryTableName);
+                var associateDataSources = ontologyCreateParam.getAssociateDataSources();
+                if (CollectionUtils.isNotEmpty(associateDataSources)) {
+                    var dataSources = associateDataSources.stream().map(ds -> ds.getColumnParamList().get(0).getTableName()).collect(Collectors.toList());
+                    meta.setOtherDatasourceId(String.join(",", dataSources));
+                }
+                //2 创建本体属性
+                // 主数据源属性
+                var properties = primaryDataSource.getColumnParamList().stream()
+                        .map(ParamToEntityConverter::convert)
+                        .collect(Collectors.toList());
+                //  其他数据源属性
+                if (CollectionUtils.isNotEmpty(associateDataSources)) {
+                    //校验关联健
+                    associateDataSources.stream().forEach(ds -> {
+                        var associateKey = ds.getColumnParamList().stream().filter(v -> v.getIsAssociateKey()).findFirst().orElse(null);
+                        PreconditionUtils.checkArgument(associateKey != null &&
+                                properties.stream().anyMatch(v -> v.getDatasourceColumnName().equals(associateKey.getPrimaryDataSourceKey())), "找不到关联健或者关联的属性错误");
+                    });
+                    //生成属性表数据
+                    var otherProps = associateDataSources.stream()
+                            .flatMap(ds -> ds.getColumnParamList().stream().filter(v -> !v.getIsPrimaryKey() && !v.getIsAssociateKey()))
+                            .collect(Collectors.toList());
+                    properties.addAll(otherProps.stream().map(ParamToEntityConverter::convert).collect(Collectors.toList()));
+                }
+                //校验property apiName是否有冲突
+                PreconditionUtils.checkArgument(properties.stream()
+                        .map(v -> v.getApiName()).collect(Collectors.toSet()).size() == properties.size(), "apiName存在冲突");
+                //校验titleKey
+                var titleKeyExist = properties.stream().filter(v -> v.getIsTitleKey() == 1).count();
+                PreconditionUtils.checkArgument(titleKeyExist == 1, "名称健不存在或多个");
+                //批量插入
+                ontologyPropertyService.saveBatch(properties);
+                //创建实体表、实体数据和实体节点
+                entityClient.createTableAndEntities(EntityCreateParam.builder()
+                        .primaryDataSource(ClientParamConverter.convert(primaryDataSource))
+                        .associateDataSources(CollectionUtils.isNotEmpty(associateDataSources) ?
+                                associateDataSources.stream().map(ClientParamConverter::convert).collect(Collectors.toList()) : null)
+                        .build());
                 break;
 
         }

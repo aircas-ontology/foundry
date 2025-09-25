@@ -22,11 +22,6 @@
             <artifactId>common</artifactId>
             <version>${project.version}</version>
         </dependency>
-        <dependency>
-            <groupId>com.aircas.ptr</groupId>
-            <artifactId>model</artifactId>
-            <version>${project.version}</version>
-        </dependency>
         <!--swagger-->
         <dependency>
             <groupId>com.github.xiaoymin</groupId>

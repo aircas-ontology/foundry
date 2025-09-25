@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.aircas.ptr.foundry.ontology.repository.dao.OntologyPropertyMapper">
-    <resultMap id="BaseResultMap" type="com.aircas.ptr.foundry.model.po.OntologyProperty">
+    <resultMap id="BaseResultMap" type="com.aircas.ptr.foundry.ontology.model.po.OntologyProperty">
         <id column="id" jdbcType="BIGINT" property="id"/>
         <result column="unique_identifier" jdbcType="VARCHAR" property="uniqueIdentifier"/>
         <result column="status" jdbcType="INTEGER" property="status"/>
@@ -59,7 +59,7 @@
         </if>
     </select>
 
-    <select id="selectByApiName" resultType="com.aircas.ptr.foundry.model.po.OntologyProperty"
+    <select id="selectByApiName" resultType="com.aircas.ptr.foundry.ontology.model.po.OntologyProperty"
             parameterType="java.lang.String">
         select
         <include refid="Base_Column_List"/>
@@ -74,7 +74,7 @@
         from "ontology_property"
         where unique_identifier = #{uniqumeigeeIdentifier,jdbcType=BIGINT}
     </delete>
-    <insert id="insert" keyColumn="id" keyProperty="id" parameterType="com.aircas.ptr.foundry.model.po.OntologyProperty"
+    <insert id="insert" keyColumn="id" keyProperty="id" parameterType="com.aircas.ptr.foundry.ontology.model.po.OntologyProperty"
             useGeneratedKeys="true">
         insert into "ontology_property" ("status", unique_identifier, create_time, update_time,
                                          ontology_unique_identifier, datasource_column_name, property_type,
@@ -90,7 +90,7 @@
                 #{isTitleKey,jdbcType=INTEGER}, #{datasourceId,jdbcType=VARCHAR})
     </insert>
     <insert id="insertSelective" keyColumn="id" keyProperty="id"
-            parameterType="com.aircas.ptr.foundry.model.po.OntologyProperty" useGeneratedKeys="true">
+            parameterType="com.aircas.ptr.foundry.ontology.model.po.OntologyProperty" useGeneratedKeys="true">
         insert into "ontology_property"
         <trim prefix="(" suffix=")" suffixOverrides=",">
             <if test="uniqueIdentifier != null">
@@ -184,7 +184,7 @@
             </if>
         </trim>
     </insert>
-    <update id="updateSelective" parameterType="com.aircas.ptr.foundry.model.po.OntologyProperty">
+    <update id="updateSelective" parameterType="com.aircas.ptr.foundry.ontology.model.po.OntologyProperty">
         update "ontology_property"
         <set>
             <if test="status != null">
@@ -232,7 +232,7 @@
         </set>
         where unique_Identifier = #{uniqueIdentifier,jdbcType=VARCHAR}
     </update>
-    <update id="updateByUniqueIdentifier" parameterType="com.aircas.ptr.foundry.model.po.OntologyProperty">
+    <update id="updateByUniqueIdentifier" parameterType="com.aircas.ptr.foundry.ontology.model.po.OntologyProperty">
         update "ontology_property"
         set "status"                   = #{status,jdbcType=INTEGER},
             create_time                = #{createTime,jdbcType=TIMESTAMP},

@@ -1,9 +1,9 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
 import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
-import com.aircas.ptr.foundry.model.po.OntologyMeta;
-import com.aircas.ptr.foundry.model.po.OntologyProperty;
-import com.aircas.ptr.foundry.model.po.TableColumnDesc;
+import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
+import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
+import com.aircas.ptr.foundry.ontology.model.po.TableColumnDesc;
 import com.aircas.ptr.foundry.ontology.service.EntityService;
 import com.aircas.ptr.foundry.ontology.service.OntologyPropertyService;
 import com.aircas.ptr.foundry.ontology.model.bo.OntologyPropertyBO;
@@ -12,32 +12,29 @@ import com.aircas.ptr.foundry.ontology.repository.dao.OntologyMetaMapper;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyPropertyMapper;
 import com.aircas.ptr.foundry.ontology.repository.datalakeDao.TableMetadataMapper;
 import com.aircas.ptr.foundry.ontology.model.param.EntityTableFieldParam;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeanUtils;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import javax.annotation.Resource;
 import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
-public class OntologyPropertyServiceImpl implements OntologyPropertyService {
+public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMapper,OntologyProperty> implements OntologyPropertyService {
 
     private static final Logger log = LoggerFactory.getLogger(OntologyPropertyServiceImpl.class);
+
     private final OntologyPropertyMapper ontologyPropertyMapper;
 
-    @Resource
     private final TableMetadataMapper tableMetadataMapper;
 
-    @Autowired
-    private OntologyMetaMapper ontologyMetaMapper;
+    private final OntologyMetaMapper ontologyMetaMapper;
 
-    @Autowired
-    private EntityService entityService;
+    private final EntityService entityService;
 
     @Override
     public Integer add(OntologyPropertyBO ontologyPropertyBO) {

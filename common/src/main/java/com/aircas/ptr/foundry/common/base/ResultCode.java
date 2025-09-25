@@ -67,16 +67,16 @@ public enum ResultCode {
 
 
 
-    public int code;
+    public Integer code;
 
     public String message;
 
-    ResultCode (int code, String message){
+    ResultCode (Integer code, String message){
         this.code = code;
         this.message = message;
     }
 
-    public int getCode(){
+    public Integer getCode(){
         return code;
     }
 

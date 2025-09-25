@@ -2,8 +2,8 @@ package com.aircas.ptr.foundry.ontology.service.impl;
 
 import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.common.base.ResultGenerator;
-import com.aircas.ptr.foundry.model.po.OntologyChildLink;
-import com.aircas.ptr.foundry.model.po.OntologyLinkGroup;
+import com.aircas.ptr.foundry.ontology.model.po.OntologyChildLink;
+import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup;
 import com.aircas.ptr.foundry.ontology.service.OntologyLinkGroupService;
 import com.aircas.ptr.foundry.ontology.service.OntologyMetaService;
 import com.aircas.ptr.foundry.ontology.model.bo.OntologyLinkGroupBo;

@@ -10,7 +10,7 @@ import lombok.Data;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class RestResult<T> {
 
-    private int code;
+    private Integer code;
 
 
     private String message;
@@ -18,7 +18,7 @@ public class RestResult<T> {
 
     private T data;
 
-    public int getCode() {
+    public Integer getCode() {
         return code;
     }
 
@@ -46,7 +46,7 @@ public class RestResult<T> {
         this.data = data;
     }
 
-    public RestResult setCode(int code) {
+    public RestResult setCode(Integer code) {
         this.code = code;
         return this;
     }

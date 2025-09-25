@@ -2,17 +2,12 @@ package com.aircas.ptr.foundry.ontology.entity.controller;
 
 
 import com.aircas.ptr.foundry.common.base.RestResult;
-import com.aircas.ptr.foundry.ontology.entity.model.param.EntityCreateParam;
 import com.aircas.ptr.foundry.ontology.entity.model.param.EntityRecordParam;
 import com.aircas.ptr.foundry.ontology.entity.model.vo.EntityVO;
-import com.aircas.ptr.foundry.ontology.entity.service.EntityService;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
-import io.swagger.annotations.ApiResponse;
-import io.swagger.annotations.ApiResponses;
 import org.springframework.web.bind.annotation.*;
 
-import javax.annotation.Resource;
 import javax.validation.Valid;
 import java.util.List;
 

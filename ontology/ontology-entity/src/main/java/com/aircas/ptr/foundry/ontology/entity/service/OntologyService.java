@@ -1,11 +1,11 @@
 package com.aircas.ptr.foundry.ontology.entity.service;
 
-import com.aircas.ptr.foundry.ontology.entity.entity.OntologyNode;
-import com.aircas.ptr.foundry.ontology.entity.entity.OntologyRelation;
+import com.aircas.ptr.foundry.ontology.entity.model.document.OntologyNode;
+import com.aircas.ptr.foundry.ontology.entity.model.document.OntologyRelation;
 import com.aircas.ptr.foundry.ontology.entity.exception.ResourceNotFoundException;
 import com.aircas.ptr.foundry.ontology.entity.model.dto.BatchImportDTO;
-import com.aircas.ptr.foundry.ontology.entity.repository.OntologyNodeRepository;
-import com.aircas.ptr.foundry.ontology.entity.repository.OntologyRelationRepository;
+import com.aircas.ptr.foundry.ontology.entity.repository.arangodb.OntologyNodeRepository;
+import com.aircas.ptr.foundry.ontology.entity.repository.arangodb.OntologyRelationRepository;
 import com.arangodb.ArangoCursor;
 import com.arangodb.springframework.core.ArangoOperations;
 import org.slf4j.Logger;

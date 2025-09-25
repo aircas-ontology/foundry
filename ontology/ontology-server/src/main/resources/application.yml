@@ -10,7 +10,7 @@ spring:
     main:
       driver-class-name: org.postgresql.Driver
       #url: jdbc:postgresql://${PG_DB_HOST}:${PG_DB_PORT}/${PG_DB_NAME}?currentSchema=ontology
-      url: jdbc:postgresql://192.168.9.11:35432/postgres?currentSchema=ontology
+      url: jdbc:postgresql://192.168.9.11:35432/postgres?currentSchema=ontology&rewriteBatchedStatements=true
       username: iecas
       password: iecas123
       validation-query: SELECT 1
@@ -68,3 +68,13 @@ entity:
     delete: "http://192.168.9.11:8088/api/ontology/nodes/{node_id}"
     exist: "http://192.168.9.11:8088/api/ontology/nodes/{node_id}"
     batch: "http://192.168.9.11:8088/api/ontology/nodes/batch"
+
+# 调其他服务的接口配置
+client:
+  entity:
+    url-prefix: "http://127.0.0.1:37004/ontology_entity"
+    create-table:  "/table"
+    delete-table: "/table/%s"
+    add-column: "/table/column"
+    delete-column: "/table/column"
+    update-column-relation: "/table/column_relation"

@@ -1,7 +1,7 @@
 package com.aircas.ptr.foundry.ontology.service;
 
 import com.aircas.ptr.foundry.common.base.RestResult;
-import com.aircas.ptr.foundry.model.po.OntologyLinkGroup;
+import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup;
 import com.aircas.ptr.foundry.ontology.model.bo.OntologyLinkGroupBo;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkGraphVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkGroupVO;

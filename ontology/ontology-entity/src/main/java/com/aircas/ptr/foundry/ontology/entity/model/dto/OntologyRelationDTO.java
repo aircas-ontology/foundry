@@ -1,7 +1,7 @@
 package com.aircas.ptr.foundry.ontology.entity.model.dto;
 
 
-import com.aircas.ptr.foundry.ontology.entity.entity.OntologyRelation;
+import com.aircas.ptr.foundry.ontology.entity.model.document.OntologyRelation;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.Data;
 

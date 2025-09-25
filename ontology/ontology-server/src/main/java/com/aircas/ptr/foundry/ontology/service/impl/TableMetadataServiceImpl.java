@@ -1,7 +1,7 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
-import com.aircas.ptr.foundry.model.po.DatasourceTable;
-import com.aircas.ptr.foundry.model.po.TableColumnDesc;
+import com.aircas.ptr.foundry.ontology.model.po.DatasourceTable;
+import com.aircas.ptr.foundry.ontology.model.po.TableColumnDesc;
 import com.aircas.ptr.foundry.ontology.service.TableMetadataService;
 import com.aircas.ptr.foundry.ontology.model.vo.TableColumnDescVO;
 import com.aircas.ptr.foundry.ontology.model.vo.DatasourceTableVO;

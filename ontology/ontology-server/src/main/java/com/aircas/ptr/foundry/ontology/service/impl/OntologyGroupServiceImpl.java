@@ -1,7 +1,7 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
 import com.aircas.ptr.foundry.common.exception.DuplicatedDataException;
-import com.aircas.ptr.foundry.model.po.OntologyGroup;
+import com.aircas.ptr.foundry.ontology.model.po.OntologyGroup;
 import com.aircas.ptr.foundry.ontology.service.OntologyGroupService;
 import com.aircas.ptr.foundry.ontology.service.OntologyLinkGroupService;
 import com.aircas.ptr.foundry.ontology.service.OntologyMetaService;

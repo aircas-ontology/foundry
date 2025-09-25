@@ -31,7 +31,6 @@
         <module>api</module>
         <module>common</module>
         <module>gateway</module>
-        <module>model</module>
         <module>ontology</module>
         <module>server-discover</module>
         <module>sync</module>

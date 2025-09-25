@@ -1,12 +1,9 @@
 package com.aircas.ptr.foundry.ontology.controller.validator;
 
-import com.aircas.ptr.foundry.model.po.OntologyGroup;
+import com.aircas.ptr.foundry.ontology.model.po.OntologyGroup;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyGroupMapper;
-import com.aircas.ptr.foundry.ontology.repository.dao.OntologyMetaMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import org.apache.commons.collections4.CollectionUtils;
-import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.Resource;

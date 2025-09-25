@@ -1,6 +1,6 @@
 package com.aircas.ptr.foundry.ontology.service;
 
-import com.aircas.ptr.foundry.model.po.ActionHandleRule;
+import com.aircas.ptr.foundry.ontology.model.po.ActionHandleRule;
 import com.aircas.ptr.foundry.ontology.model.bo.ActionHandleRuleBO;
 
 import java.util.List;

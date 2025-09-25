@@ -1,6 +1,6 @@
 package com.aircas.ptr.foundry.ontology.entity.config;
 
-import com.aircas.ptr.foundry.ontology.entity.entity.OntologyRelation;
+import com.aircas.ptr.foundry.ontology.entity.model.document.OntologyRelation;
 import org.aspectj.lang.JoinPoint;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.annotation.Before;
@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class RelationInterceptor {
 
-    @Before("execution(* com.aircas.ptr.foundry.ontology.entity.repository.OntologyRelationRepository.save(..)) || " +
+    @Before("execution(* com.aircas.ptr.foundry.ontology.entity.repository.arangodb.OntologyRelationRepository.save(..)) || " +
             "execution(* com.aircas.ptr.foundry.ontology.entity.service.*.createRelation(..))")
     public void validateRelation(JoinPoint joinPoint) {
         Object[] args = joinPoint.getArgs();
