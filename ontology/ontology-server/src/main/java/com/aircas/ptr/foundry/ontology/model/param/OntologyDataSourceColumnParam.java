@@ -18,11 +18,11 @@ import lombok.experimental.SuperBuilder;
 @ApiModel(description = "ontology datasource column param")
 public class OntologyDataSourceColumnParam {
 
-    @ApiModelProperty(name = "columnName",value = "列名", required = true, example = "id")
-    private String columnName;
+    @ApiModelProperty(name = "datasourceColumnName",value = "数据源列名", required = true, example = "id")
+    private String datasourceColumnName;
 
-    @ApiModelProperty(name="columnType", value = "列类型，仅只支持postgresql", required = true, example = "bigint")
-    private PostgresDataTypeEnum columnType;
+    @ApiModelProperty(name="datasourceColumnType", value = "数据源列类型，仅只支持postgresql", required = true, example = "bigint")
+    private PostgresDataTypeEnum datasourceColumnType;
 
     @ApiModelProperty(name="description", value = "列描述", required = true, example = "名称")
     private String description;
@@ -33,8 +33,8 @@ public class OntologyDataSourceColumnParam {
     @ApiModelProperty(name="apiName",value = "在代码里用的属性名称", required = true, example = "name")
     private String apiName;
 
-    @ApiModelProperty(name = "tableName", value = "表名", required = true, example = "xtmb")
-    private String tableName;
+    @ApiModelProperty(name = "datasourceId", value = "数据源表名", required = true, example = "xtmb")
+    private String datasourceId;
 
     @ApiModelProperty(name ="isPrimaryKey",value = "是否为主键", required = true, example = "true")
     private Boolean isPrimaryKey;

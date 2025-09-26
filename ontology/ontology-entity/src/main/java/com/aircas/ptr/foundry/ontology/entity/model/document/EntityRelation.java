@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.entity.model.document;
 
+import com.arangodb.springframework.annotation.ArangoId;
 import com.arangodb.springframework.annotation.Edge;
 import com.arangodb.springframework.annotation.From;
 import com.arangodb.springframework.annotation.To;
@@ -9,32 +10,39 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
 
+import java.util.Date;
 import java.util.Map;
 
 @Data
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-public class OntologyRelation {
+@Edge("relation")
+public class EntityRelation {
+
     @Id
-    private String _id;
+    private String id;
+
+    @ArangoId
+    private String arangoId;
 
     @From
-    private String _from;
+    private EntityNode from;
 
     @To
-    private String _to;
+    private EntityNode to;
 
-    private String _key;
+    //关系类型
     private String type;
-    private Double weight;
-    private Map<String, Object> properties;
-    private Long createTime;
-    private Long updateTime;
+
     private String description;
-    private String source;
-    private Double confidence;
-    private String status;
+
+    private Date createTime;                // 创建时间
+
+    private Date updateTime;                // 更新时间
+
+    private Boolean isDeleted;              // 是否删除
+
 
 
 } 

@@ -1,22 +1,146 @@
 package com.aircas.ptr.foundry.ontology.entity.service.impl;
 
+import com.aircas.ptr.foundry.ontology.entity.converter.ParamDtoConverter;
+import com.aircas.ptr.foundry.ontology.entity.model.document.EntityNode;
+import com.aircas.ptr.foundry.ontology.entity.model.dto.TableCreateDTO;
+import com.aircas.ptr.foundry.ontology.entity.model.param.DataSourceParam;
 import com.aircas.ptr.foundry.ontology.entity.model.param.EntityCreateParam;
+import com.aircas.ptr.foundry.ontology.entity.model.po.EntityPropertyMappingPO;
+import com.aircas.ptr.foundry.ontology.entity.repository.arangodb.EntityNodeRepository;
+import com.aircas.ptr.foundry.ontology.entity.repository.mapper.datalake.DataObjectMapper;
+import com.aircas.ptr.foundry.ontology.entity.repository.mapper.main.EntityPropertyMappingMapper;
+import com.aircas.ptr.foundry.ontology.entity.repository.mapper.main.EntityTableMapper;
+import com.aircas.ptr.foundry.ontology.entity.service.EntityPropertyService;
 import com.aircas.ptr.foundry.ontology.entity.service.EntityTableService;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.var;
+import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.compress.utils.Lists;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
 @Service
-public class EntityTableServiceImpl implements EntityTableService {
+public class EntityTableServiceImpl extends ServiceImpl<EntityTableMapper, Object> implements EntityTableService {
+
+    private EntityPropertyMappingMapper propertyMappingMapper;
+
+    private EntityPropertyService propertyService;
+
+    private EntityTableMapper tableMapper;
+
+    private DataObjectMapper dataObjectMapper;
+
+    private EntityNodeRepository nodeRepository;
 
     @Override
-    @Transactional
+    @Transactional(value = "mainTransactionManager")
     public void createEntities(EntityCreateParam entityCreateParam) {
+
         var primaryDataSource = entityCreateParam.getPrimaryDataSource();
-        var associateDataSources = entityCreateParam.getAssociateDataSources();
-        // 创建实体表
+        List<DataSourceParam> associateDataSources = CollectionUtils.isEmpty(entityCreateParam.getAssociateDataSources()) ?
+                Lists.newArrayList() : entityCreateParam.getAssociateDataSources();
 
-        //
+        // 创建实体表和实体属性表
+        this.createTables(primaryDataSource, associateDataSources);
+        // (异步执行)获取数据源数据,写入数据源数据到实体表和属性表,写入实体节点数据
+        this.insertEntityTables(primaryDataSource, associateDataSources);
 
+    }
+
+    private void createTables(DataSourceParam primaryDataSource, List<DataSourceParam> associateDataSources) {
+        // 创建主实体表
+        var primaryTableName = primaryDataSource.getColumnParamList().get(0).getTableName();
+        var fields = primaryDataSource.getColumnParamList().stream().map(v -> ParamDtoConverter.convert(v)).collect(Collectors.toList());
+
+        var otherDS = associateDataSources.stream().flatMap(list -> list.getColumnParamList().stream()
+                .filter(v -> !v.getIsPrimaryKey() && !v.getIsAssociateKey()))
+                .collect(Collectors.toList());
+        var otherFields = otherDS.stream().map(v -> ParamDtoConverter.convert(v)).collect(Collectors.toList());
+        fields.addAll(otherFields);
+        tableMapper.createTable(TableCreateDTO.builder().fields(fields).tableName(primaryTableName).build());
+
+        // 插入主实体元数据表
+        var primaryProperty = fields.stream().map(v -> ParamDtoConverter.convertToEntityProperty(v)).collect(Collectors.toList());
+        propertyService.saveBatch(primaryProperty);
+
+        // 创建实体其他属性表,插入其他属性表元数据
+        associateDataSources.stream().forEach(ds -> {
+            // 创建实体其他属性表
+            var fieldList = ds.getColumnParamList().stream().map(v -> ParamDtoConverter.convert(v)).collect(Collectors.toList());
+            tableMapper.createTable(TableCreateDTO.builder().fields(fieldList).tableName(fieldList.get(0).getTableName()).build());
+            // 插入其他属性表元数据
+            var entityPropertyList = fieldList.stream().map(v -> ParamDtoConverter.convertToEntityProperty(v)).collect(Collectors.toList());
+            propertyService.saveBatch(entityPropertyList);
+            // 插入实体表关联健
+            var param = ds.getColumnParamList().stream().filter(v -> v.getIsAssociateKey()).findFirst().get();
+            propertyMappingMapper.insert(EntityPropertyMappingPO.builder()
+                    .entityTable(primaryTableName)
+                    .entityPropertyTable(fieldList.get(0).getTableName())
+                    .entityTableKey(param.getPrimaryDataSourceKey())
+                    .entityPropertyTableKey(param.getColumnName())
+                    .build());
+        });
+    }
+
+
+    private void insertEntityTables(DataSourceParam primaryDataSource, List<DataSourceParam> associateDataSources) {
+        //获取主数据源数据
+        var primaryTableName = primaryDataSource.getColumnParamList().get(0).getTableName();
+        var primaryDatasource = primaryDataSource.getColumnParamList().get(0).getDatasourceId();
+        var primaryFieldMap = primaryDataSource.getColumnParamList().stream().collect(Collectors.toMap(v -> v.getDatasourceColumnName(), v -> v.getColumnName()));
+        var primaryData = dataObjectMapper.queryTableDataByColumn(primaryDatasource, primaryFieldMap);
+
+        associateDataSources.stream().forEach(ds -> {
+            //获取其他数据源数据，并插入实体属性表
+            var tableName = ds.getColumnParamList().get(0).getTableName();
+            var datasourceId = ds.getColumnParamList().get(0).getDatasourceId();
+            var filedMap = ds.getColumnParamList().stream().collect(Collectors.toMap(v -> v.getDatasourceColumnName(), v -> v.getColumnName()));
+            List<Map<String, Object>> data = dataObjectMapper.queryTableDataByColumn(datasourceId, filedMap);
+            tableMapper.batchInsertRows(tableName, data);
+
+            //抽取关联的实体表属性值（取最新数据），并整合到主实体表
+            var associate = ds.getColumnParamList().stream().filter(v -> v.getIsAssociateKey()).findFirst().get();
+            // 其他数据源关联健
+            var associateColumn = associate.getColumnName();
+            var firstDataPerGroup = data.stream()
+                    .collect(Collectors.groupingBy(map -> (String) map.get(associateColumn)))
+                    .entrySet().stream()
+                    .collect(Collectors.toMap(
+                            entry -> entry.getKey(),
+                            entry -> entry.getValue().get(0)));
+
+            //查找关联的主表数据列
+            var associateKey = associate.getPrimaryDataSourceKey();
+            var primaryAssociateColumn = primaryDataSource.getColumnParamList().stream().filter(v -> v.getDatasourceColumnName().equals(associateKey)).findFirst().get().getColumnName();
+            //待整合的数据字段
+            var populatedColumn = ds.getColumnParamList().stream().filter(v -> !v.getIsPrimaryKey() && !v.getIsAssociateKey()).map(v -> v.getColumnName()).collect(Collectors.toList());
+            primaryData.forEach(d -> {
+                var value = d.getOrDefault(primaryAssociateColumn, null);
+                if (value != null && firstDataPerGroup.get(value) != null) {
+                    var props = firstDataPerGroup.get(value);
+                    populatedColumn.forEach(col -> d.put(col, props.get(col)));
+                } else {
+                    populatedColumn.forEach(col -> d.put(col, null));
+                }
+            });
+        });
+        //插入主实体表
+        tableMapper.batchInsertRows(primaryTableName, primaryData);
+        //写入实体节点数据
+        var primaryKey = primaryDataSource.getColumnParamList().stream().filter(v->v.getIsPrimaryKey()).findFirst().get().getColumnName();
+        var nodes = primaryData.stream().map(data -> EntityNode.builder()
+                .tableName(primaryTableName)
+                .isDeleted(false)
+                .createTime(new Date())
+                .updateTime(new Date())
+                .primaryKey(data.get(primaryKey))
+                .build())
+                .collect(Collectors.toList());
+        nodeRepository.saveAll(nodes);
     }
 }

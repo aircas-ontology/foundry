@@ -1,10 +1,16 @@
 package com.aircas.ptr.foundry.ontology.entity.config;
 
 import com.arangodb.ArangoDB;
+import com.arangodb.ArangoDatabase;
 import com.arangodb.springframework.annotation.EnableArangoRepositories;
 import com.arangodb.springframework.config.ArangoConfiguration;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
+
+import javax.annotation.PostConstruct;
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Configuration
 @EnableArangoRepositories(basePackages = {"com.aircas.ptr.foundry.ontology.entity.repository.arangodb"})
@@ -21,18 +27,21 @@ public class ArangoConfig implements ArangoConfiguration {
 
     @Value("${spring.data.arangodb.password}")
     private String password;
-    
+
     @Value("${spring.data.arangodb.connections.max:8}")
     private Integer maxConnections;
-    
+
     @Value("${spring.data.arangodb.timeout.connect:5000}")
     private Integer connectTimeout;
-    
+
     @Value("${spring.data.arangodb.timeout.request:10000}")
     private Long requestTimeout;
 
     @Value("${spring.data.arangodb.database}")
     private String database;
+
+    @Value("${spring.data.arangodb.collections}")
+    private String collections;
 
     @Override
     public ArangoDB.Builder arango() {
@@ -50,5 +59,20 @@ public class ArangoConfig implements ArangoConfiguration {
     @Override
     public String database() {
         return database;
+    }
+
+    @PostConstruct
+    public void initCollections() {
+        ArangoDatabase db = arango().build().db(database());
+        List<String> collectionList = Arrays.stream(collections.split(",")).collect(Collectors.toList());
+        if (!db.exists()) {
+            arango().build().createDatabase(database);
+        }
+        collectionList.forEach(v -> {
+            if (!db.collection(v).exists()) {
+                db.createCollection(v);
+            }
+        });
+
     }
 } 

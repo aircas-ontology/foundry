@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.aircas.ptr.foundry.ontology.entity.repository.mapper.main.EntityTableMapper">
+
+    <sql id="tableColumns">
+        <foreach collection="tableDto.fields" item="field" separator=", ">
+            <if test="field.isPrimaryKey">
+                ${field.fieldName} ${field.fieldType} PRIMARY KEY
+            </if>
+            <if test="!field.isPrimaryKey">
+                ${field.fieldName} ${field.fieldType}
+                <if test="!field.isNullable">NOT NULL</if>
+                <if test="field.fieldComment != null and field.fieldComment != ''">
+                    COMMENT ON COLUMN ${tableDto.tableName}.${field.fieldName} IS '${field.fieldComment}'
+                </if>
+            </if>
+        </foreach>
+    </sql>
+
+    <insert id="createTable">
+        CREATE TABLE ${tableDto.tableName}
+        (
+        <include refid="tableColumns" />
+        );
+        <if test="tableDto.tableComment != null and tableDto.tableComment != ''">
+            COMMENT ON TABLE ${tableDto.tableName} IS '${tableDto.tableComment}';
+        </if>
+    </insert>
+
+
+    <insert id="batchInsertRows">
+        INSERT INTO ${tableName} (
+        <foreach item="column" collection="rows[0].keySet" separator=", ">
+            ${column}
+        </foreach>
+        )
+        VALUES
+        <foreach item="row" collection="rows" separator=", ">
+            (
+            <foreach item="value" index="column" collection="row" separator=", ">
+                #{row[${column}]}
+            </foreach>
+            )
+        </foreach>
+    </insert>
+
+</mapper>

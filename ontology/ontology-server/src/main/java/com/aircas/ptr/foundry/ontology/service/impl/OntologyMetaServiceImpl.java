@@ -89,11 +89,11 @@ public class OntologyMetaServiceImpl implements OntologyMetaService {
                 //1 创建本体元数据
                 var primaryDataSource = ontologyCreateParam.getPrimaryDataSource();
                 PreconditionUtils.checkArgument(primaryDataSource != null && CollectionUtils.isNotEmpty(primaryDataSource.getColumnParamList()), "primaryDataSource is null");
-                var primaryTableName = primaryDataSource.getColumnParamList().get(0).getTableName();
+                var primaryTableName = primaryDataSource.getColumnParamList().get(0).getDatasourceId();
                 meta.setBackingDatasourceId(primaryTableName);
                 var associateDataSources = ontologyCreateParam.getAssociateDataSources();
                 if (CollectionUtils.isNotEmpty(associateDataSources)) {
-                    var dataSources = associateDataSources.stream().map(ds -> ds.getColumnParamList().get(0).getTableName()).collect(Collectors.toList());
+                    var dataSources = associateDataSources.stream().map(ds -> ds.getColumnParamList().get(0).getDatasourceId()).collect(Collectors.toList());
                     meta.setOtherDatasourceId(String.join(",", dataSources));
                 }
                 //2 创建本体属性
@@ -125,9 +125,12 @@ public class OntologyMetaServiceImpl implements OntologyMetaService {
                 ontologyPropertyService.saveBatch(properties);
                 //创建实体表、实体数据和实体节点
                 entityClient.createTableAndEntities(EntityCreateParam.builder()
-                        .primaryDataSource(ClientParamConverter.convert(primaryDataSource))
+                        .primaryDataSource(ClientParamConverter.convert(primaryDataSource, ontologyCreateParam.getApiName()))
                         .associateDataSources(CollectionUtils.isNotEmpty(associateDataSources) ?
-                                associateDataSources.stream().map(ClientParamConverter::convert).collect(Collectors.toList()) : null)
+                                associateDataSources.stream()
+                                        .map(v -> ClientParamConverter.convert(v, ontologyCreateParam.getApiName() + "_" + v.getColumnParamList().get(0).getDatasourceId()))
+                                        .collect(Collectors.toList())
+                                : null)
                         .build());
                 break;
 

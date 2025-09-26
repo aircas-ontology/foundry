@@ -12,12 +12,15 @@ import lombok.experimental.SuperBuilder;
 @SuperBuilder
 @NoArgsConstructor
 @AllArgsConstructor
-@TableName(value = "document")
-public class EntityPO extends BasePO{
+@TableName(value = "entity_property")
+public class EntityPropertyPO extends BasePO{
 
     private String datasourceColumnName;
 
     private String datasourceId;
 
     private String tableName;
+
+    private String tableColumnName;
+
 }

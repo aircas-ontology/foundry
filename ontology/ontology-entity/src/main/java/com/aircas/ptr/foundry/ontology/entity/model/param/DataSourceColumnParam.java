@@ -28,6 +28,12 @@ public class DataSourceColumnParam {
     @ApiModelProperty(name = "tableName",value = "表名", required = true, example = "xtmb")
     private String tableName;
 
+    @ApiModelProperty(name = "datasourceId",value = "数据源表名", required = true, example = "xtmb")
+    private String datasourceId;
+
+    @ApiModelProperty(name = "datasourceColumnName",value = "数据源列名", required = true, example = "name")
+    private String datasourceColumnName;
+
     @ApiModelProperty(name ="primaryKey",value = "主键的列名，必须存在于选择的列参数中", required = true, example = "id")
     private Boolean isPrimaryKey;
 

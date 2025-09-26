@@ -1,23 +1,18 @@
 package com.aircas.ptr.foundry.ontology.entity.model.dto;
 
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.List;
-
 @Data
+@Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@Builder
-public class TableCreateDTO {
+public class RowDTO {
 
-    private String tableName;
+    private String columnName;
 
-    private String datasourceId;
-
-    private String tableComment;
-
-    private List<FieldDTO> fields;
-} 
+    private Object columnValue;
+}

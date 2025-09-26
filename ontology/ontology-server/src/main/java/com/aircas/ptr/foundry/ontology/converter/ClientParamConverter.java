@@ -10,7 +10,7 @@ import java.util.stream.Collectors;
 
 public class ClientParamConverter {
 
-    public static DataSourceParam convert(OntologyDatasourceParam param) {
+    public static DataSourceParam convert(OntologyDatasourceParam param, String tableName) {
 
         if (param == null || CollectionUtils.isEmpty(param.getColumnParamList())) {
             return null;
@@ -18,12 +18,14 @@ public class ClientParamConverter {
 
         var columnParamList = param.getColumnParamList().stream().map(v -> DataSourceColumnParam.builder()
                 .columnName(v.getApiName())
-                .columnType(v.getColumnType().getValue())
+                .columnType(v.getDatasourceColumnType().getValue())
                 .description(v.getDescription())
                 .isAssociateKey(v.getIsAssociateKey())
                 .isPrimaryKey(v.getIsPrimaryKey())
                 .primaryDataSourceKey(v.getPrimaryDataSourceKey())
-                .tableName(v.getTableName())
+                .tableName(tableName)
+                .datasourceId(v.getDatasourceId())
+                .datasourceColumnName(v.getDatasourceColumnName())
                 .build())
                 .collect(Collectors.toList());
 

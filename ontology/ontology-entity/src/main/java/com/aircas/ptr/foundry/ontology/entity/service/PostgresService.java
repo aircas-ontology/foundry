@@ -2,6 +2,7 @@ package com.aircas.ptr.foundry.ontology.entity.service;
 
 
 import com.aircas.ptr.foundry.ontology.entity.exception.ResourceNotFoundException;
+import com.aircas.ptr.foundry.ontology.entity.model.dto.FieldDTO;
 import com.aircas.ptr.foundry.ontology.entity.model.dto.TableCreateDTO;
 import com.aircas.ptr.foundry.ontology.entity.model.dto.TableQueryDTO;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,7 +34,7 @@ public class PostgresService {
 
         // 添加字段定义
         List<String> columnDefinitions = new ArrayList<>();
-        for (TableCreateDTO.FieldDTO field : tableInfo.getFields()) {
+        for (FieldDTO field : tableInfo.getFields()) {
             StringBuilder columnDef = new StringBuilder();
             columnDef.append(field.getFieldName())
                     .append(" ")
@@ -72,7 +73,7 @@ public class PostgresService {
         }
 
         // 添加字段注释
-        for (TableCreateDTO.FieldDTO field : tableInfo.getFields()) {
+        for (FieldDTO field : tableInfo.getFields()) {
             if (field.getFieldComment() != null && !field.getFieldComment().isEmpty()) {
                 String columnCommentSql = String.format(
                         "COMMENT ON COLUMN %s.%s IS '%s'",
@@ -134,14 +135,14 @@ public class PostgresService {
     }
 
     @Transactional
-    public void alterTable(String tableName, List<TableCreateDTO.FieldDTO> addColumns,
-                           List<String> dropColumns, List<TableCreateDTO.FieldDTO> modifyColumns) {
+    public void alterTable(String tableName, List<FieldDTO> addColumns,
+                           List<String> dropColumns, List<FieldDTO> modifyColumns) {
         if (!isTableExists(tableName)) {
             throw new RuntimeException("表 " + tableName + " 不存在");
         }
 
         // 添加新列
-        for (TableCreateDTO.FieldDTO column : addColumns) {
+        for (FieldDTO column : addColumns) {
             String addColumnSql = String.format("ALTER TABLE %s ADD COLUMN %s %s",
                     tableName, column.getFieldName(), column.getFieldType());
             if (!column.isNullable()) {
@@ -169,7 +170,7 @@ public class PostgresService {
         }
 
         // 修改列
-        for (TableCreateDTO.FieldDTO column : modifyColumns) {
+        for (FieldDTO column : modifyColumns) {
             String modifyColumnSql = String.format("ALTER TABLE %s ALTER COLUMN %s TYPE %s",
                     tableName, column.getFieldName(), column.getFieldType());
             jdbcTemplate.execute(modifyColumnSql);

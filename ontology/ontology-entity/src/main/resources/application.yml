@@ -9,7 +9,8 @@ spring:
     arangodb:
       host: 192.168.9.11
       port: 8529
-      database: ontology
+      database: entity
+      collections: node,relation
       user: root
       password: root
       connections:
@@ -18,6 +19,7 @@ spring:
       timeout:
         connect: 5000
         request: 10000
+
   mvc:
     pathmatch:
       matching-strategy: ant_path_matcher
