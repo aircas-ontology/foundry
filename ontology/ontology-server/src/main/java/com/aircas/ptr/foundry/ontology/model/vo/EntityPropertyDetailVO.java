@@ -8,15 +8,17 @@ import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
 
+import java.util.List;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @SuperBuilder
 @Accessors(chain = true)
-@ApiModel(value = "实体属性值VO")
-public class EntityPropertyVO extends OntologyPropertyInfoVO {
+@ApiModel(value = "实体属性详情VO")
+public class EntityPropertyDetailVO extends OntologyPropertyInfoVO {
 
-    @ApiModelProperty(name = "propertyValue", value = "属性值", example = "123")
-    private Object propertyValue;
+    @ApiModelProperty(name = "propertyValues", value = "属性值列表（包含历史数据）", example = "[123,456]")
+    private List<Object> propertyValues;
 
 }

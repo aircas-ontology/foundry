@@ -2,7 +2,7 @@ package com.aircas.ptr.foundry.ontology.client;
 
 import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.common.util.HttpUtil;
-import com.aircas.ptr.foundry.ontology.client.param.EntityCreateParam;
+import com.aircas.ptr.foundry.ontology.common.param.EntityCreateParam;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;

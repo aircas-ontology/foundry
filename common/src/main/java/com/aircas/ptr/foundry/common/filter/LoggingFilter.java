@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.common.filter;
 
+import com.aircas.ptr.foundry.common.filter.CachableHttpServletRequest;
 import com.aircas.ptr.foundry.common.util.IdGenerator;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;

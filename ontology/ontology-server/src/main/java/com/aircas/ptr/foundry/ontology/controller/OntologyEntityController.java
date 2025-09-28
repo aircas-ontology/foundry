@@ -50,7 +50,7 @@ public class OntologyEntityController {
 
 
     @GetMapping
-    @ApiOperation(value = "根据实体主键查询某实体的所有属性")
+    @ApiOperation(value = "根据实体主键查询某实体的所有属性详情")
     public RestResult<EntityInfoVO> queryEntityByPrimaryKey(@RequestParam(required = true, name = "ontologyUniqueIdentifier") @ApiParam(name = "ontologyUniqueIdentifier", value = "本体id") String ontologyUniqueIdentifier,
                                                             @RequestParam(required = true, name = "entityPrimaryKey") @ApiParam(name = "entityPrimaryKey", value = "实体primary key") String entityPrimaryKey) {
         return RestResult.success();

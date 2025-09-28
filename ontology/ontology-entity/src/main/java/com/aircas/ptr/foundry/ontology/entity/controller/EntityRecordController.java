@@ -2,8 +2,8 @@ package com.aircas.ptr.foundry.ontology.entity.controller;
 
 
 import com.aircas.ptr.foundry.common.base.RestResult;
-import com.aircas.ptr.foundry.ontology.entity.model.param.EntityRecordParam;
-import com.aircas.ptr.foundry.ontology.entity.model.vo.EntityVO;
+import com.aircas.ptr.foundry.ontology.common.param.EntityRecordParam;
+import com.aircas.ptr.foundry.ontology.common.vo.EntityVO;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import org.springframework.web.bind.annotation.*;

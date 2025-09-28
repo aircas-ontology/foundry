@@ -1,8 +1,5 @@
 package com.aircas.ptr.foundry.ontology.model.po;
 
-import java.io.Serializable;
-import java.util.Date;
-
 import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import com.baomidou.mybatisplus.annotation.FieldFill;
 import com.baomidou.mybatisplus.annotation.TableField;
@@ -13,9 +10,13 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 
+import java.io.Serializable;
+import java.util.Date;
+
 /**
  * ontology_property
- * @author 
+ *
+ * @author
  */
 @Data
 @Builder
@@ -101,6 +102,16 @@ public class OntologyProperty implements Serializable {
      * 是否为名称键，将该属性作为本体的显示名称，1是0否
      */
     private Integer isTitleKey;
+
+    /**
+     * 是否为其他数据源关联键
+     */
+    private Integer isAssociateKey;
+
+    /**
+     * 关联的主数据源的列名
+     */
+    private String associateDatasourceColumnName;
 
     /**
      * 数据源ID

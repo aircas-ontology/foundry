@@ -1,7 +1,6 @@
-package com.aircas.ptr.foundry.ontology.entity.model.param;
+package com.aircas.ptr.foundry.ontology.common.param;
 
 
-import com.aircas.ptr.foundry.common.constant.PostgresDataTypeEnum;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.AllArgsConstructor;

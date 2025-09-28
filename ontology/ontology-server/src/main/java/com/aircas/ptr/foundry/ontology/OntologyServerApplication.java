@@ -7,7 +7,7 @@ import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
 import org.springframework.context.ApplicationContext;
 import tk.mybatis.mapper.autoconfigure.MapperAutoConfiguration;
 
-@SpringBootApplication(scanBasePackages = "com.aircas.ptr.foundry.ontology", exclude = {DataSourceAutoConfiguration.class, DruidDataSourceAutoConfigure.class, MapperAutoConfiguration.class})
+@SpringBootApplication(scanBasePackages = "com.aircas.ptr.foundry", exclude = {DataSourceAutoConfiguration.class, DruidDataSourceAutoConfigure.class, MapperAutoConfiguration.class})
 public class OntologyServerApplication {
 
     public static ApplicationContext context;

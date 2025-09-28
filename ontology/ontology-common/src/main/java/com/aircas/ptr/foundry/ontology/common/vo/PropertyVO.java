@@ -1,7 +1,6 @@
-package com.aircas.ptr.foundry.ontology.entity.model.vo;
+package com.aircas.ptr.foundry.ontology.common.vo;
 
 
-import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import com.aircas.ptr.foundry.common.constant.PostgresDataTypeEnum;
 import lombok.AllArgsConstructor;
 import lombok.Builder;

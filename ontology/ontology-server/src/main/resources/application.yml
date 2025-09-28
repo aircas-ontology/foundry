@@ -28,11 +28,11 @@ spring:
 #    map-underscore-to-camel-case: true
 #  mapper-locations: classpath*:/mybatis-mapper/*Mapper.xml
 
-mybatis-plus:
-  configuration:
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
-    map-underscore-to-camel-case: true
-    cache-enabled: false
+#mybatis-plus:
+#  configuration:
+#    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+#    map-underscore-to-camel-case: true
+#    cache-enabled: false
 
 
 #eureka:

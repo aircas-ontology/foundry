@@ -1,7 +1,8 @@
 package com.aircas.ptr.foundry.ontology.entity.converter;
 
+import com.aircas.ptr.foundry.common.constant.Status;
+import com.aircas.ptr.foundry.ontology.common.param.DataSourceColumnParam;
 import com.aircas.ptr.foundry.ontology.entity.model.dto.FieldDTO;
-import com.aircas.ptr.foundry.ontology.entity.model.param.DataSourceColumnParam;
 import com.aircas.ptr.foundry.ontology.entity.model.po.EntityPropertyPO;
 
 public class ParamDtoConverter {
@@ -25,6 +26,7 @@ public class ParamDtoConverter {
                 .tableColumnName(v.getFieldName())
                 .datasourceColumnName(v.getDatasourceColumnName())
                 .datasourceId(v.getDatasourceId())
+                .status(Status.ENABLE.getValue())
                 .build();
     }
 }

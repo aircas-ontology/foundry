@@ -2,10 +2,11 @@ package com.aircas.ptr.foundry.ontology.service.impl;
 
 import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import com.aircas.ptr.foundry.common.constant.Status;
+import com.aircas.ptr.foundry.common.constant.Visibility;
 import com.aircas.ptr.foundry.common.util.IdGenerator;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.ontology.client.EntityClient;
-import com.aircas.ptr.foundry.ontology.client.param.EntityCreateParam;
+import com.aircas.ptr.foundry.ontology.common.param.EntityCreateParam;
 import com.aircas.ptr.foundry.ontology.converter.ClientParamConverter;
 import com.aircas.ptr.foundry.ontology.converter.ParamToEntityConverter;
 import com.aircas.ptr.foundry.ontology.model.bo.OntologyMetaBO;
@@ -107,13 +108,18 @@ public class OntologyMetaServiceImpl implements OntologyMetaService {
                     associateDataSources.stream().forEach(ds -> {
                         var associateKey = ds.getColumnParamList().stream().filter(v -> v.getIsAssociateKey()).findFirst().orElse(null);
                         PreconditionUtils.checkArgument(associateKey != null &&
-                                properties.stream().anyMatch(v -> v.getDatasourceColumnName().equals(associateKey.getPrimaryDataSourceKey())), "找不到关联健或者关联的属性错误");
+                                properties.stream().anyMatch(v -> v.getDatasourceColumnName().equals(associateKey.getAssociateDatasourceColumnName())), "找不到关联健或者关联的属性错误");
                     });
                     //生成属性表数据
                     var otherProps = associateDataSources.stream()
-                            .flatMap(ds -> ds.getColumnParamList().stream().filter(v -> !v.getIsPrimaryKey() && !v.getIsAssociateKey()))
+                            .flatMap(ds -> ds.getColumnParamList().stream().map(v -> {
+                                if (v.getIsPrimaryKey() || v.getIsAssociateKey()) {
+                                    return ParamToEntityConverter.convert(v).setVisibility(Visibility.HIDDEN.getValue());
+                                }
+                                return ParamToEntityConverter.convert(v);
+                            }))
                             .collect(Collectors.toList());
-                    properties.addAll(otherProps.stream().map(ParamToEntityConverter::convert).collect(Collectors.toList()));
+                    properties.addAll(otherProps);
                 }
                 //校验property apiName是否有冲突
                 PreconditionUtils.checkArgument(properties.stream()

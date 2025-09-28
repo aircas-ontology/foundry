@@ -1,9 +1,9 @@
 package com.aircas.ptr.foundry.ontology.entity.controller;
 
 import com.aircas.ptr.foundry.common.base.RestResult;
-import com.aircas.ptr.foundry.ontology.entity.model.param.DataSourceParam;
-import com.aircas.ptr.foundry.ontology.entity.model.param.EntityCreateParam;
-import com.aircas.ptr.foundry.ontology.entity.model.param.TableColumnRelationUpdateParam;
+import com.aircas.ptr.foundry.ontology.common.param.DataSourceParam;
+import com.aircas.ptr.foundry.ontology.common.param.EntityCreateParam;
+import com.aircas.ptr.foundry.ontology.common.param.TableColumnRelationUpdateParam;
 import com.aircas.ptr.foundry.ontology.entity.service.EntityTableService;
 import com.aircas.ptr.foundry.ontology.entity.service.PostgresService;
 import io.swagger.annotations.*;

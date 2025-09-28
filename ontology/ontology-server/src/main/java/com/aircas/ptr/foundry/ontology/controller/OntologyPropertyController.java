@@ -2,6 +2,8 @@ package com.aircas.ptr.foundry.ontology.controller;
 
 import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.model.param.*;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologyDatasourcePropertyVO;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyDetailVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyInfoVO;
 import com.aircas.ptr.foundry.ontology.service.OntologyPropertyService;
 import io.swagger.annotations.Api;
@@ -23,7 +25,7 @@ public class OntologyPropertyController {
 
     @PostMapping("/create_datasource")
     @ApiOperation(value = "新增数据源")
-    public RestResult createDatasource(@RequestBody @Valid OntologyDataSourceCreateParamOntology dataSourceCreateParam) {
+    public RestResult createDatasource(@RequestBody @Valid OntologyDataSourceCreateParam dataSourceCreateParam) {
         return RestResult.success();
     }
 
@@ -54,9 +56,15 @@ public class OntologyPropertyController {
         return RestResult.success();
     }
 
-    @GetMapping
-    @ApiOperation(value = "根据本体identifier查询本体属性列表")
-    public RestResult<List<OntologyPropertyInfoVO>> getOntologyById(@RequestParam(required = true, name = "ontologyUniqueIdentifier") @ApiParam(value = "本体uniqueIdentifier", required = true) String ontologyUniqueIdentifier) {
+    @GetMapping("/info/list")
+    @ApiOperation(value = "根据本体identifier查询本体属性列表(用于展示)")
+    public RestResult<List<OntologyPropertyInfoVO>> getPropertyInfoByOntologyId(@RequestParam(required = true, name = "ontologyUniqueIdentifier") @ApiParam(value = "本体uniqueIdentifier", required = true) String ontologyUniqueIdentifier) {
+        return RestResult.ofData(null);
+    }
+
+    @GetMapping("/detail/list")
+    @ApiOperation(value = "根据本体identifier查询本体属性详细（用于编辑属性）")
+    public RestResult<OntologyDatasourcePropertyVO> getPropertyDetailByOntologyId(@RequestParam(required = true, name = "ontologyUniqueIdentifier") @ApiParam(value = "本体uniqueIdentifier", required = true) String ontologyUniqueIdentifier) {
         return RestResult.ofData(null);
     }
 

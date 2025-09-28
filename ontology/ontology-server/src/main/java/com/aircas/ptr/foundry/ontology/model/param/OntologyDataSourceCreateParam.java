@@ -17,7 +17,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @ApiModel(description = "Ontology DataSourceCreate Param")
-public class OntologyDataSourceCreateParamOntology extends OntologyIdentifierParam {
+public class OntologyDataSourceCreateParam extends OntologyIdentifierParam {
 
     @ApiModelProperty(name = "primaryDataSource", value = "本体对应主数据源", dataType = "OntologyPrimaryDataSourceParam", required = true)
     @NotNull(message = "primaryDataSource is null")

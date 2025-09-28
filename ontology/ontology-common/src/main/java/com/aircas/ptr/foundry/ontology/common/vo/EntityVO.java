@@ -1,4 +1,4 @@
-package com.aircas.ptr.foundry.ontology.client.vo;
+package com.aircas.ptr.foundry.ontology.common.vo;
 
 
 import lombok.AllArgsConstructor;

@@ -1,10 +1,10 @@
 package com.aircas.ptr.foundry.ontology.entity.service.impl;
 
+import com.aircas.ptr.foundry.ontology.common.param.DataSourceParam;
+import com.aircas.ptr.foundry.ontology.common.param.EntityCreateParam;
 import com.aircas.ptr.foundry.ontology.entity.converter.ParamDtoConverter;
 import com.aircas.ptr.foundry.ontology.entity.model.document.EntityNode;
 import com.aircas.ptr.foundry.ontology.entity.model.dto.TableCreateDTO;
-import com.aircas.ptr.foundry.ontology.entity.model.param.DataSourceParam;
-import com.aircas.ptr.foundry.ontology.entity.model.param.EntityCreateParam;
 import com.aircas.ptr.foundry.ontology.entity.model.po.EntityPropertyMappingPO;
 import com.aircas.ptr.foundry.ontology.entity.repository.arangodb.EntityNodeRepository;
 import com.aircas.ptr.foundry.ontology.entity.repository.mapper.datalake.DataObjectMapper;
@@ -13,6 +13,7 @@ import com.aircas.ptr.foundry.ontology.entity.repository.mapper.main.EntityTable
 import com.aircas.ptr.foundry.ontology.entity.service.EntityPropertyService;
 import com.aircas.ptr.foundry.ontology.entity.service.EntityTableService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import lombok.RequiredArgsConstructor;
 import lombok.var;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.compress.utils.Lists;
@@ -25,17 +26,18 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
+@RequiredArgsConstructor
 public class EntityTableServiceImpl extends ServiceImpl<EntityTableMapper, Object> implements EntityTableService {
 
-    private EntityPropertyMappingMapper propertyMappingMapper;
+    private final EntityPropertyMappingMapper propertyMappingMapper;
 
-    private EntityPropertyService propertyService;
+    private final EntityPropertyService propertyService;
 
-    private EntityTableMapper tableMapper;
+    private final EntityTableMapper tableMapper;
 
-    private DataObjectMapper dataObjectMapper;
+    private final DataObjectMapper dataObjectMapper;
 
-    private EntityNodeRepository nodeRepository;
+    private final EntityNodeRepository nodeRepository;
 
     @Override
     @Transactional(value = "mainTransactionManager")
@@ -47,7 +49,8 @@ public class EntityTableServiceImpl extends ServiceImpl<EntityTableMapper, Objec
 
         // 创建实体表和实体属性表
         this.createTables(primaryDataSource, associateDataSources);
-        // (异步执行)获取数据源数据,写入数据源数据到实体表和属性表,写入实体节点数据
+        // 获取数据源数据,写入数据源数据到实体表和属性表,写入实体节点数据
+        // todo 改成异步执行,失败重试确保实体最终插入
         this.insertEntityTables(primaryDataSource, associateDataSources);
 
     }
@@ -60,7 +63,7 @@ public class EntityTableServiceImpl extends ServiceImpl<EntityTableMapper, Objec
         var otherDS = associateDataSources.stream().flatMap(list -> list.getColumnParamList().stream()
                 .filter(v -> !v.getIsPrimaryKey() && !v.getIsAssociateKey()))
                 .collect(Collectors.toList());
-        var otherFields = otherDS.stream().map(v -> ParamDtoConverter.convert(v)).collect(Collectors.toList());
+        var otherFields = otherDS.stream().map(v -> ParamDtoConverter.convert(v).setTableName(primaryTableName)).collect(Collectors.toList());
         fields.addAll(otherFields);
         tableMapper.createTable(TableCreateDTO.builder().fields(fields).tableName(primaryTableName).build());
 
@@ -78,10 +81,13 @@ public class EntityTableServiceImpl extends ServiceImpl<EntityTableMapper, Objec
             propertyService.saveBatch(entityPropertyList);
             // 插入实体表关联健
             var param = ds.getColumnParamList().stream().filter(v -> v.getIsAssociateKey()).findFirst().get();
+            var entityTableKey = primaryDataSource.getColumnParamList().stream()
+                    .filter(v -> v.getDatasourceColumnName().equals(param.getAssociateDatasourceColumnName()))
+                    .findFirst().get().getColumnName();
             propertyMappingMapper.insert(EntityPropertyMappingPO.builder()
                     .entityTable(primaryTableName)
                     .entityPropertyTable(fieldList.get(0).getTableName())
-                    .entityTableKey(param.getPrimaryDataSourceKey())
+                    .entityTableKey(entityTableKey)
                     .entityPropertyTableKey(param.getColumnName())
                     .build());
         });
@@ -108,14 +114,14 @@ public class EntityTableServiceImpl extends ServiceImpl<EntityTableMapper, Objec
             // 其他数据源关联健
             var associateColumn = associate.getColumnName();
             var firstDataPerGroup = data.stream()
-                    .collect(Collectors.groupingBy(map -> (String) map.get(associateColumn)))
+                    .collect(Collectors.groupingBy(map -> map.get(associateColumn)))
                     .entrySet().stream()
                     .collect(Collectors.toMap(
                             entry -> entry.getKey(),
                             entry -> entry.getValue().get(0)));
 
             //查找关联的主表数据列
-            var associateKey = associate.getPrimaryDataSourceKey();
+            var associateKey = associate.getAssociateDatasourceColumnName();
             var primaryAssociateColumn = primaryDataSource.getColumnParamList().stream().filter(v -> v.getDatasourceColumnName().equals(associateKey)).findFirst().get().getColumnName();
             //待整合的数据字段
             var populatedColumn = ds.getColumnParamList().stream().filter(v -> !v.getIsPrimaryKey() && !v.getIsAssociateKey()).map(v -> v.getColumnName()).collect(Collectors.toList());
@@ -132,7 +138,7 @@ public class EntityTableServiceImpl extends ServiceImpl<EntityTableMapper, Objec
         //插入主实体表
         tableMapper.batchInsertRows(primaryTableName, primaryData);
         //写入实体节点数据
-        var primaryKey = primaryDataSource.getColumnParamList().stream().filter(v->v.getIsPrimaryKey()).findFirst().get().getColumnName();
+        var primaryKey = primaryDataSource.getColumnParamList().stream().filter(v -> v.getIsPrimaryKey()).findFirst().get().getColumnName();
         var nodes = primaryData.stream().map(data -> EntityNode.builder()
                 .tableName(primaryTableName)
                 .isDeleted(false)

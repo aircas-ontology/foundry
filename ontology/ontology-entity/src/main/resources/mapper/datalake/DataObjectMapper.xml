@@ -21,16 +21,16 @@
     </select>
 
     <select id="queryTableData" resultType="java.util.HashMap">
-        SELECT * FROM ${tableName} ORDER BY id DESC;
+        SELECT * FROM ${tableName} ORDER BY "id" DESC;
     </select>
 
     <select id="queryTableDataByColumn" resultType="java.util.Map">
         SELECT
         <foreach item="value" index="key" collection="columnNames" separator=", ">
-            ${key} AS ${value}
+            "${key}" AS ${value}
         </foreach>
         FROM ${tableName}
-        ORDER BY id DESC;
+        ORDER BY "id" DESC;
     </select>
 
 

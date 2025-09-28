@@ -1,4 +1,4 @@
-package com.aircas.ptr.foundry.ontology.client.param;
+package com.aircas.ptr.foundry.ontology.common.param;
 
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
@@ -40,6 +40,6 @@ public class DataSourceColumnParam {
     @ApiModelProperty(name = "isAssociateKey", value = "是否为与主数据源关联的列名，必须存在于选择的列参数中", required = true, example = "id")
     private Boolean isAssociateKey;
 
-    @ApiModelProperty(name = "primaryDataSourceKey", value = "关联的主数据源表的列名，必须存在于主数据源表的列中", required = true, example = "id")
-    private String primaryDataSourceKey;
+    @ApiModelProperty(name = "associateDatasourceColumnName", value = "关联的主数据源表的列名，必须存在于主数据源表的列中", required = true, example = "id")
+    private String associateDatasourceColumnName;
 }

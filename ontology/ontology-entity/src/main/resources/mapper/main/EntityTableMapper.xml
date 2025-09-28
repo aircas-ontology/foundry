@@ -10,9 +10,6 @@
             <if test="!field.isPrimaryKey">
                 ${field.fieldName} ${field.fieldType}
                 <if test="!field.isNullable">NOT NULL</if>
-                <if test="field.fieldComment != null and field.fieldComment != ''">
-                    COMMENT ON COLUMN ${tableDto.tableName}.${field.fieldName} IS '${field.fieldComment}'
-                </if>
             </if>
         </foreach>
     </sql>
@@ -24,6 +21,13 @@
         );
         <if test="tableDto.tableComment != null and tableDto.tableComment != ''">
             COMMENT ON TABLE ${tableDto.tableName} IS '${tableDto.tableComment}';
+        </if>
+        <if test="tableDto.fields != null and tableDto.fields.size() > 0">
+            <foreach collection="tableDto.fields" item="field" separator=";">
+                <if test="field.fieldComment != null and field.fieldComment != ''">
+                    COMMENT ON COLUMN ${tableDto.tableName}.${field.fieldName} IS '${field.fieldComment}';
+                </if>
+            </foreach>
         </if>
     </insert>
 
@@ -37,11 +41,12 @@
         VALUES
         <foreach item="row" collection="rows" separator=", ">
             (
-            <foreach item="value" index="column" collection="row" separator=", ">
-                #{row[${column}]}
+            <foreach item="value" index="column" collection="row.entrySet()" separator=", ">
+                #{value}
             </foreach>
             )
         </foreach>
+        ON CONFLICT DO NOTHING;
     </insert>
 
 </mapper>

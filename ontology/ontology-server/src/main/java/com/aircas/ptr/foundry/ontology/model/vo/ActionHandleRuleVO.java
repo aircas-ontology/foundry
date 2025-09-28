@@ -1,6 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.vo;
 
-import com.aircas.ptr.foundry.common.constant.ActionRuleConnectType;
+import com.aircas.ptr.foundry.common.constant.*;
 import com.aircas.ptr.foundry.ontology.model.param.ActionHandleRuleAddParam;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;

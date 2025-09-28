@@ -1,6 +1,5 @@
 package com.aircas.ptr.foundry.common.exception;
 
-import com.aircas.ptr.foundry.common.base.ApiResult;
 import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.common.base.ResultCode;
 import lombok.extern.slf4j.Slf4j;

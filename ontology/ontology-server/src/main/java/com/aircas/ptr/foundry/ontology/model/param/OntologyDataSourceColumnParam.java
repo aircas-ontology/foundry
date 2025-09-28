@@ -42,11 +42,9 @@ public class OntologyDataSourceColumnParam {
     @ApiModelProperty(name ="isTitleKey",value = "是否为名称键", required = true, example = "true")
     private Boolean isTitleKey;
 
-    @ApiModelProperty(value = "是否为与主数据源关联的列名", example = "false")
+    @ApiModelProperty(name = "isAssociateKey", value = "是否为与主数据源关联的列名", example = "false")
     private Boolean isAssociateKey;
 
-    @ApiModelProperty(value = "关联的主数据源表的列名，必须存在于主数据源表的列中", example = "id")
-    private String primaryDataSourceKey;
-
-
+    @ApiModelProperty(name = "associateDatasourceColumnName", value = "关联的主数据源表的列名，必须存在于主数据源表的列中", example = "id")
+    private String associateDatasourceColumnName;
 }
