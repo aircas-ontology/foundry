@@ -1,17 +1,22 @@
 package com.aircas.ptr.foundry.ontology.entity.service.impl;
 
 import com.aircas.ptr.foundry.ontology.common.param.DataSourceParam;
+import com.aircas.ptr.foundry.ontology.common.param.EntityCopyParam;
 import com.aircas.ptr.foundry.ontology.common.param.EntityCreateParam;
 import com.aircas.ptr.foundry.ontology.entity.converter.ParamDtoConverter;
 import com.aircas.ptr.foundry.ontology.entity.model.document.EntityNode;
+import com.aircas.ptr.foundry.ontology.entity.model.document.EntityRelation;
 import com.aircas.ptr.foundry.ontology.entity.model.dto.TableCreateDTO;
 import com.aircas.ptr.foundry.ontology.entity.model.po.EntityPropertyMappingPO;
+import com.aircas.ptr.foundry.ontology.entity.model.po.EntityPropertyPO;
 import com.aircas.ptr.foundry.ontology.entity.repository.arangodb.EntityNodeRepository;
+import com.aircas.ptr.foundry.ontology.entity.repository.arangodb.EntityRelationRepository;
 import com.aircas.ptr.foundry.ontology.entity.repository.mapper.datalake.DataObjectMapper;
-import com.aircas.ptr.foundry.ontology.entity.repository.mapper.main.EntityPropertyMappingMapper;
 import com.aircas.ptr.foundry.ontology.entity.repository.mapper.main.EntityTableMapper;
+import com.aircas.ptr.foundry.ontology.entity.service.EntityPropertyMappingService;
 import com.aircas.ptr.foundry.ontology.entity.service.EntityPropertyService;
 import com.aircas.ptr.foundry.ontology.entity.service.EntityTableService;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.RequiredArgsConstructor;
 import lombok.var;
@@ -23,13 +28,14 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class EntityTableServiceImpl extends ServiceImpl<EntityTableMapper, Object> implements EntityTableService {
 
-    private final EntityPropertyMappingMapper propertyMappingMapper;
+    private final EntityPropertyMappingService propertyMappingService;
 
     private final EntityPropertyService propertyService;
 
@@ -39,10 +45,11 @@ public class EntityTableServiceImpl extends ServiceImpl<EntityTableMapper, Objec
 
     private final EntityNodeRepository nodeRepository;
 
+    private final EntityRelationRepository relationRepository;
+
     @Override
     @Transactional(value = "mainTransactionManager")
     public void createEntities(EntityCreateParam entityCreateParam) {
-
         var primaryDataSource = entityCreateParam.getPrimaryDataSource();
         List<DataSourceParam> associateDataSources = CollectionUtils.isEmpty(entityCreateParam.getAssociateDataSources()) ?
                 Lists.newArrayList() : entityCreateParam.getAssociateDataSources();
@@ -53,6 +60,75 @@ public class EntityTableServiceImpl extends ServiceImpl<EntityTableMapper, Objec
         // todo 改成异步执行,失败重试确保实体最终插入
         this.insertEntityTables(primaryDataSource, associateDataSources);
 
+    }
+
+    @Override
+    @Transactional(value = "mainTransactionManager")
+    public void copyEntities(EntityCopyParam entityCopyParam) {
+        var srcTable = entityCopyParam.getSourceTableName();
+        var newTable = entityCopyParam.getNewTableName();
+        //copy主实体表
+        this.copyTable(srcTable, newTable);
+        //copy 关联的其他属性表
+        var tableMapping = propertyMappingService.list(new LambdaQueryWrapper<EntityPropertyMappingPO>().eq(EntityPropertyMappingPO::getEntityTable, srcTable));
+        tableMapping.forEach(v -> {
+            var propertyTable = v.getEntityPropertyTable();
+            var newPropertyTable = newTable + propertyTable.substring(propertyTable.indexOf("_"));
+            var mappingPO = EntityPropertyMappingPO.builder()
+                    .entityTableKey(v.getEntityTableKey())
+                    .entityTable(newTable)
+                    .entityPropertyTableKey(v.getEntityPropertyTableKey())
+                    .entityPropertyTable(newPropertyTable)
+                    .build();
+            propertyMappingService.save(mappingPO);
+            this.copyTable(propertyTable, newPropertyTable);
+        });
+        //copy实体节点和实体关系
+        this.copyNodesAndRelations(srcTable, newTable);
+    }
+
+    private void copyNodesAndRelations(String srcTableName, String newTableName) {
+        // 查询所有 tableName=srcTableName 的 EntityNode 对象
+        var nodesToCopy = nodeRepository.findByTableName(srcTableName);
+        // 复制这些对象并更新 tableName 为 newTableName
+        var nodesToInsert = nodesToCopy.stream().map(node -> EntityNode.builder().tableName(newTableName)
+                .createTime(new Date())
+                .updateTime(new Date())
+                .primaryKey(node.getPrimaryKey())
+                .isDeleted(node.getIsDeleted()).build())
+                .collect(Collectors.toList());
+        nodeRepository.saveAll(nodesToInsert);
+
+        var newNodeMap = nodesToInsert.stream().collect(Collectors.toMap(EntityNode::getPrimaryKey, node -> node));
+        // 查询与这些节点相关的边
+        var relationsToCopy = relationRepository.findByFromIn(nodesToCopy);
+        relationsToCopy.addAll(relationRepository.findByToIn(nodesToCopy));
+        // 复制这些边并更新 from 和 to 字段
+        var relationsToInsert = relationsToCopy.stream()
+                .map(relation -> EntityRelation.builder()
+                        .type(relation.getType())
+                        .description(relation.getDescription())
+                        .createTime(new Date())
+                        .updateTime(new Date())
+                        .isDeleted(relation.getIsDeleted())
+                        .from(Optional.ofNullable(newNodeMap.get(relation.getFrom().getPrimaryKey())).orElse(relation.getFrom()))
+                        .to(Optional.ofNullable(newNodeMap.get(relation.getTo().getPrimaryKey())).orElse(relation.getTo()))
+                        .build()
+                ).collect(Collectors.toList());
+        relationRepository.saveAll(relationsToInsert);
+    }
+
+    private void copyTable(String srcTable, String newTable) {
+        var srcProps = propertyService.list(new LambdaQueryWrapper<EntityPropertyPO>().eq(EntityPropertyPO::getTableName, srcTable));
+        var newProps = srcProps.stream().<EntityPropertyPO>map(v -> EntityPropertyPO.builder()
+                .status(v.getStatus())
+                .datasourceId(v.getDatasourceId())
+                .datasourceColumnName(v.getDatasourceColumnName())
+                .tableColumnName(v.getTableColumnName())
+                .tableName(newTable)
+                .build()).collect(Collectors.toList());
+        propertyService.saveBatch(newProps);
+        dataObjectMapper.copyTable(srcTable, newTable);
     }
 
     private void createTables(DataSourceParam primaryDataSource, List<DataSourceParam> associateDataSources) {
@@ -84,7 +160,7 @@ public class EntityTableServiceImpl extends ServiceImpl<EntityTableMapper, Objec
             var entityTableKey = primaryDataSource.getColumnParamList().stream()
                     .filter(v -> v.getDatasourceColumnName().equals(param.getAssociateDatasourceColumnName()))
                     .findFirst().get().getColumnName();
-            propertyMappingMapper.insert(EntityPropertyMappingPO.builder()
+            propertyMappingService.save(EntityPropertyMappingPO.builder()
                     .entityTable(primaryTableName)
                     .entityPropertyTable(fieldList.get(0).getTableName())
                     .entityTableKey(entityTableKey)

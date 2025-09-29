@@ -8,6 +8,7 @@ import com.aircas.ptr.foundry.common.util.IdGenerator;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.common.util.SnowflakeIdUtil;
 import com.aircas.ptr.foundry.ontology.client.EntityClient;
+import com.aircas.ptr.foundry.ontology.common.param.EntityCopyParam;
 import com.aircas.ptr.foundry.ontology.common.param.EntityCreateParam;
 import com.aircas.ptr.foundry.ontology.converter.ClientParamConverter;
 import com.aircas.ptr.foundry.ontology.converter.ParamToEntityConverter;
@@ -234,7 +235,10 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         actionHandleTaskService.saveBatch(tasks);
 
         // 远程调用创建实体
-
+        entityClient.copyTableAndEntities(EntityCopyParam.builder()
+                .newTableName(parentOntology.getApiName())
+                .sourceTableName(meta.getApiName())
+                .build());
     }
 
     private String findChildOntologyProperty(List<OntologyProperty> parentProperties, List<OntologyProperty> childProps, String targetUniqId) {

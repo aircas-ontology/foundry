@@ -4,6 +4,11 @@ import com.aircas.ptr.foundry.ontology.entity.model.document.EntityNode;
 import com.arangodb.springframework.repository.ArangoRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
+
 @Repository
 public interface EntityNodeRepository extends ArangoRepository<EntityNode, String> {
+
+    List<EntityNode> findByTableName(String tableName);
+
 }

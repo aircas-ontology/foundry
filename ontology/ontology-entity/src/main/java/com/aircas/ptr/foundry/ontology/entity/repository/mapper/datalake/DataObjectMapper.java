@@ -17,9 +17,10 @@ public interface DataObjectMapper {
     //todo 后续改成分页查询，前期数据量小暂不考虑
     List<Map<String, Object>> queryTableData(@Param("tableName") String tableName);
 
-    List<Map<String, Object>> queryTableDataByColumn(@Param("tableName") String tableName, @Param("columnNames") Map<String,String> columnNames);
+    //todo 后续改成分页查询，前期数据量小暂不考虑
+    List<Map<String, Object>> queryTableDataByColumn(@Param("tableName") String tableName, @Param("columnNames") Map<String, String> columnNames);
 
-
+    void copyTable(@Param("srcTable") String srcTable, @Param("newTable") String newTable);
 
     int updateAnySQL(String updateSql);
 

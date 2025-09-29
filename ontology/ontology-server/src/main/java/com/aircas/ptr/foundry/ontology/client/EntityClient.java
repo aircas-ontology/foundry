@@ -2,6 +2,7 @@ package com.aircas.ptr.foundry.ontology.client;
 
 import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.common.util.HttpUtil;
+import com.aircas.ptr.foundry.ontology.common.param.EntityCopyParam;
 import com.aircas.ptr.foundry.ontology.common.param.EntityCreateParam;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -22,18 +23,31 @@ public class EntityClient {
     @Value("${client.entity.create-table}")
     private String createTable;
 
+    @Value("${client.entity.copy-table}")
+    private String copyTable;
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
 
     public void createTableAndEntities(EntityCreateParam param) {
         String url = urlPrefix + createTable;
+        post(url, param);
+    }
+
+    public void copyTableAndEntities(EntityCopyParam param) {
+        String url = urlPrefix + copyTable;
+        post(url, param);
+    }
+
+
+    private RestResult post(String url, Object param) {
         String jsonStr = "";
         try {
             jsonStr = objectMapper.writeValueAsString(param);
         } catch (JsonProcessingException e) {
-            log.error("json序列化失败",e);
+            log.error("json序列化失败", e);
         }
-        HttpUtil.postJson(url, Maps.newHashMap(), jsonStr, new TypeReference<RestResult>() {
+        return HttpUtil.postJson(url, Maps.newHashMap(), jsonStr, new TypeReference<RestResult>() {
         });
     }
 

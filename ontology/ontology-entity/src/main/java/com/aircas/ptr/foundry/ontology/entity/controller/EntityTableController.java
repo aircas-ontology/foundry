@@ -2,6 +2,7 @@ package com.aircas.ptr.foundry.ontology.entity.controller;
 
 import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.common.param.DataSourceParam;
+import com.aircas.ptr.foundry.ontology.common.param.EntityCopyParam;
 import com.aircas.ptr.foundry.ontology.common.param.EntityCreateParam;
 import com.aircas.ptr.foundry.ontology.common.param.TableColumnRelationUpdateParam;
 import com.aircas.ptr.foundry.ontology.entity.service.EntityTableService;
@@ -25,12 +26,16 @@ public class EntityTableController {
     private EntityTableService entityTableService;
 
     @ApiOperation("创建实体表、实体数据、实体节点和关系")
-    @ApiResponses({
-            @ApiResponse(code = 200, message = "创建成功")
-    })
     @PostMapping("")
     public RestResult createEntities(@RequestBody @Valid EntityCreateParam entityCreateParam) {
         entityTableService.createEntities(entityCreateParam);
+        return RestResult.success();
+    }
+
+    @ApiOperation("复制实体表、实体数据、实体节点、关系")
+    @PostMapping("/copy")
+    public RestResult copyEntities(@RequestBody @Valid EntityCopyParam entityCopyParam) {
+        entityTableService.copyEntities(entityCopyParam);
         return RestResult.success();
     }
 
