@@ -14,4 +14,7 @@ public interface EntityTableMapper extends BaseMapper<Object> {
     void createTable(@Param("tableDto") TableCreateDTO tableDto);
 
     void batchInsertRows(@Param("tableName") String tableName, @Param("rows") List<Map<String, Object>> rows);
+
+    void copyTable(@Param("srcTable") String srcTable, @Param("newTable") String newTable);
+
 }

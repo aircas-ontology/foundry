@@ -236,8 +236,8 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
 
         // 远程调用创建实体
         entityClient.copyTableAndEntities(EntityCopyParam.builder()
-                .newTableName(parentOntology.getApiName())
-                .sourceTableName(meta.getApiName())
+                .newTableName(meta.getApiName())
+                .sourceTableName(parentOntology.getApiName())
                 .build());
     }
 
@@ -260,6 +260,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
             var dataSources = associateDataSources.stream().map(ds -> ds.getColumnParamList().get(0).getDatasourceId()).collect(Collectors.toList());
             meta.setOtherDatasourceId(String.join(",", dataSources));
         }
+        save(meta);
         //2 创建本体属性
         // 主数据源属性
         var properties = primaryDataSource.getColumnParamList().stream()

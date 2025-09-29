@@ -34,12 +34,6 @@
     </select>
 
 
-    <select id="copyTable" parameterType="map">
-        <!-- 创建新表并复制数据 -->
-        CREATE TABLE ${newTable} AS
-        SELECT * FROM ${srcTable}
-    </select>
-
     <update id="updateAnySQL">
         ${updateSql}
     </update>

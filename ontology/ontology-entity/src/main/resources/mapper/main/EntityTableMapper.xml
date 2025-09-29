@@ -49,4 +49,10 @@
         ON CONFLICT DO NOTHING;
     </insert>
 
+
+    <select id="copyTable">
+        <!-- 创建新表并复制数据 -->
+        CREATE TABLE ${newTable} AS
+        SELECT * FROM ${srcTable}
+    </select>
 </mapper>

@@ -74,6 +74,7 @@ client:
   entity:
     url-prefix: "http://127.0.0.1:37004/ontology_entity"
     create-table:  "/table"
+    copy-table: "/table/copy"
     delete-table: "/table/%s"
     add-column: "/table/column"
     delete-column: "/table/column"

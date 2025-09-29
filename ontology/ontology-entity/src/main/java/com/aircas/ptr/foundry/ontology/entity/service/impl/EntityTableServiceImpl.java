@@ -79,6 +79,7 @@ public class EntityTableServiceImpl extends ServiceImpl<EntityTableMapper, Objec
                     .entityTable(newTable)
                     .entityPropertyTableKey(v.getEntityPropertyTableKey())
                     .entityPropertyTable(newPropertyTable)
+                    .status(v.getStatus())
                     .build();
             propertyMappingService.save(mappingPO);
             this.copyTable(propertyTable, newPropertyTable);
@@ -128,7 +129,7 @@ public class EntityTableServiceImpl extends ServiceImpl<EntityTableMapper, Objec
                 .tableName(newTable)
                 .build()).collect(Collectors.toList());
         propertyService.saveBatch(newProps);
-        dataObjectMapper.copyTable(srcTable, newTable);
+        tableMapper.copyTable(srcTable, newTable);
     }
 
     private void createTables(DataSourceParam primaryDataSource, List<DataSourceParam> associateDataSources) {
