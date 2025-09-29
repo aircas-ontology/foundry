@@ -15,6 +15,7 @@ import com.aircas.ptr.foundry.ontology.repository.dao.OntologyPropertyMapper;
 import com.aircas.ptr.foundry.ontology.repository.datalakeDao.ObjectMapper;
 import com.aircas.ptr.foundry.ontology.model.param.FilterParam;
 import com.aircas.ptr.foundry.ontology.model.param.QuerySortParam;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import joptsimple.internal.Strings;
@@ -30,7 +31,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
-public class ObjectServiceImpl implements ObjectService {
+public class ObjectServiceImpl extends ServiceImpl<ObjectMapper,Object> implements ObjectService {
 
     @Resource
     private final OntologyPropertyMapper ontologyPropertyMapper;

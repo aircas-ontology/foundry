@@ -4,6 +4,7 @@ import com.aircas.ptr.foundry.ontology.model.po.ActionHandleRule;
 import com.aircas.ptr.foundry.ontology.service.ActionHandleRuleService;
 import com.aircas.ptr.foundry.ontology.model.bo.ActionHandleRuleBO;
 import com.aircas.ptr.foundry.ontology.repository.dao.ActionHandleRuleMapper;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,7 +21,7 @@ import java.util.List;
  */
 @Service
 @Slf4j
-public class ActionHandleRuleServiceImpl implements ActionHandleRuleService {
+public class ActionHandleRuleServiceImpl extends ServiceImpl<ActionHandleRuleMapper,ActionHandleRule> implements ActionHandleRuleService {
 
     @Autowired
     private ActionHandleRuleMapper actionHandleRuleMapper;

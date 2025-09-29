@@ -4,12 +4,18 @@ import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.common.base.ResultGenerator;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyChildLink;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup;
+import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
+import com.aircas.ptr.foundry.ontology.repository.dao.OntologyPropertyMapper;
 import com.aircas.ptr.foundry.ontology.service.OntologyLinkGroupService;
 import com.aircas.ptr.foundry.ontology.service.OntologyMetaService;
 import com.aircas.ptr.foundry.ontology.model.bo.OntologyLinkGroupBo;
 import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyChildLinkMapper;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyLinkGroupMapper;
+import com.baomidou.mybatisplus.extension.service.IService;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeanUtils;
@@ -26,14 +32,14 @@ import java.util.stream.Collectors;
  */
 
 @Service
-public class OntologyLinkGroupServiceImpl implements OntologyLinkGroupService {
-
-    private static final Logger log = LoggerFactory.getLogger(OntologyLinkGroupServiceImpl.class);
-    @Resource
-    private OntologyLinkGroupMapper ontologyLinkGroupMapper;
+@Slf4j
+public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupMapper, OntologyLinkGroup>  implements OntologyLinkGroupService {
 
     @Resource
-    private OntologyChildLinkMapper ontologyChildLinkMapper;
+    private  OntologyLinkGroupMapper ontologyLinkGroupMapper;
+
+    @Resource
+    private  OntologyChildLinkMapper ontologyChildLinkMapper;
 
     @Resource
     private OntologyMetaService ontologyMetaService;

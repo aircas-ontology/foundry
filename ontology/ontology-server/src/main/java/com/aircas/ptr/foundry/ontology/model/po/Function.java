@@ -1,7 +1,13 @@
 package com.aircas.ptr.foundry.ontology.model.po;
 
+import com.baomidou.mybatisplus.annotation.FieldFill;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.experimental.Accessors;
 
 import javax.persistence.Column;
 import javax.persistence.Entity;
@@ -12,6 +18,10 @@ import java.util.Date;
 
 @Data
 @Entity
+@Builder
+@Accessors(chain = true)
+@NoArgsConstructor
+@AllArgsConstructor
 @TableName(value = "function")
 public class Function {
 
@@ -19,12 +29,14 @@ public class Function {
     /**
      * 记录创建时间
      */
+    @TableField(fill = FieldFill.INSERT)
     private Date createTime;
 
 
     /**
      * 记录创建时间
      */
+    @TableField(fill = FieldFill.INSERT_UPDATE)
     private Date updateTime;
 
     /**
@@ -53,5 +65,7 @@ public class Function {
      * Column: ObjectTypes
      */
     private String objectTypes;
+
+    private String code;
 
 }

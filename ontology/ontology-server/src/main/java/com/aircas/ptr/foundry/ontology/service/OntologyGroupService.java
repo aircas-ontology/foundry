@@ -1,9 +1,11 @@
 package com.aircas.ptr.foundry.ontology.service;
 
 import com.aircas.ptr.foundry.ontology.model.bo.OntologyGroupBO;
+import com.aircas.ptr.foundry.ontology.model.po.OntologyGroup;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyGroupVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkGraphVO;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyGroupAddParam;
+import com.baomidou.mybatisplus.extension.service.IService;
 import com.github.pagehelper.PageInfo;
 
 import java.util.List;
@@ -15,7 +17,7 @@ import java.util.List;
  */
 
 
-public interface OntologyGroupService {
+public interface OntologyGroupService extends IService<OntologyGroup> {
 
     Integer add(OntologyGroupAddParam param);
 

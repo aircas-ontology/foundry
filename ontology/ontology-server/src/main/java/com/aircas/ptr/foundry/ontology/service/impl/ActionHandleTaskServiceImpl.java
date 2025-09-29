@@ -5,6 +5,7 @@ import com.aircas.ptr.foundry.ontology.model.bo.ActionHandleTaskBO;
 import com.aircas.ptr.foundry.ontology.repository.dao.ActionHandleTaskMapper;
 import com.aircas.ptr.foundry.ontology.service.ActionHandleTaskService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,7 +20,7 @@ import org.springframework.stereotype.Service;
  */
 @Service
 @Slf4j
-public class ActionHandleTaskServiceImpl implements ActionHandleTaskService {
+public class ActionHandleTaskServiceImpl extends ServiceImpl<ActionHandleTaskMapper,ActionHandleTask> implements ActionHandleTaskService {
 
     @Autowired
     private ActionHandleTaskMapper actionHandleTaskMapper;

@@ -2,7 +2,7 @@ package com.aircas.ptr.foundry.ontology.controller;
 
 import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionExecuteParam;
-import com.aircas.ptr.foundry.ontology.model.param.FunctionParam;
+import com.aircas.ptr.foundry.ontology.model.param.FunctionCreateParam;
 import com.aircas.ptr.foundry.ontology.model.vo.FunctionInfoVO;
 import com.aircas.ptr.foundry.ontology.service.FunctionService;
 import io.swagger.annotations.Api;
@@ -52,13 +52,13 @@ public class OntologyFunctionController {
 
     @ApiOperation(value = "创建函数")
     @PostMapping
-    public RestResult createFunction(@RequestBody @Valid FunctionParam param) {
+    public RestResult createFunction(@RequestBody @Valid FunctionCreateParam param) {
         return RestResult.success();
     }
 
     @ApiOperation(value = "更新函数")
     @PutMapping
-    public RestResult updateFunctionMetadata(@RequestBody FunctionParam param) {
+    public RestResult updateFunctionMetadata(@RequestBody FunctionCreateParam param) {
         return RestResult.success();
     }
 

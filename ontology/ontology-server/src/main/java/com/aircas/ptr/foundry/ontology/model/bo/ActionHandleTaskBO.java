@@ -1,13 +1,11 @@
 package com.aircas.ptr.foundry.ontology.model.bo;
 
-import com.aircas.ptr.foundry.common.util.SnowflakeIdUtil;
 import com.aircas.ptr.foundry.ontology.model.po.ActionHandleTask;
+import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
-
-import java.util.Date;
-
-import static com.aircas.ptr.foundry.common.constant.Status.ENABLE;
+import lombok.NoArgsConstructor;
+import lombok.experimental.SuperBuilder;
 
 /**
  * @className: ActionHandleTaskBO
@@ -18,14 +16,9 @@ import static com.aircas.ptr.foundry.common.constant.Status.ENABLE;
  */
 @EqualsAndHashCode(callSuper = true)
 @Data
+@SuperBuilder
+@NoArgsConstructor
 public class ActionHandleTaskBO  extends ActionHandleTask {
 
-    public ActionHandleTaskBO() {
 
-        setId(SnowflakeIdUtil.get());
-        Date now = new Date();
-        setCreateTime(now);
-        setUpdateTime(now);
-        setStatus(ENABLE.getValue());
-    }
 }

@@ -9,7 +9,7 @@ import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
 
 public class ParamToEntityConverter {
 
-    public static OntologyProperty convert(OntologyDataSourceColumnParam param) {
+    public static OntologyProperty convert(OntologyDataSourceColumnParam param, String ontologyUniqueIdentifier) {
         return OntologyProperty.builder()
                 .status(Status.ENABLE.getValue())
                 .datasourceColumnName(param.getDatasourceColumnName())
@@ -24,6 +24,7 @@ public class ParamToEntityConverter {
                 .visibility(Visibility.NORMAL.getValue())
                 .isAssociateKey(param.getIsAssociateKey() ? 1 : 0)
                 .associateDatasourceColumnName(param.getAssociateDatasourceColumnName())
+                .ontologyUniqueIdentifier(ontologyUniqueIdentifier)
                 .build();
     }
 }

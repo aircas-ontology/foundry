@@ -52,8 +52,8 @@ public class DatalakeDataSourceConfiguration {
 //        return sqlSessionFactoryBean.getObject();
     }
 
-    @Bean(name = "datalakeTransactionManager")
-    public DataSourceTransactionManager mainTransactionManager(@Qualifier("datalakeDataSource")DataSource dataSource) {
-        return new DataSourceTransactionManager(dataSource);
-    }
+//    @Bean(name = "datalakeTransactionManager")
+//    public DataSourceTransactionManager mainTransactionManager(@Qualifier("datalakeDataSource")DataSource dataSource) {
+//        return new DataSourceTransactionManager(dataSource);
+//    }
 }

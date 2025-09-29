@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.ontology.repository.dao;
 
 import com.aircas.ptr.foundry.ontology.model.po.Function;
+import com.aircas.ptr.foundry.ontology.model.view.FunctionView;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
 
@@ -18,4 +19,6 @@ public interface FunctionMapper extends BaseMapper<Function> {
     Integer deleteByApi(String api);
 
     List<Function> getAllFunctions();
+
+    List<FunctionView> selectFunctionViewsByOntologyId(String ontologyUniqId);
 }

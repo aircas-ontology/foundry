@@ -1,8 +1,14 @@
 package com.aircas.ptr.foundry.ontology.model.po;
 
+import com.baomidou.mybatisplus.annotation.FieldFill;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.fasterxml.jackson.annotation.JsonFormat;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.experimental.Accessors;
 import org.springframework.beans.BeanUtils;
 
 import java.io.Serializable;
@@ -12,6 +18,10 @@ import static com.aircas.ptr.foundry.common.constant.DateFormat.DATE_FORMAT_DEFA
 
 
 @Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@Accessors(chain = true)
 @TableName("ontology_link_group")
 public class OntologyLinkGroup implements Serializable {
     /**
@@ -38,12 +48,14 @@ public class OntologyLinkGroup implements Serializable {
      * 记录创建时间
      */
     @JsonFormat(pattern = DATE_FORMAT_DEFAULT, timezone = "GMT+8")
+    @TableField(fill = FieldFill.INSERT)
     private Date createTime;
 
     /**
      * 记录修改时间
      */
     @JsonFormat(pattern = DATE_FORMAT_DEFAULT, timezone = "GMT+8")
+    @TableField(fill = FieldFill.INSERT_UPDATE)
     private Date updateTime;
 
     /**

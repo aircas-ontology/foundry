@@ -6,13 +6,16 @@ import com.aircas.ptr.foundry.ontology.exception.FunctionFileNotCompiled;
 import com.aircas.ptr.foundry.ontology.exception.FunctionNotFoundException;
 import com.aircas.ptr.foundry.ontology.exception.FunctionRuntimeException;
 import com.aircas.ptr.foundry.ontology.model.bo.FunctionBo;
+import com.aircas.ptr.foundry.ontology.model.po.Function;
+import com.aircas.ptr.foundry.ontology.model.view.FunctionView;
 import com.aircas.ptr.foundry.ontology.model.vo.FunctionVO;
 import com.aircas.ptr.foundry.ontology.model.vo.ParameterMetadataVO;
+import com.baomidou.mybatisplus.extension.service.IService;
 
 import java.util.HashMap;
 import java.util.List;
 
-public interface FunctionService {
+public interface FunctionService extends IService<Function> {
     Object handle(String functionName, Boolean isPreview, List<String> objectTypes, HashMap<String, Object> parameters) throws FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionRuntimeException, FunctionNotFoundException;
 
     List<ParameterMetadataVO> getParameters(String functionName) throws FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionNotFoundException;
@@ -36,4 +39,6 @@ public interface FunctionService {
     Boolean deleteById(Long id);
 
     int getCountByStatus(int status);
+
+    List<FunctionView> queryFunctionViewByOntologyId(String ontologyUniqId);
 }

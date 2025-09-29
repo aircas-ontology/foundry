@@ -6,12 +6,13 @@ import com.aircas.ptr.foundry.ontology.model.vo.ObjectOneInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.ObjectWithLinkedInfoVO;
 import com.aircas.ptr.foundry.ontology.model.param.FilterParam;
 import com.aircas.ptr.foundry.ontology.model.param.QuerySortParam;
+import com.baomidou.mybatisplus.extension.service.IService;
 import com.github.pagehelper.PageInfo;
 
 import java.util.List;
 import java.util.Map;
 
-public interface ObjectService {
+public interface ObjectService extends IService<Object> {
 
     PageInfo<DirectoryItemVO> queryDirectories(String ontologyUniqueIdentifier, Integer page, Integer size);
 

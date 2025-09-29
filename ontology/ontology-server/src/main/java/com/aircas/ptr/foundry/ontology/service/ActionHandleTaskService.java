@@ -1,6 +1,8 @@
 package com.aircas.ptr.foundry.ontology.service;
 
 import com.aircas.ptr.foundry.ontology.model.bo.ActionHandleTaskBO;
+import com.aircas.ptr.foundry.ontology.model.po.ActionHandleTask;
+import com.baomidou.mybatisplus.extension.service.IService;
 
 /**
  * @interfaceName: ActionHandleTaskService
@@ -9,7 +11,7 @@ import com.aircas.ptr.foundry.ontology.model.bo.ActionHandleTaskBO;
  * @version: 1.0
  * @description: 行为执行任务service
  */
-public interface ActionHandleTaskService {
+public interface ActionHandleTaskService extends IService<ActionHandleTask> {
 
     int insert(ActionHandleTaskBO actionHandleTaskBO);
 

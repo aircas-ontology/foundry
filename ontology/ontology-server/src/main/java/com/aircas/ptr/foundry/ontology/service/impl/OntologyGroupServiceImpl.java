@@ -12,6 +12,7 @@ import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkGraphVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaVO;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyGroupMapper;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyGroupAddParam;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import org.springframework.beans.BeanUtils;
@@ -32,7 +33,7 @@ import java.util.stream.Collectors;
  */
 
 @Service
-public class OntologyGroupServiceImpl implements OntologyGroupService {
+public class OntologyGroupServiceImpl extends ServiceImpl<OntologyGroupMapper,OntologyGroup> implements OntologyGroupService {
 
     @Resource
     private OntologyGroupMapper ontologyGroupMapper;

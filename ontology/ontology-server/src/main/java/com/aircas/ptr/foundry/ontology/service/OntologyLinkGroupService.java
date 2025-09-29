@@ -3,9 +3,11 @@ package com.aircas.ptr.foundry.ontology.service;
 import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup;
 import com.aircas.ptr.foundry.ontology.model.bo.OntologyLinkGroupBo;
+import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkGraphVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkGroupVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaVO;
+import com.baomidou.mybatisplus.extension.service.IService;
 
 import java.util.List;
 
@@ -16,7 +18,7 @@ import java.util.List;
  */
 
 
-public interface OntologyLinkGroupService {
+public interface OntologyLinkGroupService  extends IService<OntologyLinkGroup> {
     Integer add(OntologyLinkGroupBo ontologyLinkGroupBo);
 
     List<OntologyLinkGroupVO> getLinkByOntologyUniqueIdentifier(String uniqueIdentifier);

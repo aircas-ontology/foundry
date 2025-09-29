@@ -1,8 +1,8 @@
 package com.aircas.ptr.foundry.common.filter;
 
-import com.aircas.ptr.foundry.common.filter.CachableHttpServletRequest;
 import com.aircas.ptr.foundry.common.util.IdGenerator;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.MDC;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
@@ -29,7 +29,10 @@ public class LoggingFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
 
-        String logId = IdGenerator.generateLogId();
+        String logId = request.getHeader(LOG_ID_HEADER);
+        if (StringUtils.isEmpty(logId)) {
+            logId = IdGenerator.generateLogId();
+        }
         MDC.put(LOG_ID_KEY, logId);
 
         long startTime = System.currentTimeMillis();

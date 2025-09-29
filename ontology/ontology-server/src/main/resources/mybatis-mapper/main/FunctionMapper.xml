@@ -66,5 +66,42 @@
         </set>
         where api = #{api,jdbcType=VARCHAR}
     </update>
+
+
+    <resultMap id="OntologyFunctionViewResultMap" type="com.aircas.ptr.foundry.ontology.model.view.FunctionView">
+        <id property="functionId" column="function_id" />
+        <result property="api" column="api" />
+        <result property="description" column="description" />
+        <result property="status" column="status" />
+        <result property="objectTypes" column="object_types" />
+        <result property="code" column="code" />
+        <collection property="functionParams" ofType="com.aircas.ptr.foundry.ontology.model.po.FunctionParamPO">
+            <id property="id" column="param_id" />
+            <result property="functionId" column="function_id" />
+            <result property="parameterName" column="parameter_name" />
+            <result property="parameterType" column="parameter_type" />
+            <result property="description" column="param_description" />
+        </collection>
+    </resultMap>
+
+    <select id="selectFunctionViewsByOntologyId" resultMap="OntologyFunctionViewResultMap">
+        SELECT
+            f.id AS function_id,
+            f.api,
+            f.description,
+            f.status,
+            f.object_types,
+            p.id AS param_id,
+            p.function_id,
+            p.parameter_name,
+            p.parameter_type,
+            p.description AS param_description
+        FROM
+            function f
+        LEFT JOIN
+            function_param p ON f.id = p.function_id
+        WHERE
+            f.object_types = #{ontologyUniqId}
+    </select>
 </mapper>
 

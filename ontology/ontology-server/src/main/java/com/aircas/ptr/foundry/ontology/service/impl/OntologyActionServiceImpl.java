@@ -10,11 +10,13 @@ import com.aircas.ptr.foundry.ontology.model.bo.OntologyActionMappingInBO;
 import com.aircas.ptr.foundry.ontology.model.param.ActionHandleMappingInParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionHandleRuleAddParam;
 import com.aircas.ptr.foundry.ontology.model.po.*;
+import com.aircas.ptr.foundry.ontology.model.view.OntologyActionView;
 import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.aircas.ptr.foundry.ontology.repository.dao.*;
 import com.aircas.ptr.foundry.ontology.service.*;
 import com.alibaba.fastjson.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import lombok.RequiredArgsConstructor;
@@ -33,32 +35,47 @@ import static com.aircas.ptr.foundry.common.constant.ActionHandleTypeEnum.TASK;
 import static com.aircas.ptr.foundry.common.constant.ActionMappingInTypeEnum.ONTOLOGY;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
-public class OntologyActionServiceImpl implements OntologyActionService {
+public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper, OntologyAction>  implements OntologyActionService {
 
-    private final OntologyActionMapper ontologyActionMapper;
+    @Resource
+    private  OntologyActionMapper ontologyActionMapper;
 
-    private final OntologyActionMappingInMapper ontologyActionMappingInMapper;
+    @Resource
+    private  OntologyActionMappingInMapper ontologyActionMappingInMapper;
 
-    private final OntologyMetaMapper ontologyMetaMapper;
+    @Resource
+    private  OntologyMetaMapper ontologyMetaMapper;
 
 
-    private final ActionHandleCommitFlashMermoryMapper actionHandleCommitFlashMermoryMapper;
+    @Resource
+    private  ActionHandleCommitFlashMermoryMapper actionHandleCommitFlashMermoryMapper;
 
-    private final OntologyPropertyMapper propertyMapper;
+    @Resource
+    private  OntologyPropertyMapper propertyMapper;
 
-    private final ObjectService objectService;
+    @Resource
+    private  ObjectService objectService;
 
-    private final OntologyPropertyService ontologyPropertyService;
+    @Resource
+    private  OntologyPropertyService ontologyPropertyService;
 
-    private final FunctionService functionService;
+    @Resource
+    private  FunctionService functionService;
 
-    private final ActionHandleRuleService actionHandleRuleService;
+    @Resource
+    private  ActionHandleRuleService actionHandleRuleService;
 
-    private final ActionHandleTaskService actionHandleTaskService;
+    @Resource
+    private  ActionHandleTaskService actionHandleTaskService;
 
     private final static String DEFAULT_OBJECT_DESC = "当前本体对象";
+
+
+    @Override
+    public List<OntologyActionView> queryActionViewByOntologyIdentifier(String ontologyUniqIdentifier){
+        return ontologyActionMapper.selectActionViewByOntologyIdentifier(ontologyUniqIdentifier);
+    }
 
     @Override
     public Object handle(String primaryKey, String api, List<ActionHandleMappingInParam> params)

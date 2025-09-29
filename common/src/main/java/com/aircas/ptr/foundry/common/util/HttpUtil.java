@@ -1,11 +1,13 @@
 package com.aircas.ptr.foundry.common.util;
 
 import com.aircas.ptr.foundry.common.exception.BusinessException;
+import com.aircas.ptr.foundry.common.filter.LoggingFilter;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.*;
 import org.apache.commons.collections4.MapUtils;
+import org.slf4j.MDC;
 
 import java.util.List;
 import java.util.Map;
@@ -36,6 +38,7 @@ public class HttpUtil {
         }
 
         Request.Builder requestBuilder = new Request.Builder()
+                .header(LoggingFilter.LOG_ID_HEADER, MDC.get(LoggingFilter.LOG_ID_KEY))
                 .url(urlBuilder.build());
 
         Request request = requestBuilder.build();
@@ -51,6 +54,7 @@ public class HttpUtil {
 
         RequestBody body = RequestBody.create(JSON, jsonString);
         Request.Builder requestBuilder = new Request.Builder()
+                .header(LoggingFilter.LOG_ID_HEADER, MDC.get(LoggingFilter.LOG_ID_KEY))
                 .post(body)
                 .url(urlBuilder.build());
 
@@ -67,6 +71,7 @@ public class HttpUtil {
 
         RequestBody body = RequestBody.create(JSON, jsonString);
         Request.Builder requestBuilder = new Request.Builder()
+                .header(LoggingFilter.LOG_ID_HEADER, MDC.get(LoggingFilter.LOG_ID_KEY))
                 .put(body)
                 .url(urlBuilder.build());
 
@@ -78,6 +83,7 @@ public class HttpUtil {
     public static <T> T deletePathVariable(String url, List<String> pathVariable, TypeReference<T> responseType) {
         url = String.format(url, pathVariable);
         Request.Builder requestBuilder = new Request.Builder()
+                .header(LoggingFilter.LOG_ID_HEADER, MDC.get(LoggingFilter.LOG_ID_KEY))
                 .delete()
                 .url(url);
         Request request = requestBuilder.build();
@@ -88,7 +94,8 @@ public class HttpUtil {
     private static <T> T executeRequest(Request request, TypeReference<T> responseType) {
         try (Response response = client.newCall(request).execute()) {
             if (!response.isSuccessful()) {
-                throw new BusinessException("unexpected code :" + response);
+                String respStr = response.body().string();
+                throw new BusinessException("unexpected code :" + response + ", response body: " + respStr);
             }
             ResponseBody responseBody = response.body();
             if (responseBody != null) {

@@ -1,38 +1,38 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
 
+import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import com.aircas.ptr.foundry.common.exception.DuplicatedDataException;
 import com.aircas.ptr.foundry.common.util.FileUtil;
 import com.aircas.ptr.foundry.common.util.SnowflakeIdUtil;
 import com.aircas.ptr.foundry.common.util.StringUtil;
+import com.aircas.ptr.foundry.ontology.GroovyClassLoaderManager;
+import com.aircas.ptr.foundry.ontology.exception.*;
+import com.aircas.ptr.foundry.ontology.function.FunctionUtils;
+import com.aircas.ptr.foundry.ontology.function.Parameter;
+import com.aircas.ptr.foundry.ontology.model.bo.FunctionBo;
 import com.aircas.ptr.foundry.ontology.model.po.Function;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
-import com.aircas.ptr.foundry.ontology.exception.*;
-import com.aircas.ptr.foundry.ontology.GroovyClassLoaderManager;
-import com.aircas.ptr.foundry.ontology.service.FunctionService;
-import com.aircas.ptr.foundry.ontology.model.bo.FunctionBo;
+import com.aircas.ptr.foundry.ontology.model.view.FunctionView;
 import com.aircas.ptr.foundry.ontology.model.vo.FunctionVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaVO;
 import com.aircas.ptr.foundry.ontology.model.vo.ParameterMetadataVO;
-import com.aircas.ptr.foundry.ontology.function.FunctionUtils;
-import com.aircas.ptr.foundry.ontology.function.Parameter;
 import com.aircas.ptr.foundry.ontology.repository.dao.FunctionMapper;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyMetaMapper;
+import com.aircas.ptr.foundry.ontology.service.FunctionService;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import groovy.lang.GroovyClassLoader;
 import groovy.lang.GroovyObject;
 import lombok.RequiredArgsConstructor;
-import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
-import com.aircas.ptr.foundry.ontology.exception.ExceptionFactory;
-
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FileUtils;
 import org.codehaus.groovy.control.CompilationFailedException;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 
-import javax.annotation.Resource;
-import java.io.*;
+import java.io.File;
+import java.io.IOException;
 import java.lang.reflect.Method;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
@@ -40,20 +40,21 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import static org.codehaus.groovy.runtime.DefaultGroovyMethods.collect;
-
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class FunctionServiceImpl implements FunctionService {
+public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> implements FunctionService {
 
     final static String baseDir = "functions";
 
-    @Resource
-    FunctionMapper functionMapper;
+    private final FunctionMapper functionMapper;
 
-    @Resource
-    OntologyMetaMapper ontologyMetaMapper;
+    private final OntologyMetaMapper ontologyMetaMapper;
+
+    @Override
+    public List<FunctionView> queryFunctionViewByOntologyId(String ontologyUniqId) {
+        return functionMapper.selectFunctionViewsByOntologyId(ontologyUniqId);
+    }
 
     @Override
     public int saveFunctionMetadata(FunctionBo functionBo) {
@@ -132,7 +133,7 @@ public class FunctionServiceImpl implements FunctionService {
 
     @Override
     public int getCountByStatus(int status) {
-        return functionMapper.selectCount(new QueryWrapper<Function>().eq("status",status));
+        return functionMapper.selectCount(new QueryWrapper<Function>().eq("status", status));
     }
 
     @Override
