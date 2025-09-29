@@ -18,8 +18,13 @@ public interface DataObjectMapper {
     List<Map<String, Object>> queryTableData(@Param("tableName") String tableName);
 
     //todo 后续改成分页查询，前期数据量小暂不考虑
-    List<Map<String, Object>> queryTableDataByColumn(@Param("tableName") String tableName, @Param("columnNames") Map<String, String> columnNames);
+    List<Map<String, Object>> queryTableDataByColumn(@Param("tableName") String tableName,
+                                                     @Param("columnNames") Map<String, String> columnNames,
+                                                     @Param("orderBy") String orderBy);
 
     int updateAnySQL(String updateSql);
+
+
+    String checkIdColumnExists(@Param("tableName") String tableName );
 
 }

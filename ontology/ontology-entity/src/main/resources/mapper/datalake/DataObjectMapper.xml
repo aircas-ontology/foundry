@@ -21,7 +21,7 @@
     </select>
 
     <select id="queryTableData" resultType="java.util.HashMap">
-        SELECT * FROM ${tableName} ORDER BY "id" DESC;
+        SELECT * FROM ${tableName} ORDER BY "ID" DESC;
     </select>
 
     <select id="queryTableDataByColumn" resultType="java.util.Map">
@@ -30,7 +30,19 @@
             "${key}" AS ${value}
         </foreach>
         FROM ${tableName}
-        ORDER BY "id" DESC;
+        <if test="orderBy != null and orderBy != ''">
+            ORDER BY ${orderBy} DESC
+        </if>
+    </select>
+
+    <select id="checkIdColumnExists" resultType="java.lang.String">
+        SELECT
+            column_name
+        FROM
+            information_schema.columns
+        WHERE
+            table_name = #{tableName}
+            AND (column_name = 'id' OR column_name = 'ID')
     </select>
 
 

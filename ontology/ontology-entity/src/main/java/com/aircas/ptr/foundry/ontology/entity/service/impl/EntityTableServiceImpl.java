@@ -176,14 +176,15 @@ public class EntityTableServiceImpl extends ServiceImpl<EntityTableMapper, Objec
         var primaryTableName = primaryDataSource.getColumnParamList().get(0).getTableName();
         var primaryDatasource = primaryDataSource.getColumnParamList().get(0).getDatasourceId();
         var primaryFieldMap = primaryDataSource.getColumnParamList().stream().collect(Collectors.toMap(v -> v.getDatasourceColumnName(), v -> v.getColumnName()));
-        var primaryData = dataObjectMapper.queryTableDataByColumn(primaryDatasource, primaryFieldMap);
+        var primaryData = dataObjectMapper.queryTableDataByColumn(primaryDatasource, primaryFieldMap, dataObjectMapper.checkIdColumnExists(primaryDatasource));
 
         associateDataSources.stream().forEach(ds -> {
             //获取其他数据源数据，并插入实体属性表
             var tableName = ds.getColumnParamList().get(0).getTableName();
             var datasourceId = ds.getColumnParamList().get(0).getDatasourceId();
             var filedMap = ds.getColumnParamList().stream().collect(Collectors.toMap(v -> v.getDatasourceColumnName(), v -> v.getColumnName()));
-            List<Map<String, Object>> data = dataObjectMapper.queryTableDataByColumn(datasourceId, filedMap);
+            var orderBy = dataObjectMapper.checkIdColumnExists(datasourceId);
+            List<Map<String, Object>> data = dataObjectMapper.queryTableDataByColumn(datasourceId, filedMap, orderBy);
             tableMapper.batchInsertRows(tableName, data);
 
             //抽取关联的实体表属性值（取最新数据），并整合到主实体表
