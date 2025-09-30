@@ -11,10 +11,6 @@ public interface OntologyPropertyMapper extends BaseMapper<OntologyProperty> {
 
     int deleteByUniqueIdentifier(String uniqueIdentifier);
 
-    //int insert(OntologyProperty record);
-
-    int insertSelective(OntologyProperty record);
-
     OntologyProperty selectByPrimaryKey(Long id);
 
     OntologyProperty selectByApiName(String ontologyUniqueIdentifier,String apiName);

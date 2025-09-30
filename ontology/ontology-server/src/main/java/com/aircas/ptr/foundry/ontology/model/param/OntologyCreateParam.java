@@ -1,8 +1,8 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
 import com.aircas.ptr.foundry.common.constant.OntologyCreateModeEnum;
-import com.aircas.ptr.foundry.ontology.controller.validator.ApiNameVerify;
-import com.aircas.ptr.foundry.ontology.controller.validator.DisplayNameVerify;
+import com.aircas.ptr.foundry.ontology.controller.validator.OntologyApiNameVerify;
+import com.aircas.ptr.foundry.ontology.controller.validator.OntologyDisplayNameVerify;
 import com.aircas.ptr.foundry.ontology.controller.validator.GroupIdsVerify;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
@@ -32,7 +32,7 @@ public class OntologyCreateParam {
 
     @ApiModelProperty(name = "displayName", value = "本体名称", dataType = "java.lang.String", example = "飞机", required = true)
     @NotBlank(message = "displayName is empty")
-    @DisplayNameVerify
+    @OntologyDisplayNameVerify
     private String displayName;
 
     @ApiModelProperty(name = "primaryDataSource", value = "本体对应主数据源", dataType = "OntologyPrimaryDataSourceParam")
@@ -50,7 +50,7 @@ public class OntologyCreateParam {
 
     @ApiModelProperty(name = "apiName", value = "在代码里用的本体名称", dataType = "java.lang.String", example = "airplane", required = true)
     @NotBlank(message = "apiName is empty")
-    @ApiNameVerify
+    @OntologyApiNameVerify
     private String apiName;
 
     @ApiModelProperty(name = "groupIds", value = "分组ids", example = "[123,456]", required = true)

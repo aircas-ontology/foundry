@@ -31,7 +31,7 @@
         </foreach>
         FROM ${tableName}
         <if test="orderBy != null and orderBy != ''">
-            ORDER BY ${orderBy} DESC
+            ORDER BY "${orderBy}" DESC
         </if>
     </select>
 

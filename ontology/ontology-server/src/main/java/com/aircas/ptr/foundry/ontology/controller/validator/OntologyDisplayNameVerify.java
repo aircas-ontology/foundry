@@ -7,11 +7,11 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-@Constraint(validatedBy = DisplayNameValidator.class)
+@Constraint(validatedBy = OntologyDisplayNameValidator.class)
 @Target({ ElementType.FIELD, ElementType.PARAMETER })
 @Retention(RetentionPolicy.RUNTIME)
-public @interface DisplayNameVerify {
-    String message() default "Invalid DisplayName";
+public @interface OntologyDisplayNameVerify {
+    String message() default "本体DisplayName非法或已存在";
     Class<?>[] groups() default {};
     Class<? extends Payload>[] payload() default {};
 }
