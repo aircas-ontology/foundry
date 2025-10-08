@@ -1,7 +1,6 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
 import com.aircas.ptr.foundry.common.base.ResultCode;
-import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import com.aircas.ptr.foundry.common.constant.Status;
 import com.aircas.ptr.foundry.common.constant.Visibility;
 import com.aircas.ptr.foundry.common.util.IdGenerator;
@@ -13,18 +12,17 @@ import com.aircas.ptr.foundry.ontology.common.param.EntityCreateParam;
 import com.aircas.ptr.foundry.ontology.converter.ClientParamConverter;
 import com.aircas.ptr.foundry.ontology.converter.ParamToEntityConverter;
 import com.aircas.ptr.foundry.ontology.model.bo.OntologyMetaBO;
-import com.aircas.ptr.foundry.ontology.model.bo.OntologyPropertyBO;
-import com.aircas.ptr.foundry.ontology.model.param.EntityNodeParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.po.*;
-import com.aircas.ptr.foundry.ontology.model.vo.*;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologyGroupMetaVO;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaInfoVO;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaVO;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyMetaMapper;
 import com.aircas.ptr.foundry.ontology.service.*;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.github.pagehelper.PageInfo;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import lombok.var;
@@ -36,9 +34,12 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Date;
+import java.util.List;
 import java.util.stream.Collectors;
-//import java.util.Map;
+
 
 /**
  * @author dongjunchuan
@@ -55,8 +56,6 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
 
     private final OntologyPropertyService ontologyPropertyService;
 
-    private final TableMetadataService tableMetadataService;
-
     private final OntologyLinkGroupService linkService;
 
     private final FunctionService functionService;
@@ -68,10 +67,6 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
     private final ActionHandleRuleService actionHandleRuleService;
 
     private final ActionHandleTaskService actionHandleTaskService;
-
-    private final ObjectService objectService;
-
-    private final EntityService entityService;
 
     private final EntityClient entityClient;
 
@@ -177,6 +172,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                     .api(view.getApi())
                     .description(view.getDescription())
                     .objectTypes(childIdentifer)
+                    .ontologyUniqueIdentifier(childIdentifer)
                     .status(view.getStatus())
                     .id(funcId).build());
             functionParams.addAll(view.getFunctionParams().stream().map(v -> FunctionParamPO.builder().functionId(funcId)
@@ -307,37 +303,6 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
     }
 
 
-    private int batchInsertEntity(String uniqueIdentifier, String apiName, String displayName) {
-
-        List<OntologyPropertyVO> propertyVOS = ontologyPropertyService.selectByOntologyApi(apiName);
-        String key = Objects.requireNonNull(propertyVOS.stream().filter(prop -> prop.getIsPrimaryKey() == 1).findFirst().orElse(null)).getApiName();
-        String title = Objects.requireNonNull(propertyVOS.stream().filter(prop -> prop.getIsTitleKey() == 1).findFirst().orElse(null)).getApiName();
-
-        int pageNum = 1, count = 0;
-        while (true) {
-            PageInfo<Map<String, Object>> mapPageInfo = objectService.queryObjectList(uniqueIdentifier, pageNum, 200);
-            if (mapPageInfo == null || mapPageInfo.getList() == null || mapPageInfo.getList().isEmpty()) {
-                break;
-            }
-            // 插入实体数据
-            Integer num = entityService.batchInsertEntityTable(apiName, mapPageInfo.getList());
-            // 创建节点
-            List<EntityNodeParam> collect = mapPageInfo.getList().stream().map(item -> new EntityNodeParam(
-                    uniqueIdentifier + "@" + item.get(key),
-                    (String) item.get(title),
-                    "",
-                    apiName,
-                    displayName
-            )).collect(Collectors.toList());
-            if (!entityService.createEntityNode(collect)) {
-                log.warn("创建实体失败");
-            }
-            pageNum++;
-            count += num;
-        }
-        return count;
-    }
-
     @Override
     public List<OntologyMetaVO> selectByUniqueIdentifiers(List<String> uniqueIdentifiers) {
         if (uniqueIdentifiers.isEmpty()) {
@@ -359,54 +324,25 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         return ontologyMetaMapper.sumByGroup(groupId);
     }
 
-    /**
-     * 插入所有的datasource字段作为本体属性
-     *
-     * @param backingDatasourceId
-     * @param ontologyUniqueIdentifier
-     * @param titleKey
-     * @param primaryKey
-     * @return
-     */
-    private Integer creatAllProperties(String backingDatasourceId, String ontologyUniqueIdentifier, String titleKey, String primaryKey) {
-
-        List<TableColumnDescVO> columns = tableMetadataService.getColumns(backingDatasourceId);
-        List<OntologyPropertyBO> collect = columns.stream().map(column -> {
-            OntologyPropertyBO property = new OntologyPropertyBO();
-            property.setOntologyUniqueIdentifier(ontologyUniqueIdentifier);
-            property.setApiName(column.getColumnName());
-            property.setDatasourceColumnName(column.getColumnName());
-            property.setPropertyType(OntologyDataTypeEnum.valueOfPg(column.getType()));
-            property.setDatasourceId(backingDatasourceId);
-            property.setDescription(column.getDescription());
-            property.setDisplayName(column.getDescription());
-            if (column.getColumnName().equals(primaryKey)) {
-                property.setIsPrimaryKey(1);
-            } else {
-                property.setIsPrimaryKey(0);
-            }
-            if (column.getColumnName().equals(titleKey)) {
-                property.setIsTitleKey(1);
-            } else {
-                property.setIsTitleKey(0);
-            }
-            property.setStatus(1);
-            return property;
-        }).collect(Collectors.toList());
-        return ontologyPropertyService.batchAdd(collect);
-    }
 
     @Override
-    public void deleteOntology(String uniqueIdentifier) {
-        /**
-         * todo:
-         * 1 删除本体元数据
-         * 2 删除属性
-         * 3 删除关系
-         * 4 删除函数
-         * 5 删除行为
-         * 6 删除所有实体
-         */
+    @Transactional(value = "mainTransactionManager")
+    public void deleteOntology(String ontologyIdentifier) {
+        //删除本体元数据
+        this.remove(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, ontologyIdentifier));
+        //删除属性
+        ontologyPropertyService.remove(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyIdentifier));
+        //删除关系
+        linkService.remove(new LambdaQueryWrapper<OntologyLinkGroup>()
+                .eq(OntologyLinkGroup::getOntologyUniqueIdentifierFrom, ontologyIdentifier).or()
+                .eq(OntologyLinkGroup::getOntologyUniqueIdentifierTo, ontologyIdentifier));
+        //删除函数
+        functionService.removeByOntologyUniqId(ontologyIdentifier);
+        //删除行为，参数，规则，任务 todo 停止本体下实体的定时任务
+        actionService.removeByOntologyIdentifier(ontologyIdentifier);
+        //删除所有实体
+        var meta = ontologyMetaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, ontologyIdentifier));
+        entityClient.deleteTableAndEntities(meta.getApiName());
     }
 
     @Override

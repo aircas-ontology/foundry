@@ -16,6 +16,9 @@ import java.util.HashMap;
 import java.util.List;
 
 public interface FunctionService extends IService<Function> {
+
+    void removeByOntologyUniqId(String ontologyUniqId);
+
     Object handle(String functionName, Boolean isPreview, List<String> objectTypes, HashMap<String, Object> parameters) throws FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionRuntimeException, FunctionNotFoundException;
 
     List<ParameterMetadataVO> getParameters(String functionName) throws FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionNotFoundException;

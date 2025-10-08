@@ -12,6 +12,7 @@ import lombok.experimental.SuperBuilder;
 import org.springframework.context.annotation.Primary;
 
 import javax.persistence.PrimaryKeyJoinColumn;
+import javax.validation.Valid;
 import javax.validation.constraints.NotBlank;
 import java.util.List;
 
@@ -25,5 +26,6 @@ public class OntologyDatasourceParam {
 
     @ApiModelProperty(name ="columnParamList",value = "列参数", required = true)
     @PrimaryKeyVerify
+    @Valid
     private List<OntologyDataSourceColumnParam> columnParamList;
 }

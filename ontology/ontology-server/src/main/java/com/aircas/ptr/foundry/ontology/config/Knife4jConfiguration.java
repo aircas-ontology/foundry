@@ -21,10 +21,9 @@ public class Knife4jConfiguration {
     public Docket retrievalWebDocs() {
         return new Docket(DocumentationType.SWAGGER_2)
                 .apiInfo(apiInfo())
-                .groupName("ontology")
                 .enable(enable)
                 .select()
-                .apis(RequestHandlerSelectors.basePackage("com.aircas.ptr.foundry.ontology.userinterface.controller"))
+                .apis(RequestHandlerSelectors.basePackage("com.aircas.ptr.foundry.ontology.controller"))
                 .paths(PathSelectors.any())
                 .build();
     }

@@ -9,4 +9,6 @@ public interface EntityTableService {
     void createEntities(EntityCreateParam entityCreateParam);
 
     void copyEntities(EntityCopyParam entityCopyParam);
+
+    void deleteEntitiesByTableName(String tableName);
 }

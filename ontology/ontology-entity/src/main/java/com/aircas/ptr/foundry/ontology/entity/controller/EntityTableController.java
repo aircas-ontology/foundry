@@ -42,6 +42,7 @@ public class EntityTableController {
     @ApiOperation("删除实体表、实体数据、实体节点和关系")
     @DeleteMapping("/{tableName}")
     public RestResult deleteEntitiesByTableName(@PathVariable(required = true,name = "tableName") String tableName) {
+        entityTableService.deleteEntitiesByTableName(tableName);
         return RestResult.success();
     }
 

@@ -1,7 +1,9 @@
 package com.aircas.ptr.foundry.common.filter;
 
 import com.aircas.ptr.foundry.common.util.IdGenerator;
+import com.google.common.collect.Sets;
 import lombok.extern.slf4j.Slf4j;
+import lombok.var;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.MDC;
 import org.springframework.core.annotation.Order;
@@ -15,6 +17,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Set;
 
 @Component
 @Slf4j
@@ -24,10 +27,24 @@ public class LoggingFilter extends OncePerRequestFilter {
     public static final String LOG_ID_HEADER = "X-Request-ID";
     public static final String LOG_ID_KEY = "logId";
 
+    private static final Set<String> SWAGGER_IGNORE_PATH = Sets.newHashSet(
+            "/swagger-ui",
+            "/swagger-resources",
+            "/v2/api-docs",
+            "/v3/api-docs",
+            "/doc.html"
+    );
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
+
+        var servletPath = request.getServletPath();
+        var isSwaggerPath = SWAGGER_IGNORE_PATH.stream().anyMatch(v -> servletPath.startsWith(servletPath));
+        if (isSwaggerPath) {
+            filterChain.doFilter(request, response);
+            return;
+        }
 
         String logId = request.getHeader(LOG_ID_HEADER);
         if (StringUtils.isEmpty(logId)) {
@@ -36,6 +53,7 @@ public class LoggingFilter extends OncePerRequestFilter {
         MDC.put(LOG_ID_KEY, logId);
 
         long startTime = System.currentTimeMillis();
+
 
         CachableHttpServletRequest requestWrapper = new CachableHttpServletRequest(request);
         this.logRequest(requestWrapper);

@@ -68,4 +68,8 @@ public class Function {
 
     private String code;
 
+    /**
+     * 本体id
+     */
+    private String ontologyUniqueIdentifier;
 }

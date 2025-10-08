@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.ontology.controller;
 
 import com.aircas.ptr.foundry.common.base.RestResult;
+import com.aircas.ptr.foundry.ontology.controller.validator.OntologyIdVerify;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyIdentifierParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyUpdateParam;
@@ -37,7 +38,7 @@ public class OntologyMetaController {
 
     @DeleteMapping("/{ontologyIdentifier}")
     @ApiOperation(value = "删除本体")
-    public RestResult deleteOntology(@PathVariable(required = true,name = "ontologyIdentifier") String  ontologyIdentifier) {
+    public RestResult deleteOntology(@PathVariable(required = true,name = "ontologyIdentifier") @Valid @OntologyIdVerify String ontologyIdentifier) {
         ontologyMetaService.deleteOntology(ontologyIdentifier);
         return RestResult.success();
     }

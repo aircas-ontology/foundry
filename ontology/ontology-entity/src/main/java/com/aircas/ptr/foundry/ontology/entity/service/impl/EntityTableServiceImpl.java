@@ -47,6 +47,14 @@ public class EntityTableServiceImpl extends ServiceImpl<EntityTableMapper, Objec
 
     private final EntityRelationRepository relationRepository;
 
+
+    @Override
+    @Transactional(value = "mainTransactionManager")
+    public void deleteEntitiesByTableName(String tableName){
+
+
+    }
+
     @Override
     @Transactional(value = "mainTransactionManager")
     public void createEntities(EntityCreateParam entityCreateParam) {

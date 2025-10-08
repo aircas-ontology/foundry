@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
+import com.aircas.ptr.foundry.ontology.controller.validator.OntologyIdVerify;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.AllArgsConstructor;
@@ -22,6 +23,7 @@ public class OntologyIdentifierParam {
 
 
     @NotBlank(message = "ontologyIdentifier is empty")
+    @OntologyIdVerify
     @ApiModelProperty(name = "ontologyIdentifier", value = "本体id", dataType = "java.lang.String", example = "abcdef",required = true)
     private String ontologyIdentifier;
 }

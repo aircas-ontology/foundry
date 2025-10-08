@@ -15,15 +15,15 @@ import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.aircas.ptr.foundry.ontology.repository.dao.*;
 import com.aircas.ptr.foundry.ontology.service.*;
 import com.alibaba.fastjson.JSON;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import lombok.var;
 import org.apache.commons.lang.StringUtils;
 import org.springframework.beans.BeanUtils;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
@@ -36,45 +36,55 @@ import static com.aircas.ptr.foundry.common.constant.ActionMappingInTypeEnum.ONT
 
 @Service
 @Slf4j
-public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper, OntologyAction>  implements OntologyActionService {
+public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper, OntologyAction> implements OntologyActionService {
 
     @Resource
-    private  OntologyActionMapper ontologyActionMapper;
+    private OntologyActionMapper ontologyActionMapper;
 
     @Resource
-    private  OntologyActionMappingInMapper ontologyActionMappingInMapper;
+    private OntologyActionMappingInMapper ontologyActionMappingInMapper;
 
     @Resource
-    private  OntologyMetaMapper ontologyMetaMapper;
+    private OntologyMetaMapper ontologyMetaMapper;
 
 
     @Resource
-    private  ActionHandleCommitFlashMermoryMapper actionHandleCommitFlashMermoryMapper;
+    private ActionHandleCommitFlashMermoryMapper actionHandleCommitFlashMermoryMapper;
 
     @Resource
-    private  OntologyPropertyMapper propertyMapper;
+    private OntologyPropertyMapper propertyMapper;
 
     @Resource
-    private  ObjectService objectService;
+    private ObjectService objectService;
 
     @Resource
-    private  OntologyPropertyService ontologyPropertyService;
+    private OntologyPropertyService ontologyPropertyService;
 
     @Resource
-    private  FunctionService functionService;
+    private FunctionService functionService;
 
     @Resource
-    private  ActionHandleRuleService actionHandleRuleService;
+    private ActionHandleRuleService actionHandleRuleService;
 
     @Resource
-    private  ActionHandleTaskService actionHandleTaskService;
+    private ActionHandleTaskService actionHandleTaskService;
 
     private final static String DEFAULT_OBJECT_DESC = "当前本体对象";
 
 
     @Override
-    public List<OntologyActionView> queryActionViewByOntologyIdentifier(String ontologyUniqIdentifier){
+    public List<OntologyActionView> queryActionViewByOntologyIdentifier(String ontologyUniqIdentifier) {
         return ontologyActionMapper.selectActionViewByOntologyIdentifier(ontologyUniqIdentifier);
+    }
+
+    @Override
+    public void removeByOntologyIdentifier(String ontologyIdentifier) {
+        var actions = list(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getOntologyUniqueIdentifier, ontologyIdentifier));
+        var actionIds = actions.stream().map(v -> v.getId()).collect(Collectors.toList());
+        ontologyActionMapper.delete(new LambdaQueryWrapper<OntologyAction>().in(OntologyAction::getId, actionIds));
+        ontologyActionMappingInMapper.delete(new LambdaQueryWrapper<OntologyActionMappingIn>().in(OntologyActionMappingIn::getOntologyActionId, actionIds));
+        actionHandleRuleService.remove(new LambdaQueryWrapper<ActionHandleRule>().in(ActionHandleRule::getActionId, actionIds));
+        actionHandleTaskService.remove(new LambdaQueryWrapper<ActionHandleTask>().in(ActionHandleTask::getActionId, actionIds));
     }
 
     @Override
@@ -191,8 +201,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             try {
                 handle(objectKey, action.getApi(), null);
             } catch (FunctionClassNotNewInstanceException | FunctionFileNotCompiled | FunctionRuntimeException |
-                     FunctionNotFoundException | OntologyFunctionNotFoundException | OntologyApiNameNotFoundException |
-                     OntologyFunctionMappedPropertyNotFoundException e) {
+                    FunctionNotFoundException | OntologyFunctionNotFoundException | OntologyApiNameNotFoundException |
+                    OntologyFunctionMappedPropertyNotFoundException e) {
                 throw new RuntimeException(e);
             }
         });
@@ -200,7 +210,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
 
     @Override
     public int getCountByStatus(int status) {
-        return ontologyActionMapper.selectCount(new QueryWrapper<OntologyAction>().eq("status",status));
+        return ontologyActionMapper.selectCount(new QueryWrapper<OntologyAction>().eq("status", status));
     }
 
     @Override
@@ -223,20 +233,20 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     }
 
     @Override
-    public List<ActionHandleRule> getActionRulesById(List<Long> ids){
+    public List<ActionHandleRule> getActionRulesById(List<Long> ids) {
         return actionHandleRuleService.queryRulesByIds(ids);
     }
 
-    public int updateActionRulesById(ActionHandleRule rule){
+    public int updateActionRulesById(ActionHandleRule rule) {
         return actionHandleRuleService.updateRules(rule);
     }
 
 
-    public ActionHandleCommitFlashMemory getActionDataLogByAction(long actionId,String primaryValue){
-        return actionHandleCommitFlashMermoryMapper.getActionFlashMemoryByActionAndPrimary(actionId,primaryValue);
+    public ActionHandleCommitFlashMemory getActionDataLogByAction(long actionId, String primaryValue) {
+        return actionHandleCommitFlashMermoryMapper.getActionFlashMemoryByActionAndPrimary(actionId, primaryValue);
     }
 
-    public int updateActionDataById(ActionHandleCommitFlashMemory flashMemory){
+    public int updateActionDataById(ActionHandleCommitFlashMemory flashMemory) {
         return actionHandleCommitFlashMermoryMapper.updateActionDataLogById(flashMemory);
     }
 
@@ -348,7 +358,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             try {
                 return getMetadataByApi(item.getApi());
             } catch (OntologyFunctionMappedPropertyNotFoundException | OntologyFunctionNotFoundException |
-                     FunctionClassNotNewInstanceException | FunctionFileNotCompiled | FunctionNotFoundException e) {
+                    FunctionClassNotNewInstanceException | FunctionFileNotCompiled | FunctionNotFoundException e) {
                 throw new RuntimeException(e);
             }
         }).collect(Collectors.toList());
@@ -427,20 +437,20 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             try {
                 return getMetadataByApi(item.getApi());
             } catch (OntologyFunctionMappedPropertyNotFoundException | OntologyFunctionNotFoundException |
-                     FunctionClassNotNewInstanceException | FunctionFileNotCompiled | FunctionNotFoundException e) {
+                    FunctionClassNotNewInstanceException | FunctionFileNotCompiled | FunctionNotFoundException e) {
                 throw new RuntimeException(e);
             }
         }).collect(Collectors.toList());
 
         /**
-        OntologyAction action = pageInfo.getList().get(0);
-        List<OntologyActionVO> collect = new ArrayList<>();
-        try {
-            OntologyActionVO ontologyActionVO = getMetadataByApi(action.getApi());
-            collect.add(ontologyActionVO);
-        } catch (exception e) {
+         OntologyAction action = pageInfo.getList().get(0);
+         List<OntologyActionVO> collect = new ArrayList<>();
+         try {
+         OntologyActionVO ontologyActionVO = getMetadataByApi(action.getApi());
+         collect.add(ontologyActionVO);
+         } catch (exception e) {
 
-        }
+         }
          **/
         PageInfo<OntologyActionVO> pageResult = new PageInfo<>(collect);
         BeanUtils.copyProperties(pageInfo, pageResult);

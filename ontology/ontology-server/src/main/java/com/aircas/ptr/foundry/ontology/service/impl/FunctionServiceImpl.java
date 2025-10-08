@@ -12,20 +12,24 @@ import com.aircas.ptr.foundry.ontology.function.FunctionUtils;
 import com.aircas.ptr.foundry.ontology.function.Parameter;
 import com.aircas.ptr.foundry.ontology.model.bo.FunctionBo;
 import com.aircas.ptr.foundry.ontology.model.po.Function;
+import com.aircas.ptr.foundry.ontology.model.po.FunctionParamPO;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.model.view.FunctionView;
 import com.aircas.ptr.foundry.ontology.model.vo.FunctionVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaVO;
 import com.aircas.ptr.foundry.ontology.model.vo.ParameterMetadataVO;
 import com.aircas.ptr.foundry.ontology.repository.dao.FunctionMapper;
+import com.aircas.ptr.foundry.ontology.repository.dao.FunctionParamMapper;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyMetaMapper;
 import com.aircas.ptr.foundry.ontology.service.FunctionService;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import groovy.lang.GroovyClassLoader;
 import groovy.lang.GroovyObject;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import lombok.var;
 import org.apache.commons.io.FileUtils;
 import org.codehaus.groovy.control.CompilationFailedException;
 import org.springframework.beans.BeanUtils;
@@ -49,7 +53,17 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
 
     private final FunctionMapper functionMapper;
 
+    private final FunctionParamMapper functionParamMapper;
+
     private final OntologyMetaMapper ontologyMetaMapper;
+
+    @Override
+    public void removeByOntologyUniqId(String ontologyUniqId) {
+        var functionList = list(new LambdaQueryWrapper<Function>().eq(Function::getOntologyUniqueIdentifier, ontologyUniqId));
+        var funcIds = functionList.stream().map(v -> v.getId()).collect(Collectors.toList());
+        remove(new LambdaQueryWrapper<Function>().in(Function::getId, funcIds));
+        functionParamMapper.delete(new LambdaQueryWrapper<FunctionParamPO>().in(FunctionParamPO::getFunctionId, funcIds));
+    }
 
     @Override
     public List<FunctionView> queryFunctionViewByOntologyId(String ontologyUniqId) {
