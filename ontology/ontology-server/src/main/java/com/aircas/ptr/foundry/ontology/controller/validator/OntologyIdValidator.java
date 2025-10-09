@@ -3,6 +3,7 @@ package com.aircas.ptr.foundry.ontology.controller.validator;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyMetaMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import lombok.RequiredArgsConstructor;
 import lombok.var;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Component;
@@ -11,10 +12,12 @@ import javax.validation.ConstraintValidator;
 import javax.validation.ConstraintValidatorContext;
 
 @Component
+@RequiredArgsConstructor
 public class OntologyIdValidator implements ConstraintValidator<OntologyIdVerify, String> {
 
 
-    private OntologyMetaMapper metaMapper;
+
+    private  final OntologyMetaMapper metaMapper;
 
 
     @Override

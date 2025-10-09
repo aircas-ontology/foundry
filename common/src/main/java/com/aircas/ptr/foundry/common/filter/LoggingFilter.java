@@ -40,7 +40,7 @@ public class LoggingFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
 
         var servletPath = request.getServletPath();
-        var isSwaggerPath = SWAGGER_IGNORE_PATH.stream().anyMatch(v -> servletPath.startsWith(servletPath));
+        var isSwaggerPath = SWAGGER_IGNORE_PATH.stream().anyMatch(v -> servletPath.startsWith(v));
         if (isSwaggerPath) {
             filterChain.doFilter(request, response);
             return;

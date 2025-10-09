@@ -22,6 +22,7 @@ import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import lombok.extern.slf4j.Slf4j;
 import lombok.var;
+import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang.StringUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
@@ -80,11 +81,13 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     @Override
     public void removeByOntologyIdentifier(String ontologyIdentifier) {
         var actions = list(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getOntologyUniqueIdentifier, ontologyIdentifier));
-        var actionIds = actions.stream().map(v -> v.getId()).collect(Collectors.toList());
-        ontologyActionMapper.delete(new LambdaQueryWrapper<OntologyAction>().in(OntologyAction::getId, actionIds));
-        ontologyActionMappingInMapper.delete(new LambdaQueryWrapper<OntologyActionMappingIn>().in(OntologyActionMappingIn::getOntologyActionId, actionIds));
-        actionHandleRuleService.remove(new LambdaQueryWrapper<ActionHandleRule>().in(ActionHandleRule::getActionId, actionIds));
-        actionHandleTaskService.remove(new LambdaQueryWrapper<ActionHandleTask>().in(ActionHandleTask::getActionId, actionIds));
+        if (CollectionUtils.isNotEmpty(actions)) {
+            var actionIds = actions.stream().map(v -> v.getId()).collect(Collectors.toList());
+            ontologyActionMapper.delete(new LambdaQueryWrapper<OntologyAction>().in(OntologyAction::getId, actionIds));
+            ontologyActionMappingInMapper.delete(new LambdaQueryWrapper<OntologyActionMappingIn>().in(OntologyActionMappingIn::getOntologyActionId, actionIds));
+            actionHandleRuleService.remove(new LambdaQueryWrapper<ActionHandleRule>().in(ActionHandleRule::getActionId, actionIds));
+            actionHandleTaskService.remove(new LambdaQueryWrapper<ActionHandleTask>().in(ActionHandleTask::getActionId, actionIds));
+        }
     }
 
     @Override

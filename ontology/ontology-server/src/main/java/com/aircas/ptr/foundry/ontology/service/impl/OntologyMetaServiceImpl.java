@@ -328,6 +328,10 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
     @Override
     @Transactional(value = "mainTransactionManager")
     public void deleteOntology(String ontologyIdentifier) {
+        var meta = ontologyMetaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, ontologyIdentifier));
+        PreconditionUtils.checkArgument(meta != null, "ontology not exist:" + ontologyIdentifier, ResultCode.PARAM_ERROR, HttpStatus.BAD_REQUEST);
+        var childs = ontologyMetaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getParentUniqueIdentifier, ontologyIdentifier));
+        PreconditionUtils.checkArgument(CollectionUtils.isEmpty(childs), "存在依赖该本体的子本体" + ontologyIdentifier, ResultCode.PARAM_ERROR, HttpStatus.BAD_REQUEST);
         //删除本体元数据
         this.remove(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, ontologyIdentifier));
         //删除属性
@@ -340,8 +344,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         functionService.removeByOntologyUniqId(ontologyIdentifier);
         //删除行为，参数，规则，任务 todo 停止本体下实体的定时任务
         actionService.removeByOntologyIdentifier(ontologyIdentifier);
-        //删除所有实体
-        var meta = ontologyMetaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, ontologyIdentifier));
+        //删除所有实体表、节点和边
         entityClient.deleteTableAndEntities(meta.getApiName());
     }
 

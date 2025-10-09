@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
+import javax.validation.ConstraintViolationException;
 import java.util.stream.Collectors;
 
 /**
@@ -28,6 +29,7 @@ import java.util.stream.Collectors;
 public class GlobalExceptionHandler {
 
     @ExceptionHandler({
+            ConstraintViolationException.class,
             MissingServletRequestParameterException.class,
             ServletRequestBindingException.class,
             HttpMessageNotReadableException.class,
@@ -39,25 +41,28 @@ public class GlobalExceptionHandler {
         String errorMsg = ex.getMessage();
         if (ex instanceof MethodArgumentNotValidException) {
             var exception = (MethodArgumentNotValidException) ex;
-            errorMsg = String.join(";", exception.getBindingResult().getAllErrors().stream().map((error) -> {
-                return error.getDefaultMessage();
-            }).collect(Collectors.toList()));
+            errorMsg = String.join(";", exception.getBindingResult().getAllErrors().stream().map((error) -> error.getDefaultMessage()).collect(Collectors.toList()));
             result.setMessage(errorMsg);
         }
-        log.error("handleBadRequestException:{}",errorMsg);
+        if (ex instanceof ConstraintViolationException) {
+            var exception = (ConstraintViolationException) ex;
+            errorMsg = String.join(";", exception.getConstraintViolations().stream().map(e -> e.getMessage()).collect(Collectors.toList()));
+            result.setMessage(errorMsg);
+        }
+        log.error("handleBadRequestException:{}", errorMsg);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(result);
     }
 
 
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<RestResult> handleBusinessException(BusinessException exception) {
-        log.error("handleBusinessException:",exception);
-        return ResponseEntity.status(exception.getHttpStatus()).body(new RestResult(exception.getResultCode(),exception.getMessage()));
+        log.error("handleBusinessException:", exception);
+        return ResponseEntity.status(exception.getHttpStatus()).body(new RestResult(exception.getResultCode(), exception.getMessage()));
     }
 
     @ExceptionHandler(Throwable.class)
     public ResponseEntity<RestResult> handleThrowable(Throwable t) {
-        log.error("handleThrowable:",t);
+        log.error("handleThrowable:", t);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new RestResult(ResultCode.ERROR));
     }
 }

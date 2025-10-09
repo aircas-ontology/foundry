@@ -81,7 +81,7 @@ public class HttpUtil {
     }
 
     public static <T> T deletePathVariable(String url, List<String> pathVariable, TypeReference<T> responseType) {
-        url = String.format(url, pathVariable);
+        url = String.format(url, pathVariable.toArray());
         Request.Builder requestBuilder = new Request.Builder()
                 .header(LoggingFilter.LOG_ID_HEADER, MDC.get(LoggingFilter.LOG_ID_KEY))
                 .delete()

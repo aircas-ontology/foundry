@@ -11,4 +11,7 @@ public interface EntityTableService {
     void copyEntities(EntityCopyParam entityCopyParam);
 
     void deleteEntitiesByTableName(String tableName);
+
+    void deleteNodesByTableName(String entityTableName);
+
 }

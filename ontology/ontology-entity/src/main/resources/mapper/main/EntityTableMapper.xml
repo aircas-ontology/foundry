@@ -55,4 +55,9 @@
         CREATE TABLE ${newTable} AS
         SELECT * FROM ${srcTable}
     </select>
+
+    <!-- Drop table SQL statement -->
+    <update id="dropTable" parameterType="string">
+        DROP TABLE IF EXISTS ${tableName}
+    </update>
 </mapper>

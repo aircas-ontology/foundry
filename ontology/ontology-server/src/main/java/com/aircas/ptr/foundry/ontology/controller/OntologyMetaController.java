@@ -13,6 +13,7 @@ import com.aircas.ptr.foundry.ontology.service.OntologyMetaService;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
@@ -23,6 +24,7 @@ import java.util.List;
 @Api(tags = "元数据")
 @RestController
 @RequestMapping("/meta")
+@Validated
 public class OntologyMetaController {
 
     @Resource
@@ -38,7 +40,7 @@ public class OntologyMetaController {
 
     @DeleteMapping("/{ontologyIdentifier}")
     @ApiOperation(value = "删除本体")
-    public RestResult deleteOntology(@PathVariable(required = true,name = "ontologyIdentifier") @Valid @OntologyIdVerify String ontologyIdentifier) {
+    public RestResult deleteOntology(@PathVariable(required = true,name = "ontologyIdentifier") @OntologyIdVerify String ontologyIdentifier) {
         ontologyMetaService.deleteOntology(ontologyIdentifier);
         return RestResult.success();
     }

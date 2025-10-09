@@ -30,6 +30,7 @@ import groovy.lang.GroovyObject;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import lombok.var;
+import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.io.FileUtils;
 import org.codehaus.groovy.control.CompilationFailedException;
 import org.springframework.beans.BeanUtils;
@@ -60,9 +61,11 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     @Override
     public void removeByOntologyUniqId(String ontologyUniqId) {
         var functionList = list(new LambdaQueryWrapper<Function>().eq(Function::getOntologyUniqueIdentifier, ontologyUniqId));
-        var funcIds = functionList.stream().map(v -> v.getId()).collect(Collectors.toList());
-        remove(new LambdaQueryWrapper<Function>().in(Function::getId, funcIds));
-        functionParamMapper.delete(new LambdaQueryWrapper<FunctionParamPO>().in(FunctionParamPO::getFunctionId, funcIds));
+        if(CollectionUtils.isNotEmpty(functionList)) {
+            var funcIds = functionList.stream().map(v -> v.getId()).collect(Collectors.toList());
+            remove(new LambdaQueryWrapper<Function>().in(Function::getId, funcIds));
+            functionParamMapper.delete(new LambdaQueryWrapper<FunctionParamPO>().in(FunctionParamPO::getFunctionId, funcIds));
+        }
     }
 
     @Override

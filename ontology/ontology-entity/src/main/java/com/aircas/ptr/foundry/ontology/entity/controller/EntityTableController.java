@@ -45,6 +45,14 @@ public class EntityTableController {
         entityTableService.deleteEntitiesByTableName(tableName);
         return RestResult.success();
     }
+    
+    @ApiOperation("删除实体节点和关系")
+    @DeleteMapping("/node/{tableName}")
+    public RestResult deleteEntityNodeByTableName(@PathVariable(required = true,name = "tableName") String tableName) {
+        entityTableService.deleteNodesByTableName(tableName);
+        return RestResult.success();
+    }
+
 
 
     @ApiOperation("增加列")

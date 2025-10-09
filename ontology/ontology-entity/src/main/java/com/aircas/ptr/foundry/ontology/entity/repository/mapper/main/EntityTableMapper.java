@@ -17,4 +17,7 @@ public interface EntityTableMapper extends BaseMapper<Object> {
 
     void copyTable(@Param("srcTable") String srcTable, @Param("newTable") String newTable);
 
+    void dropTable(@Param("tableName") String tableName);
+
+
 }

@@ -50,9 +50,25 @@ public class EntityTableServiceImpl extends ServiceImpl<EntityTableMapper, Objec
 
     @Override
     @Transactional(value = "mainTransactionManager")
-    public void deleteEntitiesByTableName(String tableName){
+    public void deleteEntitiesByTableName(String entityTableName) {
+        //删除实体属性表、实体关联表、实体表
+        var tableNames = propertyMappingService.list(new LambdaQueryWrapper<EntityPropertyMappingPO>().eq(EntityPropertyMappingPO::getEntityTable, entityTableName))
+                .stream().map(v -> v.getEntityPropertyTable()).collect(Collectors.toList());
+        propertyMappingService.remove(new LambdaQueryWrapper<EntityPropertyMappingPO>().eq(EntityPropertyMappingPO::getEntityTable, entityTableName));
+        tableNames.add(entityTableName);
+        propertyService.remove(new LambdaQueryWrapper<EntityPropertyPO>().in(EntityPropertyPO::getTableName, tableNames));
+        tableNames.forEach(table -> tableMapper.dropTable(table));
+        //删除实体节点、实体关联关系
+        deleteNodesByTableName(entityTableName);
+    }
 
-
+    @Override
+    public void deleteNodesByTableName(String entityTableName) {
+        var nodes = nodeRepository.findByTableName(entityTableName);
+        var relations = relationRepository.findByFromIn(nodes);
+        relations.addAll(relationRepository.findByToIn(nodes));
+        nodeRepository.deleteByIds(nodes.stream().map(v -> v.getArangoId()).collect(Collectors.toList()));
+        relationRepository.deleteByIds(relations.stream().map(v -> v.getArangoId()).collect(Collectors.toList()));
     }
 
     @Override
