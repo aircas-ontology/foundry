@@ -7,7 +7,8 @@ import com.aircas.ptr.foundry.ontology.common.param.EntityCreateParam;
 import com.aircas.ptr.foundry.ontology.common.param.TableColumnRelationUpdateParam;
 import com.aircas.ptr.foundry.ontology.entity.service.EntityTableService;
 import com.aircas.ptr.foundry.ontology.entity.service.PostgresService;
-import io.swagger.annotations.*;
+import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiOperation;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -18,7 +19,7 @@ import javax.validation.Valid;
 @RestController
 @RequestMapping("/table")
 public class EntityTableController {
-    
+
     @Autowired
     private PostgresService postgresService;
 
@@ -41,18 +42,17 @@ public class EntityTableController {
 
     @ApiOperation("删除实体表、实体数据、实体节点和关系")
     @DeleteMapping("/{tableName}")
-    public RestResult deleteEntitiesByTableName(@PathVariable(required = true,name = "tableName") String tableName) {
+    public RestResult deleteEntitiesByTableName(@PathVariable(required = true, name = "tableName") String tableName) {
         entityTableService.deleteEntitiesByTableName(tableName);
         return RestResult.success();
     }
-    
+
     @ApiOperation("删除实体节点和关系")
     @DeleteMapping("/node/{tableName}")
-    public RestResult deleteEntityNodeByTableName(@PathVariable(required = true,name = "tableName") String tableName) {
+    public RestResult deleteEntityNodeByTableName(@PathVariable(required = true, name = "tableName") String tableName) {
         entityTableService.deleteNodesByTableName(tableName);
         return RestResult.success();
     }
-
 
 
     @ApiOperation("增加列")
@@ -73,9 +73,6 @@ public class EntityTableController {
     public RestResult modifyColumnRelation(@RequestBody @Valid TableColumnRelationUpdateParam param) {
         return RestResult.success();
     }
-
-
-
 
 
 //    @ApiOperation("创建数据表")

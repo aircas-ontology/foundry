@@ -2,28 +2,38 @@ package com.aircas.ptr.foundry.ontology.service.impl;
 
 import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.common.base.ResultGenerator;
+import com.aircas.ptr.foundry.common.constant.OntologyLinkMappingEnum;
+import com.aircas.ptr.foundry.common.constant.Status;
+import com.aircas.ptr.foundry.common.util.IdGenerator;
+import com.aircas.ptr.foundry.ontology.client.EntityClient;
+import com.aircas.ptr.foundry.ontology.common.param.EntityRelationCreateParam;
+import com.aircas.ptr.foundry.ontology.model.bo.OntologyLinkGroupBo;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyLinkCreateParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyChildLink;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup;
-import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
-import com.aircas.ptr.foundry.ontology.repository.dao.OntologyPropertyMapper;
-import com.aircas.ptr.foundry.ontology.service.OntologyLinkGroupService;
-import com.aircas.ptr.foundry.ontology.service.OntologyMetaService;
-import com.aircas.ptr.foundry.ontology.model.bo.OntologyLinkGroupBo;
+import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyChildLinkMapper;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyLinkGroupMapper;
-import com.baomidou.mybatisplus.extension.service.IService;
+import com.aircas.ptr.foundry.ontology.service.OntologyLinkGroupService;
+import com.aircas.ptr.foundry.ontology.service.OntologyMetaService;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import lombok.RequiredArgsConstructor;
+import com.google.common.collect.Lists;
 import lombok.extern.slf4j.Slf4j;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.var;
+import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * @author dongjunchuan
@@ -33,16 +43,89 @@ import java.util.stream.Collectors;
 
 @Service
 @Slf4j
-public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupMapper, OntologyLinkGroup>  implements OntologyLinkGroupService {
+public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupMapper, OntologyLinkGroup> implements OntologyLinkGroupService {
 
     @Resource
-    private  OntologyLinkGroupMapper ontologyLinkGroupMapper;
+    private OntologyLinkGroupMapper ontologyLinkGroupMapper;
 
     @Resource
-    private  OntologyChildLinkMapper ontologyChildLinkMapper;
+    private OntologyChildLinkMapper ontologyChildLinkMapper;
 
     @Resource
     private OntologyMetaService ontologyMetaService;
+
+    @Resource
+    private EntityClient entityClient;
+
+
+    @Override
+    @Transactional(value = "mainTransactionManager")
+    public void createLink(OntologyLinkCreateParam linkCreateParam) {
+        save(OntologyLinkGroup.builder()
+                .uniqueIdentifier(IdGenerator.generateUUID())
+                .status(Status.ENABLE.getValue())
+                .ontologyUniqueIdentifierFrom(linkCreateParam.getOntologyUniqueIdentifierFrom())
+                .ontologyUniqueIdentifierTo(linkCreateParam.getOntologyUniqueIdentifierTo())
+                .propertyUniqueIdentifierFrom(linkCreateParam.getPropertyUniqueIdentifierFrom())
+                .propertyUniqueIdentifierTo(linkCreateParam.getPropertyUniqueIdentifierTo())
+                .name(linkCreateParam.getName())
+                .mapping(linkCreateParam.getMapping().getValue())
+                .build());
+
+        var fromMeta = ontologyMetaService.getOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, linkCreateParam.getOntologyUniqueIdentifierFrom()));
+        var toMeta = ontologyMetaService.getOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, linkCreateParam.getOntologyUniqueIdentifierTo()));
+
+
+        entityClient.createEntityRelation(EntityRelationCreateParam.builder()
+                .entityTableFrom(fromMeta.getApiName())
+                .entityTableTo(toMeta.getApiName())
+                .relationType(linkCreateParam.getName())
+                .build());
+    }
+
+    @Override
+    public List<OntologyLinkInfoVO> getLinkByGroupId(String groupId) {
+        var ids = ontologyMetaService.list(new LambdaQueryWrapper<OntologyMeta>().like(OntologyMeta::getMetaGroupId, groupId))
+                .stream().map(v -> v.getUniqueIdentifier()).collect(Collectors.toList());
+
+        if (CollectionUtils.isEmpty(ids)) {
+            return Lists.newArrayList();
+        }
+        var links = list(new LambdaQueryWrapper<OntologyLinkGroup>().in(OntologyLinkGroup::getOntologyUniqueIdentifierFrom, ids)
+                .or().in(OntologyLinkGroup::getOntologyUniqueIdentifierTo, ids));
+
+        if (CollectionUtils.isEmpty(links)) {
+            return Lists.newArrayList();
+        }
+
+        var idList = links.stream().flatMap(l -> Stream.of(l.getOntologyUniqueIdentifierFrom(), l.getOntologyUniqueIdentifierTo())).collect(Collectors.toList());
+
+        var metaMap = ontologyMetaService.list(new LambdaQueryWrapper<OntologyMeta>().in(OntologyMeta::getUniqueIdentifier, idList))
+                .stream().collect(Collectors.toMap(v -> v.getUniqueIdentifier(), v -> v));
+
+        return links.stream().map(link -> {
+            var from = metaMap.get(link.getOntologyUniqueIdentifierFrom());
+            var to = metaMap.get(link.getOntologyUniqueIdentifierTo());
+            return OntologyLinkInfoVO.builder()
+                    .mapping(OntologyLinkMappingEnum.getByValue(link.getMapping()))
+                    .createTime(link.getCreateTime())
+                    .updateTime(link.getUpdateTime())
+                    .name(link.getName())
+                    .uniqueIdentifier(link.getUniqueIdentifier())
+                    .ontologyUniqueIdentifierFrom(from.getUniqueIdentifier())
+                    .ontologyUniqueIdentifierTo(to.getUniqueIdentifier())
+                    .ontologyIconFrom(from.getIcon())
+                    .ontologyIconTO(to.getIcon())
+                    .ontologyNameFrom(from.getDisplayName())
+                    .ontologyNameTo(to.getDisplayName())
+                    .propertyUniqueIdentifierFrom(link.getPropertyUniqueIdentifierFrom())
+                    .propertyUniqueIdentifierTo(link.getPropertyUniqueIdentifierTo())
+                    .build();
+        }).collect(Collectors.toList());
+
+
+    }
+
 
     @Override
     public Integer add(OntologyLinkGroupBo ontologyLinkGroupBo) {

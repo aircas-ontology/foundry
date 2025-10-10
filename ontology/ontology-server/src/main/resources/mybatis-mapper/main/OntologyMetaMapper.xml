@@ -23,7 +23,7 @@
     </resultMap>
     <sql id="Base_Column_List">
         id
-        , "unique_identifier", "status", create_time, update_time, icon, display_name, plural_display_name,
+        , unique_identifier, status, create_time, update_time, icon, display_name, plural_display_name,
     backing_datasource_id, description, api_name, visibility, experimental_status, index_status,nickname,
     writeback_flag,meta_group_id, parent_unique_identifier
     </sql>
@@ -89,20 +89,7 @@
         set status = 0
         where unique_identifier = #{uniqueIdentifier, jdbcType=VARCHAR}
     </update>
-<!--    <insert id="insert" keyColumn="id" keyProperty="id" parameterType="com.aircas.ptr.foundry.ontology.model.po.OntologyMeta"-->
-<!--            useGeneratedKeys="true">-->
-<!--        insert into "ontology_meta" ("status", create_time, update_time,-->
-<!--                                     icon, display_name, plural_display_name,-->
-<!--                                     backing_datasource_id, description, api_name,-->
-<!--                                     visibility, experimental_status, index_status, nickname,-->
-<!--                                     writeback_flag)-->
-<!--        values (#{uniqueIdentifier,jdbcType=VARCHAR}, #{status,jdbcType=INTEGER}, #{createTime,jdbcType=TIMESTAMP},-->
-<!--                #{updateTime,jdbcType=TIMESTAMP},-->
-<!--                #{icon,jdbcType=OTHER}, #{displayName,jdbcType=VARCHAR}, #{pluralDisplayName,jdbcType=VARCHAR},-->
-<!--                #{backingDatasourceId,jdbcType=VARCHAR}, #{description,jdbcType=VARCHAR}, #{apiName,jdbcType=VARCHAR},-->
-<!--                #{visibility,jdbcType=INTEGER}, #{experimentalStatus,jdbcType=INTEGER}, #{indexStatus,jdbcType=INTEGER}, #{nickname,jdbcType=VARCHAR}-->
-<!--      #{writebackFlag,jdbcType=INTEGER})-->
-<!--    </insert>-->
+
     <insert id="insertSelective" keyColumn="id" keyProperty="id"
             parameterType="com.aircas.ptr.foundry.ontology.model.po.OntologyMeta" useGeneratedKeys="true">
         insert into "ontology_meta"

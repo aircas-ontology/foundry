@@ -118,6 +118,16 @@ public class OntologyProperty implements Serializable {
      */
     private String datasourceId;
 
+    /**
+     * 属性标签
+     */
+    private String tag;
+
+    /**
+     * 属性类别 static=1 dynamic=2
+     */
+    private Integer category;
+
     private static final long serialVersionUID = 1L;
 
 }

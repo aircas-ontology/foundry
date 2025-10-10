@@ -9,7 +9,7 @@ import lombok.Getter;
 
 @AllArgsConstructor
 @Getter
-public enum OntologyPropertyTypeEnum {
+public enum OntologyPropertyCategoryEnum {
 
     STATIC(1, "静态属性"),
     DYNAMIC(2, "动态属性"),

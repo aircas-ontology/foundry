@@ -2,11 +2,13 @@ package com.aircas.ptr.foundry.ontology.model.vo;
 
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
+import lombok.Builder;
 import lombok.Data;
 
 import java.util.List;
 
 @Data
+@Builder
 @ApiModel(description = "本体分组搜索返回参数")
 public class OntologyGroupMetaVO {
 

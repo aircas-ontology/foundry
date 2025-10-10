@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
 import com.aircas.ptr.foundry.common.constant.OntologyLinkMappingEnum;
+import com.aircas.ptr.foundry.ontology.controller.validator.OntologyIdVerify;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.AllArgsConstructor;
@@ -38,6 +39,7 @@ public class OntologyLinkCreateParam {
      */
     @ApiModelProperty(name = "ontologyUniqueIdentifierFrom", required = true, value = "开始本体uniq id")
     @NotBlank(message = "ontologyUniqueIdentifierFrom name is empty")
+    @OntologyIdVerify
     private String ontologyUniqueIdentifierFrom;
 
     /**
@@ -45,6 +47,7 @@ public class OntologyLinkCreateParam {
      */
     @ApiModelProperty(name = "ontologyUniqueIdentifierTo", required = true, value = "结束本体uniq id")
     @NotBlank(message = "ontologyUniqueIdentifierTo name is empty")
+    @OntologyIdVerify
     private String ontologyUniqueIdentifierTo;
 
     /**

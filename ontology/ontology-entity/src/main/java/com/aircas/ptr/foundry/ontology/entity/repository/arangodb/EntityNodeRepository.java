@@ -1,7 +1,9 @@
 package com.aircas.ptr.foundry.ontology.entity.repository.arangodb;
 
 import com.aircas.ptr.foundry.ontology.entity.model.document.EntityNode;
+import com.aircas.ptr.foundry.ontology.entity.model.document.EntityRelation;
 import com.arangodb.springframework.annotation.Query;
+import com.arangodb.springframework.annotation.QueryOptions;
 import com.arangodb.springframework.repository.ArangoRepository;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -15,4 +17,5 @@ public interface EntityNodeRepository extends ArangoRepository<EntityNode, Strin
 
     @Query("FOR n IN node FILTER n._id IN @nodeIds REMOVE n IN node")
     void deleteByIds(@Param("nodeIds") List<String> nodeIds);
+
 }

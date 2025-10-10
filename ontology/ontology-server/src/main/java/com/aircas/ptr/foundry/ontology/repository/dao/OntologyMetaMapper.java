@@ -10,8 +10,6 @@ import java.util.List;
 public interface OntologyMetaMapper extends BaseMapper<OntologyMeta> {
     int deleteByPrimaryKey(Long id);
 
-    //int insert(OntologyMeta record);
-
     int insertSelective(OntologyMeta record);
 
     OntologyMeta selectByPrimaryKey(Long id);

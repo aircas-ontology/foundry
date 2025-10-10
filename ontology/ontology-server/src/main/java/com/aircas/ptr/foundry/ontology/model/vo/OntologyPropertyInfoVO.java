@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.ontology.model.vo;
 
 import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
+import com.aircas.ptr.foundry.common.constant.OntologyPropertyCategoryEnum;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.AllArgsConstructor;
@@ -46,4 +47,6 @@ public class OntologyPropertyInfoVO {
      */
     @ApiModelProperty(name = "uniqueIdentifier", value = "id")
     private String uniqueIdentifier;
+
+
 }

@@ -161,11 +161,6 @@ public class EntityTableServiceImpl extends ServiceImpl<EntityTableMapper, Objec
         var primaryTableName = primaryDataSource.getColumnParamList().get(0).getTableName();
         var fields = primaryDataSource.getColumnParamList().stream().map(v -> ParamDtoConverter.convert(v)).collect(Collectors.toList());
 
-        var otherDS = associateDataSources.stream().flatMap(list -> list.getColumnParamList().stream()
-                .filter(v -> !v.getIsPrimaryKey() && !v.getIsAssociateKey()))
-                .collect(Collectors.toList());
-        var otherFields = otherDS.stream().map(v -> ParamDtoConverter.convert(v).setTableName(primaryTableName)).collect(Collectors.toList());
-        fields.addAll(otherFields);
         tableMapper.createTable(TableCreateDTO.builder().fields(fields).tableName(primaryTableName).build());
 
         // 插入主实体元数据表
@@ -201,7 +196,8 @@ public class EntityTableServiceImpl extends ServiceImpl<EntityTableMapper, Objec
         var primaryDatasource = primaryDataSource.getColumnParamList().get(0).getDatasourceId();
         var primaryFieldMap = primaryDataSource.getColumnParamList().stream().collect(Collectors.toMap(v -> v.getDatasourceColumnName(), v -> v.getColumnName()));
         var primaryData = dataObjectMapper.queryTableDataByColumn(primaryDatasource, primaryFieldMap, dataObjectMapper.checkIdColumnExists(primaryDatasource));
-
+        //插入主实体表
+        tableMapper.batchInsertRows(primaryTableName, primaryData);
         associateDataSources.stream().forEach(ds -> {
             //获取其他数据源数据，并插入实体属性表
             var tableName = ds.getColumnParamList().get(0).getTableName();
@@ -210,35 +206,8 @@ public class EntityTableServiceImpl extends ServiceImpl<EntityTableMapper, Objec
             var orderBy = dataObjectMapper.checkIdColumnExists(datasourceId);
             List<Map<String, Object>> data = dataObjectMapper.queryTableDataByColumn(datasourceId, filedMap, orderBy);
             tableMapper.batchInsertRows(tableName, data);
-
-            //抽取关联的实体表属性值（取最新数据），并整合到主实体表
-            var associate = ds.getColumnParamList().stream().filter(v -> v.getIsAssociateKey()).findFirst().get();
-            // 其他数据源关联健
-            var associateColumn = associate.getColumnName();
-            var firstDataPerGroup = data.stream()
-                    .collect(Collectors.groupingBy(map -> map.get(associateColumn)))
-                    .entrySet().stream()
-                    .collect(Collectors.toMap(
-                            entry -> entry.getKey(),
-                            entry -> entry.getValue().get(0)));
-
-            //查找关联的主表数据列
-            var associateKey = associate.getAssociateDatasourceColumnName();
-            var primaryAssociateColumn = primaryDataSource.getColumnParamList().stream().filter(v -> v.getDatasourceColumnName().equals(associateKey)).findFirst().get().getColumnName();
-            //待整合的数据字段
-            var populatedColumn = ds.getColumnParamList().stream().filter(v -> !v.getIsPrimaryKey() && !v.getIsAssociateKey()).map(v -> v.getColumnName()).collect(Collectors.toList());
-            primaryData.forEach(d -> {
-                var value = d.getOrDefault(primaryAssociateColumn, null);
-                if (value != null && firstDataPerGroup.get(value) != null) {
-                    var props = firstDataPerGroup.get(value);
-                    populatedColumn.forEach(col -> d.put(col, props.get(col)));
-                } else {
-                    populatedColumn.forEach(col -> d.put(col, null));
-                }
-            });
         });
-        //插入主实体表
-        tableMapper.batchInsertRows(primaryTableName, primaryData);
+
         //写入实体节点数据
         var primaryKey = primaryDataSource.getColumnParamList().stream().filter(v -> v.getIsPrimaryKey()).findFirst().get().getColumnName();
         var nodes = primaryData.stream().map(data -> EntityNode.builder()

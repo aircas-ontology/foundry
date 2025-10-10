@@ -1,13 +1,12 @@
 package com.aircas.ptr.foundry.ontology.service;
 
-import com.aircas.ptr.foundry.ontology.model.bo.OntologyMetaBO;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyGroupMetaVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaInfoVO;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaNodeVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaVO;
-import com.aircas.ptr.foundry.ontology.model.param.OntologyMetaAddParam;
 import com.baomidou.mybatisplus.extension.service.IService;
 
 import java.util.List;
@@ -20,33 +19,26 @@ import java.util.List;
 
 public interface OntologyMetaService extends IService<OntologyMeta> {
 
-    OntologyMetaVO getOntologyById(Long id);
+    String createOntology(OntologyCreateParam ontologyCreateParam);
 
-    OntologyMetaVO getOntologyByApi(String api);
+    List<OntologyGroupMetaVO> getByGroupId(String groupId);
 
     OntologyMetaInfoVO getMetaByUniqueIdentifier(String uniqueIdentifier);
 
-    //OntologyMetaVO add(OntologyMetaAddParam param);
-
     void deleteOntology(String uniqueIdentifier);
-
-    Integer update(OntologyMetaBO ontologyMetaBO);
 
     void updateMeta(OntologyUpdateParam updateParam);
 
-    List<OntologyMetaVO> getAllOntologies();
-
-    Integer getCountByStatus(int status);
-
     List<OntologyMetaInfoVO> searchByKeyword(String keyword);
 
+    OntologyMetaNodeVO getOntologyTree(String uniqueIdentifier);
+
+    //todo need clean
     List<OntologyMetaVO> listOntologiesByGroup(String groupId);
 
     List<OntologyMetaVO> selectByUniqueIdentifiers(List<String> ontologyUniqueIdentifiers);
 
     Integer countByGroup(String groupId);
 
-    String createOntology(OntologyCreateParam ontologyCreateParam);
 
-    List<OntologyGroupMetaVO> getByGroupId(String groupId);
 }

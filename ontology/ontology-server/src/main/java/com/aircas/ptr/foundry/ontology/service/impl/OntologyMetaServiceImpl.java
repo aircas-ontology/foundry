@@ -9,21 +9,20 @@ import com.aircas.ptr.foundry.common.util.SnowflakeIdUtil;
 import com.aircas.ptr.foundry.ontology.client.EntityClient;
 import com.aircas.ptr.foundry.ontology.common.param.EntityCopyParam;
 import com.aircas.ptr.foundry.ontology.common.param.EntityCreateParam;
-import com.aircas.ptr.foundry.ontology.converter.ClientParamConverter;
-import com.aircas.ptr.foundry.ontology.converter.ParamToEntityConverter;
-import com.aircas.ptr.foundry.ontology.model.bo.OntologyMetaBO;
+import com.aircas.ptr.foundry.ontology.converter.DataConverter;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.po.*;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyGroupMetaVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaInfoVO;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaNodeVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaVO;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyMetaMapper;
 import com.aircas.ptr.foundry.ontology.service.*;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import lombok.var;
 import org.apache.commons.collections4.CollectionUtils;
@@ -34,10 +33,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import javax.annotation.Resource;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 
@@ -48,27 +47,38 @@ import java.util.stream.Collectors;
  */
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, OntologyMeta> implements OntologyMetaService {
 
-    private final OntologyMetaMapper ontologyMetaMapper;
+    @Resource
+    private OntologyMetaMapper ontologyMetaMapper;
 
-    private final OntologyPropertyService ontologyPropertyService;
+    @Resource
+    private OntologyPropertyService ontologyPropertyService;
 
-    private final OntologyLinkGroupService linkService;
+    @Resource
+    private OntologyLinkGroupService linkService;
 
-    private final FunctionService functionService;
+    @Resource
+    private FunctionService functionService;
 
-    private final FunctionParamService functionParamService;
+    @Resource
+    private FunctionParamService functionParamService;
 
-    private final OntologyActionService actionService;
+    @Resource
+    private OntologyActionService actionService;
 
-    private final ActionHandleRuleService actionHandleRuleService;
+    @Resource
+    private ActionHandleRuleService actionHandleRuleService;
 
-    private final ActionHandleTaskService actionHandleTaskService;
+    @Resource
+    private ActionHandleTaskService actionHandleTaskService;
 
-    private final EntityClient entityClient;
+    @Resource
+    private EntityClient entityClient;
+
+    @Resource
+    private OntologyGroupService groupService;
 
 
     @Override
@@ -132,6 +142,8 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 .propertyType(v.getPropertyType())
                 .status(v.getStatus())
                 .uniqueIdentifier(IdGenerator.generateUUID())
+                .tag(v.getTag())
+                .category(v.getCategory())
                 .build())
                 .collect(Collectors.toList());
         ontologyPropertyService.saveBatch(childProps);
@@ -262,7 +274,10 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         //2 创建本体属性
         // 主数据源属性
         var properties = primaryDataSource.getColumnParamList().stream()
-                .map(v -> ParamToEntityConverter.convert(v, meta.getUniqueIdentifier()))
+                .map(v -> DataConverter.convert(v)
+                        .setOntologyUniqueIdentifier(meta.getUniqueIdentifier())
+                        .setTag(primaryDataSource.getTag())
+                        .setCategory(primaryDataSource.getCategory().getValue()))
                 .collect(Collectors.toList());
         //  其他数据源属性
         if (CollectionUtils.isNotEmpty(associateDataSources)) {
@@ -275,7 +290,10 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
             //生成属性表数据
             var otherProps = associateDataSources.stream()
                     .flatMap(ds -> ds.getColumnParamList().stream().map(v -> {
-                        var prop = ParamToEntityConverter.convert(v, meta.getUniqueIdentifier());
+                        var prop = DataConverter.convert(v)
+                                .setOntologyUniqueIdentifier(meta.getUniqueIdentifier())
+                                .setTag(ds.getTag())
+                                .setCategory(ds.getCategory().getValue());
                         if (v.getIsPrimaryKey() || v.getIsAssociateKey()) {
                             return prop.setVisibility(Visibility.HIDDEN.getValue());
                         }
@@ -293,10 +311,10 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         ontologyPropertyService.saveBatch(properties);
         //创建实体表、实体数据和实体节点
         entityClient.createTableAndEntities(EntityCreateParam.builder()
-                .primaryDataSource(ClientParamConverter.convert(primaryDataSource, ontologyCreateParam.getApiName()))
+                .primaryDataSource(DataConverter.convert(primaryDataSource, ontologyCreateParam.getApiName()))
                 .associateDataSources(CollectionUtils.isNotEmpty(associateDataSources) ?
                         associateDataSources.stream()
-                                .map(v -> ClientParamConverter.convert(v, ontologyCreateParam.getApiName() + "_" + v.getColumnParamList().get(0).getDatasourceId()))
+                                .map(v -> DataConverter.convert(v, ontologyCreateParam.getApiName() + "_" + v.getColumnParamList().get(0).getDatasourceId()))
                                 .collect(Collectors.toList())
                         : null)
                 .build());
@@ -348,113 +366,82 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         entityClient.deleteTableAndEntities(meta.getApiName());
     }
 
-    @Override
-    public Integer update(OntologyMetaBO ontologyMetaBO) {
-        if (ontologyMetaBO.getId() == null) {
-            throw new RuntimeException("id必传");
-        }
-        OntologyMeta ontologyMeta = ontologyMetaMapper.selectByPrimaryKey(ontologyMetaBO.getId());
-        BeanUtils.copyProperties(ontologyMetaBO, ontologyMeta);
-        ontologyMeta.setUpdateTime(new Date());
-
-        int count = ontologyMetaMapper.updateByPrimaryKeySelective(ontologyMeta);
-        return count;
-    }
 
     @Override
     public void updateMeta(OntologyUpdateParam updateParam) {
 
     }
 
-    @Override
-    public OntologyMetaVO getOntologyById(Long id) {
-        OntologyMeta ontologyMeta = ontologyMetaMapper.selectByPrimaryKey(id);
-        OntologyMetaVO ontologyMetaVO = new OntologyMetaVO();
-        BeanUtils.copyProperties(ontologyMeta, ontologyMetaVO);
-        return ontologyMetaVO;
-    }
-
-    @Override
-    public OntologyMetaVO getOntologyByApi(String api) {
-        OntologyMeta ontologyMeta = ontologyMetaMapper.selectByApi(api);
-        OntologyMetaVO ontologyMetaVO = new OntologyMetaVO();
-        BeanUtils.copyProperties(ontologyMeta, ontologyMetaVO);
-        return ontologyMetaVO;
-    }
 
     @Override
     public OntologyMetaInfoVO getMetaByUniqueIdentifier(String uniqueIdentifier) {
         OntologyMeta ontologyMeta = ontologyMetaMapper.selectByUniqueIdentifier(uniqueIdentifier);
-        return OntologyMetaInfoVO.builder()
-                .uniqueIdentifier(ontologyMeta.getUniqueIdentifier())
-                .apiName(ontologyMeta.getApiName())
-                .createTime(ontologyMeta.getCreateTime())
-                .updateTime(ontologyMeta.getUpdateTime())
-                .description(ontologyMeta.getDescription())
-                .icon(ontologyMeta.getIcon())
-                .metaGroupId(Arrays.stream(ontologyMeta.getMetaGroupId().split(",")).collect(Collectors.toList()))
-                .displayName(ontologyMeta.getDisplayName())
-                .build();
+        return DataConverter.convert(ontologyMeta);
     }
 
-    @Override
-    public List<OntologyMetaVO> getAllOntologies() {
-        List<OntologyMeta> result = ontologyMetaMapper.selectAllOntologies();
-        List<OntologyMetaVO> retResult = new ArrayList();
-        for (OntologyMeta meta : result) {
-            OntologyMetaVO ontologyMetaVO = new OntologyMetaVO();
-            BeanUtils.copyProperties(meta, ontologyMetaVO);
-            retResult.add(ontologyMetaVO);
-        }
-        return retResult;
-    }
-
-    @Override
-    public Integer getCountByStatus(int status) {
-        int count = ontologyMetaMapper.getCountByStatus(status);
-        return count;
-    }
 
     @Override
     public List<OntologyMetaInfoVO> searchByKeyword(String keyword) {
-        return ontologyMetaMapper.searchByKeyword(keyword).stream().map(v -> {
-            return OntologyMetaInfoVO.builder()
-                    .uniqueIdentifier(v.getUniqueIdentifier())
-                    .apiName(v.getApiName())
-                    .createTime(v.getCreateTime())
-                    .updateTime(v.getUpdateTime())
-                    .description(v.getDescription())
-                    .icon(v.getIcon())
-                    .metaGroupId(Arrays.stream(v.getMetaGroupId().split(",")).collect(Collectors.toList()))
-                    .displayName(v.getDisplayName())
-                    .build();
-        }).collect(Collectors.toList());
+        return ontologyMetaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>().like(OntologyMeta::getDisplayName, keyword))
+                .stream().map(DataConverter::convert).collect(Collectors.toList());
+    }
+
+    @Override
+    public OntologyMetaNodeVO getOntologyTree(String rootUniqueIdentifier) {
+        var metaMap = list(new QueryWrapper<>())
+                .stream().collect(Collectors.toMap(v -> v.getUniqueIdentifier(), v -> OntologyMetaNodeVO.builder()
+                        .parentUniqueIdentifier(v.getParentUniqueIdentifier())
+                        .uniqueIdentifier(v.getUniqueIdentifier())
+                        .displayName(v.getDisplayName())
+                        .childNodes(new ArrayList<>())
+                        .build()));
+
+        OntologyMetaNodeVO result = new OntologyMetaNodeVO().setChildNodes(new ArrayList<>());
+        if (StringUtils.isEmpty(rootUniqueIdentifier)) {
+            result.setUniqueIdentifier("").setDisplayName("").setParentUniqueIdentifier("");
+            metaMap.values().stream().filter(v -> StringUtils.isEmpty(v.getParentUniqueIdentifier()))
+                    .forEach(child -> {
+                        buildTree(child, metaMap);
+                        result.getChildNodes().add(child);
+                    });
+        } else {
+            var root = metaMap.get(rootUniqueIdentifier);
+            PreconditionUtils.checkArgument(root != null, "无效的uniqid", ResultCode.PARAM_ERROR, HttpStatus.BAD_REQUEST);
+            result.setUniqueIdentifier(rootUniqueIdentifier).setDisplayName(root.getDisplayName()).setParentUniqueIdentifier(root.getParentUniqueIdentifier());
+            buildTree(result, metaMap);
+        }
+        return result;
+    }
+
+    private void buildTree(OntologyMetaNodeVO parent, Map<String, OntologyMetaNodeVO> metaMap) {
+        metaMap.values().forEach(child -> {
+            if (StringUtils.equals(child.getParentUniqueIdentifier(), parent.getUniqueIdentifier())) {
+                parent.getChildNodes().add(child);
+                buildTree(child, metaMap);
+            }
+        });
     }
 
     @Override
     public List<OntologyGroupMetaVO> getByGroupId(String groupId) {
-        return null;
+        List<OntologyGroup> groups = Lists.newArrayList();
+        if (StringUtils.isEmpty(groupId)) {
+            groups.addAll(groupService.list());
+        } else {
+            groups.add(groupService.getOne(new LambdaQueryWrapper<OntologyGroup>().eq(OntologyGroup::getGroupId, groupId)));
+        }
+
+        var metaList = list().stream().map(meta -> DataConverter.convert(meta)).collect(Collectors.toList());
+        return groups.stream().map(group -> {
+            var metaInfoVOList = metaList.stream().filter(meta -> meta.getMetaGroupId().contains(group.getGroupId())).collect(Collectors.toList());
+            return OntologyGroupMetaVO.builder()
+                    .groupId(group.getGroupId())
+                    .groupName(group.getGroupName())
+                    .metaVOS(metaInfoVOList)
+                    .build();
+        }).collect(Collectors.toList());
     }
 
-//    @Override
-//    public PageInfo<OntologyGroupMetaVO> searchGroupOntologies(String keyword, Integer page, Integer size) {
-//
-//        PageHelper.startPage(page, size);
-//        PageInfo<OntologyGroup> pageInfo = new PageInfo<>(ontologyGroupMapper.selectAll());
-//        List<OntologyGroupMetaVO> collect = pageInfo.getList().stream().map(group -> {
-//            OntologyGroupMetaVO ontologyGroupMetaVO = new OntologyGroupMetaVO();
-//            ontologyGroupMetaVO.setGroupId(group.getGroupId());
-//            ontologyGroupMetaVO.setGroupName(group.getGroupName());
-//            List<OntologyMetaVO> ontologyMetaVOS = listOntologiesByGroup(group.getGroupId());
-//            ontologyGroupMetaVO.setOntologyCount(ontologyMetaVOS.size());
-//            ontologyGroupMetaVO.setMetaVOS(ontologyMetaVOS);
-//            return ontologyGroupMetaVO;
-//        }).collect(Collectors.toList());
-//        PageInfo<OntologyGroupMetaVO> pageResult = new PageInfo<>(collect);
-//        BeanUtils.copyProperties(pageInfo, pageResult);
-//        pageResult.setList(collect);
-//        return pageResult;
-//    }
 
     @Override
     public List<OntologyMetaVO> listOntologiesByGroup(String groupId) {

@@ -50,4 +50,6 @@ public class OntologyDataSourceColumnParam {
 
     @ApiModelProperty(name = "associateDatasourceColumnName", value = "关联的主数据源表的列名，必须存在于主数据源表的列中", example = "id")
     private String associateDatasourceColumnName;
+
+
 }

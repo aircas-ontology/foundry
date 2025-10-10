@@ -4,6 +4,7 @@ import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.common.util.HttpUtil;
 import com.aircas.ptr.foundry.ontology.common.param.EntityCopyParam;
 import com.aircas.ptr.foundry.ontology.common.param.EntityCreateParam;
+import com.aircas.ptr.foundry.ontology.common.param.EntityRelationCreateParam;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -30,7 +31,16 @@ public class EntityClient {
     @Value("${client.entity.delete-table}")
     private String deleteTable;
 
+    @Value("${client.entity.create-relation}")
+    private String createRelation;
+
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+
+    public void createEntityRelation(EntityRelationCreateParam param) {
+        String url = urlPrefix + createRelation;
+        post(url, param);
+    }
 
     public void deleteTableAndEntities(String tableName) {
         String url = urlPrefix + deleteTable;

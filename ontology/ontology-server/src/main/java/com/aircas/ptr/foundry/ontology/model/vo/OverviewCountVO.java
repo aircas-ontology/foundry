@@ -2,15 +2,18 @@ package com.aircas.ptr.foundry.ontology.model.vo;
 
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
-/**
- * @author wangweigang
- * @descrption 概览页面数量统计vo
- */
+
 @Data
-@ApiModel(description = "概览数量统计vo")
-public class OverviewCountVo {
+@Builder
+@AllArgsConstructor
+@NoArgsConstructor
+@ApiModel(description = "概览数量统计")
+public class OverviewCountVO {
 
     /**
      * 本体数量统计

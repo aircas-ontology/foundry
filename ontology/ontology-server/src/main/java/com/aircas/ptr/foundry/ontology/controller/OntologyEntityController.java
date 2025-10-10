@@ -65,6 +65,7 @@ public class OntologyEntityController {
 
     }
 
+
 //    @ApiOperation(value = "实体分页查询", notes = "查询该本体下所有实体详情列表")
 //    @GetMapping("/list")
 //    public DataResult<PageInfo<Map<String, Object>>> queryObject(

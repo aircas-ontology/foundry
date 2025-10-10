@@ -3,13 +3,17 @@ package com.aircas.ptr.foundry.ontology.model.vo;
 
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 
 import java.util.List;
 
 @Data
+@NoArgsConstructor
+@AllArgsConstructor
 @Builder
 @Accessors(chain = true)
 @ApiModel(value = "本体节点信息")
@@ -27,6 +31,9 @@ public class OntologyMetaNodeVO {
     @ApiModelProperty(name = "displayName", value = "本体名称", example = "飞机")
     private String displayName;
 
+
+    @ApiModelProperty(name = "parentUniqueIdentifier")
+    private String parentUniqueIdentifier;
 
     /**
      * 子本体

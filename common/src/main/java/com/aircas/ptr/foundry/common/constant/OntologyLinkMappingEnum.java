@@ -3,6 +3,8 @@ package com.aircas.ptr.foundry.common.constant;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
+import java.util.Arrays;
+
 @AllArgsConstructor
 @Getter
 public enum OntologyLinkMappingEnum {
@@ -22,4 +24,8 @@ public enum OntologyLinkMappingEnum {
 
     private final Integer value;
     private final String name;
+
+    public static OntologyLinkMappingEnum getByValue(Integer value) {
+        return Arrays.stream(OntologyLinkMappingEnum.values()).filter(v -> v.getValue().equals(value)).findFirst().get();
+    }
 }

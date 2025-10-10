@@ -75,8 +75,8 @@ public class OntologyMetaController {
 
     @GetMapping("/tree")
     @ApiOperation(value = "查询本体树")
-    public RestResult<OntologyMetaNodeVO> getOntologyTree() {
-        return RestResult.success();
+    public RestResult<OntologyMetaNodeVO> getOntologyTree(@RequestParam(name = "uniqueIdentifier", required = false) @ApiParam(name = "uniqueIdentifier", value = "本体unique identifer", required = true) String uniqueIdentifier) {
+        return RestResult.ofData(ontologyMetaService.getOntologyTree(uniqueIdentifier));
     }
 
 }

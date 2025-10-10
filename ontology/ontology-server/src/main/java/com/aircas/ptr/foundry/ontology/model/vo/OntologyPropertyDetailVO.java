@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.vo;
 
+import com.aircas.ptr.foundry.common.constant.OntologyPropertyCategoryEnum;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.AllArgsConstructor;
@@ -27,4 +28,10 @@ public class OntologyPropertyDetailVO extends OntologyPropertyInfoVO {
 
     @ApiModelProperty(name = "datasourceId", value = "数据源表名", example = "xtmb")
     private String datasourceId;
+
+    @ApiModelProperty(name = "tag", value = "属性标签")
+    private String tag;
+
+    @ApiModelProperty(name = "type", value = "属性类别")
+    private OntologyPropertyCategoryEnum category;
 }

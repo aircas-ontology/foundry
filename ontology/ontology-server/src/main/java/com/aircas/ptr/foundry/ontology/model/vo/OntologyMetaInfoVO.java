@@ -9,6 +9,7 @@ import lombok.experimental.Accessors;
 
 import java.util.Date;
 import java.util.List;
+import java.util.Set;
 
 import static com.aircas.ptr.foundry.common.constant.DateFormat.DATE_FORMAT_DEFAULT;
 
@@ -74,7 +75,7 @@ public class OntologyMetaInfoVO {
      * 分组
      */
     @ApiModelProperty(name = "metaGroupId",value = "分组")
-    private List<String> metaGroupId;
+    private Set<String> metaGroupId;
 
 }
 
