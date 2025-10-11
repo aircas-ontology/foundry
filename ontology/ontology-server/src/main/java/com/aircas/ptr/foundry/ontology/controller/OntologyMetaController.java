@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
 import javax.validation.Valid;
+import javax.validation.constraints.NotBlank;
 import java.util.List;
 
 
@@ -62,7 +63,7 @@ public class OntologyMetaController {
 
     @GetMapping("/search")
     @ApiOperation(value = "搜索本体", notes = "通过关键字匹配本体，包括本体名称、本体描述")
-    public RestResult<List<OntologyMetaInfoVO>> searchByKeyword(@RequestParam(name = "keyword", required = false) @ApiParam(name = "keyword", value = "搜索关键词", required = false) String keyword) {
+    public RestResult<List<OntologyMetaInfoVO>> searchByKeyword(@RequestParam(name = "keyword", required = false) @ApiParam(name = "keyword", value = "搜索关键词", required = false) @NotBlank(message = "搜索词不能为空") String keyword) {
         return RestResult.ofData(ontologyMetaService.searchByKeyword(keyword));
     }
 

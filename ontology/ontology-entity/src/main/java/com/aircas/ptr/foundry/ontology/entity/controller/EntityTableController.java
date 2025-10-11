@@ -1,27 +1,23 @@
 package com.aircas.ptr.foundry.ontology.entity.controller;
 
 import com.aircas.ptr.foundry.common.base.RestResult;
-import com.aircas.ptr.foundry.ontology.common.param.DataSourceParam;
-import com.aircas.ptr.foundry.ontology.common.param.EntityCopyParam;
-import com.aircas.ptr.foundry.ontology.common.param.EntityCreateParam;
-import com.aircas.ptr.foundry.ontology.common.param.TableColumnRelationUpdateParam;
+import com.aircas.ptr.foundry.ontology.common.param.*;
+import com.aircas.ptr.foundry.ontology.common.vo.EntityDetailVO;
+import com.aircas.ptr.foundry.ontology.common.vo.EntityVO;
 import com.aircas.ptr.foundry.ontology.entity.service.EntityTableService;
-import com.aircas.ptr.foundry.ontology.entity.service.PostgresService;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
 import javax.validation.Valid;
+import java.util.List;
 
 @Api(tags = "实体表管理接口")
 @RestController
 @RequestMapping("/table")
 public class EntityTableController {
-
-    @Autowired
-    private PostgresService postgresService;
 
     @Resource
     private EntityTableService entityTableService;
@@ -71,6 +67,43 @@ public class EntityTableController {
     @ApiOperation("修改table关联健")
     @PutMapping("/column_relation")
     public RestResult modifyColumnRelation(@RequestBody @Valid TableColumnRelationUpdateParam param) {
+        return RestResult.success();
+    }
+
+
+    @ApiOperation("分页查询表数据")
+    @GetMapping("/record")
+    public RestResult<Page<EntityVO>> queryEntitiesByTableName(@RequestParam(required = true, name = "tableName") String tableName,
+                                                               @RequestParam(required = false, defaultValue = "1") Integer pageNum,
+                                                               @RequestParam(required = false, defaultValue = "10") Integer pageSize) {
+
+        return RestResult.ofData(entityTableService.queryEntitiesByTableName(tableName, pageNum, pageSize));
+    }
+
+
+    @ApiOperation("查询实体详细数据")
+    @PostMapping("/record_detail")
+    public RestResult<List<EntityDetailVO>> queryEntityDetail(@RequestBody @Valid EntityDetailQueryParam param) {
+        return RestResult.ofData(entityTableService.queryEntityDetail(param));
+    }
+
+
+    @ApiOperation("新增实体记录")
+    @PostMapping("/record")
+    public RestResult createEntity(@RequestBody @Valid EntityRecordParam param) {
+        return RestResult.success();
+    }
+
+    @ApiOperation("修改实体记录")
+    @PutMapping("/record")
+    public RestResult updateEntity(@RequestBody @Valid EntityRecordParam param) {
+        return RestResult.success();
+    }
+
+    @ApiOperation("删除实体记录")
+    @DeleteMapping("/record/{tableName}/{primaryValue}")
+    public RestResult deleteEntity(@PathVariable(name = "tableName", required = true) String tableName,
+                                   @PathVariable(name = "primaryValue", required = true) String primaryValue) {
         return RestResult.success();
     }
 

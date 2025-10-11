@@ -2,6 +2,9 @@ package com.aircas.ptr.foundry.ontology.service;
 
 import com.aircas.ptr.foundry.ontology.model.param.EntityNodeParam;
 import com.aircas.ptr.foundry.ontology.model.param.EntityTableFieldParam;
+import com.aircas.ptr.foundry.ontology.model.vo.EntityInfoVO;
+import com.aircas.ptr.foundry.ontology.model.vo.EntityPropertyDetailVO;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 
 import java.util.List;
 import java.util.Map;
@@ -15,12 +18,16 @@ import java.util.Map;
  */
 public interface EntityService {
 
+    List<EntityPropertyDetailVO> queryEntityDetail(String ontologyUniqueIdentifier, Integer entityPrimaryKey);
+
+    Page<EntityInfoVO> queryEntity(String ontologyUniqueIdentifier, Integer pageNum, Integer pageSize);
+
     /**
      * 创建实体表。
      *
-     * @param tableName 表名
+     * @param tableName    表名
      * @param tableComment 表注释
-     * @param fields 字段列表
+     * @param fields       字段列表
      * @return 如果创建成功，则返回 true；否则返回 false
      */
     Boolean createEntityTable(String tableName, String tableComment, List<EntityTableFieldParam> fields);
@@ -53,7 +60,7 @@ public interface EntityService {
      * 批量插入数据到实体表中。
      *
      * @param tableName 表名
-     * @param entities 要插入的数据列表，每个元素是一个包含字段和对应值的 Map
+     * @param entities  要插入的数据列表，每个元素是一个包含字段和对应值的 Map
      * @return 如果插入成功，则返回插入的记录数；否则返回 0
      */
     Integer batchInsertEntityTable(String tableName, List<Map<String, Object>> entities);
@@ -61,10 +68,10 @@ public interface EntityService {
     /**
      * 创建单个实体节点。
      *
-     * @param id 节点ID
-     * @param name 节点名称
+     * @param id          节点ID
+     * @param name        节点名称
      * @param description 节点描述
-     * @param category 节点类别
+     * @param category    节点类别
      * @return 如果创建成功，则返回 true；否则返回 false
      */
     Boolean createEntityNode(String id, String name, String description, String category, String type);

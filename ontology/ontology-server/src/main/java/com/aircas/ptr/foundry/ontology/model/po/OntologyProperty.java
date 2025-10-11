@@ -1,9 +1,7 @@
 package com.aircas.ptr.foundry.ontology.model.po;
 
 import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
-import com.baomidou.mybatisplus.annotation.FieldFill;
-import com.baomidou.mybatisplus.annotation.TableField;
-import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.annotation.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -28,6 +26,7 @@ public class OntologyProperty implements Serializable {
     /**
      * 主键自增
      */
+    @TableId(type = IdType.AUTO)
     private Long id;
 
 

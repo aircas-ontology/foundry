@@ -1,19 +1,31 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
-import com.aircas.ptr.foundry.common.util.HttpUtil;
-import com.aircas.ptr.foundry.common.util.StringUtil;
-import com.aircas.ptr.foundry.ontology.service.EntityService;
+import com.aircas.ptr.foundry.common.constant.CountTypeEnum;
+import com.aircas.ptr.foundry.common.constant.OntologyPropertyCategoryEnum;
+import com.aircas.ptr.foundry.ontology.client.EntityClient;
+import com.aircas.ptr.foundry.ontology.common.param.EntityAssociateDatasourceParam;
+import com.aircas.ptr.foundry.ontology.common.param.EntityDetailQueryParam;
 import com.aircas.ptr.foundry.ontology.model.param.EntityNodeParam;
 import com.aircas.ptr.foundry.ontology.model.param.EntityTableFieldParam;
-import com.alibaba.fastjson.JSON;
+import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
+import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
+import com.aircas.ptr.foundry.ontology.model.vo.EntityInfoVO;
+import com.aircas.ptr.foundry.ontology.model.vo.EntityPropertyDetailVO;
+import com.aircas.ptr.foundry.ontology.model.vo.EntityPropertyVO;
+import com.aircas.ptr.foundry.ontology.repository.dao.OntologyMetaMapper;
+import com.aircas.ptr.foundry.ontology.repository.dao.OntologyPropertyMapper;
+import com.aircas.ptr.foundry.ontology.service.EntityService;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
+import lombok.var;
+import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.stereotype.Service;
 
-import java.util.HashMap;
+import javax.annotation.Resource;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
+import java.util.stream.Collectors;
 
 /**
  * @className: EntityServiceImpl
@@ -25,6 +37,88 @@ import java.util.Objects;
 @Slf4j
 @Service
 public class EntityServiceImpl implements EntityService {
+
+    @Resource
+    private EntityClient entityClient;
+
+    @Resource
+    private OntologyMetaMapper metaMapper;
+
+    @Resource
+    private OntologyPropertyMapper propertyMapper;
+
+
+    @Override
+    public List<EntityPropertyDetailVO> queryEntityDetail(String ontologyUniqueIdentifier, Integer entityPrimaryKey) {
+        var meta = metaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, ontologyUniqueIdentifier));
+        var props = propertyMapper.selectList(new LambdaQueryWrapper<OntologyProperty>()
+                .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier));
+        var propsMap = props.stream().collect(Collectors.groupingBy(v -> v.getDatasourceId()));
+        var associateDatasource = propsMap.entrySet().stream().filter(v -> !v.getKey().equals(meta.getBackingDatasourceId())).<EntityAssociateDatasourceParam>map(entry -> {
+            return EntityAssociateDatasourceParam.builder()
+                    .count(CountTypeEnum.convert(OntologyPropertyCategoryEnum.getByValue(entry.getValue().get(0).getCategory())))
+                    .datasourceId(entry.getKey())
+                    .build();
+        }).collect(Collectors.toList());
+
+        var queryRecordDetail = entityClient.queryRecordDetail(EntityDetailQueryParam.builder()
+                .associateDatasource(associateDatasource)
+                .primaryKeyValue(entityPrimaryKey)
+                .primaryTableName(meta.getApiName())
+                .build());
+
+        var apiDisplayMap = props.stream().collect(Collectors.toMap(v -> v.getApiName(), v -> v.getDisplayName()));
+        return queryRecordDetail.stream().map(detail -> {
+            var displayNames = detail.getPropertyName().stream().map(v -> apiDisplayMap.get(v)).collect(Collectors.toList());
+
+            return EntityPropertyDetailVO.builder()
+                    .propertyDisplayNames(displayNames)
+                    .propertyValues(detail.getPropertyValues())
+                    .tag(propsMap.get(detail.getDatasourceId()).get(0).getTag())
+                    .build();
+        }).collect(Collectors.toList());
+
+    }
+
+
+    @Override
+    public Page<EntityInfoVO> queryEntity(String ontologyUniqueIdentifier, Integer pageNum, Integer pageSize) {
+        Page<EntityInfoVO> result = new Page<EntityInfoVO>().setSize(pageSize).setCurrent(pageNum);
+        var meta = metaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, ontologyUniqueIdentifier));
+        var props = propertyMapper.selectList(new LambdaQueryWrapper<OntologyProperty>()
+                .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier).eq(OntologyProperty::getDatasourceId, meta.getBackingDatasourceId()));
+        if (CollectionUtils.isEmpty(props)) {
+            return result;
+        }
+        var titleKey = props.stream().filter(v -> v.getIsTitleKey() == 1).findFirst().get().getApiName();
+        var primaryKey = props.stream().filter(v -> v.getIsPrimaryKey() == 1).findFirst().get().getApiName();
+
+        var propertyMap = props.stream().collect(Collectors.toMap(v -> v.getApiName(), v -> v));
+        var entityVOPage = entityClient.queryRecords(meta.getApiName(), pageNum, pageSize);
+
+        var records = entityVOPage.getRecords().stream().map(r -> {
+            var valueMap = r.getProperties().stream().collect(Collectors.toMap(v -> v.getPropertyName(), v -> v.getPropertyValue()));
+            var entityPropertyVOS = valueMap.entrySet().stream().<EntityPropertyVO>map(entry -> {
+                var ontologyProperty = propertyMap.get(entry.getKey());
+                return EntityPropertyVO.builder()
+                        .propertyDisplayName(ontologyProperty.getDisplayName())
+                        .propertyValue(entry.getValue())
+                        .build();
+            }).collect(Collectors.toList());
+
+            return EntityInfoVO.builder()
+                    .displayName(valueMap.get(titleKey).toString())
+                    .primaryKey(valueMap.get(primaryKey).toString())
+                    .properties(entityPropertyVOS)
+                    .build();
+        }).collect(Collectors.toList());
+
+        result.setCurrent(entityVOPage.getCurrent())
+                .setSize(entityVOPage.getSize())
+                .setTotal(entityVOPage.getTotal())
+                .setRecords(records);
+        return result;
+    }
 
 
     @Override

@@ -84,7 +84,7 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
     }
 
     @Override
-    public List<OntologyLinkInfoVO> getLinkByGroupId(String groupId) {
+    public List<OntologyLinkInfoVO> getLinksByGroupId(String groupId) {
         var ids = ontologyMetaService.list(new LambdaQueryWrapper<OntologyMeta>().like(OntologyMeta::getMetaGroupId, groupId))
                 .stream().map(v -> v.getUniqueIdentifier()).collect(Collectors.toList());
 
@@ -97,7 +97,21 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
         if (CollectionUtils.isEmpty(links)) {
             return Lists.newArrayList();
         }
+        return buildLinkInfo(links);
+    }
 
+    @Override
+    public List<OntologyLinkInfoVO> getLinksByOntologyUniqueIdentifier(String ontologyUniqueIdentifier) {
+        var links = list(new LambdaQueryWrapper<OntologyLinkGroup>().eq(OntologyLinkGroup::getOntologyUniqueIdentifierFrom, ontologyUniqueIdentifier)
+                .or().eq(OntologyLinkGroup::getOntologyUniqueIdentifierTo, ontologyUniqueIdentifier));
+
+        if (CollectionUtils.isEmpty(links)) {
+            return Lists.newArrayList();
+        }
+        return buildLinkInfo(links);
+    }
+
+    private List<OntologyLinkInfoVO> buildLinkInfo(List<OntologyLinkGroup> links) {
         var idList = links.stream().flatMap(l -> Stream.of(l.getOntologyUniqueIdentifierFrom(), l.getOntologyUniqueIdentifierTo())).collect(Collectors.toList());
 
         var metaMap = ontologyMetaService.list(new LambdaQueryWrapper<OntologyMeta>().in(OntologyMeta::getUniqueIdentifier, idList))
@@ -123,9 +137,7 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
                     .build();
         }).collect(Collectors.toList());
 
-
     }
-
 
     @Override
     public Integer add(OntologyLinkGroupBo ontologyLinkGroupBo) {
@@ -151,26 +163,6 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
         ontologyLinkGroup.setBackwardChildLinkId(backwardLink.getId());
         count = ontologyLinkGroupMapper.insert(ontologyLinkGroup);
         return 0;
-    }
-
-    @Override
-    public List<OntologyLinkGroupVO> getLinkByOntologyUniqueIdentifier(String uniqueIdentifier) {
-        List<OntologyLinkGroup> linkGroups = new ArrayList<>();
-        List<OntologyLinkGroup> forwardOntologyLinkGroups = ontologyLinkGroupMapper.selectByOntologyUniqueIdentifierFrom(uniqueIdentifier);
-        linkGroups.addAll(forwardOntologyLinkGroups);
-
-        List<OntologyLinkGroup> backwardOntologyLinkGroups = ontologyLinkGroupMapper.selectByOntologyUniqueIdentifierTo(uniqueIdentifier);
-        linkGroups.addAll(backwardOntologyLinkGroups.stream().map(OntologyLinkGroup::revertForwardToBackward).collect(Collectors.toList()));
-
-        List<OntologyLinkGroupVO> result = new ArrayList<>();
-        for (OntologyLinkGroup linkGroup : linkGroups) {
-            OntologyLinkGroupVO linkGroupVO = new OntologyLinkGroupVO();
-            BeanUtils.copyProperties(linkGroup, linkGroupVO);
-            setChildLinks(linkGroupVO, linkGroup.getForwardChildLinkId(), linkGroup.getBackwardChildLinkId());
-            result.add(linkGroupVO);
-        }
-        addOntologyNames(result);
-        return result;
     }
 
 

@@ -2,6 +2,7 @@ package com.aircas.ptr.foundry.common.util;
 
 import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.common.filter.LoggingFilter;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -46,10 +47,18 @@ public class HttpUtil {
         return executeRequest(request, responseType);
     }
 
-    public static <T> T postJson(String url, Map<String, String> params, String jsonString, TypeReference<T> responseType) {
+    public static <T> T postJson(String url, Map<String, String> params, Object jsonBody, TypeReference<T> responseType) {
         HttpUrl.Builder urlBuilder = HttpUrl.parse(url).newBuilder();
         if (MapUtils.isNotEmpty(params)) {
             params.entrySet().forEach(entry -> urlBuilder.addQueryParameter(entry.getKey(), entry.getValue()));
+        }
+
+        String jsonString = "";
+        try {
+            jsonString = objectMapper.writeValueAsString(jsonBody);
+        } catch (JsonProcessingException e) {
+            log.error("json序列化失败", e);
+            throw new BusinessException("json序列化失败");
         }
 
         RequestBody body = RequestBody.create(JSON, jsonString);

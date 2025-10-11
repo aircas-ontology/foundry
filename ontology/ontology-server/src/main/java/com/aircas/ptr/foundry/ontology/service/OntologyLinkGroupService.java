@@ -20,12 +20,11 @@ public interface OntologyLinkGroupService  extends IService<OntologyLinkGroup> {
 
     void createLink(OntologyLinkCreateParam linkCreateParam);
 
-    List<OntologyLinkInfoVO> getLinkByGroupId(String groupId);
+    List<OntologyLinkInfoVO> getLinksByGroupId(String groupId);
 
+    List<OntologyLinkInfoVO> getLinksByOntologyUniqueIdentifier(String ontologyUniqueIdentifier);
 
     Integer add(OntologyLinkGroupBo ontologyLinkGroupBo);
-
-    List<OntologyLinkGroupVO> getLinkByOntologyUniqueIdentifier(String uniqueIdentifier);
 
     RestResult deleteLinkByOntologyUniqueIdentifier(String uniqueIdentifier);
 

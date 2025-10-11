@@ -305,8 +305,9 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         //校验property apiName是否有冲突
         PreconditionUtils.checkArgument(properties.stream().map(v -> StringUtils.lowerCase(v.getApiName())).collect(Collectors.toSet()).size() == properties.size(), "apiName存在冲突");
         //校验titleKey
-        var titleKeyExist = properties.stream().filter(v -> v.getIsTitleKey() == 1).count();
-        PreconditionUtils.checkArgument(titleKeyExist == 1, "名称健不存在或多个");
+        var titleProperties = properties.stream().filter(v -> v.getIsTitleKey() == 1).collect(Collectors.toList());
+        PreconditionUtils.checkArgument(titleProperties.size() == 1 && titleProperties.get(0).getDatasourceId().equals(primaryTableName) ,
+                "名称健不存在或多个");
         //批量插入
         ontologyPropertyService.saveBatch(properties);
         //创建实体表、实体数据和实体节点

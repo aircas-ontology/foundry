@@ -1,8 +1,13 @@
 package com.aircas.ptr.foundry.ontology.entity.service.impl;
 
+import com.aircas.ptr.foundry.common.constant.CountTypeEnum;
 import com.aircas.ptr.foundry.ontology.common.param.DataSourceParam;
 import com.aircas.ptr.foundry.ontology.common.param.EntityCopyParam;
 import com.aircas.ptr.foundry.ontology.common.param.EntityCreateParam;
+import com.aircas.ptr.foundry.ontology.common.param.EntityDetailQueryParam;
+import com.aircas.ptr.foundry.ontology.common.vo.EntityDetailVO;
+import com.aircas.ptr.foundry.ontology.common.vo.EntityVO;
+import com.aircas.ptr.foundry.ontology.common.vo.PropertyVO;
 import com.aircas.ptr.foundry.ontology.entity.converter.ParamDtoConverter;
 import com.aircas.ptr.foundry.ontology.entity.model.document.EntityNode;
 import com.aircas.ptr.foundry.ontology.entity.model.document.EntityRelation;
@@ -17,6 +22,7 @@ import com.aircas.ptr.foundry.ontology.entity.service.EntityPropertyMappingServi
 import com.aircas.ptr.foundry.ontology.entity.service.EntityPropertyService;
 import com.aircas.ptr.foundry.ontology.entity.service.EntityTableService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.RequiredArgsConstructor;
 import lombok.var;
@@ -25,10 +31,7 @@ import org.apache.commons.compress.utils.Lists;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Date;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -47,6 +50,77 @@ public class EntityTableServiceImpl extends ServiceImpl<EntityTableMapper, Objec
 
     private final EntityRelationRepository relationRepository;
 
+
+    @Override
+    public List<EntityDetailVO> queryEntityDetail(EntityDetailQueryParam param) {
+        List<EntityDetailVO> result = Lists.newArrayList();
+        var primaryTableName = param.getPrimaryTableName();
+        var primaryKeyColumn = tableMapper.queryPrimaryKeyColumnName(primaryTableName);
+        var primaryData = tableMapper.selectByPrimaryKey(primaryTableName, primaryKeyColumn, param.getPrimaryKeyValue());
+        //获取主表实体数据
+        var primaryDatasourceId = propertyService.getOne(new LambdaQueryWrapper<EntityPropertyPO>()
+                .eq(EntityPropertyPO::getTableName, primaryTableName).last("limit 1"))
+                .getDatasourceId();
+        var primaryEntityDetail = EntityDetailVO.builder()
+                .tableName(primaryTableName)
+                .datasourceId(primaryDatasourceId)
+                .propertyName(primaryData.get(0).keySet().stream().collect(Collectors.toList()))
+                .propertyValues(primaryData.stream().map(row -> row.values().stream().collect(Collectors.toList())).collect(Collectors.toList()))
+                .build();
+        result.add(primaryEntityDetail);
+        //获取关联表实体数据
+        var tableMapping = propertyMappingService.list(new LambdaQueryWrapper<EntityPropertyMappingPO>().eq(EntityPropertyMappingPO::getEntityTable, primaryTableName));
+        if (CollectionUtils.isEmpty(tableMapping) || CollectionUtils.isEmpty(param.getAssociateDatasource())) {
+            return result;
+        }
+        var dsMap = param.getAssociateDatasource().stream().collect(Collectors.toMap(v -> v.getDatasourceId(), v -> v.getCount()));
+        tableMapping.forEach(mapping -> {
+            var tableName = mapping.getEntityPropertyTable();
+            var datasourceId = propertyService.getOne(new LambdaQueryWrapper<EntityPropertyPO>()
+                    .eq(EntityPropertyPO::getTableName, tableName).last("limit 1"))
+                    .getDatasourceId();
+            if (Objects.isNull(dsMap.get(datasourceId))) {
+                return;
+            }
+            var orderBy = tableMapper.queryPrimaryKeyColumnName(tableName);
+            var data = tableMapper.selectJoinTableData(mapping.getEntityTable(),
+                    mapping.getEntityTableKey(),
+                    primaryKeyColumn,
+                    param.getPrimaryKeyValue(),
+                    tableName,
+                    mapping.getEntityPropertyTableKey(),
+                    orderBy,
+                    dsMap.get(datasourceId).equals(CountTypeEnum.ONE) ? 1 : null);
+            var entityDetail = EntityDetailVO.builder()
+                    .tableName(tableName)
+                    .datasourceId(datasourceId)
+                    .propertyName(data.get(0).keySet().stream().collect(Collectors.toList()))
+                    .propertyValues(data.stream().map(row -> row.values().stream().collect(Collectors.toList())).collect(Collectors.toList()))
+                    .build();
+            result.add(entityDetail);
+        });
+        return result;
+    }
+
+
+    @Override
+    public Page<EntityVO> queryEntitiesByTableName(String tableName, Integer pageNum, Integer pageSize) {
+        var records = tableMapper.selectMapsPage(tableName, pageSize, (pageNum - 1) * pageSize);
+        var total = tableMapper.selectCount(tableName);
+        var entityVOS = records.stream().map(row -> {
+            var properties = row.entrySet().stream().map(entry -> PropertyVO.builder()
+                    .propertyName(entry.getKey())
+                    .propertyValue(entry.getValue())
+                    .build()).collect(Collectors.toList());
+            return EntityVO.builder().tableName(tableName).properties(properties).build();
+        }).collect(Collectors.toList());
+        Page<EntityVO> result = new Page<>();
+        result.setRecords(entityVOS)
+                .setSize(pageSize)
+                .setCurrent(pageNum)
+                .setTotal(total);
+        return result;
+    }
 
     @Override
     @Transactional(value = "mainTransactionManager")
@@ -218,6 +292,8 @@ public class EntityTableServiceImpl extends ServiceImpl<EntityTableMapper, Objec
                 .primaryKey(data.get(primaryKey))
                 .build())
                 .collect(Collectors.toList());
+
+        //todo 改成批量插入
         nodeRepository.saveAll(nodes);
     }
 }

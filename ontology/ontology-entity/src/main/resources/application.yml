@@ -48,3 +48,4 @@ springfox:
     swagger-ui:
       enabled: true
     enabled: true
+

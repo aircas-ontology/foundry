@@ -1,25 +1,26 @@
 package com.aircas.ptr.foundry.ontology.common.vo;
 
 
-import com.aircas.ptr.foundry.common.constant.PostgresDataTypeEnum;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 
+import java.util.List;
+
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
 @Accessors(chain = true)
-public class PropertyVO {
+public class EntityDetailVO {
 
-    private String propertyName;
+    private String tableName;
 
-    private Object propertyValue;
+    private String datasourceId;
 
-//    private Boolean isPrimaryKey;
-//
-//    private PostgresDataTypeEnum datatype;
+    private List<String> propertyName;
+
+    private List<List<Object>> propertyValues;
 }

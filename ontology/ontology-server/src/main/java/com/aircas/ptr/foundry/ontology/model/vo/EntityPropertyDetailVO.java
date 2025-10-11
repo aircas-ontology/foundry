@@ -16,9 +16,15 @@ import java.util.List;
 @SuperBuilder
 @Accessors(chain = true)
 @ApiModel(value = "实体属性详情VO")
-public class EntityPropertyDetailVO extends OntologyPropertyInfoVO {
+public class EntityPropertyDetailVO  {
 
-    @ApiModelProperty(name = "propertyValues", value = "属性值列表（包含历史数据）", example = "[123,456]")
-    private List<Object> propertyValues;
+    @ApiModelProperty(name = "tag", value = "属性标签", example = "基本属性")
+    private String tag;
+
+    @ApiModelProperty(name = "propertyDisplayNames", value = "属性名称列表", example = "名称")
+    private List<String> propertyDisplayNames;
+
+    @ApiModelProperty(name = "propertyValues", value = "属性值列表", example = "[123,456]")
+    private List<List<Object>> propertyValues;
 
 }

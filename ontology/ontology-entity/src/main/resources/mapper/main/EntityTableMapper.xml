@@ -17,7 +17,7 @@
     <insert id="createTable">
         CREATE TABLE ${tableDto.tableName}
         (
-        <include refid="tableColumns" />
+        <include refid="tableColumns"/>
         );
         <if test="tableDto.tableComment != null and tableDto.tableComment != ''">
             COMMENT ON TABLE ${tableDto.tableName} IS '${tableDto.tableComment}';
@@ -60,4 +60,48 @@
     <update id="dropTable" parameterType="string">
         DROP TABLE IF EXISTS ${tableName}
     </update>
+
+    <select id="selectMapsPage" resultType="java.util.HashMap">
+        SELECT * FROM ${tableName} limit ${limit} offset ${offset}
+    </select>
+
+
+    <select id="selectCount" resultType="java.lang.Integer">
+        SELECT count(*) FROM ${tableName}
+    </select>
+
+    <select id="queryPrimaryKeyColumnName" resultType="string">
+        select a.attname AS cloumn_name
+        from pg_index i join pg_attribute a on a.attrelid=i.indrelid and a.attnum=any(i.indkey)
+        where i.indrelid='${tableName}'::regclass and i.indisprimary
+    </select>
+
+
+    <select id="selectJoinTableData" resultType="java.util.HashMap">
+        SELECT t2.*
+        FROM ${tableName} t1
+        LEFT JOIN ${joinTableName} t2 ON t1.${tableKey} = t2.${joinTableKey}
+        WHERE t1.${primaryKeyColumn} = #{primaryKeyValue}
+        ORDER BY t2.${joinTableOrderBy} DESC
+        <if test="count != null">
+            LIMIT ${count}
+        </if>
+    </select>
+
+    <select id="checkIdColumnExists" resultType="java.lang.String">
+        SELECT
+            column_name
+        FROM
+            information_schema.columns
+        WHERE
+            table_name = #{tableName}
+            AND (column_name = 'id' OR column_name = 'ID')
+    </select>
+
+    <select id="selectByPrimaryKey" resultType="java.util.HashMap">
+        SELECT *
+        FROM ${tableName}
+        WHERE ${primaryKeyColumn} = #{primaryKeyValue}
+    </select>
+
 </mapper>
