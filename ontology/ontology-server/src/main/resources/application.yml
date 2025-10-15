@@ -79,6 +79,6 @@ client:
     add-column: "/table/column"
     delete-column: "/table/column"
     update-column-relation: "/table/column_relation"
-    create-relation: "/node/relation"
+    node-relation: "/node/relation"
     query-record: "/table/record"
     query-record-detail: "/table/record_detail"

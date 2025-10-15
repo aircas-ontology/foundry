@@ -19,11 +19,6 @@ import java.util.List;
 @ApiModel(value = "实体关系属性VO")
 public class EntityLinkPropertyVO {
 
-    /**
-     * link的unique identifier
-     */
-    @ApiModelProperty(name = "linkUniqueIdentifier",value = "link 唯一标识")
-    private String linkUniqueIdentifier;
 
     /**
      * link的名称
@@ -31,12 +26,16 @@ public class EntityLinkPropertyVO {
     @ApiModelProperty(name = "linkName",value = "关系名称")
     private String linkName;
 
-    @ApiModelProperty(name = "primaryKey", value = "实体主键标识")
-    private String primaryKey;
+    @ApiModelProperty(name = "primaryKeyFrom", value = "开始实体主键标识")
+    private Object primaryKeyFrom;
 
+    @ApiModelProperty(name = "displayNameFrom", value = "开始实体展示名称")
+    private String displayNameFrom;
 
-    @ApiModelProperty(name = "displayName", value = "实体展示名称")
-    private String displayName;
+    @ApiModelProperty(name = "primaryKeyTo", value = "结束实体主键标识")
+    private Object primaryKeyTo;
 
+    @ApiModelProperty(name = "displayNameTo", value = "结束实体展示名称")
+    private String displayNameTo;
 
 }

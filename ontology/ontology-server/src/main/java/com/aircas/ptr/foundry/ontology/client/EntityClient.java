@@ -7,18 +7,21 @@ import com.aircas.ptr.foundry.ontology.common.param.EntityCreateParam;
 import com.aircas.ptr.foundry.ontology.common.param.EntityDetailQueryParam;
 import com.aircas.ptr.foundry.ontology.common.param.EntityRelationCreateParam;
 import com.aircas.ptr.foundry.ontology.common.vo.EntityDetailVO;
+import com.aircas.ptr.foundry.ontology.common.vo.EntityRelationVO;
 import com.aircas.ptr.foundry.ontology.common.vo.EntityVO;
 import com.aircas.ptr.foundry.ontology.model.vo.EntityPropertyDetailVO;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.jsonldjava.utils.Obj;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import lombok.extern.slf4j.Slf4j;
 import lombok.var;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.web.bind.annotation.RequestParam;
 
 import java.util.HashMap;
 import java.util.List;
@@ -40,14 +43,23 @@ public class EntityClient {
     @Value("${client.entity.delete-table}")
     private String deleteTable;
 
-    @Value("${client.entity.create-relation}")
-    private String createRelation;
+    @Value("${client.entity.node-relation}")
+    private String nodeRelation;
 
     @Value("${client.entity.query-record}")
     private String queryRecords;
 
     @Value("${client.entity.query-record-detail}")
     private String queryRecordDetail;
+
+    public List<EntityRelationVO> queryRelation(String tableName, Object primaryKeyValue){
+        var paramMap = new HashMap<String, String>();
+        paramMap.put("tableName", tableName);
+        paramMap.put("primaryKeyValue", primaryKeyValue.toString());
+        var result =  HttpUtil.get(urlPrefix+nodeRelation,paramMap,new TypeReference<RestResult<List<EntityRelationVO>>>() {
+        });
+        return result.getData();
+    }
 
 
     public List<EntityDetailVO> queryRecordDetail(EntityDetailQueryParam param) {
@@ -69,7 +81,7 @@ public class EntityClient {
 
 
     public void createEntityRelation(EntityRelationCreateParam param) {
-        String url = urlPrefix + createRelation;
+        String url = urlPrefix + nodeRelation;
         HttpUtil.postJson(url, Maps.newHashMap(), param, new TypeReference<RestResult>() {
         });    }
 

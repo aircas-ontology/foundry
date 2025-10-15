@@ -28,6 +28,8 @@ public class EntityNode {
 
     private Object primaryKey;
 
+    private String displayName;
+
     private Date createTime;                // 创建时间
 
     private Date updateTime;                // 更新时间

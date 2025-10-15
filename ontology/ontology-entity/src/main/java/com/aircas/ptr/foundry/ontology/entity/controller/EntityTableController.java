@@ -88,6 +88,7 @@ public class EntityTableController {
     }
 
 
+
     @ApiOperation("新增实体记录")
     @PostMapping("/record")
     public RestResult createEntity(@RequestBody @Valid EntityRecordParam param) {

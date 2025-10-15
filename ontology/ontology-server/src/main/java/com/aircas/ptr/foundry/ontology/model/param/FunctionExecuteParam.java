@@ -18,15 +18,13 @@ import java.util.List;
 @ApiModel(description = "函数执行参数")
 public class FunctionExecuteParam {
 
-    @ApiModelProperty(name = "functionName",value = "函数名称",required = true)
-    @NotBlank(message = "functionName is empty" )
-    private String functionName;
+    @ApiModelProperty(name = "functionApi", value = "函数api", required = true)
+    @NotBlank(message = "functionApi is empty")
+    private String functionApi;
 
-    @ApiModelProperty(name = "objectTypes",value = "本体列表", required = true)
-    @NotEmpty(message = "objectTypes is empty" )
-    private List<String> objectTypes;
+    @ApiModelProperty(name = "parameters", value = "参数列表", required = true)
+    private List<Parameter> parameters;
 
-    @ApiModelProperty(name = "parameters",value = "参数", required = true)
-    @NotNull(message = "parameters is empty")
-    private HashMap<String, Object> parameters;
+
+
 }

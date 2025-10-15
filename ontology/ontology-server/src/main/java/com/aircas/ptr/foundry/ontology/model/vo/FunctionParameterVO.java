@@ -21,4 +21,7 @@ public class FunctionParameterVO {
 
     @ApiModelProperty(name = "paramType",value = "参数类型")
     private String paramType;
+
+    @ApiModelProperty(name = "description",value = "参数描述")
+    private String description;
 }

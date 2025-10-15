@@ -10,6 +10,7 @@ import com.aircas.ptr.foundry.ontology.model.param.EntityTableFieldParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
 import com.aircas.ptr.foundry.ontology.model.vo.EntityInfoVO;
+import com.aircas.ptr.foundry.ontology.model.vo.EntityLinkPropertyVO;
 import com.aircas.ptr.foundry.ontology.model.vo.EntityPropertyDetailVO;
 import com.aircas.ptr.foundry.ontology.model.vo.EntityPropertyVO;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyMetaMapper;
@@ -20,6 +21,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.extern.slf4j.Slf4j;
 import lombok.var;
 import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.compress.utils.Lists;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
@@ -47,6 +49,25 @@ public class EntityServiceImpl implements EntityService {
     @Resource
     private OntologyPropertyMapper propertyMapper;
 
+
+    @Override
+    public List<EntityLinkPropertyVO> queryEntityLinkByPrimaryKey(String ontologyUniqueIdentifier,
+                                                                  Object entityPrimaryKey) {
+
+        var meta = metaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier,ontologyUniqueIdentifier));
+        var relations = entityClient.queryRelation(meta.getApiName(),entityPrimaryKey);
+        if(CollectionUtils.isEmpty(relations)) {
+            return Lists.newArrayList();
+        }
+        return relations.stream().map(v->EntityLinkPropertyVO.builder()
+                .displayNameFrom(v.getNodeNameFrom())
+                .displayNameTo(v.getNodeNameTo())
+                .linkName(v.getType())
+                .primaryKeyFrom(v.getNodePrimaryKeyFrom())
+                .primaryKeyTo(v.getNodePrimaryKeyTo())
+                .build() )
+                .collect(Collectors.toList());
+    }
 
     @Override
     public List<EntityPropertyDetailVO> queryEntityDetail(String ontologyUniqueIdentifier, Integer entityPrimaryKey) {

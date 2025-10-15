@@ -30,6 +30,8 @@ public class FunctionParamPO {
 
     private String description;
 
+    private String category;
+
     /**
      * 记录创建时间
      */

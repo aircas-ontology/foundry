@@ -4,8 +4,9 @@ import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.controller.validator.OntologyIdVerify;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyEntityDeleteParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyEntityParam;
+import com.aircas.ptr.foundry.ontology.model.vo.EntityActionVO;
 import com.aircas.ptr.foundry.ontology.model.vo.EntityInfoVO;
-import com.aircas.ptr.foundry.ontology.model.vo.EntityLinkVO;
+import com.aircas.ptr.foundry.ontology.model.vo.EntityLinkPropertyVO;
 import com.aircas.ptr.foundry.ontology.model.vo.EntityPropertyDetailVO;
 import com.aircas.ptr.foundry.ontology.service.EntityService;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
 import javax.validation.Valid;
+import javax.validation.constraints.NotNull;
 import java.util.List;
 
 @Api(tags = "实体")
@@ -36,7 +38,7 @@ public class OntologyEntityController {
             @RequestParam(required = false, defaultValue = "1") Integer pageNum,
             @RequestParam(required = false, defaultValue = "10") Integer pageSize) {
         return RestResult.ofData(entityService.queryEntity(ontologyUniqueIdentifier, pageNum, pageSize));
-}
+    }
 
 
     @GetMapping
@@ -44,15 +46,26 @@ public class OntologyEntityController {
     public RestResult<List<EntityPropertyDetailVO>> queryEntityDetail(@RequestParam(required = true, name = "ontologyUniqueIdentifier") @ApiParam(name = "ontologyUniqueIdentifier", value = "本体id") @OntologyIdVerify String ontologyUniqueIdentifier,
                                                                       @RequestParam(required = true, name = "entityPrimaryKey") @ApiParam(name = "entityPrimaryKey", value = "实体primary key") Integer entityPrimaryKey) {
 
-        return RestResult.ofData(entityService.queryEntityDetail(ontologyUniqueIdentifier,entityPrimaryKey));
+        return RestResult.ofData(entityService.queryEntityDetail(ontologyUniqueIdentifier, entityPrimaryKey));
 
     }
 
     @GetMapping("/link")
     @ApiOperation(value = "查询本体下实体的关联关系")
-    public RestResult<List<EntityLinkVO>> queryEntityLinkByPrimaryKey(@RequestParam(required = true, name = "ontologyUniqueIdentifier") @ApiParam(name = "ontologyUniqueIdentifier", value = "本体id") String ontologyUniqueIdentifier,
-                                                                      @RequestParam(required = false, name = "entityPrimaryKey") @ApiParam(name = "entityPrimaryKey", value = "实体primary key") String entityPrimaryKey) {
-        return RestResult.success();
+    public RestResult<List<EntityLinkPropertyVO>> queryEntityLinkByPrimaryKey(@RequestParam(required = true, name = "ontologyUniqueIdentifier") @ApiParam(name = "ontologyUniqueIdentifier", value = "本体id") @OntologyIdVerify String ontologyUniqueIdentifier,
+                                                                              @RequestParam(required = true, name = "entityPrimaryKey") @ApiParam(name = "entityPrimaryKey", value = "实体primary key") @NotNull(message = "entityPrimaryKey is null") Object entityPrimaryKey) {
+
+
+        return RestResult.ofData(entityService.queryEntityLinkByPrimaryKey(ontologyUniqueIdentifier, entityPrimaryKey));
+
+    }
+
+    @GetMapping("/action")
+    @ApiOperation(value = "查询本体下实体的行为")
+    public RestResult<List<EntityActionVO>> queryEntityActionsByPrimaryKey(@RequestParam(required = true, name = "ontologyUniqueIdentifier") @ApiParam(name = "ontologyUniqueIdentifier", value = "本体id") @OntologyIdVerify String ontologyUniqueIdentifier,
+                                                                           @RequestParam(required = true, name = "entityPrimaryKey") @ApiParam(name = "entityPrimaryKey", value = "实体primary key") @NotNull(message = "entityPrimaryKey is null") Object entityPrimaryKey) {
+
+        return RestResult.ofData(null);
 
     }
 
@@ -78,7 +91,7 @@ public class OntologyEntityController {
 
     @GetMapping("/list/by_link")
     @ApiOperation(value = "依据本体关系id查询实体关系列表")
-    public RestResult<List<EntityLinkVO>> queryEntityLinkById(@RequestParam(required = true, name = "linkUniqueIdentifier") @ApiParam(name = "linkUniqueIdentifier", value = "关系id") String linkUniqueIdentifier) {
+    public RestResult<List<EntityLinkPropertyVO>> queryEntityLinkById(@RequestParam(required = true, name = "linkUniqueIdentifier") @ApiParam(name = "linkUniqueIdentifier", value = "关系id") String linkUniqueIdentifier) {
         return RestResult.success();
     }
 

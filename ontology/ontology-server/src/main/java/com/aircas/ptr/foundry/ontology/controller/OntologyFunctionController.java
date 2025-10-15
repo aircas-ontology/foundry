@@ -1,8 +1,8 @@
 package com.aircas.ptr.foundry.ontology.controller;
 
 import com.aircas.ptr.foundry.common.base.RestResult;
-import com.aircas.ptr.foundry.ontology.model.param.FunctionExecuteParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionCreateParam;
+import com.aircas.ptr.foundry.ontology.model.param.FunctionExecuteParam;
 import com.aircas.ptr.foundry.ontology.model.vo.FunctionInfoVO;
 import com.aircas.ptr.foundry.ontology.service.FunctionService;
 import io.swagger.annotations.Api;
@@ -23,15 +23,13 @@ public class OntologyFunctionController {
     @Resource
     FunctionService functionService;
 
-    @ApiOperation(value = "执行某个function")
+
     @PostMapping("/execute")
-    public RestResult execute(@RequestBody @Valid FunctionExecuteParam executeParam) {
-        try {
-            return RestResult.ofData(functionService.handle(executeParam.getFunctionName(), false, executeParam.getObjectTypes(), executeParam.getParameters()));
-        } catch (Exception e) {
-            return RestResult.failed();
-        }
+    @ApiOperation(value = "函数执行")
+    public RestResult executeFunction(@RequestBody @Valid FunctionExecuteParam param) {
+        return RestResult.ofData(null);
     }
+
 
 //    @ApiOperation(value = "得到函数参数")
 //    @GetMapping("/parameter")

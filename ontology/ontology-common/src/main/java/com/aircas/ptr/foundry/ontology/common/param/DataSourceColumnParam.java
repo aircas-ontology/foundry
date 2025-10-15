@@ -37,6 +37,9 @@ public class DataSourceColumnParam {
     @ApiModelProperty(name ="primaryKey",value = "主键的列名，必须存在于选择的列参数中", required = true, example = "id")
     private Boolean isPrimaryKey;
 
+    @ApiModelProperty(name ="isTitleKey",value = "名称健", required = true, example = "name")
+    private Boolean isTitleKey;
+
     @ApiModelProperty(name = "isAssociateKey", value = "是否为与主数据源关联的列名，必须存在于选择的列参数中", required = true, example = "id")
     private Boolean isAssociateKey;
 

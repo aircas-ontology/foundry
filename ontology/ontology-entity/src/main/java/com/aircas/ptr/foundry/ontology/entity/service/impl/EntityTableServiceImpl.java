@@ -194,6 +194,7 @@ public class EntityTableServiceImpl extends ServiceImpl<EntityTableMapper, Objec
                 .createTime(new Date())
                 .updateTime(new Date())
                 .primaryKey(node.getPrimaryKey())
+                .displayName(node.getDisplayName())
                 .isDeleted(node.getIsDeleted()).build())
                 .collect(Collectors.toList());
         nodeRepository.saveAll(nodesToInsert);
@@ -284,12 +285,14 @@ public class EntityTableServiceImpl extends ServiceImpl<EntityTableMapper, Objec
 
         //写入实体节点数据
         var primaryKey = primaryDataSource.getColumnParamList().stream().filter(v -> v.getIsPrimaryKey()).findFirst().get().getColumnName();
+        var titleKey = primaryDataSource.getColumnParamList().stream().filter(v -> v.getIsTitleKey()).findFirst().get().getColumnName();
         var nodes = primaryData.stream().map(data -> EntityNode.builder()
                 .tableName(primaryTableName)
                 .isDeleted(false)
                 .createTime(new Date())
                 .updateTime(new Date())
                 .primaryKey(data.get(primaryKey))
+                .displayName(String.valueOf(data.get(titleKey)))
                 .build())
                 .collect(Collectors.toList());
 

@@ -63,6 +63,7 @@ public class DataConverter {
                 .description(v.getDescription())
                 .isAssociateKey(v.getIsAssociateKey())
                 .isPrimaryKey(v.getIsPrimaryKey())
+                .isTitleKey(v.getIsTitleKey())
                 .associateDatasourceColumnName(v.getAssociateDatasourceColumnName())
                 .tableName(tableName)
                 .datasourceId(v.getDatasourceId())

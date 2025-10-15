@@ -1,0 +1,35 @@
+package com.aircas.ptr.foundry.ontology.model.vo;
+
+import io.swagger.annotations.ApiModel;
+import io.swagger.annotations.ApiModelProperty;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
+import lombok.experimental.SuperBuilder;
+
+import java.util.List;
+
+@Data
+@SuperBuilder
+@NoArgsConstructor
+@AllArgsConstructor
+@ApiModel(value = "实体行为")
+public class EntityActionVO {
+
+    @ApiModelProperty(name = "functionApi", value = "函数api", example = "getInfo")
+    private String functionApi;
+
+    @ApiModelProperty(name = "description", value = "行为描述", example = "这是一个行为")
+    private String description;
+
+    @ApiModelProperty(name = "displayName", value = "行为显示名称", example = "轨迹")
+    private String displayName;
+
+    @ApiModelProperty(name = "requestParams",value = "函数请求参数列表")
+    private List<FunctionParameterVO> requestParams;
+
+    @ApiModelProperty(name = "responseParams",value = "函数返回参数列表")
+    private List<FunctionParameterVO> responseParams;
+
+}

@@ -61,7 +61,5 @@ public class OntologyCreateParam {
     @ApiModelProperty(name = "parentOntologyUniqueIdentifier", value = "继承的本体id", example = "8039c5f9-5579-4ee4-ba94-b2f25f785dd6")
     private String parentOntologyUniqueIdentifier;
 
-    @ApiModelProperty(name = "createMode", value = "本体创建模式：DATASOURCE，INHERIT，NONE", example = "DATASOURCE", required = true)
-    @NotNull(message = "createMode is null")
-    private OntologyCreateModeEnum createMode;
+
 }

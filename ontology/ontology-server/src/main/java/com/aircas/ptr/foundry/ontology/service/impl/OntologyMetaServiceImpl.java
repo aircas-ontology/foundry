@@ -100,16 +100,12 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 .parentUniqueIdentifier(ontologyCreateParam.getParentOntologyUniqueIdentifier())
                 .metaGroupId(String.join(",", ontologyCreateParam.getGroupIds()))
                 .build();
-        switch (ontologyCreateParam.getCreateMode()) {
-            case NONE:
-                this.save(meta);
-                break;
-            case INHERIT:
-                createOntologyByInherit(ontologyCreateParam, meta);
-                break;
-            case DATASOURCE:
-                createOntologyByDatasource(ontologyCreateParam, meta);
-                break;
+        if (StringUtils.isNotEmpty(ontologyCreateParam.getParentOntologyUniqueIdentifier())) {
+            createOntologyByInherit(ontologyCreateParam, meta);
+        } else if (ontologyCreateParam.getPrimaryDataSource() != null) {
+            createOntologyByDatasource(ontologyCreateParam, meta);
+        } else {
+            this.save(meta);
         }
         return meta.getUniqueIdentifier();
     }
@@ -306,7 +302,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         PreconditionUtils.checkArgument(properties.stream().map(v -> StringUtils.lowerCase(v.getApiName())).collect(Collectors.toSet()).size() == properties.size(), "apiName存在冲突");
         //校验titleKey
         var titleProperties = properties.stream().filter(v -> v.getIsTitleKey() == 1).collect(Collectors.toList());
-        PreconditionUtils.checkArgument(titleProperties.size() == 1 && titleProperties.get(0).getDatasourceId().equals(primaryTableName) ,
+        PreconditionUtils.checkArgument(titleProperties.size() == 1 && titleProperties.get(0).getDatasourceId().equals(primaryTableName),
                 "名称健不存在或多个");
         //批量插入
         ontologyPropertyService.saveBatch(properties);
