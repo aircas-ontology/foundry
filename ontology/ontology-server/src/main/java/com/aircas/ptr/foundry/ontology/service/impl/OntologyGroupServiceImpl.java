@@ -1,20 +1,19 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
 import com.aircas.ptr.foundry.common.exception.DuplicatedDataException;
+import com.aircas.ptr.foundry.ontology.model.bo.OntologyGroupBO;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyGroupAddParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyGroup;
+import com.aircas.ptr.foundry.ontology.model.vo.*;
+import com.aircas.ptr.foundry.ontology.repository.dao.OntologyGroupMapper;
 import com.aircas.ptr.foundry.ontology.service.OntologyGroupService;
 import com.aircas.ptr.foundry.ontology.service.OntologyLinkGroupService;
 import com.aircas.ptr.foundry.ontology.service.OntologyMetaService;
-import com.aircas.ptr.foundry.ontology.model.bo.OntologyGroupBO;
-import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkCountVO;
-import com.aircas.ptr.foundry.ontology.model.vo.OntologyGroupVO;
-import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkGraphVO;
-import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaVO;
-import com.aircas.ptr.foundry.ontology.repository.dao.OntologyGroupMapper;
-import com.aircas.ptr.foundry.ontology.model.param.OntologyGroupAddParam;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
+import lombok.var;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -33,7 +32,7 @@ import java.util.stream.Collectors;
  */
 
 @Service
-public class OntologyGroupServiceImpl extends ServiceImpl<OntologyGroupMapper,OntologyGroup> implements OntologyGroupService {
+public class OntologyGroupServiceImpl extends ServiceImpl<OntologyGroupMapper, OntologyGroup> implements OntologyGroupService {
 
     @Resource
     private OntologyGroupMapper ontologyGroupMapper;
@@ -43,6 +42,14 @@ public class OntologyGroupServiceImpl extends ServiceImpl<OntologyGroupMapper,On
 
     @Autowired
     private OntologyLinkGroupService ontologyLinkGroupService;
+
+    @Override
+    public List<OntologyGroupInfoVO> searchByKeyword(String keyword) {
+        var list = list(new LambdaQueryWrapper<OntologyGroup>().like(OntologyGroup::getGroupName, keyword));
+        return list.stream().map(v -> OntologyGroupInfoVO.builder().groupId(v.getGroupId()).groupName(v.getGroupName()).build())
+                .collect(Collectors.toList());
+    }
+
 
     @Override
     public Integer add(OntologyGroupAddParam param) {

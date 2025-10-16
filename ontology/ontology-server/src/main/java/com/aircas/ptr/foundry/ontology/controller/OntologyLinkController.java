@@ -73,19 +73,6 @@ public class OntologyLinkController {
         return RestResult.ofData(result);
     }
 
-    @PostMapping("/entity")
-    @ApiOperation(value = "查询实体关系(1跳)")
-    public RestResult<List<EntityLinkInfoVO>> getEntityLink(@RequestBody @Valid EntityLinkQueryParam queryParam) {
-        return RestResult.ofData(null);
-    }
-
-
-//    @GetMapping("/by_ontology/graph")
-//    @ApiOperation(value = "根据本体id查询关系(1跳)(graph)")
-//    public RestResult<OntologyLinkGraphVO> getLinkGraphByOntologyUniqueIdentifier(@RequestParam(required = true, name = "ontologyUniqueIdentifier") @ApiParam(value = "本体uniqueIdentifier", required = true) String ontologyUniqueIdentifier) {
-//
-//        return RestResult.ofData(ontologyLinkGroupService.getLinkGraphByOntologyUniqueIdentifier(oId));
-//    }
 
     @GetMapping("/all")
     @ApiOperation(value = "查询所有本体的所有关系")

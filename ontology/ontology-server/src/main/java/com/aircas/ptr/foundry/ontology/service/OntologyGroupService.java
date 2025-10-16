@@ -2,6 +2,7 @@ package com.aircas.ptr.foundry.ontology.service;
 
 import com.aircas.ptr.foundry.ontology.model.bo.OntologyGroupBO;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyGroup;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologyGroupInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyGroupVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkGraphVO;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyGroupAddParam;
@@ -18,6 +19,8 @@ import java.util.List;
 
 
 public interface OntologyGroupService extends IService<OntologyGroup> {
+
+    List<OntologyGroupInfoVO> searchByKeyword(String keyword);
 
     Integer add(OntologyGroupAddParam param);
 

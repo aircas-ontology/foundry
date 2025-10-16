@@ -7,8 +7,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.Date;
-
 /**
  * @author dongjunchuan
  * @description
@@ -19,8 +17,8 @@ import java.util.Date;
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@ApiModel(description = "本体分组视图")
-public class OntologyGroupVO {
+@ApiModel(description = "本体分组VO")
+public class OntologyGroupInfoVO {
 
      @ApiModelProperty(value = "分组名称", example = "远海远域")
      private String groupName;
@@ -28,6 +26,4 @@ public class OntologyGroupVO {
      @ApiModelProperty(value = "分组id", example = "fdsafdsfaf")
      private String groupId;
 
-     @ApiModelProperty(value = "分组数量", example = "1")
-     private Integer count;
 }

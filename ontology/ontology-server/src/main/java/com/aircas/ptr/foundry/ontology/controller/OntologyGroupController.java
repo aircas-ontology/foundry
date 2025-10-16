@@ -4,6 +4,7 @@ import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.model.param.GroupIdParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyGroupAddParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyGroupUpdateParam;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologyGroupInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyGroupVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkGraphVO;
 import com.aircas.ptr.foundry.ontology.service.OntologyGroupService;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
 import javax.validation.Valid;
+import javax.validation.constraints.NotNull;
 import java.util.List;
 
 /**
@@ -54,9 +56,8 @@ public class OntologyGroupController {
 
     @GetMapping("/search")
     @ApiOperation("关键字检索本体分组")
-    public RestResult<List<OntologyGroupVO>> searchOntologyGroups(@RequestParam(required = false,name = "keyword") String keyword) {
-        //todo
-        return RestResult.success();
+    public RestResult<List<OntologyGroupInfoVO>> searchOntologyGroups(@RequestParam(required = true,name = "keyword") String keyword) {
+        return RestResult.ofData(ontologyGroupService.searchByKeyword(keyword));
     }
 
     @GetMapping("/link/graph")
