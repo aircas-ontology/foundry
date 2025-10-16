@@ -270,7 +270,7 @@ public class EntityTableServiceImpl extends ServiceImpl<EntityTableMapper, Objec
         var primaryTableName = primaryDataSource.getColumnParamList().get(0).getTableName();
         var primaryDatasource = primaryDataSource.getColumnParamList().get(0).getDatasourceId();
         var primaryFieldMap = primaryDataSource.getColumnParamList().stream().collect(Collectors.toMap(v -> v.getDatasourceColumnName(), v -> v.getColumnName()));
-        var primaryData = dataObjectMapper.queryTableDataByColumn(primaryDatasource, primaryFieldMap, dataObjectMapper.checkIdColumnExists(primaryDatasource));
+        var primaryData = queryTableDataByColumns(primaryDatasource, primaryFieldMap, dataObjectMapper.checkIdColumnExists(primaryDatasource));
         //插入主实体表
         tableMapper.batchInsertRows(primaryTableName, primaryData);
         associateDataSources.stream().forEach(ds -> {
@@ -279,7 +279,7 @@ public class EntityTableServiceImpl extends ServiceImpl<EntityTableMapper, Objec
             var datasourceId = ds.getColumnParamList().get(0).getDatasourceId();
             var filedMap = ds.getColumnParamList().stream().collect(Collectors.toMap(v -> v.getDatasourceColumnName(), v -> v.getColumnName()));
             var orderBy = dataObjectMapper.checkIdColumnExists(datasourceId);
-            List<Map<String, Object>> data = dataObjectMapper.queryTableDataByColumn(datasourceId, filedMap, orderBy);
+            List<Map<String, Object>> data = queryTableDataByColumns(datasourceId, filedMap, orderBy);
             tableMapper.batchInsertRows(tableName, data);
         });
 
@@ -298,5 +298,20 @@ public class EntityTableServiceImpl extends ServiceImpl<EntityTableMapper, Objec
 
         //todo 改成批量插入
         nodeRepository.saveAll(nodes);
+    }
+
+    private List<Map<String, Object>> queryTableDataByColumns(String tableName,
+                                                             Map<String, String> columnNames,
+                                                             String orderBy) {
+        var rows = dataObjectMapper.queryTableDataByColumn(tableName, columnNames, orderBy);
+        var cols = columnNames.values().stream().collect(Collectors.toList());
+        rows.forEach(row -> {
+            cols.forEach(col -> {
+                if (!row.containsKey(col)) {
+                    row.put(col, null);
+                }
+            });
+        });
+        return rows;
     }
 }

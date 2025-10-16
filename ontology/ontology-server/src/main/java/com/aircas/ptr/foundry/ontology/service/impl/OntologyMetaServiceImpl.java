@@ -200,7 +200,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
 
         actionViews.forEach(action -> {
             var actionId = SnowflakeIdUtil.get();
-            actions.add(OntologyAction.builder().api(action.getApi())
+            actions.add(OntologyAction.builder().api(ontologyCreateParam.getApiName() + "_" + action.getApi())
                     .description(action.getDescription())
                     .displayName(action.getDisplayName())
                     .functionApi(action.getFunctionApi())
@@ -241,10 +241,14 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         actionHandleTaskService.saveBatch(tasks);
 
         // 远程调用创建实体
-        entityClient.copyTableAndEntities(EntityCopyParam.builder()
-                .newTableName(meta.getApiName())
-                .sourceTableName(parentOntology.getApiName())
-                .build());
+        try {
+            entityClient.copyTableAndEntities(EntityCopyParam.builder()
+                    .newTableName(meta.getApiName())
+                    .sourceTableName(parentOntology.getApiName())
+                    .build());
+        } catch (Exception e) {
+            //todo 临时解决方案，10-18号演示完成删除try catch
+        }
     }
 
     private String findChildOntologyProperty(List<OntologyProperty> parentProperties, List<OntologyProperty> childProps, String targetUniqId) {
