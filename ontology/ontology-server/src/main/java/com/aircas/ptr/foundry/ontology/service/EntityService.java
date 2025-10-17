@@ -21,7 +21,7 @@ public interface EntityService {
 
     List<EntityLinkPropertyVO> queryEntityLinkByPrimaryKey(String ontologyUniqueIdentifier, Object entityPrimaryKey);
 
-    List<EntityPropertyDetailVO> queryEntityDetail(String ontologyUniqueIdentifier, Integer entityPrimaryKey);
+    List<EntityPropertyDetailVO> queryEntityDetail(String ontologyUniqueIdentifier, Object entityPrimaryKey);
 
     Page<EntityInfoVO> queryEntity(String ontologyUniqueIdentifier, Integer pageNum, Integer pageSize);
 

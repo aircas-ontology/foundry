@@ -5,6 +5,7 @@ import com.aircas.ptr.foundry.common.constant.OntologyPropertyCategoryEnum;
 import com.aircas.ptr.foundry.ontology.client.EntityClient;
 import com.aircas.ptr.foundry.ontology.common.param.EntityAssociateDatasourceParam;
 import com.aircas.ptr.foundry.ontology.common.param.EntityDetailQueryParam;
+import com.aircas.ptr.foundry.ontology.common.param.EntityRelationQueryParam;
 import com.aircas.ptr.foundry.ontology.model.param.EntityNodeParam;
 import com.aircas.ptr.foundry.ontology.model.param.EntityTableFieldParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
@@ -54,23 +55,26 @@ public class EntityServiceImpl implements EntityService {
     public List<EntityLinkPropertyVO> queryEntityLinkByPrimaryKey(String ontologyUniqueIdentifier,
                                                                   Object entityPrimaryKey) {
 
-        var meta = metaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier,ontologyUniqueIdentifier));
-        var relations = entityClient.queryRelation(meta.getApiName(),entityPrimaryKey);
-        if(CollectionUtils.isEmpty(relations)) {
+        var meta = metaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, ontologyUniqueIdentifier));
+        var relations = entityClient.queryRelation(EntityRelationQueryParam.builder()
+                .tableName(meta.getApiName())
+                .primaryKeyValue(entityPrimaryKey)
+                .build());
+        if (CollectionUtils.isEmpty(relations)) {
             return Lists.newArrayList();
         }
-        return relations.stream().map(v->EntityLinkPropertyVO.builder()
+        return relations.stream().map(v -> EntityLinkPropertyVO.builder()
                 .displayNameFrom(v.getNodeNameFrom())
                 .displayNameTo(v.getNodeNameTo())
                 .linkName(v.getType())
-                .primaryKeyFrom(v.getNodePrimaryKeyFrom())
-                .primaryKeyTo(v.getNodePrimaryKeyTo())
-                .build() )
+                .entityKeyFrom(v.getNodeIdFrom())
+                .entityKeyTo(v.getNodeIdTo())
+                .build())
                 .collect(Collectors.toList());
     }
 
     @Override
-    public List<EntityPropertyDetailVO> queryEntityDetail(String ontologyUniqueIdentifier, Integer entityPrimaryKey) {
+    public List<EntityPropertyDetailVO> queryEntityDetail(String ontologyUniqueIdentifier, Object entityPrimaryKey) {
         var meta = metaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, ontologyUniqueIdentifier));
         var props = propertyMapper.selectList(new LambdaQueryWrapper<OntologyProperty>()
                 .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier));

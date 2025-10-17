@@ -56,8 +56,8 @@ public class EntityNodeServiceImpl implements EntityNodeService {
                 .type(v.getType())
                 .nodeNameFrom(v.getFrom().getDisplayName())
                 .nodeNameTo(v.getTo().getDisplayName())
-                .nodePrimaryKeyFrom(v.getFrom().getPrimaryKey())
-                .nodePrimaryKeyTo(v.getTo().getPrimaryKey())
+                .nodeIdFrom(v.getFrom().getId())
+                .nodeIdTo(v.getTo().getId())
                 .build()).collect(Collectors.toList());
     }
 }

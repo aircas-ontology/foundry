@@ -80,5 +80,6 @@ client:
     delete-column: "/table/column"
     update-column-relation: "/table/column_relation"
     node-relation: "/node/relation"
+    query-node-relation: "/node/query_relation"
     query-record: "/table/record"
     query-record-detail: "/table/record_detail"

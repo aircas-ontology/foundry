@@ -26,14 +26,14 @@ public class EntityLinkPropertyVO {
     @ApiModelProperty(name = "linkName",value = "关系名称")
     private String linkName;
 
-    @ApiModelProperty(name = "primaryKeyFrom", value = "开始实体主键标识")
-    private Object primaryKeyFrom;
+    @ApiModelProperty(name = "primaryKeyFrom", value = "开始实体标识")
+    private String entityKeyFrom;
 
     @ApiModelProperty(name = "displayNameFrom", value = "开始实体展示名称")
     private String displayNameFrom;
 
-    @ApiModelProperty(name = "primaryKeyTo", value = "结束实体主键标识")
-    private Object primaryKeyTo;
+    @ApiModelProperty(name = "primaryKeyTo", value = "结束实体标识")
+    private String entityKeyTo;
 
     @ApiModelProperty(name = "displayNameTo", value = "结束实体展示名称")
     private String displayNameTo;

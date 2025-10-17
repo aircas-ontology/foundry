@@ -150,4 +150,25 @@
             <artifactId>knife4j-spring-boot-starter</artifactId>
         </dependency>
     </dependencies>
+
+    <build>
+        <finalName>ptr_entity</finalName>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <executable>true</executable>
+                    <mainClass>com.aircas.ptr.foundry.ontology.entity.EntityApplication</mainClass>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 </project>

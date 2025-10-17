@@ -157,6 +157,8 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                         .propertyUniqueIdentifierFrom(v.getPropertyUniqueIdentifierFrom())
                         .propertyUniqueIdentifierTo(v.getPropertyUniqueIdentifierTo())
                         .status(v.getStatus())
+                        .forwardChildLinkId(v.getForwardChildLinkId())
+                        .backwardChildLinkId(v.getBackwardChildLinkId())
                         .uniqueIdentifier(IdGenerator.generateUUID())
                         .build();
                 if (v.getOntologyUniqueIdentifierFrom().equals(parentIdentifer)) {
@@ -241,14 +243,11 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         actionHandleTaskService.saveBatch(tasks);
 
         // 远程调用创建实体
-        try {
-            entityClient.copyTableAndEntities(EntityCopyParam.builder()
-                    .newTableName(meta.getApiName())
-                    .sourceTableName(parentOntology.getApiName())
-                    .build());
-        } catch (Exception e) {
-            //todo 临时解决方案，10-18号演示完成删除try catch
-        }
+        entityClient.copyTableAndEntities(EntityCopyParam.builder()
+                .newTableName(meta.getApiName())
+                .sourceTableName(parentOntology.getApiName())
+                .build());
+
     }
 
     private String findChildOntologyProperty(List<OntologyProperty> parentProperties, List<OntologyProperty> childProps, String targetUniqId) {
