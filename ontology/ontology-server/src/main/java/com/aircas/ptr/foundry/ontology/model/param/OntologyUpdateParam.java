@@ -9,6 +9,9 @@ import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
 
+import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.NotEmpty;
+import javax.validation.constraints.NotNull;
 import java.util.List;
 
 @Data
@@ -23,12 +26,14 @@ public class OntologyUpdateParam extends OntologyIdentifierParam {
      * 图标
      */
     @ApiModelProperty(name = "icon", value = "本体图标", dataType = "java.lang.String", example = "飞机图标base64")
+    @NotBlank(message = "icon is empty")
     private String icon;
 
     /**
      * 本体名称
      */
     @ApiModelProperty(name = "displayName", value = "本体名称", dataType = "java.lang.String", example = "飞机")
+    @NotBlank(message = "displayName is empty")
     private String displayName;
 
 
@@ -42,6 +47,7 @@ public class OntologyUpdateParam extends OntologyIdentifierParam {
      * 本体描述
      */
     @ApiModelProperty(name = "groupIds", value = "分组ids", example = "[123,456]")
+    @NotEmpty(message = "groupIds is empty")
     private List<String> groupIds;
 
 }

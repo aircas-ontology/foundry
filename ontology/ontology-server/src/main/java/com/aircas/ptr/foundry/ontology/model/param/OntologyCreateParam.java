@@ -1,9 +1,10 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
-import com.aircas.ptr.foundry.common.constant.OntologyCreateModeEnum;
+import com.aircas.ptr.foundry.common.constant.OntologyLinkMappingEnum;
+import com.aircas.ptr.foundry.ontology.controller.validator.GroupIdsVerify;
 import com.aircas.ptr.foundry.ontology.controller.validator.OntologyApiNameVerify;
 import com.aircas.ptr.foundry.ontology.controller.validator.OntologyDisplayNameVerify;
-import com.aircas.ptr.foundry.ontology.controller.validator.GroupIdsVerify;
+import com.aircas.ptr.foundry.ontology.controller.validator.OntologyIdVerify;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.AllArgsConstructor;
@@ -11,6 +12,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
+import lombok.experimental.SuperBuilder;
 
 import javax.validation.Valid;
 import javax.validation.constraints.NotBlank;
@@ -61,5 +63,57 @@ public class OntologyCreateParam {
     @ApiModelProperty(name = "parentOntologyUniqueIdentifier", value = "继承的本体id", example = "8039c5f9-5579-4ee4-ba94-b2f25f785dd6")
     private String parentOntologyUniqueIdentifier;
 
+    @ApiModelProperty(name = "linkCreateParam", value = "创建关系")
+    @Valid
+    private LinkCreateParam linkCreateParam;
+
+
+    @Data
+    @SuperBuilder
+    @Accessors(chain = true)
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @ApiModel(description = "link create param")
+    public static class LinkCreateParam {
+
+        /**
+         * link的名称
+         */
+        @ApiModelProperty(name = "name", required = true, value = "本体关系名称")
+        @NotBlank(message = "link name is empty")
+        private String name;
+
+        /**
+         * 结束本体unique identifier
+         */
+        @ApiModelProperty(name = "ontologyUniqueIdentifierTo", required = true, value = "结束本体uniq id")
+        @NotBlank(message = "ontologyUniqueIdentifierTo name is empty")
+        @OntologyIdVerify
+        private String ontologyUniqueIdentifierTo;
+
+        /**
+         * 开始本体的某个属性api name，作为连接键
+         */
+        @ApiModelProperty(name = "propertyApiNameFrom",  value = "开始本体的某个属性，作为连接键")
+        private String propertyApiNameFrom;
+
+        /**
+         * 结束本体的某个属性，作为连接键
+         */
+        @ApiModelProperty(name = "propertyUniqueIdentifierTo",  value = "结束本体的某个属性，作为连接键")
+        private String propertyUniqueIdentifierTo;
+
+
+        /**
+         * 1: 1对1
+         * 2: 1对多
+         * 3: 多对1
+         * 4: 多对多
+         */
+        @ApiModelProperty(name = "mapping", required = true, value = "本体映射关系")
+        @NotNull(message = "mapping is empty")
+        private OntologyLinkMappingEnum mapping;
+
+    }
 
 }

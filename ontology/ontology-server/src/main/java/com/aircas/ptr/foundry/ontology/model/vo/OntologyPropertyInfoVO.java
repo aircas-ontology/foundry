@@ -48,5 +48,9 @@ public class OntologyPropertyInfoVO {
     @ApiModelProperty(name = "uniqueIdentifier", value = "id")
     private String uniqueIdentifier;
 
-
+    /**
+     * 属性标签
+     */
+    @ApiModelProperty(name = "tag", value = "属性标签")
+    private String tag;
 }

@@ -26,15 +26,13 @@ public class OntologyDatasourceController {
 
     @GetMapping("/column")
     @ApiOperation(value = "根据dataSourceId查询有哪些列")
-    public RestResult<List<TableColumnDescVO>> query(@RequestParam @ApiParam(value = "dataSourceId", required = true) String dataSourceId) {
-        //todo 增加 is primary key
+    public RestResult<List<TableColumnDescVO>> getColumns(@RequestParam @ApiParam(value = "dataSourceId", required = true) String dataSourceId) {
         return RestResult.ofData(tableMetadataService.getColumns(dataSourceId));
     }
 
-    @GetMapping("/table/list")
+    @GetMapping("/table")
     @ApiOperation(value = "查询数据源列表")
-    public RestResult<List<DatasourceTableVO>> queryTables() {
-
+    public RestResult<List<DatasourceTableVO>> getTables() {
         return RestResult.ofData(tableMetadataService.listTables());
     }
 

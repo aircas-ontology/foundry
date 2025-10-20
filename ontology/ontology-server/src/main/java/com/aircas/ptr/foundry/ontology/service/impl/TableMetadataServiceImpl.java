@@ -1,13 +1,10 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
-import com.aircas.ptr.foundry.ontology.model.po.DatasourceTable;
-import com.aircas.ptr.foundry.ontology.model.po.TableColumnDesc;
-import com.aircas.ptr.foundry.ontology.service.TableMetadataService;
-import com.aircas.ptr.foundry.ontology.model.vo.TableColumnDescVO;
 import com.aircas.ptr.foundry.ontology.model.vo.DatasourceTableVO;
+import com.aircas.ptr.foundry.ontology.model.vo.TableColumnDescVO;
 import com.aircas.ptr.foundry.ontology.repository.datalakeDao.TableMetadataMapper;
+import com.aircas.ptr.foundry.ontology.service.TableMetadataService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
@@ -23,27 +20,20 @@ public class TableMetadataServiceImpl implements TableMetadataService {
 
     @Override
     public List<TableColumnDescVO> getColumns(String datasourceId) {
-        List<TableColumnDesc> list = this.tableMetadataMapper.getColumnMetadata(datasourceId);
-        return list.stream().map(item -> {
-            TableColumnDescVO tableColumnDescVO = new TableColumnDescVO();
-            BeanUtils.copyProperties(item, tableColumnDescVO);
-            return tableColumnDescVO;
-        }).collect(Collectors.toList());
+        return tableMetadataMapper.getColumnMetadata(datasourceId).stream().map(v ->
+                TableColumnDescVO.builder()
+                        .columnName(v.getColumnName())
+                        .description(v.getDescription())
+                        .isPrimaryKey(v.getIsPrimaryKey())
+                        .type(v.getType())
+                        .build()
+        ).collect(Collectors.toList());
     }
 
     @Override
     public List<DatasourceTableVO> listTables() {
-
-        List<DatasourceTable> list = tableMetadataMapper.listTables();
-
-        return list.stream().map(item -> {
-            DatasourceTableVO datasourceTableVO = new DatasourceTableVO();
-            BeanUtils.copyProperties(item, datasourceTableVO);
-            if (null == datasourceTableVO.getDescription() || datasourceTableVO.getDescription().equals("")) {
-                datasourceTableVO.setDescription(datasourceTableVO.getTableName());
-            }
-            return datasourceTableVO;
-        }).collect(Collectors.toList());
+        return tableMetadataMapper.listTables().stream().map(v -> DatasourceTableVO.builder().description(v.getDescription()).tableName(v.getTableName()).build())
+                .collect(Collectors.toList());
     }
 
 }

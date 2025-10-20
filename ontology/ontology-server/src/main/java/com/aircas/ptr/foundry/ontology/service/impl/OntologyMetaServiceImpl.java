@@ -2,13 +2,13 @@ package com.aircas.ptr.foundry.ontology.service.impl;
 
 import com.aircas.ptr.foundry.common.base.ResultCode;
 import com.aircas.ptr.foundry.common.constant.Status;
-import com.aircas.ptr.foundry.common.constant.Visibility;
 import com.aircas.ptr.foundry.common.util.IdGenerator;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.common.util.SnowflakeIdUtil;
 import com.aircas.ptr.foundry.ontology.client.EntityClient;
 import com.aircas.ptr.foundry.ontology.common.param.EntityCopyParam;
 import com.aircas.ptr.foundry.ontology.common.param.EntityCreateParam;
+import com.aircas.ptr.foundry.ontology.common.param.EntityRelationCreateParam;
 import com.aircas.ptr.foundry.ontology.converter.DataConverter;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyUpdateParam;
@@ -288,17 +288,12 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
             });
             //生成属性表数据
             var otherProps = associateDataSources.stream()
-                    .flatMap(ds -> ds.getColumnParamList().stream().map(v -> {
-                        var prop = DataConverter.convert(v)
-                                .setOntologyUniqueIdentifier(meta.getUniqueIdentifier())
-                                .setTag(ds.getTag())
-                                .setCategory(ds.getCategory().getValue());
-                        if (v.getIsPrimaryKey() || v.getIsAssociateKey()) {
-                            return prop.setVisibility(Visibility.HIDDEN.getValue());
-                        }
-                        return prop;
-                    }))
-                    .collect(Collectors.toList());
+                    .flatMap(ds -> ds.getColumnParamList().stream().map(v ->
+                            DataConverter.convert(v)
+                                    .setOntologyUniqueIdentifier(meta.getUniqueIdentifier())
+                                    .setTag(ds.getTag())
+                                    .setCategory(ds.getCategory().getValue())
+                    )).collect(Collectors.toList());
             properties.addAll(otherProps);
         }
         //校验property apiName是否有冲突
@@ -317,6 +312,36 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                                 .map(v -> DataConverter.convert(v, ontologyCreateParam.getApiName() + "_" + v.getColumnParamList().get(0).getDatasourceId()))
                                 .collect(Collectors.toList())
                         : null)
+                .build());
+
+        //创建实体关系
+        if (ontologyCreateParam.getLinkCreateParam() != null) {
+            createOntologyLink(ontologyCreateParam.getLinkCreateParam(), meta, properties);
+        }
+    }
+
+    private void createOntologyLink(OntologyCreateParam.LinkCreateParam link, OntologyMeta meta, List<OntologyProperty> properties) {
+        var targetOntology = getOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, link.getOntologyUniqueIdentifierTo()));
+
+        var propertyUniqueIdentifierFrom = StringUtils.isEmpty(link.getPropertyApiNameFrom()) ?
+                null : properties.stream().filter(v -> v.getApiName().equals(link.getPropertyApiNameFrom()))
+                .findFirst().get().getUniqueIdentifier();
+
+        linkService.save(OntologyLinkGroup.builder()
+                .uniqueIdentifier(IdGenerator.generateUUID())
+                .status(Status.ENABLE.getValue())
+                .ontologyUniqueIdentifierFrom(meta.getUniqueIdentifier())
+                .ontologyUniqueIdentifierTo(link.getOntologyUniqueIdentifierTo())
+                .propertyUniqueIdentifierFrom(propertyUniqueIdentifierFrom)
+                .propertyUniqueIdentifierTo(link.getPropertyUniqueIdentifierTo())
+                .name(link.getName())
+                .mapping(link.getMapping().getValue())
+                .build());
+
+        entityClient.createEntityRelation(EntityRelationCreateParam.builder()
+                .entityTableFrom(meta.getApiName())
+                .entityTableTo(targetOntology.getApiName())
+                .relationType(link.getName())
                 .build());
     }
 
@@ -369,7 +394,12 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
 
     @Override
     public void updateMeta(OntologyUpdateParam updateParam) {
-
+        var meta = getOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, updateParam.getOntologyIdentifier()));
+        meta.setIcon(updateParam.getIcon())
+                .setDescription(updateParam.getDescription())
+                .setDisplayName(updateParam.getDisplayName())
+                .setMetaGroupId(String.join(",", updateParam.getGroupIds()));
+        updateById(meta);
     }
 
 

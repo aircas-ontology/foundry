@@ -52,7 +52,7 @@ public class EntityServiceImpl implements EntityService {
 
 
     @Override
-    public List<EntityLinkPropertyVO> queryEntityLinkByPrimaryKey(String ontologyUniqueIdentifier,
+    public List<EntityLinkPropertyVO> getEntityLinksByPrimaryKey(String ontologyUniqueIdentifier,
                                                                   Object entityPrimaryKey) {
 
         var meta = metaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, ontologyUniqueIdentifier));
@@ -74,7 +74,7 @@ public class EntityServiceImpl implements EntityService {
     }
 
     @Override
-    public List<EntityPropertyDetailVO> queryEntityDetail(String ontologyUniqueIdentifier, Object entityPrimaryKey) {
+    public List<EntityPropertyDetailVO> getEntityDetail(String ontologyUniqueIdentifier, Object entityPrimaryKey) {
         var meta = metaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, ontologyUniqueIdentifier));
         var props = propertyMapper.selectList(new LambdaQueryWrapper<OntologyProperty>()
                 .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier));
@@ -107,7 +107,7 @@ public class EntityServiceImpl implements EntityService {
 
 
     @Override
-    public Page<EntityInfoVO> queryEntity(String ontologyUniqueIdentifier, Integer pageNum, Integer pageSize) {
+    public Page<EntityInfoVO> getEntities(String ontologyUniqueIdentifier, Integer pageNum, Integer pageSize) {
         Page<EntityInfoVO> result = new Page<EntityInfoVO>().setSize(pageSize).setCurrent(pageNum);
         var meta = metaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, ontologyUniqueIdentifier));
         var props = propertyMapper.selectList(new LambdaQueryWrapper<OntologyProperty>()

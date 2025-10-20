@@ -145,7 +145,7 @@ public class OntologyActionController {
 
     @ApiOperation(value = "查询行为task执行逻辑")
     @GetMapping("/config/task")
-    public RestResult<ActionHandleTaskVO> queryTask(@RequestParam(required = true,name = "actionId") @ApiParam(name = "actionId",value = "行为id",required = true) String actionId) {
+    public RestResult<ActionHandleTaskVO> getTask(@RequestParam(required = true,name = "actionId") @ApiParam(name = "actionId",value = "行为id",required = true) String actionId) {
         return RestResult.success();
     }
 
@@ -158,7 +158,7 @@ public class OntologyActionController {
 
     @ApiOperation(value = "查询行为rule执行逻辑")
     @GetMapping("/config/rule")
-    public RestResult<ActionHandleRuleVO> queryRule(@RequestParam(required = true,name = "actionId") @ApiParam(name = "actionId",value = "行为id",required = true) String actionId) {
+    public RestResult<ActionHandleRuleVO> getRule(@RequestParam(required = true,name = "actionId") @ApiParam(name = "actionId",value = "行为id",required = true) String actionId) {
         return RestResult.success();
     }
 

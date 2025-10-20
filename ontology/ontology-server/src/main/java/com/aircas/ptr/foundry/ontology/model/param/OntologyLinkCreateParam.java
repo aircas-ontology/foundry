@@ -13,11 +13,6 @@ import lombok.experimental.SuperBuilder;
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
 
-/**
- * @author dongjunchuan
- * @description
- * @since 2023/12/15 11:14
- */
 
 @Data
 @SuperBuilder
@@ -54,14 +49,12 @@ public class OntologyLinkCreateParam {
      * 开始本体的某个属性，作为连接键
      */
     @ApiModelProperty(name = "propertyUniqueIdentifierFrom",  value = "开始本体的某个属性，作为连接键")
-    @NotBlank(message = "propertyUniqueIdentifierFrom is empty")
     private String propertyUniqueIdentifierFrom;
 
     /**
      * 结束本体的某个属性，作为连接键
      */
     @ApiModelProperty(name = "propertyUniqueIdentifierTo",  value = "结束本体的某个属性，作为连接键")
-    @NotBlank(message = "propertyUniqueIdentifierTo is empty")
     private String propertyUniqueIdentifierTo;
 
 

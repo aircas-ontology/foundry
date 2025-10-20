@@ -12,4 +12,6 @@ public class TableColumnDesc implements Serializable {
     private String description;
 
     private String type;
+
+    private Boolean isPrimaryKey;
 }

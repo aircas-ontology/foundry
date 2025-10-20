@@ -44,7 +44,7 @@ public class OntologyFunctionController {
 
     @ApiOperation(value = "得到本体下函数列表")
     @GetMapping("/list")
-    public RestResult<List<FunctionInfoVO>> queryFunction(@RequestParam(required = false, name = "ontologyUniqueIdentifier") @ApiParam(value = "本体uniqueIdentifier", required = false) String ontologyUniqueIdentifier) {
+    public RestResult<List<FunctionInfoVO>> getFunctions(@RequestParam(required = false, name = "ontologyUniqueIdentifier") @ApiParam(value = "本体uniqueIdentifier", required = false) String ontologyUniqueIdentifier) {
         return RestResult.success();
     }
 

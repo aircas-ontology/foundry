@@ -5,6 +5,7 @@
         <result column="column_name" jdbcType="VARCHAR" property="columnName"/>
         <result column="description" jdbcType="VARCHAR" property="description"/>
         <result column="type" jdbcType="VARCHAR" property="type"/>
+        <result column="is_primary_key" jdbcType="BOOLEAN" property="isPrimaryKey"/>
     </resultMap>
 
     <resultMap id="TableResultMap" type="com.aircas.ptr.foundry.ontology.model.po.DatasourceTable">
@@ -13,17 +14,29 @@
     </resultMap>
 
     <select id="getColumnMetadata" parameterType="java.lang.String" resultMap="BaseResultMap">
-        SELECT a.attname                                as column_name,
-               col_description(a.attrelid, a.attnum)    as description,
-               pg_catalog.format_type(a.atttypid, null) as type
-        FROM pg_class c
-                 JOIN pg_namespace n on n.oid = c.relnamespace
-                 JOIN pg_attribute a on a.attrelid = c.oid
-        WHERE n.nspname = 'public'
-          AND c.relkind = 'r'
-          AND a.attnum > 0
-          AND a.atttypid != 0
-          AND c.relname = #{tableName,jdbcType=VARCHAR}
+        SELECT
+            a.attname                                AS column_name,
+            col_description(a.attrelid, a.attnum)    AS description,
+            pg_catalog.format_type(a.atttypid, null) AS type,
+            CASE
+                WHEN pg_index.indkey::text LIKE '%' || a.attnum::text || '%' THEN true
+                ELSE false
+            END AS is_primary_key
+        FROM
+            pg_class c
+        JOIN
+            pg_namespace n ON n.oid = c.relnamespace
+        JOIN
+            pg_attribute a ON a.attrelid = c.oid
+        LEFT JOIN
+            pg_index ON pg_index.indrelid = c.oid AND pg_index.indisprimary
+        WHERE
+            c.relkind = 'r'
+            AND a.attnum > 0
+            AND a.atttypid != 0
+            AND c.relname = #{tableName}
+        ORDER BY
+            a.attnum;
     </select>
 
     <select id="listTables" resultMap="TableResultMap">

@@ -19,11 +19,11 @@ import java.util.Map;
  */
 public interface EntityService {
 
-    List<EntityLinkPropertyVO> queryEntityLinkByPrimaryKey(String ontologyUniqueIdentifier, Object entityPrimaryKey);
+    List<EntityLinkPropertyVO> getEntityLinksByPrimaryKey(String ontologyUniqueIdentifier, Object entityPrimaryKey);
 
-    List<EntityPropertyDetailVO> queryEntityDetail(String ontologyUniqueIdentifier, Object entityPrimaryKey);
+    List<EntityPropertyDetailVO> getEntityDetail(String ontologyUniqueIdentifier, Object entityPrimaryKey);
 
-    Page<EntityInfoVO> queryEntity(String ontologyUniqueIdentifier, Integer pageNum, Integer pageSize);
+    Page<EntityInfoVO> getEntities(String ontologyUniqueIdentifier, Integer pageNum, Integer pageSize);
 
     /**
      * 创建实体表。

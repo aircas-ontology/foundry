@@ -35,6 +35,8 @@ spring:
       url: jdbc:postgresql://192.168.9.11:35432/foudry_datasource?currentSchema=public
       username: iecas
       password: iecas123
+  application:
+    name: entity
 
 # 日志配置
 logging:

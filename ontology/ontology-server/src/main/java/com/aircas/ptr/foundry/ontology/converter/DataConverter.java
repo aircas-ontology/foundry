@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.ontology.converter;
 
 import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
+import com.aircas.ptr.foundry.common.constant.OntologyPropertyCategoryEnum;
 import com.aircas.ptr.foundry.common.constant.Status;
 import com.aircas.ptr.foundry.common.constant.Visibility;
 import com.aircas.ptr.foundry.common.util.IdGenerator;
@@ -11,6 +12,7 @@ import com.aircas.ptr.foundry.ontology.model.param.OntologyDatasourceParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaInfoVO;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyDetailVO;
 import lombok.var;
 import org.apache.commons.collections4.CollectionUtils;
 
@@ -18,6 +20,24 @@ import java.util.Arrays;
 import java.util.stream.Collectors;
 
 public class DataConverter {
+
+    public static OntologyPropertyDetailVO convert(OntologyProperty p) {
+        return OntologyPropertyDetailVO.builder()
+                .associateDatasourceColumnName(p.getAssociateDatasourceColumnName())
+                .apiName(p.getApiName())
+                .category(OntologyPropertyCategoryEnum.getByValue(p.getCategory()))
+                .datasourceColumnName(p.getDatasourceColumnName())
+                .datasourceId(p.getDatasourceId())
+                .description(p.getDescription())
+                .displayName(p.getDisplayName())
+                .isAssociateKey(p.getIsAssociateKey() == 1)
+                .isPrimaryKey(p.getIsPrimaryKey() == 1)
+                .isTitleKey(p.getIsTitleKey() == 1)
+                .propertyType(p.getPropertyType())
+                .tag(p.getTag())
+                .uniqueIdentifier(p.getUniqueIdentifier())
+                .build();
+    }
 
     public static OntologyProperty convert(OntologyDataSourceColumnParam param) {
         return OntologyProperty.builder()

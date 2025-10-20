@@ -28,6 +28,7 @@ public class LoggingFilter extends OncePerRequestFilter {
     public static final String LOG_ID_KEY = "logId";
 
     private static final Set<String> SWAGGER_IGNORE_PATH = Sets.newHashSet(
+            "/webjars",
             "/swagger-ui",
             "/swagger-resources",
             "/v2/api-docs",
