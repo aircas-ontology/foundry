@@ -274,12 +274,14 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         // 主数据源属性
         var properties = primaryDataSource.getColumnParamList().stream()
                 .map(v -> DataConverter.convert(v)
-                        .setOntologyUniqueIdentifier(meta.getUniqueIdentifier())
-                        .setTag(primaryDataSource.getTag())
-                        .setCategory(primaryDataSource.getCategory().getValue()))
+                        .setOntologyUniqueIdentifier(meta.getUniqueIdentifier()))
                 .collect(Collectors.toList());
         //  其他数据源属性
         if (CollectionUtils.isNotEmpty(associateDataSources)) {
+            //校验datasource 是否冲突
+            var datasourceIds = associateDataSources.stream().map(v -> v.getColumnParamList().get(0).getDatasourceId()).collect(Collectors.toList());
+            datasourceIds.add(primaryTableName);
+            PreconditionUtils.checkArgument(datasourceIds.stream().collect(Collectors.toSet()).size() == datasourceIds.size(), "datasourceId存在冲突");
             //校验关联健
             associateDataSources.stream().forEach(ds -> {
                 var associateKey = ds.getColumnParamList().stream().filter(v -> v.getIsAssociateKey()).findFirst().orElse(null);
@@ -291,7 +293,6 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                     .flatMap(ds -> ds.getColumnParamList().stream().map(v ->
                             DataConverter.convert(v)
                                     .setOntologyUniqueIdentifier(meta.getUniqueIdentifier())
-                                    .setTag(ds.getTag())
                                     .setCategory(ds.getCategory().getValue())
                     )).collect(Collectors.toList());
             properties.addAll(otherProps);

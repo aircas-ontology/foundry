@@ -8,7 +8,7 @@ import com.aircas.ptr.foundry.common.util.IdGenerator;
 import com.aircas.ptr.foundry.ontology.common.param.DataSourceColumnParam;
 import com.aircas.ptr.foundry.ontology.common.param.DataSourceParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyDataSourceColumnParam;
-import com.aircas.ptr.foundry.ontology.model.param.OntologyDatasourceParam;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyPrimaryDatasourceParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaInfoVO;
@@ -54,6 +54,7 @@ public class DataConverter {
                 .visibility(Visibility.NORMAL.getValue())
                 .isAssociateKey(param.getIsAssociateKey() ? 1 : 0)
                 .associateDatasourceColumnName(param.getAssociateDatasourceColumnName())
+                .tag(param.getTag())
                 .build();
     }
 
@@ -70,8 +71,7 @@ public class DataConverter {
                 .build();
     }
 
-
-    public static DataSourceParam convert(OntologyDatasourceParam param, String tableName) {
+    public static DataSourceParam convert(OntologyPrimaryDatasourceParam param, String tableName) {
 
         if (param == null || CollectionUtils.isEmpty(param.getColumnParamList())) {
             return null;

@@ -10,6 +10,7 @@ import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
 
 import javax.validation.Valid;
+import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.Pattern;
 
 @Data
@@ -51,5 +52,7 @@ public class OntologyDataSourceColumnParam {
     @ApiModelProperty(name = "associateDatasourceColumnName", value = "关联的主数据源表的列名，必须存在于主数据源表的列中", example = "id")
     private String associateDatasourceColumnName;
 
+    @ApiModelProperty(name = "type", value = "属性的自定义标签，默认值：基本属性", example = "载荷基本信息")
+    private String tag = "基本属性";
 
 }

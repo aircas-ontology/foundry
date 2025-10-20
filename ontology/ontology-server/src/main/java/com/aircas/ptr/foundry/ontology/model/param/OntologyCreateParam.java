@@ -40,7 +40,7 @@ public class OntologyCreateParam {
     @ApiModelProperty(name = "primaryDataSource", value = "本体对应主数据源", dataType = "OntologyPrimaryDataSourceParam")
     //todo  数据源参数有效性校验
     @Valid
-    private OntologyDatasourceParam primaryDataSource;
+    private OntologyPrimaryDatasourceParam primaryDataSource;
 
     @ApiModelProperty(name = "associateDataSources", value = "本体关联的其他数据源", dataType = "OntologyAssociateDataSourceParam")
     //todo  数据源参数有效性校验
