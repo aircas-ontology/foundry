@@ -7,10 +7,10 @@ import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.common.util.SnowflakeIdUtil;
 import com.aircas.ptr.foundry.ontology.client.EntityClient;
 import com.aircas.ptr.foundry.ontology.common.param.EntityCopyParam;
-import com.aircas.ptr.foundry.ontology.common.param.EntityCreateParam;
 import com.aircas.ptr.foundry.ontology.common.param.EntityRelationCreateParam;
 import com.aircas.ptr.foundry.ontology.converter.DataConverter;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyCreateParam;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyDataSourceCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.po.*;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyGroupMetaVO;
@@ -100,12 +100,11 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 .parentUniqueIdentifier(ontologyCreateParam.getParentOntologyUniqueIdentifier())
                 .metaGroupId(String.join(",", ontologyCreateParam.getGroupIds()))
                 .build();
+        this.save(meta);
         if (StringUtils.isNotEmpty(ontologyCreateParam.getParentOntologyUniqueIdentifier())) {
             createOntologyByInherit(ontologyCreateParam, meta);
         } else if (ontologyCreateParam.getPrimaryDataSource() != null) {
             createOntologyByDatasource(ontologyCreateParam, meta);
-        } else {
-            this.save(meta);
         }
         return meta.getUniqueIdentifier();
     }
@@ -259,72 +258,21 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
 
 
     private void createOntologyByDatasource(OntologyCreateParam ontologyCreateParam, OntologyMeta meta) {
-        //1 创建本体元数据
-        var primaryDataSource = ontologyCreateParam.getPrimaryDataSource();
-        PreconditionUtils.checkArgument(primaryDataSource != null && CollectionUtils.isNotEmpty(primaryDataSource.getColumnParamList()), "primaryDataSource is null");
-        var primaryTableName = primaryDataSource.getColumnParamList().get(0).getDatasourceId();
-        meta.setBackingDatasourceId(primaryTableName);
-        var associateDataSources = ontologyCreateParam.getAssociateDataSources();
-        if (CollectionUtils.isNotEmpty(associateDataSources)) {
-            var dataSources = associateDataSources.stream().map(ds -> ds.getColumnParamList().get(0).getDatasourceId()).collect(Collectors.toList());
-            meta.setOtherDatasourceId(String.join(",", dataSources));
-        }
-        save(meta);
-        //2 创建本体属性
-        // 主数据源属性
-        var properties = primaryDataSource.getColumnParamList().stream()
-                .map(v -> DataConverter.convert(v)
-                        .setOntologyUniqueIdentifier(meta.getUniqueIdentifier()))
-                .collect(Collectors.toList());
-        //  其他数据源属性
-        if (CollectionUtils.isNotEmpty(associateDataSources)) {
-            //校验datasource 是否冲突
-            var datasourceIds = associateDataSources.stream().map(v -> v.getColumnParamList().get(0).getDatasourceId()).collect(Collectors.toList());
-            datasourceIds.add(primaryTableName);
-            PreconditionUtils.checkArgument(datasourceIds.stream().collect(Collectors.toSet()).size() == datasourceIds.size(), "datasourceId存在冲突");
-            //校验关联健
-            associateDataSources.stream().forEach(ds -> {
-                var associateKey = ds.getColumnParamList().stream().filter(v -> v.getIsAssociateKey()).findFirst().orElse(null);
-                PreconditionUtils.checkArgument(associateKey != null &&
-                        properties.stream().anyMatch(v -> v.getDatasourceColumnName().equals(associateKey.getAssociateDatasourceColumnName())), "找不到关联健或者关联的属性错误");
-            });
-            //生成属性表数据
-            var otherProps = associateDataSources.stream()
-                    .flatMap(ds -> ds.getColumnParamList().stream().map(v ->
-                            DataConverter.convert(v)
-                                    .setOntologyUniqueIdentifier(meta.getUniqueIdentifier())
-                                    .setCategory(ds.getCategory().getValue())
-                    )).collect(Collectors.toList());
-            properties.addAll(otherProps);
-        }
-        //校验property apiName是否有冲突
-        PreconditionUtils.checkArgument(properties.stream().map(v -> StringUtils.lowerCase(v.getApiName())).collect(Collectors.toSet()).size() == properties.size(), "apiName存在冲突");
-        //校验titleKey
-        var titleProperties = properties.stream().filter(v -> v.getIsTitleKey() == 1).collect(Collectors.toList());
-        PreconditionUtils.checkArgument(titleProperties.size() == 1 && titleProperties.get(0).getDatasourceId().equals(primaryTableName),
-                "名称健不存在或多个");
-        //批量插入
-        ontologyPropertyService.saveBatch(properties);
-        //创建实体表、实体数据和实体节点
-        entityClient.createTableAndEntities(EntityCreateParam.builder()
-                .primaryDataSource(DataConverter.convert(primaryDataSource, ontologyCreateParam.getApiName()))
-                .associateDataSources(CollectionUtils.isNotEmpty(associateDataSources) ?
-                        associateDataSources.stream()
-                                .map(v -> DataConverter.convert(v, ontologyCreateParam.getApiName() + "_" + v.getColumnParamList().get(0).getDatasourceId()))
-                                .collect(Collectors.toList())
-                        : null)
+        //更新本体元数据数据源+ 创建本体属性
+        ontologyPropertyService.createDatasource(OntologyDataSourceCreateParam.builder()
+                .primaryDataSource(ontologyCreateParam.getPrimaryDataSource())
+                .associateDataSources(ontologyCreateParam.getAssociateDataSources())
+                .ontologyIdentifier(meta.getUniqueIdentifier())
                 .build());
-
         //创建实体关系
         if (CollectionUtils.isNotEmpty(ontologyCreateParam.getLinkCreateParams())) {
-            ontologyCreateParam.getLinkCreateParams().forEach(link -> {
-                createOntologyLink(link, meta, properties);
-            });
+            ontologyCreateParam.getLinkCreateParams().forEach(link -> createOntologyLink(link, meta));
         }
     }
 
-    private void createOntologyLink(OntologyCreateParam.LinkCreateParam link, OntologyMeta meta, List<OntologyProperty> properties) {
+    private void createOntologyLink(OntologyCreateParam.LinkCreateParam link, OntologyMeta meta) {
         var targetOntology = getOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, link.getOntologyUniqueIdentifierTo()));
+        var properties = ontologyPropertyService.list(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, meta.getUniqueIdentifier()));
 
         var propertyUniqueIdentifierFrom = StringUtils.isEmpty(link.getPropertyApiNameFrom()) ?
                 null : properties.stream().filter(v -> v.getApiName().equals(link.getPropertyApiNameFrom()))

@@ -30,6 +30,7 @@ public class OntologyPropertyController {
     @PostMapping("/create_datasource")
     @ApiOperation(value = "新增属性数据源")
     public RestResult createDatasource(@RequestBody @Valid OntologyDataSourceCreateParam dataSourceCreateParam) {
+        ontologyPropertyService.createDatasource(dataSourceCreateParam);
         return RestResult.success();
     }
 
