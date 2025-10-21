@@ -61,6 +61,14 @@
         DROP TABLE IF EXISTS ${tableName}
     </update>
 
+
+    <!-- 获取列名 -->
+    <select id="getColumnNames" resultType="string">
+        SELECT COLUMN_NAME
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = 'ontology_entity' AND  TABLE_NAME = #{tableName}
+    </select>
+
     <select id="selectMapsPage" resultType="java.util.HashMap">
         SELECT * FROM ${tableName} limit ${limit} offset ${offset}
     </select>

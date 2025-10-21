@@ -316,8 +316,10 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 .build());
 
         //创建实体关系
-        if (ontologyCreateParam.getLinkCreateParam() != null) {
-            createOntologyLink(ontologyCreateParam.getLinkCreateParam(), meta, properties);
+        if (CollectionUtils.isNotEmpty(ontologyCreateParam.getLinkCreateParams())) {
+            ontologyCreateParam.getLinkCreateParams().forEach(link -> {
+                createOntologyLink(link, meta, properties);
+            });
         }
     }
 

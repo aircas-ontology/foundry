@@ -63,9 +63,9 @@ public class OntologyCreateParam {
     @ApiModelProperty(name = "parentOntologyUniqueIdentifier", value = "继承的本体id", example = "8039c5f9-5579-4ee4-ba94-b2f25f785dd6")
     private String parentOntologyUniqueIdentifier;
 
-    @ApiModelProperty(name = "linkCreateParam", value = "创建关系")
+    @ApiModelProperty(name = "linkCreateParams", value = "创建关系")
     @Valid
-    private LinkCreateParam linkCreateParam;
+    private List<LinkCreateParam> linkCreateParams;
 
 
     @Data
@@ -79,14 +79,14 @@ public class OntologyCreateParam {
         /**
          * link的名称
          */
-        @ApiModelProperty(name = "name", required = true, value = "本体关系名称")
+        @ApiModelProperty(name = "name", required = true, value = "本体关系名称", example = "关联")
         @NotBlank(message = "link name is empty")
         private String name;
 
         /**
          * 结束本体unique identifier
          */
-        @ApiModelProperty(name = "ontologyUniqueIdentifierTo", required = true, value = "结束本体uniq id")
+        @ApiModelProperty(name = "ontologyUniqueIdentifierTo", required = true, value = "结束本体uniq id", example = "1234")
         @NotBlank(message = "ontologyUniqueIdentifierTo name is empty")
         @OntologyIdVerify
         private String ontologyUniqueIdentifierTo;
@@ -94,13 +94,13 @@ public class OntologyCreateParam {
         /**
          * 开始本体的某个属性api name，作为连接键
          */
-        @ApiModelProperty(name = "propertyApiNameFrom",  value = "开始本体的某个属性，作为连接键")
+        @ApiModelProperty(name = "propertyApiNameFrom", value = "开始本体的某个属性，作为连接键", example = "name")
         private String propertyApiNameFrom;
 
         /**
          * 结束本体的某个属性，作为连接键
          */
-        @ApiModelProperty(name = "propertyUniqueIdentifierTo",  value = "结束本体的某个属性，作为连接键")
+        @ApiModelProperty(name = "propertyUniqueIdentifierTo", value = "结束本体的某个属性，作为连接键", example = "qwert")
         private String propertyUniqueIdentifierTo;
 
 
@@ -110,7 +110,7 @@ public class OntologyCreateParam {
          * 3: 多对1
          * 4: 多对多
          */
-        @ApiModelProperty(name = "mapping", required = true, value = "本体映射关系")
+        @ApiModelProperty(name = "mapping", required = true, value = "本体映射关系", example = "MANY_TO_MANY")
         @NotNull(message = "mapping is empty")
         private OntologyLinkMappingEnum mapping;
 

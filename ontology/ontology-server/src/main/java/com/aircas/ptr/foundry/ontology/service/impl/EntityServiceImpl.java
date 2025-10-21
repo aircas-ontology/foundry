@@ -19,6 +19,7 @@ import com.aircas.ptr.foundry.ontology.repository.dao.OntologyPropertyMapper;
 import com.aircas.ptr.foundry.ontology.service.EntityService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.google.common.collect.Maps;
 import lombok.extern.slf4j.Slf4j;
 import lombok.var;
 import org.apache.commons.collections4.CollectionUtils;
@@ -26,6 +27,7 @@ import org.apache.commons.compress.utils.Lists;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -53,7 +55,7 @@ public class EntityServiceImpl implements EntityService {
 
     @Override
     public List<EntityLinkPropertyVO> getEntityLinksByPrimaryKey(String ontologyUniqueIdentifier,
-                                                                  Object entityPrimaryKey) {
+                                                                 Object entityPrimaryKey) {
 
         var meta = metaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, ontologyUniqueIdentifier));
         var relations = entityClient.queryRelation(EntityRelationQueryParam.builder()
@@ -92,16 +94,40 @@ public class EntityServiceImpl implements EntityService {
                 .primaryTableName(meta.getApiName())
                 .build());
 
+        var tagMap = props.stream().collect(Collectors.groupingBy(v -> v.getTag()));
         var apiDisplayMap = props.stream().collect(Collectors.toMap(v -> v.getApiName(), v -> v.getDisplayName()));
-        return queryRecordDetail.stream().map(detail -> {
-            var displayNames = detail.getPropertyName().stream().map(v -> apiDisplayMap.get(v)).collect(Collectors.toList());
+        Map<String, List<Object>> detailMap = Maps.newHashMap();
+        queryRecordDetail.forEach(detail -> {
+            var names = detail.getPropertyName();
+            var values = detail.getPropertyValues();
+            for (var i = 0; i < names.size(); i++) {
+                final int j = i;
+                detailMap.put(names.get(i), values.stream().map(v -> v.get(j)).collect(Collectors.toList()));
+            }
+        });
 
+        var res = tagMap.entrySet().stream().<EntityPropertyDetailVO>map(entry -> {
+            var tag = entry.getKey();
+            var displayNames = entry.getValue().stream().map(v -> apiDisplayMap.get(v.getApiName())).collect(Collectors.toList());
+            var apiNames = entry.getValue().stream().map(v -> v.getApiName()).collect(Collectors.toList());
+
+            int size = detailMap.get(apiNames.get(0)).size();
+
+            List<List<Object>> propValues = Lists.newArrayList();
+            for (int i = 0; i < size; i++) {
+                List<Object> list = Lists.newArrayList();
+                for (int j = 0; j < apiNames.size(); j++) {
+                    list.add(detailMap.get(apiNames.get(j)).get(i));
+                }
+                propValues.add(list);
+            }
             return EntityPropertyDetailVO.builder()
                     .propertyDisplayNames(displayNames)
-                    .propertyValues(detail.getPropertyValues())
-                    .tag(propsMap.get(detail.getDatasourceId()).get(0).getTag())
+                    .propertyValues(propValues)
+                    .tag(tag)
                     .build();
         }).collect(Collectors.toList());
+        return res;
 
     }
 
@@ -122,7 +148,7 @@ public class EntityServiceImpl implements EntityService {
         var entityVOPage = entityClient.queryRecords(meta.getApiName(), pageNum, pageSize);
 
         var records = entityVOPage.getRecords().stream().map(r -> {
-            var valueMap = r.getProperties().stream().collect(Collectors.toMap(v -> v.getPropertyName(), v -> v.getPropertyValue()));
+            var valueMap = r.getProperties().stream().collect(HashMap::new, (m, p) -> m.put(p.getPropertyName(), p.getPropertyValue()), HashMap::putAll);
             var entityPropertyVOS = valueMap.entrySet().stream().<EntityPropertyVO>map(entry -> {
                 var ontologyProperty = propertyMap.get(entry.getKey());
                 return EntityPropertyVO.builder()
