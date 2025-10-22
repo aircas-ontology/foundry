@@ -14,7 +14,7 @@ import lombok.experimental.Accessors;
 @Builder
 @Accessors(chain = true)
 @ApiModel(description = "ontology datasource column param")
-public class DataSourceColumnParam {
+public class EntityDataSourceColumnParam {
 
     @ApiModelProperty(name = "columnName", value = "列名", required = true, example = "id")
     private String columnName;

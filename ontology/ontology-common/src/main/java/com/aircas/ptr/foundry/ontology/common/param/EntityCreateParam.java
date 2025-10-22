@@ -19,9 +19,9 @@ import java.util.List;
 public class EntityCreateParam {
 
     @ApiModelProperty(name = "primaryDataSource", value = "实体表对应主数据源")
-    private DataSourceParam primaryDataSource;
+    private EntityDataSourceParam primaryDataSource;
 
     @ApiModelProperty(name = "associateDataSources", value = "实体表关联的其他数据源")
-    private List<DataSourceParam> associateDataSources;
+    private List<EntityDataSourceParam> associateDataSources;
 
 }

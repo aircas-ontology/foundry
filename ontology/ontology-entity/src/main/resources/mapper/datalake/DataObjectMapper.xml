@@ -10,18 +10,11 @@
 
     </resultMap>
 
-    <select id="queryDirectory" resultMap="BaseResultMap">
-        select "${primaryKey}" as primaryKey,
-               "${titleKey}"   as displayName
-        from ${tableName}
-    </select>
 
-    <select id="queryAnySQL" resultMap="ObjectResultMap">
-        ${query}
-    </select>
-
-    <select id="queryTableData" resultType="java.util.HashMap">
-        SELECT * FROM ${tableName} ORDER BY "ID" DESC;
+    <select id="queryPrimaryKeyColumnName" resultType="string">
+        select a.attname AS cloumn_name
+        from pg_index i join pg_attribute a on a.attrelid=i.indrelid and a.attnum=any(i.indkey)
+        where i.indrelid='${tableName}'::regclass and i.indisprimary
     </select>
 
     <select id="queryTableDataByColumn" resultType="java.util.Map">
@@ -45,10 +38,6 @@
             AND (column_name = 'id' OR column_name = 'ID')
     </select>
 
-
-    <update id="updateAnySQL">
-        ${updateSql}
-    </update>
 
 </mapper>
 

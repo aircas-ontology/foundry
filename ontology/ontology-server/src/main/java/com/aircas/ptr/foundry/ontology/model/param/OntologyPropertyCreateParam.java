@@ -10,7 +10,6 @@ import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
 
 import javax.validation.Valid;
-import javax.validation.constraints.NotEmpty;
 import java.util.List;
 
 @Data
@@ -21,10 +20,13 @@ import java.util.List;
 @ApiModel(description = "属性创建请求")
 public class OntologyPropertyCreateParam extends OntologyIdentifierParam {
 
-    @ApiModelProperty(name = "columnParamList", value = "属性列表", required = true)
-    @NotEmpty(message = "columnParamList is empty")
-    @Valid
-    private List<OntologyDataSourceColumnParam> columnParamList;
 
+    @ApiModelProperty(name = "newAssociateDataSources", value = "新的其他数据源数据", dataType = "List<OntologyAssociateDataSourceParam>")
+    @Valid
+    private List<OntologyDatasourceParam> newAssociateDataSources;
+
+    @ApiModelProperty(name = "existDataSources", value = "已存在数据源的新增属性列表", dataType = "List<OntologyDataSourceColumnParam>")
+    @Valid
+    private List<OntologyDataSourceColumnParam> existDataSources;
 
 }

@@ -53,13 +53,14 @@ public class EntityTableController {
 
     @ApiOperation("增加列")
     @PostMapping("/column")
-    public RestResult createColumn(@RequestBody @Valid DataSourceParam param) {
+    public RestResult createColumns(@RequestBody @Valid EntityColumnCreateParam param) {
+        entityTableService.createColumns(param);
         return RestResult.success();
     }
 
     @ApiOperation("删除列")
     @DeleteMapping("/column")
-    public RestResult deleteColumn(@RequestBody @Valid DataSourceParam param) {
+    public RestResult deleteColumn(@RequestBody @Valid EntityDataSourceParam param) {
         return RestResult.success();
     }
 

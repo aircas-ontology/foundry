@@ -1,16 +1,15 @@
 package com.aircas.ptr.foundry.ontology.entity.service.impl;
 
 import com.aircas.ptr.foundry.common.constant.CountTypeEnum;
-import com.aircas.ptr.foundry.ontology.common.param.DataSourceParam;
-import com.aircas.ptr.foundry.ontology.common.param.EntityCopyParam;
-import com.aircas.ptr.foundry.ontology.common.param.EntityCreateParam;
-import com.aircas.ptr.foundry.ontology.common.param.EntityDetailQueryParam;
+import com.aircas.ptr.foundry.common.constant.Status;
+import com.aircas.ptr.foundry.ontology.common.param.*;
 import com.aircas.ptr.foundry.ontology.common.vo.EntityDetailVO;
 import com.aircas.ptr.foundry.ontology.common.vo.EntityVO;
 import com.aircas.ptr.foundry.ontology.common.vo.PropertyVO;
 import com.aircas.ptr.foundry.ontology.entity.converter.ParamDtoConverter;
 import com.aircas.ptr.foundry.ontology.entity.model.document.EntityNode;
 import com.aircas.ptr.foundry.ontology.entity.model.document.EntityRelation;
+import com.aircas.ptr.foundry.ontology.entity.model.dto.FieldDTO;
 import com.aircas.ptr.foundry.ontology.entity.model.dto.TableCreateDTO;
 import com.aircas.ptr.foundry.ontology.entity.model.po.EntityPropertyMappingPO;
 import com.aircas.ptr.foundry.ontology.entity.model.po.EntityPropertyPO;
@@ -147,9 +146,75 @@ public class EntityTableServiceImpl extends ServiceImpl<EntityTableMapper, Objec
 
     @Override
     @Transactional(value = "mainTransactionManager")
+    public void createColumns(EntityColumnCreateParam param) {
+        var primaryTableName = param.getPrimaryTableName();
+        var entityProperties = propertyService.list(new LambdaQueryWrapper<EntityPropertyPO>().eq(EntityPropertyPO::getTableName, primaryTableName));
+        //新数据源属性插入
+        var newDS = param.getNewDatasource();
+        if (CollectionUtils.isNotEmpty(newDS)) {
+            // 创建实体其他属性表,插入其他属性表元数据
+            newDS.stream().forEach(ds -> {
+                // 创建实体其他属性表
+                createTableAndRelation(ds, primaryTableName, entityProperties);
+                //获取其他数据源数据，并插入实体属性表
+                insertRecords(ds);
+            });
+        }
+        //旧数据源属性插入
+        var existDS = param.getExistDatasourceColumns();
+        if (CollectionUtils.isNotEmpty(existDS)) {
+
+            var list = propertyMappingService.list(new LambdaQueryWrapper<EntityPropertyMappingPO>().eq(EntityPropertyMappingPO::getEntityTable, primaryTableName))
+                    .stream().map(v -> v.getEntityPropertyTable())
+                    .collect(Collectors.toList());
+            list.add(primaryTableName);
+            var entityPropertyMap = propertyService.list(new LambdaQueryWrapper<EntityPropertyPO>().in(EntityPropertyPO::getTableName, list));
+
+            var dsTableMap = entityPropertyMap.stream().collect(Collectors.toMap(v -> v.getDatasourceId(), v -> v.getTableName(), (v1, v2) -> v1));
+            var existMap = existDS.stream().collect(Collectors.groupingBy(v -> v.getDatasourceId()));
+
+            existMap.entrySet().forEach(entry -> {
+                var datasourceId = entry.getKey();
+                var tableName = dsTableMap.get(datasourceId);
+                //插入entity property表
+                var entityPropertyPOS = entry.getValue().stream().<EntityPropertyPO>map(v -> {
+                    return EntityPropertyPO.builder()
+                            .tableName(tableName)
+                            .tableColumnName(v.getColumnName())
+                            .datasourceColumnName(v.getDatasourceColumnName())
+                            .datasourceId(v.getDatasourceId())
+                            .status(Status.ENABLE.getValue())
+                            .build();
+                }).collect(Collectors.toList());
+                propertyService.saveBatch(entityPropertyPOS);
+                //增加列
+                tableMapper.createColumns(entry.getValue().stream().map(v -> FieldDTO.builder()
+                        .tableName(tableName)
+                        .fieldType(v.getColumnType())
+                        .fieldName(v.getColumnName())
+                        .fieldComment(v.getDescription())
+                        .isNullable(true)
+                        .build())
+                        .collect(Collectors.toList()));
+                //更新列数据
+                var columnMap = entry.getValue().stream().collect(Collectors.toMap(v -> v.getDatasourceColumnName(), v -> v.getColumnName()));
+                var dsPK = dataObjectMapper.queryPrimaryKeyColumnName(datasourceId);
+                var tablePK = tableMapper.queryPrimaryKeyColumnName(tableName);
+                columnMap.put(dsPK, tablePK);
+                var datasourceRows = dataObjectMapper.queryTableDataByColumns(datasourceId, columnMap, "");
+                tableMapper.updateByPrimaryKey(tableName, tablePK, datasourceRows);
+            });
+
+
+        }
+
+    }
+
+    @Override
+    @Transactional(value = "mainTransactionManager")
     public void createEntities(EntityCreateParam entityCreateParam) {
         var primaryDataSource = entityCreateParam.getPrimaryDataSource();
-        List<DataSourceParam> associateDataSources = CollectionUtils.isEmpty(entityCreateParam.getAssociateDataSources()) ?
+        List<EntityDataSourceParam> associateDataSources = CollectionUtils.isEmpty(entityCreateParam.getAssociateDataSources()) ?
                 Lists.newArrayList() : entityCreateParam.getAssociateDataSources();
 
         // 创建实体表和实体属性表
@@ -231,7 +296,7 @@ public class EntityTableServiceImpl extends ServiceImpl<EntityTableMapper, Objec
         tableMapper.copyTable(srcTable, newTable);
     }
 
-    private void createTables(DataSourceParam primaryDataSource, List<DataSourceParam> associateDataSources) {
+    private void createTables(EntityDataSourceParam primaryDataSource, List<EntityDataSourceParam> associateDataSources) {
         // 创建主实体表
         var primaryTableName = primaryDataSource.getColumnParamList().get(0).getTableName();
         var fields = primaryDataSource.getColumnParamList().stream().map(v -> ParamDtoConverter.convert(v)).collect(Collectors.toList());
@@ -245,27 +310,42 @@ public class EntityTableServiceImpl extends ServiceImpl<EntityTableMapper, Objec
         // 创建实体其他属性表,插入其他属性表元数据
         associateDataSources.stream().forEach(ds -> {
             // 创建实体其他属性表
-            var fieldList = ds.getColumnParamList().stream().map(v -> ParamDtoConverter.convert(v)).collect(Collectors.toList());
-            tableMapper.createTable(TableCreateDTO.builder().fields(fieldList).tableName(fieldList.get(0).getTableName()).build());
-            // 插入其他属性表元数据
-            var entityPropertyList = fieldList.stream().map(v -> ParamDtoConverter.convertToEntityProperty(v)).collect(Collectors.toList());
-            propertyService.saveBatch(entityPropertyList);
-            // 插入实体表关联健
-            var param = ds.getColumnParamList().stream().filter(v -> v.getIsAssociateKey()).findFirst().get();
-            var entityTableKey = primaryDataSource.getColumnParamList().stream()
-                    .filter(v -> v.getDatasourceColumnName().equals(param.getAssociateDatasourceColumnName()))
-                    .findFirst().get().getColumnName();
-            propertyMappingService.save(EntityPropertyMappingPO.builder()
-                    .entityTable(primaryTableName)
-                    .entityPropertyTable(fieldList.get(0).getTableName())
-                    .entityTableKey(entityTableKey)
-                    .entityPropertyTableKey(param.getColumnName())
-                    .build());
+            createTableAndRelation(ds, primaryTableName, primaryProperty);
         });
     }
 
+    private void createTableAndRelation(EntityDataSourceParam ds, String primaryTableName, List<EntityPropertyPO> columnParams) {
+        // 创建实体其他属性表
+        var fieldList = ds.getColumnParamList().stream().map(v -> ParamDtoConverter.convert(v)).collect(Collectors.toList());
+        tableMapper.createTable(TableCreateDTO.builder().fields(fieldList).tableName(fieldList.get(0).getTableName()).build());
+        // 插入其他属性表元数据
+        var entityPropertyList = fieldList.stream().map(v -> ParamDtoConverter.convertToEntityProperty(v)).collect(Collectors.toList());
+        propertyService.saveBatch(entityPropertyList);
+        // 插入实体表关联健
+        var param = ds.getColumnParamList().stream().filter(v -> v.getIsAssociateKey()).findFirst().get();
+        var entityTableKey = columnParams.stream()
+                .filter(v -> v.getDatasourceColumnName().equals(param.getAssociateDatasourceColumnName()))
+                .findFirst().get().getTableColumnName();
+        propertyMappingService.save(EntityPropertyMappingPO.builder()
+                .entityTable(primaryTableName)
+                .entityPropertyTable(fieldList.get(0).getTableName())
+                .entityTableKey(entityTableKey)
+                .entityPropertyTableKey(param.getColumnName())
+                .build());
+    }
 
-    private void insertEntityTables(DataSourceParam primaryDataSource, List<DataSourceParam> associateDataSources) {
+    private void insertRecords(EntityDataSourceParam ds) {
+        //获取其他数据源数据，并插入实体属性表
+        var tableName = ds.getColumnParamList().get(0).getTableName();
+        var datasourceId = ds.getColumnParamList().get(0).getDatasourceId();
+        var filedMap = ds.getColumnParamList().stream().collect(Collectors.toMap(v -> v.getDatasourceColumnName(), v -> v.getColumnName()));
+        var orderBy = dataObjectMapper.checkIdColumnExists(datasourceId);
+        List<Map<String, Object>> data = dataObjectMapper.queryTableDataByColumns(datasourceId, filedMap, orderBy);
+        tableMapper.batchInsertRows(tableName, data);
+    }
+
+
+    private void insertEntityTables(EntityDataSourceParam primaryDataSource, List<EntityDataSourceParam> associateDataSources) {
         //获取主数据源数据
         var primaryTableName = primaryDataSource.getColumnParamList().get(0).getTableName();
         var primaryDatasource = primaryDataSource.getColumnParamList().get(0).getDatasourceId();
@@ -273,16 +353,7 @@ public class EntityTableServiceImpl extends ServiceImpl<EntityTableMapper, Objec
         var primaryData = dataObjectMapper.queryTableDataByColumns(primaryDatasource, primaryFieldMap, dataObjectMapper.checkIdColumnExists(primaryDatasource));
         //插入主实体表
         tableMapper.batchInsertRows(primaryTableName, primaryData);
-        associateDataSources.stream().forEach(ds -> {
-            //获取其他数据源数据，并插入实体属性表
-            var tableName = ds.getColumnParamList().get(0).getTableName();
-            var datasourceId = ds.getColumnParamList().get(0).getDatasourceId();
-            var filedMap = ds.getColumnParamList().stream().collect(Collectors.toMap(v -> v.getDatasourceColumnName(), v -> v.getColumnName()));
-            var orderBy = dataObjectMapper.checkIdColumnExists(datasourceId);
-            List<Map<String, Object>> data = dataObjectMapper.queryTableDataByColumns(datasourceId, filedMap, orderBy);
-            tableMapper.batchInsertRows(tableName, data);
-        });
-
+        associateDataSources.forEach(ds -> insertRecords(ds));
         //写入实体节点数据
         var primaryKey = primaryDataSource.getColumnParamList().stream().filter(v -> v.getIsPrimaryKey()).findFirst().get().getColumnName();
         var titleKey = primaryDataSource.getColumnParamList().stream().filter(v -> v.getIsTitleKey()).findFirst().get().getColumnName();

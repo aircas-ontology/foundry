@@ -2,6 +2,35 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
 <mapper namespace="com.aircas.ptr.foundry.ontology.entity.repository.mapper.main.EntityTableMapper">
 
+
+    <update id="updateByPrimaryKey">
+        <foreach collection="rows" item="row" separator=";">
+            UPDATE ${tableName}
+            <set>
+                <foreach collection="row" index="key" item="value" separator=",">
+                    ${key} = #{value}
+                </foreach>
+            </set>
+            WHERE ${primaryKey} = #{row.${primaryKey}}
+        </foreach>
+    </update>
+
+
+    <insert id="createColumns" parameterType="java.util.List">
+        <foreach collection="fields" item="field" separator=";">
+            ALTER TABLE ${field.tableName}
+            ADD COLUMN IF NOT EXISTS ${field.fieldName} ${field.fieldType}
+            <if test="!field.isNullable">
+                NOT NULL
+            </if>;
+            <if test="field.fieldComment != null and field.fieldComment != ''">
+                COMMENT ON COLUMN ${field.tableName}.${field.fieldName} IS '${field.fieldComment}';
+            </if>
+        </foreach>
+    </insert>
+
+
+
     <sql id="tableColumns">
         <foreach collection="tableDto.fields" item="field" separator=", ">
             <if test="field.isPrimaryKey">

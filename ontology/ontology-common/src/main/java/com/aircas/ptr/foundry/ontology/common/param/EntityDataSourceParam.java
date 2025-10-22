@@ -18,10 +18,10 @@ import java.util.List;
 @SuperBuilder
 @Accessors(chain = true)
 @ApiModel(description = "实体数据源")
-public class DataSourceParam {
+public class EntityDataSourceParam {
 
     @ApiModelProperty(name="columnParamList", value = "列参数", required = true)
     @NotEmpty(message = "columnParamList is empty")
-    private List<DataSourceColumnParam> columnParamList;
+    private List<EntityDataSourceColumnParam> columnParamList;
 
 }

@@ -47,6 +47,15 @@ public class EntityClient {
     @Value("${client.entity.query-record-detail}")
     private String queryRecordDetail;
 
+    @Value("${client.entity.column}")
+    private String columnUrl;
+
+    public void createColumns(EntityColumnCreateParam param) {
+        HttpUtil.postJson(urlPrefix + columnUrl, new HashMap<>(), param, new TypeReference<RestResult>() {
+        });
+    }
+
+
     public List<EntityRelationVO> queryRelation(EntityRelationQueryParam param) {
         var result = HttpUtil.postJson(urlPrefix + queryNodeRelation, new HashMap<>(), param, new TypeReference<RestResult<List<EntityRelationVO>>>() {
         });

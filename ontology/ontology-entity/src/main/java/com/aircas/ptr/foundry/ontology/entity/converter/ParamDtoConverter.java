@@ -1,13 +1,13 @@
 package com.aircas.ptr.foundry.ontology.entity.converter;
 
 import com.aircas.ptr.foundry.common.constant.Status;
-import com.aircas.ptr.foundry.ontology.common.param.DataSourceColumnParam;
+import com.aircas.ptr.foundry.ontology.common.param.EntityDataSourceColumnParam;
 import com.aircas.ptr.foundry.ontology.entity.model.dto.FieldDTO;
 import com.aircas.ptr.foundry.ontology.entity.model.po.EntityPropertyPO;
 
 public class ParamDtoConverter {
 
-    public static FieldDTO convert(DataSourceColumnParam param){
+    public static FieldDTO convert(EntityDataSourceColumnParam param){
         return FieldDTO.builder()
                 .fieldComment(param.getDescription())
                 .fieldName(param.getColumnName())

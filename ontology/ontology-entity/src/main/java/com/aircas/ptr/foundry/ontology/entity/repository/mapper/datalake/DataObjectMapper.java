@@ -1,6 +1,5 @@
 package com.aircas.ptr.foundry.ontology.entity.repository.mapper.datalake;
 
-import com.aircas.ptr.foundry.ontology.entity.model.po.DirectoryItemPO;
 import lombok.var;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -11,13 +10,6 @@ import java.util.stream.Collectors;
 
 @Mapper
 public interface DataObjectMapper {
-
-    List<DirectoryItemPO> queryDirectory(String tableName, String primaryKey, String titleKey);
-
-    List<Map<String, Object>> queryAnySQL(String sql);
-
-    //todo 后续改成分页查询，前期数据量小暂不考虑
-    List<Map<String, Object>> queryTableData(@Param("tableName") String tableName);
 
     //todo 后续改成分页查询，前期数据量小暂不考虑
     List<Map<String, Object>> queryTableDataByColumn(@Param("tableName") String tableName,
@@ -37,9 +29,10 @@ public interface DataObjectMapper {
         return rows;
     }
 
-    int updateAnySQL(String updateSql);
-
 
     String checkIdColumnExists(@Param("tableName") String tableName);
+
+    String queryPrimaryKeyColumnName(@Param("tableName") String tableName);
+
 
 }

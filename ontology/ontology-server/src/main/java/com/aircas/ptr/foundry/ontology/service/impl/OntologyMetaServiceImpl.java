@@ -344,6 +344,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
 
 
     @Override
+    @Transactional(value = "mainTransactionManager")
     public void updateMeta(OntologyUpdateParam updateParam) {
         var meta = getOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, updateParam.getOntologyIdentifier()));
         meta.setIcon(updateParam.getIcon())

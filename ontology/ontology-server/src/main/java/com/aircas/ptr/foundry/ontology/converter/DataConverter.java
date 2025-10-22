@@ -5,8 +5,8 @@ import com.aircas.ptr.foundry.common.constant.OntologyPropertyCategoryEnum;
 import com.aircas.ptr.foundry.common.constant.Status;
 import com.aircas.ptr.foundry.common.constant.Visibility;
 import com.aircas.ptr.foundry.common.util.IdGenerator;
-import com.aircas.ptr.foundry.ontology.common.param.DataSourceColumnParam;
-import com.aircas.ptr.foundry.ontology.common.param.DataSourceParam;
+import com.aircas.ptr.foundry.ontology.common.param.EntityDataSourceColumnParam;
+import com.aircas.ptr.foundry.ontology.common.param.EntityDataSourceParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyDataSourceColumnParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyPrimaryDatasourceParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
@@ -71,13 +71,13 @@ public class DataConverter {
                 .build();
     }
 
-    public static DataSourceParam convert(OntologyPrimaryDatasourceParam param, String tableName) {
+    public static EntityDataSourceParam convert(OntologyPrimaryDatasourceParam param, String tableName) {
 
         if (param == null || CollectionUtils.isEmpty(param.getColumnParamList())) {
             return null;
         }
 
-        var columnParamList = param.getColumnParamList().stream().map(v -> DataSourceColumnParam.builder()
+        var columnParamList = param.getColumnParamList().stream().map(v -> EntityDataSourceColumnParam.builder()
                 .columnName(v.getApiName())
                 .columnType(v.getDatasourceColumnType().getValue())
                 .description(v.getDescription())
@@ -91,8 +91,22 @@ public class DataConverter {
                 .build())
                 .collect(Collectors.toList());
 
-        return DataSourceParam.builder()
+        return EntityDataSourceParam.builder()
                 .columnParamList(columnParamList)
+                .build();
+    }
+
+    public static EntityDataSourceColumnParam convertEntityDataSource(OntologyDataSourceColumnParam param){
+        return EntityDataSourceColumnParam.builder()
+                .columnName(param.getApiName())
+                .columnType(param.getDatasourceColumnType().getValue())
+                .datasourceColumnName(param.getDatasourceColumnName())
+                .datasourceId(param.getDatasourceId())
+                .isAssociateKey(param.getIsAssociateKey())
+                .associateDatasourceColumnName(param.getAssociateDatasourceColumnName())
+                .description(param.getDescription())
+                .isPrimaryKey(param.getIsPrimaryKey())
+                .isTitleKey(param.getIsTitleKey())
                 .build();
     }
 }

@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.entity.repository.mapper.main;
 
+import com.aircas.ptr.foundry.ontology.entity.model.dto.FieldDTO;
 import com.aircas.ptr.foundry.ontology.entity.model.dto.TableCreateDTO;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import lombok.var;
@@ -11,6 +12,12 @@ import java.util.Map;
 
 @Mapper
 public interface EntityTableMapper extends BaseMapper<Object> {
+
+    void updateByPrimaryKey(@Param("tableName") String tableName,
+                            @Param("primaryKey") String primaryKey,
+                            @Param("rows")  List<Map<String, Object>> rows);
+
+    void createColumns(@Param("fields") List<FieldDTO> fields);
 
     void createTable(@Param("tableDto") TableCreateDTO tableDto);
 

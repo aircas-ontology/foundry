@@ -29,6 +29,9 @@ public class OntologyPropertyDetailVO extends OntologyPropertyInfoVO {
     @ApiModelProperty(name = "datasourceId", value = "数据源表名", example = "xtmb")
     private String datasourceId;
 
+    @ApiModelProperty(name = "datasourceId", value = "数据源表名描述", example = "xtmb")
+    private String datasourceDescription;
+
     @ApiModelProperty(name = "type", value = "属性类别")
     private OntologyPropertyCategoryEnum category;
 }

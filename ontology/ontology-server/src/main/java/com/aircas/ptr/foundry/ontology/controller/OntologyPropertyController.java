@@ -36,28 +36,30 @@ public class OntologyPropertyController {
 
     @PostMapping("")
     @ApiOperation(value = "新增属性")
-    public RestResult createProperty(@RequestBody @Valid OntologyPropertyCreateParam propertyCreateParam) {
+    public RestResult createProperties(@RequestBody @Valid OntologyPropertyCreateParam propertyCreateParam) {
+        ontologyPropertyService.createProperties(propertyCreateParam);
         return RestResult.success();
     }
 
 
     @PutMapping("")
-    @ApiOperation(value = "更新本体属性")
-    public RestResult updateProperty(@RequestBody @Valid List<OntologyPropertyUpdateParam> propertyUpdateParams) {
+    @ApiOperation(value = "单个更新本体属性")
+    public RestResult updateProperty(@RequestBody @Valid OntologyPropertyUpdateParam propertyUpdateParam) {
+        ontologyPropertyService.updateProperty(propertyUpdateParam);
         return RestResult.success();
     }
 
 
-    @DeleteMapping("/{propertyId}")
+    @DeleteMapping("/{propertyUniqId}")
     @ApiOperation(value = "删除本体属性")
-    public RestResult delete(@PathVariable(name = "propertyId", required = true) String propertyId) {
+    public RestResult delete(@PathVariable(name = "propertyUniqId", required = true) String propertyUniqId) {
         return RestResult.success();
     }
 
 
-    @DeleteMapping("/delete_datasource/{datasource}")
+    @DeleteMapping("/delete_datasource/{datasourceId}")
     @ApiOperation(value = "删除属性数据源下的所有属性")
-    public RestResult deleteDatasource(@PathVariable(required = true, name = "datasource") String datasource) {
+    public RestResult deleteDatasource(@PathVariable(required = true, name = "datasourceId") String datasourceId) {
         return RestResult.success();
     }
 
