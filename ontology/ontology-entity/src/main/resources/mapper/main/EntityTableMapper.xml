@@ -34,10 +34,10 @@
     <sql id="tableColumns">
         <foreach collection="tableDto.fields" item="field" separator=", ">
             <if test="field.isPrimaryKey">
-                ${field.fieldName} ${field.fieldType} PRIMARY KEY
+                "${field.fieldName}" ${field.fieldType} PRIMARY KEY
             </if>
             <if test="!field.isPrimaryKey">
-                ${field.fieldName} ${field.fieldType}
+                "${field.fieldName}" ${field.fieldType}
                 <if test="!field.isNullable">NOT NULL</if>
             </if>
         </foreach>
@@ -54,17 +54,17 @@
         <if test="tableDto.fields != null and tableDto.fields.size() > 0">
             <foreach collection="tableDto.fields" item="field" separator=";">
                 <if test="field.fieldComment != null and field.fieldComment != ''">
-                    COMMENT ON COLUMN ${tableDto.tableName}.${field.fieldName} IS '${field.fieldComment}';
+                    COMMENT ON COLUMN ${tableDto.tableName}."${field.fieldName}" IS '${field.fieldComment}';
                 </if>
             </foreach>
         </if>
     </insert>
 
 
-    <insert id="batchInsertRows">
+    <insert id="insertRows">
         INSERT INTO ${tableName} (
         <foreach item="column" collection="rows[0].keySet" separator=", ">
-            ${column}
+            "${column}"
         </foreach>
         )
         VALUES

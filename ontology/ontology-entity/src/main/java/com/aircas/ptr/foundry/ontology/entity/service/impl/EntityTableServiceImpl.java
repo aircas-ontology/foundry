@@ -262,7 +262,7 @@ public class EntityTableServiceImpl extends ServiceImpl<EntityTableMapper, Objec
                 .displayName(node.getDisplayName())
                 .isDeleted(node.getIsDeleted()).build())
                 .collect(Collectors.toList());
-        nodeRepository.saveAll(nodesToInsert);
+        nodeRepository.batchSave(nodesToInsert);
 
         var newNodeMap = nodesToInsert.stream().collect(Collectors.toMap(EntityNode::getPrimaryKey, node -> node));
         // 查询与这些节点相关的边
@@ -280,7 +280,7 @@ public class EntityTableServiceImpl extends ServiceImpl<EntityTableMapper, Objec
                         .to(Optional.ofNullable(newNodeMap.get(relation.getTo().getPrimaryKey())).orElse(relation.getTo()))
                         .build()
                 ).collect(Collectors.toList());
-        relationRepository.saveAll(relationsToInsert);
+        relationRepository.batchSave(relationsToInsert);
     }
 
     private void copyTable(String srcTable, String newTable) {
@@ -367,7 +367,7 @@ public class EntityTableServiceImpl extends ServiceImpl<EntityTableMapper, Objec
                 .build())
                 .collect(Collectors.toList());
 
-        //todo 改成批量插入
-        nodeRepository.saveAll(nodes);
+        //改成批量插入
+        nodeRepository.batchSave(nodes);
     }
 }

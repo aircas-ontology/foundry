@@ -20,7 +20,7 @@
     <select id="queryTableDataByColumn" resultType="java.util.Map">
         SELECT
         <foreach item="value" index="key" collection="columnNames" separator=", ">
-            "${key}" AS ${value}
+            "${key}" AS "${value}"
         </foreach>
         FROM ${tableName}
         <if test="orderBy != null and orderBy != ''">

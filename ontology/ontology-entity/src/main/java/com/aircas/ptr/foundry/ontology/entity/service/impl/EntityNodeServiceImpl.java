@@ -44,7 +44,7 @@ public class EntityNodeServiceImpl implements EntityNodeService {
                                 .type(relationType).build())
                 )
         );
-        relationRepository.saveAll(relations);
+        relationRepository.batchSave(relations);
 
     }
 

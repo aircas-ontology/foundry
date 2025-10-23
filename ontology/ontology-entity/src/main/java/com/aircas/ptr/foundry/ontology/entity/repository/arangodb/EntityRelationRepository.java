@@ -4,6 +4,8 @@ import com.aircas.ptr.foundry.ontology.entity.model.document.EntityNode;
 import com.aircas.ptr.foundry.ontology.entity.model.document.EntityRelation;
 import com.arangodb.springframework.annotation.Query;
 import com.arangodb.springframework.repository.ArangoRepository;
+import com.google.common.collect.Lists;
+import lombok.var;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
@@ -29,4 +31,8 @@ public interface EntityRelationRepository extends ArangoRepository<EntityRelatio
                                                                @Param("primaryKeyValue") Object primaryKeyValue);
 
 
+    default void batchSave(List<EntityRelation> nodes) {
+        var partition = Lists.partition(nodes, 1000);
+        partition.forEach(p -> saveAll(p));
+    }
 }

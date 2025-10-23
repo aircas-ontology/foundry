@@ -3,6 +3,7 @@ package com.aircas.ptr.foundry.ontology.entity.repository.mapper.main;
 import com.aircas.ptr.foundry.ontology.entity.model.dto.FieldDTO;
 import com.aircas.ptr.foundry.ontology.entity.model.dto.TableCreateDTO;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.google.common.collect.Lists;
 import lombok.var;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -15,13 +16,18 @@ public interface EntityTableMapper extends BaseMapper<Object> {
 
     void updateByPrimaryKey(@Param("tableName") String tableName,
                             @Param("primaryKey") String primaryKey,
-                            @Param("rows")  List<Map<String, Object>> rows);
+                            @Param("rows") List<Map<String, Object>> rows);
 
     void createColumns(@Param("fields") List<FieldDTO> fields);
 
     void createTable(@Param("tableDto") TableCreateDTO tableDto);
 
-    void batchInsertRows(@Param("tableName") String tableName, @Param("rows") List<Map<String, Object>> rows);
+    void insertRows(@Param("tableName") String tableName, @Param("rows") List<Map<String, Object>> rows);
+
+    default void batchInsertRows(@Param("tableName") String tableName, @Param("rows") List<Map<String, Object>> rows) {
+        var partition = Lists.partition(rows, 1000);
+        partition.forEach(p -> insertRows(tableName, p));
+    }
 
     void copyTable(@Param("srcTable") String srcTable, @Param("newTable") String newTable);
 
