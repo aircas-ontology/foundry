@@ -5,9 +5,11 @@ import com.aircas.ptr.foundry.ontology.entity.model.dto.TableCreateDTO;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.google.common.collect.Lists;
 import lombok.var;
+import org.apache.commons.collections4.CollectionUtils;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -45,8 +47,7 @@ public interface EntityTableMapper extends BaseMapper<Object> {
                                                  @Param("limit") Integer limit,
                                                  @Param("offset") Integer offset) {
         var records = selectMapsPage(tableName, limit, offset);
-        populate(records, tableName);
-        return records;
+        return populate(records, tableName);
     }
 
     Integer selectCount(@Param("tableName") String tableName);
@@ -73,8 +74,7 @@ public interface EntityTableMapper extends BaseMapper<Object> {
                                                         @Param("joinTableOrderBy") String joinTableOrderBy,
                                                         @Param("count") Integer count) {
         var records = selectJoinTableData(tableName, tableKey, primaryKeyColumn, primaryKeyValue, joinTableName, joinTableKey, joinTableOrderBy, count);
-        populate(records, joinTableName);
-        return records;
+        return populate(records, joinTableName);
     }
 
 
@@ -86,12 +86,16 @@ public interface EntityTableMapper extends BaseMapper<Object> {
                                                              @Param("primaryKeyColumn") String primaryKeyColumn,
                                                              @Param("primaryKeyValue") Object primaryKeyValue) {
         var records = selectByPrimaryKey(tableName, primaryKeyColumn, primaryKeyValue);
-        populate(records, tableName);
-        return records;
+        return populate(records, tableName);
     }
 
-    default void populate(List<Map<String, Object>> records, String tableName) {
+    default List<Map<String, Object>> populate(List<Map<String, Object>> records, String tableName) {
         var columnNames = getColumnNames(tableName);
+        if (CollectionUtils.isEmpty(records) || (records.size() == 1 && records.get(0) == null)) {
+            var map = new HashMap<String, Object>();
+            columnNames.forEach(v -> map.put(v, null));
+            return Lists.newArrayList(map);
+        }
         records.forEach(r -> {
             columnNames.forEach(col -> {
                 if (!r.containsKey(col)) {
@@ -99,6 +103,7 @@ public interface EntityTableMapper extends BaseMapper<Object> {
                 }
             });
         });
+        return records;
     }
 
     String checkIdColumnExists(@Param("tableName") String tableName);

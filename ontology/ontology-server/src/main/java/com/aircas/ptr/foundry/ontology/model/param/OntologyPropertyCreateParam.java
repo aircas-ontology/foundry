@@ -22,11 +22,9 @@ public class OntologyPropertyCreateParam extends OntologyIdentifierParam {
 
 
     @ApiModelProperty(name = "newAssociateDataSources", value = "新的其他数据源数据", dataType = "List<OntologyAssociateDataSourceParam>")
-    @Valid
     private List<OntologyDatasourceParam> newAssociateDataSources;
 
     @ApiModelProperty(name = "existDataSources", value = "已存在数据源的新增属性列表", dataType = "List<OntologyDataSourceColumnParam>")
-    @Valid
     private List<OntologyDataSourceColumnParam> existDataSources;
 
 }

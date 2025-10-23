@@ -21,7 +21,6 @@ import java.util.List;
 public class OntologyDatasourcePropertyVO {
 
     @ApiModelProperty(name = "primaryDataSource", value = "本体对应主数据源属性列表", dataType = "OntologyPrimaryDataSourceParam", required = true)
-    @NotNull(message = "primaryDataSource is null")
     private List<OntologyPropertyDetailVO> primaryDataSource;
 
     @ApiModelProperty(name = "associateDataSources", value = "本体关联的其他数据源属性", dataType = "OntologyAssociateDataSourceParam")
