@@ -4,8 +4,10 @@ import com.alibaba.druid.spring.boot.autoconfigure.DruidDataSourceAutoConfigure;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 
+@EnableScheduling
 @SpringBootApplication(scanBasePackages = "com.aircas.ptr.foundry", exclude = {DataSourceAutoConfiguration.class, DruidDataSourceAutoConfigure.class})
 public class EntityApplication {
     public static void main(String[] args) {

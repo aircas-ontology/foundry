@@ -1,26 +1,55 @@
 package com.aircas.ptr.foundry.ontology.entity.controller;
 
+import com.aircas.ptr.foundry.common.base.RestResult;
+import com.aircas.ptr.foundry.ontology.client.OrbitCalculationAlgorithmClient;
+import com.aircas.ptr.foundry.ontology.common.param.SatellitePointParam;
+import com.aircas.ptr.foundry.ontology.entity.repository.mapper.main.EntityTableMapper;
 import com.aircas.ptr.foundry.ontology.entity.service.SatelliteService;
+import com.google.common.collect.Lists;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
+import lombok.extern.slf4j.Slf4j;
+import lombok.var;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.web.bind.annotation.*;
 
+import javax.annotation.Resource;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
 import java.util.Map;
 
 /**
  * 卫星控制器
  */
+@Slf4j
 @RestController
 @RequestMapping("/api/satellite")
 @Api(tags = "卫星API")
 public class SatelliteController {
 
+
+
     @Autowired
     private SatelliteService satelliteService;
+
+    /**
+     * todo 仅演示使用
+     *
+     * @param entityPrimaryKey
+     * @return
+     */
+    @PostMapping("/point/{entityPrimaryKey}")
+    @ApiOperation("更新卫星的坐标位置")
+    public RestResult updateSatellitePoint(@PathVariable(value = "entityPrimaryKey") Integer entityPrimaryKey) {
+        satelliteService.updatePointByPrimaryKey(entityPrimaryKey);
+        return RestResult.success();
+
+    }
+
+
+
 
     /**
      * 计算卫星对指定位置的最近可见窗口

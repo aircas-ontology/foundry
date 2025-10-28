@@ -19,7 +19,7 @@ import java.util.List;
 public class EntityInfoVO {
 
     @ApiModelProperty(name = "primaryKey",value = "实体主键id")
-    private String primaryKey;
+    private Object primaryKey;
 
     @ApiModelProperty(name = "displayName",value = "实体显示名称")
     private String displayName;

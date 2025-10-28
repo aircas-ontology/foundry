@@ -80,6 +80,7 @@ public enum OntologyDataTypeEnum {
         put(PostgresDataTypeEnum.Date.getValue(), OntologyDataTypeEnum.Date);
         put(PostgresDataTypeEnum.Time.getValue(), OntologyDataTypeEnum.Timestamp);
         put(PostgresDataTypeEnum.Timestamp.getValue(), OntologyDataTypeEnum.Timestamp);
+        put(PostgresDataTypeEnum.Bytea.getValue(), OntologyDataTypeEnum.Byte);
     }};
 
     private static final Map<OntologyDataTypeEnum, String> TYPE_2_PG = new HashMap<OntologyDataTypeEnum, String>() {{

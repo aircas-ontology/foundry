@@ -39,7 +39,7 @@ public class HttpUtil {
         }
 
         Request.Builder requestBuilder = new Request.Builder()
-                .header(LoggingFilter.LOG_ID_HEADER, MDC.get(LoggingFilter.LOG_ID_KEY))
+                .header(LoggingFilter.LOG_ID_HEADER, MDC.get(LoggingFilter.LOG_ID_KEY) == null ? IdGenerator.generateLogId() : MDC.get(LoggingFilter.LOG_ID_KEY))
                 .url(urlBuilder.build());
 
         Request request = requestBuilder.build();
@@ -63,7 +63,7 @@ public class HttpUtil {
 
         RequestBody body = RequestBody.create(JSON, jsonString);
         Request.Builder requestBuilder = new Request.Builder()
-                .header(LoggingFilter.LOG_ID_HEADER, MDC.get(LoggingFilter.LOG_ID_KEY))
+                .header(LoggingFilter.LOG_ID_HEADER, MDC.get(LoggingFilter.LOG_ID_KEY) == null ? IdGenerator.generateLogId() : MDC.get(LoggingFilter.LOG_ID_KEY))
                 .post(body)
                 .url(urlBuilder.build());
 
@@ -80,7 +80,7 @@ public class HttpUtil {
 
         RequestBody body = RequestBody.create(JSON, jsonString);
         Request.Builder requestBuilder = new Request.Builder()
-                .header(LoggingFilter.LOG_ID_HEADER, MDC.get(LoggingFilter.LOG_ID_KEY))
+                .header(LoggingFilter.LOG_ID_HEADER, MDC.get(LoggingFilter.LOG_ID_KEY) == null ? IdGenerator.generateLogId() : MDC.get(LoggingFilter.LOG_ID_KEY))
                 .put(body)
                 .url(urlBuilder.build());
 
@@ -92,7 +92,7 @@ public class HttpUtil {
     public static <T> T deletePathVariable(String url, List<String> pathVariable, TypeReference<T> responseType) {
         url = String.format(url, pathVariable.toArray());
         Request.Builder requestBuilder = new Request.Builder()
-                .header(LoggingFilter.LOG_ID_HEADER, MDC.get(LoggingFilter.LOG_ID_KEY))
+                .header(LoggingFilter.LOG_ID_HEADER, MDC.get(LoggingFilter.LOG_ID_KEY) == null ? IdGenerator.generateLogId() : MDC.get(LoggingFilter.LOG_ID_KEY))
                 .delete()
                 .url(url);
         Request request = requestBuilder.build();

@@ -17,7 +17,10 @@ import java.util.List;
 @ApiModel(value = "实体行为")
 public class EntityActionVO {
 
-    @ApiModelProperty(name = "functionApi", value = "函数api", example = "getInfo")
+    @ApiModelProperty(name = "actionApi", value = "行为api name", example = "getInfo")
+    private String actionApi;
+
+    @ApiModelProperty(name = "functionApi", value = "函数api name", example = "getInfo")
     private String functionApi;
 
     @ApiModelProperty(name = "description", value = "行为描述", example = "这是一个行为")

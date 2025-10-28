@@ -54,6 +54,10 @@ public class EntityNodeServiceImpl implements EntityNodeService {
 
         return relations.stream().map(v-> EntityRelationVO.builder()
                 .type(v.getType())
+                .nodePrimaryKeyFrom(v.getFrom().getPrimaryKey())
+                .nodePrimaryKeyTo(v.getTo().getPrimaryKey())
+                .nodeTableNameFrom(v.getFrom().getTableName())
+                .nodeTableNameTo(v.getTo().getTableName())
                 .nodeNameFrom(v.getFrom().getDisplayName())
                 .nodeNameTo(v.getTo().getDisplayName())
                 .nodeIdFrom(v.getFrom().getId())

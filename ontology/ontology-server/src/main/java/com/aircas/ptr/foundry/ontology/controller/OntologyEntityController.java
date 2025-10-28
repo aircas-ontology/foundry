@@ -57,8 +57,7 @@ public class OntologyEntityController {
     @PostMapping("/action")
     @ApiOperation(value = "查询本体下实体的行为")
     public RestResult<List<EntityActionVO>> getEntityActionsByPrimaryKey(@RequestBody @Valid EntityQueryParam param) {
-
-        return RestResult.ofData(null);
+        return RestResult.ofData(entityService.getEntityActionsByPrimaryKey(param.getOntologyUniqueIdentifier()));
 
     }
 

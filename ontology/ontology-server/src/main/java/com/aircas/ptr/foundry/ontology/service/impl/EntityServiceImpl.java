@@ -8,12 +8,13 @@ import com.aircas.ptr.foundry.ontology.common.param.EntityDetailQueryParam;
 import com.aircas.ptr.foundry.ontology.common.param.EntityRelationQueryParam;
 import com.aircas.ptr.foundry.ontology.model.param.EntityNodeParam;
 import com.aircas.ptr.foundry.ontology.model.param.EntityTableFieldParam;
+import com.aircas.ptr.foundry.ontology.model.po.OntologyAction;
+import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
-import com.aircas.ptr.foundry.ontology.model.vo.EntityInfoVO;
-import com.aircas.ptr.foundry.ontology.model.vo.EntityLinkPropertyVO;
-import com.aircas.ptr.foundry.ontology.model.vo.EntityPropertyDetailVO;
-import com.aircas.ptr.foundry.ontology.model.vo.EntityPropertyVO;
+import com.aircas.ptr.foundry.ontology.model.vo.*;
+import com.aircas.ptr.foundry.ontology.repository.dao.OntologyActionMapper;
+import com.aircas.ptr.foundry.ontology.repository.dao.OntologyLinkGroupMapper;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyMetaMapper;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyPropertyMapper;
 import com.aircas.ptr.foundry.ontology.service.EntityService;
@@ -31,6 +32,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * @className: EntityServiceImpl
@@ -52,25 +54,54 @@ public class EntityServiceImpl implements EntityService {
     @Resource
     private OntologyPropertyMapper propertyMapper;
 
+    @Resource
+    private OntologyLinkGroupMapper linkGroupMapper;
+
+    @Resource
+    private OntologyActionMapper actionMapper;
+
+
+    @Override
+    public List<EntityActionVO> getEntityActionsByPrimaryKey(String ontologyUniqueIdentifier) {
+        var actions = actionMapper.selectList(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getOntologyUniqueIdentifier, ontologyUniqueIdentifier));
+        return actions.stream().map(action -> EntityActionVO.builder()
+                .actionApi(action.getApi())
+                .description(action.getDescription())
+                .displayName(action.getDisplayName())
+                .functionApi(action.getFunctionApi())
+                .build()).collect(Collectors.toList());
+    }
 
     @Override
     public List<EntityLinkPropertyVO> getEntityLinksByPrimaryKey(String ontologyUniqueIdentifier,
                                                                  Object entityPrimaryKey) {
 
-        var meta = metaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, ontologyUniqueIdentifier));
+        var links = linkGroupMapper.selectList(new LambdaQueryWrapper<OntologyLinkGroup>()
+                .eq(OntologyLinkGroup::getOntologyUniqueIdentifierFrom, ontologyUniqueIdentifier).or()
+                .eq(OntologyLinkGroup::getOntologyUniqueIdentifierTo, ontologyUniqueIdentifier));
+        var ontologyIds = links.stream().flatMap(v -> Stream.of(v.getOntologyUniqueIdentifierFrom(), v.getOntologyUniqueIdentifierTo())).collect(Collectors.toList());
+
+        var metas = metaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>().in(OntologyMeta::getUniqueIdentifier, ontologyIds));
+
         var relations = entityClient.queryRelation(EntityRelationQueryParam.builder()
-                .tableName(meta.getApiName())
+                .tableName(metas.stream().filter(v -> v.getUniqueIdentifier().equals(ontologyUniqueIdentifier)).findFirst().get().getApiName())
                 .primaryKeyValue(entityPrimaryKey)
                 .build());
         if (CollectionUtils.isEmpty(relations)) {
             return Lists.newArrayList();
         }
+
+        var apiMap = metas.stream().collect(Collectors.toMap(v -> v.getApiName(), v -> v.getUniqueIdentifier()));
         return relations.stream().map(v -> EntityLinkPropertyVO.builder()
+                .ontologyFrom(apiMap.get(v.getNodeTableNameFrom()))
+                .ontologyTo(apiMap.get(v.getNodeTableNameTo()))
+                .entityPrimaryKeyFrom(v.getNodePrimaryKeyFrom())
+                .entityPrimaryKeyTo(v.getNodePrimaryKeyTo())
                 .displayNameFrom(v.getNodeNameFrom())
                 .displayNameTo(v.getNodeNameTo())
                 .linkName(v.getType())
-                .entityKeyFrom(v.getNodeIdFrom())
-                .entityKeyTo(v.getNodeIdTo())
+                .entityNodeFrom(v.getNodeIdFrom())
+                .entityNodeTo(v.getNodeIdTo())
                 .build())
                 .collect(Collectors.toList());
     }
@@ -159,7 +190,7 @@ public class EntityServiceImpl implements EntityService {
 
             return EntityInfoVO.builder()
                     .displayName(valueMap.get(titleKey).toString())
-                    .primaryKey(valueMap.get(primaryKey).toString())
+                    .primaryKey(valueMap.get(primaryKey))
                     .properties(entityPropertyVOS)
                     .build();
         }).collect(Collectors.toList());

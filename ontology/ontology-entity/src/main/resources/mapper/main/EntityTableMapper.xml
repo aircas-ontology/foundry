@@ -117,9 +117,9 @@
     <select id="selectJoinTableData" resultType="java.util.HashMap">
         SELECT t2.*
         FROM ${tableName} t1
-        LEFT JOIN ${joinTableName} t2 ON t1.${tableKey} = t2.${joinTableKey}
-        WHERE t1.${primaryKeyColumn} = #{primaryKeyValue}
-        ORDER BY t2.${joinTableOrderBy} DESC
+        LEFT JOIN ${joinTableName} t2 ON t1."${tableKey}" = t2."${joinTableKey}"
+        WHERE t1."${primaryKeyColumn}" = #{primaryKeyValue}
+        ORDER BY t2."${joinTableOrderBy}" DESC
         <if test="count != null">
             LIMIT ${count}
         </if>
@@ -138,7 +138,7 @@
     <select id="selectByPrimaryKey" resultType="java.util.HashMap">
         SELECT *
         FROM ${tableName}
-        WHERE ${primaryKeyColumn} = #{primaryKeyValue}
+        WHERE "${primaryKeyColumn}" = #{primaryKeyValue}
     </select>
 
 </mapper>

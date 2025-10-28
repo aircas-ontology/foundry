@@ -17,6 +17,14 @@ public class EntityRelationVO {
 
     private String type;
 
+    private String nodeTableNameFrom;
+
+    private String nodeTableNameTo;
+
+    private Object nodePrimaryKeyFrom;
+
+    private Object nodePrimaryKeyTo;
+
     private String nodeIdFrom;
 
     private String nodeIdTo;

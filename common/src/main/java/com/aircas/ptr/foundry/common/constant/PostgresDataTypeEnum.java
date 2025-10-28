@@ -20,6 +20,7 @@ public enum PostgresDataTypeEnum {
     Date("date"),
     Time("time without time zone"),
     Timestamp ("timestamp without time zone"),
+    Bytea("bytea"),
     ;
 
     private final String value;
