@@ -8,14 +8,11 @@ import com.aircas.ptr.foundry.ontology.common.param.EntityCreateParam;
 import com.aircas.ptr.foundry.ontology.common.param.EntityDataSourceColumnParam;
 import com.aircas.ptr.foundry.ontology.common.param.EntityDataSourceParam;
 import com.aircas.ptr.foundry.ontology.converter.DataConverter;
-import com.aircas.ptr.foundry.ontology.model.param.OntologyDataSourceCreateParam;
-import com.aircas.ptr.foundry.ontology.model.param.OntologyDatasourceParam;
-import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyCreateParam;
-import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyUpdateParam;
+import com.aircas.ptr.foundry.ontology.model.param.*;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
 import com.aircas.ptr.foundry.ontology.model.po.TableColumnDesc;
-import com.aircas.ptr.foundry.ontology.model.vo.OntologyDatasourcePropertyVO;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyDetailVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyVO;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyMetaMapper;
@@ -52,6 +49,12 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
     private final EntityClient entityClient;
 
     private final OntologyMetaMapper metaMapper;
+
+    @Override
+    @Transactional(value = "mainTransactionManager")
+    public void createProperty(OntologyPropertyCreateParamV2 propertyCreateParam) {
+
+    }
 
     @Override
     @Transactional(value = "mainTransactionManager")
@@ -184,39 +187,30 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                 .flatMap(ds -> ds.getColumnParamList().stream().map(v ->
                         DataConverter.convert(v)
                                 .setOntologyUniqueIdentifier(ontologyUniqueIdentifier)
-                                .setCategory(ds.getCategory().getValue())
                 )).collect(Collectors.toList());
         return otherProps;
     }
 
 
     @Override
-    public OntologyDatasourcePropertyVO getPropertyDetailByOntologyId(String ontologyUniqueIdentifier) {
+    public List<OntologyPropertyDetailVO> getPropertyDetailByOntologyId(String ontologyUniqueIdentifier) {
+        var props = list(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier));
         var tableMap = tableMetadataMapper.listTables().stream().collect(Collectors.toMap(v -> v.getTableName(), v -> v.getDescription() != null ? v.getDescription() : ""));
-        var meta = ontologyMetaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, ontologyUniqueIdentifier));
-        var primaryDS = meta.getBackingDatasourceId();
-        var primaryProps = list(new LambdaQueryWrapper<OntologyProperty>()
-                .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier)
-                .eq(OntologyProperty::getDatasourceId, primaryDS));
 
-        var res = OntologyDatasourcePropertyVO.builder()
-                .primaryDataSource(primaryProps.stream().map(v -> DataConverter.convert(v).setDatasourceDescription(tableMap.get(v.getDatasourceId())))
-                        .collect(Collectors.toList()))
-                .build();
-
-        if (StringUtils.isNotEmpty(meta.getOtherDatasourceId())) {
-            var otherProps = list(new LambdaQueryWrapper<OntologyProperty>()
-                    .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier)
-                    .in(OntologyProperty::getDatasourceId, meta.getOtherDatasourceId().split(",")));
-            var otherPropsMap = otherProps.stream().collect(Collectors.groupingBy(v -> v.getDatasourceId()));
-            var otherPropDetails = otherPropsMap.entrySet().stream()
-                    .map(v -> v.getValue().stream().map(p -> DataConverter.convert(p).setDatasourceDescription(tableMap.get(p.getDatasourceId())))
-                            .collect(Collectors.toList()))
-                    .collect(Collectors.toList());
-            res.setAssociateDataSources(otherPropDetails);
-        }
-
-        return res;
+        return props.stream().map(v -> OntologyPropertyDetailVO.builder()
+                .description(v.getDescription())
+                .displayName(v.getDisplayName())
+                .isPrimaryKey(v.getIsPrimaryKey() == 1)
+                .isTitleKey(v.getIsTitleKey() == 1)
+                .tag(v.getTag())
+                .uniqueIdentifier(v.getUniqueIdentifier())
+                .apiName(v.getApiName())
+                .propertyType(v.getPropertyType())
+                .datasourceId(v.getDatasourceId())
+                .datasourceColumnName(v.getDatasourceColumnName())
+                .datasourceDescription(tableMap.get(v.getDatasourceId()))
+                .build())
+                .collect(Collectors.toList());
     }
 
     @Override
@@ -225,12 +219,10 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         var props = list(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier));
 
         return props.stream().map(v -> OntologyPropertyInfoVO.builder()
-                .apiName(v.getApiName())
                 .description(v.getDescription())
                 .displayName(v.getDisplayName())
                 .isPrimaryKey(v.getIsPrimaryKey() == 1)
                 .isTitleKey(v.getIsTitleKey() == 1)
-                .propertyType(v.getPropertyType())
                 .tag(v.getTag())
                 .uniqueIdentifier(v.getUniqueIdentifier())
                 .build())

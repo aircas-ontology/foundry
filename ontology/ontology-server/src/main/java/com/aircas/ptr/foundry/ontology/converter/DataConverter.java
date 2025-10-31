@@ -23,14 +23,11 @@ public class DataConverter {
 
     public static OntologyPropertyDetailVO convert(OntologyProperty p) {
         return OntologyPropertyDetailVO.builder()
-                .associateDatasourceColumnName(p.getAssociateDatasourceColumnName())
                 .apiName(p.getApiName())
-                .category(OntologyPropertyCategoryEnum.getByValue(p.getCategory()))
                 .datasourceColumnName(p.getDatasourceColumnName())
                 .datasourceId(p.getDatasourceId())
                 .description(p.getDescription())
                 .displayName(p.getDisplayName())
-                .isAssociateKey(p.getIsAssociateKey() == 1)
                 .isPrimaryKey(p.getIsPrimaryKey() == 1)
                 .isTitleKey(p.getIsTitleKey() == 1)
                 .propertyType(p.getPropertyType())
@@ -51,9 +48,6 @@ public class DataConverter {
                 .isPrimaryKey(param.getIsPrimaryKey() ? 1 : 0)
                 .isTitleKey(param.getIsTitleKey() ? 1 : 0)
                 .uniqueIdentifier(IdGenerator.generateUUID())
-                .visibility(Visibility.NORMAL.getValue())
-                .isAssociateKey(param.getIsAssociateKey() ? 1 : 0)
-                .associateDatasourceColumnName(param.getAssociateDatasourceColumnName())
                 .tag(param.getTag())
                 .build();
     }

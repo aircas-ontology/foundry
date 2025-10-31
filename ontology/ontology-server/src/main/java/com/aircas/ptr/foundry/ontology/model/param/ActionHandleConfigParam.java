@@ -1,6 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
-import com.aircas.ptr.foundry.common.constant.ActionHandleTypeEnum;
+import com.aircas.ptr.foundry.common.constant.ActionSchedulingTypeEnum;
 import com.aircas.ptr.foundry.common.constant.ActionRuleConnectType;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.annotations.ApiModel;
@@ -31,7 +31,7 @@ public class ActionHandleConfigParam {
     private String actionApi;
 
     @ApiModelProperty(value = "行为执行类型", required = true, example = "RULE")
-    private ActionHandleTypeEnum handleType;
+    private ActionSchedulingTypeEnum handleType;
 
     @ApiModelProperty(value = "任务的实体主键列表，以逗号分隔", example = "[\"7\",\"10\"]")
     private List<String> objectPrimaryKeys;

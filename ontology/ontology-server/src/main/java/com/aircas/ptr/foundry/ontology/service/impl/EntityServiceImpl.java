@@ -114,7 +114,6 @@ public class EntityServiceImpl implements EntityService {
         var propsMap = props.stream().collect(Collectors.groupingBy(v -> v.getDatasourceId()));
         var associateDatasource = propsMap.entrySet().stream().filter(v -> !v.getKey().equals(meta.getBackingDatasourceId())).<EntityAssociateDatasourceParam>map(entry -> {
             return EntityAssociateDatasourceParam.builder()
-                    .count(CountTypeEnum.convert(OntologyPropertyCategoryEnum.getByValue(entry.getValue().get(0).getCategory())))
                     .datasourceId(entry.getKey())
                     .build();
         }).collect(Collectors.toList());

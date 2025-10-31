@@ -16,8 +16,11 @@ import java.util.List;
 @AllArgsConstructor
 @NoArgsConstructor
 @ApiModel(description = "编辑行为请求")
-public class ActionUpdateParam extends OntologyIdentifierParam {
+public class ActionUpdateParam {
 
+    @ApiModelProperty(value = "行为api", example = "satellite", required = true)
+    @NotBlank(message = "actionApi is empty")
+    private String actionApi;
 
     @ApiModelProperty(value = "本体下函数api", example = "satellite", required = true)
     @NotBlank(message = "functionApi is empty")

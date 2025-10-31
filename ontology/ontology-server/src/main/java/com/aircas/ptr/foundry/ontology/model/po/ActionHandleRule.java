@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.annotation.FieldFill;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.fasterxml.jackson.annotation.JsonFormat;
+import io.swagger.annotations.ApiModelProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -13,6 +14,7 @@ import javax.persistence.Column;
 import javax.persistence.Entity;
 import javax.persistence.Id;
 import javax.persistence.Table;
+import javax.validation.constraints.NotBlank;
 import java.util.Date;
 
 import static com.aircas.ptr.foundry.common.constant.DateFormat.DATE_FORMAT_DEFAULT;
@@ -48,11 +50,10 @@ public class ActionHandleRule {
 
     private Long actionId;
 
-    /**
-     * 实体主键列表，以逗号分隔
-     */
-    @Column(name = "object_primary_key")
-    private String objectPrimaryKey;
+
+    private String name;
+
+    private String description;
 
     private String rules;
 

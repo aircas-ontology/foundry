@@ -1,17 +1,16 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
+import com.aircas.ptr.foundry.common.constant.FunctionTypeEnum;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
 
 import javax.validation.constraints.NotBlank;
-import javax.validation.constraints.NotEmpty;
-import java.util.List;
+import javax.validation.constraints.NotNull;
 
 @Data
 @SuperBuilder
@@ -19,17 +18,22 @@ import java.util.List;
 @AllArgsConstructor
 @NoArgsConstructor
 @ApiModel(description = "函数请求")
-public class FunctionCreateParam extends OntologyIdentifierParam{
+public class FunctionCreateParam {
 
-    @ApiModelProperty(value = "函数api", required = true, example = "getDesc")
-    @NotBlank(message = "functionName is empty")
-    private String functionName;
+    @ApiModelProperty(name = "functionApi", value = "函数api")
+    @NotBlank(message = "functionApi is empty")
+    private String functionApi;
 
-    @ApiModelProperty(value = "函数描述", example = "这是一个函数")
-    @NotBlank(message = "description is empty")
+    @ApiModelProperty(name = "description", value = "描述")
     private String description;
 
-    @ApiModelProperty(value = "函数涉及的本体", example = "xtmb")
-    @NotBlank(message = "code is empty")
+    @ApiModelProperty(name = "type", value = "函数类型")
+    @NotNull(message = "type is null")
+    private FunctionTypeEnum type;
+
+    @ApiModelProperty(name = "code", value = "自定义函数code")
     private String code;
+
+    @ApiModelProperty(name = "referenceName", value = "已存在函数的全限定名")
+    private String referenceName;
 }

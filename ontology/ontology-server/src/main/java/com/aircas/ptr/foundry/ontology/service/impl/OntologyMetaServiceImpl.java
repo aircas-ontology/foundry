@@ -10,6 +10,7 @@ import com.aircas.ptr.foundry.ontology.common.param.EntityCopyParam;
 import com.aircas.ptr.foundry.ontology.common.param.EntityRelationCreateParam;
 import com.aircas.ptr.foundry.ontology.converter.DataConverter;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyCreateParam;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyCreateParamV2;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyDataSourceCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.po.*;
@@ -20,7 +21,6 @@ import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaVO;
 import com.aircas.ptr.foundry.ontology.repository.dao.OntologyMetaMapper;
 import com.aircas.ptr.foundry.ontology.service.*;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.extern.slf4j.Slf4j;
@@ -39,12 +39,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-
-/**
- * @author dongjunchuan
- * @description
- * @since 2023/12/11 16:15
- */
 
 @Service
 @Slf4j
@@ -82,6 +76,28 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
 
 
     @Override
+    public String createOntologyV2(OntologyCreateParamV2 ontologyCreateParam) {
+        var meta = OntologyMeta.builder()
+                .uniqueIdentifier(IdGenerator.generateUUID())
+                .apiName(ontologyCreateParam.getApiName())
+                .description(ontologyCreateParam.getDescription())
+                .displayName(ontologyCreateParam.getDisplayName())
+                .status(Status.ENABLE.getValue())
+                .icon(ontologyCreateParam.getIcon())
+                .build();
+        //自主创建
+        if (StringUtils.isEmpty(ontologyCreateParam.getParentOntologyUniqueIdentifier())) {
+            meta.setMetaGroupId(String.join(",", ontologyCreateParam.getGroupIds()));
+            this.save(meta);
+        }
+        //继承创建
+        else {
+            //createOntologyByInherit(ontologyCreateParam, meta);
+        }
+        return meta.getUniqueIdentifier();
+    }
+
+    @Override
     @Transactional(value = "mainTransactionManager")
     public String createOntology(OntologyCreateParam ontologyCreateParam) {
         /**
@@ -110,23 +126,21 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
     }
 
     private void createOntologyByInherit(OntologyCreateParam ontologyCreateParam, OntologyMeta meta) {
-        var childIdentifer = meta.getUniqueIdentifier();
-        var parentIdentifer = ontologyCreateParam.getParentOntologyUniqueIdentifier();
+        var childIdentifier = meta.getUniqueIdentifier();
+        var parentIdentifier = ontologyCreateParam.getParentOntologyUniqueIdentifier();
         //校验父本体
-        var parentOntology = this.getOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, parentIdentifer));
+        var parentOntology = this.getOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, parentIdentifier));
         PreconditionUtils.checkArgument(parentOntology != null, "父本体不存在", ResultCode.PARAM_ERROR, HttpStatus.BAD_REQUEST);
         //创建子本体元数据
-        meta.setStatus(parentOntology.getStatus())
+        meta.setParentUniqueIdentifier(parentIdentifier)
+                .setStatus(parentOntology.getStatus())
                 .setBackingDatasourceId(parentOntology.getBackingDatasourceId())
                 .setOtherDatasourceId(parentOntology.getOtherDatasourceId());
         this.save(meta);
         // 创建属性
         var parentProperties = ontologyPropertyService.list(new LambdaUpdateWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyCreateParam.getParentOntologyUniqueIdentifier()));
         var childProps = parentProperties.stream().map(v -> OntologyProperty.builder()
-                .ontologyUniqueIdentifier(childIdentifer)
-                .visibility(v.getVisibility())
-                .associateDatasourceColumnName(v.getAssociateDatasourceColumnName())
-                .isAssociateKey(v.getIsAssociateKey())
+                .ontologyUniqueIdentifier(childIdentifier)
                 .apiName(v.getApiName())
                 .datasourceColumnName(v.getDatasourceColumnName())
                 .datasourceId(v.getDatasourceId())
@@ -138,39 +152,28 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 .status(v.getStatus())
                 .uniqueIdentifier(IdGenerator.generateUUID())
                 .tag(v.getTag())
-                .category(v.getCategory())
                 .build())
                 .collect(Collectors.toList());
         ontologyPropertyService.saveBatch(childProps);
         // 创建关系
         var parentLinks = linkService.list(new LambdaUpdateWrapper<OntologyLinkGroup>()
-                .eq(OntologyLinkGroup::getOntologyUniqueIdentifierFrom, parentIdentifer)
-                .or().eq(OntologyLinkGroup::getOntologyUniqueIdentifierTo, parentIdentifer));
+                .eq(OntologyLinkGroup::getOntologyUniqueIdentifierFrom, parentIdentifier)
+                .or().eq(OntologyLinkGroup::getOntologyUniqueIdentifierTo, parentIdentifier));
         if (CollectionUtils.isNotEmpty(parentLinks)) {
             var childLinks = parentLinks.stream().map(v -> {
                 var link = OntologyLinkGroup.builder()
-                        .mapping(v.getMapping())
                         .name(v.getName())
                         .ontologyUniqueIdentifierFrom(v.getOntologyUniqueIdentifierFrom())
                         .ontologyUniqueIdentifierTo(v.getOntologyUniqueIdentifierTo())
-                        .propertyUniqueIdentifierFrom(v.getPropertyUniqueIdentifierFrom())
-                        .propertyUniqueIdentifierTo(v.getPropertyUniqueIdentifierTo())
                         .status(v.getStatus())
-                        .forwardChildLinkId(v.getForwardChildLinkId())
-                        .backwardChildLinkId(v.getBackwardChildLinkId())
                         .uniqueIdentifier(IdGenerator.generateUUID())
                         .build();
-                if (v.getOntologyUniqueIdentifierFrom().equals(parentIdentifer)) {
-                    link.setOntologyUniqueIdentifierFrom(childIdentifer).setPropertyUniqueIdentifierFrom(findChildOntologyProperty(parentProperties, childProps, v.getPropertyUniqueIdentifierFrom()));
-                } else {
-                    link.setOntologyUniqueIdentifierTo(childIdentifer).setPropertyUniqueIdentifierTo(findChildOntologyProperty(parentProperties, childProps, v.getPropertyUniqueIdentifierTo()));
-                }
                 return link;
             }).collect(Collectors.toList());
             linkService.saveBatch(childLinks);
         }
         // 函数
-        var funcViews = functionService.queryFunctionViewByOntologyId(parentIdentifer);
+        var funcViews = functionService.queryFunctionViewByOntologyId(parentIdentifier);
         List<Function> functions = Lists.newArrayList();
         List<FunctionParamPO> functionParams = Lists.newArrayList();
 
@@ -180,8 +183,6 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                     .code(view.getCode())
                     .api(view.getApi())
                     .description(view.getDescription())
-                    .objectTypes(childIdentifer)
-                    .ontologyUniqueIdentifier(childIdentifer)
                     .status(view.getStatus())
                     .id(funcId).build());
             functionParams.addAll(view.getFunctionParams().stream().map(v -> FunctionParamPO.builder().functionId(funcId)
@@ -193,7 +194,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         functionService.saveBatch(functions);
         functionParamService.saveBatch(functionParams);
         // 行为
-        var actionViews = actionService.queryActionViewByOntologyIdentifier(parentIdentifer);
+        var actionViews = actionService.queryActionViewByOntologyIdentifier(parentIdentifier);
         List<OntologyAction> actions = Lists.newArrayList();
         List<ActionHandleRule> rules = Lists.newArrayList();
         List<ActionHandleTask> tasks = Lists.newArrayList();
@@ -205,11 +206,10 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                     .description(action.getDescription())
                     .displayName(action.getDisplayName())
                     .functionApi(action.getFunctionApi())
-                    .handleType(action.getHandleType())
                     .ontologyLinkGroupId(action.getOntologyLinkGroupId())
                     .status(action.getStatus())
                     .id(actionId)
-                    .ontologyUniqueIdentifier(childIdentifer)
+                    .ontologyUniqueIdentifier(childIdentifier)
                     .build());
             mappingIns.addAll(action.getMappingIn().stream().map(v -> OntologyActionMappingIn.builder()
                     .propertyUniqueIdentifier(findChildOntologyProperty(parentProperties, childProps, v.getPropertyUniqueIdentifier()))
@@ -221,7 +221,6 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 rules.add(ActionHandleRule.builder()
                         .status(action.getRuleStatus())
                         .actionId(actionId)
-                        .objectPrimaryKey(action.getRuleObjectPrimaryKey())
                         .ruleConnectType(action.getRuleConnectType())
                         .rules(action.getRules())
                         .build());
@@ -233,7 +232,6 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                         .corn(action.getCorn())
                         .startTime(action.getStartTime())
                         .endTime(action.getEndTime())
-                        .objectPrimaryKey(action.getTaskObjectPrimaryKey())
                         .build());
             }
         });
@@ -283,10 +281,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 .status(Status.ENABLE.getValue())
                 .ontologyUniqueIdentifierFrom(meta.getUniqueIdentifier())
                 .ontologyUniqueIdentifierTo(link.getOntologyUniqueIdentifierTo())
-                .propertyUniqueIdentifierFrom(propertyUniqueIdentifierFrom)
-                .propertyUniqueIdentifierTo(link.getPropertyUniqueIdentifierTo())
                 .name(link.getName())
-                .mapping(link.getMapping().getValue())
                 .build());
 
         entityClient.createEntityRelation(EntityRelationCreateParam.builder()
@@ -364,13 +359,15 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
 
     @Override
     public List<OntologyMetaInfoVO> searchByKeyword(String keyword) {
-        return ontologyMetaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>().like(OntologyMeta::getDisplayName, keyword))
+        return ontologyMetaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>().like(OntologyMeta::getDisplayName, keyword)
+                .or().like(OntologyMeta::getDescription, keyword)
+                .or().like(OntologyMeta::getApiName, keyword))
                 .stream().map(DataConverter::convert).collect(Collectors.toList());
     }
 
     @Override
-    public OntologyMetaNodeVO getOntologyTree(String rootUniqueIdentifier) {
-        var metaMap = list(new QueryWrapper<>())
+    public List<OntologyMetaNodeVO> getOntologyTreeByByGroupId(String groupId) {
+        var metaMap = list(new LambdaQueryWrapper<OntologyMeta>().like(OntologyMeta::getMetaGroupId, groupId))
                 .stream().collect(Collectors.toMap(v -> v.getUniqueIdentifier(), v -> OntologyMetaNodeVO.builder()
                         .parentUniqueIdentifier(v.getParentUniqueIdentifier())
                         .uniqueIdentifier(v.getUniqueIdentifier())
@@ -378,21 +375,14 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                         .childNodes(new ArrayList<>())
                         .build()));
 
-        OntologyMetaNodeVO result = new OntologyMetaNodeVO().setChildNodes(new ArrayList<>());
-        if (StringUtils.isEmpty(rootUniqueIdentifier)) {
-            result.setUniqueIdentifier("").setDisplayName("").setParentUniqueIdentifier("");
-            metaMap.values().stream().filter(v -> StringUtils.isEmpty(v.getParentUniqueIdentifier()))
-                    .forEach(child -> {
-                        buildTree(child, metaMap);
-                        result.getChildNodes().add(child);
-                    });
-        } else {
-            var root = metaMap.get(rootUniqueIdentifier);
-            PreconditionUtils.checkArgument(root != null, "无效的uniqid", ResultCode.PARAM_ERROR, HttpStatus.BAD_REQUEST);
-            result.setUniqueIdentifier(rootUniqueIdentifier).setDisplayName(root.getDisplayName()).setParentUniqueIdentifier(root.getParentUniqueIdentifier());
-            buildTree(result, metaMap);
-        }
-        return result;
+
+        return metaMap.values().stream().filter(v -> StringUtils.isEmpty(v.getParentUniqueIdentifier())).map(parent ->
+                {
+                    buildTree(parent, metaMap);
+                    return parent;
+                }
+        ).collect(Collectors.toList());
+
     }
 
     private void buildTree(OntologyMetaNodeVO parent, Map<String, OntologyMetaNodeVO> metaMap) {

@@ -160,13 +160,13 @@ public class ObjectServiceImpl extends ServiceImpl<ObjectMapper,Object> implemen
         OntologyLinkGroup ontologyLinkGroup = ontologyLinkGroupService.selectByUniqueIdentifier(linkId);
         String ontologypropertyId = null;
         String dataOntologyPropertyId = null;
-        if (ontologyLinkGroup.getOntologyUniqueIdentifierFrom().equals(dataOntologyId)) {
-            dataOntologyPropertyId = ontologyLinkGroup.getPropertyUniqueIdentifierFrom();
-            ontologypropertyId = ontologyLinkGroup.getPropertyUniqueIdentifierTo();
-        } else {
-            dataOntologyPropertyId = ontologyLinkGroup.getPropertyUniqueIdentifierTo();
-            ontologypropertyId = ontologyLinkGroup.getPropertyUniqueIdentifierFrom();
-        }
+//        if (ontologyLinkGroup.getOntologyUniqueIdentifierFrom().equals(dataOntologyId)) {
+//            dataOntologyPropertyId = ontologyLinkGroup.getPropertyUniqueIdentifierFrom();
+//            ontologypropertyId = ontologyLinkGroup.getPropertyUniqueIdentifierTo();
+//        } else {
+//            dataOntologyPropertyId = ontologyLinkGroup.getPropertyUniqueIdentifierTo();
+//            ontologypropertyId = ontologyLinkGroup.getPropertyUniqueIdentifierFrom();
+//        }
         //TODO: 这里有潜在风险，因为没有考虑join时的数据类型
         String filterValue = Strings.EMPTY;
         for (PropertyValueVO propertyValueVO : obj.getProperties()) {
@@ -289,43 +289,44 @@ public class ObjectServiceImpl extends ServiceImpl<ObjectMapper,Object> implemen
         List<OntologyLinkGroup> forwardOntologyLinkGroups = ontologyLinkGroupService.selectByOntologyUniqueIdentifierFrom(ontologyUniqueIdentifier);
         linkGroups.addAll(forwardOntologyLinkGroups);
 
-        List<OntologyLinkGroup> backwardOntologyLinkGroups = ontologyLinkGroupService.selectByOntologyUniqueIdentifierTo(ontologyUniqueIdentifier);
-        linkGroups.addAll(backwardOntologyLinkGroups.stream().map(OntologyLinkGroup::revertForwardToBackward).collect(Collectors.toList()));
+        //List<OntologyLinkGroup> backwardOntologyLinkGroups = ontologyLinkGroupService.selectByOntologyUniqueIdentifierTo(ontologyUniqueIdentifier);
+        //linkGroups.addAll(backwardOntologyLinkGroups.stream().map(OntologyLinkGroup::revertForwardToBackward).collect(Collectors.toList()));
         return linkGroups;
     }
 
     private LinkedValueVo getLinkedValue(OntologyLinkGroup ontologyLinkGroup, ObjectOneInfoVO objectOneInfoVO) {
-        LinkedValueVo linkedValueVo = new LinkedValueVo();
-        OntologyChildLink backwardChildLink = ontologyChildLinkMapper.selectByPrimaryKey(ontologyLinkGroup.getBackwardChildLinkId());
-        String linkDisplayName = backwardChildLink.getDisplayName();
-        String apiName = backwardChildLink.getApiName();
-        linkedValueVo.setName(linkDisplayName);
-        linkedValueVo.setApiName(apiName);
-
-        String propertyIdentifierFrom = ontologyLinkGroup.getPropertyUniqueIdentifierFrom();
-        String propertyIdentifierTo = ontologyLinkGroup.getPropertyUniqueIdentifierTo();
-        String columnValue = null;
-        for (PropertyValueVO propertyValueVO : objectOneInfoVO.getProperties()) {
-            //TODO: 这里有潜在风险，因为没有考虑join时的数据类型
-            if (propertyValueVO.getUniqueIdentifier().equals(propertyIdentifierFrom)) {
-                columnValue = propertyValueVO.getValue().toString();
-                break;
-            }
-        }
-        List<OntologyProperty> propertyToList = ontologyPropertyMapper.selectByUniqueIdentifier(propertyIdentifierTo);
-        if (propertyToList.size() == 0) {
-            return null;
-        }
-        OntologyProperty propertyTo = propertyToList.get(0);
-
-        String toOntologyUniqueIdentifier = ontologyLinkGroup.getOntologyUniqueIdentifierTo();
-        List<ObjectOneInfoVO> linkedObjectOneInfoVO = queryByColumnNameValue(
-                toOntologyUniqueIdentifier,
-                propertyTo.getDatasourceColumnName(),
-                columnValue
-        );
-        linkedValueVo.setJoinedResults(linkedObjectOneInfoVO);
-        return linkedValueVo;
+        return null;
+//        LinkedValueVo linkedValueVo = new LinkedValueVo();
+//        OntologyChildLink backwardChildLink = ontologyChildLinkMapper.selectByPrimaryKey(ontologyLinkGroup.getBackwardChildLinkId());
+//        String linkDisplayName = backwardChildLink.getDisplayName();
+//        String apiName = backwardChildLink.getApiName();
+//        linkedValueVo.setName(linkDisplayName);
+//        linkedValueVo.setApiName(apiName);
+//
+//        String propertyIdentifierFrom = ontologyLinkGroup.getPropertyUniqueIdentifierFrom();
+//        String propertyIdentifierTo = ontologyLinkGroup.getPropertyUniqueIdentifierTo();
+//        String columnValue = null;
+//        for (PropertyValueVO propertyValueVO : objectOneInfoVO.getProperties()) {
+//            //TODO: 这里有潜在风险，因为没有考虑join时的数据类型
+//            if (propertyValueVO.getUniqueIdentifier().equals(propertyIdentifierFrom)) {
+//                columnValue = propertyValueVO.getValue().toString();
+//                break;
+//            }
+//        }
+//        List<OntologyProperty> propertyToList = ontologyPropertyMapper.selectByUniqueIdentifier(propertyIdentifierTo);
+//        if (propertyToList.size() == 0) {
+//            return null;
+//        }
+//        OntologyProperty propertyTo = propertyToList.get(0);
+//
+//        String toOntologyUniqueIdentifier = ontologyLinkGroup.getOntologyUniqueIdentifierTo();
+//        List<ObjectOneInfoVO> linkedObjectOneInfoVO = queryByColumnNameValue(
+//                toOntologyUniqueIdentifier,
+//                propertyTo.getDatasourceColumnName(),
+//                columnValue
+//        );
+//        linkedValueVo.setJoinedResults(linkedObjectOneInfoVO);
+//        return linkedValueVo;
     }
 
     //目前只支持单个table，多个table的先不考虑

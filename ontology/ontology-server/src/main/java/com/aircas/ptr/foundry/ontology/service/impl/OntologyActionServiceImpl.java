@@ -3,8 +3,6 @@ package com.aircas.ptr.foundry.ontology.service.impl;
 import com.aircas.ptr.foundry.common.constant.ActionRuleConnectType;
 import com.aircas.ptr.foundry.common.util.SnowflakeIdUtil;
 import com.aircas.ptr.foundry.ontology.exception.*;
-import com.aircas.ptr.foundry.ontology.model.bo.ActionHandleRuleBO;
-import com.aircas.ptr.foundry.ontology.model.bo.ActionHandleTaskBO;
 import com.aircas.ptr.foundry.ontology.model.bo.OntologyActionBo;
 import com.aircas.ptr.foundry.ontology.model.bo.OntologyActionMappingInBO;
 import com.aircas.ptr.foundry.ontology.model.param.ActionHandleMappingInParam;
@@ -14,7 +12,6 @@ import com.aircas.ptr.foundry.ontology.model.view.OntologyActionView;
 import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.aircas.ptr.foundry.ontology.repository.dao.*;
 import com.aircas.ptr.foundry.ontology.service.*;
-import com.alibaba.fastjson.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -31,8 +28,6 @@ import javax.annotation.Resource;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import static com.aircas.ptr.foundry.common.constant.ActionHandleTypeEnum.RULE;
-import static com.aircas.ptr.foundry.common.constant.ActionHandleTypeEnum.TASK;
 import static com.aircas.ptr.foundry.common.constant.ActionMappingInTypeEnum.ONTOLOGY;
 
 @Service
@@ -194,21 +189,21 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     @Override
     public void handleTask(Long actionHandleTaskId) {
 
-        ActionHandleTaskBO actionHandleTaskBO = actionHandleTaskService.selectById(actionHandleTaskId);
-        String objectPrimaryKeys = actionHandleTaskBO.getObjectPrimaryKey();
-        OntologyAction action = ontologyActionMapper.selectById(actionHandleTaskBO.getActionId());
-        if (StringUtils.isBlank(objectPrimaryKeys)) {
-            return;
-        }
-        Arrays.stream(objectPrimaryKeys.split(",")).forEach(objectKey -> {
-            try {
-                handle(objectKey, action.getApi(), null);
-            } catch (FunctionClassNotNewInstanceException | FunctionFileNotCompiled | FunctionRuntimeException |
-                    FunctionNotFoundException | OntologyFunctionNotFoundException | OntologyApiNameNotFoundException |
-                    OntologyFunctionMappedPropertyNotFoundException e) {
-                throw new RuntimeException(e);
-            }
-        });
+//        ActionHandleTaskBO actionHandleTaskBO = actionHandleTaskService.selectById(actionHandleTaskId);
+//        String objectPrimaryKeys = actionHandleTaskBO.getObjectPrimaryKey();
+//        OntologyAction action = ontologyActionMapper.selectById(actionHandleTaskBO.getActionId());
+//        if (StringUtils.isBlank(objectPrimaryKeys)) {
+//            return;
+//        }
+//        Arrays.stream(objectPrimaryKeys.split(",")).forEach(objectKey -> {
+//            try {
+//                handle(objectKey, action.getApi(), null);
+//            } catch (FunctionClassNotNewInstanceException | FunctionFileNotCompiled | FunctionRuntimeException |
+//                    FunctionNotFoundException | OntologyFunctionNotFoundException | OntologyApiNameNotFoundException |
+//                    OntologyFunctionMappedPropertyNotFoundException e) {
+//                throw new RuntimeException(e);
+//            }
+//        });
     }
 
     @Override
@@ -219,20 +214,21 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     @Override
     public boolean configRule(String actionApi, List<String> objectPrimaryKeys, List<ActionHandleRuleAddParam> rules, ActionRuleConnectType ruleConnectType) {
 
-        // 0.更新action的handle类型
-        OntologyAction action = ontologyActionMapper.selectByApi(actionApi);
-        action.setHandleType(RULE.getCode());
-        ontologyActionMapper.updateById(action);
-        // 1.插入数据库
-        ActionHandleRuleBO actionHandleRuleBO = new ActionHandleRuleBO();
-        actionHandleRuleBO.setActionId(action.getId());
-        // TODO: 需要考虑所有实体情况
-        actionHandleRuleBO.setObjectPrimaryKey(String.join(",", objectPrimaryKeys));
-        actionHandleRuleBO.setRuleConnectType(ruleConnectType.getCode());
-        actionHandleRuleBO.setRules(JSON.toJSONString(rules));
-        actionHandleRuleService.insert(actionHandleRuleBO);
-        // TODO: 2.调用数据更改任务，插入任务
         return true;
+//        // 0.更新action的handle类型
+//        OntologyAction action = ontologyActionMapper.selectByApi(actionApi);
+//        action.setHandleType(RULE.getCode());
+//        ontologyActionMapper.updateById(action);
+//        // 1.插入数据库
+//        ActionHandleRuleBO actionHandleRuleBO = new ActionHandleRuleBO();
+//        actionHandleRuleBO.setActionId(action.getId());
+//        // TODO: 需要考虑所有实体情况
+//        actionHandleRuleBO.setObjectPrimaryKey(String.join(",", objectPrimaryKeys));
+//        actionHandleRuleBO.setRuleConnectType(ruleConnectType.getCode());
+//        actionHandleRuleBO.setRules(JSON.toJSONString(rules));
+//        actionHandleRuleService.insert(actionHandleRuleBO);
+//        // TODO: 2.调用数据更改任务，插入任务
+//        return true;
     }
 
     @Override
@@ -256,19 +252,20 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     @Override
     public boolean configTask(String actionApi, List<String> objectPrimaryKeys, Date taskStartTime, Date taskEndTime, String taskCorn) {
 
-        // 0.更新action的handle类型
-        OntologyAction action = ontologyActionMapper.selectByApi(actionApi);
-        action.setHandleType(TASK.getCode());
-        ontologyActionMapper.updateById(action);
-
-        ActionHandleTaskBO actionHandleTaskBO = new ActionHandleTaskBO();
-        actionHandleTaskBO.setActionId(action.getId());
-        actionHandleTaskBO.setObjectPrimaryKey(String.join(",", objectPrimaryKeys));
-        actionHandleTaskBO.setStartTime(taskStartTime);
-        actionHandleTaskBO.setEndTime(taskEndTime);
-        actionHandleTaskBO.setCorn(taskCorn);
-
-        return actionHandleTaskService.insert(actionHandleTaskBO) > 0;
+        return true;
+//        // 0.更新action的handle类型
+//        OntologyAction action = ontologyActionMapper.selectByApi(actionApi);
+//        action.setHandleType(TASK.getCode());
+//        ontologyActionMapper.updateById(action);
+//
+//        ActionHandleTaskBO actionHandleTaskBO = new ActionHandleTaskBO();
+//        actionHandleTaskBO.setActionId(action.getId());
+//        actionHandleTaskBO.setObjectPrimaryKey(String.join(",", objectPrimaryKeys));
+//        actionHandleTaskBO.setStartTime(taskStartTime);
+//        actionHandleTaskBO.setEndTime(taskEndTime);
+//        actionHandleTaskBO.setCorn(taskCorn);
+//
+//        return actionHandleTaskService.insert(actionHandleTaskBO) > 0;
     }
 
     private void checkBindingConsistence(OntologyActionBo ontologyFunctionBo)

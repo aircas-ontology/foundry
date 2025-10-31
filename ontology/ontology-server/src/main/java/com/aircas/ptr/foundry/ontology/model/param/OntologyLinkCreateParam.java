@@ -1,6 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
-import com.aircas.ptr.foundry.common.constant.OntologyLinkMappingEnum;
+import com.aircas.ptr.foundry.common.constant.OntologyLinkTypeEnum;
 import com.aircas.ptr.foundry.ontology.controller.validator.OntologyIdVerify;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
@@ -45,27 +45,9 @@ public class OntologyLinkCreateParam {
     @OntologyIdVerify
     private String ontologyUniqueIdentifierTo;
 
-    /**
-     * 开始本体的某个属性，作为连接键
-     */
-    @ApiModelProperty(name = "propertyUniqueIdentifierFrom",  value = "开始本体的某个属性，作为连接键")
-    private String propertyUniqueIdentifierFrom;
 
-    /**
-     * 结束本体的某个属性，作为连接键
-     */
-    @ApiModelProperty(name = "propertyUniqueIdentifierTo",  value = "结束本体的某个属性，作为连接键")
-    private String propertyUniqueIdentifierTo;
-
-
-    /**
-     * 1: 1对1
-     * 2: 1对多
-     * 3: 多对1
-     * 4: 多对多
-     */
-    @ApiModelProperty(name = "mapping", required = true, value = "本体映射关系")
-    @NotNull(message = "mapping is empty")
-    private OntologyLinkMappingEnum mapping;
+    @ApiModelProperty(name = "type", required = true, value = "关系类型")
+    @NotNull(message = "type is empty")
+    private OntologyLinkTypeEnum type;
 
 }

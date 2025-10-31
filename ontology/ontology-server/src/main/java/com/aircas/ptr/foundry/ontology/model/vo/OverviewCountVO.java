@@ -22,16 +22,16 @@ public class OverviewCountVO {
     private Integer ontologyCount;
 
     /**
-     * 关系数量统计
+     * 分组数量统计
      */
-    @ApiModelProperty(notes = "关系数量统计")
-    private Integer linkCount;
+    @ApiModelProperty(notes = "分组统计")
+    private Integer groupCount;
 
     /**
-     * 动作数量统计
+     * 行为调度统计
      */
-    @ApiModelProperty(notes = "行为数量统计")
-    private Integer actionCount;
+    @ApiModelProperty(notes = "行为调度统计")
+    private Integer actionSchedulingCount;
 
     /**
      * 函数数量统计

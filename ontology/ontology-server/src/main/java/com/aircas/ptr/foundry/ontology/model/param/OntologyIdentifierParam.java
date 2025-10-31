@@ -21,7 +21,6 @@ import javax.validation.constraints.NotNull;
 @ApiModel(description = "本体id Param")
 public class OntologyIdentifierParam {
 
-
     @NotBlank(message = "ontologyIdentifier is empty")
     @OntologyIdVerify
     @ApiModelProperty(name = "ontologyIdentifier", value = "本体id", dataType = "java.lang.String", example = "abcdef",required = true)

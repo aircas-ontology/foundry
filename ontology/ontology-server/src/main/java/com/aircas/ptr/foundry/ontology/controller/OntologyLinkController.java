@@ -3,10 +3,7 @@ package com.aircas.ptr.foundry.ontology.controller;
 import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.controller.validator.GroupIdVerify;
 import com.aircas.ptr.foundry.ontology.controller.validator.OntologyIdVerify;
-import com.aircas.ptr.foundry.ontology.model.param.EntityLinkQueryParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyLinkCreateParam;
-import com.aircas.ptr.foundry.ontology.model.param.OntologyLinkUpdateParam;
-import com.aircas.ptr.foundry.ontology.model.vo.EntityLinkInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkInfoVO;
 import com.aircas.ptr.foundry.ontology.service.OntologyLinkGroupService;
 import io.swagger.annotations.Api;
@@ -41,11 +38,6 @@ public class OntologyLinkController {
         return RestResult.success();
     }
 
-    @PutMapping("")
-    @ApiOperation(value = "修改本体之间的关系")
-    public RestResult updateLink(@RequestBody OntologyLinkUpdateParam linkUpdateParam) {
-        return RestResult.success();
-    }
 
     @DeleteMapping("/{uniqIdentifier}")
     @ApiOperation(value = "根据link uniqid删除关系")
@@ -74,9 +66,4 @@ public class OntologyLinkController {
     }
 
 
-    @GetMapping("/all")
-    @ApiOperation(value = "查询所有本体的所有关系")
-    public RestResult<List<OntologyLinkInfoVO>> getAllLinks() {
-        return RestResult.ofData(null);
-    }
 }

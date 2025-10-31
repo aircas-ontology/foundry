@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.po;
 
+import com.aircas.ptr.foundry.common.constant.FunctionTypeEnum;
 import com.baomidou.mybatisplus.annotation.FieldFill;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -12,7 +13,6 @@ import lombok.experimental.Accessors;
 import javax.persistence.Column;
 import javax.persistence.Entity;
 import javax.persistence.Id;
-import javax.persistence.Table;
 import java.util.Date;
 
 
@@ -61,15 +61,20 @@ public class Function {
     @Column(name = "id")
     private Long id;
 
-    /**
-     * Column: ObjectTypes
-     */
-    private String objectTypes;
 
+    /**
+     * 自定义函数类型才保存code
+     */
     private String code;
 
+
     /**
-     * 本体id
+     * 已存在函数类型才保存引入的函数全限定名称
      */
-    private String ontologyUniqueIdentifier;
+    private String referenceName;
+
+    /**
+     * FunctionTypeEnum
+     */
+    private FunctionTypeEnum type;
 }

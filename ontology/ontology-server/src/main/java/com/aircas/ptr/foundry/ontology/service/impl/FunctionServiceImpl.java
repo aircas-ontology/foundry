@@ -60,12 +60,12 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
 
     @Override
     public void removeByOntologyUniqId(String ontologyUniqId) {
-        var functionList = list(new LambdaQueryWrapper<Function>().eq(Function::getOntologyUniqueIdentifier, ontologyUniqId));
-        if(CollectionUtils.isNotEmpty(functionList)) {
-            var funcIds = functionList.stream().map(v -> v.getId()).collect(Collectors.toList());
-            remove(new LambdaQueryWrapper<Function>().in(Function::getId, funcIds));
-            functionParamMapper.delete(new LambdaQueryWrapper<FunctionParamPO>().in(FunctionParamPO::getFunctionId, funcIds));
-        }
+//        var functionList = list(new LambdaQueryWrapper<Function>().eq(Function::getOntologyUniqueIdentif, ontologyUniqId));
+//        if(CollectionUtils.isNotEmpty(functionList)) {
+//            var funcIds = functionList.stream().map(v -> v.getId()).collect(Collectors.toList());
+//            remove(new LambdaQueryWrapper<Function>().in(Function::getId, funcIds));
+//            functionParamMapper.delete(new LambdaQueryWrapper<FunctionParamPO>().in(FunctionParamPO::getFunctionId, funcIds));
+//        }
     }
 
     @Override
@@ -168,43 +168,43 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
 
     private void setOntologyList(List<FunctionVO> functionVOList) {
 
-        Map<String, OntologyMeta> ontologyMetas = ontologyMetaMapper
-                .selectAllOntologies()
-                .stream()
-                .map((meta) -> new Map.Entry<String, OntologyMeta>() {
-                    @Override
-                    public String getKey() {
-                        return meta.getApiName();
-                    }
-
-                    @Override
-                    public OntologyMeta getValue() {
-                        return meta;
-                    }
-
-                    @Override
-                    public OntologyMeta setValue(OntologyMeta value) {
-                        return meta;
-                    }
-                })
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-
-        functionVOList.forEach(functionVO -> {
-            String objectTypes = functionVO.getObjectTypes();
-            if (objectTypes == null || objectTypes.length() == 0) {
-                return;
-            }
-            String[] ontologyApis = objectTypes.split(",");
-            List<OntologyMetaVO> list = Arrays.stream(ontologyApis)
-                    .map(api -> ontologyMetas.get(api))
-                    .map(meta -> {
-                        OntologyMetaVO vo = new OntologyMetaVO();
-                        BeanUtils.copyProperties(meta, vo);
-                        return vo;
-                    })
-                    .collect(Collectors.toList());
-            functionVO.setOntologyList(list);
-        });
+//        Map<String, OntologyMeta> ontologyMetas = ontologyMetaMapper
+//                .selectAllOntologies()
+//                .stream()
+//                .map((meta) -> new Map.Entry<String, OntologyMeta>() {
+//                    @Override
+//                    public String getKey() {
+//                        return meta.getApiName();
+//                    }
+//
+//                    @Override
+//                    public OntologyMeta getValue() {
+//                        return meta;
+//                    }
+//
+//                    @Override
+//                    public OntologyMeta setValue(OntologyMeta value) {
+//                        return meta;
+//                    }
+//                })
+//                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+//
+//        functionVOList.forEach(functionVO -> {
+//            String objectTypes = functionVO.getObjectTypes();
+//            if (objectTypes == null || objectTypes.length() == 0) {
+//                return;
+//            }
+//            String[] ontologyApis = objectTypes.split(",");
+//            List<OntologyMetaVO> list = Arrays.stream(ontologyApis)
+//                    .map(api -> ontologyMetas.get(api))
+//                    .map(meta -> {
+//                        OntologyMetaVO vo = new OntologyMetaVO();
+//                        BeanUtils.copyProperties(meta, vo);
+//                        return vo;
+//                    })
+//                    .collect(Collectors.toList());
+//            functionVO.setOntologyList(list);
+//        });
     }
 
     @Override
@@ -244,44 +244,45 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     @Override
     public List<ParameterMetadataVO> getParameters(String functionName)
             throws FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionNotFoundException {
-        if (functionMapper.selectByApi(functionName) == null) {
-            return null;
-        }
-
-        GroovyClassLoader classLoader = GroovyClassLoaderManager.getIndependentClassLoader();
-        String objectTypes = functionMapper.selectByApi(functionName).getObjectTypes();
-        List<String> objectApiList = new ArrayList<>();
-        if (objectTypes != null && objectTypes.length() > 0) {
-            objectApiList = Arrays.stream(objectTypes.split(",")).collect(Collectors.toList());
-        }
-        //将本体涉及的类都import
-        importAllObjectType(classLoader, objectApiList);
-        GroovyObject functionInstance = getFunctionInstance(classLoader, functionName, false);
-
-        Method handleMethod = FunctionUtils.getMethod(functionInstance, "handle");
-        List<ParameterMetadataVO> params = new ArrayList<>();
-        List<Parameter> parameters = FunctionUtils.getMethodParameterAnnotates(handleMethod);
-        List<OntologyDataTypeEnum> types = FunctionUtils.getParameterTypes(handleMethod);
-        for (int i = 0; i < types.size(); i++) {
-            OntologyDataTypeEnum type = types.get(i);
-            Parameter parameter = parameters.get(i);
-            if (type.isOntologyDataType()) {
-                ParameterMetadataVO vo = new ParameterMetadataVO(parameter.name(), type.name(), parameter.description(), type.getOntologyApi());
-                params.add(vo);
-            } else {
-                ParameterMetadataVO vo = new ParameterMetadataVO(parameter.name(), type.name(), parameter.description());
-                params.add(vo);
-            }
-        }
-        return params;
+        return null;
+//        if (functionMapper.selectByApi(functionName) == null) {
+//            return null;
+//        }
+//
+//        GroovyClassLoader classLoader = GroovyClassLoaderManager.getIndependentClassLoader();
+//        String objectTypes = functionMapper.selectByApi(functionName).getObjectTypes();
+//        List<String> objectApiList = new ArrayList<>();
+//        if (objectTypes != null && objectTypes.length() > 0) {
+//            objectApiList = Arrays.stream(objectTypes.split(",")).collect(Collectors.toList());
+//        }
+//        //将本体涉及的类都import
+//        importAllObjectType(classLoader, objectApiList);
+//        GroovyObject functionInstance = getFunctionInstance(classLoader, functionName, false);
+//
+//        Method handleMethod = FunctionUtils.getMethod(functionInstance, "handle");
+//        List<ParameterMetadataVO> params = new ArrayList<>();
+//        List<Parameter> parameters = FunctionUtils.getMethodParameterAnnotates(handleMethod);
+//        List<OntologyDataTypeEnum> types = FunctionUtils.getParameterTypes(handleMethod);
+//        for (int i = 0; i < types.size(); i++) {
+//            OntologyDataTypeEnum type = types.get(i);
+//            Parameter parameter = parameters.get(i);
+//            if (type.isOntologyDataType()) {
+//                ParameterMetadataVO vo = new ParameterMetadataVO(parameter.name(), type.name(), parameter.description(), type.getOntologyApi());
+//                params.add(vo);
+//            } else {
+//                ParameterMetadataVO vo = new ParameterMetadataVO(parameter.name(), type.name(), parameter.description());
+//                params.add(vo);
+//            }
+//        }
+//        return params;
     }
 
     //如果api在production，则objectType从数据库读取，否则从参数读取。
     private List<String> getObjectApiList(Boolean isPreview, List<String> objectTypes, String functionName) {
-        if (!isPreview) {
-            Function function = functionMapper.selectByApi(functionName);
-            objectTypes = Arrays.asList(function.getObjectTypes().split(","));
-        }
+//        if (!isPreview) {
+//            Function function = functionMapper.selectByApi(functionName);
+//            objectTypes = Arrays.asList(function.getObjectTypes().split(","));
+//        }
         return objectTypes;
     }
 

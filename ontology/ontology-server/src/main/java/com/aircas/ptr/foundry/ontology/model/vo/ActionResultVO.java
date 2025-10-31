@@ -14,7 +14,7 @@ import lombok.experimental.Accessors;
 @NoArgsConstructor
 @Builder
 @Accessors(chain = true)
-@ApiModel(description = "行为执行结果")
+@ApiModel(description = "行为调度执行结果")
 public class ActionResultVO {
 
 

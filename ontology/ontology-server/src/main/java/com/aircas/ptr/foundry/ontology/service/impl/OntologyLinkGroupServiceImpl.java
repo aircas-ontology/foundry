@@ -2,7 +2,6 @@ package com.aircas.ptr.foundry.ontology.service.impl;
 
 import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.common.base.ResultGenerator;
-import com.aircas.ptr.foundry.common.constant.OntologyLinkMappingEnum;
 import com.aircas.ptr.foundry.common.constant.Status;
 import com.aircas.ptr.foundry.common.util.IdGenerator;
 import com.aircas.ptr.foundry.ontology.client.EntityClient;
@@ -66,10 +65,8 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
                 .status(Status.ENABLE.getValue())
                 .ontologyUniqueIdentifierFrom(linkCreateParam.getOntologyUniqueIdentifierFrom())
                 .ontologyUniqueIdentifierTo(linkCreateParam.getOntologyUniqueIdentifierTo())
-                .propertyUniqueIdentifierFrom(linkCreateParam.getPropertyUniqueIdentifierFrom())
-                .propertyUniqueIdentifierTo(linkCreateParam.getPropertyUniqueIdentifierTo())
                 .name(linkCreateParam.getName())
-                .mapping(linkCreateParam.getMapping().getValue())
+                .type(linkCreateParam.getType())
                 .build());
 
         var fromMeta = ontologyMetaService.getOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, linkCreateParam.getOntologyUniqueIdentifierFrom()));
@@ -92,7 +89,7 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
             return Lists.newArrayList();
         }
         var links = list(new LambdaQueryWrapper<OntologyLinkGroup>().in(OntologyLinkGroup::getOntologyUniqueIdentifierFrom, ids)
-                .or().in(OntologyLinkGroup::getOntologyUniqueIdentifierTo, ids));
+                .in(OntologyLinkGroup::getOntologyUniqueIdentifierTo, ids));
 
         if (CollectionUtils.isEmpty(links)) {
             return Lists.newArrayList();
@@ -121,7 +118,6 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
             var from = metaMap.get(link.getOntologyUniqueIdentifierFrom());
             var to = metaMap.get(link.getOntologyUniqueIdentifierTo());
             return OntologyLinkInfoVO.builder()
-                    .mapping(OntologyLinkMappingEnum.getByValue(link.getMapping()))
                     .createTime(link.getCreateTime())
                     .updateTime(link.getUpdateTime())
                     .name(link.getName())
@@ -132,8 +128,6 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
                     .ontologyIconTO(to.getIcon())
                     .ontologyNameFrom(from.getDisplayName())
                     .ontologyNameTo(to.getDisplayName())
-                    .propertyUniqueIdentifierFrom(link.getPropertyUniqueIdentifierFrom())
-                    .propertyUniqueIdentifierTo(link.getPropertyUniqueIdentifierTo())
                     .build();
         }).collect(Collectors.toList());
 
@@ -159,8 +153,6 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
         BeanUtils.copyProperties(normalizedLinkGroupBo, ontologyLinkGroup);
         ontologyLinkGroup.setStatus(1);
         ontologyLinkGroup.setCreateTime(new Date());
-        ontologyLinkGroup.setForwardChildLinkId(forwardLink.getId());
-        ontologyLinkGroup.setBackwardChildLinkId(backwardLink.getId());
         count = ontologyLinkGroupMapper.insert(ontologyLinkGroup);
         return 0;
     }
@@ -173,7 +165,6 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
         for (OntologyLinkGroup linkGroup : linkGroups) {
             OntologyLinkGroupVO linkGroupVO = new OntologyLinkGroupVO();
             BeanUtils.copyProperties(linkGroup, linkGroupVO);
-            setChildLinks(linkGroupVO, linkGroup.getForwardChildLinkId(), linkGroup.getBackwardChildLinkId());
             result.add(linkGroupVO);
         }
         addOntologyNames(result);
@@ -189,7 +180,6 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
         for (OntologyLinkGroup linkGroup : linkGroups) {
             OntologyLinkGroupVO linkGroupVO = new OntologyLinkGroupVO();
             BeanUtils.copyProperties(linkGroup, linkGroupVO);
-            setChildLinks(linkGroupVO, linkGroup.getForwardChildLinkId(), linkGroup.getBackwardChildLinkId());
             linkGroupVO.setOntologyNameTo(metaVOs.stream().filter(meta -> meta.getUniqueIdentifier().equals(linkGroup.getOntologyUniqueIdentifierTo())).findFirst().get().getDisplayName());
             linkGroupVO.setOntologyNameFrom(metaVOs.stream().filter(meta -> meta.getUniqueIdentifier().equals(linkGroup.getOntologyUniqueIdentifierFrom())).findFirst().get().getDisplayName());
             linkGroupVO.setOntologyIconTO(metaVOs.stream().filter(meta -> meta.getUniqueIdentifier().equals(linkGroup.getOntologyUniqueIdentifierTo())).findFirst().get().getIcon());
@@ -207,7 +197,7 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
         linkGroups.addAll(forwardOntologyLinkGroups);
 
         List<OntologyLinkGroup> backwardOntologyLinkGroups = ontologyLinkGroupMapper.selectByOntologyUniqueIdentifierTo(oId);
-        linkGroups.addAll(backwardOntologyLinkGroups.stream().map(OntologyLinkGroup::revertForwardToBackward).collect(Collectors.toList()));
+        //linkGroups.addAll(backwardOntologyLinkGroups.stream().map(OntologyLinkGroup::revertForwardToBackward).collect(Collectors.toList()));
         List<String> metaIds = new ArrayList<>();
         linkGroups.stream().forEach(linkGroup -> {
             if (!metaIds.contains(linkGroup.getOntologyUniqueIdentifierTo())) {
@@ -279,8 +269,6 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
     public RestResult deleteLinkByOntologyUniqueIdentifier(String uniqueIdentifier) {
         OntologyLinkGroup ontologyLinkGroup = ontologyLinkGroupMapper.selectByUniqueIdentifier(uniqueIdentifier);
         if (ontologyLinkGroup != null) {
-            ontologyChildLinkMapper.deleteByPrimaryKey(ontologyLinkGroup.getForwardChildLinkId());
-            ontologyChildLinkMapper.deleteByPrimaryKey(ontologyLinkGroup.getBackwardChildLinkId());
             ontologyLinkGroupMapper.deleteByUniqueIdentifier(uniqueIdentifier);
             return ResultGenerator.genSuccessResult();
         }

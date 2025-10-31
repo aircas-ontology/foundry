@@ -77,15 +77,6 @@ public class OntologyProperty implements Serializable {
      */
     private String description;
 
-    /**
-     * 可见性、正常、隐藏、突出显示
-     */
-    private Integer visibility;
-
-    /**
-     * 实验状态、激活、测试中、废弃
-     */
-    private Integer experimentalStatus;
 
     /**
      * 在代码里用的属性名称、驼峰式
@@ -102,15 +93,6 @@ public class OntologyProperty implements Serializable {
      */
     private Integer isTitleKey;
 
-    /**
-     * 是否为其他数据源关联键
-     */
-    private Integer isAssociateKey;
-
-    /**
-     * 关联的主数据源的列名
-     */
-    private String associateDatasourceColumnName;
 
     /**
      * 数据源ID
@@ -122,10 +104,7 @@ public class OntologyProperty implements Serializable {
      */
     private String tag;
 
-    /**
-     * 属性类别 static=1 dynamic=2
-     */
-    private Integer category;
+
 
     private static final long serialVersionUID = 1L;
 

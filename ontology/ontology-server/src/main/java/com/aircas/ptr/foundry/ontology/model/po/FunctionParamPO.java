@@ -19,6 +19,7 @@ import java.util.Date;
 @TableName(value = "function_param")
 public class FunctionParamPO {
 
+
     @TableId(type = IdType.AUTO)
     private Long id;
 
@@ -27,6 +28,8 @@ public class FunctionParamPO {
     private String parameterName;
 
     private String parameterType;
+
+    private String parameterSchema;
 
     private String description;
 

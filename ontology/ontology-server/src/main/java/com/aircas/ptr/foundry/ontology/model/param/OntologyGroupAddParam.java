@@ -21,4 +21,7 @@ public class OntologyGroupAddParam {
 
     @ApiModelProperty(name = "description", value = "分组描述", required = false, example = "用于远海远域场景使用")
     private String description;
+
+    @ApiModelProperty(name = "icon", value = "分组图标", required = false)
+    private String icon;
 }

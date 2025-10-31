@@ -46,24 +46,12 @@ public class OntologyGroupController {
         return RestResult.success();
     }
 
-    @PutMapping("")
-    @ApiOperation(value = "修改本体分组")
-    public RestResult update(@RequestBody @Valid OntologyGroupUpdateParam updateParam) {
-        //todo
-        return RestResult.success();
-    }
 
 
     @GetMapping("/search")
     @ApiOperation("关键字检索本体分组")
     public RestResult<List<OntologyGroupInfoVO>> searchOntologyGroups(@RequestParam(required = true,name = "keyword") String keyword) {
         return RestResult.ofData(ontologyGroupService.searchByKeyword(keyword));
-    }
-
-    @GetMapping("/link/graph")
-    @ApiOperation("查询分组下所有本体的关系(graph)")
-    public RestResult<OntologyLinkGraphVO> getOntologyGroupLinks(@RequestParam(required = true , name = "groupId") String groupId) {
-        return RestResult.ofData(ontologyGroupService.getOntologyGroupLinks(groupId));
     }
 
 

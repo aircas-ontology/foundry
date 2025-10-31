@@ -4,13 +4,14 @@ import com.baomidou.mybatisplus.annotation.FieldFill;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.fasterxml.jackson.annotation.JsonFormat;
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 
 import javax.persistence.Column;
 import javax.persistence.Entity;
 import javax.persistence.Id;
-import javax.persistence.Table;
 import java.util.Date;
 
 import static com.aircas.ptr.foundry.common.constant.DateFormat.DATE_FORMAT_DEFAULT;
@@ -47,11 +48,6 @@ public class ActionHandleTask {
     private Long actionId;
 
     /**
-     * 实体主键列表，以逗号分隔
-     */
-    private String objectPrimaryKey;
-
-    /**
      * 任务开始时间
      */
     private Date startTime;
@@ -65,5 +61,9 @@ public class ActionHandleTask {
      * 定时任务表达式
      */
     private String corn;
+
+    private String name;
+
+    private String description;
 
 }

@@ -64,8 +64,9 @@ public class OntologyAction {
 
     private Integer status;
 
-    private Integer handleType;
-
+    /**
+     * 关联的本体关系
+     */
     private Long ontologyLinkGroupId;
 
     private static final long serialVersionUID = 1L;

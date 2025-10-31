@@ -3,8 +3,11 @@ package com.aircas.ptr.foundry.ontology.controller;
 import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionExecuteParam;
+import com.aircas.ptr.foundry.ontology.model.param.FunctionUpdateParam;
+import com.aircas.ptr.foundry.ontology.model.vo.FunctionDetailVO;
 import com.aircas.ptr.foundry.ontology.model.vo.FunctionInfoVO;
 import com.aircas.ptr.foundry.ontology.service.FunctionService;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
@@ -12,7 +15,6 @@ import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
 import javax.validation.Valid;
-import java.util.List;
 
 
 @Api(tags = "函数")
@@ -42,9 +44,10 @@ public class OntologyFunctionController {
 //        }
 //    }
 
-    @ApiOperation(value = "得到本体下函数列表")
+    @ApiOperation(value = "查询函数列表")
     @GetMapping("/list")
-    public RestResult<List<FunctionInfoVO>> getFunctions(@RequestParam(required = false, name = "ontologyUniqueIdentifier") @ApiParam(value = "本体uniqueIdentifier", required = false) String ontologyUniqueIdentifier) {
+    public RestResult<Page<FunctionInfoVO>> getFunctions(@RequestParam(required = false, defaultValue = "1") Integer pageNum,
+                                                         @RequestParam(required = false, defaultValue = "10") Integer pageSize) {
         return RestResult.success();
     }
 
@@ -56,22 +59,22 @@ public class OntologyFunctionController {
 
     @ApiOperation(value = "更新函数")
     @PutMapping
-    public RestResult updateFunctionMetadata(@RequestBody FunctionCreateParam param) {
+    public RestResult updateFunction(@RequestBody FunctionUpdateParam param) {
         return RestResult.success();
     }
 
 
-    @ApiOperation(value = "根据函数id获取函数数据")
-    @GetMapping("/query")
-    public RestResult<FunctionInfoVO> getFunctionById(@RequestParam(required = true, name = "functionId") @ApiParam(value = "函数id", required = true) String functionId) {
+    @ApiOperation(value = "根据函数id获取函数详情")
+    @GetMapping("/detail")
+    public RestResult<FunctionDetailVO> getFunctionByApi(@RequestParam(required = true, name = "functionApi") @ApiParam(value = "函数api", required = true) String functionApi) {
         return RestResult.success();
     }
 
 
     @ApiOperation(value = "根据id删除函数")
-    @DeleteMapping("/delete/{functionId}")
-    public RestResult deleteById(@PathVariable(required = true, name = "functionId") Long functionId) {
-        return RestResult.ofData(functionService.deleteById(functionId));
+    @DeleteMapping("/delete/{functionApi}")
+    public RestResult deleteById(@PathVariable(required = true, name = "functionApi") String functionApi) {
+        return RestResult.ofData(null);
     }
 
 //    @ApiOperation(value = "读取函数列表")

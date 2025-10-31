@@ -1,6 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.vo;
 
-import com.aircas.ptr.foundry.common.constant.OntologyPropertyCategoryEnum;
+import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.AllArgsConstructor;
@@ -17,12 +17,6 @@ import lombok.experimental.SuperBuilder;
 @ApiModel(description = "本体属性详细信息")
 public class OntologyPropertyDetailVO extends OntologyPropertyInfoVO {
 
-    @ApiModelProperty(name = "isAssociateKey", value = "是否为与主数据源关联的列名", example = "false")
-    private Boolean isAssociateKey;
-
-    @ApiModelProperty(name = "associateDatasourceColumnName", value = "关联的主数据源表的列名，必须存在于主数据源表的列中", example = "id")
-    private String associateDatasourceColumnName;
-
     @ApiModelProperty(name = "datasourceColumnName", value = "数据源列名", example = "id")
     private String datasourceColumnName;
 
@@ -32,6 +26,10 @@ public class OntologyPropertyDetailVO extends OntologyPropertyInfoVO {
     @ApiModelProperty(name = "datasourceId", value = "数据源表名描述", example = "xtmb")
     private String datasourceDescription;
 
-    @ApiModelProperty(name = "type", value = "属性类别")
-    private OntologyPropertyCategoryEnum category;
+    @ApiModelProperty(name = "propertyType", value = "属性基础类型、时间、字符、数值", example = "String")
+    private OntologyDataTypeEnum propertyType;
+
+    @ApiModelProperty(name = "apiName", value = "在代码里用的属性名称、驼峰式", example = "mbbh")
+    private String apiName;
+
 }

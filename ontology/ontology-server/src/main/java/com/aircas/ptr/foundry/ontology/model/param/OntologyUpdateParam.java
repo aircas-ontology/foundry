@@ -26,7 +26,6 @@ public class OntologyUpdateParam extends OntologyIdentifierParam {
      * 图标
      */
     @ApiModelProperty(name = "icon", value = "本体图标", dataType = "java.lang.String", example = "飞机图标base64")
-    @NotBlank(message = "icon is empty")
     private String icon;
 
     /**

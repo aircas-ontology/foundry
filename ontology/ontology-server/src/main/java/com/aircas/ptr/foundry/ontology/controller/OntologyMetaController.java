@@ -2,8 +2,7 @@ package com.aircas.ptr.foundry.ontology.controller;
 
 import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.controller.validator.OntologyIdVerify;
-import com.aircas.ptr.foundry.ontology.model.param.OntologyIdentifierParam;
-import com.aircas.ptr.foundry.ontology.model.param.OntologyCreateParam;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyCreateParamV2;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.vo.IdentifierVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyGroupMetaVO;
@@ -18,7 +17,6 @@ import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
 import javax.validation.Valid;
-import javax.validation.constraints.NotBlank;
 import java.util.List;
 
 
@@ -31,17 +29,25 @@ public class OntologyMetaController {
     @Resource
     private OntologyMetaService ontologyMetaService;
 
+//    @PostMapping("")
+//    @ApiOperation(value = "创建本体")
+//    public RestResult<IdentifierVO> createOntology(@RequestBody @Valid OntologyCreateParam ontologyCreateParam) {
+//        String uniqIdentifier = ontologyMetaService.createOntology(ontologyCreateParam);
+//        return RestResult.ofData(IdentifierVO.builder().uniqueIdentifier(uniqIdentifier).build());
+//    }
+
+
     @PostMapping("")
     @ApiOperation(value = "创建本体")
-    public RestResult<IdentifierVO> createOntology(@RequestBody @Valid OntologyCreateParam ontologyCreateParam) {
-        String uniqIdentifier = ontologyMetaService.createOntology(ontologyCreateParam);
+    public RestResult<IdentifierVO> createOntologyV2(@RequestBody @Valid OntologyCreateParamV2 ontologyCreateParam) {
+        String uniqIdentifier = ontologyMetaService.createOntologyV2(ontologyCreateParam);
         return RestResult.ofData(IdentifierVO.builder().uniqueIdentifier(uniqIdentifier).build());
     }
 
 
     @DeleteMapping("/{ontologyIdentifier}")
     @ApiOperation(value = "删除本体")
-    public RestResult deleteOntology(@PathVariable(required = true,name = "ontologyIdentifier") @OntologyIdVerify String ontologyIdentifier) {
+    public RestResult deleteOntology(@PathVariable(required = true, name = "ontologyIdentifier") @OntologyIdVerify String ontologyIdentifier) {
         ontologyMetaService.deleteOntology(ontologyIdentifier);
         return RestResult.success();
     }
@@ -63,7 +69,7 @@ public class OntologyMetaController {
 
     @GetMapping("/search")
     @ApiOperation(value = "搜索本体", notes = "通过关键字匹配本体，包括本体名称、本体描述")
-    public RestResult<List<OntologyMetaInfoVO>> searchByKeyword(@RequestParam(name = "keyword", required = true) @ApiParam(name = "keyword", value = "搜索关键词", required = true)  String keyword) {
+    public RestResult<List<OntologyMetaInfoVO>> searchByKeyword(@RequestParam(name = "keyword", required = true) @ApiParam(name = "keyword", value = "搜索关键词", required = true) String keyword) {
         return RestResult.ofData(ontologyMetaService.searchByKeyword(keyword));
     }
 
@@ -74,10 +80,10 @@ public class OntologyMetaController {
     }
 
 
-    @GetMapping("/tree")
-    @ApiOperation(value = "查询本体树")
-    public RestResult<OntologyMetaNodeVO> getOntologyTree(@RequestParam(name = "uniqueIdentifier", required = false) @ApiParam(name = "uniqueIdentifier", value = "本体unique identifer", required = true) String uniqueIdentifier) {
-        return RestResult.ofData(ontologyMetaService.getOntologyTree(uniqueIdentifier));
+    @GetMapping("/group/tree")
+    @ApiOperation(value = "根据groupId查询组内本体树")
+    public RestResult<List<OntologyMetaNodeVO>> getOntologyTreeByByGroupId(@RequestParam(name = "groupId", required = true) @ApiParam(name = "groupId", value = "groupId", required = true) String groupId) {
+        return RestResult.ofData(ontologyMetaService.getOntologyTreeByByGroupId(groupId));
     }
 
 }

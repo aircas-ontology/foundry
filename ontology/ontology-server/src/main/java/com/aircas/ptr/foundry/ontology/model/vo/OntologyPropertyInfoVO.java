@@ -18,17 +18,12 @@ import lombok.experimental.SuperBuilder;
 @ApiModel(description = "本体属性基本信息")
 public class OntologyPropertyInfoVO {
 
-    @ApiModelProperty(name = "propertyType", value = "属性基础类型、时间、字符、数值", example = "String")
-    private OntologyDataTypeEnum propertyType;
 
     @ApiModelProperty(name = "displayName", value = "属性名称", example = "名称")
     private String displayName;
 
     @ApiModelProperty(name = "description", value = "属性描述", example = "描述")
     private String description;
-
-    @ApiModelProperty(name = "apiName", value = "在代码里用的属性名称、驼峰式", example = "mbbh")
-    private String apiName;
 
     /**
      * 是否为主键，1是0否

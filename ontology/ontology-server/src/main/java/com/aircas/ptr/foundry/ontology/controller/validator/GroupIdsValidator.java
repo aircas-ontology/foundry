@@ -22,7 +22,7 @@ public class GroupIdsValidator implements ConstraintValidator<GroupIdsVerify, Se
     @Override
     public boolean isValid(Set<String> value, ConstraintValidatorContext context) {
         if(CollectionUtils.isEmpty(value)){
-            return false;
+            return true;
         }
         List<OntologyGroup> list = groupMapper.selectList(new LambdaQueryWrapper<OntologyGroup>().in(OntologyGroup::getGroupId,value));
         return CollectionUtils.isNotEmpty(list) && list.size() == value.size();

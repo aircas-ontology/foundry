@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.po;
 
+import com.aircas.ptr.foundry.common.constant.OntologyLinkTypeEnum;
 import com.baomidou.mybatisplus.annotation.*;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.AllArgsConstructor;
@@ -68,56 +69,8 @@ public class OntologyLinkGroup implements Serializable {
     private String ontologyUniqueIdentifierTo;
 
     /**
-     * 开始本体的某个属性，作为连接键
+     * 关系类型
      */
-    private String propertyUniqueIdentifierFrom;
-
-    /**
-     * 结束本体的某个属性，作为连接键
-     */
-    private String propertyUniqueIdentifierTo;
-
-    /**
-     * 实验状态，1激活、2测试中、3废弃
-     */
-    private Integer experimentalStatus;
-
-    /**
-     * 1: 1对1
-     * 2: 1对多
-     * 3: 多对1
-     * 4: 多对多
-     */
-
-    private Integer mapping;
-
-    private long forwardChildLinkId;
-
-    private long backwardChildLinkId;
-
-    private static final long serialVersionUID = 1L;
-
-    public OntologyLinkGroup revertForwardToBackward() {
-        OntologyLinkGroup ontologyLinkGroupBo = new OntologyLinkGroup();
-        BeanUtils.copyProperties(this, ontologyLinkGroupBo);
-        ontologyLinkGroupBo.forwardChildLinkId = this.backwardChildLinkId;
-        ontologyLinkGroupBo.backwardChildLinkId = this.forwardChildLinkId;
-        ontologyLinkGroupBo.ontologyUniqueIdentifierFrom = this.ontologyUniqueIdentifierTo;
-        ontologyLinkGroupBo.ontologyUniqueIdentifierTo = this.ontologyUniqueIdentifierFrom;
-        ontologyLinkGroupBo.propertyUniqueIdentifierFrom = this.propertyUniqueIdentifierTo;
-        ontologyLinkGroupBo.propertyUniqueIdentifierTo = this.propertyUniqueIdentifierFrom;
-        ontologyLinkGroupBo.mapping = revertMapping(this.mapping);
-        return ontologyLinkGroupBo;
-    }
-
-    private static Integer revertMapping (int mapping) {
-        switch (mapping) {
-            case 1: return 1;
-            case 2: return 3;
-            case 3: return 2;
-            case 4: return 4;
-        }
-        return 0;
-    }
+    private OntologyLinkTypeEnum type;
 
 }

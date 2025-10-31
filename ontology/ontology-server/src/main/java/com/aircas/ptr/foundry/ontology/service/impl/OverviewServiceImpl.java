@@ -28,10 +28,11 @@ public class OverviewServiceImpl implements OverviewService {
     @Override
     public OverviewCountVO getCount() {
 
+        /**
+         * todo
+         */
         return OverviewCountVO.builder()
-                .actionCount(ontologyActionService.count())
                 .functionCount(functionService.count())
-                .linkCount(ontologyLinkGroupService.count())
                 .ontologyCount(ontologyMetaService.count())
                 .build();
 
