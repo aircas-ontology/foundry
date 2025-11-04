@@ -23,8 +23,6 @@ public class OntologyOverviewController {
     @ApiOperation("获取概览页面统计数据")
     @GetMapping("/count")
     public RestResult<OverviewCountVO> getCount(){
-
-        OverviewCountVO count = overviewService.getCount();
-        return RestResult.ofData(count);
+        return RestResult.ofData(overviewService.getCount());
     }
 }

@@ -1,4 +1,4 @@
-package com.aircas.ptr.foundry.ontology.repository.dao;
+package com.aircas.ptr.foundry.ontology.repository.mainMapper;
 
 import com.aircas.ptr.foundry.ontology.model.po.OntologyActionMappingIn;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;

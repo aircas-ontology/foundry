@@ -4,11 +4,8 @@ import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.AllArgsConstructor;
 import lombok.Data;
-import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
-
-import java.util.List;
 
 @Data
 @SuperBuilder
@@ -28,11 +25,5 @@ public class EntityActionVO {
 
     @ApiModelProperty(name = "displayName", value = "行为显示名称", example = "轨迹")
     private String displayName;
-
-    @ApiModelProperty(name = "requestParams",value = "函数请求参数列表")
-    private List<FunctionParameterVO> requestParams;
-
-    @ApiModelProperty(name = "responseParams",value = "函数返回参数列表")
-    private List<FunctionParameterVO> responseParams;
 
 }

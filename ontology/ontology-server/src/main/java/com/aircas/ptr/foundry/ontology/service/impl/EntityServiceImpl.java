@@ -1,22 +1,22 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
-import com.aircas.ptr.foundry.common.constant.CountTypeEnum;
-import com.aircas.ptr.foundry.common.constant.OntologyPropertyCategoryEnum;
 import com.aircas.ptr.foundry.ontology.client.EntityClient;
 import com.aircas.ptr.foundry.ontology.common.param.EntityAssociateDatasourceParam;
 import com.aircas.ptr.foundry.ontology.common.param.EntityDetailQueryParam;
 import com.aircas.ptr.foundry.ontology.common.param.EntityRelationQueryParam;
-import com.aircas.ptr.foundry.ontology.model.param.EntityNodeParam;
-import com.aircas.ptr.foundry.ontology.model.param.EntityTableFieldParam;
+import com.aircas.ptr.foundry.ontology.model.document.EntityNode;
+import com.aircas.ptr.foundry.ontology.model.document.EntityRelation;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyAction;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
 import com.aircas.ptr.foundry.ontology.model.vo.*;
-import com.aircas.ptr.foundry.ontology.repository.dao.OntologyActionMapper;
-import com.aircas.ptr.foundry.ontology.repository.dao.OntologyLinkGroupMapper;
-import com.aircas.ptr.foundry.ontology.repository.dao.OntologyMetaMapper;
-import com.aircas.ptr.foundry.ontology.repository.dao.OntologyPropertyMapper;
+import com.aircas.ptr.foundry.ontology.repository.arangodb.EntityNodeRepository;
+import com.aircas.ptr.foundry.ontology.repository.arangodb.EntityRelationRepository;
+import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyActionMapper;
+import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyLinkGroupMapper;
+import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyMetaMapper;
+import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyPropertyMapper;
 import com.aircas.ptr.foundry.ontology.service.EntityService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -28,9 +28,7 @@ import org.apache.commons.compress.utils.Lists;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -59,6 +57,70 @@ public class EntityServiceImpl implements EntityService {
 
     @Resource
     private OntologyActionMapper actionMapper;
+
+    @Resource
+    private EntityRelationRepository relationRepository;
+
+    @Resource
+    private EntityNodeRepository nodeRepository;
+
+
+    @Override
+    public void deleteNodesAndRelationsByOntologyId(String ontologyUniqueIdentifier) {
+        var nodes = nodeRepository.findByOntologyUniqIdentifier(ontologyUniqueIdentifier);
+        if (CollectionUtils.isEmpty(nodes)) {
+            return;
+        }
+        nodeRepository.deleteByIds(nodes.stream().map(v -> v.getArangoId()).collect(Collectors.toList()));
+        var relations = relationRepository.findByFromIn(nodes);
+        relations.addAll(relationRepository.findByToIn(nodes));
+        if (CollectionUtils.isEmpty(relations)) {
+            return;
+        }
+        relationRepository.deleteByIds(relations.stream().map(v -> v.getArangoId()).collect(Collectors.toList()));
+    }
+
+    @Override
+    public void createNodesAndRelationsByParentOntology(String parentOntologyUniqueIdentifier, String newOntologyUniqueIdentifier) {
+        // 查询所有 OntologyUniqIdentifier=parentOntologyId 的 EntityNode 对象
+        var nodesToCopy = nodeRepository.findByOntologyUniqIdentifier(parentOntologyUniqueIdentifier);
+        if (CollectionUtils.isEmpty(nodesToCopy)) {
+            return;
+        }
+        // 复制这些对象并更新 tableName 为 newTableName
+        var nodesToInsert = nodesToCopy.stream().map(node -> EntityNode.builder()
+                .ontologyUniqIdentifier(newOntologyUniqueIdentifier)
+                .tableName(node.getTableName())
+                .createTime(new Date())
+                .updateTime(new Date())
+                .primaryKey(node.getPrimaryKey())
+                .displayName(node.getDisplayName())
+                .isDeleted(node.getIsDeleted()).build())
+                .collect(Collectors.toList());
+        nodeRepository.batchSave(nodesToInsert);
+
+        var newNodeMap = nodesToInsert.stream().collect(Collectors.toMap(EntityNode::getPrimaryKey, node -> node));
+        // 查询与这些节点相关的边
+        var relationsToCopy = relationRepository.findByFromIn(nodesToCopy);
+        relationsToCopy.addAll(relationRepository.findByToIn(nodesToCopy));
+        if (CollectionUtils.isEmpty(relationsToCopy)) {
+            return;
+        }
+        // 复制这些边并更新 from 和 to 字段
+        var relationsToInsert = relationsToCopy.stream()
+                .map(relation -> EntityRelation.builder()
+                        .type(relation.getType())
+                        .name(relation.getName())
+                        .description(relation.getDescription())
+                        .createTime(new Date())
+                        .updateTime(new Date())
+                        .isDeleted(relation.getIsDeleted())
+                        .from(Optional.ofNullable(newNodeMap.get(relation.getFrom().getPrimaryKey())).orElse(relation.getFrom()))
+                        .to(Optional.ofNullable(newNodeMap.get(relation.getTo().getPrimaryKey())).orElse(relation.getTo()))
+                        .build()
+                ).collect(Collectors.toList());
+        relationRepository.batchSave(relationsToInsert);
+    }
 
 
     @Override
@@ -202,48 +264,4 @@ public class EntityServiceImpl implements EntityService {
     }
 
 
-    @Override
-    public Boolean createEntityTable(String tableName, String tableComment, List<EntityTableFieldParam> fields) {
-        return null;
-    }
-
-    @Override
-    public Boolean deleteEntityTable(String tableName) {
-        return null;
-    }
-
-    @Override
-    public Boolean existsEntityTable(String tableName) {
-        return null;
-    }
-
-    @Override
-    public Integer countEntityTable(String tableName) {
-        return null;
-    }
-
-    @Override
-    public Integer batchInsertEntityTable(String tableName, List<Map<String, Object>> entities) {
-        return null;
-    }
-
-    @Override
-    public Boolean createEntityNode(String id, String name, String description, String category, String type) {
-        return null;
-    }
-
-    @Override
-    public Boolean createEntityNode(List<EntityNodeParam> nodes) {
-        return null;
-    }
-
-    @Override
-    public Boolean deleteEntityNode(String nodeId) {
-        return null;
-    }
-
-    @Override
-    public Boolean existsEntityNode(String nodeId) {
-        return null;
-    }
 }

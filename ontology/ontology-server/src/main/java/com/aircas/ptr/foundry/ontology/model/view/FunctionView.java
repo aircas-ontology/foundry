@@ -16,7 +16,10 @@ public class FunctionView {
 
     private Integer status;
 
-    private String objectTypes;
+
+    private String type;
+
+    private String referenceName;
 
     private String code;
 

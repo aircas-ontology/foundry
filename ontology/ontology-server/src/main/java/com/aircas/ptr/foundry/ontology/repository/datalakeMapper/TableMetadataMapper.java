@@ -1,4 +1,4 @@
-package com.aircas.ptr.foundry.ontology.repository.datalakeDao;
+package com.aircas.ptr.foundry.ontology.repository.datalakeMapper;
 
 import com.aircas.ptr.foundry.ontology.model.po.DatasourceTable;
 import com.aircas.ptr.foundry.ontology.model.po.TableColumnDesc;

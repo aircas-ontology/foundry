@@ -1,4 +1,4 @@
-package com.aircas.ptr.foundry.ontology.entity.config;
+package com.aircas.ptr.foundry.ontology.config;
 
 import com.arangodb.ArangoDB;
 import com.arangodb.ArangoDatabase;
@@ -6,7 +6,6 @@ import com.arangodb.springframework.annotation.EnableArangoRepositories;
 import com.arangodb.springframework.config.ArangoConfiguration;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.transaction.annotation.EnableTransactionManagement;
 
 import javax.annotation.PostConstruct;
 import java.util.Arrays;
@@ -14,35 +13,34 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @Configuration
-@EnableTransactionManagement
-@EnableArangoRepositories(basePackages = {"com.aircas.ptr.foundry.ontology.entity.repository.arangodb"})
+@EnableArangoRepositories(basePackages = {"com.aircas.ptr.foundry.ontology.repository.arangodb"})
 public class ArangoConfig implements ArangoConfiguration {
 
-    @Value("${spring.data.arangodb.host}")
+    @Value("${spring.datasource.arangodb.host}")
     private String host;
 
-    @Value("${spring.data.arangodb.port}")
+    @Value("${spring.datasource.arangodb.port}")
     private Integer port;
 
-    @Value("${spring.data.arangodb.user}")
+    @Value("${spring.datasource.arangodb.user}")
     private String user;
 
-    @Value("${spring.data.arangodb.password}")
+    @Value("${spring.datasource.arangodb.password}")
     private String password;
 
-    @Value("${spring.data.arangodb.connections.max:8}")
+    @Value("${spring.datasource.arangodb.connections.max:8}")
     private Integer maxConnections;
 
-    @Value("${spring.data.arangodb.timeout.connect:5000}")
+    @Value("${spring.datasource.arangodb.timeout.connect:5000}")
     private Integer connectTimeout;
 
-    @Value("${spring.data.arangodb.timeout.request:10000}")
+    @Value("${spring.datasource.arangodb.timeout.request:10000}")
     private Long requestTimeout;
 
-    @Value("${spring.data.arangodb.database}")
+    @Value("${spring.datasource.arangodb.database}")
     private String database;
 
-    @Value("${spring.data.arangodb.collections}")
+    @Value("${spring.datasource.arangodb.collections}")
     private String collections;
 
     @Override
@@ -63,18 +61,18 @@ public class ArangoConfig implements ArangoConfiguration {
         return database;
     }
 
-//    @PostConstruct
-//    public void initCollections() {
-//        ArangoDatabase db = arango().build().db(database());
-//        List<String> collectionList = Arrays.stream(collections.split(",")).collect(Collectors.toList());
-//        if (!db.exists()) {
-//            arango().build().createDatabase(database);
-//        }
-//        collectionList.forEach(v -> {
-//            if (!db.collection(v).exists()) {
-//                db.createCollection(v);
-//            }
-//        });
-//    }
+    @PostConstruct
+    public void initCollections() {
+        ArangoDatabase db = arango().build().db(database());
+        List<String> collectionList = Arrays.stream(collections.split(",")).collect(Collectors.toList());
+        if (!db.exists()) {
+            arango().build().createDatabase(database);
+        }
+        collectionList.forEach(v -> {
+            if (!db.collection(v).exists()) {
+                db.createCollection(v);
+            }
+        });
 
+    }
 } 

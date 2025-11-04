@@ -6,6 +6,10 @@ server:
 spring:
   application:
     name: ontology
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
   datasource:
     main:
       driver-class-name: org.postgresql.Driver
@@ -20,6 +24,19 @@ spring:
       url: jdbc:postgresql://192.168.9.11:35432/foudry_datasource
       username: iecas
       password: iecas123
+    arangodb:
+      host: 192.168.9.11
+      port: 8529
+      database: entity
+      collections: node,relation
+      user: root
+      password: root
+      connections:
+        max: 8
+        ttl: 1800
+      timeout:
+        connect: 5000
+        request: 10000
 
 #mybatis:
 #  configuration:
@@ -82,3 +99,9 @@ client:
     query-node-relation: "/node/query_relation"
     query-record: "/table/record"
     query-record-detail: "/table/record_detail"
+
+minio:
+  endpoint: http://192.168.9.11:16337
+  accessKey: root
+  secretKey: iecas123
+  bucketName: ptr

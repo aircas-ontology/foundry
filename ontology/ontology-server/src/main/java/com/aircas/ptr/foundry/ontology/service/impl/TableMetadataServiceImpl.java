@@ -2,7 +2,7 @@ package com.aircas.ptr.foundry.ontology.service.impl;
 
 import com.aircas.ptr.foundry.ontology.model.vo.DatasourceTableVO;
 import com.aircas.ptr.foundry.ontology.model.vo.TableColumnDescVO;
-import com.aircas.ptr.foundry.ontology.repository.datalakeDao.TableMetadataMapper;
+import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.TableMetadataMapper;
 import com.aircas.ptr.foundry.ontology.service.TableMetadataService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;

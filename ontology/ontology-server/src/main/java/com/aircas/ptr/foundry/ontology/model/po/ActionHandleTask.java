@@ -66,4 +66,8 @@ public class ActionHandleTask {
 
     private String description;
 
+
+    private String objectPrimaryKey;
+
+
 }

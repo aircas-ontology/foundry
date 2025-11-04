@@ -10,7 +10,7 @@ import com.aircas.ptr.foundry.ontology.service.ObjectService;
 import com.aircas.ptr.foundry.ontology.service.OwlService;
 import com.aircas.ptr.foundry.ontology.model.vo.ObjectOneInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.PropertyValueVO;
-import com.aircas.ptr.foundry.ontology.repository.dao.OntologyMetaMapper;
+import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyMetaMapper;
 import lombok.RequiredArgsConstructor;
 import org.semanticweb.owlapi.apibinding.OWLManager;
 import org.semanticweb.owlapi.model.*;

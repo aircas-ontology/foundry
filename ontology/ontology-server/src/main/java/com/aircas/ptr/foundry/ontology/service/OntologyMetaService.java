@@ -1,7 +1,6 @@
 package com.aircas.ptr.foundry.ontology.service;
 
-import com.aircas.ptr.foundry.ontology.model.param.OntologyCreateParam;
-import com.aircas.ptr.foundry.ontology.model.param.OntologyCreateParamV2;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyMetaCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyGroupMetaVO;
@@ -20,10 +19,7 @@ import java.util.List;
 
 public interface OntologyMetaService extends IService<OntologyMeta> {
 
-    String createOntologyV2(OntologyCreateParamV2 ontologyCreateParam);
-
-
-    String createOntology(OntologyCreateParam ontologyCreateParam);
+    String createOntology(OntologyMetaCreateParam ontologyCreateParam);
 
     List<OntologyGroupMetaVO> getByGroupId(String groupId);
 
@@ -37,12 +33,8 @@ public interface OntologyMetaService extends IService<OntologyMeta> {
 
     List<OntologyMetaNodeVO> getOntologyTreeByByGroupId(String groupId);
 
-    //todo need clean
-    List<OntologyMetaVO> listOntologiesByGroup(String groupId);
-
     List<OntologyMetaVO> selectByUniqueIdentifiers(List<String> ontologyUniqueIdentifiers);
 
-    Integer countByGroup(String groupId);
 
 
 }

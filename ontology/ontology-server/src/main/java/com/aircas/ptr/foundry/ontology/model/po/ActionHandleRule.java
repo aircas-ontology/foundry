@@ -59,4 +59,6 @@ public class ActionHandleRule {
 
     @Column(name = "rule_connect_type")
     private Integer ruleConnectType;
+
+    private String objectPrimaryKey;
 }

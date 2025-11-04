@@ -12,7 +12,6 @@ import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 
 import javax.validation.constraints.NotBlank;
-import javax.validation.constraints.NotEmpty;
 import java.util.Set;
 
 @Data
@@ -21,10 +20,10 @@ import java.util.Set;
 @Builder
 @Accessors(chain = true)
 @ApiModel(description = "ontology create request param")
-public class OntologyCreateParamV2 {
+public class OntologyMetaCreateParam {
 
-    @ApiModelProperty(name = "icon", value = "本体图标", dataType = "java.lang.String", example = "飞机图标base64")
-    private String icon;
+    @ApiModelProperty(name = "icon", value = "本体图标url", dataType = "java.lang.String",required = false)
+    private String iconUrl;
 
     @ApiModelProperty(name = "displayName", value = "本体名称", dataType = "java.lang.String", example = "飞机", required = true)
     @NotBlank(message = "displayName is empty")

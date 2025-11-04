@@ -20,7 +20,7 @@ import tk.mybatis.spring.annotation.MapperScan;
 import javax.sql.DataSource;
 
 @Configuration
-@MapperScan(basePackages = "com.aircas.ptr.foundry.ontology.repository.dao", sqlSessionFactoryRef = "mainSqlSessionFactory")
+@MapperScan(basePackages = "com.aircas.ptr.foundry.ontology.repository.mainMapper", sqlSessionFactoryRef = "mainSqlSessionFactory")
 public class MainDataSourceConfiguration {
 
     @Primary

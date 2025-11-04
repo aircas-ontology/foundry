@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.aircas.ptr.foundry.ontology.repository.dao.OntologyActionMapper">
+<mapper namespace="com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyActionMapper">
     <resultMap id="BaseResultMap" type="com.aircas.ptr.foundry.ontology.model.po.OntologyAction">
         <!-- @mbg.generated: generated automatically, do not modify! -->
         <result column="api" jdbcType="VARCHAR" property="api"/>
@@ -12,7 +12,6 @@
         <result column="update_time" jdbcType="TIMESTAMP" property="updateTime"/>
         <result column="display_name" jdbcType="VARCHAR" property="displayName"/>
         <result column="status" jdbcType="BIGINT" property="status"/>
-        <result column="handle_type" jdbcType="BIGINT" property="handleType"/>
     </resultMap>
     <sql id="Base_Column_List">
         <!-- @mbg.generated: generated automatically, do not modify! -->
@@ -38,23 +37,13 @@
 
     <resultMap id="OntologyActionViewResultMap" type="com.aircas.ptr.foundry.ontology.model.view.OntologyActionView">
         <id property="actionId" column="action_id" />
-        <result property="api" column="api" />
+        <result property="actionApi" column="action_api" />
         <result property="functionApi" column="function_api" />
         <result property="ontologyUniqueIdentifier" column="ontology_unique_identifier" />
         <result property="description" column="description" />
         <result property="displayName" column="display_name" />
         <result property="status" column="status" />
-        <result property="handleType" column="handle_type" />
         <result property="ontologyLinkGroupId" column="ontology_link_group_id" />
-        <result property="ruleObjectPrimaryKey" column="rule_object_primary_key" />
-        <result property="rules" column="rules" />
-        <result property="ruleConnectType" column="rule_connect_type" />
-        <result property="ruleStatus" column="rule_status" />
-        <result property="taskObjectPrimaryKey" column="task_object_primary_key" />
-        <result property="startTime" column="start_time" />
-        <result property="endTime" column="end_time" />
-        <result property="corn" column="corn" />
-        <result property="taskStatus" column="task_status" />
         <collection property="mappingIn" ofType="com.aircas.ptr.foundry.ontology.model.po.OntologyActionMappingIn">
             <id property="id" column="mapping_in_id" />
             <result property="ontologyActionId" column="ontology_action_id" />
@@ -66,29 +55,18 @@
     <select id="selectActionViewByOntologyIdentifier" resultMap="OntologyActionViewResultMap">
         SELECT
             a.id AS action_id,
-            a.api,
+            a.api AS action_api,
             a.function_api,
             a.ontology_unique_identifier,
             a.description,
             a.display_name,
             a.status,
-            a.handle_type,
             a.ontology_link_group_id,
-            t.object_primary_key AS task_object_primary_key,
-            t.start_time,
-            t.end_time,
-            t.corn,
-            t.status AS task_status,
-            r.object_primary_key AS rule_object_primary_key,
-            r.rules,
-            r.rule_connect_type,
-            r.status AS rule_status,
             m.id AS mapping_in_id,
             m.ontology_action_id,
             m.parameter_name,
             m.property_unique_identifier
-        FROM ontology_action a LEFT JOIN action_handle_rule r ON a.id = r.action_id
-        LEFT JOIN action_handle_task t ON a.id = t.action_id
+        FROM ontology_action a
         LEFT JOIN ontology_action_mapping_in m ON a.id = m.ontology_action_id
         WHERE a.ontology_unique_identifier = #{ontologyUniqueIdentifier}
     </select>

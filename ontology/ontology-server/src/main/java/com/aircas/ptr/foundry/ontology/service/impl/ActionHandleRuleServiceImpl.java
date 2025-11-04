@@ -3,7 +3,7 @@ package com.aircas.ptr.foundry.ontology.service.impl;
 import com.aircas.ptr.foundry.ontology.model.po.ActionHandleRule;
 import com.aircas.ptr.foundry.ontology.service.ActionHandleRuleService;
 import com.aircas.ptr.foundry.ontology.model.bo.ActionHandleRuleBO;
-import com.aircas.ptr.foundry.ontology.repository.dao.ActionHandleRuleMapper;
+import com.aircas.ptr.foundry.ontology.repository.mainMapper.ActionHandleRuleMapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;

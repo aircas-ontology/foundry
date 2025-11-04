@@ -1,4 +1,4 @@
-package com.aircas.ptr.foundry.ontology.entity.model.document;
+package com.aircas.ptr.foundry.ontology.model.document;
 
 import com.arangodb.springframework.annotation.ArangoId;
 import com.arangodb.springframework.annotation.Document;
@@ -23,7 +23,7 @@ public class EntityNode {
     @ArangoId
     private String arangoId;
 
-    private String ontologyId;
+    private String ontologyUniqIdentifier;
 
     private String tableName;
 

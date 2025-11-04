@@ -2,7 +2,7 @@ package com.aircas.ptr.foundry.ontology.service.impl;
 
 import com.aircas.ptr.foundry.ontology.model.po.ActionHandleTask;
 import com.aircas.ptr.foundry.ontology.model.bo.ActionHandleTaskBO;
-import com.aircas.ptr.foundry.ontology.repository.dao.ActionHandleTaskMapper;
+import com.aircas.ptr.foundry.ontology.repository.mainMapper.ActionHandleTaskMapper;
 import com.aircas.ptr.foundry.ontology.service.ActionHandleTaskService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;

@@ -33,7 +33,8 @@ public class LoggingFilter extends OncePerRequestFilter {
             "/swagger-resources",
             "/v2/api-docs",
             "/v3/api-docs",
-            "/doc.html"
+            "/doc.html",
+            "/file/"
     );
 
     @Override

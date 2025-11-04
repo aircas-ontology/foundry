@@ -38,4 +38,17 @@ public class OverviewCountVO {
      */
     @ApiModelProperty(notes = "函数数量统计")
     private Integer functionCount;
+
+    /**
+     * 本体属性统计
+     */
+    @ApiModelProperty(notes = "本体属性统计")
+    private Integer propertyCount;
+
+
+    /**
+     * 本体关系统计
+     */
+    @ApiModelProperty(notes = "本体关系统计")
+    private Integer linkCount;
 }

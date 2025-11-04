@@ -2,7 +2,7 @@ package com.aircas.ptr.foundry.ontology.controller;
 
 import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.controller.validator.OntologyIdVerify;
-import com.aircas.ptr.foundry.ontology.model.param.OntologyCreateParamV2;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyMetaCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.vo.IdentifierVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyGroupMetaVO;
@@ -39,8 +39,8 @@ public class OntologyMetaController {
 
     @PostMapping("")
     @ApiOperation(value = "创建本体")
-    public RestResult<IdentifierVO> createOntologyV2(@RequestBody @Valid OntologyCreateParamV2 ontologyCreateParam) {
-        String uniqIdentifier = ontologyMetaService.createOntologyV2(ontologyCreateParam);
+    public RestResult<IdentifierVO> createOntology(@RequestBody @Valid OntologyMetaCreateParam ontologyCreateParam) {
+        String uniqIdentifier = ontologyMetaService.createOntology(ontologyCreateParam);
         return RestResult.ofData(IdentifierVO.builder().uniqueIdentifier(uniqIdentifier).build());
     }
 

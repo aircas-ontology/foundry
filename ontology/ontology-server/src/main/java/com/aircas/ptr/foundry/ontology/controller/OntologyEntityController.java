@@ -62,29 +62,29 @@ public class OntologyEntityController {
     }
 
 
-    @ApiOperation(value = "新增实体", notes = "更新本体下指定实体的属性信息")
-    @PostMapping("")
-    public RestResult createOntologyEntity(@RequestBody @Valid OntologyEntityParam param) {
-        return RestResult.success();
-    }
+//    @ApiOperation(value = "新增实体", notes = "更新本体下指定实体的属性信息")
+//    @PostMapping("")
+//    public RestResult createOntologyEntity(@RequestBody @Valid OntologyEntityParam param) {
+//        return RestResult.success();
+//    }
+//
+//    @ApiOperation(value = "更新实体属性值", notes = "更新本体下指定实体的属性信息")
+//    @PutMapping("")
+//    public RestResult updateOntologyEntity(@RequestBody @Valid OntologyEntityParam param) {
+//        return RestResult.success();
+//    }
+//
+//    @ApiOperation(value = "删除实体属性", notes = "更新本体下指定实体的属性信息")
+//    @DeleteMapping("")
+//    public RestResult deleteOntologyEntity(@RequestBody @Valid OntologyEntityDeleteParam param) {
+//        return RestResult.success();
+//    }
 
-    @ApiOperation(value = "更新实体属性值", notes = "更新本体下指定实体的属性信息")
-    @PutMapping("")
-    public RestResult updateOntologyEntity(@RequestBody @Valid OntologyEntityParam param) {
-        return RestResult.success();
-    }
 
-    @ApiOperation(value = "删除实体属性", notes = "更新本体下指定实体的属性信息")
-    @DeleteMapping("")
-    public RestResult deleteOntologyEntity(@RequestBody @Valid OntologyEntityDeleteParam param) {
-        return RestResult.success();
-    }
-
-
-    @GetMapping("/list/by_link")
-    @ApiOperation(value = "依据本体关系id查询实体关系列表")
-    public RestResult<List<EntityLinkPropertyVO>> getEntityLinksById(@RequestParam(required = true, name = "linkUniqueIdentifier") @ApiParam(name = "linkUniqueIdentifier", value = "关系id") String linkUniqueIdentifier) {
-        return RestResult.success();
-    }
+//    @GetMapping("/list/by_link")
+//    @ApiOperation(value = "依据本体关系id查询实体关系列表")
+//    public RestResult<List<EntityLinkPropertyVO>> getEntityLinksById(@RequestParam(required = true, name = "linkUniqueIdentifier") @ApiParam(name = "linkUniqueIdentifier", value = "关系id") String linkUniqueIdentifier) {
+//        return RestResult.success();
+//    }
 
 }

@@ -17,10 +17,10 @@ import lombok.experimental.Accessors;
 public class FunctionParameterVO {
 
     @ApiModelProperty(name = "paramName",value = "参数名称")
-    private String paramName;
+    private String parameterName;
 
     @ApiModelProperty(name = "paramType",value = "参数类型")
-    private String paramType;
+    private String parameterType;
 
     @ApiModelProperty(name = "description",value = "参数描述")
     private String description;

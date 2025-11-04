@@ -41,7 +41,7 @@ public class OntologyLinkController {
 
     @DeleteMapping("/{uniqIdentifier}")
     @ApiOperation(value = "根据link uniqid删除关系")
-    public RestResult deleteLinkByUniqueIdentifier(@PathVariable(required = true, name = "uniqIdentifier") @Valid String uniqueIdentifier) {
+    public RestResult deleteLinkByUniqueIdentifier(@PathVariable(required = true, name = "uniqIdentifier")  String uniqueIdentifier) {
         /**
          * todo 需要检查关联关系是否被行为使用到
          */

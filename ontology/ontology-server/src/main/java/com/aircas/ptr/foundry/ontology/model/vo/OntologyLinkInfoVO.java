@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.vo;
 
+import com.aircas.ptr.foundry.common.constant.OntologyLinkTypeEnum;
 import com.alibaba.fastjson.annotation.JSONField;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.annotations.ApiModel;
@@ -81,6 +82,9 @@ public class OntologyLinkInfoVO {
      */
     @ApiModelProperty(name = "ontologyIconTO", value = "开始本体icon")
     private String ontologyIconTO;
+
+    @ApiModelProperty(name = "type", value = "关系类型")
+    private OntologyLinkTypeEnum type;
 
 }
 

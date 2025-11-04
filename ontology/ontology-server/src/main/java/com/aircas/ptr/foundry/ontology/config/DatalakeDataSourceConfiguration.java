@@ -19,7 +19,7 @@ import tk.mybatis.spring.annotation.MapperScan;
 import javax.sql.DataSource;
 
 @Configuration
-@MapperScan(basePackages = "com.aircas.ptr.foundry.ontology.repository.datalakeDao", sqlSessionFactoryRef = "datalakeSqlSessionFactory")
+@MapperScan(basePackages = "com.aircas.ptr.foundry.ontology.repository.datalakeMapper", sqlSessionFactoryRef = "datalakeSqlSessionFactory")
 public class DatalakeDataSourceConfiguration {
 
     @Primary

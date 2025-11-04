@@ -5,20 +5,15 @@ import com.aircas.ptr.foundry.common.constant.Status;
 import com.aircas.ptr.foundry.common.util.IdGenerator;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.common.util.SnowflakeIdUtil;
-import com.aircas.ptr.foundry.ontology.client.EntityClient;
-import com.aircas.ptr.foundry.ontology.common.param.EntityCopyParam;
-import com.aircas.ptr.foundry.ontology.common.param.EntityRelationCreateParam;
 import com.aircas.ptr.foundry.ontology.converter.DataConverter;
-import com.aircas.ptr.foundry.ontology.model.param.OntologyCreateParam;
-import com.aircas.ptr.foundry.ontology.model.param.OntologyCreateParamV2;
-import com.aircas.ptr.foundry.ontology.model.param.OntologyDataSourceCreateParam;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyMetaCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.po.*;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyGroupMetaVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaNodeVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaVO;
-import com.aircas.ptr.foundry.ontology.repository.dao.OntologyMetaMapper;
+import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyMetaMapper;
 import com.aircas.ptr.foundry.ontology.service.*;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
@@ -51,81 +46,43 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
     private OntologyPropertyService ontologyPropertyService;
 
     @Resource
+    private OntologyActionMappingInService actionMappingInService;
+
+    @Resource
     private OntologyLinkGroupService linkService;
-
-    @Resource
-    private FunctionService functionService;
-
-    @Resource
-    private FunctionParamService functionParamService;
 
     @Resource
     private OntologyActionService actionService;
 
     @Resource
-    private ActionHandleRuleService actionHandleRuleService;
-
-    @Resource
-    private ActionHandleTaskService actionHandleTaskService;
-
-    @Resource
-    private EntityClient entityClient;
-
-    @Resource
     private OntologyGroupService groupService;
 
+    @Resource
+    private EntityService entityService;
 
     @Override
-    public String createOntologyV2(OntologyCreateParamV2 ontologyCreateParam) {
+    @Transactional(value = "mainTransactionManager")
+    public String createOntology(OntologyMetaCreateParam ontologyCreateParam) {
         var meta = OntologyMeta.builder()
                 .uniqueIdentifier(IdGenerator.generateUUID())
                 .apiName(ontologyCreateParam.getApiName())
                 .description(ontologyCreateParam.getDescription())
                 .displayName(ontologyCreateParam.getDisplayName())
                 .status(Status.ENABLE.getValue())
-                .icon(ontologyCreateParam.getIcon())
+                .icon(ontologyCreateParam.getIconUrl())
                 .build();
         //自主创建
         if (StringUtils.isEmpty(ontologyCreateParam.getParentOntologyUniqueIdentifier())) {
             meta.setMetaGroupId(String.join(",", ontologyCreateParam.getGroupIds()));
             this.save(meta);
-        }
-        //继承创建
+        }//继承创建
         else {
-            //createOntologyByInherit(ontologyCreateParam, meta);
-        }
-        return meta.getUniqueIdentifier();
-    }
-
-    @Override
-    @Transactional(value = "mainTransactionManager")
-    public String createOntology(OntologyCreateParam ontologyCreateParam) {
-        /**
-         *
-         * 1 创建元数据
-         * 2 创建属性、关系、函数、行为（关系、函数、行为只在本体继承场景）
-         * 3 创建实体
-         */
-        var meta = OntologyMeta.builder()
-                .uniqueIdentifier(IdGenerator.generateUUID())
-                .apiName(ontologyCreateParam.getApiName())
-                .description(ontologyCreateParam.getDescription())
-                .displayName(ontologyCreateParam.getDisplayName())
-                .status(Status.ENABLE.getValue())
-                .icon(ontologyCreateParam.getIcon())
-                .parentUniqueIdentifier(ontologyCreateParam.getParentOntologyUniqueIdentifier())
-                .metaGroupId(String.join(",", ontologyCreateParam.getGroupIds()))
-                .build();
-        this.save(meta);
-        if (StringUtils.isNotEmpty(ontologyCreateParam.getParentOntologyUniqueIdentifier())) {
             createOntologyByInherit(ontologyCreateParam, meta);
-        } else if (ontologyCreateParam.getPrimaryDataSource() != null) {
-            createOntologyByDatasource(ontologyCreateParam, meta);
         }
         return meta.getUniqueIdentifier();
     }
 
-    private void createOntologyByInherit(OntologyCreateParam ontologyCreateParam, OntologyMeta meta) {
+    private void createOntologyByInherit(OntologyMetaCreateParam ontologyCreateParam, OntologyMeta meta) {
         var childIdentifier = meta.getUniqueIdentifier();
         var parentIdentifier = ontologyCreateParam.getParentOntologyUniqueIdentifier();
         //校验父本体
@@ -172,37 +129,14 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
             }).collect(Collectors.toList());
             linkService.saveBatch(childLinks);
         }
-        // 函数
-        var funcViews = functionService.queryFunctionViewByOntologyId(parentIdentifier);
-        List<Function> functions = Lists.newArrayList();
-        List<FunctionParamPO> functionParams = Lists.newArrayList();
-
-        funcViews.forEach(view -> {
-            var funcId = SnowflakeIdUtil.get();
-            functions.add(Function.builder()
-                    .code(view.getCode())
-                    .api(view.getApi())
-                    .description(view.getDescription())
-                    .status(view.getStatus())
-                    .id(funcId).build());
-            functionParams.addAll(view.getFunctionParams().stream().map(v -> FunctionParamPO.builder().functionId(funcId)
-                    .description(v.getDescription())
-                    .parameterName(v.getParameterName())
-                    .parameterType(v.getParameterType())
-                    .build()).collect(Collectors.toList()));
-        });
-        functionService.saveBatch(functions);
-        functionParamService.saveBatch(functionParams);
-        // 行为
+        // 创建行为（不创建行为调度）
         var actionViews = actionService.queryActionViewByOntologyIdentifier(parentIdentifier);
         List<OntologyAction> actions = Lists.newArrayList();
-        List<ActionHandleRule> rules = Lists.newArrayList();
-        List<ActionHandleTask> tasks = Lists.newArrayList();
         List<OntologyActionMappingIn> mappingIns = Lists.newArrayList();
 
         actionViews.forEach(action -> {
             var actionId = SnowflakeIdUtil.get();
-            actions.add(OntologyAction.builder().api(ontologyCreateParam.getApiName() + "_" + action.getApi())
+            actions.add(OntologyAction.builder().api(ontologyCreateParam.getApiName() + "_" + action.getActionApi())
                     .description(action.getDescription())
                     .displayName(action.getDisplayName())
                     .functionApi(action.getFunctionApi())
@@ -216,79 +150,21 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                     .parameterName(v.getParameterName())
                     .ontologyActionId(actionId)
                     .build()).collect(Collectors.toList()));
-
-            if (action.getRules() != null) {
-                rules.add(ActionHandleRule.builder()
-                        .status(action.getRuleStatus())
-                        .actionId(actionId)
-                        .ruleConnectType(action.getRuleConnectType())
-                        .rules(action.getRules())
-                        .build());
-            }
-            if (action.getCorn() != null) {
-                tasks.add(ActionHandleTask.builder()
-                        .status(action.getTaskStatus())
-                        .actionId(actionId)
-                        .corn(action.getCorn())
-                        .startTime(action.getStartTime())
-                        .endTime(action.getEndTime())
-                        .build());
-            }
         });
+
         actionService.saveBatch(actions);
-        actionHandleRuleService.saveBatch(rules);
-        actionHandleTaskService.saveBatch(tasks);
+        actionMappingInService.saveBatch(mappingIns);
 
-        // 远程调用创建实体
-        entityClient.copyTableAndEntities(EntityCopyParam.builder()
-                .newTableName(meta.getApiName())
-                .sourceTableName(parentOntology.getApiName())
-                .build());
-
+        // 创建实体节点和实体关系(当前快照)
+        entityService.createNodesAndRelationsByParentOntology(parentIdentifier, meta.getUniqueIdentifier());
     }
+
 
     private String findChildOntologyProperty(List<OntologyProperty> parentProperties, List<OntologyProperty> childProps, String targetUniqId) {
         var apiName = parentProperties.stream()
                 .filter(p -> p.getUniqueIdentifier().equals(targetUniqId))
                 .findFirst().get().getApiName();
         return childProps.stream().filter(p -> p.getApiName().equals(apiName)).findFirst().get().getUniqueIdentifier();
-    }
-
-
-    private void createOntologyByDatasource(OntologyCreateParam ontologyCreateParam, OntologyMeta meta) {
-        //更新本体元数据数据源+ 创建本体属性
-        ontologyPropertyService.createDatasource(OntologyDataSourceCreateParam.builder()
-                .primaryDataSource(ontologyCreateParam.getPrimaryDataSource())
-                .associateDataSources(ontologyCreateParam.getAssociateDataSources())
-                .ontologyIdentifier(meta.getUniqueIdentifier())
-                .build());
-        //创建实体关系
-        if (CollectionUtils.isNotEmpty(ontologyCreateParam.getLinkCreateParams())) {
-            ontologyCreateParam.getLinkCreateParams().forEach(link -> createOntologyLink(link, meta));
-        }
-    }
-
-    private void createOntologyLink(OntologyCreateParam.LinkCreateParam link, OntologyMeta meta) {
-        var targetOntology = getOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, link.getOntologyUniqueIdentifierTo()));
-        var properties = ontologyPropertyService.list(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, meta.getUniqueIdentifier()));
-
-        var propertyUniqueIdentifierFrom = StringUtils.isEmpty(link.getPropertyApiNameFrom()) ?
-                null : properties.stream().filter(v -> v.getApiName().equals(link.getPropertyApiNameFrom()))
-                .findFirst().get().getUniqueIdentifier();
-
-        linkService.save(OntologyLinkGroup.builder()
-                .uniqueIdentifier(IdGenerator.generateUUID())
-                .status(Status.ENABLE.getValue())
-                .ontologyUniqueIdentifierFrom(meta.getUniqueIdentifier())
-                .ontologyUniqueIdentifierTo(link.getOntologyUniqueIdentifierTo())
-                .name(link.getName())
-                .build());
-
-        entityClient.createEntityRelation(EntityRelationCreateParam.builder()
-                .entityTableFrom(meta.getApiName())
-                .entityTableTo(targetOntology.getApiName())
-                .relationType(link.getName())
-                .build());
     }
 
 
@@ -307,20 +183,15 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         return ontologyMetaVOList;
     }
 
-    @Override
-    public Integer countByGroup(String groupId) {
-
-        return ontologyMetaMapper.sumByGroup(groupId);
-    }
-
 
     @Override
     @Transactional(value = "mainTransactionManager")
     public void deleteOntology(String ontologyIdentifier) {
         var meta = ontologyMetaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, ontologyIdentifier));
         PreconditionUtils.checkArgument(meta != null, "ontology not exist:" + ontologyIdentifier, ResultCode.PARAM_ERROR, HttpStatus.BAD_REQUEST);
-        var childs = ontologyMetaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getParentUniqueIdentifier, ontologyIdentifier));
-        PreconditionUtils.checkArgument(CollectionUtils.isEmpty(childs), "存在依赖该本体的子本体" + ontologyIdentifier, ResultCode.PARAM_ERROR, HttpStatus.BAD_REQUEST);
+        //父本体不能删除
+//        var childs = ontologyMetaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getParentUniqueIdentifier, ontologyIdentifier));
+//        PreconditionUtils.checkArgument(CollectionUtils.isEmpty(childs), "存在依赖该本体的子本体" + ontologyIdentifier, ResultCode.PARAM_ERROR, HttpStatus.BAD_REQUEST);
         //删除本体元数据
         this.remove(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, ontologyIdentifier));
         //删除属性
@@ -329,12 +200,10 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         linkService.remove(new LambdaQueryWrapper<OntologyLinkGroup>()
                 .eq(OntologyLinkGroup::getOntologyUniqueIdentifierFrom, ontologyIdentifier).or()
                 .eq(OntologyLinkGroup::getOntologyUniqueIdentifierTo, ontologyIdentifier));
-        //删除函数
-        functionService.removeByOntologyUniqId(ontologyIdentifier);
-        //删除行为，参数，规则，任务 todo 停止本体下实体的定时任务
+        //删除行为，参数，规则，任务 todo 停止本体下定时调度任务
         actionService.removeByOntologyIdentifier(ontologyIdentifier);
         //删除所有实体表、节点和边
-        entityClient.deleteTableAndEntities(meta.getApiName());
+        entityService.deleteNodesAndRelationsByOntologyId(meta.getApiName());
     }
 
 
@@ -403,7 +272,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
             groups.add(groupService.getOne(new LambdaQueryWrapper<OntologyGroup>().eq(OntologyGroup::getGroupId, groupId)));
         }
 
-        var metaList = list().stream().map(meta -> DataConverter.convert(meta)).collect(Collectors.toList());
+        var metaList = list(new LambdaQueryWrapper<OntologyMeta>().orderByDesc(OntologyMeta::getUpdateTime)).stream().map(meta -> DataConverter.convert(meta)).collect(Collectors.toList());
         return groups.stream().map(group -> {
             var metaInfoVOList = metaList.stream().filter(meta -> meta.getMetaGroupId().contains(group.getGroupId())).collect(Collectors.toList());
             return OntologyGroupMetaVO.builder()
@@ -412,19 +281,5 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                     .metaVOS(metaInfoVOList)
                     .build();
         }).collect(Collectors.toList());
-    }
-
-
-    @Override
-    public List<OntologyMetaVO> listOntologiesByGroup(String groupId) {
-
-        List<OntologyMeta> result = ontologyMetaMapper.listOntologiesByGroup(groupId);
-        List<OntologyMetaVO> retResult = new ArrayList();
-        for (OntologyMeta meta : result) {
-            OntologyMetaVO ontologyMetaVO = new OntologyMetaVO();
-            BeanUtils.copyProperties(meta, ontologyMetaVO);
-            retResult.add(ontologyMetaVO);
-        }
-        return retResult;
     }
 }

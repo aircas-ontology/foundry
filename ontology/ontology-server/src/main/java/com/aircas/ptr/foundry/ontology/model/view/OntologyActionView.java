@@ -13,7 +13,7 @@ public class OntologyActionView {
 
     private Long actionId;
 
-    private String api;
+    private String actionApi;
 
     /**
      * Column: function_api
@@ -35,46 +35,7 @@ public class OntologyActionView {
 
     private Integer status;
 
-    private Integer handleType;
-
     private Long ontologyLinkGroupId;
-
-    //action rule
-
-    /**
-     * 实体主键列表，以逗号分隔
-     */
-    private String ruleObjectPrimaryKey;
-
-    private String rules;
-
-    private Integer ruleConnectType;
-
-    private Integer ruleStatus;
-
-    //action task
-
-    /**
-     * 实体主键列表，以逗号分隔
-     */
-    private String taskObjectPrimaryKey;
-
-    /**
-     * 任务开始时间
-     */
-    private Date startTime;
-
-    /**
-     * 任务结束时间
-     */
-    private Date endTime;
-
-    /**
-     * 定时任务表达式
-     */
-    private String corn;
-
-    private Integer taskStatus;
 
 
     // action mapping
