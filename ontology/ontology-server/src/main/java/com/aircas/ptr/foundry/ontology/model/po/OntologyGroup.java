@@ -1,17 +1,18 @@
 package com.aircas.ptr.foundry.ontology.model.po;
 
-import java.io.Serializable;
-import java.util.Date;
-
 import com.baomidou.mybatisplus.annotation.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.io.Serializable;
+import java.util.Date;
+
 /**
  * ontology_group
- * @author 
+ *
+ * @author
  */
 @Builder
 @Data
@@ -49,11 +50,14 @@ public class OntologyGroup implements Serializable {
 
     /**
      * 所属组别id
+     *
      * @Auther：liuyang
      */
     private String groupId;
 
     private String icon;
+
+    private String description;
 
     private static final long serialVersionUID = 1L;
 }

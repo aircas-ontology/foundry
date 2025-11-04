@@ -33,7 +33,7 @@ public class OntologyMetaController {
     @PutMapping("/icon")
     @ApiOperation(value = "修改本体图标")
     public RestResult updateIcon(@RequestParam(required = true, name = "image") MultipartFile image,
-                                 @RequestParam(name = "uniqueIdentifier", required = true) @ApiParam(name = "uniqueIdentifier", value = "本体unique identifer", required = true) String uniqueIdentifier) {
+                                 @RequestParam(name = "uniqueIdentifier", required = true) @ApiParam(name = "uniqueIdentifier", value = "本体unique identifer", required = true) @OntologyIdVerify String uniqueIdentifier) {
         ontologyMetaService.updateIcon(image, uniqueIdentifier);
         return RestResult.success();
     }
@@ -64,7 +64,7 @@ public class OntologyMetaController {
 
     @GetMapping("")
     @ApiOperation(value = "根据unique identifier查询一个本体元数据")
-    public RestResult<OntologyMetaInfoVO> getMetaByUniqueIdentifier(@RequestParam(name = "uniqueIdentifier", required = true) @ApiParam(name = "uniqueIdentifier", value = "本体unique identifer", required = true) String uniqueIdentifier) {
+    public RestResult<OntologyMetaInfoVO> getMetaByUniqueIdentifier(@RequestParam(name = "uniqueIdentifier", required = true) @ApiParam(name = "uniqueIdentifier", value = "本体unique identifer", required = true) @OntologyIdVerify String uniqueIdentifier) {
         return RestResult.ofData(ontologyMetaService.getMetaByUniqueIdentifier(uniqueIdentifier));
     }
 

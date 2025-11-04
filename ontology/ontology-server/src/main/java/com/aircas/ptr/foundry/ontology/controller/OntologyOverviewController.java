@@ -18,7 +18,7 @@ import javax.annotation.Resource;
 public class OntologyOverviewController {
 
     @Resource
-    OverviewService overviewService;
+    private OverviewService overviewService;
 
     @ApiOperation("获取概览页面统计数据")
     @GetMapping("/count")

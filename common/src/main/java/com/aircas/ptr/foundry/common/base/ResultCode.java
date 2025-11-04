@@ -15,6 +15,8 @@ public enum ResultCode {
 
     ERROR(500, "业务异常"),
 
+    NO_PERMISSION(403, "无权限操作"),
+
     NOT_FOUND(404, "接口不存在"),
 
     PARAM_ERROR(400, "参数异常"),
@@ -66,21 +68,20 @@ public enum ResultCode {
     ;
 
 
-
     public Integer code;
 
     public String message;
 
-    ResultCode (Integer code, String message){
+    ResultCode(Integer code, String message) {
         this.code = code;
         this.message = message;
     }
 
-    public Integer getCode(){
+    public Integer getCode() {
         return code;
     }
 
-    public String getMessage(){
+    public String getMessage() {
         return message;
     }
 }

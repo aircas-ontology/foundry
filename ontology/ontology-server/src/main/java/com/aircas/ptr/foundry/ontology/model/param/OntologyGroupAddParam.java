@@ -19,9 +19,10 @@ public class OntologyGroupAddParam {
     @NotBlank(message = "groupName is empty")
     private String groupName;
 
-    @ApiModelProperty(name = "description", value = "分组描述", required = false, example = "用于远海远域场景使用")
+    @ApiModelProperty(name = "description", value = "分组描述", required = true, example = "用于远海远域场景使用")
+    @NotBlank(message = "description is empty")
     private String description;
 
-    @ApiModelProperty(name = "icon", value = "分组图标", required = false)
-    private String icon;
+    @ApiModelProperty(name = "icon", value = "分组图标url", required = false)
+    private String iconUrl;
 }

@@ -34,6 +34,12 @@ public class OverviewCountVO {
     private Integer actionSchedulingCount;
 
     /**
+     * 行为统计
+     */
+    @ApiModelProperty(notes = "行为统计")
+    private Integer actionCount;
+
+    /**
      * 函数数量统计
      */
     @ApiModelProperty(notes = "函数数量统计")
