@@ -14,13 +14,14 @@ import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
 import javax.validation.Valid;
 import java.util.List;
 
 
-@Api(tags = "元数据")
+@Api(tags = "基本数据")
 @RestController
 @RequestMapping("/meta")
 @Validated
@@ -29,12 +30,13 @@ public class OntologyMetaController {
     @Resource
     private OntologyMetaService ontologyMetaService;
 
-//    @PostMapping("")
-//    @ApiOperation(value = "创建本体")
-//    public RestResult<IdentifierVO> createOntology(@RequestBody @Valid OntologyCreateParam ontologyCreateParam) {
-//        String uniqIdentifier = ontologyMetaService.createOntology(ontologyCreateParam);
-//        return RestResult.ofData(IdentifierVO.builder().uniqueIdentifier(uniqIdentifier).build());
-//    }
+    @PutMapping("/icon")
+    @ApiOperation(value = "修改本体图标")
+    public RestResult updateIcon(@RequestParam(required = true, name = "image") MultipartFile image,
+                                 @RequestParam(name = "uniqueIdentifier", required = true) @ApiParam(name = "uniqueIdentifier", value = "本体unique identifer", required = true) String uniqueIdentifier) {
+        ontologyMetaService.updateIcon(image, uniqueIdentifier);
+        return RestResult.success();
+    }
 
 
     @PostMapping("")

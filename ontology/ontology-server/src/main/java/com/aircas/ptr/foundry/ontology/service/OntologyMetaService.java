@@ -8,6 +8,7 @@ import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaNodeVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaVO;
 import com.baomidou.mybatisplus.extension.service.IService;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -18,6 +19,8 @@ import java.util.List;
  */
 
 public interface OntologyMetaService extends IService<OntologyMeta> {
+
+    void updateIcon(MultipartFile image, String uniqueIdentifier);
 
     String createOntology(OntologyMetaCreateParam ontologyCreateParam);
 
@@ -34,7 +37,6 @@ public interface OntologyMetaService extends IService<OntologyMeta> {
     List<OntologyMetaNodeVO> getOntologyTreeByByGroupId(String groupId);
 
     List<OntologyMetaVO> selectByUniqueIdentifiers(List<String> ontologyUniqueIdentifiers);
-
 
 
 }

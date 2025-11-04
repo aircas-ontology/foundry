@@ -33,8 +33,7 @@ public class LoggingFilter extends OncePerRequestFilter {
             "/swagger-resources",
             "/v2/api-docs",
             "/v3/api-docs",
-            "/doc.html",
-            "/file/"
+            "/doc.html"
     );
 
     @Override
@@ -43,7 +42,11 @@ public class LoggingFilter extends OncePerRequestFilter {
 
         var servletPath = request.getServletPath();
         var isSwaggerPath = SWAGGER_IGNORE_PATH.stream().anyMatch(v -> servletPath.startsWith(v));
-        if (isSwaggerPath) {
+
+        var contentType = request.getContentType();
+        var isMultipartRequest = contentType != null && contentType.toLowerCase().startsWith("multipart/");
+
+        if (isSwaggerPath || isMultipartRequest) {
             filterChain.doFilter(request, response);
             return;
         }

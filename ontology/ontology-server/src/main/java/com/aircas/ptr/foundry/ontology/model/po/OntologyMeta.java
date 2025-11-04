@@ -15,6 +15,8 @@ import lombok.experimental.Accessors;
  * @author 
  */
 @Data
+@AllArgsConstructor
+@NoArgsConstructor
 @Builder
 @Accessors(chain = true)
 @TableName("ontology_meta")

@@ -2,6 +2,7 @@ package com.aircas.ptr.foundry.ontology.service.impl;
 
 import com.aircas.ptr.foundry.common.base.ResultCode;
 import com.aircas.ptr.foundry.common.constant.Status;
+import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.common.util.IdGenerator;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.common.util.SnowflakeIdUtil;
@@ -27,6 +28,7 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
 import java.util.ArrayList;
@@ -59,6 +61,20 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
 
     @Resource
     private EntityService entityService;
+
+    @Resource
+    private FileService fileService;
+
+    @Override
+    public void updateIcon(MultipartFile image, String uniqueIdentifier) {
+        try {
+            var iconUrl = fileService.getThumbnailByImage(image);
+            ontologyMetaMapper.update(new OntologyMeta().setIcon(iconUrl), new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, uniqueIdentifier));
+        } catch (Exception e) {
+            throw new BusinessException("updateIcon failed");
+        }
+
+    }
 
     @Override
     @Transactional(value = "mainTransactionManager")
