@@ -131,8 +131,9 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         var parentLinks = linkService.list(new LambdaUpdateWrapper<OntologyLinkGroup>()
                 .eq(OntologyLinkGroup::getOntologyUniqueIdentifierFrom, parentIdentifier)
                 .or().eq(OntologyLinkGroup::getOntologyUniqueIdentifierTo, parentIdentifier));
+        List<OntologyLinkGroup> childLinks = Lists.newArrayList();
         if (CollectionUtils.isNotEmpty(parentLinks)) {
-            var childLinks = parentLinks.stream().map(v -> {
+            childLinks = parentLinks.stream().map(v -> {
                 var link = OntologyLinkGroup.builder()
                         .name(v.getName())
                         .ontologyUniqueIdentifierFrom(v.getOntologyUniqueIdentifierFrom())
@@ -170,8 +171,12 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         actionService.saveBatch(actions);
         actionMappingInService.saveBatch(mappingIns);
 
-        // 创建实体节点和实体关系(当前快照)
-        entityService.createNodesAndRelationsByParentOntology(parentIdentifier, meta.getUniqueIdentifier());
+        // 创建实体节点和实体关系
+        var primaryKey = parentProperties.stream().filter(v -> v.getIsPrimaryKey() == 1).findFirst();
+        if (primaryKey.isPresent() && StringUtils.isNotEmpty(primaryKey.get().getDatasourceColumnName())) {
+            entityService.createNodes(meta.getUniqueIdentifier(), primaryKey.get().getDatasourceId(), primaryKey.get().getDatasourceColumnName());
+            childLinks.stream().forEach(link -> entityService.createEntityRelations(link));
+        }
     }
 
 

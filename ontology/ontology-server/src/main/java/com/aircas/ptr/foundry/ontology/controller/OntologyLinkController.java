@@ -5,6 +5,7 @@ import com.aircas.ptr.foundry.ontology.controller.validator.GroupIdVerify;
 import com.aircas.ptr.foundry.ontology.controller.validator.OntologyIdVerify;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyLinkCreateParam;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkInfoVO;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaInfoVO;
 import com.aircas.ptr.foundry.ontology.service.OntologyLinkGroupService;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
@@ -13,7 +14,6 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
-import javax.validation.Valid;
 import java.util.List;
 
 /**
@@ -39,14 +39,18 @@ public class OntologyLinkController {
     }
 
 
-    @DeleteMapping("/{uniqIdentifier}")
+    @DeleteMapping("/{linkUniqIdentifier}")
     @ApiOperation(value = "根据link uniqid删除关系")
-    public RestResult deleteLinkByUniqueIdentifier(@PathVariable(required = true, name = "uniqIdentifier")  String uniqueIdentifier) {
-        /**
-         * todo 需要检查关联关系是否被行为使用到
-         */
-        ontologyLinkGroupService.deleteLinkByOntologyUniqueIdentifier(uniqueIdentifier);
+    public RestResult deleteLinkByUniqueIdentifier(@PathVariable(required = true, name = "linkUniqIdentifier") String linkUniqIdentifier) {
+        ontologyLinkGroupService.deleteLinkByLinkUniqueIdentifier(linkUniqIdentifier);
         return RestResult.success();
+    }
+
+    @GetMapping("/ontology_meta")
+    @ApiOperation(value = "查询与本体关联的其他本体")
+    public RestResult<List<OntologyMetaInfoVO>> getLinkedOntology(@RequestParam(required = true, name = "ontologyUniqueIdentifier") @ApiParam(value = "本体uniqueIdentifier", required = true)
+                                                                  @OntologyIdVerify String ontologyUniqueIdentifier) {
+        return RestResult.ofData(ontologyLinkGroupService.getLinkedOntology(ontologyUniqueIdentifier));
     }
 
 

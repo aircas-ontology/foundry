@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.ontology.model.document;
 
 import com.aircas.ptr.foundry.common.constant.OntologyLinkTypeEnum;
+import com.aircas.ptr.foundry.common.constant.Status;
 import com.arangodb.springframework.annotation.ArangoId;
 import com.arangodb.springframework.annotation.Edge;
 import com.arangodb.springframework.annotation.From;
@@ -32,20 +33,19 @@ public class EntityRelation {
     @To
     private EntityNode to;
 
+    private String ontologyLinkId;
+
     //关系类型
     private OntologyLinkTypeEnum type;
 
     //关系名称
     private String name;
 
-    private String description;
+    private Date createTime;
 
-    private Date createTime;                // 创建时间
+    private Date updateTime;
 
-    private Date updateTime;                // 更新时间
-
-    private Boolean isDeleted;              // 是否删除
-
+    private Status status;
 
 
 } 

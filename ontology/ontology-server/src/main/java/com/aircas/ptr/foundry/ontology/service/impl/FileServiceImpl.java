@@ -15,7 +15,6 @@ import org.springframework.web.multipart.MultipartFile;
 import javax.annotation.Resource;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 
 @Service
 @Slf4j
@@ -25,9 +24,9 @@ public class FileServiceImpl implements FileService {
     @Value("${minio.bucketName}")
     private String bucketName;
 
-    private static final Integer THUMBNAIL_WIDTH = 50;
+    private static final Integer THUMBNAIL_WIDTH = 64;
 
-    private static final Integer THUMBNAIL_HEIGHT = 50;
+    private static final Integer THUMBNAIL_HEIGHT = 64;
 
 
     @Resource

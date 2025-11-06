@@ -140,40 +140,7 @@ public class ObjectServiceImpl extends ServiceImpl<ObjectMapper,Object> implemen
         return objectMapper.queryAnySQL(sql);
     }
 
-    @Override
-    public PageInfo<Map<String, Object>> queryObjectByLink(String linkId, String dataOntologyId, ObjectOneInfoVO obj, Integer page, Integer size) {
 
-        OntologyLinkGroup ontologyLinkGroup = ontologyLinkGroupService.selectByUniqueIdentifier(linkId);
-        String ontologypropertyId = null;
-        String dataOntologyPropertyId = null;
-//        if (ontologyLinkGroup.getOntologyUniqueIdentifierFrom().equals(dataOntologyId)) {
-//            dataOntologyPropertyId = ontologyLinkGroup.getPropertyUniqueIdentifierFrom();
-//            ontologypropertyId = ontologyLinkGroup.getPropertyUniqueIdentifierTo();
-//        } else {
-//            dataOntologyPropertyId = ontologyLinkGroup.getPropertyUniqueIdentifierTo();
-//            ontologypropertyId = ontologyLinkGroup.getPropertyUniqueIdentifierFrom();
-//        }
-        //TODO: 这里有潜在风险，因为没有考虑join时的数据类型
-        String filterValue = Strings.EMPTY;
-        for (PropertyValueVO propertyValueVO : obj.getProperties()) {
-            //TODO: 这里有潜在风险，因为没有考虑join时的数据类型，沒有考虑是to的情况
-            if (propertyValueVO.getUniqueIdentifier().equals(ontologypropertyId)) {
-                filterValue = propertyValueVO.getValue().toString();
-                break;
-            }
-        }
-        if (filterValue == null || filterValue.isEmpty()) {
-            return null;
-        }
-        List<OntologyProperty> propertyToList = ontologyPropertyMapper.selectByUniqueIdentifier(dataOntologyPropertyId);
-        if (propertyToList.isEmpty()) {
-            return null;
-        }
-        String filterKey = propertyToList.get(0).getDatasourceColumnName();
-        List<FilterParam> filter = new ArrayList<>();
-        filter.add(new FilterParam(filterKey, filterValue, ActionHandleRuleAddConditionEnum.EQ));
-        return queryObjectByFilter(ontologyMetaMapper.selectByUniqueIdentifier(dataOntologyId).getApiName(), filter, page, size, null);
-    }
 
     @Override
     public ObjectWithLinkedInfoVO queryObjectWithLinkedInfoByPrimaryKey(String ontologyUniqueIdentifier, String primaryKey) {
@@ -273,7 +240,8 @@ public class ObjectServiceImpl extends ServiceImpl<ObjectMapper,Object> implemen
 
     private List<OntologyLinkGroup> getLinkedMetadata(String ontologyUniqueIdentifier) {
         List<OntologyLinkGroup> linkGroups = new ArrayList<>();
-        List<OntologyLinkGroup> forwardOntologyLinkGroups = ontologyLinkGroupService.selectByOntologyUniqueIdentifierFrom(ontologyUniqueIdentifier);
+//        List<OntologyLinkGroup> forwardOntologyLinkGroups = ontologyLinkGroupService.selectByOntologyUniqueIdentifierFrom(ontologyUniqueIdentifier);
+        List<OntologyLinkGroup> forwardOntologyLinkGroups = Lists.newArrayList();
         linkGroups.addAll(forwardOntologyLinkGroups);
 
         //List<OntologyLinkGroup> backwardOntologyLinkGroups = ontologyLinkGroupService.selectByOntologyUniqueIdentifierTo(ontologyUniqueIdentifier);

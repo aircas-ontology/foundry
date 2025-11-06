@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.service;
 
+import com.aircas.ptr.foundry.ontology.model.document.EntityNode;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup;
 import com.aircas.ptr.foundry.ontology.model.vo.EntityActionVO;
 import com.aircas.ptr.foundry.ontology.model.vo.EntityInfoVO;
@@ -22,9 +23,9 @@ public interface EntityService {
 
     void createNodes(String ontologyUniqueIdentifier, String datasourceId, String primaryKeyColumnName);
 
-    void deleteNodesAndRelationsByOntologyId(String ontologyUniqueIdentifier);
+    void deleteRelationsByLinkId(String linkId);
 
-    void createNodesAndRelationsByParentOntology(String parentOntologyUniqueIdentifier, String newOntologyUniqueIdentifier);
+    void deleteNodesAndRelationsByOntologyId(String ontologyUniqueIdentifier);
 
     List<EntityActionVO> getEntityActionsByPrimaryKey(String ontologyUniqueIdentifier);
 
@@ -33,5 +34,8 @@ public interface EntityService {
     List<EntityPropertyDetailVO> getEntityDetail(String ontologyUniqueIdentifier, Object entityPrimaryKey);
 
     Page<EntityInfoVO> getEntities(String ontologyUniqueIdentifier, Integer pageNum, Integer pageSize);
+
+    List<EntityNode> getByByOntologyUniqIdentifier(String ontologyIdentifier);
+
 
 }

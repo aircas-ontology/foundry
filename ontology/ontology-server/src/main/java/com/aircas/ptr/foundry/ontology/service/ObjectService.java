@@ -1,11 +1,11 @@
 package com.aircas.ptr.foundry.ontology.service;
 
 
+import com.aircas.ptr.foundry.ontology.model.param.FilterParam;
+import com.aircas.ptr.foundry.ontology.model.param.QuerySortParam;
 import com.aircas.ptr.foundry.ontology.model.vo.DirectoryItemVO;
 import com.aircas.ptr.foundry.ontology.model.vo.ObjectOneInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.ObjectWithLinkedInfoVO;
-import com.aircas.ptr.foundry.ontology.model.param.FilterParam;
-import com.aircas.ptr.foundry.ontology.model.param.QuerySortParam;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.github.pagehelper.PageInfo;
 
@@ -24,11 +24,10 @@ public interface ObjectService extends IService<Object> {
 
     ObjectWithLinkedInfoVO queryObjectWithLinkedInfoByApiAndPrimaryKey(String api, String key);
 
-    int updateObjectData(String ontologyUniqueIdentifier,Map<String, Object> datamap,Map<String, Object> whereMap);
+    int updateObjectData(String ontologyUniqueIdentifier, Map<String, Object> datamap, Map<String, Object> whereMap);
 
     PageInfo<Map<String, Object>> queryObjectByFilter(String ontologyApi, List<FilterParam> filter, Integer page, Integer size, List<QuerySortParam> sorts);
 
     List<Map<String, Object>> queryObjectByFilter(String ontologyApi, List<FilterParam> filter, List<QuerySortParam> sorts);
 
-    PageInfo<Map<String, Object>> queryObjectByLink(String linkId, String dataOntologyId, ObjectOneInfoVO obj, Integer page, Integer size);
 }

@@ -23,7 +23,7 @@ import javax.validation.Valid;
 public class OntologyFunctionController {
 
     @Resource
-    FunctionService functionService;
+    private FunctionService functionService;
 
 
     @PostMapping("/execute")

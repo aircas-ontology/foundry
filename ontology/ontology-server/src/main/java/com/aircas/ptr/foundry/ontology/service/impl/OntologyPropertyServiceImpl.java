@@ -11,7 +11,6 @@ import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyDetailVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyInfoVO;
-import com.aircas.ptr.foundry.ontology.repository.arangodb.EntityNodeRepository;
 import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.TableMetadataMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyActionMappingInMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyLinkGroupMapper;
@@ -32,7 +31,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -43,8 +41,6 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
     private final TableMetadataMapper tableMetadataMapper;
 
     private final EntityService entityService;
-
-    private final EntityNodeRepository nodeRepository;
 
     private final OntologyLinkGroupMapper linkMapper;
 
@@ -95,10 +91,10 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         var ontologyId = params.get(0).getOntologyIdentifier();
         var properties = list(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyId));
 
-        Set<String> apiNameSet = Sets.newHashSet();
-        Set<String> datasourceSet = Sets.newHashSet();
-        Boolean hasTitleKey = false;
-        Boolean hasPrimaryKey = false;
+        var apiNameSet = Sets.newHashSet();
+        var datasourceSet = Sets.newHashSet();
+        var hasTitleKey = false;
+        var hasPrimaryKey = false;
         List<OntologyProperty> propertyList = Lists.newArrayList();
 
         for (var p : params) {
@@ -250,7 +246,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         var primaryProperty = getOne(new LambdaQueryWrapper<OntologyProperty>()
                 .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyIdentifier)
                 .eq(OntologyProperty::getIsPrimaryKey, 1));
-        var nodes = nodeRepository.findByOntologyUniqIdentifier(ontologyIdentifier);
+        var nodes = entityService.getByByOntologyUniqIdentifier(ontologyIdentifier);
 
         if (primaryProperty == null && CollectionUtils.isEmpty(nodes)) {
             return;
@@ -279,7 +275,6 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                 entityService.deleteNodesAndRelationsByOntologyId(ontologyIdentifier);
             }
         }
-
     }
 
     private void createRelationsByLink(String ontologyIdentifier) {

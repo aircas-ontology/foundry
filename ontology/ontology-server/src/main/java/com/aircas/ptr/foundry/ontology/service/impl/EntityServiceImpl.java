@@ -76,7 +76,6 @@ public class EntityServiceImpl implements EntityService {
     private ObjectMapper objectMapper;
 
 
-
     @Override
     public void createEntityRelations(OntologyLinkGroup link) {
         var fromNodes = nodeRepository.findByOntologyUniqIdentifier(link.getOntologyUniqueIdentifierFrom());
@@ -87,9 +86,10 @@ public class EntityServiceImpl implements EntityService {
             fromNodes.forEach(from ->
                     toNodes.forEach(to ->
                             relations.add(EntityRelation.builder()
+                                    .ontologyLinkId(link.getUniqueIdentifier())
                                     .from(from)
                                     .to(to)
-                                    .isDeleted(link.getType().equals(OntologyLinkTypeEnum.COMPOSITION) ? false : true)
+                                    .status(OntologyLinkTypeEnum.mappingToStatus(link.getType()))
                                     .createTime(new Date())
                                     .updateTime(new Date())
                                     .type(link.getType())
@@ -115,58 +115,25 @@ public class EntityServiceImpl implements EntityService {
     }
 
     @Override
+    public void deleteRelationsByLinkId(String linkId) {
+        relationRepository.deleteByOntologyLinkId(linkId);
+    }
+
+    @Override
     public void deleteNodesAndRelationsByOntologyId(String ontologyUniqueIdentifier) {
         var nodes = nodeRepository.findByOntologyUniqIdentifier(ontologyUniqueIdentifier);
         if (CollectionUtils.isEmpty(nodes)) {
             return;
         }
         nodeRepository.deleteByIds(nodes.stream().map(v -> v.getArangoId()).collect(Collectors.toList()));
-        var relations = relationRepository.findByFromIn(nodes);
-        relations.addAll(relationRepository.findByToIn(nodes));
+        var relations = relationRepository.findByFrom(nodes);
+        relations.addAll(relationRepository.findByTo(nodes));
         if (CollectionUtils.isEmpty(relations)) {
             return;
         }
         relationRepository.deleteByIds(relations.stream().map(v -> v.getArangoId()).collect(Collectors.toList()));
     }
 
-    @Override
-    public void createNodesAndRelationsByParentOntology(String parentOntologyUniqueIdentifier, String newOntologyUniqueIdentifier) {
-        // 查询所有 OntologyUniqIdentifier=parentOntologyId 的 EntityNode 对象
-        var nodesToCopy = nodeRepository.findByOntologyUniqIdentifier(parentOntologyUniqueIdentifier);
-        if (CollectionUtils.isEmpty(nodesToCopy)) {
-            return;
-        }
-        // 复制这些对象并更新 tableName 为 newTableName
-        var nodesToInsert = nodesToCopy.stream().map(node -> EntityNode.builder()
-                .ontologyUniqIdentifier(newOntologyUniqueIdentifier)
-                .tableName(node.getTableName())
-                .createTime(new Date())
-                .updateTime(new Date())
-                .primaryKey(node.getPrimaryKey()).build())
-                .collect(Collectors.toList());
-        nodeRepository.batchSave(nodesToInsert);
-
-        var newNodeMap = nodesToInsert.stream().collect(Collectors.toMap(EntityNode::getPrimaryKey, node -> node));
-        // 查询与这些节点相关的边
-        var relationsToCopy = relationRepository.findByFromIn(nodesToCopy);
-        relationsToCopy.addAll(relationRepository.findByToIn(nodesToCopy));
-        if (CollectionUtils.isEmpty(relationsToCopy)) {
-            return;
-        }
-        // 复制这些边并更新 from 和 to 字段
-        var relationsToInsert = relationsToCopy.stream()
-                .map(relation -> EntityRelation.builder()
-                        .type(relation.getType())
-                        .name(relation.getName())
-                        .description(relation.getDescription())
-                        .createTime(new Date())
-                        .updateTime(new Date())
-                        .from(Optional.ofNullable(newNodeMap.get(relation.getFrom().getPrimaryKey())).orElse(relation.getFrom()))
-                        .to(Optional.ofNullable(newNodeMap.get(relation.getTo().getPrimaryKey())).orElse(relation.getTo()))
-                        .build()
-                ).collect(Collectors.toList());
-        relationRepository.batchSave(relationsToInsert);
-    }
 
 
     @Override
@@ -307,6 +274,11 @@ public class EntityServiceImpl implements EntityService {
                 .setTotal(entityVOPage.getTotal())
                 .setRecords(records);
         return result;
+    }
+
+    @Override
+    public List<EntityNode> getByByOntologyUniqIdentifier(String ontologyIdentifier) {
+        return nodeRepository.findByOntologyUniqIdentifier(ontologyIdentifier);
     }
 
 

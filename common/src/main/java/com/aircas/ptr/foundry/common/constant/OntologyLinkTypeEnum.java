@@ -13,4 +13,13 @@ public enum OntologyLinkTypeEnum {
 
     private final Integer value;
     private final String name;
+
+    public static Status mappingToStatus(OntologyLinkTypeEnum value) {
+        switch (value) {
+            case COMPOSITION:
+                return Status.ENABLE;
+            default:
+                return Status.DELETE;
+        }
+    }
 }

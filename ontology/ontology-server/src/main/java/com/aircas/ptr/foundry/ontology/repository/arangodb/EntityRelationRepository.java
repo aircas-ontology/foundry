@@ -14,12 +14,14 @@ import java.util.List;
 @Repository
 public interface EntityRelationRepository extends ArangoRepository<EntityRelation, String> {
 
-    List<EntityRelation> findByFromIn(List<EntityNode> nodes);
+    List<EntityRelation> findByFrom(List<EntityNode> nodes);
 
-    List<EntityRelation> findByToIn(List<EntityNode> nodes);
+    List<EntityRelation> findByTo(List<EntityNode> nodes);
 
     @Query("FOR r IN relation FILTER r._id IN @relationIds REMOVE r IN relation")
     void deleteByIds(@Param("relationIds") List<String> relationIds);
+
+    void deleteByOntologyLinkId(@Param("ontologyLinkId") String ontologyLinkId);
 
     @Query(" FOR n IN node" +
             "    FILTER n.tableName == @tableName AND n.primaryKey == @primaryKeyValue" +
