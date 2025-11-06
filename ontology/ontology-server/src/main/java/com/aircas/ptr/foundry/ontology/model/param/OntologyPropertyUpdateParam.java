@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
 import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
+import com.aircas.ptr.foundry.ontology.controller.validator.DatasourceVerify;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.AllArgsConstructor;
@@ -20,11 +21,9 @@ import javax.validation.constraints.NotNull;
 @ApiModel(description = "属性更新请求")
 public class OntologyPropertyUpdateParam extends IdentifierParam {
 
-    @ApiModelProperty(name = "datasourceId", value = "数据源表名", example = "xtmb")
-    private String datasourceId;
-
-    @ApiModelProperty(name = "datasourceColumnName", value = "数据源列名", example = "id")
-    private String datasourceColumnName;
+    @ApiModelProperty(name = "datasource", value = "数据源")
+    @DatasourceVerify
+    private PropertyDatasourceParam datasource;
 
     @ApiModelProperty(name = "displayName", value = "属性名称", example = "id")
     @NotBlank(message = "displayName is empty")

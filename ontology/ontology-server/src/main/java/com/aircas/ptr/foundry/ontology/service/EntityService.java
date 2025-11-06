@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.service;
 
+import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup;
 import com.aircas.ptr.foundry.ontology.model.vo.EntityActionVO;
 import com.aircas.ptr.foundry.ontology.model.vo.EntityInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.EntityLinkPropertyVO;
@@ -16,6 +17,10 @@ import java.util.List;
  * @description: 实体数据操作，外部接口
  */
 public interface EntityService {
+
+    void createEntityRelations(OntologyLinkGroup link);
+
+    void createNodes(String ontologyUniqueIdentifier, String datasourceId, String primaryKeyColumnName);
 
     void deleteNodesAndRelationsByOntologyId(String ontologyUniqueIdentifier);
 

@@ -13,7 +13,7 @@
         <result column="description" jdbcType="VARCHAR" property="description"/>
     </resultMap>
 
-    <select id="getColumnMetadata" parameterType="java.lang.String" resultMap="BaseResultMap">
+    <select id="queryColumnMetadata" parameterType="java.lang.String" resultMap="BaseResultMap">
         SELECT
             a.attname                                AS column_name,
             col_description(a.attrelid, a.attnum)    AS description,
@@ -46,5 +46,25 @@
           and relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'public')
         ORDER BY table_name
     </select>
+
+
+    <!-- 检查表中是否存在某个列 -->
+    <select id="isColumnExist" resultType="boolean">
+        SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_name = #{tableName}
+              AND column_name = #{columnName}
+              AND table_schema = 'public'
+        )
+    </select>
+
+
+    <select id="queryPrimaryKeyColumnName" resultType="string">
+        select a.attname AS cloumn_name
+        from pg_index i join pg_attribute a on a.attrelid=i.indrelid and a.attnum=any(i.indkey)
+        where i.indrelid='${tableName}'::regclass and i.indisprimary
+    </select>
+
 </mapper>
 

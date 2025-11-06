@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
 import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
+import com.aircas.ptr.foundry.ontology.controller.validator.DatasourceVerify;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.AllArgsConstructor;
@@ -9,6 +10,7 @@ import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
 
+import javax.validation.Valid;
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
 import javax.validation.constraints.Pattern;
@@ -20,13 +22,11 @@ import javax.validation.constraints.Pattern;
 @SuperBuilder
 @Accessors(chain = true)
 @ApiModel(description = "本体属性创建请求")
-public class OntologyPropertyCreateParamV2 {
+public class OntologyPropertyCreateParamV2 extends OntologyIdentifierParam {
 
-    @ApiModelProperty(name = "datasourceId", value = "数据源表名", required = true, example = "xtmb")
-    private String datasourceId;
-
-    @ApiModelProperty(name = "datasourceColumnName", value = "数据源列名", required = true, example = "id")
-    private String datasourceColumnName;
+    @ApiModelProperty(name = "datasource", value = "数据源", required = false, example = "xtmb")
+    @DatasourceVerify
+    private PropertyDatasourceParam datasource;
 
     @ApiModelProperty(name = "dataType", value = "数据类型", required = true, example = "Bool")
     @NotNull(message = "dataType is null")
@@ -47,11 +47,11 @@ public class OntologyPropertyCreateParamV2 {
 
     @ApiModelProperty(name = "isPrimaryKey", value = "是否为主键", required = true, example = "true")
     @NotNull(message = "isPrimaryKey is empty")
-    private Boolean isPrimaryKey ;
+    private Boolean isPrimaryKey;
 
     @ApiModelProperty(name = "isTitleKey", value = "是否为名称键", required = true, example = "true")
     @NotNull(message = "isTitleKey is empty")
-    private Boolean isTitleKey ;
+    private Boolean isTitleKey;
 
     @ApiModelProperty(name = "type", value = "属性的自定义标签，默认值：基本属性", example = "载荷基本信息")
     @NotBlank(message = "tag is empty")

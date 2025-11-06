@@ -33,4 +33,9 @@ public class BusinessException extends RuntimeException {
         super(msg);
         this.resultCode = resultCode;
     }
+
+    public BusinessException(String msg, HttpStatus httpStatus) {
+        super(msg);
+        this.httpStatus = httpStatus;
+    }
 }

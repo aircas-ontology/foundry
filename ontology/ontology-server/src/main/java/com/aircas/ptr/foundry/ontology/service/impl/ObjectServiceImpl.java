@@ -19,6 +19,7 @@ import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import joptsimple.internal.Strings;
 import lombok.RequiredArgsConstructor;
+import org.apache.commons.compress.utils.Lists;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -109,20 +110,6 @@ public class ObjectServiceImpl extends ServiceImpl<ObjectMapper,Object> implemen
         return queryObjectWithLinkedInfoByPrimaryKey(identifier, primaryKey);
     }
 
-    @Override
-    public PageInfo<Map<String, Object>> queryObjectList(String ontologyUniqueIdentifier, Integer page, Integer size) {
-
-        List<OntologyPropertyVO> ontologyPropertyList = ontologyPropertyService.selectByOntologyUniqueIdentifier(ontologyUniqueIdentifier);
-        String sql = buildBaseSQL(ontologyPropertyList);
-        if (sql == null) {
-            return null;
-        }
-        PageHelper.startPage(page, size);
-        List<Map<String, Object>> rawResult = objectMapper.queryAnySQL(sql);
-        PageInfo pageResult = new PageInfo<>(rawResult);
-        BeanUtils.copyProperties(pageResult, rawResult);
-        return pageResult;
-    }
 
 
     @Override
@@ -210,8 +197,8 @@ public class ObjectServiceImpl extends ServiceImpl<ObjectMapper,Object> implemen
 
 
     private ObjectOneInfoVO queryByPrimaryKey(String ontologyUniqueIdentifier, String primaryKey) {
-        List<OntologyPropertyVO> ontologyPropertyList = ontologyPropertyService.selectByOntologyUniqueIdentifier(ontologyUniqueIdentifier);
-
+//        List<OntologyPropertyVO> ontologyPropertyList = ontologyPropertyService.selectByOntologyUniqueIdentifier(ontologyUniqueIdentifier);
+        List<OntologyPropertyVO> ontologyPropertyList = Lists.newArrayList();
         //根据表，列，求解数据类型，填充到OntologyProperty中
         String primaryColumnName = getPrimaryKeyColumnName(ontologyPropertyList);
         List<ObjectOneInfoVO> objectOneInfoVOList = queryByColumnNameValue(ontologyPropertyList, primaryColumnName, primaryKey);
@@ -224,7 +211,8 @@ public class ObjectServiceImpl extends ServiceImpl<ObjectMapper,Object> implemen
 
     private List<ObjectOneInfoVO> queryByColumnNameValue(String ontologyUniqueIdentifier, String columnName, String columnValue) {
 
-        List<OntologyPropertyVO> ontologyPropertyList = ontologyPropertyService.selectByOntologyUniqueIdentifier(ontologyUniqueIdentifier);
+//        List<OntologyPropertyVO> ontologyPropertyList = ontologyPropertyService.selectByOntologyUniqueIdentifier(ontologyUniqueIdentifier);
+        List<OntologyPropertyVO> ontologyPropertyList = Lists.newArrayList();
         return queryByColumnNameValue(ontologyPropertyList, columnName, columnValue);
     }
 
@@ -387,7 +375,8 @@ public class ObjectServiceImpl extends ServiceImpl<ObjectMapper,Object> implemen
 
     private String buildFilterSortSQL(String ontologyApi, List<FilterParam> filter, List<QuerySortParam> sorts) {
 
-        List<OntologyPropertyVO> ontologyPropertyList = ontologyPropertyService.selectByOntologyApi(ontologyApi);
+//        List<OntologyPropertyVO> ontologyPropertyList = ontologyPropertyService.selectByOntologyApi(ontologyApi);
+        List<OntologyPropertyVO> ontologyPropertyList = Lists.newArrayList();
         String sql = buildBaseSQL(ontologyPropertyList);
         assert filter != null;
         assert !filter.isEmpty();

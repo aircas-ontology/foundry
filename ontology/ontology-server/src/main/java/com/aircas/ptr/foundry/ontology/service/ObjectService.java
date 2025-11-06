@@ -24,8 +24,6 @@ public interface ObjectService extends IService<Object> {
 
     ObjectWithLinkedInfoVO queryObjectWithLinkedInfoByApiAndPrimaryKey(String api, String key);
 
-    PageInfo<Map<String, Object>> queryObjectList(String uniqueIdentifier, Integer page, Integer size);
-
     int updateObjectData(String ontologyUniqueIdentifier,Map<String, Object> datamap,Map<String, Object> whereMap);
 
     PageInfo<Map<String, Object>> queryObjectByFilter(String ontologyApi, List<FilterParam> filter, Integer page, Integer size, List<QuerySortParam> sorts);

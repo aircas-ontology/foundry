@@ -1,23 +1,22 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
-import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
+import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
-import com.aircas.ptr.foundry.ontology.client.EntityClient;
-import com.aircas.ptr.foundry.ontology.common.param.EntityColumnCreateParam;
-import com.aircas.ptr.foundry.ontology.common.param.EntityCreateParam;
-import com.aircas.ptr.foundry.ontology.common.param.EntityDataSourceColumnParam;
-import com.aircas.ptr.foundry.ontology.common.param.EntityDataSourceParam;
 import com.aircas.ptr.foundry.ontology.converter.DataConverter;
-import com.aircas.ptr.foundry.ontology.model.param.*;
-import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyCreateParamV2;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyUpdateParam;
+import com.aircas.ptr.foundry.ontology.model.param.PropertyDatasourceParam;
+import com.aircas.ptr.foundry.ontology.model.po.OntologyActionMappingIn;
+import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
-import com.aircas.ptr.foundry.ontology.model.po.TableColumnDesc;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyDetailVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyInfoVO;
-import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyVO;
-import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyMetaMapper;
-import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyPropertyMapper;
+import com.aircas.ptr.foundry.ontology.repository.arangodb.EntityNodeRepository;
 import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.TableMetadataMapper;
+import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyActionMappingInMapper;
+import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyLinkGroupMapper;
+import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyPropertyMapper;
+import com.aircas.ptr.foundry.ontology.service.EntityService;
 import com.aircas.ptr.foundry.ontology.service.OntologyPropertyService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -28,11 +27,12 @@ import lombok.extern.slf4j.Slf4j;
 import lombok.var;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
-import org.springframework.beans.BeanUtils;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.*;
+import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -40,155 +40,141 @@ import java.util.stream.Collectors;
 @Slf4j
 public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMapper, OntologyProperty> implements OntologyPropertyService {
 
-    private final OntologyPropertyMapper ontologyPropertyMapper;
-
     private final TableMetadataMapper tableMetadataMapper;
 
-    private final OntologyMetaMapper ontologyMetaMapper;
+    private final EntityService entityService;
 
-    private final EntityClient entityClient;
+    private final EntityNodeRepository nodeRepository;
 
-    private final OntologyMetaMapper metaMapper;
+    private final OntologyLinkGroupMapper linkMapper;
+
+    private final OntologyActionMappingInMapper mappingInMapper;
+
 
     @Override
     @Transactional(value = "mainTransactionManager")
-    public void createProperty(OntologyPropertyCreateParamV2 propertyCreateParam) {
+    public void updateProperty(OntologyPropertyUpdateParam param) {
+        //check property existence
+        var uniqIdentifier = param.getUniqIdentifier();
+        var originalProperty = getOne(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getUniqueIdentifier, uniqIdentifier));
+        PreconditionUtils.checkArgument(originalProperty != null, "属性不存在", HttpStatus.BAD_REQUEST);
 
+        var otherProps = list(new LambdaQueryWrapper<OntologyProperty>()
+                .eq(OntologyProperty::getOntologyUniqueIdentifier, originalProperty.getOntologyUniqueIdentifier()))
+                .stream().filter(v -> !v.getUniqueIdentifier().equals(param.getUniqIdentifier())).collect(Collectors.toList());
+        //check columnName
+        checkDatasourceColumnName(otherProps, param.getDatasource());
+        //check titleKey
+        if (param.getIsTitleKey()) {
+            checkTitleKey(otherProps);
+        }
+        //check primaryKey
+        if (param.getIsPrimaryKey()) {
+            checkPrimaryKey(otherProps, param.getDatasource());
+        }
+        //update property
+        updateById(originalProperty.setDatasourceColumnName(param.getDatasource() != null ? param.getDatasource().getDatasourceColumnName() : null)
+                .setDatasourceId(param.getDatasource() != null ? param.getDatasource().getDatasourceId() : null)
+                .setDescription(param.getDescription())
+                .setDisplayName(param.getDisplayName())
+                .setTag(param.getTag())
+                .setPropertyType(param.getDataType())
+                .setIsTitleKey(param.getIsTitleKey() ? 1 : 0)
+                .setIsPrimaryKey(param.getIsPrimaryKey() ? 1 : 0));
+        //update arangodb node
+        buildEntityNodes(originalProperty.getOntologyUniqueIdentifier());
     }
 
     @Override
     @Transactional(value = "mainTransactionManager")
-    public void createProperties(OntologyPropertyCreateParam propertyCreateParam) {
-        var meta = metaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, propertyCreateParam.getOntologyIdentifier()));
-        var properties = list(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, meta.getUniqueIdentifier()));
-        List<EntityDataSourceParam> newDS = Lists.newArrayList();
-        List<EntityDataSourceColumnParam> existDS = Lists.newArrayList();
+    public void batchCreateProperties(List<OntologyPropertyCreateParamV2> params) {
+        if (CollectionUtils.isEmpty(params)) {
+            return;
+        }
+        //参数校验
+        var ontologyId = params.get(0).getOntologyIdentifier();
+        var properties = list(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyId));
 
-        //新数据源
-        var newDatasources = propertyCreateParam.getNewAssociateDataSources();
-        if (CollectionUtils.isNotEmpty(newDatasources)) {
-            //校验数据源
-            var dataSources = newDatasources.stream().map(ds -> ds.getColumnParamList().get(0).getDatasourceId()).collect(Collectors.toList());
-            var otherDS = meta.getOtherDatasourceId();
-            List<String> dsList = Lists.newArrayList(meta.getBackingDatasourceId());
-            if (StringUtils.isNotEmpty(otherDS)) {
-                dsList.addAll(Arrays.stream(otherDS.split(",")).collect(Collectors.toList()));
+        Set<String> apiNameSet = Sets.newHashSet();
+        Set<String> datasourceSet = Sets.newHashSet();
+        Boolean hasTitleKey = false;
+        Boolean hasPrimaryKey = false;
+        List<OntologyProperty> propertyList = Lists.newArrayList();
+
+        for (var p : params) {
+            //check api name conflict
+            if (apiNameSet.contains(p.getApiName())) {
+                throw new BusinessException("属性apiName冲突：" + p.getApiName(), HttpStatus.BAD_REQUEST);
+            } else {
+                apiNameSet.add(p.getApiName());
             }
-            dsList.addAll(dataSources);
-            PreconditionUtils.checkArgument(dsList.stream().collect(Collectors.toSet()).size() == dsList.size(), "datasourceId存在冲突");
-            //校验关联健，不考虑title key
-            var otherProps = buildOtherDatasourceProperty(newDatasources, meta.getUniqueIdentifier(), properties);
-            properties.addAll(otherProps);
-            //校验property apiName是否有冲突
-            PreconditionUtils.checkArgument(properties.stream().map(v -> StringUtils.lowerCase(v.getApiName())).collect(Collectors.toSet()).size() == properties.size(), "apiName存在冲突");
-            //更新meta其他数据源信息
-            dsList.remove(meta.getBackingDatasourceId());
-            meta.setOtherDatasourceId(String.join(",", dsList));
-            metaMapper.updateById(meta);
-            //批量插入属性
-            saveBatch(otherProps);
-            //build new ds
-            newDS = newDatasources.stream().map(ds -> DataConverter.convert(ds, meta.getApiName() + "_" + ds.getColumnParamList().get(0).getDatasourceId()))
-                    .collect(Collectors.toList());
-        }
-        //旧数据源属性
-        var existDatasources = propertyCreateParam.getExistDataSources();
-        if (CollectionUtils.isNotEmpty(existDatasources)) {
-            //校验数据源
-            var dataSources = existDatasources.stream().map(ds -> ds.getDatasourceId()).collect(Collectors.toSet());
-            var dsSet = Sets.newHashSet(meta.getBackingDatasourceId());
-            if (StringUtils.isNotEmpty(meta.getOtherDatasourceId())) {
-                dsSet.addAll(Arrays.stream(meta.getOtherDatasourceId().split(",")).collect(Collectors.toList()));
+            checkApiName(properties, p.getApiName());
+            //check datasource conflict
+            if (p.getDatasource() != null) {
+                var datasource = p.getDatasource();
+                if (datasourceSet.contains(datasource.getDatasourceId() + datasource.getDatasourceColumnName())) {
+                    throw new BusinessException("属性数据源冲突：" + datasource.getDatasourceId() + ":" + datasource.getDatasourceColumnName(), HttpStatus.BAD_REQUEST);
+                } else {
+                    apiNameSet.add(datasource.getDatasourceId() + datasource.getDatasourceColumnName());
+                }
             }
-            PreconditionUtils.checkArgument(dsSet.containsAll(dataSources), "数据源不存在");
-            //校验property apiName和columnName是否有冲突
-            var otherProps = existDatasources.stream().map(param -> DataConverter.convert(param).setOntologyUniqueIdentifier(meta.getUniqueIdentifier())).collect(Collectors.toList());
-            properties.addAll(otherProps);
-            PreconditionUtils.checkArgument(properties.stream().map(v -> StringUtils.lowerCase(v.getApiName())).collect(Collectors.toSet()).size() == properties.size(), "apiName存在冲突");
-            //PreconditionUtils.checkArgument(properties.stream().map(v -> StringUtils.lowerCase(v.getDatasourceColumnName())).collect(Collectors.toSet()).size() == properties.size(), "datasourceColumnName存在冲突");
-            //批量插入属性
-            saveBatch(otherProps);
-            //build exist ds
-            existDS = existDatasources.stream().map(v -> DataConverter.convertEntityDataSource(v)).collect(Collectors.toList());
+            checkDatasourceColumnName(properties, p.getDatasource());
+            //check titleKey
+            if (p.getIsTitleKey()) {
+                PreconditionUtils.checkArgument(!hasTitleKey, "属性存在多个名称健", HttpStatus.BAD_REQUEST);
+                hasTitleKey = true;
+                checkTitleKey(properties);
+            }
+            //check primaryKey
+            if (p.getIsPrimaryKey()) {
+                PreconditionUtils.checkArgument(!hasPrimaryKey, "属性存在多个主键", HttpStatus.BAD_REQUEST);
+                hasPrimaryKey = true;
+                checkPrimaryKey(properties, p.getDatasource());
+            }
+            propertyList.add(DataConverter.convert(p));
         }
-        //更新实体层数据
-        entityClient.createColumns(EntityColumnCreateParam.builder()
-                .existDatasourceColumns(existDS)
-                .newDatasource(newDS)
-                .primaryTableName(meta.getApiName())
-                .build());
+        //更新数据
+        saveBatch(propertyList);
+        //更新节点
+        buildEntityNodes(ontologyId);
     }
 
     @Override
     @Transactional(value = "mainTransactionManager")
-    public void updateProperty(OntologyPropertyUpdateParam propertyUpdateParam) {
-
+    public void deleteProperty(String propertyUniqueIdentifier) {
+        var property = getOne(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getUniqueIdentifier, propertyUniqueIdentifier));
+        PreconditionUtils.checkArgument(property != null, "无效的属性id", HttpStatus.BAD_REQUEST);
+        //主键+标题健不能删除
+        PreconditionUtils.checkArgument(property.getIsPrimaryKey() == 1 || property.getIsTitleKey() == 1, "主键和标题健不能删除", HttpStatus.FORBIDDEN);
+        //被行为使用到的属性不能删除
+        var mappingList = mappingInMapper.selectList(new LambdaQueryWrapper<OntologyActionMappingIn>().eq(OntologyActionMappingIn::getPropertyUniqueIdentifier, propertyUniqueIdentifier));
+        PreconditionUtils.checkArgument(CollectionUtils.isEmpty(mappingList), "该属性被本体行为用到", HttpStatus.FORBIDDEN);
+        //delete
+        remove(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getUniqueIdentifier, propertyUniqueIdentifier));
     }
 
     @Override
     @Transactional(value = "mainTransactionManager")
-    public void createDatasource(OntologyDataSourceCreateParam dataSourceCreateParam) {
-        // 主数据源属性
-        var meta = metaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, dataSourceCreateParam.getOntologyIdentifier()));
-        var primaryDataSource = dataSourceCreateParam.getPrimaryDataSource();
-        PreconditionUtils.checkArgument(primaryDataSource != null && CollectionUtils.isNotEmpty(primaryDataSource.getColumnParamList()), "primaryDataSource is null");
-        var primaryTableName = primaryDataSource.getColumnParamList().get(0).getDatasourceId();
-        meta.setBackingDatasourceId(primaryTableName);
-        var associateDataSources = dataSourceCreateParam.getAssociateDataSources();
-        if (CollectionUtils.isNotEmpty(associateDataSources)) {
-            var dataSources = associateDataSources.stream().map(ds -> ds.getColumnParamList().get(0).getDatasourceId()).collect(Collectors.toList());
-            meta.setOtherDatasourceId(String.join(",", dataSources));
+    public void createProperty(OntologyPropertyCreateParamV2 param) {
+        //参数校验
+        var ontologyId = param.getOntologyIdentifier();
+        var properties = list(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyId));
+        //check apiName
+        checkApiName(properties, param.getApiName());
+        //check columnName
+        checkDatasourceColumnName(properties, param.getDatasource());
+        //check titleKey
+        if (param.getIsTitleKey()) {
+            checkTitleKey(properties);
         }
-        metaMapper.updateById(meta);
-        // 创建本体属性
-        var properties = primaryDataSource.getColumnParamList().stream()
-                .map(v -> DataConverter.convert(v)
-                        .setOntologyUniqueIdentifier(dataSourceCreateParam.getOntologyIdentifier()))
-                .collect(Collectors.toList());
-        //  其他数据源属性
-        if (CollectionUtils.isNotEmpty(associateDataSources)) {
-            //校验datasource 是否冲突
-            var datasourceIds = associateDataSources.stream().map(v -> v.getColumnParamList().get(0).getDatasourceId()).collect(Collectors.toList());
-            datasourceIds.add(primaryTableName);
-            PreconditionUtils.checkArgument(datasourceIds.stream().collect(Collectors.toSet()).size() == datasourceIds.size(), "datasourceId存在冲突");
-            var otherProps = buildOtherDatasourceProperty(associateDataSources, meta.getUniqueIdentifier(), properties);
-            properties.addAll(otherProps);
+        //check primaryKey
+        if (param.getIsPrimaryKey()) {
+            checkPrimaryKey(properties, param.getDatasource());
         }
-        //校验property apiName是否有冲突
-        PreconditionUtils.checkArgument(properties.stream().map(v -> StringUtils.lowerCase(v.getApiName())).collect(Collectors.toSet()).size() == properties.size(), "apiName存在冲突");
-        //校验titleKey
-        var titleProperties = properties.stream().filter(v -> v.getIsTitleKey() == 1).collect(Collectors.toList());
-        PreconditionUtils.checkArgument(titleProperties.size() == 1 && titleProperties.get(0).getDatasourceId().equals(primaryTableName),
-                "名称健不存在或多个");
-        //批量插入
-        saveBatch(properties);
-        //创建实体表、实体数据和实体节点
-        entityClient.createTableAndEntities(EntityCreateParam.builder()
-                .primaryDataSource(DataConverter.convert(primaryDataSource, meta.getApiName()))
-                .associateDataSources(CollectionUtils.isNotEmpty(associateDataSources) ?
-                        associateDataSources.stream()
-                                .map(v -> DataConverter.convert(v, meta.getApiName() + "_" + v.getColumnParamList().get(0).getDatasourceId()))
-                                .collect(Collectors.toList())
-                        : null)
-                .build());
-    }
-
-    private List<OntologyProperty> buildOtherDatasourceProperty(List<OntologyDatasourceParam> associateDataSources,
-                                                                String ontologyUniqueIdentifier,
-                                                                List<OntologyProperty> properties) {
-        //校验关联健
-        associateDataSources.stream().forEach(ds -> {
-            var associateKey = ds.getColumnParamList().stream().filter(v -> v.getIsAssociateKey()).findFirst().orElse(null);
-            PreconditionUtils.checkArgument(associateKey != null &&
-                    properties.stream().anyMatch(v -> v.getDatasourceColumnName().equals(associateKey.getAssociateDatasourceColumnName())), "找不到关联健或者关联的属性错误");
-        });
-        //生成属性表数据
-        var otherProps = associateDataSources.stream()
-                .flatMap(ds -> ds.getColumnParamList().stream().map(v ->
-                        DataConverter.convert(v)
-                                .setOntologyUniqueIdentifier(ontologyUniqueIdentifier)
-                )).collect(Collectors.toList());
-        return otherProps;
+        //create property
+        save(DataConverter.convert(param));
+        //create arango node by primary key
+        buildEntityNodes(param.getOntologyIdentifier());
     }
 
 
@@ -230,44 +216,78 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
     }
 
 
-    @Override
-    public List<OntologyPropertyVO> selectByOntologyUniqueIdentifier(String uniqueIdentifier) {
-        List<OntologyProperty> ontologyPropertyList = ontologyPropertyMapper.selectByOntologyUniqueIdentifier(uniqueIdentifier);
-        List<OntologyPropertyVO> list = new ArrayList<>();
-
-        List<String> dataSouceIdList = ontologyPropertyList.stream().map(property -> property.getDatasourceId()).collect(Collectors.toList());
-        Map<String, Map<String, TableColumnDesc>> propertySourceMap = new HashMap<>();
-        for (String dataSourceId : dataSouceIdList) {
-            List<TableColumnDesc> tableColumnDescs = tableMetadataMapper.getColumnMetadata(dataSourceId);
-            Map<String, TableColumnDesc> columnNameDescMap = new HashMap<>();
-            for (TableColumnDesc tableColumnDesc : tableColumnDescs) {
-                columnNameDescMap.put(tableColumnDesc.getColumnName(), tableColumnDesc);
-            }
-            propertySourceMap.put(dataSourceId, columnNameDescMap);
+    private void checkPrimaryKey(List<OntologyProperty> properties, PropertyDatasourceParam datasource) {
+        var existPrimaryKey = properties.stream().filter(v -> v.getIsPrimaryKey() == 1).findFirst();
+        PreconditionUtils.checkArgument(!existPrimaryKey.isPresent(), "属性主键已存在:" + existPrimaryKey, HttpStatus.BAD_REQUEST);
+        if (datasource != null) {
+            var ds = datasource.getDatasourceId();
+            var pk = datasource.getDatasourceColumnName();
+            var pkCol = tableMetadataMapper.queryPrimaryKeyColumnName(ds);
+            PreconditionUtils.checkArgument(pkCol.equals(pk), "属性主键不是数据源主键", HttpStatus.BAD_REQUEST);
         }
+    }
 
-        for (OntologyProperty ontologyProperty : ontologyPropertyList) {
-            OntologyPropertyVO propertyVO = new OntologyPropertyVO();
-            BeanUtils.copyProperties(ontologyProperty, propertyVO);
-            String dataSourceId = ontologyProperty.getDatasourceId();
-            if (dataSourceId != null && dataSourceId.length() > 0) {
-                Map<String, TableColumnDesc> tableColumnsDesc = propertySourceMap.get(dataSourceId);
-                if (tableColumnsDesc != null && tableColumnsDesc.size() > 0) {
-                    TableColumnDesc tableColumnDesc = tableColumnsDesc.get(ontologyProperty.getDatasourceColumnName());
-                    OntologyDataTypeEnum type = OntologyDataTypeEnum.valueOfPg(tableColumnDesc.getType());
-                    propertyVO.setPropertyType(type);
+    private void checkTitleKey(List<OntologyProperty> properties) {
+        var existTitleKey = properties.stream().filter(v -> v.getIsTitleKey() == 1).findFirst();
+        PreconditionUtils.checkArgument(!existTitleKey.isPresent(), "属性标题键已存在:" + existTitleKey, HttpStatus.BAD_REQUEST);
+    }
+
+    private void checkDatasourceColumnName(List<OntologyProperty> properties, PropertyDatasourceParam datasource) {
+        if (datasource != null) {
+            var sameDsProp = properties.stream().filter(v -> StringUtils.equals(v.getDatasourceId(), datasource.getDatasourceId())
+                    && StringUtils.equals(v.getDatasourceColumnName(), datasource.getDatasourceColumnName())).findFirst();
+            PreconditionUtils.checkArgument(!sameDsProp.isPresent(), "数据源和列已关联到已有属性上：" + sameDsProp, HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    private void checkApiName(List<OntologyProperty> properties, String apiName) {
+        var apiNameProp = properties.stream().filter(v -> v.getApiName().equals(apiName)).findFirst();
+        PreconditionUtils.checkArgument(!apiNameProp.isPresent(), "属性apiName已存在:" + apiNameProp.get().getApiName(), HttpStatus.BAD_REQUEST);
+    }
+
+
+    private void buildEntityNodes(String ontologyIdentifier) {
+        var primaryProperty = getOne(new LambdaQueryWrapper<OntologyProperty>()
+                .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyIdentifier)
+                .eq(OntologyProperty::getIsPrimaryKey, 1));
+        var nodes = nodeRepository.findByOntologyUniqIdentifier(ontologyIdentifier);
+
+        if (primaryProperty == null && CollectionUtils.isEmpty(nodes)) {
+            return;
+        }
+        //新增主键数据源
+        else if (primaryProperty != null && CollectionUtils.isEmpty(nodes)) {
+            if (StringUtils.isNotEmpty(primaryProperty.getDatasourceId())) {
+                entityService.createNodes(ontologyIdentifier, primaryProperty.getDatasourceId(), primaryProperty.getDatasourceColumnName());
+                createRelationsByLink(ontologyIdentifier);
+            }
+        }
+        //主键字段设置为false
+        else if (primaryProperty == null && !CollectionUtils.isEmpty(nodes)) {
+            entityService.deleteNodesAndRelationsByOntologyId(ontologyIdentifier);
+        } else if (primaryProperty != null && !CollectionUtils.isEmpty(nodes)) {
+            //主键数据源发生了变更
+            if (StringUtils.isNotEmpty(primaryProperty.getDatasourceId())) {
+                if (!primaryProperty.getDatasourceId().equals(nodes.get(0).getTableName())) {
+                    entityService.deleteNodesAndRelationsByOntologyId(ontologyIdentifier);
+                    entityService.createNodes(ontologyIdentifier, primaryProperty.getDatasourceId(), primaryProperty.getDatasourceColumnName());
+                    createRelationsByLink(ontologyIdentifier);
                 }
             }
-            list.add(propertyVO);
+            //主键数据源取消设置
+            else {
+                entityService.deleteNodesAndRelationsByOntologyId(ontologyIdentifier);
+            }
         }
-        return list;
+
     }
 
-
-    @Override
-    public List<OntologyPropertyVO> selectByOntologyApi(String api) {
-
-        return selectByOntologyUniqueIdentifier(ontologyMetaMapper.selectByApi(api).getUniqueIdentifier());
+    private void createRelationsByLink(String ontologyIdentifier) {
+        var links = linkMapper.selectList(new LambdaQueryWrapper<OntologyLinkGroup>()
+                .eq(OntologyLinkGroup::getOntologyUniqueIdentifierFrom, ontologyIdentifier)
+                .or().eq(OntologyLinkGroup::getOntologyUniqueIdentifierTo, ontologyIdentifier));
+        links.stream().forEach(link -> entityService.createEntityRelations(link));
     }
+
 
 }

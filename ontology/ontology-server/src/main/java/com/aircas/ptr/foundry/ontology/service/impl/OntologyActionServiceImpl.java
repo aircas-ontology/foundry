@@ -20,6 +20,7 @@ import com.github.pagehelper.PageInfo;
 import lombok.extern.slf4j.Slf4j;
 import lombok.var;
 import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.compress.utils.Lists;
 import org.apache.commons.lang.StringUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
@@ -268,42 +269,42 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
 //        return actionHandleTaskService.insert(actionHandleTaskBO) > 0;
     }
 
-    private void checkBindingConsistence(OntologyActionBo ontologyFunctionBo)
-            throws OntologyFunctionParameterPropertyTypeNotSameException, FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionNotFoundException, OntologyFunctionBindingParameterNotFoundException, OntologyFunctionMappedPropertyNotFoundException {
-
-        String ontologUniqueIdentifier = ontologyFunctionBo.getOntologyUniqueIdentifier();
-        List<OntologyPropertyVO> propertyVOS = ontologyPropertyService.selectByOntologyUniqueIdentifier(ontologUniqueIdentifier);
-        Map<String, OntologyPropertyVO> propertyMap = new HashMap<>();
-        propertyVOS.forEach(propertyVO -> {
-            propertyMap.put(propertyVO.getUniqueIdentifier(), propertyVO);
-        });
-
-        List<ParameterMetadataVO> parameterMetadataVOS = functionService.getParameters(ontologyFunctionBo.getFunctionApi());
-        Map<String, ParameterMetadataVO> parameterMetadataMap = new HashMap<>();
-        parameterMetadataVOS.forEach(parameterMetadataVO -> {
-            parameterMetadataMap.put(parameterMetadataVO.getName(), parameterMetadataVO);
-        });
-
-        for (OntologyActionMappingInBO mappingInBO : ontologyFunctionBo.getMappingIns()) {
-            String parameterName = mappingInBO.getParameterName();
-            String propertyUniqueIdentifier = mappingInBO.getPropertyUniqueIdentifier();
-            if (ONTOLOGY.getCode().equals(propertyUniqueIdentifier)) {
-
-            } else {
-                ParameterMetadataVO parameterMetadataVO = parameterMetadataMap.get(parameterName);
-                if (parameterMetadataVO == null) {
-                    throw ExceptionFactory.getOntologyFunctionBindingParameterNotFoundException(null);
-                }
-                OntologyPropertyVO ontologyPropertyVO = propertyMap.get(propertyUniqueIdentifier);
-                if (ontologyPropertyVO == null) {
-                    throw ExceptionFactory.getOntologyFunctionMappedPropertyNotFoundException(null);
-                }
-                if (!parameterMetadataVO.getType().equals(ontologyPropertyVO.getPropertyType().name())) {
-                    throw ExceptionFactory.getOntologyFunctionParameterPropertyTypeNotSameException(null);
-                }
-            }
-        }
-    }
+//    private void checkBindingConsistence(OntologyActionBo ontologyFunctionBo)
+//            throws OntologyFunctionParameterPropertyTypeNotSameException, FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionNotFoundException, OntologyFunctionBindingParameterNotFoundException, OntologyFunctionMappedPropertyNotFoundException {
+//
+//        String ontologUniqueIdentifier = ontologyFunctionBo.getOntologyUniqueIdentifier();
+//        List<OntologyPropertyVO> propertyVOS = ontologyPropertyService.selectByOntologyUniqueIdentifier(ontologUniqueIdentifier);
+//        Map<String, OntologyPropertyVO> propertyMap = new HashMap<>();
+//        propertyVOS.forEach(propertyVO -> {
+//            propertyMap.put(propertyVO.getUniqueIdentifier(), propertyVO);
+//        });
+//
+//        List<ParameterMetadataVO> parameterMetadataVOS = functionService.getParameters(ontologyFunctionBo.getFunctionApi());
+//        Map<String, ParameterMetadataVO> parameterMetadataMap = new HashMap<>();
+//        parameterMetadataVOS.forEach(parameterMetadataVO -> {
+//            parameterMetadataMap.put(parameterMetadataVO.getName(), parameterMetadataVO);
+//        });
+//
+//        for (OntologyActionMappingInBO mappingInBO : ontologyFunctionBo.getMappingIns()) {
+//            String parameterName = mappingInBO.getParameterName();
+//            String propertyUniqueIdentifier = mappingInBO.getPropertyUniqueIdentifier();
+//            if (ONTOLOGY.getCode().equals(propertyUniqueIdentifier)) {
+//
+//            } else {
+//                ParameterMetadataVO parameterMetadataVO = parameterMetadataMap.get(parameterName);
+//                if (parameterMetadataVO == null) {
+//                    throw ExceptionFactory.getOntologyFunctionBindingParameterNotFoundException(null);
+//                }
+//                OntologyPropertyVO ontologyPropertyVO = propertyMap.get(propertyUniqueIdentifier);
+//                if (ontologyPropertyVO == null) {
+//                    throw ExceptionFactory.getOntologyFunctionMappedPropertyNotFoundException(null);
+//                }
+//                if (!parameterMetadataVO.getType().equals(ontologyPropertyVO.getPropertyType().name())) {
+//                    throw ExceptionFactory.getOntologyFunctionParameterPropertyTypeNotSameException(null);
+//                }
+//            }
+//        }
+//    }
 
     @Override
     public OntologyActionVO getMetadataByApi(String apiName)
@@ -326,7 +327,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
 
     private Map<String, OntologyPropertyVO> queryPropertiesByOntologyUniqueIdentifier(String ontologyUniqueIdentifier) {
         Map<String, OntologyPropertyVO> ontologyPropertiesMap = new HashMap<>();
-        List<OntologyPropertyVO> ontologyProperties = ontologyPropertyService.selectByOntologyUniqueIdentifier(ontologyUniqueIdentifier);
+//        List<OntologyPropertyVO> ontologyProperties = ontologyPropertyService.selectByOntologyUniqueIdentifier(ontologyUniqueIdentifier);
+        List<OntologyPropertyVO> ontologyProperties = Lists.newArrayList();
         ontologyProperties.forEach(ontologyProperty -> {
             ontologyPropertiesMap.put(ontologyProperty.getUniqueIdentifier(), ontologyProperty);
         });

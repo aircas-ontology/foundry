@@ -1,14 +1,13 @@
 package com.aircas.ptr.foundry.ontology.converter;
 
 import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
-import com.aircas.ptr.foundry.common.constant.OntologyPropertyCategoryEnum;
 import com.aircas.ptr.foundry.common.constant.Status;
-import com.aircas.ptr.foundry.common.constant.Visibility;
 import com.aircas.ptr.foundry.common.util.IdGenerator;
 import com.aircas.ptr.foundry.ontology.common.param.EntityDataSourceColumnParam;
 import com.aircas.ptr.foundry.ontology.common.param.EntityDataSourceParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyDataSourceColumnParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyPrimaryDatasourceParam;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyCreateParamV2;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaInfoVO;
@@ -20,6 +19,28 @@ import java.util.Arrays;
 import java.util.stream.Collectors;
 
 public class DataConverter {
+
+    public static OntologyProperty convert(OntologyPropertyCreateParamV2 param) {
+        var datasource = param.getDatasource();
+
+        var prop = OntologyProperty.builder()
+                .uniqueIdentifier(IdGenerator.generateUUID())
+                .tag(param.getTag())
+                .status(Status.ENABLE.getValue())
+                .propertyType(param.getDataType())
+                .isTitleKey(param.getIsTitleKey() ? 1 : 0)
+                .isPrimaryKey(param.getIsPrimaryKey() ? 1 : 0)
+                .displayName(param.getDisplayName())
+                .description(param.getDescription())
+                .apiName(param.getApiName())
+                .ontologyUniqueIdentifier(param.getOntologyIdentifier())
+                .build();
+        if (datasource != null) {
+            prop.setDatasourceId(datasource.getDatasourceId())
+                    .setDatasourceColumnName(datasource.getDatasourceColumnName());
+        }
+        return prop;
+    }
 
     public static OntologyPropertyDetailVO convert(OntologyProperty p) {
         return OntologyPropertyDetailVO.builder()
@@ -90,7 +111,7 @@ public class DataConverter {
                 .build();
     }
 
-    public static EntityDataSourceColumnParam convertEntityDataSource(OntologyDataSourceColumnParam param){
+    public static EntityDataSourceColumnParam convertEntityDataSource(OntologyDataSourceColumnParam param) {
         return EntityDataSourceColumnParam.builder()
                 .columnName(param.getApiName())
                 .columnType(param.getDatasourceColumnType().getValue())

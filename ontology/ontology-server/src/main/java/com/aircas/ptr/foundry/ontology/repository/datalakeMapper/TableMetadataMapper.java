@@ -10,7 +10,12 @@ import java.util.List;
 @Mapper
 public interface TableMetadataMapper {
 
-    List<TableColumnDesc> getColumnMetadata(@Param("tableName") String tableName);
+    List<TableColumnDesc> queryColumnMetadata(@Param("tableName") String tableName);
 
     List<DatasourceTable> listTables();
+
+    Boolean isColumnExist(@Param("tableName") String tableName, @Param("columnName") String columnName);
+
+    String queryPrimaryKeyColumnName(@Param("tableName") String tableName);
+
 }

@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
+import com.aircas.ptr.foundry.common.constant.OntologyLinkTypeEnum;
 import com.aircas.ptr.foundry.ontology.client.EntityClient;
 import com.aircas.ptr.foundry.ontology.common.param.EntityAssociateDatasourceParam;
 import com.aircas.ptr.foundry.ontology.common.param.EntityDetailQueryParam;
@@ -13,6 +14,8 @@ import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
 import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.aircas.ptr.foundry.ontology.repository.arangodb.EntityNodeRepository;
 import com.aircas.ptr.foundry.ontology.repository.arangodb.EntityRelationRepository;
+import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.ObjectMapper;
+import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.TableMetadataMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyActionMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyLinkGroupMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyMetaMapper;
@@ -33,6 +36,8 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
+ * todo 添加事务
+ *
  * @className: EntityServiceImpl
  * @author: yangj
  * @date: 2025/4/8 18:40
@@ -64,6 +69,50 @@ public class EntityServiceImpl implements EntityService {
     @Resource
     private EntityNodeRepository nodeRepository;
 
+    @Resource
+    private TableMetadataMapper tableMapper;
+
+    @Resource
+    private ObjectMapper objectMapper;
+
+
+
+    @Override
+    public void createEntityRelations(OntologyLinkGroup link) {
+        var fromNodes = nodeRepository.findByOntologyUniqIdentifier(link.getOntologyUniqueIdentifierFrom());
+        var toNodes = nodeRepository.findByOntologyUniqIdentifier(link.getOntologyUniqueIdentifierTo());
+
+        if (CollectionUtils.isNotEmpty(fromNodes) && CollectionUtils.isNotEmpty(toNodes)) {
+            var relations = new ArrayList<EntityRelation>();
+            fromNodes.forEach(from ->
+                    toNodes.forEach(to ->
+                            relations.add(EntityRelation.builder()
+                                    .from(from)
+                                    .to(to)
+                                    .isDeleted(link.getType().equals(OntologyLinkTypeEnum.COMPOSITION) ? false : true)
+                                    .createTime(new Date())
+                                    .updateTime(new Date())
+                                    .type(link.getType())
+                                    .name(link.getName())
+                                    .build())
+                    )
+            );
+            relationRepository.batchSave(relations);
+        }
+    }
+
+
+    @Override
+    public void createNodes(String ontologyUniqueIdentifier, String datasourceId, String primaryKeyColumnName) {
+
+        var rows = objectMapper.queryPrimaryKeyValue(datasourceId, primaryKeyColumnName);
+        var nodes = rows.stream().map(r -> EntityNode.builder()
+                .ontologyUniqIdentifier(ontologyUniqueIdentifier)
+                .primaryKey(r)
+                .tableName(datasourceId)
+                .build()).collect(Collectors.toList());
+        nodeRepository.batchSave(nodes);
+    }
 
     @Override
     public void deleteNodesAndRelationsByOntologyId(String ontologyUniqueIdentifier) {
@@ -93,9 +142,7 @@ public class EntityServiceImpl implements EntityService {
                 .tableName(node.getTableName())
                 .createTime(new Date())
                 .updateTime(new Date())
-                .primaryKey(node.getPrimaryKey())
-                .displayName(node.getDisplayName())
-                .isDeleted(node.getIsDeleted()).build())
+                .primaryKey(node.getPrimaryKey()).build())
                 .collect(Collectors.toList());
         nodeRepository.batchSave(nodesToInsert);
 
@@ -114,7 +161,6 @@ public class EntityServiceImpl implements EntityService {
                         .description(relation.getDescription())
                         .createTime(new Date())
                         .updateTime(new Date())
-                        .isDeleted(relation.getIsDeleted())
                         .from(Optional.ofNullable(newNodeMap.get(relation.getFrom().getPrimaryKey())).orElse(relation.getFrom()))
                         .to(Optional.ofNullable(newNodeMap.get(relation.getTo().getPrimaryKey())).orElse(relation.getTo()))
                         .build()

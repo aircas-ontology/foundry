@@ -19,6 +19,12 @@ public class PreconditionUtils {
         }
     }
 
+    public static void checkArgument(boolean expression, String message, HttpStatus httpStatus) {
+        if (!expression) {
+            throw new BusinessException(message, httpStatus);
+        }
+    }
+
     public static void checkArgument(boolean expression, String message, ResultCode resultCode, HttpStatus httpStatus) {
         if (!expression) {
             throw new BusinessException(message, resultCode, httpStatus);

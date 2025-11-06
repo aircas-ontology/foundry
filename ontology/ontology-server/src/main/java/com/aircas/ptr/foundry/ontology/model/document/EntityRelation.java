@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.document;
 
+import com.aircas.ptr.foundry.common.constant.OntologyLinkTypeEnum;
 import com.arangodb.springframework.annotation.ArangoId;
 import com.arangodb.springframework.annotation.Edge;
 import com.arangodb.springframework.annotation.From;
@@ -32,7 +33,7 @@ public class EntityRelation {
     private EntityNode to;
 
     //关系类型
-    private String type;
+    private OntologyLinkTypeEnum type;
 
     //关系名称
     private String name;

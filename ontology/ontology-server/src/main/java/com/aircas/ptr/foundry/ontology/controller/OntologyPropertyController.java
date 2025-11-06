@@ -27,17 +27,19 @@ public class OntologyPropertyController {
 
     private final OntologyPropertyService ontologyPropertyService;
 
-//    @PostMapping("/create_datasource")
-//    @ApiOperation(value = "新增属性数据源")
-//    public RestResult createDatasource(@RequestBody @Valid OntologyDataSourceCreateParam dataSourceCreateParam) {
-//        ontologyPropertyService.createDatasource(dataSourceCreateParam);
-//        return RestResult.success();
-//    }
 
     @PostMapping("")
     @ApiOperation(value = "新增单个属性")
     public RestResult createProperty(@RequestBody @Valid OntologyPropertyCreateParamV2 propertyCreateParam) {
         ontologyPropertyService.createProperty(propertyCreateParam);
+        return RestResult.success();
+    }
+
+
+    @PostMapping("/batch")
+    @ApiOperation(value = "批量新增属性")
+    public RestResult createProperty(@RequestBody @Valid  List<OntologyPropertyCreateParamV2> param) {
+        ontologyPropertyService.batchCreateProperties(param);
         return RestResult.success();
     }
 
@@ -52,7 +54,8 @@ public class OntologyPropertyController {
 
     @DeleteMapping("/{propertyUniqueIdentifier}")
     @ApiOperation(value = "删除本体属性")
-    public RestResult delete(@PathVariable(name = "propertyUniqueIdentifier", required = true) String propertyUniqueIdentifier) {
+    public RestResult deleteProperty(@PathVariable(name = "propertyUniqueIdentifier", required = true) String propertyUniqueIdentifier) {
+        ontologyPropertyService.deleteProperty(propertyUniqueIdentifier);
         return RestResult.success();
     }
 

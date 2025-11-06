@@ -20,7 +20,7 @@ public class TableMetadataServiceImpl implements TableMetadataService {
 
     @Override
     public List<TableColumnDescVO> getColumns(String datasourceId) {
-        return tableMetadataMapper.getColumnMetadata(datasourceId).stream().map(v ->
+        return tableMetadataMapper.queryColumnMetadata(datasourceId).stream().map(v ->
                 TableColumnDescVO.builder()
                         .columnName(v.getColumnName())
                         .description(v.getDescription())

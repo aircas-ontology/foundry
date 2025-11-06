@@ -71,6 +71,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
             var iconUrl = fileService.getThumbnailByImage(image);
             ontologyMetaMapper.update(new OntologyMeta().setIcon(iconUrl), new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, uniqueIdentifier));
         } catch (Exception e) {
+            log.error(e.getMessage(), e);
             throw new BusinessException("updateIcon failed");
         }
 
@@ -106,9 +107,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         PreconditionUtils.checkArgument(parentOntology != null, "父本体不存在", ResultCode.PARAM_ERROR, HttpStatus.BAD_REQUEST);
         //创建子本体元数据
         meta.setParentUniqueIdentifier(parentIdentifier)
-                .setStatus(parentOntology.getStatus())
-                .setBackingDatasourceId(parentOntology.getBackingDatasourceId())
-                .setOtherDatasourceId(parentOntology.getOtherDatasourceId());
+                .setStatus(parentOntology.getStatus());
         this.save(meta);
         // 创建属性
         var parentProperties = ontologyPropertyService.list(new LambdaUpdateWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyCreateParam.getParentOntologyUniqueIdentifier()));
