@@ -28,6 +28,7 @@ import lombok.extern.slf4j.Slf4j;
 import lombok.var;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.compress.utils.Lists;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
@@ -135,7 +136,6 @@ public class EntityServiceImpl implements EntityService {
     }
 
 
-
     @Override
     public List<EntityActionVO> getEntityActionsByPrimaryKey(String ontologyUniqueIdentifier) {
         var actions = actionMapper.selectList(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getOntologyUniqueIdentifier, ontologyUniqueIdentifier));
@@ -241,38 +241,43 @@ public class EntityServiceImpl implements EntityService {
     public Page<EntityInfoVO> getEntities(String ontologyUniqueIdentifier, Integer pageNum, Integer pageSize) {
         Page<EntityInfoVO> result = new Page<EntityInfoVO>().setSize(pageSize).setCurrent(pageNum);
         var meta = metaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, ontologyUniqueIdentifier));
-        var props = propertyMapper.selectList(new LambdaQueryWrapper<OntologyProperty>()
-                .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier).eq(OntologyProperty::getDatasourceId, meta.getBackingDatasourceId()));
+        var props = propertyMapper.selectList(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier));
         if (CollectionUtils.isEmpty(props)) {
             return result;
         }
-        var titleKey = props.stream().filter(v -> v.getIsTitleKey() == 1).findFirst().get().getApiName();
-        var primaryKey = props.stream().filter(v -> v.getIsPrimaryKey() == 1).findFirst().get().getApiName();
+        var primaryProperty = props.stream().filter(v -> v.getIsPrimaryKey() == 1).findFirst().orElse(null);
+        if (primaryProperty == null || StringUtils.isEmpty(primaryProperty.getDatasourceColumnName())) {
 
-        var propertyMap = props.stream().collect(Collectors.toMap(v -> v.getApiName(), v -> v));
-        var entityVOPage = entityClient.queryRecords(meta.getApiName(), pageNum, pageSize);
+        }
 
-        var records = entityVOPage.getRecords().stream().map(r -> {
-            var valueMap = r.getProperties().stream().collect(HashMap::new, (m, p) -> m.put(p.getPropertyName(), p.getPropertyValue()), HashMap::putAll);
-            var entityPropertyVOS = valueMap.entrySet().stream().<EntityPropertyVO>map(entry -> {
-                var ontologyProperty = propertyMap.get(entry.getKey());
-                return EntityPropertyVO.builder()
-                        .propertyDisplayName(ontologyProperty.getDisplayName())
-                        .propertyValue(entry.getValue())
-                        .build();
-            }).collect(Collectors.toList());
 
-            return EntityInfoVO.builder()
-                    .displayName(valueMap.get(titleKey).toString())
-                    .primaryKey(valueMap.get(primaryKey))
-                    .properties(entityPropertyVOS)
-                    .build();
-        }).collect(Collectors.toList());
-
-        result.setCurrent(entityVOPage.getCurrent())
-                .setSize(entityVOPage.getSize())
-                .setTotal(entityVOPage.getTotal())
-                .setRecords(records);
+//        var titleKey = props.stream().filter(v -> v.getIsTitleKey() == 1).findFirst().get().getApiName();
+//        var primaryKey = props.stream().filter(v -> v.getIsPrimaryKey() == 1).findFirst().get().getApiName();
+//
+//        var propertyMap = props.stream().collect(Collectors.toMap(v -> v.getApiName(), v -> v));
+//        var entityVOPage = entityClient.queryRecords(meta.getApiName(), pageNum, pageSize);
+//
+//        var records = entityVOPage.getRecords().stream().map(r -> {
+//            var valueMap = r.getProperties().stream().collect(HashMap::new, (m, p) -> m.put(p.getPropertyName(), p.getPropertyValue()), HashMap::putAll);
+//            var entityPropertyVOS = valueMap.entrySet().stream().<EntityPropertyVO>map(entry -> {
+//                var ontologyProperty = propertyMap.get(entry.getKey());
+//                return EntityPropertyVO.builder()
+//                        .propertyDisplayName(ontologyProperty.getDisplayName())
+//                        .propertyValue(entry.getValue())
+//                        .build();
+//            }).collect(Collectors.toList());
+//
+//            return EntityInfoVO.builder()
+//                    .displayName(valueMap.get(titleKey).toString())
+//                    .primaryKey(valueMap.get(primaryKey))
+//                    .properties(entityPropertyVOS)
+//                    .build();
+//        }).collect(Collectors.toList());
+//
+//        result.setCurrent(entityVOPage.getCurrent())
+//                .setSize(entityVOPage.getSize())
+//                .setTotal(entityVOPage.getTotal())
+//                .setRecords(records);
         return result;
     }
 

@@ -3,7 +3,6 @@ package com.aircas.ptr.foundry.ontology.controller;
 import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.controller.validator.OntologyIdVerify;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyCreateParam;
-import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyCreateParamV2;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyDetailVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyInfoVO;
@@ -30,7 +29,7 @@ public class OntologyPropertyController {
 
     @PostMapping("")
     @ApiOperation(value = "新增单个属性")
-    public RestResult createProperty(@RequestBody @Valid OntologyPropertyCreateParamV2 propertyCreateParam) {
+    public RestResult createProperty(@RequestBody @Valid OntologyPropertyCreateParam propertyCreateParam) {
         ontologyPropertyService.createProperty(propertyCreateParam);
         return RestResult.success();
     }
@@ -38,7 +37,7 @@ public class OntologyPropertyController {
 
     @PostMapping("/batch")
     @ApiOperation(value = "批量新增属性")
-    public RestResult createProperty(@RequestBody @Valid  List<OntologyPropertyCreateParamV2> param) {
+    public RestResult batchCreateProperties(@RequestBody @Valid  List<OntologyPropertyCreateParam> param) {
         ontologyPropertyService.batchCreateProperties(param);
         return RestResult.success();
     }
@@ -48,6 +47,13 @@ public class OntologyPropertyController {
     @ApiOperation(value = "单个更新本体属性")
     public RestResult updateProperty(@RequestBody @Valid OntologyPropertyUpdateParam propertyUpdateParam) {
         ontologyPropertyService.updateProperty(propertyUpdateParam);
+        return RestResult.success();
+    }
+
+    @PutMapping("/batch")
+    @ApiOperation(value = "批量更新本体属性")
+    public RestResult batchUpdateProperties(@RequestBody @Valid List<OntologyPropertyUpdateParam> params) {
+        ontologyPropertyService.batchUpdateProperties(params);
         return RestResult.success();
     }
 

@@ -7,7 +7,7 @@ import com.aircas.ptr.foundry.ontology.common.param.EntityDataSourceColumnParam;
 import com.aircas.ptr.foundry.ontology.common.param.EntityDataSourceParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyDataSourceColumnParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyPrimaryDatasourceParam;
-import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyCreateParamV2;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyCreateParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaInfoVO;
@@ -20,7 +20,7 @@ import java.util.stream.Collectors;
 
 public class DataConverter {
 
-    public static OntologyProperty convert(OntologyPropertyCreateParamV2 param) {
+    public static OntologyProperty convert(OntologyPropertyCreateParam param) {
         var datasource = param.getDatasource();
 
         var prop = OntologyProperty.builder()

@@ -1,6 +1,6 @@
 package com.aircas.ptr.foundry.ontology.service;
 
-import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyCreateParamV2;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyDetailVO;
@@ -11,13 +11,15 @@ import java.util.List;
 
 public interface OntologyPropertyService extends IService<OntologyProperty> {
 
-    void batchCreateProperties(List<OntologyPropertyCreateParamV2> propertyCreateParam);
+    void batchCreateProperties(List<OntologyPropertyCreateParam> propertyCreateParam);
 
     void deleteProperty(String propertyUniqueIdentifier);
 
-    void createProperty(OntologyPropertyCreateParamV2 propertyCreateParam);
+    void createProperty(OntologyPropertyCreateParam propertyCreateParam);
 
     void updateProperty(OntologyPropertyUpdateParam propertyUpdateParam);
+
+    void batchUpdateProperties(List<OntologyPropertyUpdateParam> params);
 
     List<OntologyPropertyDetailVO> getPropertyDetailByOntologyId(String ontologyUniqueIdentifier);
 

@@ -45,6 +45,17 @@ public class EntityRelation {
 
     private Date updateTime;
 
+    /**
+     *  可见窗口开始时间
+     */
+    private Date startTime;
+
+    /**
+     *  可见窗口结束时间
+     */
+    private Date endTime;
+
+
     private Status status;
 
 

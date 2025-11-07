@@ -3,7 +3,7 @@ package com.aircas.ptr.foundry.ontology.service.impl;
 import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.ontology.converter.DataConverter;
-import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyCreateParamV2;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.param.PropertyDatasourceParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyActionMappingIn;
@@ -83,7 +83,63 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
 
     @Override
     @Transactional(value = "mainTransactionManager")
-    public void batchCreateProperties(List<OntologyPropertyCreateParamV2> params) {
+    public void batchUpdateProperties(List<OntologyPropertyUpdateParam> params) {
+        if (CollectionUtils.isEmpty(params)) {
+            return;
+        }
+        //参数校验
+        //属性id是否有效
+        var updateUniqIds = params.stream().map(v -> v.getUniqIdentifier()).collect(Collectors.toList());
+        var updateProperties = list(new LambdaQueryWrapper<OntologyProperty>().in(OntologyProperty::getUniqueIdentifier, updateUniqIds));
+        PreconditionUtils.checkArgument(updateUniqIds.size() == updateProperties.size(), "属性不存在", HttpStatus.BAD_REQUEST);
+        ///主键，标题健，数据源校验
+        var ontologyId = updateProperties.get(0).getOntologyUniqueIdentifier();
+        var otherProps = list(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyId).notIn(OntologyProperty::getUniqueIdentifier, updateUniqIds));
+        var datasourceSet = Sets.newHashSet();
+        var hasTitleKey = false;
+        var hasPrimaryKey = false;
+        var updatePropMap = updateProperties.stream().collect(Collectors.toMap(v -> v.getUniqueIdentifier(), v -> v));
+
+        for (OntologyPropertyUpdateParam p : params) {
+            //check datasource columnName conflict
+            if (p.getDatasource() != null) {
+                var datasource = p.getDatasource();
+                if (datasourceSet.contains(datasource.getDatasourceId() + datasource.getDatasourceColumnName())) {
+                    throw new BusinessException("属性数据源冲突：" + datasource.getDatasourceId() + ":" + datasource.getDatasourceColumnName(), HttpStatus.BAD_REQUEST);
+                }
+            }
+            checkDatasourceColumnName(otherProps, p.getDatasource());
+            //check titleKey
+            if (p.getIsTitleKey()) {
+                PreconditionUtils.checkArgument(!hasTitleKey, "属性存在多个名称健", HttpStatus.BAD_REQUEST);
+                hasTitleKey = true;
+                checkTitleKey(otherProps);
+            }
+            //check primaryKey
+            if (p.getIsPrimaryKey()) {
+                PreconditionUtils.checkArgument(!hasPrimaryKey, "属性存在多个主键", HttpStatus.BAD_REQUEST);
+                hasPrimaryKey = true;
+                checkPrimaryKey(otherProps, p.getDatasource());
+            }
+            var prop = updatePropMap.get(p.getUniqIdentifier());
+            prop.setPropertyType(p.getDataType())
+                    .setIsTitleKey(p.getIsTitleKey() ? 1 : 0)
+                    .setIsPrimaryKey(p.getIsPrimaryKey() ? 1 : 0)
+                    .setTag(p.getTag())
+                    .setDescription(p.getDescription())
+                    .setDisplayName(p.getDisplayName())
+                    .setDatasourceId(p.getDatasource() != null ? p.getDatasource().getDatasourceId() : null)
+                    .setDatasourceColumnName(p.getDatasource() != null ? p.getDatasource().getDatasourceColumnName() : null);
+        }
+        //batch update
+        updateBatchById(updateProperties);
+        //update arangodb node
+        buildEntityNodes(ontologyId);
+    }
+
+    @Override
+    @Transactional(value = "mainTransactionManager")
+    public void batchCreateProperties(List<OntologyPropertyCreateParam> params) {
         if (CollectionUtils.isEmpty(params)) {
             return;
         }
@@ -151,7 +207,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
 
     @Override
     @Transactional(value = "mainTransactionManager")
-    public void createProperty(OntologyPropertyCreateParamV2 param) {
+    public void createProperty(OntologyPropertyCreateParam param) {
         //参数校验
         var ontologyId = param.getOntologyIdentifier();
         var properties = list(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyId));
