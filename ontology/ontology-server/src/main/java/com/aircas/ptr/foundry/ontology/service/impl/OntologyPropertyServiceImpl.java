@@ -197,7 +197,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         var property = getOne(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getUniqueIdentifier, propertyUniqueIdentifier));
         PreconditionUtils.checkArgument(property != null, "无效的属性id", HttpStatus.BAD_REQUEST);
         //主键+标题健不能删除
-        PreconditionUtils.checkArgument(property.getIsPrimaryKey() == 1 || property.getIsTitleKey() == 1, "主键和标题健不能删除", HttpStatus.FORBIDDEN);
+        PreconditionUtils.checkArgument(property.getIsPrimaryKey() == 0 && property.getIsTitleKey() == 0, "主键和标题健不能删除", HttpStatus.FORBIDDEN);
         //被行为使用到的属性不能删除
         var mappingList = mappingInMapper.selectList(new LambdaQueryWrapper<OntologyActionMappingIn>().eq(OntologyActionMappingIn::getPropertyUniqueIdentifier, propertyUniqueIdentifier));
         PreconditionUtils.checkArgument(CollectionUtils.isEmpty(mappingList), "该属性被本体行为用到", HttpStatus.FORBIDDEN);
@@ -270,7 +270,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
 
     private void checkPrimaryKey(List<OntologyProperty> properties, PropertyDatasourceParam datasource) {
         var existPrimaryKey = properties.stream().filter(v -> v.getIsPrimaryKey() == 1).findFirst();
-        PreconditionUtils.checkArgument(!existPrimaryKey.isPresent(), "属性主键已存在:" + existPrimaryKey, HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(!existPrimaryKey.isPresent(), "属性主键已存在", HttpStatus.BAD_REQUEST);
         if (datasource != null) {
             var ds = datasource.getDatasourceId();
             var pk = datasource.getDatasourceColumnName();
@@ -281,20 +281,20 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
 
     private void checkTitleKey(List<OntologyProperty> properties) {
         var existTitleKey = properties.stream().filter(v -> v.getIsTitleKey() == 1).findFirst();
-        PreconditionUtils.checkArgument(!existTitleKey.isPresent(), "属性标题键已存在:" + existTitleKey, HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(!existTitleKey.isPresent(), "属性标题键已存在", HttpStatus.BAD_REQUEST);
     }
 
     private void checkDatasourceColumnName(List<OntologyProperty> properties, PropertyDatasourceParam datasource) {
         if (datasource != null) {
             var sameDsProp = properties.stream().filter(v -> StringUtils.equals(v.getDatasourceId(), datasource.getDatasourceId())
                     && StringUtils.equals(v.getDatasourceColumnName(), datasource.getDatasourceColumnName())).findFirst();
-            PreconditionUtils.checkArgument(!sameDsProp.isPresent(), "数据源和列已关联到已有属性上：" + sameDsProp, HttpStatus.BAD_REQUEST);
+            PreconditionUtils.checkArgument(!sameDsProp.isPresent(), "数据源和列已关联到已有属性上", HttpStatus.BAD_REQUEST);
         }
     }
 
     private void checkApiName(List<OntologyProperty> properties, String apiName) {
         var apiNameProp = properties.stream().filter(v -> v.getApiName().equals(apiName)).findFirst();
-        PreconditionUtils.checkArgument(!apiNameProp.isPresent(), "属性apiName已存在:" + apiNameProp.get().getApiName(), HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(!apiNameProp.isPresent(), "属性apiName已存在:" + apiName, HttpStatus.BAD_REQUEST);
     }
 
 
