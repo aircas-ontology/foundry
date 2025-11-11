@@ -1,6 +1,8 @@
 package com.aircas.ptr.foundry.ontology.controller;
 
 import com.aircas.ptr.foundry.common.base.RestResult;
+import com.aircas.ptr.foundry.common.constant.QuerySortEnum;
+import com.aircas.ptr.foundry.ontology.common.enums.OntologyOrderByEnum;
 import com.aircas.ptr.foundry.ontology.controller.validator.OntologyIdVerify;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyMetaCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyUpdateParam;
@@ -77,8 +79,10 @@ public class OntologyMetaController {
 
     @GetMapping("/group")
     @ApiOperation(value = "根据groupId查询本体分组")
-    public RestResult<List<OntologyGroupMetaVO>> getByGroupId(@RequestParam(name = "groupId", required = false) @ApiParam(name = "groupId", value = "groupId", required = false) String groupId) {
-        return RestResult.ofData(ontologyMetaService.getByGroupId(groupId));
+    public RestResult<List<OntologyGroupMetaVO>> getByGroupId(@RequestParam(name = "groupId", required = false) @ApiParam(name = "groupId", value = "groupId", required = false) String groupId,
+                                                              @RequestParam(name = "orderBy", required = false) @ApiParam(name = "orderBy", value = "orderBy", required = false) OntologyOrderByEnum orderBy,
+                                                              @RequestParam(name = "sort", required = false) @ApiParam(name = "sort", value = "sort", required = false) QuerySortEnum sort) {
+        return RestResult.ofData(ontologyMetaService.getByGroupId(groupId, orderBy, sort));
     }
 
 

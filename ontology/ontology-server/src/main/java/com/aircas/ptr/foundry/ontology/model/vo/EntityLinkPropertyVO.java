@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.vo;
 
+import com.aircas.ptr.foundry.common.constant.OntologyLinkTypeEnum;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.AllArgsConstructor;
@@ -23,6 +24,9 @@ public class EntityLinkPropertyVO {
      */
     @ApiModelProperty(name = "linkName", value = "关系名称")
     private String linkName;
+
+    @ApiModelProperty(name = "linkType", value = "关系类型")
+    private OntologyLinkTypeEnum linkType;
 
     @ApiModelProperty(name = "ontologyFrom", value = "本体开始id")
     private String ontologyFrom;

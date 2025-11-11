@@ -26,7 +26,6 @@
     </update>
 
 
-
     <select id="queryTableDataByColumn" resultType="java.util.Map">
         SELECT
         <foreach item="value" index="key" collection="columnNames" separator=", ">
@@ -42,6 +41,74 @@
         SELECT "${primaryKeyColumnName}" FROM ${tableName}
     </select>
 
+    <select id="queryPrimaryKeyAndTitleKeyValue" resultType="java.util.HashMap">
+        SELECT
+        ${primaryKeyColumnName}
+        <if test="titleKeyColumnName != null and titleKeyColumnName != ''">
+            , ${titleKeyColumnName}
+        </if>
+        FROM ${tableName}
+    </select>
+
+    <!-- 获取列名 -->
+    <select id="queryColumnNames" resultType="string">
+        SELECT COLUMN_NAME
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = 'public' AND  TABLE_NAME = #{tableName}
+    </select>
+
+    <select id="queryMapsPage" resultType="java.util.HashMap">
+        SELECT
+        <if test="columnNames != null and columnNames.size() > 0">
+            <foreach item="column" collection="columnNames" separator=",">
+                "${column}"
+            </foreach>
+        </if>
+        <if test="columnNames == null or columnNames.size() == 0">
+            *
+        </if>
+        FROM ${tableName}
+        LIMIT ${limit} OFFSET ${offset}
+    </select>
+
+
+    <select id="queryCount" resultType="java.lang.Integer">
+        SELECT count(*) FROM ${tableName}
+    </select>
+
+
+    <select id="queryJoinTableData" resultType="java.util.HashMap">
+        SELECT
+        <if test="joinTableColumnNames != null and joinTableColumnNames.size() > 0">
+            <foreach item="column" collection="joinTableColumnNames" separator=",">
+                t2."${column}"
+            </foreach>
+        </if>
+        <if test="joinTableColumnNames == null or joinTableColumnNames.size() == 0">
+            t2.*
+        </if>
+        FROM ${tableName} t1
+        LEFT JOIN ${joinTableName} t2 ON t1."${tableKey}" = t2."${joinTableKey}"
+        WHERE t1."${primaryKeyColumn}" = #{primaryKeyValue}
+        ORDER BY t2."${joinTableOrderBy}" DESC
+        <if test="count != null">
+            LIMIT ${count}
+        </if>
+    </select>
+
+    <select id="queryByPrimaryKey" resultType="java.util.HashMap">
+        SELECT
+        <if test="columnNames != null and columnNames.size() > 0">
+            <foreach item="column" collection="columnNames" separator=",">
+                "${column}"
+            </foreach>
+        </if>
+        <if test="columnNames == null or columnNames.size() == 0">
+            *
+        </if>
+        FROM ${tableName}
+        WHERE "${primaryKeyColumn}" = #{primaryKeyValue}
+    </select>
 
 </mapper>
 

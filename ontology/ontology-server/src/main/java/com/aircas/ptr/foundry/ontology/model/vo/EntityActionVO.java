@@ -26,4 +26,5 @@ public class EntityActionVO {
     @ApiModelProperty(name = "displayName", value = "行为显示名称", example = "轨迹")
     private String displayName;
 
+    //todo 行为参数
 }

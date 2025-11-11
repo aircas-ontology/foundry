@@ -1,11 +1,13 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
 import com.aircas.ptr.foundry.common.base.ResultCode;
+import com.aircas.ptr.foundry.common.constant.QuerySortEnum;
 import com.aircas.ptr.foundry.common.constant.Status;
 import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.common.util.IdGenerator;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.common.util.SnowflakeIdUtil;
+import com.aircas.ptr.foundry.ontology.common.enums.OntologyOrderByEnum;
 import com.aircas.ptr.foundry.ontology.converter.DataConverter;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyMetaCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyUpdateParam;
@@ -17,6 +19,7 @@ import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaVO;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyMetaMapper;
 import com.aircas.ptr.foundry.ontology.service.*;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.extern.slf4j.Slf4j;
@@ -99,6 +102,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         return meta.getUniqueIdentifier();
     }
 
+
     private void createOntologyByInherit(OntologyMetaCreateParam ontologyCreateParam, OntologyMeta meta) {
         var childIdentifier = meta.getUniqueIdentifier();
         var parentIdentifier = ontologyCreateParam.getParentOntologyUniqueIdentifier();
@@ -173,8 +177,15 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
 
         // 创建实体节点和实体关系
         var primaryKey = parentProperties.stream().filter(v -> v.getIsPrimaryKey() == 1).findFirst();
+        var titleKey = parentProperties.stream().filter(v -> v.getIsTitleKey() == 1).findFirst();
+
         if (primaryKey.isPresent() && StringUtils.isNotEmpty(primaryKey.get().getDatasourceColumnName())) {
-            entityService.createNodes(meta.getUniqueIdentifier(), primaryKey.get().getDatasourceId(), primaryKey.get().getDatasourceColumnName());
+            //标题健需要和主键为同一个数据源
+            var titleColumn = "";
+            if (titleKey != null && StringUtils.equals(titleKey.get().getDatasourceId(), primaryKey.get().getDatasourceId())) {
+                titleColumn = titleKey.get().getDatasourceColumnName();
+            }
+            entityService.createNodes(meta.getUniqueIdentifier(), primaryKey.get().getDatasourceId(), primaryKey.get().getDatasourceColumnName(), titleColumn);
             childLinks.stream().forEach(link -> entityService.createEntityRelations(link));
         }
     }
@@ -263,8 +274,6 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                         .displayName(v.getDisplayName())
                         .childNodes(new ArrayList<>())
                         .build()));
-
-
         return metaMap.values().stream().filter(v -> StringUtils.isEmpty(v.getParentUniqueIdentifier())).map(parent ->
                 {
                     buildTree(parent, metaMap);
@@ -283,8 +292,9 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         });
     }
 
+
     @Override
-    public List<OntologyGroupMetaVO> getByGroupId(String groupId) {
+    public List<OntologyGroupMetaVO> getByGroupId(String groupId, OntologyOrderByEnum orderBy, QuerySortEnum sort) {
         List<OntologyGroup> groups = Lists.newArrayList();
         if (StringUtils.isEmpty(groupId)) {
             groups.addAll(groupService.list());
@@ -292,7 +302,8 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
             groups.add(groupService.getOne(new LambdaQueryWrapper<OntologyGroup>().eq(OntologyGroup::getGroupId, groupId)));
         }
 
-        var metaList = list(new LambdaQueryWrapper<OntologyMeta>().orderByDesc(OntologyMeta::getUpdateTime)).stream().map(meta -> DataConverter.convert(meta)).collect(Collectors.toList());
+        var metaList = list(new QueryWrapper<OntologyMeta>().orderBy(orderBy != null, sort != null && sort.equals(QuerySortEnum.ASC), orderBy == null ? "id" : orderBy.getValue()))
+                .stream().map(meta -> DataConverter.convert(meta)).collect(Collectors.toList());
         return groups.stream().map(group -> {
             var metaInfoVOList = metaList.stream().filter(meta -> meta.getMetaGroupId().contains(group.getGroupId())).collect(Collectors.toList());
             return OntologyGroupMetaVO.builder()

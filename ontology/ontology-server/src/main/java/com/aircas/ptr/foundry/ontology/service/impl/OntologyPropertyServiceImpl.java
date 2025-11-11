@@ -302,6 +302,18 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         var primaryProperty = getOne(new LambdaQueryWrapper<OntologyProperty>()
                 .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyIdentifier)
                 .eq(OntologyProperty::getIsPrimaryKey, 1));
+
+        var tiltleProperty = getOne(new LambdaQueryWrapper<OntologyProperty>()
+                .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyIdentifier)
+                .eq(OntologyProperty::getIsTitleKey, 1));
+
+        var titleColumn = "";
+        if (tiltleProperty != null
+                && primaryProperty != null
+                && StringUtils.equals(tiltleProperty.getDatasourceId(), primaryProperty.getDatasourceId())) {
+            titleColumn = tiltleProperty.getDatasourceColumnName();
+        }
+
         var nodes = entityService.getByByOntologyUniqIdentifier(ontologyIdentifier);
 
         if (primaryProperty == null && CollectionUtils.isEmpty(nodes)) {
@@ -310,7 +322,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         //新增主键数据源
         else if (primaryProperty != null && CollectionUtils.isEmpty(nodes)) {
             if (StringUtils.isNotEmpty(primaryProperty.getDatasourceId())) {
-                entityService.createNodes(ontologyIdentifier, primaryProperty.getDatasourceId(), primaryProperty.getDatasourceColumnName());
+                entityService.createNodes(ontologyIdentifier, primaryProperty.getDatasourceId(), primaryProperty.getDatasourceColumnName(), titleColumn);
                 createRelationsByLink(ontologyIdentifier);
             }
         }
@@ -322,7 +334,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
             if (StringUtils.isNotEmpty(primaryProperty.getDatasourceId())) {
                 if (!primaryProperty.getDatasourceId().equals(nodes.get(0).getTableName())) {
                     entityService.deleteNodesAndRelationsByOntologyId(ontologyIdentifier);
-                    entityService.createNodes(ontologyIdentifier, primaryProperty.getDatasourceId(), primaryProperty.getDatasourceColumnName());
+                    entityService.createNodes(ontologyIdentifier, primaryProperty.getDatasourceId(), primaryProperty.getDatasourceColumnName(), titleColumn);
                     createRelationsByLink(ontologyIdentifier);
                 }
             }

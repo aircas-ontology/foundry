@@ -1,5 +1,7 @@
 package com.aircas.ptr.foundry.ontology.service;
 
+import com.aircas.ptr.foundry.common.constant.QuerySortEnum;
+import com.aircas.ptr.foundry.ontology.common.enums.OntologyOrderByEnum;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyMetaCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
@@ -24,7 +26,7 @@ public interface OntologyMetaService extends IService<OntologyMeta> {
 
     String createOntology(OntologyMetaCreateParam ontologyCreateParam);
 
-    List<OntologyGroupMetaVO> getByGroupId(String groupId);
+    List<OntologyGroupMetaVO> getByGroupId(String groupId, OntologyOrderByEnum orderBy, QuerySortEnum sort);
 
     OntologyMetaInfoVO getMetaByUniqueIdentifier(String uniqueIdentifier);
 

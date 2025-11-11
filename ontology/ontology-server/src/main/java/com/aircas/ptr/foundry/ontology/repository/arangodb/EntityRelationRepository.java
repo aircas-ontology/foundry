@@ -23,14 +23,14 @@ public interface EntityRelationRepository extends ArangoRepository<EntityRelatio
 
     void deleteByOntologyLinkId(@Param("ontologyLinkId") String ontologyLinkId);
 
+
     @Query(" FOR n IN node" +
-            "    FILTER n.tableName == @tableName AND n.primaryKey == @primaryKeyValue" +
+            "    FILTER n.ontologyUniqIdentifier == @ontologyUniqueIdentifier AND n.primaryKey == @entityPrimaryKey" +
             "    LET nodeId = n._id" +
             "    FOR edge IN relation" +
-            "        FILTER edge._from == nodeId OR edge._to == nodeId" +
+            "        FILTER (edge._from == nodeId OR edge._to == nodeId) AND edge.status == 'ENABLE'" +
             "        RETURN edge ")
-    List<EntityRelation> queryRelationByTableNameAndPrimaryKey(@Param("tableName") String tableName,
-                                                               @Param("primaryKeyValue") Object primaryKeyValue);
+    List<EntityRelation> queryEnableRelationsByEntity(@Param("ontologyUniqueIdentifier") String ontologyUniqueIdentifier, @Param("entityPrimaryKey") Object entityPrimaryKey);
 
 
     default void batchSave(List<EntityRelation> nodes) {

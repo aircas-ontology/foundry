@@ -29,6 +29,8 @@ public class EntityNode {
 
     private Object primaryKey;
 
+    private String displayName;
+
     private Date createTime;
 
     private Date updateTime;

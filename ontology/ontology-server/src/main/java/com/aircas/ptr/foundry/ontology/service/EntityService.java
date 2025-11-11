@@ -21,7 +21,7 @@ public interface EntityService {
 
     void createEntityRelations(OntologyLinkGroup link);
 
-    void createNodes(String ontologyUniqueIdentifier, String datasourceId, String primaryKeyColumnName);
+    void createNodes(String ontologyUniqueIdentifier, String datasourceId, String primaryKeyColumnName, String titleKeyColumnName);
 
     void deleteRelationsByLinkId(String linkId);
 
