@@ -22,10 +22,10 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.google.common.collect.Lists;
 import lombok.extern.slf4j.Slf4j;
 import lombok.var;
 import org.apache.commons.collections4.CollectionUtils;
-import org.apache.commons.compress.utils.Lists;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.http.HttpStatus;
@@ -242,11 +242,12 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
     @Transactional(value = "mainTransactionManager")
     public void updateMeta(OntologyUpdateParam updateParam) {
         var meta = getOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, updateParam.getOntologyIdentifier()));
-        meta.setIcon(updateParam.getIcon())
-                .setDescription(updateParam.getDescription())
-                .setDisplayName(updateParam.getDisplayName())
-                .setMetaGroupId(String.join(",", updateParam.getGroupIds()));
-        updateById(meta);
+        var updateWrapper = new LambdaUpdateWrapper<OntologyMeta>()
+                .set(OntologyMeta::getIcon, updateParam.getIcon())
+                .set(OntologyMeta::getDescription, updateParam.getDescription())
+                .set(OntologyMeta::getDisplayName, updateParam.getDisplayName())
+                .set(OntologyMeta::getMetaGroupId, String.join(",", updateParam.getGroupIds()));
+        update(meta, updateWrapper);
     }
 
 
@@ -259,7 +260,8 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
 
     @Override
     public List<OntologyMetaInfoVO> searchByKeyword(String keyword) {
-        return ontologyMetaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>().like(OntologyMeta::getDisplayName, keyword)
+        var searchKeyword = StringUtils.isEmpty(keyword) ? "" : keyword;
+        return ontologyMetaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>().like(OntologyMeta::getDisplayName, searchKeyword)
                 .or().like(OntologyMeta::getDescription, keyword)
                 .or().like(OntologyMeta::getApiName, keyword))
                 .stream().map(DataConverter::convert).collect(Collectors.toList());
@@ -267,20 +269,27 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
 
     @Override
     public List<OntologyMetaNodeVO> getOntologyTreeByByGroupId(String groupId) {
-        var metaMap = list(new LambdaQueryWrapper<OntologyMeta>().like(OntologyMeta::getMetaGroupId, groupId))
-                .stream().collect(Collectors.toMap(v -> v.getUniqueIdentifier(), v -> OntologyMetaNodeVO.builder()
-                        .parentUniqueIdentifier(v.getParentUniqueIdentifier())
-                        .uniqueIdentifier(v.getUniqueIdentifier())
-                        .displayName(v.getDisplayName())
-                        .childNodes(new ArrayList<>())
-                        .build()));
-        return metaMap.values().stream().filter(v -> StringUtils.isEmpty(v.getParentUniqueIdentifier())).map(parent ->
-                {
-                    buildTree(parent, metaMap);
-                    return parent;
-                }
-        ).collect(Collectors.toList());
+        List<String> groups = StringUtils.isEmpty(groupId)
+                ? groupService.list(new QueryWrapper<>()).stream().map(v -> v.getGroupId()).collect(Collectors.toList())
+                : Lists.newArrayList(groupId);
 
+        List<OntologyMetaNodeVO> res = Lists.newArrayList();
+        for (var gid : groups) {
+            var metaMap = list(new LambdaQueryWrapper<OntologyMeta>().like(OntologyMeta::getMetaGroupId, gid))
+                    .stream().collect(Collectors.toMap(v -> v.getUniqueIdentifier(), v -> OntologyMetaNodeVO.builder()
+                            .parentUniqueIdentifier(v.getParentUniqueIdentifier())
+                            .uniqueIdentifier(v.getUniqueIdentifier())
+                            .displayName(v.getDisplayName())
+                            .childNodes(new ArrayList<>())
+                            .build()));
+            res.addAll(metaMap.values().stream().filter(v -> StringUtils.isEmpty(v.getParentUniqueIdentifier())).map(parent ->
+                    {
+                        buildTree(parent, metaMap);
+                        return parent;
+                    }
+            ).collect(Collectors.toList()));
+        }
+        return res;
     }
 
     private void buildTree(OntologyMetaNodeVO parent, Map<String, OntologyMetaNodeVO> metaMap) {

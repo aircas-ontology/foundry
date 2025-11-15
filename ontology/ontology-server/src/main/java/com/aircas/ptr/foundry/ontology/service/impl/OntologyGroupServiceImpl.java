@@ -10,17 +10,16 @@ import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyGroupInfoVO;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyGroupMapper;
 import com.aircas.ptr.foundry.ontology.service.OntologyGroupService;
-import com.aircas.ptr.foundry.ontology.service.OntologyLinkGroupService;
 import com.aircas.ptr.foundry.ontology.service.OntologyMetaService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.var;
 import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.lang.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
-import javax.annotation.Resource;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -59,10 +58,13 @@ public class OntologyGroupServiceImpl extends ServiceImpl<OntologyGroupMapper, O
 
     @Override
     public List<OntologyGroupInfoVO> searchByKeyword(String keyword) {
-        var list = list(new LambdaQueryWrapper<OntologyGroup>().like(OntologyGroup::getGroupName, keyword));
-        return list.stream().map(v -> OntologyGroupInfoVO.builder().groupId(v.getGroupId()).groupName(v.getGroupName()).build())
+        var groupName = StringUtils.isEmpty(keyword) ? "" : keyword;
+        var list = list(new LambdaQueryWrapper<OntologyGroup>().like(OntologyGroup::getGroupName, groupName));
+        return list.stream().map(v -> OntologyGroupInfoVO.builder()
+                .groupId(v.getGroupId())
+                .groupName(v.getGroupName())
+                .icon(v.getIcon())
+                .build())
                 .collect(Collectors.toList());
     }
-
-
 }

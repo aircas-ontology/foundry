@@ -25,4 +25,11 @@ public interface EntityNodeRepository extends ArangoRepository<EntityNode, Strin
         partition.forEach(p -> saveAll(p));
     }
 
+
+
+    @Query("FOR n IN node " +
+            "    FILTER n.ontologyUniqIdentifier == @ontologyUniqIdentifier " +
+            "    UPDATE n WITH { displayName: TO_STRING(n.primaryKey) } IN node")
+    void updateDisplayNameEqualPrimaryKey(@Param("ontologyUniqIdentifier") String ontologyUniqIdentifier);
+
 }

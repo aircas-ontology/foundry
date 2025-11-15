@@ -47,7 +47,7 @@ public class OntologyGroupController {
 
     @GetMapping("/search")
     @ApiOperation("关键字检索本体分组")
-    public RestResult<List<OntologyGroupInfoVO>> searchOntologyGroups(@RequestParam(required = true, name = "keyword") String keyword) {
+    public RestResult<List<OntologyGroupInfoVO>> searchOntologyGroups(@RequestParam(required = false, name = "keyword") String keyword) {
         return RestResult.ofData(ontologyGroupService.searchByKeyword(keyword));
     }
 

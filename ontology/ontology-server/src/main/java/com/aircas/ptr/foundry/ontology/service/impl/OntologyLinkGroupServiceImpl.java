@@ -21,6 +21,7 @@ import com.google.common.collect.Lists;
 import lombok.extern.slf4j.Slf4j;
 import lombok.var;
 import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -81,6 +82,14 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
 
     @Override
     public List<OntologyLinkInfoVO> getLinksByGroupId(String groupId) {
+        if (StringUtils.isEmpty(groupId)) {
+            var links = list(new LambdaQueryWrapper<>());
+            if (CollectionUtils.isEmpty(links)) {
+                return Lists.newArrayList();
+            }
+            return buildLinkInfo(links);
+        }
+
         var ids = ontologyMetaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>().like(OntologyMeta::getMetaGroupId, groupId))
                 .stream().map(v -> v.getUniqueIdentifier()).collect(Collectors.toList());
 
@@ -134,8 +143,6 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
             var from = metaMap.get(link.getOntologyUniqueIdentifierFrom());
             var to = metaMap.get(link.getOntologyUniqueIdentifierTo());
             return OntologyLinkInfoVO.builder()
-                    .createTime(link.getCreateTime())
-                    .updateTime(link.getUpdateTime())
                     .name(link.getName())
                     .uniqueIdentifier(link.getUniqueIdentifier())
                     .ontologyUniqueIdentifierFrom(from.getUniqueIdentifier())

@@ -34,20 +34,6 @@ public class OntologyLinkInfoVO {
     private String name;
 
     /**
-     * 记录创建时间
-     */
-    @ApiModelProperty(name = "createTime", value = "记录创建时间")
-    @JsonFormat(pattern = DATE_FORMAT_DEFAULT)
-    private Date createTime;
-
-    /**
-     * 记录修改时间
-     */
-    @ApiModelProperty(name = "updateTime", value = "记录修改时间")
-    @JSONField(format = DATE_FORMAT_DEFAULT)
-    private Date updateTime;
-
-    /**
      * 开始本体unique identifier
      */
     @ApiModelProperty(name = "ontologyUniqueIdentifierFrom", value = "开始本体unique identifier")

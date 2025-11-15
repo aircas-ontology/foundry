@@ -73,12 +73,12 @@ public class OntologyMetaController {
 
     @GetMapping("/search")
     @ApiOperation(value = "搜索本体", notes = "通过关键字匹配本体，包括本体名称、本体描述")
-    public RestResult<List<OntologyMetaInfoVO>> searchByKeyword(@RequestParam(name = "keyword", required = true) @ApiParam(name = "keyword", value = "搜索关键词", required = true) String keyword) {
+    public RestResult<List<OntologyMetaInfoVO>> searchByKeyword(@RequestParam(name = "keyword", required = false) @ApiParam(name = "keyword", value = "搜索关键词", required = false) String keyword) {
         return RestResult.ofData(ontologyMetaService.searchByKeyword(keyword));
     }
 
     @GetMapping("/group")
-    @ApiOperation(value = "根据groupId查询本体分组")
+    @ApiOperation(value = "根据groupId查询组内本体")
     public RestResult<List<OntologyGroupMetaVO>> getByGroupId(@RequestParam(name = "groupId", required = false) @ApiParam(name = "groupId", value = "groupId", required = false) String groupId,
                                                               @RequestParam(name = "orderBy", required = false) @ApiParam(name = "orderBy", value = "orderBy", required = false) OntologyOrderByEnum orderBy,
                                                               @RequestParam(name = "sort", required = false) @ApiParam(name = "sort", value = "sort", required = false) QuerySortEnum sort) {
@@ -88,7 +88,7 @@ public class OntologyMetaController {
 
     @GetMapping("/group/tree")
     @ApiOperation(value = "根据groupId查询组内本体树")
-    public RestResult<List<OntologyMetaNodeVO>> getOntologyTreeByByGroupId(@RequestParam(name = "groupId", required = true) @ApiParam(name = "groupId", value = "groupId", required = true) String groupId) {
+    public RestResult<List<OntologyMetaNodeVO>> getOntologyTreeByByGroupId(@RequestParam(name = "groupId", required = false) @ApiParam(name = "groupId", value = "groupId", required = false) String groupId) {
         return RestResult.ofData(ontologyMetaService.getOntologyTreeByByGroupId(groupId));
     }
 

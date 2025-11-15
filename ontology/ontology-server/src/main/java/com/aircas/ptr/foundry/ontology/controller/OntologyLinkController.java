@@ -63,8 +63,7 @@ public class OntologyLinkController {
 
     @GetMapping("/by_group")
     @ApiOperation(value = "根据group id查询组内本体所有关系(1跳)")
-    public RestResult<List<OntologyLinkInfoVO>> getLinkByGroupId(@RequestParam(required = true, name = "groupId") @ApiParam(value = "分组id", required = true)
-                                                                 @GroupIdVerify String groupId) {
+    public RestResult<List<OntologyLinkInfoVO>> getLinkByGroupId(@RequestParam(required = false, name = "groupId") @ApiParam(value = "分组id", required = false) String groupId) {
         List<OntologyLinkInfoVO> result = ontologyLinkGroupService.getLinksByGroupId(groupId);
         return RestResult.ofData(result);
     }

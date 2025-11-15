@@ -43,9 +43,9 @@
 
     <select id="queryPrimaryKeyAndTitleKeyValue" resultType="java.util.HashMap">
         SELECT
-        ${primaryKeyColumnName}
+        "${primaryKeyColumnName}"
         <if test="titleKeyColumnName != null and titleKeyColumnName != ''">
-            , ${titleKeyColumnName}
+            , "${titleKeyColumnName}"
         </if>
         FROM ${tableName}
     </select>

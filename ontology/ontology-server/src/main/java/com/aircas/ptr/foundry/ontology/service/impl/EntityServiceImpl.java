@@ -29,6 +29,7 @@ import javax.annotation.Resource;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -69,6 +70,38 @@ public class EntityServiceImpl implements EntityService {
 
 
     @Override
+    public void updateNodesDisplayName(String ontologyUniqueIdentifier, String datasourceId, String primaryKeyColumnName, String titleKeyColumnName) {
+        if (StringUtils.isEmpty(titleKeyColumnName)) {
+            nodeRepository.updateDisplayNameEqualPrimaryKey(ontologyUniqueIdentifier);
+            return;
+        }
+        var nodes = nodeRepository.findByOntologyUniqIdentifier(ontologyUniqueIdentifier);
+        if (CollectionUtils.isEmpty(nodes)) {
+            createNodes(ontologyUniqueIdentifier, datasourceId, primaryKeyColumnName, titleKeyColumnName);
+            return;
+        }
+        var rows = objectMapper.queryPrimaryKeyAndTitleKeyValue(datasourceId, primaryKeyColumnName, titleKeyColumnName);
+        var rowMap = rows.stream().collect(Collectors.toMap(
+                v -> {
+                    var primaryKeyValue = v.get(primaryKeyColumnName);
+                    if (primaryKeyValue instanceof Integer) {
+                        return ((Integer) primaryKeyValue).longValue();
+                    } else {
+                        return primaryKeyValue;
+                    }
+                },
+                v -> v.get(titleKeyColumnName) != null ? v.get(titleKeyColumnName).toString() : "",
+                (existingValue, newValue) -> existingValue // 处理键冲突，保留第一个值
+        ));
+
+        nodes.forEach(n -> {
+            var pk = n.getPrimaryKey();
+            n.setDisplayName(rowMap.get(pk));
+        });
+        nodeRepository.batchSave(nodes);
+    }
+
+    @Override
     public void createEntityRelations(OntologyLinkGroup link) {
         var fromNodes = nodeRepository.findByOntologyUniqIdentifier(link.getOntologyUniqueIdentifierFrom());
         var toNodes = nodeRepository.findByOntologyUniqIdentifier(link.getOntologyUniqueIdentifierTo());
@@ -105,8 +138,8 @@ public class EntityServiceImpl implements EntityService {
     @Override
     public void createNodes(String ontologyUniqueIdentifier, String datasourceId, String primaryKeyColumnName, String titleKeyColumnName) {
 
-        var rows = objectMapper.queryPrimaryKeyAndTitleKeyValue(datasourceId, primaryKeyColumnName, titleKeyColumnName);
-        var nodes = rows.stream().map(r -> EntityNode.builder()
+        List<Map<String, Object>> rows = objectMapper.queryPrimaryKeyAndTitleKeyValue(datasourceId, primaryKeyColumnName, titleKeyColumnName);
+        List<EntityNode> nodes = rows.stream().map(r -> EntityNode.builder()
                 .ontologyUniqIdentifier(ontologyUniqueIdentifier)
                 .primaryKey(r.get(primaryKeyColumnName))
                 .tableName(datasourceId)

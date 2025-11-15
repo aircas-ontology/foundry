@@ -26,4 +26,7 @@ public class OntologyGroupInfoVO {
      @ApiModelProperty(value = "分组id", example = "fdsafdsfaf")
      private String groupId;
 
+     @ApiModelProperty(value = "分组icon url", example = "icon")
+     private String icon;
+
 }
