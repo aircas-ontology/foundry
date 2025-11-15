@@ -29,4 +29,10 @@ public class FileController {
         return RestResult.ofData(fileService.getThumbnailByImage(image));
     }
 
+    @ApiOperation(value = "上传图片文件,获取url")
+    @PostMapping("/url")
+    public RestResult<String> getUrlByImage(@RequestParam(required = true, name = "image") MultipartFile image) throws Exception {
+        return RestResult.ofData(fileService.getUrlByImage(image));
+    }
+
 }

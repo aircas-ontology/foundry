@@ -110,7 +110,8 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         var parentOntology = this.getOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, parentIdentifier));
         PreconditionUtils.checkArgument(parentOntology != null, "父本体不存在", ResultCode.PARAM_ERROR, HttpStatus.BAD_REQUEST);
         //创建子本体元数据
-        meta.setParentUniqueIdentifier(parentIdentifier)
+        meta.setMetaGroupId(parentOntology.getMetaGroupId())
+                .setParentUniqueIdentifier(parentIdentifier)
                 .setStatus(parentOntology.getStatus());
         this.save(meta);
         // 创建属性
@@ -220,9 +221,6 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
     public void deleteOntology(String ontologyIdentifier) {
         var meta = ontologyMetaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, ontologyIdentifier));
         PreconditionUtils.checkArgument(meta != null, "ontology not exist:" + ontologyIdentifier, ResultCode.PARAM_ERROR, HttpStatus.BAD_REQUEST);
-        //父本体不能删除
-//        var childs = ontologyMetaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getParentUniqueIdentifier, ontologyIdentifier));
-//        PreconditionUtils.checkArgument(CollectionUtils.isEmpty(childs), "存在依赖该本体的子本体" + ontologyIdentifier, ResultCode.PARAM_ERROR, HttpStatus.BAD_REQUEST);
         //删除本体元数据
         this.remove(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, ontologyIdentifier));
         //删除属性

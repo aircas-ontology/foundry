@@ -6,4 +6,6 @@ public interface FileService {
 
     String getThumbnailByImage(MultipartFile image) throws Exception;
 
+    String getUrlByImage(MultipartFile image) throws  Exception;
+
 }

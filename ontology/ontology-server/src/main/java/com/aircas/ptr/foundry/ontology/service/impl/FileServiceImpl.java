@@ -7,6 +7,7 @@ import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import io.minio.http.Method;
 import lombok.extern.slf4j.Slf4j;
+import lombok.var;
 import net.coobird.thumbnailator.Thumbnails;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -15,6 +16,7 @@ import org.springframework.web.multipart.MultipartFile;
 import javax.annotation.Resource;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 
 @Service
 @Slf4j
@@ -46,12 +48,29 @@ public class FileServiceImpl implements FileService {
                 .toOutputStream(outputStream);
         ByteArrayInputStream thumbnailInputStream = new ByteArrayInputStream(outputStream.toByteArray());
         //save to minio
+        var imageUrl = saveToMinio(image, thumbnailInputStream);
+        return imageUrl.substring(0, imageUrl.indexOf("?"));
+    }
+
+    @Override
+    public String getUrlByImage(MultipartFile image) throws Exception {
+        //check image file
+        PreconditionUtils.checkArgument(!image.isEmpty(), "image is empty");
+        String contentType = image.getContentType();
+        PreconditionUtils.checkArgument(contentType != null && contentType.startsWith("image/"), "not image file");
+        //save to minio
+        var imageUrl = saveToMinio(image, image.getInputStream());
+        return imageUrl.substring(0, imageUrl.indexOf("?"));
+    }
+
+    private String saveToMinio(MultipartFile image, InputStream inputStream) throws Exception {
+        //save to minio
         String fileName = System.currentTimeMillis() + "_" + image.getOriginalFilename();
         minioClient.putObject(
                 PutObjectArgs.builder()
                         .bucket(bucketName)
                         .object(fileName)
-                        .stream(thumbnailInputStream, outputStream.size(), -1)
+                        .stream(inputStream, inputStream.available(), -1)
                         .contentType("image/jpeg")
                         .build()
         );
@@ -63,6 +82,6 @@ public class FileServiceImpl implements FileService {
                         .object(fileName)
                         .build()
         );
-        return imageUrl.substring(0, imageUrl.indexOf("?"));
+        return imageUrl;
     }
 }

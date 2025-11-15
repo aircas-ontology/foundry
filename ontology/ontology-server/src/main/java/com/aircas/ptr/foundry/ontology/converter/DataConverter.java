@@ -12,8 +12,10 @@ import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyDetailVO;
+import com.google.common.collect.Sets;
 import lombok.var;
 import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.lang3.StringUtils;
 
 import java.util.Arrays;
 import java.util.stream.Collectors;
@@ -81,7 +83,7 @@ public class DataConverter {
                 .updateTime(ontologyMeta.getUpdateTime())
                 .description(ontologyMeta.getDescription())
                 .icon(ontologyMeta.getIcon())
-                .metaGroupId(Arrays.stream(ontologyMeta.getMetaGroupId().split(",")).collect(Collectors.toSet()))
+                .metaGroupId(StringUtils.isEmpty(ontologyMeta.getMetaGroupId()) ? Sets.newHashSet() : Arrays.stream(ontologyMeta.getMetaGroupId().split(",")).collect(Collectors.toSet()))
                 .displayName(ontologyMeta.getDisplayName())
                 .build();
     }
