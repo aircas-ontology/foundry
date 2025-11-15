@@ -1,13 +1,19 @@
 package com.aircas.ptr.foundry.common.base;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.experimental.Accessors;
 
 /**
  * <p>封装统一的返回结果</p>
  */
 @Data
-@JsonInclude(JsonInclude.Include.NON_NULL)
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+@Accessors(chain = true)
 public class RestResult<T> {
 
     private Integer code;
@@ -22,8 +28,6 @@ public class RestResult<T> {
         return code;
     }
 
-    public RestResult() {
-    }
 
     public RestResult(ResultCode resultCode) {
         this.code = resultCode.getCode();
