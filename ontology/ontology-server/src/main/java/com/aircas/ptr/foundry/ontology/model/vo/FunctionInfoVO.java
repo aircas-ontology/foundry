@@ -7,8 +7,6 @@ import lombok.Data;
 import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
 
-import javax.validation.constraints.NotBlank;
-
 @Data
 @SuperBuilder
 @Accessors(chain = true)
@@ -17,6 +15,9 @@ public class FunctionInfoVO {
 
     @ApiModelProperty(name = "functionApi", value = "函数api", required = true)
     private String functionApi;
+
+    @ApiModelProperty(name = "displayName", value = "函数名称", required = true)
+    private String displayName;
 
     @ApiModelProperty(name = "description", value = "描述")
     private String description;

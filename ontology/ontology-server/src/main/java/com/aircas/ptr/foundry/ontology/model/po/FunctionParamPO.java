@@ -1,5 +1,7 @@
 package com.aircas.ptr.foundry.ontology.model.po;
 
+import com.aircas.ptr.foundry.common.constant.FunctionParamCategoryEnum;
+import com.aircas.ptr.foundry.common.constant.FunctionParamTypeEnum;
 import com.baomidou.mybatisplus.annotation.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -25,15 +27,17 @@ public class FunctionParamPO {
 
     private Long functionId;
 
-    private String parameterName;
+    private String paramName;
 
-    private String parameterType;
+    private FunctionParamTypeEnum paramType;
 
-    private String parameterSchema;
+    private String paramSchema;
+
+    private Integer paramOrder;
 
     private String description;
 
-    private String category;
+    private FunctionParamCategoryEnum category;
 
     /**
      * 记录创建时间

@@ -24,6 +24,10 @@ public class FunctionCreateParam {
     @NotBlank(message = "functionApi is empty")
     private String functionApi;
 
+    @ApiModelProperty(name = "displayName", value = "函数名称")
+    @NotBlank(message = "displayName is empty")
+    private String displayName;
+
     @ApiModelProperty(name = "description", value = "描述")
     private String description;
 
@@ -31,9 +35,9 @@ public class FunctionCreateParam {
     @NotNull(message = "type is null")
     private FunctionTypeEnum type;
 
-    @ApiModelProperty(name = "code", value = "自定义函数code")
+    @ApiModelProperty(name = "code", value = "自定义函数：函数代码")
     private String code;
 
-    @ApiModelProperty(name = "referenceName", value = "已存在函数的全限定名")
+    @ApiModelProperty(name = "referenceName", value = "外部函数：函数全限定名")
     private String referenceName;
 }

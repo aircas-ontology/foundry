@@ -1,5 +1,7 @@
 package com.aircas.ptr.foundry.ontology.model.vo;
 
+import com.aircas.ptr.foundry.common.constant.FunctionParamCategoryEnum;
+import com.aircas.ptr.foundry.common.constant.FunctionParamTypeEnum;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.AllArgsConstructor;
@@ -7,6 +9,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
+
+import java.util.Map;
 
 @Data
 @Builder
@@ -17,10 +21,19 @@ import lombok.experimental.Accessors;
 public class FunctionParameterVO {
 
     @ApiModelProperty(name = "paramName",value = "参数名称")
-    private String parameterName;
+    private String paramName;
 
     @ApiModelProperty(name = "paramType",value = "参数类型")
-    private String parameterType;
+    private FunctionParamTypeEnum paramType;
+
+    @ApiModelProperty(name = "category",value = "参数输入输出类别")
+    private FunctionParamCategoryEnum category;
+
+    @ApiModelProperty(name = "paramOrder",value = "参数顺序")
+    private Integer paramOrder;
+
+    @ApiModelProperty(name = "paramOrder",value = "参数schema")
+    private String paramSchema;
 
     @ApiModelProperty(name = "description",value = "参数描述")
     private String description;

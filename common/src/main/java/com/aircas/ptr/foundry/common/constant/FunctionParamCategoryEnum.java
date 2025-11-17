@@ -8,10 +8,12 @@ import lombok.Getter;
  */
 @AllArgsConstructor
 @Getter
-public enum FunctionTypeEnum {
+public enum FunctionParamCategoryEnum {
 
-    CUSTOMIZE(1, "自定义"),
-    EXTERNAL(2, "外部");
+    INPUT(1, "输入参数"),
+    OUTPUT(2, "输出参数"),
+
+    ;
 
     private final int value;
 

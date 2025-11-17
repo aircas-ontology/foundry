@@ -19,10 +19,8 @@ public class FunctionDetailVO extends FunctionInfoVO {
     @ApiModelProperty(name = "params", value = "函数参数")
     private List<FunctionParameterVO> params;
 
-
     @ApiModelProperty(name = "referenceName", value = "函数全限定名称")
     private String referenceName;
-
 
     @ApiModelProperty(name = "code", value = "函数代码：只有自定义函数会存在")
     private String code;

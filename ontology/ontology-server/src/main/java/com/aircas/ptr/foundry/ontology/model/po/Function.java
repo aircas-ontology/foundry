@@ -50,6 +50,11 @@ public class Function {
     private String description;
 
     /**
+     * Column: displayName
+     */
+    private String displayName;
+
+    /**
      * Column: status
      */
     private Integer status;

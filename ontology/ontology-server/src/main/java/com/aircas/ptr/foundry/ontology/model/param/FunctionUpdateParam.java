@@ -17,9 +17,8 @@ import javax.validation.constraints.NotNull;
 @Accessors(chain = true)
 @AllArgsConstructor
 @NoArgsConstructor
-@ApiModel(description = "函数请求")
+@ApiModel(description = "函数更新请求")
 public class FunctionUpdateParam {
-
 
 
     @ApiModelProperty(name = "functionApi", value = "函数api", required = true)
@@ -29,13 +28,13 @@ public class FunctionUpdateParam {
     @ApiModelProperty(name = "description", value = "描述")
     private String description;
 
-    @ApiModelProperty(name = "type", value = "函数类型")
-    @NotNull(message = "type is null")
-    private FunctionTypeEnum type;
+    @ApiModelProperty(name = "displayName", value = "函数名称")
+    @NotBlank(message = "displayName is empty")
+    private String displayName;
 
-    @ApiModelProperty(name = "code", value = "自定义函数code")
+    @ApiModelProperty(name = "code", value = "自定义函数：函数代码")
     private String code;
 
-    @ApiModelProperty(name = "referenceName", value = "已存在函数的全限定名")
+    @ApiModelProperty(name = "referenceName", value = "外部函数：函数全限定名")
     private String referenceName;
 }
