@@ -134,7 +134,7 @@
     </dependencies>
 
     <build>
-        <finalName>ptr_ontology</finalName>
+        <finalName>ontology_tjy</finalName>
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>

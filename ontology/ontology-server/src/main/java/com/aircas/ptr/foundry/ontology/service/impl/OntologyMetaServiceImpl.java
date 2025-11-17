@@ -267,27 +267,26 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
 
     @Override
     public List<OntologyMetaNodeVO> getOntologyTreeByByGroupId(String groupId) {
-        List<String> groups = StringUtils.isEmpty(groupId)
-                ? groupService.list(new QueryWrapper<>()).stream().map(v -> v.getGroupId()).collect(Collectors.toList())
-                : Lists.newArrayList(groupId);
-
-        List<OntologyMetaNodeVO> res = Lists.newArrayList();
-        for (var gid : groups) {
-            var metaMap = list(new LambdaQueryWrapper<OntologyMeta>().like(OntologyMeta::getMetaGroupId, gid))
-                    .stream().collect(Collectors.toMap(v -> v.getUniqueIdentifier(), v -> OntologyMetaNodeVO.builder()
-                            .parentUniqueIdentifier(v.getParentUniqueIdentifier())
-                            .uniqueIdentifier(v.getUniqueIdentifier())
-                            .displayName(v.getDisplayName())
-                            .childNodes(new ArrayList<>())
-                            .build()));
-            res.addAll(metaMap.values().stream().filter(v -> StringUtils.isEmpty(v.getParentUniqueIdentifier())).map(parent ->
-                    {
-                        buildTree(parent, metaMap);
-                        return parent;
-                    }
-            ).collect(Collectors.toList()));
+        LambdaQueryWrapper<OntologyMeta> queryWrapper;
+        if (StringUtils.isEmpty(groupId)) {
+            queryWrapper = new LambdaQueryWrapper<>();
+        } else {
+            queryWrapper = new LambdaQueryWrapper<OntologyMeta>().like(OntologyMeta::getMetaGroupId, groupId);
         }
-        return res;
+        var metaMap = list(queryWrapper)
+                .stream().collect(Collectors.toMap(v -> v.getUniqueIdentifier(), v -> OntologyMetaNodeVO.builder()
+                        .parentUniqueIdentifier(v.getParentUniqueIdentifier())
+                        .uniqueIdentifier(v.getUniqueIdentifier())
+                        .displayName(v.getDisplayName())
+                        .childNodes(new ArrayList<>())
+                        .build()));
+        return metaMap.values().stream().filter(v -> StringUtils.isEmpty(v.getParentUniqueIdentifier())).map(parent ->
+                {
+                    buildTree(parent, metaMap);
+                    return parent;
+                }
+        ).collect(Collectors.toList());
+
     }
 
     private void buildTree(OntologyMetaNodeVO parent, Map<String, OntologyMetaNodeVO> metaMap) {
