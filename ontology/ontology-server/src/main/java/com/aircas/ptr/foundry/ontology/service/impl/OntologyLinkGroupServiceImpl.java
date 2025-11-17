@@ -151,6 +151,7 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
                     .ontologyIconTO(to.getIcon())
                     .ontologyNameFrom(from.getDisplayName())
                     .ontologyNameTo(to.getDisplayName())
+                    .type(link.getType())
                     .build();
         }).collect(Collectors.toList());
     }
