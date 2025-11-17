@@ -37,6 +37,10 @@ public class OntologyActionView {
 
     private Long ontologyLinkGroupId;
 
+    private String ontologyLinkParamExpression;
+
+    private String icon;
+
 
     // action mapping
     private List<OntologyActionMappingIn> mappingIn;

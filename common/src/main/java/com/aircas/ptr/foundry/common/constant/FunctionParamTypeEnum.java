@@ -16,6 +16,7 @@ public enum FunctionParamTypeEnum {
     LONG(4, "长整型"),
     FLOAT(5, "单浮点型"),
     DOUBLE(6, "双浮点型"),
+    BOOL(7, "布尔类型"),
     ;
 
     private final int value;

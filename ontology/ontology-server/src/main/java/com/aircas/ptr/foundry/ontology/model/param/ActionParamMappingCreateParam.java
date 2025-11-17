@@ -13,10 +13,13 @@ import lombok.NoArgsConstructor;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-public class ActionMappingInAddParam {
+public class ActionParamMappingCreateParam {
 
-    @ApiModelProperty(value = "参数名称", required = true, example = "mbbh")
-    private String parameterName;
+    @ApiModelProperty(value = "参数对应的函数参数ID", required = true, example = "fdsfa-gfdsagf-dfs")
+    private Long functionParamId;
+
+    @ApiModelProperty(value = "行为对应的函数参数的表达式", required = true, example = "data.user[0].name")
+    private String functionParamExpression;
 
     @ApiModelProperty(value = "参数对应的本体属性ID", required = true, example = "fdsfa-gfdsagf-dfs")
     private String propertyUniqueIdentifier;

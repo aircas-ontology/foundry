@@ -49,6 +49,7 @@ public class OntologyActionController {
     @ApiOperation(value = "编辑行为")
     @PutMapping("")
     public RestResult updateAction(@RequestBody @Valid ActionUpdateParam param) {
+        //已经被行为调度的行为不可直接编辑，需要先暂停调度
         return RestResult.success();
     }
 
@@ -95,10 +96,11 @@ public class OntologyActionController {
     @ApiOperation(value = "依据id删除行为")
     @DeleteMapping("/{actionApi}")
     public RestResult delete(@PathVariable(required = true, name = "actionApi") String actionApi) {
+        //已经被行为调度的行为不可直接编辑，需要先暂停调度
         return RestResult.success();
     }
 
-    @ApiOperation(value = "根据本体id获取所有行为")
+    @ApiOperation(value = "获取本体下所有行为列表")
     @GetMapping("/list")
     public RestResult<List<OntologyActionInfoVO>> getActionByOntologyId(@RequestParam(required = false, name = "ontologyId") @ApiParam(name = "ontologyId", value = "本体id", required = false) String ontologyId) {
         return RestResult.success();

@@ -5,7 +5,6 @@ import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
@@ -38,10 +37,14 @@ public class OntologyActionMappingIn {
     private Long ontologyActionId;
 
     /**
-     * Column: parameter_name
-     * Remark: 参数的名字
+     * 函数参数id
      */
-    private String parameterName;
+    private Long functionParamId;
+
+    /**
+     * 关联的函数参数表达式
+     */
+    private String functionParamExpression;
 
     /**
      * Column: property_unique_identifier

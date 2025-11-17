@@ -96,77 +96,79 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             OntologyApiNameNotFoundException,
             OntologyFunctionMappedPropertyNotFoundException {
 
-        HashMap<String, Object> parameters = new HashMap<>();
-        OntologyActionVO actionVO = getMetadataByApi(api);
-        OntologyMeta ontologyMeta = ontologyMetaMapper.selectByUniqueIdentifier(actionVO.getOntologyUniqueIdentifier());
-        if (ontologyMeta == null) {
-            throw ExceptionFactory.getOntologyApiNameNotFoundException(null);
-        }
+        return null;
 
-        //根据mapping结果，把property注入到parameters
-        ObjectOneInfoVO objectOneInfoVO = objectService.queryObjectByPrimaryKey(ontologyMeta.getUniqueIdentifier(), primaryKey);
-        List<PropertyValueVO> propertyList = objectOneInfoVO.getProperties();
-        Map<String, PropertyValueVO> propertyMap = new HashMap<>();
-        propertyList.forEach(propertyValueVO -> propertyMap.put(propertyValueVO.getUniqueIdentifier(), propertyValueVO));
-
-        List<OntologyActionMappingInVO> mappingIns = actionVO.getMappingIns();
-        for (OntologyActionMappingInVO mappingIn : mappingIns) {
-            String parameterName = mappingIn.getParameterName();
-            String propertyUniqueIdentifier = mappingIn.getPropertyUniqueIdentifier();
-            if (ONTOLOGY.getCode().equals(propertyUniqueIdentifier)) {
-                // TODO:如果参数是实体本身，需要将实体作为参数传入，现在逻辑还不完善
-                Map<String, Object> objectMap = new HashMap<>();
-                objectMap.put("primaryKey", primaryKey);
-                objectMap.put("api", api);
-                parameters.put(parameterName, objectMap);
-            } else {
-                PropertyValueVO propertyValueVO = propertyMap.get(propertyUniqueIdentifier);
-                Object value = propertyValueVO.getValue();
-                parameters.put(parameterName, value);
-            }
-        }
-        // 如果参数不为空，将所有的输入参数加入函数的parameters
-        // TODO: 参数类型不对应时，需要转换？
-        if (params != null && !params.isEmpty()) {
-            params.forEach(param -> {
-                parameters.put(param.getParameterName(), param.getParameterValue());
-            });
-        }
-        //根据property的值，设置参数的值即可，如果是当前对象，则设置为当前对象，也就是currentObject即可，包含api 和primaryKey
-        Object result = functionService.handle(actionVO.getFunctionApi(), false, null, parameters);
-        // TODO: 临时添加，模拟行为具体执行日志。
-        log.info(result.toString());
-        // TODO: 保存行为执行结果。
-
-        return result;
-    }
-
-    @Override
-    public int save(OntologyActionBo ontologyActionBo) {
-
-        // TODO:暂时不校验
-//        checkBindingConsistence(ontologyActionBo);
-        OntologyAction ontologyAction = new OntologyAction();
-        BeanUtils.copyProperties(ontologyActionBo, ontologyAction);
-        Date now = new Date();
-        ontologyAction.setCreateTime(now);
-        ontologyAction.setUpdateTime(now);
-        ontologyAction.setId(SnowflakeIdUtil.get());
-        int status = ontologyActionMapper.insert(ontologyAction);
-        if (ontologyActionBo.getMappingIns() == null || ontologyActionBo.getMappingIns().isEmpty()) {
-            return status;
-        }
-        long id = ontologyAction.getId();
-        for (OntologyActionMappingInBO mappingInBO : ontologyActionBo.getMappingIns()) {
-            OntologyActionMappingIn mappingIn = new OntologyActionMappingIn();
-            BeanUtils.copyProperties(mappingInBO, mappingIn);
-            mappingIn.setOntologyActionId(id);
-            mappingIn.setCreateTime(now);
-            mappingIn.setUpdateTime(now);
-            mappingIn.setId(SnowflakeIdUtil.get());
-            status = ontologyActionMappingInMapper.insert(mappingIn);
-        }
-        return status;
+//        HashMap<String, Object> parameters = new HashMap<>();
+//        OntologyActionVO actionVO = getMetadataByApi(api);
+//        OntologyMeta ontologyMeta = ontologyMetaMapper.selectByUniqueIdentifier(actionVO.getOntologyUniqueIdentifier());
+//        if (ontologyMeta == null) {
+//            throw ExceptionFactory.getOntologyApiNameNotFoundException(null);
+//        }
+//
+//        //根据mapping结果，把property注入到parameters
+//        ObjectOneInfoVO objectOneInfoVO = objectService.queryObjectByPrimaryKey(ontologyMeta.getUniqueIdentifier(), primaryKey);
+//        List<PropertyValueVO> propertyList = objectOneInfoVO.getProperties();
+//        Map<String, PropertyValueVO> propertyMap = new HashMap<>();
+//        propertyList.forEach(propertyValueVO -> propertyMap.put(propertyValueVO.getUniqueIdentifier(), propertyValueVO));
+//
+//        List<OntologyActionMappingInVO> mappingIns = actionVO.getMappingIns();
+//        for (OntologyActionMappingInVO mappingIn : mappingIns) {
+//            String parameterName = mappingIn.getParameterName();
+//            String propertyUniqueIdentifier = mappingIn.getPropertyUniqueIdentifier();
+//            if (ONTOLOGY.getCode().equals(propertyUniqueIdentifier)) {
+//                // TODO:如果参数是实体本身，需要将实体作为参数传入，现在逻辑还不完善
+//                Map<String, Object> objectMap = new HashMap<>();
+//                objectMap.put("primaryKey", primaryKey);
+//                objectMap.put("api", api);
+//                parameters.put(parameterName, objectMap);
+//            } else {
+//                PropertyValueVO propertyValueVO = propertyMap.get(propertyUniqueIdentifier);
+//                Object value = propertyValueVO.getValue();
+//                parameters.put(parameterName, value);
+//            }
+//        }
+//        // 如果参数不为空，将所有的输入参数加入函数的parameters
+//        // TODO: 参数类型不对应时，需要转换？
+//        if (params != null && !params.isEmpty()) {
+//            params.forEach(param -> {
+//                parameters.put(param.getParameterName(), param.getParameterValue());
+//            });
+//        }
+//        //根据property的值，设置参数的值即可，如果是当前对象，则设置为当前对象，也就是currentObject即可，包含api 和primaryKey
+//        Object result = functionService.handle(actionVO.getFunctionApi(), false, null, parameters);
+//        // TODO: 临时添加，模拟行为具体执行日志。
+//        log.info(result.toString());
+//        // TODO: 保存行为执行结果。
+//
+//        return result;
+//    }
+//
+//    @Override
+//    public int save(OntologyActionBo ontologyActionBo) {
+//
+//        // TODO:暂时不校验
+////        checkBindingConsistence(ontologyActionBo);
+//        OntologyAction ontologyAction = new OntologyAction();
+//        BeanUtils.copyProperties(ontologyActionBo, ontologyAction);
+//        Date now = new Date();
+//        ontologyAction.setCreateTime(now);
+//        ontologyAction.setUpdateTime(now);
+//        ontologyAction.setId(SnowflakeIdUtil.get());
+//        int status = ontologyActionMapper.insert(ontologyAction);
+//        if (ontologyActionBo.getMappingIns() == null || ontologyActionBo.getMappingIns().isEmpty()) {
+//            return status;
+//        }
+//        long id = ontologyAction.getId();
+//        for (OntologyActionMappingInBO mappingInBO : ontologyActionBo.getMappingIns()) {
+//            OntologyActionMappingIn mappingIn = new OntologyActionMappingIn();
+//            BeanUtils.copyProperties(mappingInBO, mappingIn);
+//            mappingIn.setOntologyActionId(id);
+//            mappingIn.setCreateTime(now);
+//            mappingIn.setUpdateTime(now);
+//            mappingIn.setId(SnowflakeIdUtil.get());
+//            status = ontologyActionMappingInMapper.insert(mappingIn);
+//        }
+//        return status;
     }
 
 
@@ -340,15 +342,16 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     public List<ParameterMetadataVO> getParametersByApi(String actionApi)
             throws FunctionClassNotNewInstanceException, FunctionFileNotCompiled, FunctionNotFoundException, OntologyFunctionNotFoundException {
 
-        OntologyAction ontologyAction = ontologyActionMapper.selectByApi(actionApi);
-        if (ontologyAction == null) {
-            throw ExceptionFactory.getOntologyFunctionNotFoundException(null);
-        }
-        List<ParameterMetadataVO> parameterMetadataVOList = functionService.getParameters(ontologyAction.getFunctionApi());
-        List<OntologyActionMappingIn> mappingIns = ontologyActionMappingInMapper.selectById(ontologyAction.getId());
-        List<String> mappedParameters = mappingIns.stream().map(OntologyActionMappingIn::getParameterName).collect(Collectors.toList());
-        parameterMetadataVOList.removeIf(parameterMetadataVO -> mappedParameters.contains(parameterMetadataVO.getName()));
-        return parameterMetadataVOList;
+        return null;
+//        OntologyAction ontologyAction = ontologyActionMapper.selectByApi(actionApi);
+//        if (ontologyAction == null) {
+//            throw ExceptionFactory.getOntologyFunctionNotFoundException(null);
+//        }
+//        List<ParameterMetadataVO> parameterMetadataVOList = functionService.getParameters(ontologyAction.getFunctionApi());
+//        List<OntologyActionMappingIn> mappingIns = ontologyActionMappingInMapper.selectById(ontologyAction.getId());
+//        List<String> mappedParameters = mappingIns.stream().map(OntologyActionMappingIn::getParameterName).collect(Collectors.toList());
+//        parameterMetadataVOList.removeIf(parameterMetadataVO -> mappedParameters.contains(parameterMetadataVO.getName()));
+//        return parameterMetadataVOList;
     }
 
 
@@ -377,50 +380,52 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             FunctionFileNotCompiled,
             FunctionNotFoundException {
 
-        if (ontologyMeta == null) {
-            return null;
-        }
-        OntologyActionVO ontologyActionVO = new OntologyActionVO();
-        BeanUtils.copyProperties(action, ontologyActionVO);
-        ontologyActionVO.setOntologyDisplayName(ontologyMeta.getDisplayName());
+        return null;
 
-        List<OntologyActionMappingInVO> mappingInVOs = new ArrayList<>();
-        String ontologyType = StringUtils.capitalize(ontologyMeta.getApiName());
-        for (OntologyActionMappingIn mapping : allMappingIns) {
-            boolean isOntologySelf = ONTOLOGY.getCode().equals(mapping.getPropertyUniqueIdentifier());
-            OntologyActionMappingInVO mappingInVO = new OntologyActionMappingInVO();
-            BeanUtils.copyProperties(mapping, mappingInVO);
-            if (!isOntologySelf) {
-                OntologyPropertyVO ontologyPropertyVO = ontologyPropertiesMap.get(mapping.getPropertyUniqueIdentifier());
-                if (ontologyPropertyVO == null) {
-                    throw ExceptionFactory.getOntologyFunctionMappedPropertyNotFoundException(null);
-                }
-                mappingInVO.setPropertyName(ontologyPropertyVO.getDisplayName());
-                mappingInVO.setPropertyType(ontologyPropertyVO.getPropertyType() != null ? ontologyPropertyVO.getPropertyType().name() : null);
-            } else {
-                mappingInVO.setPropertyName(DEFAULT_OBJECT_DESC);
-                mappingInVO.setPropertyType(ontologyType);
-            }
-            List<ParameterMetadataVO> parameterMetadataVOList = functionService.getParameters(action.getFunctionApi());
-            List<ParameterMetadataVO> matchedParaList = parameterMetadataVOList.stream()
-                    .filter(parameterMetadataVO -> parameterMetadataVO.getName().equals(mappingInVO.getParameterName()))
-                    .collect(Collectors.toList());
-            if (!matchedParaList.isEmpty()) {
-                if (isOntologySelf) {
-                    mappingInVO.setParameterType(ontologyType);
-                } else {
-                    mappingInVO.setParameterType(matchedParaList.get(0).getType());
-                }
-            }
-            mappingInVOs.add(mappingInVO);
-        }
-        ontologyActionVO.setMappingIns(mappingInVOs);
-        List<String> mappedParameters = mappingInVOs.stream().map(OntologyActionMappingIn::getParameterName).collect(Collectors.toList());
-        if (parameters != null) {
-            parameters.removeIf(parameterMetadataVO -> mappedParameters.contains(parameterMetadataVO.getName()));
-            ontologyActionVO.setParameters(parameters);
-        }
-        return ontologyActionVO;
+//        if (ontologyMeta == null) {
+//            return null;
+//        }
+//        OntologyActionVO ontologyActionVO = new OntologyActionVO();
+//        BeanUtils.copyProperties(action, ontologyActionVO);
+//        ontologyActionVO.setOntologyDisplayName(ontologyMeta.getDisplayName());
+//
+//        List<OntologyActionMappingInVO> mappingInVOs = new ArrayList<>();
+//        String ontologyType = StringUtils.capitalize(ontologyMeta.getApiName());
+//        for (OntologyActionMappingIn mapping : allMappingIns) {
+//            boolean isOntologySelf = ONTOLOGY.getCode().equals(mapping.getPropertyUniqueIdentifier());
+//            OntologyActionMappingInVO mappingInVO = new OntologyActionMappingInVO();
+//            BeanUtils.copyProperties(mapping, mappingInVO);
+//            if (!isOntologySelf) {
+//                OntologyPropertyVO ontologyPropertyVO = ontologyPropertiesMap.get(mapping.getPropertyUniqueIdentifier());
+//                if (ontologyPropertyVO == null) {
+//                    throw ExceptionFactory.getOntologyFunctionMappedPropertyNotFoundException(null);
+//                }
+//                mappingInVO.setPropertyName(ontologyPropertyVO.getDisplayName());
+//                mappingInVO.setPropertyType(ontologyPropertyVO.getPropertyType() != null ? ontologyPropertyVO.getPropertyType().name() : null);
+//            } else {
+//                mappingInVO.setPropertyName(DEFAULT_OBJECT_DESC);
+//                mappingInVO.setPropertyType(ontologyType);
+//            }
+//            List<ParameterMetadataVO> parameterMetadataVOList = functionService.getParameters(action.getFunctionApi());
+//            List<ParameterMetadataVO> matchedParaList = parameterMetadataVOList.stream()
+//                    .filter(parameterMetadataVO -> parameterMetadataVO.getName().equals(mappingInVO.getParameterName()))
+//                    .collect(Collectors.toList());
+//            if (!matchedParaList.isEmpty()) {
+//                if (isOntologySelf) {
+//                    mappingInVO.setParameterType(ontologyType);
+//                } else {
+//                    mappingInVO.setParameterType(matchedParaList.get(0).getType());
+//                }
+//            }
+//            mappingInVOs.add(mappingInVO);
+//        }
+//        ontologyActionVO.setMappingIns(mappingInVOs);
+//        List<String> mappedParameters = mappingInVOs.stream().map(OntologyActionMappingIn::getParameterName).collect(Collectors.toList());
+//        if (parameters != null) {
+//            parameters.removeIf(parameterMetadataVO -> mappedParameters.contains(parameterMetadataVO.getName()));
+//            ontologyActionVO.setParameters(parameters);
+//        }
+//        return ontologyActionVO;
     }
 
     @Override

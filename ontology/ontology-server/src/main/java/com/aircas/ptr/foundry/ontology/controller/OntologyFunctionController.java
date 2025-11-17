@@ -54,12 +54,14 @@ public class OntologyFunctionController {
     @ApiOperation(value = "创建函数")
     @PostMapping
     public RestResult createFunction(@RequestBody @Valid FunctionCreateParam param) {
+        //需要增加代码安全检测
         return RestResult.success();
     }
 
     @ApiOperation(value = "更新函数")
     @PutMapping
     public RestResult updateFunction(@RequestBody FunctionUpdateParam param) {
+        // 需要 1 校验函数有没有被本体行为使用到，否则不能修改 2 需要增加代码安全检测
         return RestResult.success();
     }
 

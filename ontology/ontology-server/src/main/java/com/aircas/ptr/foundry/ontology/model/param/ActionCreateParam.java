@@ -18,6 +18,9 @@ import java.util.List;
 @ApiModel(description = "新增行为请求")
 public class ActionCreateParam extends OntologyIdentifierParam {
 
+    @ApiModelProperty(name = "icon", value = "图片url", example = "http://192.168.9.11/aa.jpeg", required = true)
+    private String icon;
+
     @ApiModelProperty(value = "api名称", example = "satellite", required = true)
     @NotBlank(message = "actionApi is empty")
     private String actionApi;
@@ -35,6 +38,9 @@ public class ActionCreateParam extends OntologyIdentifierParam {
     @ApiModelProperty(value = "行为关联的关系id")
     private String ontologyLinkId;
 
-    @ApiModelProperty(value = "行为参数列表", example = "[{\"parameterName\":\"mbbh\",\"propertyUniqueIdentifier\":\"545649a4-8bba-4d0c-b265-362e85fd4fe1\"}]")
-    private List<ActionMappingInAddParam> mappingIns;
+    @ApiModelProperty(value = "行为关联的函数参数表达式")
+    private String ontologyLinkFunctionParamExpression;
+
+    @ApiModelProperty(value = "行为参数列表")
+    private List<ActionParamMappingCreateParam> mappingIns;
 }

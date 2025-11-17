@@ -13,14 +13,14 @@ import lombok.experimental.Accessors;
 @NoArgsConstructor
 @Builder
 @Accessors(chain = true)
-@ApiModel(description = "行为参数VO")
-public class ActionMappingInVO {
+@ApiModel(description = "行为参数映射VO")
+public class ActionParamMappingVO {
 
-    @ApiModelProperty(value = "参数名称", required = true, example = "mbbh")
-    private String parameterName;
+    @ApiModelProperty(value = "关联的函数参数值的spel表达式", required = true, example = "data[0].name")
+    private String functionParamExpression;
 
-    @ApiModelProperty(value = "参数类型", required = true, example = "mbbh")
-    private String parameterType;
+    @ApiModelProperty(value = "关联的函数参数id", required = true)
+    private String functionParamId;
 
     @ApiModelProperty(value = "参数对应的本体属性ID", required = true, example = "fdsfa-gfdsagf-dfs")
     private String propertyUniqueIdentifier;

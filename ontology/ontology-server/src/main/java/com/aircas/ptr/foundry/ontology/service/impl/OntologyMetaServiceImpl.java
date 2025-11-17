@@ -165,11 +165,14 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                     .status(action.getStatus())
                     .id(actionId)
                     .ontologyUniqueIdentifier(childIdentifier)
+                    .icon(action.getIcon())
+                    .ontologyLinkParamExpression(action.getOntologyLinkParamExpression())
                     .build());
             mappingIns.addAll(action.getMappingIn().stream().map(v -> OntologyActionMappingIn.builder()
                     .propertyUniqueIdentifier(findChildOntologyProperty(parentProperties, childProps, v.getPropertyUniqueIdentifier()))
-                    .parameterName(v.getParameterName())
                     .ontologyActionId(actionId)
+                    .functionParamId(v.getFunctionParamId())
+                    .functionParamExpression(v.getFunctionParamExpression())
                     .build()).collect(Collectors.toList()));
         });
 

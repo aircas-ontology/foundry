@@ -18,12 +18,14 @@ import java.util.List;
 @ApiModel(description = "编辑行为请求")
 public class ActionUpdateParam {
 
+    @ApiModelProperty(name = "icon", value = "图片url", example = "http://192.168.9.11/aa.jpeg", required = true)
+    private String icon;
+
     @ApiModelProperty(value = "行为api", example = "satellite", required = true)
     @NotBlank(message = "actionApi is empty")
     private String actionApi;
 
     @ApiModelProperty(value = "本体下函数api", example = "satellite", required = true)
-    @NotBlank(message = "functionApi is empty")
     private String functionApi;
 
     @ApiModelProperty(value = "行为描述", example = "这是一个行为",required = true)
@@ -37,6 +39,9 @@ public class ActionUpdateParam {
     @ApiModelProperty(value = "行为关联的关系id",required = false)
     private String ontologyLinkId;
 
-    @ApiModelProperty(value = "行为参数列表", example = "[{\"parameterName\":\"mbbh\",\"propertyUniqueIdentifier\":\"545649a4-8bba-4d0c-b265-362e85fd4fe1\"}]",required = false)
-    private List<ActionMappingInAddParam> mappingIns;
+    @ApiModelProperty(value = "行为关联的函数参数表达式")
+    private String ontologyLinkFunctionParamExpression;
+
+    @ApiModelProperty(value = "行为参数列表",required = false)
+    private List<ActionParamMappingCreateParam> mappingIns;
 }

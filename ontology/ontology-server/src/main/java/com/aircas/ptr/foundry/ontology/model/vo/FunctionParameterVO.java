@@ -20,6 +20,9 @@ import java.util.Map;
 @ApiModel(value = "函数信息")
 public class FunctionParameterVO {
 
+    @ApiModelProperty(name = "paramId",value = "参数id")
+    private Long paramId;
+
     @ApiModelProperty(name = "paramName",value = "参数名称")
     private String paramName;
 

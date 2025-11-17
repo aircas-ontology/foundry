@@ -36,5 +36,5 @@ public class ActionAddParam {
     private String displayName;
 
     @ApiModelProperty(value = "行为参数列表", example = "[{\"parameterName\":\"mbbh\",\"propertyUniqueIdentifier\":\"545649a4-8bba-4d0c-b265-362e85fd4fe1\"}]")
-    private List<ActionMappingInAddParam> mappingIns;
+    private List<ActionParamMappingCreateParam> mappingIns;
 }

@@ -69,5 +69,12 @@ public class OntologyAction {
      */
     private Long ontologyLinkGroupId;
 
+    private String icon;
+
+    /**
+     * 行为绑定的关系存在时的参数表达式,例如data.startTime>current time && data.distance>1000
+     */
+    private String ontologyLinkParamExpression;
+
     private static final long serialVersionUID = 1L;
 }
