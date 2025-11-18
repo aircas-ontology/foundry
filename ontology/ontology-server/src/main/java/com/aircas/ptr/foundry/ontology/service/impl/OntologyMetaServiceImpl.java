@@ -72,7 +72,9 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
     public void updateIcon(MultipartFile image, String uniqueIdentifier) {
         try {
             var iconUrl = fileService.getThumbnailByImage(image);
-            ontologyMetaMapper.update(new OntologyMeta().setIcon(iconUrl), new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, uniqueIdentifier));
+            ontologyMetaMapper.update(null, new LambdaUpdateWrapper<OntologyMeta>()
+                    .eq(OntologyMeta::getUniqueIdentifier, uniqueIdentifier)
+                    .set(OntologyMeta::getIcon, iconUrl));
         } catch (Exception e) {
             log.error(e.getMessage(), e);
             throw new BusinessException("updateIcon failed");
@@ -242,13 +244,12 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
     @Override
     @Transactional(value = "mainTransactionManager")
     public void updateMeta(OntologyUpdateParam updateParam) {
-        var meta = getOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, updateParam.getOntologyIdentifier()));
-        var updateWrapper = new LambdaUpdateWrapper<OntologyMeta>()
+        var updateWrapper = new LambdaUpdateWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, updateParam.getOntologyIdentifier())
+                .set(OntologyMeta::getMetaGroupId, String.join(",", updateParam.getGroupIds()))
                 .set(OntologyMeta::getIcon, updateParam.getIcon())
                 .set(OntologyMeta::getDescription, updateParam.getDescription())
-                .set(OntologyMeta::getDisplayName, updateParam.getDisplayName())
-                .set(OntologyMeta::getMetaGroupId, String.join(",", updateParam.getGroupIds()));
-        update(meta, updateWrapper);
+                .set(OntologyMeta::getDisplayName, updateParam.getDisplayName());
+        update(null, updateWrapper);
     }
 
 

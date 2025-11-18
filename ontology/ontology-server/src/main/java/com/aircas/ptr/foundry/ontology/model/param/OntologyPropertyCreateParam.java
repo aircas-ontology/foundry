@@ -33,7 +33,6 @@ public class OntologyPropertyCreateParam extends OntologyIdentifierParam {
     private OntologyDataTypeEnum dataType;
 
     @ApiModelProperty(name = "description", value = "列描述", required = true, example = "名称")
-    @NotBlank(message = "description is empty")
     private String description;
 
     @ApiModelProperty(name = "displayName", value = "属性展示名称", dataType = "java.lang.String", example = "飞机", required = true)

@@ -35,7 +35,6 @@ public class OntologyPropertyUpdateParam extends IdentifierParam {
     private OntologyDataTypeEnum dataType;
 
     @ApiModelProperty(name = "description", value = "属性描述", example = "id")
-    @NotBlank(message = "description is empty")
     private String description;
 
     @ApiModelProperty(name = "isTitleKey", value = "是否为名称键", required = true, example = "true")
