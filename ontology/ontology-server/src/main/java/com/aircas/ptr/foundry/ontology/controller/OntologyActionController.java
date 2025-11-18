@@ -101,7 +101,7 @@ public class OntologyActionController {
 
     @ApiOperation(value = "分页获取本体下行为列表")
     @GetMapping("/list")
-    public RestResult<Page<OntologyActionInfoVO>> pageGetActionByOntologyId(@RequestParam(required = false, name = "ontologyId") @ApiParam(name = "ontologyId", value = "本体id", required = false) String ontologyId,
+    public RestResult<Page<OntologyActionInfoVO>> pageGetActionByOntologyId(@RequestParam(required = true, name = "ontologyUniqIdentifier") @ApiParam(name = "ontologyUniqIdentifier", value = "本体id", required = true) String ontologyUniqIdentifier,
                                                                             @RequestParam(required = false, defaultValue = "1") Integer pageNum,
                                                                             @RequestParam(required = false, defaultValue = "10") Integer pageSize) {
         return RestResult.success();

@@ -19,7 +19,7 @@ import java.util.List;
 @ApiModel(description = "本体行为信息")
 public class OntologyActionInfoVO {
 
-    @ApiModelProperty(name = "icon", value = "本体id", example = "123456")
+    @ApiModelProperty(name = "icon", value = "本体icon", example = "http://127.0.0.1/a.jpeg")
     private String icon;
 
     @ApiModelProperty(name = "ontologyUniqIdentifier", value = "本体id", example = "123456")
