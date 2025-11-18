@@ -21,7 +21,6 @@ import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
 import javax.validation.Valid;
-import java.util.List;
 
 
 @Api(tags = "行为")
@@ -100,9 +99,11 @@ public class OntologyActionController {
         return RestResult.success();
     }
 
-    @ApiOperation(value = "获取本体下所有行为列表")
+    @ApiOperation(value = "分页获取本体下行为列表")
     @GetMapping("/list")
-    public RestResult<List<OntologyActionInfoVO>> getActionByOntologyId(@RequestParam(required = false, name = "ontologyId") @ApiParam(name = "ontologyId", value = "本体id", required = false) String ontologyId) {
+    public RestResult<Page<OntologyActionInfoVO>> pageGetActionByOntologyId(@RequestParam(required = false, name = "ontologyId") @ApiParam(name = "ontologyId", value = "本体id", required = false) String ontologyId,
+                                                                            @RequestParam(required = false, defaultValue = "1") Integer pageNum,
+                                                                            @RequestParam(required = false, defaultValue = "10") Integer pageSize) {
         return RestResult.success();
     }
 
@@ -154,9 +155,10 @@ public class OntologyActionController {
     }
 
 
-    @ApiOperation(value = "查看行为调度列表")
+    @ApiOperation(value = "分页查看行为调度列表")
     @GetMapping("/scheduling/list")
-    public RestResult<List<ActionSchedulingInfoVO>> getScheduling() {
+    public RestResult<Page<ActionSchedulingInfoVO>> pageGetScheduling(@RequestParam(required = false, defaultValue = "1") Integer pageNum,
+                                                                      @RequestParam(required = false, defaultValue = "10") Integer pageSize) {
         return RestResult.success();
     }
 
