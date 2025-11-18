@@ -20,7 +20,7 @@
         <Prudent>true</Prudent>
         <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
             <!-- 日志保留天数 -->
-            <MaxHistory>30</MaxHistory>
+            <MaxHistory>7</MaxHistory>
             <fileNamePattern>${LOG_HOME}/%d{yyyy-MM-dd}/all.%i.log</fileNamePattern>
             <timeBasedFileNamingAndTriggeringPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
                 <!-- 日志文件的最大大小 -->
