@@ -34,7 +34,7 @@ public class Function {
 
 
     /**
-     * 记录创建时间
+     * 记录更新时间
      */
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private Date updateTime;
@@ -82,4 +82,9 @@ public class Function {
      * FunctionTypeEnum
      */
     private FunctionTypeEnum type;
+
+    /**
+     * 涉及的本体
+     */
+    private String objectTypes;
 }

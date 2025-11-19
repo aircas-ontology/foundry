@@ -7,7 +7,7 @@ import com.aircas.ptr.foundry.ontology.model.param.FunctionUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.vo.FunctionDetailVO;
 import com.aircas.ptr.foundry.ontology.model.vo.FunctionInfoVO;
 import com.aircas.ptr.foundry.ontology.service.FunctionService;
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.github.pagehelper.PageInfo;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
@@ -46,14 +46,15 @@ public class OntologyFunctionController {
 
     @ApiOperation(value = "查询函数列表")
     @GetMapping("/list")
-    public RestResult<Page<FunctionInfoVO>> getFunctions(@RequestParam(required = false, defaultValue = "1") Integer pageNum,
-                                                         @RequestParam(required = false, defaultValue = "10") Integer pageSize) {
-        return RestResult.success();
+    public RestResult<PageInfo<FunctionInfoVO>> getFunctions(@RequestParam(required = false, defaultValue = "1") Integer pageNum,
+                                                             @RequestParam(required = false, defaultValue = "10") Integer pageSize) {
+        return RestResult.ofData(functionService.getFunctions(pageNum, pageSize));
     }
 
     @ApiOperation(value = "创建函数")
     @PostMapping
     public RestResult createFunction(@RequestBody @Valid FunctionCreateParam param) {
+        functionService.createFunction(param);
         //需要增加代码安全检测
         return RestResult.success();
     }
@@ -61,6 +62,7 @@ public class OntologyFunctionController {
     @ApiOperation(value = "更新函数")
     @PutMapping
     public RestResult updateFunction(@RequestBody FunctionUpdateParam param) {
+        functionService.updateFunction(param);
         // 需要 1 校验函数有没有被本体行为使用到，否则不能修改 2 需要增加代码安全检测
         return RestResult.success();
     }
@@ -69,7 +71,8 @@ public class OntologyFunctionController {
     @ApiOperation(value = "根据函数id获取函数详情")
     @GetMapping("/detail")
     public RestResult<FunctionDetailVO> getFunctionByApi(@RequestParam(required = true, name = "functionApi") @ApiParam(value = "函数api", required = true) String functionApi) {
-        return RestResult.success();
+        FunctionDetailVO function = functionService.getFunctionDetailByApi(functionApi);
+        return RestResult.ofData(function);
     }
 
 
@@ -77,7 +80,8 @@ public class OntologyFunctionController {
     @DeleteMapping("/delete/{functionApi}")
     public RestResult deleteById(@PathVariable(required = true, name = "functionApi") String functionApi) {
         //需要校验函数有没有被本体行为使用到
-        return RestResult.ofData(null);
+        boolean isSuccess = functionService.deleteByApi(functionApi);
+        return isSuccess ? RestResult.success() : RestResult.failed();
     }
 
 //    @ApiOperation(value = "读取函数列表")

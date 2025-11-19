@@ -47,7 +47,7 @@ public class FunctionParamPO {
 
 
     /**
-     * 记录创建时间
+     * 记录更新时间
      */
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private Date updateTime;

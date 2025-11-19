@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.aircas.ptr.foundry.ontology.repository.mainMapper.FunctionParamMapper">
+
+    <resultMap id="BaseResultMap" type="com.aircas.ptr.foundry.ontology.model.po.FunctionParamPO">
+        <!-- @mbg.generated: generated automatically, do not modify! -->
+        <result column="id" jdbcType="BIGINT" property="id"/>
+        <result column="function_id" jdbcType="BIGINT" property="functionId"/>
+        <result column="param_name" jdbcType="VARCHAR" property="paramName"/>
+        <result column="param_type" jdbcType="VARCHAR" property="paramType"/>
+        <result column="param_schema" jdbcType="VARCHAR" property="paramSchema"/>
+        <result column="param_order" jdbcType="INTEGER" property="paramOrder"/>
+        <result column="description" jdbcType="VARCHAR" property="description"/>
+        <result column="category" jdbcType="VARCHAR" property="category"/>
+        <result column="create_time" jdbcType="TIMESTAMP" property="createTime"/>
+        <result column="update_time" jdbcType="TIMESTAMP" property="updateTime"/>
+    </resultMap>
+    <sql id="Base_Column_List">
+        <!-- @mbg.generated: generated automatically, do not modify! -->
+        id,function_id,param_name,param_type,param_schema,param_order,description,category,status,create_time,update_time
+    </sql>
+
+    <insert id="insertBatch">
+        insert into function_param (function_id, param_name, param_type, description, create_time, update_time,category,param_schema,param_order)
+        values
+        <foreach collection="params" item="param" separator=",">
+            (#{param.functionId,jdbcType=BIGINT}, #{param.paramName,jdbcType=VARCHAR}, #{param.paramType,jdbcType=VARCHAR}, #{param.description,jdbcType=VARCHAR},
+            #{param.createTime,jdbcType=TIMESTAMP}, #{param.updateTime,jdbcType=TIMESTAMP}, #{param.category,jdbcType=VARCHAR},
+            CAST(#{param.paramSchema} AS JSONB), #{param.paramOrder,jdbcType=INTEGER} )
+        </foreach>
+    </insert>
+
+    <delete id="deleteByFunctionId" parameterType="java.lang.Long">
+        delete from function_param where function_id = #{functionId}
+    </delete>
+
+    <select id="selectByFunctionId" resultMap="BaseResultMap">
+        select
+        <include refid="Base_Column_List"/>
+        from function_param
+        where function_id = #{functionId,jdbcType=BIGINT}
+    </select>
+</mapper>
+
