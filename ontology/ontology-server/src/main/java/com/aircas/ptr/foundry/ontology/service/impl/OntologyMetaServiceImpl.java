@@ -126,8 +126,8 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 parentChildLinkMap.put(v.getUniqueIdentifier(), childLinkId);
                 var link = OntologyLinkGroup.builder()
                         .name(v.getName())
-                        .ontologyUniqueIdentifierFrom(v.getOntologyUniqueIdentifierFrom())
-                        .ontologyUniqueIdentifierTo(v.getOntologyUniqueIdentifierTo())
+                        .ontologyUniqueIdentifierFrom(v.getOntologyUniqueIdentifierFrom().equals(parentIdentifier) ? childIdentifier : v.getOntologyUniqueIdentifierFrom())
+                        .ontologyUniqueIdentifierTo(v.getOntologyUniqueIdentifierTo().equals(parentIdentifier) ? childIdentifier : v.getOntologyUniqueIdentifierTo())
                         .status(v.getStatus())
                         .uniqueIdentifier(childLinkId)
                         .build();

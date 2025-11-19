@@ -7,7 +7,9 @@ import com.aircas.ptr.foundry.ontology.model.bo.OntologyActionMappingInBO;
 import com.aircas.ptr.foundry.ontology.model.param.ActionHandleMappingInParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionHandleRuleAddParam;
 import com.aircas.ptr.foundry.ontology.model.po.*;
-import com.aircas.ptr.foundry.ontology.model.vo.*;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologyActionVO;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyVO;
+import com.aircas.ptr.foundry.ontology.model.vo.ParameterMetadataVO;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.*;
 import com.aircas.ptr.foundry.ontology.service.*;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -23,12 +25,18 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
-import java.util.*;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
 @Slf4j
 public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper, OntologyAction> implements OntologyActionService {
+
+    @Resource
+    private OntologyActionLinkMapper actionLinkMapper;
 
     @Resource
     private OntologyActionMapper ontologyActionMapper;
@@ -69,6 +77,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         var actions = list(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getOntologyUniqueIdentifier, ontologyIdentifier));
         if (CollectionUtils.isNotEmpty(actions)) {
             var actionIds = actions.stream().map(v -> v.getId()).collect(Collectors.toList());
+            actionLinkMapper.delete(new LambdaQueryWrapper<OntologyActionLink>().in(OntologyActionLink::getOntologyActionId, actionIds));
             ontologyActionMapper.delete(new LambdaQueryWrapper<OntologyAction>().in(OntologyAction::getId, actionIds));
             ontologyActionMappingInMapper.delete(new LambdaQueryWrapper<OntologyActionMappingIn>().in(OntologyActionMappingIn::getOntologyActionId, actionIds));
             actionHandleRuleService.remove(new LambdaQueryWrapper<ActionHandleRule>().in(ActionHandleRule::getActionId, actionIds));

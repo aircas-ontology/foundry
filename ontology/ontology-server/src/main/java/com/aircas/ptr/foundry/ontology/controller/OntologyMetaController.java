@@ -23,7 +23,7 @@ import javax.validation.Valid;
 import java.util.List;
 
 
-@Api(tags = "基本数据")
+@Api(tags = "本体元数据")
 @RestController
 @RequestMapping("/meta")
 @Validated

@@ -270,6 +270,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
     @Override
     public OntologyPropertyDetailVO getPropertyDetailById(String uniqueIdentifier) {
         var prop = getOne(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getUniqueIdentifier, uniqueIdentifier));
+        PreconditionUtils.checkArgument(prop != null, "属性不存在：" + uniqueIdentifier, HttpStatus.BAD_REQUEST);
         return OntologyPropertyDetailVO.builder()
                 .description(prop.getDescription())
                 .displayName(prop.getDisplayName())
