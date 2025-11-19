@@ -1,7 +1,6 @@
 package com.aircas.ptr.foundry.ontology.controller;
 
 import com.aircas.ptr.foundry.common.base.RestResult;
-import com.aircas.ptr.foundry.ontology.controller.validator.GroupIdVerify;
 import com.aircas.ptr.foundry.ontology.controller.validator.OntologyIdVerify;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyLinkCreateParam;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkInfoVO;
@@ -36,6 +35,12 @@ public class OntologyLinkController {
     public RestResult createLink(@RequestBody OntologyLinkCreateParam linkCreateParam) {
         ontologyLinkGroupService.createLink(linkCreateParam);
         return RestResult.success();
+    }
+
+    @GetMapping("")
+    @ApiOperation(value = "根据link uniqid查询关系")
+    public RestResult<OntologyLinkInfoVO> getLinkByUniqueIdentifier(@RequestParam(required = true, name = "uniqueIdentifier") @ApiParam(value = "uniqueIdentifier", required = true) String uniqueIdentifier) {
+        return RestResult.ofData(ontologyLinkGroupService.getLinkByUniqueIdentifier(uniqueIdentifier));
     }
 
 

@@ -35,47 +35,6 @@
         where ontology_unique_identifier = #{ontologyUniqueIdentifier,jdbcType=VARCHAR}
     </select>
 
-    <resultMap id="OntologyActionViewResultMap" type="com.aircas.ptr.foundry.ontology.model.view.OntologyActionView">
-        <id property="actionId" column="action_id"/>
-        <result property="actionApi" column="action_api"/>
-        <result property="functionApi" column="function_api"/>
-        <result property="ontologyUniqueIdentifier" column="ontology_unique_identifier"/>
-        <result property="description" column="description"/>
-        <result property="displayName" column="display_name"/>
-        <result property="status" column="status"/>
-        <result property="ontologyLinkGroupId" column="ontology_link_group_id"/>
-        <result property="ontologyLinkParamExpression" column="ontology_link_param_expression"/>
-        <result property="icon" column="icon"/>
-        <collection property="mappingIn" ofType="com.aircas.ptr.foundry.ontology.model.po.OntologyActionMappingIn">
-            <id property="id" column="mapping_in_id"/>
-            <result property="ontologyActionId" column="ontology_action_id"/>
-            <result property="propertyUniqueIdentifier" column="property_unique_identifier"/>
-            <result property="functionParamId" column="function_param_id"/>
-            <result property="functionParamExpression" column="function_param_expression"/>
-        </collection>
-    </resultMap>
-
-    <select id="selectActionViewByOntologyIdentifier" resultMap="OntologyActionViewResultMap">
-        SELECT
-            a.id AS action_id,
-            a.api AS action_api,
-            a.function_api,
-            a.ontology_unique_identifier,
-            a.description,
-            a.display_name,
-            a.status,
-            a.ontology_link_group_id,
-            a.ontology_link_param_expression,
-            a.icon,
-            m.id AS mapping_in_id,
-            m.ontology_action_id,
-            m.property_unique_identifier,
-            m.function_param_id,
-            m.function_param_expression
-        FROM ontology_action a
-        LEFT JOIN ontology_action_mapping_in m ON a.id = m.ontology_action_id
-        WHERE a.ontology_unique_identifier = #{ontologyUniqueIdentifier}
-    </select>
 
 
 </mapper>

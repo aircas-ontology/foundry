@@ -8,8 +8,10 @@ import com.aircas.ptr.foundry.ontology.common.param.EntityDataSourceParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyDataSourceColumnParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyPrimaryDatasourceParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyCreateParam;
+import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyDetailVO;
 import com.google.common.collect.Sets;
@@ -21,6 +23,22 @@ import java.util.Arrays;
 import java.util.stream.Collectors;
 
 public class DataConverter {
+
+
+    public static OntologyLinkInfoVO convert(OntologyLinkGroup link, OntologyMeta from, OntologyMeta to) {
+        return OntologyLinkInfoVO.builder()
+                .name(link.getName())
+                .uniqueIdentifier(link.getUniqueIdentifier())
+                .ontologyUniqueIdentifierFrom(from.getUniqueIdentifier())
+                .ontologyUniqueIdentifierTo(to.getUniqueIdentifier())
+                .ontologyIconFrom(from.getIcon())
+                .ontologyIconTO(to.getIcon())
+                .ontologyNameFrom(from.getDisplayName())
+                .ontologyNameTo(to.getDisplayName())
+                .type(link.getType())
+                .build();
+    }
+
 
     public static OntologyProperty convert(OntologyPropertyCreateParam param) {
         var datasource = param.getDatasource();

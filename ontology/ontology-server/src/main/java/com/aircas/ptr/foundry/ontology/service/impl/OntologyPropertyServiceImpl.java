@@ -267,6 +267,23 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                 .collect(Collectors.toList());
     }
 
+    @Override
+    public OntologyPropertyDetailVO getPropertyDetailById(String uniqueIdentifier) {
+        var prop = getOne(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getUniqueIdentifier, uniqueIdentifier));
+        return OntologyPropertyDetailVO.builder()
+                .description(prop.getDescription())
+                .displayName(prop.getDisplayName())
+                .isPrimaryKey(prop.getIsPrimaryKey() == 1)
+                .isTitleKey(prop.getIsTitleKey() == 1)
+                .tag(prop.getTag())
+                .uniqueIdentifier(prop.getUniqueIdentifier())
+                .apiName(prop.getApiName())
+                .propertyType(prop.getPropertyType())
+                .datasourceId(prop.getDatasourceId())
+                .datasourceColumnName(prop.getDatasourceColumnName())
+                .build();
+    }
+
 
     private void checkPrimaryKey(List<OntologyProperty> properties, PropertyDatasourceParam datasource) {
         var existPrimaryKey = properties.stream().filter(v -> v.getIsPrimaryKey() == 1).findFirst();

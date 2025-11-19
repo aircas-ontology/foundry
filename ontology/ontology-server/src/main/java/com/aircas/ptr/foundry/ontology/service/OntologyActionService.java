@@ -7,7 +7,6 @@ import com.aircas.ptr.foundry.ontology.model.po.ActionHandleRule;
 import com.aircas.ptr.foundry.ontology.exception.*;
 import com.aircas.ptr.foundry.ontology.model.bo.OntologyActionBo;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyAction;
-import com.aircas.ptr.foundry.ontology.model.view.OntologyActionView;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyActionVO;
 import com.aircas.ptr.foundry.ontology.model.vo.ParameterMetadataVO;
 import com.aircas.ptr.foundry.ontology.model.param.ActionHandleMappingInParam;
@@ -53,6 +52,4 @@ public interface OntologyActionService extends IService<OntologyAction> {
     int updateActionDataById(ActionHandleCommitFlashMemory flashMemory);
 
     boolean configTask(String actionApi, List<String> objectPrimaryKeys, Date taskStartTime, Date taskEndTime, String taskCorn);
-
-    List<OntologyActionView> queryActionViewByOntologyIdentifier(String ontologyUniqIdentifier);
 }

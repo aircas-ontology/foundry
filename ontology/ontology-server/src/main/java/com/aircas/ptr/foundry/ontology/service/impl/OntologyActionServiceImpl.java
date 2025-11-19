@@ -1,14 +1,12 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
 import com.aircas.ptr.foundry.common.constant.ActionRuleConnectType;
-import com.aircas.ptr.foundry.common.util.SnowflakeIdUtil;
 import com.aircas.ptr.foundry.ontology.exception.*;
 import com.aircas.ptr.foundry.ontology.model.bo.OntologyActionBo;
 import com.aircas.ptr.foundry.ontology.model.bo.OntologyActionMappingInBO;
 import com.aircas.ptr.foundry.ontology.model.param.ActionHandleMappingInParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionHandleRuleAddParam;
 import com.aircas.ptr.foundry.ontology.model.po.*;
-import com.aircas.ptr.foundry.ontology.model.view.OntologyActionView;
 import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.*;
 import com.aircas.ptr.foundry.ontology.service.*;
@@ -21,15 +19,12 @@ import lombok.extern.slf4j.Slf4j;
 import lombok.var;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.compress.utils.Lists;
-import org.apache.commons.lang.StringUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
 import java.util.*;
 import java.util.stream.Collectors;
-
-import static com.aircas.ptr.foundry.common.constant.ActionMappingInTypeEnum.ONTOLOGY;
 
 @Service
 @Slf4j
@@ -68,11 +63,6 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
 
     private final static String DEFAULT_OBJECT_DESC = "当前本体对象";
 
-
-    @Override
-    public List<OntologyActionView> queryActionViewByOntologyIdentifier(String ontologyUniqIdentifier) {
-        return ontologyActionMapper.selectActionViewByOntologyIdentifier(ontologyUniqIdentifier);
-    }
 
     @Override
     public void removeByOntologyIdentifier(String ontologyIdentifier) {

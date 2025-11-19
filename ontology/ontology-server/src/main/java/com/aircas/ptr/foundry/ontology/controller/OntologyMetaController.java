@@ -32,15 +32,6 @@ public class OntologyMetaController {
     @Resource
     private OntologyMetaService ontologyMetaService;
 
-    @PutMapping("/icon")
-    @ApiOperation(value = "修改本体图标")
-    public RestResult updateIcon(@RequestParam(required = true, name = "image") MultipartFile image,
-                                 @RequestParam(name = "uniqueIdentifier", required = true) @ApiParam(name = "uniqueIdentifier", value = "本体unique identifer", required = true) @OntologyIdVerify String uniqueIdentifier) {
-        ontologyMetaService.updateIcon(image, uniqueIdentifier);
-        return RestResult.success();
-    }
-
-
     @PostMapping("")
     @ApiOperation(value = "创建本体")
     public RestResult<IdentifierVO> createOntology(@RequestBody @Valid OntologyMetaCreateParam ontologyCreateParam) {

@@ -22,6 +22,8 @@ public interface OntologyLinkGroupService extends IService<OntologyLinkGroup> {
 
     List<OntologyMetaInfoVO> getLinkedOntology(String ontologyUniqueIdentifier);
 
+    OntologyLinkInfoVO getLinkByUniqueIdentifier(String uniqueIdentifier);
+
     List<OntologyLinkInfoVO> getLinksByGroupId(String groupId);
 
     List<OntologyLinkInfoVO> getLinksByOntologyUniqueIdentifier(String ontologyUniqueIdentifier);

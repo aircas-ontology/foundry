@@ -38,18 +38,7 @@ spring:
         connect: 5000
         request: 10000
 
-#mybatis:
-#  configuration:
-#    lazy-loading-enabled: true
-#    aggressive-lazy-loading: false
-#    map-underscore-to-camel-case: true
-#  mapper-locations: classpath*:/mybatis-mapper/*Mapper.xml
 
-#mybatis-plus:
-#  configuration:
-#    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
-#    map-underscore-to-camel-case: true
-#    cache-enabled: false
 
 
 #eureka:
@@ -70,35 +59,10 @@ ontology:
   swagger:
     enable: true
 
-elasticsearch:
-  addr: 192.168.9.101:9200
+#elasticsearch:
+#  addr: 192.168.9.101:9200
 
-entity:
-  table-url:
-    create: "http://192.168.9.11:8088/api/postgres/tables"
-    delete: "http://192.168.9.11:8088/api/postgres/tables/{table_name}"
-    exist: "http://192.168.9.11:8088/api/postgres/tables/{table_name}/exists"
-    count: "http://192.168.9.11:8088/api/postgres/tables/{table_name}/count"
-    batch: "http://192.168.9.11:8088/api/postgres/tables/{table_name}/batch"
-  node-url:
-    create: "http://192.168.9.11:8088/api/ontology/nodes"
-    delete: "http://192.168.9.11:8088/api/ontology/nodes/{node_id}"
-    exist: "http://192.168.9.11:8088/api/ontology/nodes/{node_id}"
-    batch: "http://192.168.9.11:8088/api/ontology/nodes/batch"
 
-# 调其他服务的接口配置
-client:
-  entity:
-    url-prefix: "http://127.0.0.1:37004/ontology_entity"
-    create-table:  "/table"
-    copy-table: "/table/copy"
-    delete-table: "/table/%s"
-    column: "/table/column"
-    update-column-relation: "/table/column_relation"
-    node-relation: "/node/relation"
-    query-node-relation: "/node/query_relation"
-    query-record: "/table/record"
-    query-record-detail: "/table/record_detail"
 
 minio:
   endpoint: http://192.168.9.11:16337

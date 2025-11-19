@@ -79,4 +79,10 @@ public class OntologyPropertyController {
     }
 
 
+    @GetMapping("")
+    @ApiOperation(value = "根据uniqid查询属性")
+    public RestResult<OntologyPropertyDetailVO> getPropertyByUniqueIdentifier(@RequestParam(required = true, name = "uniqueIdentifier") @ApiParam(value = "uniqueIdentifier", required = true) String uniqueIdentifier) {
+        return RestResult.ofData(ontologyPropertyService.getPropertyDetailById(uniqueIdentifier));
+    }
+
 }

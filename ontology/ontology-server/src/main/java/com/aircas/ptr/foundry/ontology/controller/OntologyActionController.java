@@ -1,10 +1,9 @@
 package com.aircas.ptr.foundry.ontology.controller;
 
 import com.aircas.ptr.foundry.common.base.RestResult;
-import com.aircas.ptr.foundry.ontology.model.param.ActionCreateParam;
+import com.aircas.ptr.foundry.ontology.model.param.ActionCreateOrUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionSchedulingCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionSchedulingUpdateParam;
-import com.aircas.ptr.foundry.ontology.model.param.ActionUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.vo.ActionSchedulingDetailVO;
 import com.aircas.ptr.foundry.ontology.model.vo.ActionSchedulingInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyActionDetailVO;
@@ -38,16 +37,23 @@ public class OntologyActionController {
     private ActionHandleTaskService actionHandleTaskService;
 
 
+    @ApiOperation(value = "执行行为")
+    @PostMapping(value = "/execute/{actionApi}")
+    public RestResult executeAction(@PathVariable(name = "actionApi", required = true) String actionApi) {
+        return RestResult.success();
+    }
+
+
     @ApiOperation(value = "新增行为")
     @PostMapping("")
-    public RestResult createAction(@RequestBody @Valid ActionCreateParam param) {
+    public RestResult createAction(@RequestBody @Valid ActionCreateOrUpdateParam param) {
         return RestResult.success();
     }
 
 
     @ApiOperation(value = "编辑行为")
     @PutMapping("")
-    public RestResult updateAction(@RequestBody @Valid ActionUpdateParam param) {
+    public RestResult updateAction(@RequestBody @Valid ActionCreateOrUpdateParam param) {
         //已经被行为调度的行为不可直接编辑，需要先暂停调度
         return RestResult.success();
     }
@@ -232,15 +238,6 @@ public class OntologyActionController {
 //        return DataResult.ofData(ontologyActionService.updateActionDataById(memory));
 //    }
 
-//    @ApiOperation(value = "执行行为")
-//    @PostMapping(value = "/execute")
-//    public ApiResult execute(@RequestBody ActionHandleParam param) {
-//        try {
-//            return DataResult.ofData(ontologyActionService.handle(param.getPrimaryKey(), param.getApi(), param.getParams()));
-//        } catch (BaseException e) {
-//            return DataResult.fail(e.getMessage(), e.code, e.getRootCauseMessage());
-//        }
-//    }
 
 //    @ApiOperation(value = "手动执行行为函数")
 //    @PostMapping(value = "/execute")

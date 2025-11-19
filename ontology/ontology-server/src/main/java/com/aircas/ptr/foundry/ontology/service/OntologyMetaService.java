@@ -22,8 +22,6 @@ import java.util.List;
 
 public interface OntologyMetaService extends IService<OntologyMeta> {
 
-    void updateIcon(MultipartFile image, String uniqueIdentifier);
-
     String createOntology(OntologyMetaCreateParam ontologyCreateParam);
 
     List<OntologyGroupMetaVO> getByGroupId(String groupId, OntologyOrderByEnum orderBy, QuerySortEnum sort);
@@ -37,8 +35,6 @@ public interface OntologyMetaService extends IService<OntologyMeta> {
     List<OntologyMetaInfoVO> searchByKeyword(String keyword);
 
     List<OntologyMetaNodeVO> getOntologyTreeByByGroupId(String groupId);
-
-    List<OntologyMetaVO> selectByUniqueIdentifiers(List<String> ontologyUniqueIdentifiers);
 
 
 }

@@ -5,12 +5,12 @@ import com.aircas.ptr.foundry.common.util.IdGenerator;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.ontology.converter.DataConverter;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyLinkCreateParam;
-import com.aircas.ptr.foundry.ontology.model.po.OntologyAction;
+import com.aircas.ptr.foundry.ontology.model.po.OntologyActionLink;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaInfoVO;
-import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyActionMapper;
+import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyActionLinkMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyLinkGroupMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyMetaMapper;
 import com.aircas.ptr.foundry.ontology.service.EntityService;
@@ -42,7 +42,7 @@ import java.util.stream.Stream;
 public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupMapper, OntologyLinkGroup> implements OntologyLinkGroupService {
 
     @Resource
-    private OntologyActionMapper actionMapper;
+    private OntologyActionLinkMapper actionLinkMapper;
 
     @Resource
     private OntologyMetaMapper ontologyMetaMapper;
@@ -78,6 +78,18 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
         var ontologyIds = links.stream().flatMap(v -> Stream.of(v.getOntologyUniqueIdentifierFrom(), v.getOntologyUniqueIdentifierTo())).collect(Collectors.toList());
         var metas = ontologyMetaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>().in(OntologyMeta::getUniqueIdentifier, ontologyIds));
         return metas.stream().map(DataConverter::convert).collect(Collectors.toList());
+    }
+
+    @Override
+    public OntologyLinkInfoVO getLinkByUniqueIdentifier(String uniqueIdentifier) {
+        var link = getOne(new LambdaQueryWrapper<OntologyLinkGroup>().eq(OntologyLinkGroup::getUniqueIdentifier, uniqueIdentifier));
+        PreconditionUtils.checkArgument(link != null, "关系不存在：" + uniqueIdentifier);
+        var ontologyIds = Lists.newArrayList(link.getOntologyUniqueIdentifierFrom(), link.getOntologyUniqueIdentifierTo());
+        var metaMap = ontologyMetaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>().in(OntologyMeta::getUniqueIdentifier, ontologyIds))
+                .stream().collect(Collectors.toMap(v -> v.getUniqueIdentifier(), v -> v));
+        var from = metaMap.get(link.getOntologyUniqueIdentifierFrom());
+        var to = metaMap.get(link.getOntologyUniqueIdentifierTo());
+        return DataConverter.convert(link, from, to);
     }
 
     @Override
@@ -124,7 +136,7 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
         var link = getOne(query);
         PreconditionUtils.checkArgument(link != null, "无效的关系id", HttpStatus.BAD_REQUEST);
         // 检测是否被行为使用到
-        var actions = actionMapper.selectList(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getOntologyLinkGroupId, linkUniqIdentifier));
+        var actions = actionLinkMapper.selectList(new LambdaQueryWrapper<OntologyActionLink>().eq(OntologyActionLink::getOntologyLinkUniqueIdentifier, linkUniqIdentifier));
         PreconditionUtils.checkArgument(CollectionUtils.isEmpty(actions), "该关系被本体的某个行为使用到，不能删除", HttpStatus.FORBIDDEN);
         // 删除本体关系
         remove(query);
@@ -142,17 +154,7 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
         return links.stream().map(link -> {
             var from = metaMap.get(link.getOntologyUniqueIdentifierFrom());
             var to = metaMap.get(link.getOntologyUniqueIdentifierTo());
-            return OntologyLinkInfoVO.builder()
-                    .name(link.getName())
-                    .uniqueIdentifier(link.getUniqueIdentifier())
-                    .ontologyUniqueIdentifierFrom(from.getUniqueIdentifier())
-                    .ontologyUniqueIdentifierTo(to.getUniqueIdentifier())
-                    .ontologyIconFrom(from.getIcon())
-                    .ontologyIconTO(to.getIcon())
-                    .ontologyNameFrom(from.getDisplayName())
-                    .ontologyNameTo(to.getDisplayName())
-                    .type(link.getType())
-                    .build();
+            return DataConverter.convert(link, from, to);
         }).collect(Collectors.toList());
     }
 }
