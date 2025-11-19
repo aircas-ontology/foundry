@@ -1,6 +1,9 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
 
+import com.aircas.ptr.foundry.common.constant.FunctionParamCategoryEnum;
+import com.aircas.ptr.foundry.common.constant.FunctionParamTypeEnum;
+import com.aircas.ptr.foundry.common.constant.FunctionTypeEnum;
 import com.aircas.ptr.foundry.common.exception.DuplicatedDataException;
 import com.aircas.ptr.foundry.common.util.FileUtil;
 import com.aircas.ptr.foundry.common.util.SnowflakeIdUtil;
@@ -9,25 +12,41 @@ import com.aircas.ptr.foundry.ontology.GroovyClassLoaderManager;
 import com.aircas.ptr.foundry.ontology.exception.*;
 import com.aircas.ptr.foundry.ontology.function.FunctionUtils;
 import com.aircas.ptr.foundry.ontology.model.bo.FunctionBo;
+import com.aircas.ptr.foundry.ontology.model.dto.FunctionParamDTO;
+import com.aircas.ptr.foundry.ontology.model.param.FunctionCreateParam;
+import com.aircas.ptr.foundry.ontology.model.param.FunctionUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.po.Function;
+import com.aircas.ptr.foundry.ontology.model.po.FunctionParamPO;
+import com.aircas.ptr.foundry.ontology.model.po.OntologyAction;
+import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
 import com.aircas.ptr.foundry.ontology.model.view.FunctionView;
-import com.aircas.ptr.foundry.ontology.model.vo.FunctionVO;
-import com.aircas.ptr.foundry.ontology.model.vo.ParameterMetadataVO;
+import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.FunctionMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.FunctionParamMapper;
+import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyActionMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyMetaMapper;
 import com.aircas.ptr.foundry.ontology.service.FunctionService;
+import com.aircas.ptr.foundry.ontology.service.GroovyParseService;
+import com.alibaba.druid.util.StringUtils;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.github.pagehelper.PageHelper;
+import com.github.pagehelper.PageInfo;
 import groovy.lang.GroovyClassLoader;
 import groovy.lang.GroovyObject;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import lombok.var;
+import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.io.FileUtils;
 import org.codehaus.groovy.control.CompilationFailedException;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import javax.annotation.Resource;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Method;
@@ -44,11 +63,19 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
 
     final static String baseDir = "functions";
 
-    private final FunctionMapper functionMapper;
-
-    private final FunctionParamMapper functionParamMapper;
-
     private final OntologyMetaMapper ontologyMetaMapper;
+
+    @Resource
+    private FunctionMapper functionMapper;
+
+    @Resource
+    private OntologyActionMapper ontologyActionMapper;
+
+    @Resource
+    private FunctionParamMapper functionParamMapper;
+
+    @Resource
+    private GroovyParseService groovyParseService;
 
     @Override
     public void removeByOntologyUniqId(String ontologyUniqId) {
@@ -110,16 +137,56 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     }
 
     @Override
+    public FunctionDetailVO getFunctionDetailByApi(String api) {
+        Function function = functionMapper.selectByApi(api);
+        List<FunctionParamPO> functionParams = functionParamMapper.selectByFunctionId(function.getId());
+        List<FunctionParameterVO> params = CollectionUtils.isEmpty(functionParams) ? new ArrayList<>() :
+                functionParams.stream().map(p -> {
+                    FunctionParameterVO vo = new FunctionParameterVO();
+                    BeanUtils.copyProperties(p, vo);
+                    vo.setParamId(p.getId());
+                    return vo;
+                }).collect(Collectors.toList());
+        return FunctionDetailVO.builder()
+                .code(function.getCode())
+                .referenceName(function.getReferenceName())
+                .params(params)
+                .functionApi(function.getApi())
+                .displayName(function.getDisplayName())
+                .description(function.getDescription())
+                .type(function.getType())
+                .build();
+    }
+
+    @Override
+    @Transactional(value = "mainTransactionManager")
     public Boolean deleteByApi(String functionName) {
-        Integer status = functionMapper.deleteByApi(functionName);
-        if (status == 0) {
-            return false;
+        Function function = functionMapper.selectByApi(functionName);
+        if(Objects.nonNull(function)){
+            //判断函数是否关联了行为，被本体行为使用到则不删除
+            List<OntologyAction> ontologyActions = ontologyActionMapper.selectByFunctionApi(functionName);
+            if(CollectionUtils.isEmpty(ontologyActions)){
+                return false;
+            }
+            //删除函数参数记录
+            functionParamMapper.deleteByFunctionId(function.getId());
+            //删除函数记录
+            int result = functionMapper.deleteById(function.getId());
+            //删除groovy文件
+            //todo 回滚
+            boolean isDel = deleteFunctionGroovy(functionName);
+            return result > 0 && isDel ? true : false;
         }
+        return false;
+    }
+
+    private boolean deleteFunctionGroovy(String functionName){
+        //删除groovy文件
         try {
             File file = getFile(functionName, false);
             file.delete();
-        } catch (SecurityException exception) {
-            System.out.println("删除文件失败");
+        } catch (Exception e) {
+            log.error("删除文件失败:",e.getMessage(),e);
             return false;
         }
         return true;
@@ -146,6 +213,88 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     }
 
     @Override
+    @Transactional(value = "mainTransactionManager")
+    public int createFunction(FunctionCreateParam param) {
+        Function function = Function.builder()
+                .api(param.getFunctionApi())
+                .description(param.getDescription())
+                .displayName(param.getDisplayName())
+                .code(param.getCode())
+                .type(param.getType())
+                .status(1)
+                .referenceName(param.getReferenceName())
+                .build();
+        int result = functionMapper.insert(function);
+
+        //解析函数参数，批量入库
+        insertBatchFuncParams(function.getId(),param.getCode());
+
+        //生成groovy文件
+        write(param.getFunctionApi(),param.getCode(),false);
+        return result;
+    }
+
+    /***
+     * 解析groovy代码，获取参数列表及返回值，批量入库
+     * @param functionId
+     * @param code
+     */
+    public void insertBatchFuncParams(Long functionId,String code){
+        //获取groovy参数、返回值信息
+        List<FunctionParamDTO> functionParam = groovyParseService.parseFunctionParam(code);
+        if(CollectionUtils.isNotEmpty(functionParam)){
+            List<FunctionParamPO> params = functionParam.stream().map(p ->
+                    FunctionParamPO.builder()
+                            .functionId(functionId)
+                            .paramName(p.getParamName())
+                            .paramType(FunctionParamTypeEnum.valueOf(p.getParamType()))
+                            .category(FunctionParamCategoryEnum.valueOf(p.getCategory()))
+                            .paramSchema(p.getParamSchema())
+                            .paramOrder(p.getParamOrder())
+                            .createTime(new Date())
+                            .updateTime(new Date())
+                            .build()
+            ).collect(Collectors.toList());
+            functionParamMapper.insertBatch(params);
+        }
+    }
+
+    @Override
+    @Transactional(value = "mainTransactionManager")
+    public int updateFunction(FunctionUpdateParam param) {
+        Function function = functionMapper.selectByApi(param.getFunctionApi());
+        if(Objects.nonNull(function)){
+            //判断函数是否关联了行为，被本体行为使用到则不删除
+            List<OntologyAction> ontologyActions = ontologyActionMapper.selectByFunctionApi(param.getFunctionApi());
+            if(CollectionUtils.isEmpty(ontologyActions)){
+                return 0;
+            }
+            if(!StringUtils.equals(function.getCode(),param.getCode())){
+                //删除函数参数记录
+                functionParamMapper.deleteByFunctionId(function.getId());
+                //解析函数参数，批量入库
+                insertBatchFuncParams(function.getId(),param.getCode());
+            }
+            //更新函数信息
+            int result = functionMapper.updateByApi(Function.builder()
+                            .api(param.getFunctionApi())
+                            .displayName(param.getDisplayName())
+                            .description(param.getDescription())
+                            .referenceName(param.getReferenceName())
+                            .code(param.getCode()).build());
+            //删除groovy文件,并生成新的groovy文件
+            //todo 回滚
+            boolean isDel = deleteFunctionGroovy(param.getFunctionApi());
+            if(isDel){
+                //生成groovy文件
+                write(param.getFunctionApi(),param.getCode(),false);
+            }
+            return result;
+        }
+        return 0;
+    }
+
+    @Override
     public List<FunctionVO> functionMetadataList() {
         List<Function> list = functionMapper.getAllFunctions();
         List<FunctionVO> retResult = new ArrayList();
@@ -156,6 +305,24 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         }
         this.setOntologyList(retResult);
         return retResult;
+    }
+
+    @Override
+    public PageInfo<FunctionInfoVO> getFunctions(Integer pageNum, Integer pageSize) {
+        PageHelper.startPage(pageNum, pageSize);
+        PageInfo<Function> pageInfo = new PageInfo<>(functionMapper.selectList(new QueryWrapper<>()));
+        List<FunctionInfoVO> functions = pageInfo.getList().stream().map(item ->
+           FunctionInfoVO.builder()
+                    .functionApi(item.getApi())
+                    .displayName(item.getDisplayName())
+                    .type(item.getType())
+                    .description(item.getDescription())
+                    .build()
+        ).collect(Collectors.toList());
+        PageInfo<FunctionInfoVO> pageResult = new PageInfo<>(functions);
+        BeanUtils.copyProperties(pageInfo, pageResult);
+        pageResult.setList(functions);
+        return pageResult;
     }
 
     private void setOntologyList(List<FunctionVO> functionVOList) {

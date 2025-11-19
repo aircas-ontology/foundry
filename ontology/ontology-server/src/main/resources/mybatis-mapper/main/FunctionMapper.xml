@@ -42,23 +42,32 @@
 
     <insert id="insert" parameterType="com.aircas.ptr.foundry.ontology.model.po.Function">
         <!-- @mbg.generated: generated automatically, do not modify! -->
-        insert into function (id, api, description, status, object_types, create_time, update_time)
-        values (#{id,jdbcType=BIGINT},#{api,jdbcType=VARCHAR}, #{description,jdbcType=VARCHAR},
-        #{status,jdbcType=BIGINT},
-        #{objectTypes,jdbcType=VARCHAR}, #{createTime,jdbcType=TIMESTAMP}, #{updateTime,jdbcType=TIMESTAMP})
+        insert into function (id, api, description, status, object_types, create_time, update_time,type,reference_name,code,display_name)
+        values (#{id,jdbcType=BIGINT},#{api,jdbcType=VARCHAR}, #{description,jdbcType=VARCHAR},#{status,jdbcType=BIGINT},
+        #{objectTypes,jdbcType=VARCHAR}, #{createTime,jdbcType=TIMESTAMP}, #{updateTime,jdbcType=TIMESTAMP},
+        #{type,jdbcType=VARCHAR}, #{referenceName,jdbcType=VARCHAR}, #{code,jdbcType=VARCHAR}, #{displayName,jdbcType=VARCHAR} )
     </insert>
 
     <update id="updateByApi" parameterType="com.aircas.ptr.foundry.ontology.model.po.Function">
         update "function"
         <set>
             <if test="description != null">
-                "description" = #{description,jdbcType=INTEGER},
+                "description" = #{description,jdbcType=VARCHAR},
             </if>
             <if test="status != null">
                 "status" = #{status,jdbcType=INTEGER},
             </if>
+            <if test="code != null">
+                "code" = #{code,jdbcType=VARCHAR},
+            </if>
+            <if test="displayName != null">
+                "display_name" = #{displayName,jdbcType=VARCHAR},
+            </if>
             <if test="objectTypes != null">
-                "object_types" = #{objectTypes,jdbcType=INTEGER},
+                "object_types" = #{objectTypes,jdbcType=VARCHAR},
+            </if>
+            <if test="referenceName != null">
+                "reference_name" = #{referenceName,jdbcType=VARCHAR},
             </if>
             <if test="updateTime != null">
                 update_time = #{updateTime,jdbcType=TIMESTAMP},

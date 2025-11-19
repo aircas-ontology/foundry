@@ -11,6 +11,8 @@ public interface OntologyActionMapper extends BaseMapper<OntologyAction> {
 
     OntologyAction selectByApi(String api);
 
+    List<OntologyAction> selectByFunctionApi(String functionApi);
+
     List<OntologyAction> selectByOntologyIdentifier(String ontologyUniqueIdentifier);
 
 }
