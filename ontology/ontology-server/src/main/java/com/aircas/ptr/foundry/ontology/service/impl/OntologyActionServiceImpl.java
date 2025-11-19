@@ -15,8 +15,14 @@ import com.aircas.ptr.foundry.ontology.service.*;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.NullNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
+import com.jayway.jsonpath.DocumentContext;
+import com.jayway.jsonpath.JsonPath;
 import lombok.extern.slf4j.Slf4j;
 import lombok.var;
 import org.apache.commons.collections4.CollectionUtils;
@@ -68,6 +74,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
 
     @Resource
     private ActionHandleTaskService actionHandleTaskService;
+
+    private final static ObjectMapper objectMapper = new ObjectMapper();
 
     private final static String DEFAULT_OBJECT_DESC = "当前本体对象";
 
@@ -463,5 +471,46 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         pageResult.setList(collect);
         return pageResult;
     }
+
+
+    private DocumentContext simpleCreateAndFill(String jsonSchema, Map<String, Object> values) throws Exception {
+        JsonNode nullObj = createAllNull(jsonSchema);
+        System.out.println(nullObj);
+        DocumentContext context = JsonPath.parse(nullObj.toString());
+
+        for (Map.Entry<String, Object> entry : values.entrySet()) {
+            context.set(entry.getKey(), entry.getValue());
+        }
+        return context;
+    }
+
+
+    private JsonNode createAllNull(String schemaStr) throws Exception {
+        JsonNode schema = objectMapper.readTree(schemaStr);
+        return buildNullNode(schema);
+    }
+
+    private JsonNode buildNullNode(JsonNode schema) {
+        if (!schema.has("type")) {
+            return NullNode.getInstance();
+        }
+
+        String type = schema.get("type").asText();
+        switch (type) {
+            case "object":
+                ObjectNode obj = objectMapper.createObjectNode();
+                if (schema.has("properties")) {
+                    schema.get("properties").fields().forEachRemaining(field -> {
+                        obj.set(field.getKey(), buildNullNode(field.getValue()));
+                    });
+                }
+                return obj;
+            case "array":
+                return objectMapper.createArrayNode();
+            default:
+                return NullNode.getInstance();
+        }
+    }
+
 
 }
