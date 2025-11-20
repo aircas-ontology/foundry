@@ -61,18 +61,4 @@ public class ArangoConfig implements ArangoConfiguration {
         return database;
     }
 
-    @PostConstruct
-    public void initCollections() {
-        ArangoDatabase db = arango().build().db(database());
-        List<String> collectionList = Arrays.stream(collections.split(",")).collect(Collectors.toList());
-        if (!db.exists()) {
-            arango().build().createDatabase(database);
-        }
-        collectionList.forEach(v -> {
-            if (!db.collection(v).exists()) {
-                db.createCollection(v);
-            }
-        });
-
-    }
 } 
