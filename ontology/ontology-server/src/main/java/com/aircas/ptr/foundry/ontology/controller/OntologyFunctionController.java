@@ -80,8 +80,8 @@ public class OntologyFunctionController {
     @DeleteMapping("/delete/{functionApi}")
     public RestResult deleteById(@PathVariable(required = true, name = "functionApi") String functionApi) {
         //需要校验函数有没有被本体行为使用到
-        boolean isSuccess = functionService.deleteByApi(functionApi);
-        return isSuccess ? RestResult.success() : RestResult.failed();
+        functionService.deleteByApi(functionApi);
+        return RestResult.success();
     }
 
 //    @ApiOperation(value = "读取函数列表")
