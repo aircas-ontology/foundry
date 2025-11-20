@@ -10,10 +10,11 @@
         <result column="object_types" jdbcType="VARCHAR" property="objectTypes"/>
         <result column="create_time" jdbcType="TIMESTAMP" property="createTime"/>
         <result column="update_time" jdbcType="TIMESTAMP" property="updateTime"/>
+        <result column="type" jdbcType="VARCHAR" property="type"/>
     </resultMap>
     <sql id="Base_Column_List">
         <!-- @mbg.generated: generated automatically, do not modify! -->
-        id, create_time, update_time, api, description, status, object_types
+        id, create_time, update_time, api, description, status, object_types, type
     </sql>
 
     <select id="selectByApi" parameterType="java.lang.String" resultMap="BaseResultMap">
@@ -38,6 +39,14 @@
         <include refid="Base_Column_List"/>
         from function
         where status = 1
+    </select>
+
+    <select id="selectByPage" resultMap="BaseResultMap">
+        <!-- @mbg.generated: generated automatically, do not modify! -->
+        select
+        <include refid="Base_Column_List"/>
+        from function
+        where status = 1 limit ${limit} offset ${offset}
     </select>
 
     <insert id="insert" parameterType="com.aircas.ptr.foundry.ontology.model.po.Function">

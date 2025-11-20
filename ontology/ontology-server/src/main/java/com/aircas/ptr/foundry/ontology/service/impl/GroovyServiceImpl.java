@@ -1,31 +1,38 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 import com.aircas.ptr.foundry.common.constant.FunctionParamCategoryEnum;
 import com.aircas.ptr.foundry.common.constant.FunctionParamType;
-import com.aircas.ptr.foundry.common.util.StringUtil;
 import com.aircas.ptr.foundry.ontology.model.dto.FunctionParamDTO;
-import com.aircas.ptr.foundry.ontology.service.GroovyParseService;
-import com.alibaba.druid.util.StringUtils;
+import com.aircas.ptr.foundry.ontology.model.po.FunctionParamPO;
+import com.aircas.ptr.foundry.ontology.service.GroovyService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.module.jsonSchema.JsonSchema;
 import com.fasterxml.jackson.module.jsonSchema.JsonSchemaGenerator;
+import groovy.lang.GroovyClassLoader;
+import groovy.lang.GroovyShell;
+import groovy.lang.Script;
 import lombok.RequiredArgsConstructor;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.codehaus.groovy.ast.ClassHelper;
 import org.codehaus.groovy.ast.ClassNode;
+import org.codehaus.groovy.ast.GenericsType;
 import org.codehaus.groovy.ast.Parameter;
 import org.codehaus.groovy.control.CompilationUnit;
 import org.codehaus.groovy.control.CompilerConfiguration;
 import org.codehaus.groovy.control.Phases;
 import org.springframework.stereotype.Service;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class GroovyParseServiceImpl implements GroovyParseService {
+public class GroovyServiceImpl implements GroovyService {
 
 
     /**
@@ -53,10 +60,16 @@ public class GroovyParseServiceImpl implements GroovyParseService {
                 for (int i = 0; i < parameters.length; i++) {
                     Parameter parameter = parameters[i];
                     ClassNode type = parameter.getType();
+                    GenericsType[] genericsTypes = type.getGenericsTypes();
+                    String typeName = type.getName();
+                    if(genericsTypes != null && genericsTypes.length > 0 ){
+                        typeName = String.format("%s<%s>",typeName,String.join(",", Arrays.stream(genericsTypes).map(g -> g.getType().getName()).collect(Collectors.toList())));
+                    }
                     String name = parameter.getName();
                     boolean basicType = isBasicType(type);
                     FunctionParamDTO paramDTO = FunctionParamDTO.builder()
                             .paramName(name)
+                            .referenceName(typeName)
                             .category(FunctionParamCategoryEnum.INPUT.toString())
                             //todo List/Map/Set等
                             .paramType(basicType ? FunctionParamType.getTypeEnum(type.getName()) : "OBJECT")
@@ -68,10 +81,16 @@ public class GroovyParseServiceImpl implements GroovyParseService {
                 //返回值
                 ClassNode returnType = m.getReturnType();
                 boolean basicType = isBasicType(returnType);
+                String typeName = returnType.getName();
+                GenericsType[] returnGenericsTypes = returnType.getGenericsTypes();
+                if(returnGenericsTypes != null && returnGenericsTypes.length > 0 ){
+                    typeName = String.format("%s<%s>",typeName,String.join(",", Arrays.stream(returnGenericsTypes).map(g -> g.getType().getName()).collect(Collectors.toList())));
+                }
                 FunctionParamDTO returnParam = FunctionParamDTO.builder()
                         .category(FunctionParamCategoryEnum.OUTPUT.toString())
                         //todo List/Map/Set等
                         .paramType(basicType ? FunctionParamType.getTypeEnum(returnType.getName()) : "OBJECT")
+                        .referenceName(typeName)
                         .paramName("result")
                         .paramOrder(0)
                         .paramSchema(basicType ? null : getParamSchema(returnType.getTypeClass()))
@@ -83,6 +102,24 @@ public class GroovyParseServiceImpl implements GroovyParseService {
         }
         return params;
     }
+
+    @SneakyThrows
+    @Override
+    public void executeGroovy(String code, List<com.aircas.ptr.foundry.ontology.model.param.Parameter> parameters, List<FunctionParamPO> paramInfos) {
+
+        Class<?> groovyClass = compileGroovyScript(code);
+        Object groovyInstance = groovyClass.getDeclaredConstructor(new Class[0]).newInstance();
+        Method method = groovyClass.getMethod("handle", String.class);
+        //todo
+        Object result = method.invoke(groovyInstance, "xxxxxxxxx");
+        System.out.println(result.toString());
+    }
+
+    private Class<?> compileGroovyScript(String code){
+        GroovyClassLoader classLoader = new GroovyClassLoader();
+        return classLoader.parseClass(code);
+    }
+
 
     /**
      * 判断参数类型是否为基础类型【基本类型 | 字符串 | 集合 | MAP】

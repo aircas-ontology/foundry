@@ -7,13 +7,13 @@ import com.aircas.ptr.foundry.ontology.exception.FunctionNotFoundException;
 import com.aircas.ptr.foundry.ontology.exception.FunctionRuntimeException;
 import com.aircas.ptr.foundry.ontology.model.bo.FunctionBo;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionCreateParam;
+import com.aircas.ptr.foundry.ontology.model.param.FunctionExecuteParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.po.Function;
 import com.aircas.ptr.foundry.ontology.model.view.FunctionView;
 import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
-import com.github.pagehelper.PageInfo;
 
 import java.util.HashMap;
 import java.util.List;
@@ -36,13 +36,15 @@ public interface FunctionService extends IService<Function> {
 
     List<FunctionVO> functionMetadataList();
 
-    PageInfo<FunctionInfoVO> getFunctions(Integer pageNum, Integer pageSize);
+    Page<FunctionInfoVO> getFunctions(Integer pageNum, Integer pageSize);
+
+    void executeFunction(FunctionExecuteParam param);
 
     FunctionVO getFunctionByApi(String api);
 
     FunctionDetailVO getFunctionDetailByApi(String api);
 
-    Boolean deleteByApi(String functionName);
+    Boolean deleteByApi(String api);
 
     FunctionVO queryById(Long id);
 
@@ -50,9 +52,9 @@ public interface FunctionService extends IService<Function> {
 
     int getCountByStatus(int status);
 
-    int createFunction(FunctionCreateParam param);
+    boolean createFunction(FunctionCreateParam param);
 
-    int updateFunction(FunctionUpdateParam param);
+    boolean updateFunction(FunctionUpdateParam param);
 
     List<FunctionView> queryFunctionViewByOntologyId(String ontologyUniqId);
 }

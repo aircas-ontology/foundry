@@ -4,6 +4,7 @@ import com.aircas.ptr.foundry.ontology.model.po.Function;
 import com.aircas.ptr.foundry.ontology.model.view.FunctionView;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
 
@@ -19,6 +20,8 @@ public interface FunctionMapper extends BaseMapper<Function> {
     Integer deleteByApi(String api);
 
     List<Function> getAllFunctions();
+
+    List<Function> selectByPage(@Param("limit") Integer limit, @Param("offset") Integer offset);
 
     List<FunctionView> selectFunctionViewsByOntologyId(String ontologyUniqId);
 }

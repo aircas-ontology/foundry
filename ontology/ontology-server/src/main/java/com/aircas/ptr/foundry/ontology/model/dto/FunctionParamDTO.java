@@ -20,4 +20,6 @@ public class FunctionParamDTO {
     private String category;
     //参数顺序
     private int paramOrder;
+    //全限定类名
+    private String referenceName;
 }
