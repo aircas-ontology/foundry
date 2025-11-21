@@ -15,6 +15,7 @@ import com.aircas.ptr.foundry.ontology.model.dto.FunctionParamDTO;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionExecuteParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionUpdateParam;
+import com.aircas.ptr.foundry.ontology.model.param.Parameter;
 import com.aircas.ptr.foundry.ontology.model.po.*;
 import com.aircas.ptr.foundry.ontology.model.view.FunctionView;
 import com.aircas.ptr.foundry.ontology.model.vo.*;
@@ -31,7 +32,6 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import groovy.lang.GroovyClassLoader;
 import groovy.lang.GroovyObject;
-import groovy.lang.GroovyShell;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import lombok.var;
@@ -133,24 +133,27 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     @Override
     public FunctionDetailVO getFunctionDetailByApi(String api) {
         var function = getOne(new LambdaQueryWrapper<Function>().eq(Function::getApi,api));
-        var functionParams = functionParamService.list(
-                new LambdaQueryWrapper<FunctionParamPO>().eq(FunctionParamPO::getFunctionId,function.getId()));
-        List<FunctionParameterVO> params = CollectionUtils.isEmpty(functionParams) ? new ArrayList<>() :
-                functionParams.stream().map(p -> {
-                    FunctionParameterVO vo = new FunctionParameterVO();
-                    BeanUtils.copyProperties(p, vo);
-                    vo.setParamId(p.getId());
-                    return vo;
-                }).collect(Collectors.toList());
-        return FunctionDetailVO.builder()
-                .code(function.getCode())
-                .referenceName(function.getReferenceName())
-                .params(params)
-                .functionApi(function.getApi())
-                .displayName(function.getDisplayName())
-                .description(function.getDescription())
-                .type(function.getType())
-                .build();
+        if(Objects.nonNull(function)){
+            var functionParams = functionParamService.list(
+                    new LambdaQueryWrapper<FunctionParamPO>().eq(FunctionParamPO::getFunctionId,function.getId()));
+            List<FunctionParameterVO> params = CollectionUtils.isEmpty(functionParams) ? new ArrayList<>() :
+                    functionParams.stream().map(p -> {
+                        FunctionParameterVO vo = new FunctionParameterVO();
+                        BeanUtils.copyProperties(p, vo);
+                        vo.setParamId(p.getId());
+                        return vo;
+                    }).collect(Collectors.toList());
+            return FunctionDetailVO.builder()
+                    .code(function.getCode())
+                    .referenceName(function.getReferenceName())
+                    .params(params)
+                    .functionApi(function.getApi())
+                    .displayName(function.getDisplayName())
+                    .description(function.getDescription())
+                    .type(function.getType())
+                    .build();
+        }
+        return null;
     }
 
     @Override
@@ -245,6 +248,8 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                             .category(FunctionParamCategoryEnum.valueOf(p.getCategory()))
                             .paramSchema(p.getParamSchema())
                             .paramOrder(p.getParamOrder())
+                            //todo 暂时先将参数全限定类型存放在description字段
+                            .description(p.getReferenceType())
                             .createTime(new Date())
                             .updateTime(new Date())
                             .build()
@@ -324,18 +329,20 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     }
 
     @Override
-    public void executeFunction(FunctionExecuteParam param) {
+    public String executeFunction(FunctionExecuteParam param) {
         //查询函数
         var function = getOne(new LambdaQueryWrapper<Function>().eq(Function::getApi,param.getFunctionApi()));
         //查询参数
         var funcParams = functionParamService.list(
                 new LambdaQueryWrapper<FunctionParamPO>().eq(FunctionParamPO::getFunctionId, function.getId()));
+        //参数信息
         List<FunctionParamPO> paramList = funcParams.stream()
                 .filter(p -> FunctionParamCategoryEnum.INPUT.equals(p.getCategory()))
                 .sorted(Comparator.comparing(FunctionParamPO::getParamOrder))
                 .collect(Collectors.toList());
-        groovyService.executeGroovy(function.getCode(),param.getParameters(),paramList);
-
+        //参数取值
+        Map<String, Object> paramMap = param.getParameters().stream().collect(Collectors.toMap(Parameter::getParamName, Parameter::getParamValue));
+        return groovyService.executeGroovy(function.getCode(),paramMap,paramList);
     }
 
     private void setOntologyList(List<FunctionVO> functionVOList) {

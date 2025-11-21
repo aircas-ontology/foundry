@@ -21,5 +21,5 @@ public class FunctionParamDTO {
     //参数顺序
     private int paramOrder;
     //全限定类名
-    private String referenceName;
+    private String referenceType;
 }

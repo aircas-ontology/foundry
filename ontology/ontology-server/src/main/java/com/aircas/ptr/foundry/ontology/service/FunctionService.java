@@ -38,7 +38,7 @@ public interface FunctionService extends IService<Function> {
 
     Page<FunctionInfoVO> getFunctions(Integer pageNum, Integer pageSize);
 
-    void executeFunction(FunctionExecuteParam param);
+    String executeFunction(FunctionExecuteParam param);
 
     FunctionVO getFunctionByApi(String api);
 
