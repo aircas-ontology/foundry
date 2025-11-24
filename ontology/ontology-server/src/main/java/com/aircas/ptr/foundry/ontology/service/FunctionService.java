@@ -44,7 +44,7 @@ public interface FunctionService extends IService<Function> {
 
     FunctionDetailVO getFunctionDetailByApi(String api);
 
-    Boolean deleteByApi(String api);
+    void deleteByApi(String api);
 
     FunctionVO queryById(Long id);
 
@@ -52,9 +52,9 @@ public interface FunctionService extends IService<Function> {
 
     int getCountByStatus(int status);
 
-    boolean createFunction(FunctionCreateParam param);
+    void createFunction(FunctionCreateParam param);
 
-    boolean updateFunction(FunctionUpdateParam param);
+    void updateFunction(FunctionUpdateParam param);
 
     List<FunctionView> queryFunctionViewByOntologyId(String ontologyUniqId);
 }

@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
+import com.aircas.ptr.foundry.ontology.controller.validator.FunctionApiVerify;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.AllArgsConstructor;
@@ -20,6 +21,7 @@ public class FunctionExecuteParam {
 
     @ApiModelProperty(name = "functionApi", value = "函数api", required = true)
     @NotBlank(message = "functionApi is empty")
+    @FunctionApiVerify
     private String functionApi;
 
     @ApiModelProperty(name = "parameters", value = "参数列表", required = true)

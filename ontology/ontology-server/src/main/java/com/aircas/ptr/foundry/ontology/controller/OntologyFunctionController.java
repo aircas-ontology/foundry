@@ -28,9 +28,8 @@ public class OntologyFunctionController {
 
     @PostMapping("/execute")
     @ApiOperation(value = "函数执行")
-    public RestResult executeFunction(@RequestBody @Valid FunctionExecuteParam param) {
-        functionService.executeFunction(param);
-        return RestResult.ofData(null);
+    public RestResult<String> executeFunction(@RequestBody @Valid FunctionExecuteParam param) {
+        return RestResult.ofData(functionService.executeFunction(param));
     }
 
 
@@ -55,25 +54,24 @@ public class OntologyFunctionController {
     @ApiOperation(value = "创建函数")
     @PostMapping
     public RestResult createFunction(@RequestBody @Valid FunctionCreateParam param) {
-        boolean result = functionService.createFunction(param);
-        //需要增加代码安全检测
-        return result ? RestResult.success() : RestResult.failed();
+        //todo 需要增加代码安全检测
+        functionService.createFunction(param);
+        return RestResult.success();
     }
 
     @ApiOperation(value = "更新函数")
     @PutMapping
     public RestResult updateFunction(@RequestBody FunctionUpdateParam param) {
-        boolean result = functionService.updateFunction(param);
         // 需要 1 校验函数有没有被本体行为使用到，否则不能修改 2 需要增加代码安全检测
-        return result ? RestResult.success() : RestResult.failed();
+        functionService.updateFunction(param);
+        return RestResult.success();
     }
 
 
-    @ApiOperation(value = "根据函数id获取函数详情")
+    @ApiOperation(value = "根据函数api获取函数详情")
     @GetMapping("/detail")
     public RestResult<FunctionDetailVO> getFunctionByApi(@RequestParam(required = true, name = "functionApi") @ApiParam(value = "函数api", required = true) String functionApi) {
-        FunctionDetailVO function = functionService.getFunctionDetailByApi(functionApi);
-        return RestResult.ofData(function);
+        return RestResult.ofData(functionService.getFunctionDetailByApi(functionApi));
     }
 
 
@@ -81,8 +79,8 @@ public class OntologyFunctionController {
     @DeleteMapping("/delete/{functionApi}")
     public RestResult deleteById(@PathVariable(required = true, name = "functionApi") String functionApi) {
         //需要校验函数有没有被本体行为使用到
-        boolean result = functionService.deleteByApi(functionApi);
-        return result ? RestResult.success() : RestResult.failed();
+        functionService.deleteByApi(functionApi);
+        return RestResult.success();
     }
 
 //    @ApiOperation(value = "读取函数列表")

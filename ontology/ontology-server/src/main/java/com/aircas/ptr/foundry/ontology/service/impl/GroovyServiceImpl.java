@@ -1,6 +1,6 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
+
 import com.aircas.ptr.foundry.common.constant.FunctionParamCategoryEnum;
-import com.aircas.ptr.foundry.common.constant.FunctionParamType;
 import com.aircas.ptr.foundry.common.constant.FunctionParamTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.dto.FunctionParamDTO;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionParamPO;
@@ -34,6 +34,7 @@ public class GroovyServiceImpl implements GroovyService {
 
     /**
      * 解析groovy代码块，获取参数列表和返回值信息   |   旧方法
+     *
      * @param code
      * @return
      */
@@ -99,21 +100,20 @@ public class GroovyServiceImpl implements GroovyService {
         }
         return params;
     }*/
-
     @Override
     public List<FunctionParamDTO> parseFunctionParam(String code) {
         //Groovy编译器配置
         var config = new CompilerConfiguration();
         var compilationUnit = new CompilationUnit(config);
         //添加代码块
-        compilationUnit.addSource("temp.groovy",code);
+        compilationUnit.addSource("temp.groovy", code);
         //compile方法用于执行编译过程,Phases.SEMANTIC_ANALYSIS 表示编译到语义分析阶段。这个阶段会生成抽象语法树（AST），但不会生成字节码
         compilationUnit.compile(Phases.SEMANTIC_ANALYSIS);
         var params = new ArrayList<FunctionParamDTO>();
         //提取类信息
-        for(ClassNode classNode : compilationUnit.getAST().getClasses()){
+        for (ClassNode classNode : compilationUnit.getAST().getClasses()) {
             //提取方法信息
-            var paramList = classNode.getMethods().stream().filter(m -> StringUtils.equals("handle",m.getName())).map(m -> {
+            var paramList = classNode.getMethods().stream().filter(m -> StringUtils.equals("handle", m.getName())).map(m -> {
                 List<FunctionParamDTO> funcParams = new ArrayList<>();
                 //1.参数信息提取
                 var parameters = m.getParameters();
@@ -133,32 +133,6 @@ public class GroovyServiceImpl implements GroovyService {
         return params;
     }
 
-    /**
-     * 提取参数/返回值信息
-     * @param type
-     * @param category
-     * @return
-     */
-    private FunctionParamDTO extractParamInfo(ClassNode type,FunctionParamCategoryEnum category,int order,String paramName){
-        var basicType = isBasicType(type);
-        //全限定类名
-        var typeName = type.getName();
-        //泛型列表
-        var genericsTypes = type.getGenericsTypes();
-        if(genericsTypes != null && genericsTypes.length > 0 ){
-            typeName = String.format("%s<%s>",typeName,String.join(",", Arrays.stream(genericsTypes).map(g -> g.getType().getName()).collect(Collectors.toList())));
-        }
-        //获取复杂类型参数json结构,基本类型不设定
-        var schema = basicType ? null : SchemaHandleUtil.parser(typeName);
-        return FunctionParamDTO.builder()
-                .category(category.toString())
-                .paramType(basicType ? FunctionParamType.getTypeEnum(type.getName()) : "OBJECT")
-                .referenceType(typeName)
-                .paramName(paramName)
-                .paramOrder(order)
-                .paramSchema(basicType ? null : schema)
-                .build();
-    }
 
     @SneakyThrows
     @Override
@@ -174,38 +148,69 @@ public class GroovyServiceImpl implements GroovyService {
         //参数列表反序列化
         var paramValues = paramInfos.stream().map(p -> {
             var value = paramMap.get(p.getParamName());
-            if(Objects.nonNull(value)){
+            if (Objects.nonNull(value)) {
                 //非基本类型
-                if(p.getParamType() == FunctionParamTypeEnum.OBJECT){
-                    return SchemaHandleUtil.resolveJson2Obj(p.getDescription(),value.toString());
-                //基本类型
-                }else{
-                    return SchemaHandleUtil.convertValue(value,p.getDescription());
+                if (p.getParamType() == FunctionParamTypeEnum.OBJECT) {
+                    return SchemaHandleUtil.resolveJson2Obj(p.getDescription(), value.toString());
+                    //基本类型
+                } else {
+                    return SchemaHandleUtil.convertValue(value, p.getDescription());
                 }
             }
             return null;
         }).collect(Collectors.toList());
         //动态调用handle方法
-        var result = method.invoke(groovyInstance,paramValues.toArray(new Object[]{}));
+        var result = method.invoke(groovyInstance, paramValues.toArray(new Object[]{}));
         //返回值 考虑到类型多样性，暂时仅使用json返回
         return JSON.toJSONString(result.toString());
     }
 
+
+    /**
+     * 提取参数/返回值信息
+     *
+     * @param type
+     * @param category
+     * @return
+     */
+    private FunctionParamDTO extractParamInfo(ClassNode type, FunctionParamCategoryEnum category, int order, String paramName) {
+        var basicType = isBasicType(type);
+        //全限定类名
+        var typeName = type.getName();
+        //泛型列表
+        var genericsTypes = type.getGenericsTypes();
+        if (genericsTypes != null && genericsTypes.length > 0) {
+            typeName = String.format("%s<%s>", typeName, String.join(",", Arrays.stream(genericsTypes).map(g -> g.getType().getName()).collect(Collectors.toList())));
+        }
+        //获取复杂类型参数json结构,基本类型不设定
+        var schema = basicType ? null : SchemaHandleUtil.parser(typeName);
+        return FunctionParamDTO.builder()
+                .category(category)
+                .paramType(basicType ? FunctionParamTypeEnum.getByTypeName(type.getName()) : FunctionParamTypeEnum.OBJECT)
+                .referenceType(typeName)
+                .paramName(paramName)
+                .paramOrder(order)
+                .paramSchema(basicType ? null : schema)
+                .build();
+    }
+
     /**
      * 判断参数类型是否为基础类型【基本类型 | 字符串】
+     *
      * @param classNode
      * @return
      */
-    private boolean isBasicType(ClassNode classNode){
-        return ClassHelper.isPrimitiveType(classNode) || FunctionParamType.isBasicType(classNode.getName());
+    private boolean isBasicType(ClassNode classNode) {
+        return ClassHelper.isPrimitiveType(classNode) || FunctionParamTypeEnum.isBasicType(classNode.getName());
     }
 
     /**
      * 获取类结构信息 schema
+     *
      * @param clazz
      * @return
      */
-    private String getParamSchema(Class clazz){
+    private String getParamSchema(Class clazz) {
         try {
             ObjectMapper mapper = new ObjectMapper();
             JsonSchemaGenerator generator = new JsonSchemaGenerator(mapper);

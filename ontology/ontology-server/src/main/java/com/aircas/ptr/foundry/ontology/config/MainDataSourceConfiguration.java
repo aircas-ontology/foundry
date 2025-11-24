@@ -5,6 +5,7 @@ import com.aircas.ptr.foundry.ontology.repository.handler.OnInsertUpdateHandler;
 import com.alibaba.druid.spring.boot.autoconfigure.DruidDataSourceBuilder;
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.config.GlobalConfig;
+import com.baomidou.mybatisplus.extension.plugins.PaginationInterceptor;
 import com.baomidou.mybatisplus.extension.spring.MybatisSqlSessionFactoryBean;
 import org.apache.ibatis.logging.stdout.StdOutImpl;
 import org.apache.ibatis.session.SqlSessionFactory;
@@ -47,13 +48,11 @@ public class MainDataSourceConfiguration {
         globalConfig.setMetaObjectHandler(new OnInsertUpdateHandler());
         sessionFactoryBean.setGlobalConfig(globalConfig);
 
-        return sessionFactoryBean.getObject();
+        // 添加分页拦截器
+        PaginationInterceptor paginationInterceptor = new PaginationInterceptor();
+        sessionFactoryBean.setPlugins(paginationInterceptor);
 
-//        SqlSessionFactoryBean sqlSessionFactoryBean = new SqlSessionFactoryBean();
-//        sqlSessionFactoryBean.setDataSource(dataSource);
-//        String resourcePath = "classpath:mybatis-mapper/main/*.xml";
-//        sqlSessionFactoryBean.setMapperLocations(new PathMatchingResourcePatternResolver().getResources(resourcePath));
-//        return sqlSessionFactoryBean.getObject();
+        return sessionFactoryBean.getObject();
     }
 
     @Bean(name = "mainTransactionManager")
