@@ -15,6 +15,6 @@ public class Parameter {
     @ApiModelProperty(name = "paramName", value = "参数名称")
     private String paramName;
 
-    @ApiModelProperty(name = "paramType", value = "参数值")
+    @ApiModelProperty(name = "paramValue", value = "参数值")
     private Object paramValue;
 }

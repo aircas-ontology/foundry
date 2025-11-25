@@ -2,19 +2,22 @@ package com.aircas.ptr.foundry.ontology.service.impl;
 
 import com.aircas.ptr.foundry.common.constant.FunctionParamCategoryEnum;
 import com.aircas.ptr.foundry.common.constant.FunctionParamTypeEnum;
+import com.aircas.ptr.foundry.common.exception.BusinessException;
+import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.ontology.model.dto.FunctionParamDTO;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionParamPO;
 import com.aircas.ptr.foundry.ontology.service.GroovyService;
 import com.aircas.ptr.foundry.ontology.utils.SchemaHandleUtil;
-import com.alibaba.fastjson.JSON;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.module.jsonSchema.JsonSchema;
 import com.fasterxml.jackson.module.jsonSchema.JsonSchemaGenerator;
 import groovy.lang.GroovyClassLoader;
+import groovy.lang.GroovyObject;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import lombok.var;
+import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang.StringUtils;
 import org.codehaus.groovy.ast.ClassHelper;
 import org.codehaus.groovy.ast.ClassNode;
@@ -23,7 +26,10 @@ import org.codehaus.groovy.control.CompilerConfiguration;
 import org.codehaus.groovy.control.Phases;
 import org.springframework.stereotype.Service;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -31,6 +37,11 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class GroovyServiceImpl implements GroovyService {
 
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
+
+    private final static String FUNCTION_RESULT_REFERENCE_NAME = "com.aircas.ptr.foundry.ontology.model.vo.FunctionResultVO";
 
     /**
      * 解析groovy代码块，获取参数列表和返回值信息   |   旧方法
@@ -109,28 +120,47 @@ public class GroovyServiceImpl implements GroovyService {
         compilationUnit.addSource("temp.groovy", code);
         //compile方法用于执行编译过程,Phases.SEMANTIC_ANALYSIS 表示编译到语义分析阶段。这个阶段会生成抽象语法树（AST），但不会生成字节码
         compilationUnit.compile(Phases.SEMANTIC_ANALYSIS);
-        var params = new ArrayList<FunctionParamDTO>();
-        //提取类信息
-        for (ClassNode classNode : compilationUnit.getAST().getClasses()) {
-            //提取方法信息
-            var paramList = classNode.getMethods().stream().filter(m -> StringUtils.equals("handle", m.getName())).map(m -> {
-                List<FunctionParamDTO> funcParams = new ArrayList<>();
-                //1.参数信息提取
-                var parameters = m.getParameters();
-                for (int i = 0; i < parameters.length; i++) {
-                    var parameter = parameters[i];
-                    var name = parameter.getName();
-                    var param = extractParamInfo(parameter.getType(), FunctionParamCategoryEnum.INPUT, i + 1, name);
-                    funcParams.add(param);
-                }
-                //2.返回值信息提取
-                var returnParam = extractParamInfo(m.getReturnType(), FunctionParamCategoryEnum.OUTPUT, 0, "result");
-                funcParams.add(returnParam);
-                return funcParams;
-            }).flatMap(List::stream).collect(Collectors.toList());
-            params.addAll(paramList);
+        //校验方法名和返回类型
+        var handleClassNode = compilationUnit.getAST().getClasses().stream().filter(classNode -> {
+            var handleMethod = classNode.getMethods().stream().filter(m -> StringUtils.equals("handle", m.getName())).findFirst();
+            if (!handleMethod.isPresent()) {
+                return false;
+            }
+            return StringUtils.equals(handleMethod.get().getReturnType().getName(), FUNCTION_RESULT_REFERENCE_NAME);
+        }).findFirst();
+        PreconditionUtils.checkArgument(handleClassNode.isPresent(), "函数名称handle不存在或者返回类型错误");
+
+        var classNode = handleClassNode.get();
+        var handleMethod = classNode.getMethods().stream().filter(m -> StringUtils.equals("handle", m.getName())).findFirst().get();
+        //提取方法信息
+        List<FunctionParamDTO> funcParams = new ArrayList<>();
+        //1.参数信息提取
+        var parameters = handleMethod.getParameters();
+        for (int i = 0; i < parameters.length; i++) {
+            var parameter = parameters[i];
+            var name = parameter.getName();
+            //目前只支持基本类型，暂不支持复杂类型
+            var basicType = isBasicType(parameter.getType());
+            PreconditionUtils.checkArgument(basicType, "暂不支持复杂类型参数");
+            funcParams.add(FunctionParamDTO.builder()
+                    .category(FunctionParamCategoryEnum.INPUT)
+                    .paramType(FunctionParamTypeEnum.getByTypeName(parameter.getType().getName()))
+                    .referenceType(parameter.getType().getName())
+                    .paramName(name)
+                    .paramOrder(i + 1)
+                    .build());
         }
-        return params;
+        //2.返回值信息提取
+        var returnParam = FunctionParamDTO.builder()
+                .category(FunctionParamCategoryEnum.OUTPUT)
+                .paramType(FunctionParamTypeEnum.OBJECT)
+                .referenceType(handleMethod.getReturnType().getName())
+                .paramName("result")
+                .paramSchema(getParamSchema(handleMethod.getReturnType()))
+                .paramOrder(1)
+                .build();
+        funcParams.add(returnParam);
+        return funcParams;
     }
 
 
@@ -139,30 +169,36 @@ public class GroovyServiceImpl implements GroovyService {
     public String executeGroovy(String code, Map<String, Object> paramMap, List<FunctionParamPO> paramInfos) {
         //编译groovy代码块，加载类信息
         var classLoader = new GroovyClassLoader();
-        var groovyClass = classLoader.parseClass(code);
-        var groovyInstance = groovyClass.getDeclaredConstructor(new Class[0]).newInstance();
-        //获取参数类型列表
-        var classList = paramInfos.stream().map(p -> SchemaHandleUtil.getClassByTypeExpression(p.getDescription())).collect(Collectors.toList());
+        classLoader.parseClass(code);
+        var classes = classLoader.getLoadedClasses();
         //筛选handle函数方法
-        var method = groovyClass.getMethod("handle", classList.toArray(new Class[]{}));
+        var handleClass = Arrays.stream(classes).filter(c -> {
+            var method = Arrays.stream(c.getMethods()).filter(m -> m.getName().equals("handle")).findFirst();
+            return method.isPresent();
+        }).findFirst();
+        PreconditionUtils.checkArgument(handleClass.isPresent(), "函数handle方法不存在");
+        var groovyClass = handleClass.get();
+        var groovyInstance = (GroovyObject) groovyClass.newInstance();
+
         //参数列表反序列化
         var paramValues = paramInfos.stream().map(p -> {
             var value = paramMap.get(p.getParamName());
-            if (Objects.nonNull(value)) {
-                //非基本类型
-                if (p.getParamType() == FunctionParamTypeEnum.OBJECT) {
-                    return SchemaHandleUtil.resolveJson2Obj(p.getDescription(), value.toString());
-                    //基本类型
-                } else {
-                    return SchemaHandleUtil.convertValue(value, p.getDescription());
-                }
+            PreconditionUtils.checkArgument(value != null, "未找到函数参数：" + p.getParamName());
+            //非基本类型
+            if (p.getParamType() == FunctionParamTypeEnum.OBJECT) {
+                throw new BusinessException("parse error");
             }
-            return null;
+            //基本类型
+            else {
+                return SchemaHandleUtil.convertValue(value, p.getTypeReferenceName());
+            }
         }).collect(Collectors.toList());
         //动态调用handle方法
-        var result = method.invoke(groovyInstance, paramValues.toArray(new Object[]{}));
+        var result = CollectionUtils.isEmpty(paramValues) ?
+                groovyInstance.invokeMethod("handle", null) :
+                groovyInstance.invokeMethod("handle", paramValues.toArray(new Object[]{}));
         //返回值 考虑到类型多样性，暂时仅使用json返回
-        return JSON.toJSONString(result.toString());
+        return objectMapper.writeValueAsString(result);
     }
 
 
@@ -173,7 +209,8 @@ public class GroovyServiceImpl implements GroovyService {
      * @param category
      * @return
      */
-    private FunctionParamDTO extractParamInfo(ClassNode type, FunctionParamCategoryEnum category, int order, String paramName) {
+    private FunctionParamDTO extractParamInfo(ClassNode type, FunctionParamCategoryEnum category, Integer
+            order, String paramName) {
         var basicType = isBasicType(type);
         //全限定类名
         var typeName = type.getName();
@@ -210,15 +247,16 @@ public class GroovyServiceImpl implements GroovyService {
      * @param clazz
      * @return
      */
-    private String getParamSchema(Class clazz) {
+    private String getParamSchema(ClassNode classNode) {
         try {
+            Class clazz = Class.forName(classNode.getName());
             ObjectMapper mapper = new ObjectMapper();
             JsonSchemaGenerator generator = new JsonSchemaGenerator(mapper);
             JsonSchema schema = generator.generateSchema(clazz);
             return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(schema);
         } catch (Exception e) {
-            e.printStackTrace();
-            return null;
+            log.error("getParamSchema failed", e);
+            throw new BusinessException("getParamSchema failed");
         }
     }
 }

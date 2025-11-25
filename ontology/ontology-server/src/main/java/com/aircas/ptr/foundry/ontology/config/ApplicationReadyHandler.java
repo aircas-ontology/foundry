@@ -13,7 +13,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 
-@Component
+//@Component
 class ApplicationReadyHandler implements ApplicationListener<ApplicationReadyEvent> {
 
     @Override

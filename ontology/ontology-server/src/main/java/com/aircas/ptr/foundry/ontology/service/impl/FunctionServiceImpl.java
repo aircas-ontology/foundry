@@ -2,11 +2,10 @@ package com.aircas.ptr.foundry.ontology.service.impl;
 
 
 import com.aircas.ptr.foundry.common.constant.FunctionParamCategoryEnum;
-import com.aircas.ptr.foundry.common.constant.FunctionParamTypeEnum;
 import com.aircas.ptr.foundry.common.constant.FunctionTypeEnum;
 import com.aircas.ptr.foundry.common.constant.Status;
+import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.common.exception.DuplicatedDataException;
-import com.aircas.ptr.foundry.common.util.FileUtil;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.common.util.SnowflakeIdUtil;
 import com.aircas.ptr.foundry.common.util.StringUtil;
@@ -29,10 +28,8 @@ import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyActionMappe
 import com.aircas.ptr.foundry.ontology.service.FunctionParamService;
 import com.aircas.ptr.foundry.ontology.service.FunctionService;
 import com.aircas.ptr.foundry.ontology.service.GroovyService;
-import com.alibaba.druid.util.StringUtils;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import groovy.lang.GroovyClassLoader;
@@ -52,9 +49,6 @@ import javax.annotation.Resource;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Method;
-import java.net.URLDecoder;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -63,7 +57,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> implements FunctionService {
 
-    final static String baseDir = "functions";
+    private final static String ROOT_PATH = "functions";
 
     @Resource
     private FunctionMapper functionMapper;
@@ -77,15 +71,6 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     @Resource
     private GroovyService groovyService;
 
-    @Override
-    public void removeByOntologyUniqId(String ontologyUniqId) {
-//        var functionList = list(new LambdaQueryWrapper<Function>().eq(Function::getOntologyUniqueIdentif, ontologyUniqId));
-//        if(CollectionUtils.isNotEmpty(functionList)) {
-//            var funcIds = functionList.stream().map(v -> v.getId()).collect(Collectors.toList());
-//            remove(new LambdaQueryWrapper<Function>().in(Function::getId, funcIds));
-//            functionParamMapper.delete(new LambdaQueryWrapper<FunctionParamPO>().in(FunctionParamPO::getFunctionId, funcIds));
-//        }
-    }
 
     @Override
     public List<FunctionView> queryFunctionViewByOntologyId(String ontologyUniqId) {
@@ -183,7 +168,6 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     }
 
 
-
     @Override
     public FunctionVO queryById(Long id) {
 
@@ -207,6 +191,8 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     @Override
     @Transactional(value = "mainTransactionManager")
     public void createFunction(FunctionCreateParam param) {
+        var function = getOne(new LambdaQueryWrapper<Function>().eq(Function::getApi, param.getFunctionApi()));
+        PreconditionUtils.checkArgument(function == null, "函数api已存在:" + param.getFunctionApi(), HttpStatus.BAD_REQUEST);
         //函数插入
         var func = Function.builder()
                 .api(param.getFunctionApi())
@@ -223,7 +209,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
             //解析函数参数，批量入库
             insertBatchFuncParams(func.getId(), param.getCode());
             //生成groovy文件
-            write(param.getFunctionApi(), param.getCode(), false);
+            writeCodeToFile(param.getFunctionApi(), param.getCode());
         }
         //todo 暂不考虑注册的外部函数
     }
@@ -281,17 +267,15 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     public String executeFunction(FunctionExecuteParam param) {
         //查询函数
         var function = getOne(new LambdaQueryWrapper<Function>().eq(Function::getApi, param.getFunctionApi()));
-        //查询参数
-        var funcParams = functionParamService.list(
-                new LambdaQueryWrapper<FunctionParamPO>().eq(FunctionParamPO::getFunctionId, function.getId()));
-        //参数信息
-        List<FunctionParamPO> paramList = funcParams.stream()
-                .filter(p -> FunctionParamCategoryEnum.INPUT.equals(p.getCategory()))
-                .sorted(Comparator.comparing(FunctionParamPO::getParamOrder))
-                .collect(Collectors.toList());
+        //查询输入参数
+        var executeInputParams = functionParamService.list(
+                new LambdaQueryWrapper<FunctionParamPO>()
+                        .eq(FunctionParamPO::getFunctionId, function.getId())
+                        .eq(FunctionParamPO::getCategory, FunctionParamCategoryEnum.INPUT)
+                        .orderByAsc(FunctionParamPO::getParamOrder));
         //参数取值
-        Map<String, Object> paramMap = param.getParameters().stream().collect(Collectors.toMap(Parameter::getParamName, Parameter::getParamValue));
-        return groovyService.executeGroovy(function.getCode(), paramMap, paramList);
+        Map<String, Object> funParamMap = param.getParameters().stream().collect(Collectors.toMap(Parameter::getParamName, Parameter::getParamValue));
+        return groovyService.executeGroovy(function.getCode(), funParamMap, executeInputParams);
     }
 
 
@@ -365,10 +349,22 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
 //        return params;
     }
 
-    private void deleteFunctionGroovy(String functionName) {
-        //删除groovy文件
-        File file = getFile(functionName, false);
-        file.delete();
+    private void deleteFunctionGroovy(String functionApi) {
+        try {
+            //删除groovy文件
+            // 构建文件路径
+            File rootDir = new File(ROOT_PATH);
+            File file = new File(rootDir, functionApi + ".groovy");
+
+            // 检查文件是否存在
+            if (file.exists()) {
+                // 删除文件
+                FileUtils.forceDelete(file);
+            }
+        } catch (Exception e) {
+            log.error("delete function file failed:", e);
+            throw new BusinessException("write function to file failed:" + functionApi);
+        }
     }
 
     /***
@@ -389,8 +385,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                             .category(p.getCategory())
                             .paramSchema(p.getParamSchema())
                             .paramOrder(p.getParamOrder())
-                            //将参数全限定类型存放在description字段
-                            .description(p.getReferenceType())
+                            .typeReferenceName(p.getReferenceType())
                             .createTime(new Date())
                             .updateTime(new Date())
                             .build()
@@ -398,7 +393,6 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
             functionParamService.saveBatch(params);
         }
     }
-
 
 
     private void setOntologyList(List<FunctionVO> functionVOList) {
@@ -443,7 +437,6 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     }
 
 
-
     //如果api在production，则objectType从数据库读取，否则从参数读取。
     private List<String> getObjectApiList(Boolean isPreview, List<String> objectTypes, String functionName) {
 //        if (!isPreview) {
@@ -455,7 +448,8 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
 
     static private GroovyObject getFunctionInstance(GroovyClassLoader classLoader, String functionName, boolean isPreview)
             throws FunctionFileNotCompiled, FunctionClassNotNewInstanceException, FunctionNotFoundException {
-        File file = getFile(functionName, isPreview);
+        // File file = getFile(functionName, isPreview);
+        File file = null;
         if (!file.exists()) {
             throw ExceptionFactory.getFunctionNotFoundException(null);
         }
@@ -491,57 +485,29 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         }
     }
 
-    @Override
-    public Boolean write(String functionName, String code, Boolean isPreview) {
-        File file = getFile(functionName, isPreview);
-        file.delete();
+    private void writeCodeToFile(String functionApi, String code) {
+
         try {
-            if (file.createNewFile()) {
-                System.out.println("file created in path" + file.getAbsolutePath());
-                String decodeCode = URLDecoder.decode(code, "UTF-8");
-                FileUtils.writeStringToFile(file, decodeCode);
-            } else {
-                System.out.println("file already exists in path {}" + file.getAbsolutePath());
-                return false;
+            // 构建文件路径
+            var rootDir = new File(ROOT_PATH);
+            var file = new File(rootDir, functionApi + ".groovy");
+
+            // 检查根目录是否存在，如果不存在则创建
+            if (!rootDir.exists()) {
+                FileUtils.forceMkdir(rootDir);
             }
-        } catch (IOException e) {
-            System.out.println("create file failed");
-            return false;
-        }
-        return true;
-    }
 
-    @Override
-    public String get(String functionName, Boolean isPreview) {
-        File file = getFile(functionName, isPreview);
-        try {
-            String code = FileUtils.readFileToString(file, StandardCharsets.UTF_8);
-            String encode = URLEncoder.encode(code, "UTF-8").replace("+", "%20");
-            System.out.println(code);
-            return encode;
-        } catch (IOException e) {
-            e.printStackTrace();
-            return null;
+            // 检查文件是否已存在
+            if (file.exists()) {
+                throw new IOException("File already exists: " + file.getAbsolutePath());
+            }
+
+            // 创建并写入文件
+            FileUtils.writeStringToFile(file, code, "UTF-8");
+        } catch (Exception e) {
+            log.error("write function to file failed:", e);
+            throw new BusinessException("write function to file failed:" + functionApi);
         }
     }
 
-
-    private static File getFile(String functionName, Boolean isPreview) {
-        createFunctionFoldersIfNeeded();
-        String fileName = functionName + ".groovy";
-        File path;
-        if (isPreview) {
-            path = FileUtils.getFile(baseDir, "preview", fileName);
-        } else {
-            path = FileUtils.getFile(baseDir, fileName);
-        }
-        return path;
-    }
-
-    private static void createFunctionFoldersIfNeeded() {
-        if (FileUtil.allFiles(baseDir) == null) {
-            FileUtil.createDir(baseDir);
-            FileUtil.createDir(FileUtils.getFile(baseDir, "preview").getPath());
-        }
-    }
 }

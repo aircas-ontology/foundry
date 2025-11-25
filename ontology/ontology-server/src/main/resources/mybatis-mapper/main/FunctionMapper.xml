@@ -49,14 +49,6 @@
         where status = 1 limit ${limit} offset ${offset}
     </select>
 
-    <insert id="insert" parameterType="com.aircas.ptr.foundry.ontology.model.po.Function">
-        <!-- @mbg.generated: generated automatically, do not modify! -->
-        insert into function (id, api, description, status, object_types, create_time, update_time,type,reference_name,code,display_name)
-        values (#{id,jdbcType=BIGINT},#{api,jdbcType=VARCHAR}, #{description,jdbcType=VARCHAR},#{status,jdbcType=BIGINT},
-        #{objectTypes,jdbcType=VARCHAR}, #{createTime,jdbcType=TIMESTAMP}, #{updateTime,jdbcType=TIMESTAMP},
-        #{type,jdbcType=VARCHAR}, #{referenceName,jdbcType=VARCHAR}, #{code,jdbcType=VARCHAR}, #{displayName,jdbcType=VARCHAR} )
-    </insert>
-
     <update id="updateByApi" parameterType="com.aircas.ptr.foundry.ontology.model.po.Function">
         update "function"
         <set>

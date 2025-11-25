@@ -1,9 +1,11 @@
 package com.aircas.ptr.foundry.ontology.utils;
 
+import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import lombok.SneakyThrows;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.time.DateUtils;
 
 import java.io.IOException;
@@ -16,12 +18,13 @@ import java.util.stream.Collectors;
  * 用法：
  * 1.调用parser方法，传入参数类全限定类型，返回参数结构JSON
  * 例：java.lang.String
- *    java.lang.Integer
- *    com.aircas.ptr.foundry.ontology.model.dto.FunctionParamDTO
- *    java.util.List<com.aircas.ptr.foundry.ontology.model.dto.FunctionParamDTO>
- *    java.util.Map<java.lang.String,com.aircas.ptr.foundry.ontology.model.dto.FunctionParamDTO>
+ * java.lang.Integer
+ * com.aircas.ptr.foundry.ontology.model.dto.FunctionParamDTO
+ * java.util.List<com.aircas.ptr.foundry.ontology.model.dto.FunctionParamDTO>
+ * java.util.Map<java.lang.String,com.aircas.ptr.foundry.ontology.model.dto.FunctionParamDTO>
  * 2.调用resolveJson2Obj方法，传入参数类全限定路径和结构JSON，返回Object对象
  */
+@Slf4j
 public class SchemaHandleUtil {
 
     private static final int MAX_DEPTH = 8;
@@ -45,7 +48,7 @@ public class SchemaHandleUtil {
             java.util.Date.class
     ));
 
-    public static Class getClassByTypeExpression(String className){
+    public static Class getClassByTypeExpression(String className) {
         try {
             Type type = parseTypeExpression(className);
             return resolveClass(type);
@@ -57,11 +60,12 @@ public class SchemaHandleUtil {
 
     /**
      * 传入参数类全限定类型，返回参数结构JSON
-     *   例：java.lang.String
-     *      java.lang.Integer
-     *      com.aircas.ptr.foundry.ontology.model.dto.FunctionParamDTO
-     *      java.util.List<com.aircas.ptr.foundry.ontology.model.dto.FunctionParamDTO>
-     *      java.util.Map<java.lang.String,com.aircas.ptr.foundry.ontology.model.dto.FunctionParamDTO>
+     * 例：java.lang.String
+     * java.lang.Integer
+     * com.aircas.ptr.foundry.ontology.model.dto.FunctionParamDTO
+     * java.util.List<com.aircas.ptr.foundry.ontology.model.dto.FunctionParamDTO>
+     * java.util.Map<java.lang.String,com.aircas.ptr.foundry.ontology.model.dto.FunctionParamDTO>
+     *
      * @param className
      * @return
      */
@@ -71,10 +75,11 @@ public class SchemaHandleUtil {
             Object structure = describeType(root, new ArrayDeque<>(), 0);
             return toJson(structure, 0);
         } catch (ClassNotFoundException e) {
-            e.printStackTrace();
-            return null;
+            log.error("parse className error:" + className, e);
+            throw new BusinessException("parse className error:" + className);
         }
     }
+
     private static Object describeType(Type type, Deque<String> visiting, int depth) {
         if (type == null) {
             return "object";
@@ -361,8 +366,8 @@ public class SchemaHandleUtil {
         return base;
     }
 
-    private static Class<?> parsePrimitiveType(String typeName){
-        switch (typeName){
+    private static Class<?> parsePrimitiveType(String typeName) {
+        switch (typeName) {
             case "int":
                 return int.class;
             case "long":
@@ -385,20 +390,40 @@ public class SchemaHandleUtil {
     }
 
     @SneakyThrows
-    public static Object convertValue(Object value, String className){
-        if(Objects.nonNull(value)){
+    public static Object convertValue(Object value, String className) {
+        if (Objects.nonNull(value)) {
             String valueStr = value.toString();
             Class clazz = getClassByTypeExpression(className);
-            if(clazz == Integer.class || clazz == int.class){return Integer.parseInt(valueStr);}
-            if(clazz == Long.class || clazz == long.class){return Long.parseLong(valueStr);}
-            if(clazz == Double.class || clazz == double.class){return Double.parseDouble(valueStr);}
-            if(clazz == Float.class || clazz == float.class){return Float.parseFloat(valueStr);}
-            if(clazz == Short.class || clazz == short.class){return Short.parseShort(valueStr);}
-            if(clazz == Character.class || clazz == char.class){return valueStr;}
-            if(clazz == Byte.class || clazz == byte.class){return Byte.parseByte(valueStr);}
-            if(clazz == Boolean.class || clazz == boolean.class){return Boolean.parseBoolean(valueStr);}
-            if(clazz == Date.class){return DateUtils.parseDate(valueStr,"yyyy-MM-dd HH:mm:ss");}
-            if(clazz == String.class){return valueStr;}
+            if (clazz == Integer.class || clazz == int.class) {
+                return Integer.parseInt(valueStr);
+            }
+            if (clazz == Long.class || clazz == long.class) {
+                return Long.parseLong(valueStr);
+            }
+            if (clazz == Double.class || clazz == double.class) {
+                return Double.parseDouble(valueStr);
+            }
+            if (clazz == Float.class || clazz == float.class) {
+                return Float.parseFloat(valueStr);
+            }
+            if (clazz == Short.class || clazz == short.class) {
+                return Short.parseShort(valueStr);
+            }
+            if (clazz == Character.class || clazz == char.class) {
+                return valueStr;
+            }
+            if (clazz == Byte.class || clazz == byte.class) {
+                return Byte.parseByte(valueStr);
+            }
+            if (clazz == Boolean.class || clazz == boolean.class) {
+                return Boolean.parseBoolean(valueStr);
+            }
+            if (clazz == Date.class) {
+                return DateUtils.parseDate(valueStr, "yyyy-MM-dd HH:mm:ss");
+            }
+            if (clazz == String.class) {
+                return valueStr;
+            }
         }
         return value;
     }
@@ -523,7 +548,7 @@ public class SchemaHandleUtil {
             .disable(SerializationFeature.FAIL_ON_EMPTY_BEANS)
             .findAndRegisterModules();
 
-    public static Object resolveJson2Obj(String typeExpression,String json) {
+    public static Object resolveJson2Obj(String typeExpression, String json) {
         try {
             JavaType javaType = MAPPER.getTypeFactory().constructFromCanonical(typeExpression);
             return MAPPER.readValue(json, javaType);

@@ -16,12 +16,13 @@ public interface GroovyService {
     List<FunctionParamDTO> parseFunctionParam(String code);
 
     /**
+     *
      * 编译groovy代码片段，动态执行handle方法
      * @param code
-     * @param paramMap
-     * @param paramInfos
+     * @param funParamMap
+     * @param executeInputParams
      * @return
      */
-    String executeGroovy(String code, Map<String, Object> paramMap, List<FunctionParamPO> paramInfos);
+    String executeGroovy(String code, Map<String, Object> funParamMap, List<FunctionParamPO> executeInputParams);
 
 }
