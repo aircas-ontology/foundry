@@ -8,9 +8,6 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import javax.validation.constraints.NotBlank;
-import javax.validation.constraints.NotEmpty;
-import javax.validation.constraints.NotNull;
-import java.util.HashMap;
 import java.util.List;
 
 @Data
@@ -25,7 +22,7 @@ public class FunctionExecuteParam {
     private String functionApi;
 
     @ApiModelProperty(name = "parameters", value = "参数列表", required = true)
-    private List<Parameter> parameters;
+    private List<FunctionParameter> parameters;
 
 
 

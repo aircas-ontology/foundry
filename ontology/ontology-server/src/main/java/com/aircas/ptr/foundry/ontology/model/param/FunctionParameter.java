@@ -10,7 +10,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 @ApiModel(description = "参数")
-public class Parameter {
+public class FunctionParameter {
 
     @ApiModelProperty(name = "paramName", value = "参数名称")
     private String paramName;

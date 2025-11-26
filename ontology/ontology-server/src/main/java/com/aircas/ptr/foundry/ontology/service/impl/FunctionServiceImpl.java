@@ -16,8 +16,8 @@ import com.aircas.ptr.foundry.ontology.model.bo.FunctionBo;
 import com.aircas.ptr.foundry.ontology.model.dto.FunctionParamDTO;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionExecuteParam;
+import com.aircas.ptr.foundry.ontology.model.param.FunctionParameter;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionUpdateParam;
-import com.aircas.ptr.foundry.ontology.model.param.Parameter;
 import com.aircas.ptr.foundry.ontology.model.po.Function;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionParamPO;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyAction;
@@ -274,7 +274,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                         .eq(FunctionParamPO::getCategory, FunctionParamCategoryEnum.INPUT)
                         .orderByAsc(FunctionParamPO::getParamOrder));
         //参数取值
-        Map<String, Object> funParamMap = param.getParameters().stream().collect(Collectors.toMap(Parameter::getParamName, Parameter::getParamValue));
+        Map<String, Object> funParamMap = param.getParameters().stream().collect(Collectors.toMap(FunctionParameter::getParamName, FunctionParameter::getParamValue));
         return groovyService.executeGroovy(function.getCode(), funParamMap, executeInputParams);
     }
 
@@ -374,7 +374,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
      */
     private void insertBatchFuncParams(Long functionId, String code) {
         //获取groovy参数、返回值信息
-        List<FunctionParamDTO> functionParam = groovyService.parseFunctionParam(code);
+        List<FunctionParamDTO> functionParam = groovyService.parseGroovyCode(code);
 
         if (CollectionUtils.isNotEmpty(functionParam)) {
             List<FunctionParamPO> params = functionParam.stream().map(p ->

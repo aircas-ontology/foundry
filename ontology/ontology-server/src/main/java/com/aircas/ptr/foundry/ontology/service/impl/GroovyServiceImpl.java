@@ -8,6 +8,7 @@ import com.aircas.ptr.foundry.ontology.model.dto.FunctionParamDTO;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionParamPO;
 import com.aircas.ptr.foundry.ontology.service.GroovyService;
 import com.aircas.ptr.foundry.ontology.utils.SchemaHandleUtil;
+import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.module.jsonSchema.JsonSchema;
 import com.fasterxml.jackson.module.jsonSchema.JsonSchemaGenerator;
@@ -24,8 +25,11 @@ import org.codehaus.groovy.ast.ClassNode;
 import org.codehaus.groovy.control.CompilationUnit;
 import org.codehaus.groovy.control.CompilerConfiguration;
 import org.codehaus.groovy.control.Phases;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
+import java.io.IOException;
+import java.lang.reflect.Parameter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -112,6 +116,75 @@ public class GroovyServiceImpl implements GroovyService {
         return params;
     }*/
     @Override
+    public List<FunctionParamDTO> parseGroovyCode(String code) {
+        //code 解析校验
+        PreconditionUtils.checkArgument(StringUtils.isNotEmpty(code), "code不能为空");
+        GroovyClassLoader loader = new GroovyClassLoader();
+        loader.parseClass(code);
+        Class[] allClasses = loader.getLoadedClasses();
+        PreconditionUtils.checkArgument(allClasses != null && allClasses.length > 0, "class不能为空");
+        //filter出包含handle的method且方法返回类型为FunctionResultVO
+        var handleClass = Arrays.stream(allClasses).filter(clz -> {
+            var handleMethod = Arrays.stream(clz.getDeclaredMethods()).filter(m -> m.getName().equals("handle")).findFirst();
+            if (!handleMethod.isPresent()) {
+                return false;
+            }
+            return StringUtils.equals(handleMethod.get().getReturnType().getName(), FUNCTION_RESULT_REFERENCE_NAME);
+        }).findFirst();
+        PreconditionUtils.checkArgument(handleClass.isPresent(), "函数名称handle不存在或者返回类型错误");
+        //解析输入参数和输出类型
+        var handleMethod = Arrays.stream(handleClass.get().getDeclaredMethods()).filter(m -> m.getName().equals("handle")).findFirst();
+        JsonSchemaGenerator generator = new JsonSchemaGenerator(objectMapper);
+        Parameter[] parameters = handleMethod.get().getParameters();
+        List<FunctionParamDTO> funcParams = new ArrayList<>();
+
+        try {
+            for (int i = 0; i < parameters.length; i++) {
+                //目前先用arg0，arg1....
+                String paramName = parameters[i].getName();
+                Class<?> paramType = parameters[i].getType();
+                //校验参数类型，先支持基本参数类型
+                PreconditionUtils.checkArgument(FunctionParamTypeEnum.isBasicType(paramType.getName()), "暂不支持复杂类型参数", HttpStatus.BAD_REQUEST);
+                JsonSchema schema = generator.generateSchema(paramType);
+                String jsonSchema = objectMapper.writeValueAsString(schema);
+                funcParams.add(FunctionParamDTO.builder()
+                        .paramName(paramName)
+                        .paramType(FunctionParamTypeEnum.getByTypeName(paramType.getName()))
+                        .category(FunctionParamCategoryEnum.INPUT)
+                        .paramOrder(i + 1)
+                        .referenceType(paramType.getName())
+                        .paramSchema(jsonSchema)
+                        .build());
+            }
+            JavaType returnType = objectMapper.getTypeFactory().constructType(handleMethod.get().getGenericReturnType());
+            JsonSchema returnSchema = generator.generateSchema(returnType);
+            String json = objectMapper.writeValueAsString(returnSchema);
+            funcParams.add(FunctionParamDTO.builder()
+                    .paramName("result")
+                    .paramType(FunctionParamTypeEnum.OBJECT)
+                    .category(FunctionParamCategoryEnum.OUTPUT)
+                    .paramOrder(1)
+                    .referenceType(returnType.getRawClass().getTypeName())
+                    .paramSchema(json)
+                    .build());
+            return funcParams;
+        } catch (BusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("parseGroovyCode failed:", e);
+            throw new BusinessException("parseGroovyCode failed");
+        } finally {
+            try {
+                //关闭loader
+                loader.close();
+            } catch (IOException e) {
+                throw new BusinessException("GroovyClassLoader close failed!");
+            }
+        }
+    }
+
+
+    @Override
     public List<FunctionParamDTO> parseFunctionParam(String code) {
         //Groovy编译器配置
         var config = new CompilerConfiguration();
@@ -156,7 +229,7 @@ public class GroovyServiceImpl implements GroovyService {
                 .paramType(FunctionParamTypeEnum.OBJECT)
                 .referenceType(handleMethod.getReturnType().getName())
                 .paramName("result")
-                .paramSchema(getParamSchema(handleMethod.getReturnType()))
+                .paramSchema(getJsonSchemaByClassNode(handleMethod.getReturnType()))
                 .paramOrder(1)
                 .build();
         funcParams.add(returnParam);
@@ -184,7 +257,7 @@ public class GroovyServiceImpl implements GroovyService {
         var paramValues = paramInfos.stream().map(p -> {
             var value = paramMap.get(p.getParamName());
             PreconditionUtils.checkArgument(value != null, "未找到函数参数：" + p.getParamName());
-            //非基本类型
+            //非基本类型暂时不支持
             if (p.getParamType() == FunctionParamTypeEnum.OBJECT) {
                 throw new BusinessException("parse error");
             }
@@ -242,21 +315,18 @@ public class GroovyServiceImpl implements GroovyService {
     }
 
     /**
-     * 获取类结构信息 schema
-     *
-     * @param clazz
-     * @return
+     * 获取classNode json schema结构信息，支持泛型
      */
-    private String getParamSchema(ClassNode classNode) {
+    private String getJsonSchemaByClassNode(ClassNode classNode) {
         try {
             Class clazz = Class.forName(classNode.getName());
-            ObjectMapper mapper = new ObjectMapper();
-            JsonSchemaGenerator generator = new JsonSchemaGenerator(mapper);
+            JsonSchemaGenerator generator = new JsonSchemaGenerator(objectMapper);
             JsonSchema schema = generator.generateSchema(clazz);
-            return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(schema);
+            return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(schema);
         } catch (Exception e) {
             log.error("getParamSchema failed", e);
             throw new BusinessException("getParamSchema failed");
         }
     }
+
 }
