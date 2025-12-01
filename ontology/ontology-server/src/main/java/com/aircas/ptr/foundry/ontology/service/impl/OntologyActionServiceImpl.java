@@ -330,7 +330,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         OntologyMeta ontologyMeta = ontologyMetaMapper.selectByUniqueIdentifier(ontologyAction.getOntologyUniqueIdentifier());
         Map<String, OntologyPropertyVO> ontologyPropertiesMap = queryPropertiesByOntologyUniqueIdentifier(ontologyAction.getOntologyUniqueIdentifier());
         List<OntologyActionMappingIn> allMappings = ontologyActionMappingInMapper.selectById(ontologyAction.getId());
-        List<ParameterMetadataVO> parameters = functionService.getParameters(ontologyAction.getFunctionApi());
+        //List<ParameterMetadataVO> parameters = functionService.getParameters(ontologyAction.getFunctionApi());
+        List<ParameterMetadataVO> parameters = Lists.newArrayList();
         return getActionVO(ontologyAction, ontologyMeta, allMappings, ontologyPropertiesMap, parameters);
     }
 

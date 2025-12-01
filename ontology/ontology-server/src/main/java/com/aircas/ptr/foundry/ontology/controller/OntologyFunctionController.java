@@ -33,17 +33,6 @@ public class OntologyFunctionController {
     }
 
 
-//    @ApiOperation(value = "得到函数参数")
-//    @GetMapping("/parameter")
-//    public RestResult queryParameter(@RequestParam(required = true,name = "functionName") @ApiParam(name = "functionName",value = "函数名称") String functionName) {
-//        try {
-//            //todo 修改成从function表中获取参数
-//            return RestResult.ofData(functionService.getParameters(functionName));
-//        } catch (BaseException e) {
-//            return RestResult.failed();
-//        }
-//    }
-
     @ApiOperation(value = "查询函数列表")
     @GetMapping("/list")
     public RestResult<Page<FunctionInfoVO>> getFunctions(@RequestParam(required = false, defaultValue = "1") Integer pageNum,
@@ -82,35 +71,6 @@ public class OntologyFunctionController {
         functionService.deleteByApi(functionApi);
         return RestResult.success();
     }
-
-//    @ApiOperation(value = "读取函数列表")
-//    @GetMapping("/meta/list")
-//    public DataResult<List<FunctionVO>> functionList() {
-//        return DataResult.ofData(functionService.functionMetadataList());
-//    }
-
-//    @ApiOperation(value = "保存代码")
-//    @PostMapping("/code")
-//    public DataResult<Boolean> saveCode(@RequestBody HashMap map) {
-//
-//        String functionName = (String) map.getOrDefault("functionName", null);
-//        if (functionName == null) {
-//            return DataResult.ofData(false);
-//        }
-//        String code = (String) map.getOrDefault("code", null);
-//        if (code == null) {
-//            return DataResult.ofData(false);
-//        }
-//        Boolean isPreview = (Boolean) map.getOrDefault("isPreview", true);
-//        return DataResult.ofData(functionService.write(functionName, code, isPreview));
-//    }
-
-//    @ApiOperation(value = "获取函数代码")
-//    @GetMapping("/code/{api}")
-//    public DataResult<String> getCode(@PathVariable String api) {
-//
-//        return DataResult.ofData(functionService.get(api,false));
-//    }
 
 
 }
