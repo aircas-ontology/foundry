@@ -2,6 +2,7 @@ package com.aircas.ptr.foundry.ontology.service;
 
 
 import com.aircas.ptr.foundry.common.constant.ActionRuleConnectType;
+import com.aircas.ptr.foundry.ontology.model.param.ActionCreateOrUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.po.ActionHandleCommitFlashMemory;
 import com.aircas.ptr.foundry.ontology.model.po.ActionHandleRule;
 import com.aircas.ptr.foundry.ontology.exception.*;
@@ -52,4 +53,6 @@ public interface OntologyActionService extends IService<OntologyAction> {
     int updateActionDataById(ActionHandleCommitFlashMemory flashMemory);
 
     boolean configTask(String actionApi, List<String> objectPrimaryKeys, Date taskStartTime, Date taskEndTime, String taskCorn);
+
+    void createAction(ActionCreateOrUpdateParam param);
 }

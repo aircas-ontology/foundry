@@ -1,9 +1,13 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
 import com.aircas.ptr.foundry.common.constant.ActionRuleConnectType;
+import com.aircas.ptr.foundry.common.constant.FunctionTypeEnum;
+import com.aircas.ptr.foundry.common.constant.Status;
+import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.ontology.exception.*;
 import com.aircas.ptr.foundry.ontology.model.bo.OntologyActionBo;
 import com.aircas.ptr.foundry.ontology.model.bo.OntologyActionMappingInBO;
+import com.aircas.ptr.foundry.ontology.model.param.ActionCreateOrUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionHandleMappingInParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionHandleRuleAddParam;
 import com.aircas.ptr.foundry.ontology.model.po.*;
@@ -27,8 +31,11 @@ import lombok.extern.slf4j.Slf4j;
 import lombok.var;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.compress.utils.Lists;
+import org.apache.commons.lang.StringUtils;
 import org.springframework.beans.BeanUtils;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
 import java.util.Date;
@@ -40,6 +47,13 @@ import java.util.stream.Collectors;
 @Service
 @Slf4j
 public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper, OntologyAction> implements OntologyActionService {
+
+
+    @Resource
+    private FunctionMapper functionMapper;
+
+    @Resource
+    private FunctionParamMapper functionParamMapper;
 
     @Resource
     private OntologyActionLinkMapper actionLinkMapper;
@@ -276,6 +290,38 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
 //        actionHandleTaskBO.setCorn(taskCorn);
 //
 //        return actionHandleTaskService.insert(actionHandleTaskBO) > 0;
+    }
+
+    @Override
+    @Transactional(value = "mainTransactionManager")
+    public void createAction(ActionCreateOrUpdateParam param) {
+        var action = getOne(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getApi, param.getActionApi()));
+        PreconditionUtils.checkArgument(action == null, "action api 已存在：" + param.getActionApi(), HttpStatus.BAD_REQUEST);
+        var ontologyAction = OntologyAction.builder()
+                .api(param.getActionApi())
+                .description(param.getDescription())
+                .displayName(param.getDisplayName())
+                .functionApi(param.getFunctionApi())
+                .icon(param.getIcon())
+                .ontologyUniqueIdentifier(param.getOntologyIdentifier())
+                .status(Status.ENABLE.getValue())
+                .build();
+        save(ontologyAction);
+
+        var funcApi = param.getFunctionApi();
+        if (StringUtils.isEmpty(funcApi)) {
+            return;
+        }
+        var func = functionMapper.selectOne(new LambdaQueryWrapper<Function>().eq(Function::getApi, funcApi));
+        //目前仅支行为与自定义函数api绑定
+        PreconditionUtils.checkArgument(func != null && func.getType().equals(FunctionTypeEnum.CUSTOMIZE), "function api 不存在：" + func, HttpStatus.BAD_REQUEST);
+        //校验函数参数
+        var functionParams = functionParamMapper.selectList(new LambdaQueryWrapper<FunctionParamPO>().eq(FunctionParamPO::getFunctionId, func.getId()));
+        if(CollectionUtils.isNotEmpty(functionParams)) {
+            param.getMappingIns();
+        }
+        //校验本体关系
+
     }
 
 //    private void checkBindingConsistence(OntologyActionBo ontologyFunctionBo)

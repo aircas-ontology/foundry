@@ -47,6 +47,7 @@ public class OntologyActionController {
     @ApiOperation(value = "新增行为")
     @PostMapping("")
     public RestResult createAction(@RequestBody @Valid ActionCreateOrUpdateParam param) {
+        ontologyActionService.createAction(param);
         return RestResult.success();
     }
 

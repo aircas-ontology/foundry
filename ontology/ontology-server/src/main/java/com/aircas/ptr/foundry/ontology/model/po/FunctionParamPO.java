@@ -3,7 +3,6 @@ package com.aircas.ptr.foundry.ontology.model.po;
 import com.aircas.ptr.foundry.common.constant.FunctionParamCategoryEnum;
 import com.aircas.ptr.foundry.common.constant.FunctionParamTypeEnum;
 import com.baomidou.mybatisplus.annotation.*;
-import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -32,7 +31,6 @@ public class FunctionParamPO {
 
     private FunctionParamTypeEnum paramType;
 
-    @TableField(typeHandler = JacksonTypeHandler.class)
     private String paramSchema;
 
     private Integer paramOrder;
