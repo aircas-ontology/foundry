@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.po;
 
+import com.aircas.ptr.foundry.common.constant.FunctionModelEnum;
 import com.aircas.ptr.foundry.common.constant.FunctionTypeEnum;
 import com.baomidou.mybatisplus.annotation.FieldFill;
 import com.baomidou.mybatisplus.annotation.TableField;
@@ -82,6 +83,8 @@ public class Function {
      * FunctionTypeEnum
      */
     private FunctionTypeEnum type;
+
+    private FunctionModelEnum model;
 
     /**
      * 涉及的本体

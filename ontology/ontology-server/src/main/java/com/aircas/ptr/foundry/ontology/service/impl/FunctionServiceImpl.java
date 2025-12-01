@@ -84,6 +84,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 .displayName(function.getDisplayName())
                 .description(function.getDescription())
                 .type(function.getType())
+                .model(function.getModel())
                 .build();
     }
 
@@ -118,6 +119,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 .displayName(param.getDisplayName())
                 .code(param.getCode())
                 .type(param.getType())
+                .model(param.getModel())
                 .status(Status.ENABLE.getValue())
                 .referenceName(param.getReferenceName())
                 .build();
@@ -146,6 +148,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 .displayName(param.getDisplayName())
                 .referenceName(param.getReferenceName())
                 .type(function.getType())
+                .model(function.getModel())
                 .build());
     }
 

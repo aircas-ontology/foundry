@@ -1,6 +1,8 @@
 package com.aircas.ptr.foundry.ontology.controller;
 
 import com.aircas.ptr.foundry.common.base.RestResult;
+import com.aircas.ptr.foundry.ontology.controller.validator.OntologyApiNameVerify;
+import com.aircas.ptr.foundry.ontology.controller.validator.OntologyIdVerify;
 import com.aircas.ptr.foundry.ontology.model.param.ActionCreateOrUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionSchedulingCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionSchedulingUpdateParam;
@@ -15,6 +17,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
+import org.checkerframework.checker.units.qual.A;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -56,6 +59,7 @@ public class OntologyActionController {
     @PutMapping("")
     public RestResult updateAction(@RequestBody @Valid ActionCreateOrUpdateParam param) {
         //已经被行为调度的行为不可直接编辑，需要先暂停调度
+        ontologyActionService.updateAction(param);
         return RestResult.success();
     }
 
@@ -103,15 +107,17 @@ public class OntologyActionController {
     @DeleteMapping("/{actionApi}")
     public RestResult delete(@PathVariable(required = true, name = "actionApi") String actionApi) {
         //已经被行为调度的行为不可直接编辑，需要先暂停调度
+        ontologyActionService.deleteActionByApi(actionApi);
         return RestResult.success();
     }
 
     @ApiOperation(value = "分页获取本体下行为列表")
     @GetMapping("/list")
-    public RestResult<Page<OntologyActionInfoVO>> pageGetActionByOntologyId(@RequestParam(required = true, name = "ontologyUniqIdentifier") @ApiParam(name = "ontologyUniqIdentifier", value = "本体id", required = true) String ontologyUniqIdentifier,
+    public RestResult<Page<OntologyActionInfoVO>> pageGetActionByOntologyId(@RequestParam(required = true, name = "ontologyUniqIdentifier") @ApiParam(name = "ontologyUniqIdentifier", value = "本体id", required = true) @OntologyIdVerify String ontologyUniqIdentifier,
                                                                             @RequestParam(required = false, defaultValue = "1") Integer pageNum,
                                                                             @RequestParam(required = false, defaultValue = "10") Integer pageSize) {
-        return RestResult.success();
+
+        return RestResult.ofData(ontologyActionService.pageGetActionByOntologyId(ontologyUniqIdentifier, pageNum, pageSize));
     }
 
 //    //读取函数列表
@@ -132,10 +138,10 @@ public class OntologyActionController {
 //        return DataResult.ofData(ontologyActionService.metaList(page, size));
 //    }
 
-    @ApiOperation(value = "根据actionId获取行为")
+    @ApiOperation(value = "根据actionApi获取行为详情")
     @GetMapping("")
-    public RestResult<OntologyActionDetailVO> getActionById(@RequestParam(required = true, name = "actionId") @ApiParam(name = "actionId", value = "行为id", required = true) String actionId) {
-        return RestResult.success();
+    public RestResult<OntologyActionDetailVO> getActionByApi(@RequestParam(required = true, name = "actionApi") @ApiParam(name = "actionApi", value = "行为api", required = true) String actionApi) {
+        return RestResult.ofData(ontologyActionService.getActionByApi(actionApi));
     }
 
 //    @ApiOperation(value = "获取本体关联的行为")

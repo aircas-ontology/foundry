@@ -8,10 +8,13 @@ import com.aircas.ptr.foundry.ontology.model.po.ActionHandleRule;
 import com.aircas.ptr.foundry.ontology.exception.*;
 import com.aircas.ptr.foundry.ontology.model.bo.OntologyActionBo;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyAction;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologyActionDetailVO;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologyActionInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyActionVO;
 import com.aircas.ptr.foundry.ontology.model.vo.ParameterMetadataVO;
 import com.aircas.ptr.foundry.ontology.model.param.ActionHandleMappingInParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionHandleRuleAddParam;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.github.pagehelper.PageInfo;
 
@@ -55,4 +58,12 @@ public interface OntologyActionService extends IService<OntologyAction> {
     boolean configTask(String actionApi, List<String> objectPrimaryKeys, Date taskStartTime, Date taskEndTime, String taskCorn);
 
     void createAction(ActionCreateOrUpdateParam param);
+
+    void updateAction(ActionCreateOrUpdateParam param);
+
+    void deleteActionByApi(String actionApi);
+
+    Page<OntologyActionInfoVO> pageGetActionByOntologyId(String ontologyUniqIdentifier, Integer pageNum, Integer pageSize);
+
+    OntologyActionDetailVO getActionByApi(String actionApi);
 }

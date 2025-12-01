@@ -9,19 +9,5 @@ import java.util.List;
 @Mapper
 public interface OntologyPropertyMapper extends BaseMapper<OntologyProperty> {
 
-    int deleteByUniqueIdentifier(String uniqueIdentifier);
-
-    OntologyProperty selectByPrimaryKey(Long id);
-
-    OntologyProperty selectByApiName(String ontologyUniqueIdentifier,String apiName);
-
-    List<OntologyProperty> selectByOntologyUniqueIdentifier(String uniqueIdentifier);
-
-    List<OntologyProperty> selectByUniqueIdentifier(String uniqueIdentifier);
-
-
-    List<OntologyProperty> getAllProperty(int justPrimary);
-
-    int updateSelective(OntologyProperty ontologyProperty);
 
 }

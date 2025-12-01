@@ -51,42 +51,42 @@ public class ObjectServiceImpl extends ServiceImpl<ObjectMapper,Object> implemen
     @Resource
     private final OntologyPropertyService ontologyPropertyService;
 
-    @Override
-    public PageInfo<DirectoryItemVO> queryDirectories(String ontologyUniqueIdentifier, Integer page, Integer size) {
-
-        List<OntologyProperty> ontologyPropertyList = ontologyPropertyMapper.selectByOntologyUniqueIdentifier(ontologyUniqueIdentifier);
-        OntologyProperty primaryKeyProperty = null;
-        OntologyProperty titleKeyProperty = null;
-        for (OntologyProperty property : ontologyPropertyList) {
-            if (property.getIsPrimaryKey() == 1) {
-                primaryKeyProperty = property;
-            }
-            if (property.getIsTitleKey() == 1) {
-                titleKeyProperty = property;
-            }
-        }
-        if (primaryKeyProperty == null || titleKeyProperty == null) {
-            return null;
-        }
-        if (primaryKeyProperty.getDatasourceId() != null && primaryKeyProperty.getDatasourceId().equals(titleKeyProperty.getDatasourceId())) {
-            String tableName = primaryKeyProperty.getDatasourceId();
-            String primaryKeyColumnName = primaryKeyProperty.getDatasourceColumnName();
-            String titleKeyColumnName = titleKeyProperty.getDatasourceColumnName();
-            PageHelper.startPage(page, size);
-            PageInfo<DirectoryItem> pageInfo = new PageInfo<>(objectMapper.queryDirectory(tableName, primaryKeyColumnName, titleKeyColumnName));
-            List<DirectoryItemVO> collect = pageInfo.getList().stream().map(item -> {
-                DirectoryItemVO directoryItemVO = new DirectoryItemVO();
-                directoryItemVO.setDisplayName(item.getDisplayName());
-                directoryItemVO.setPrimaryKey(item.getPrimaryKey());
-                return directoryItemVO;
-            }).collect(Collectors.toList());
-            PageInfo<DirectoryItemVO> pageResult = new PageInfo<>(collect);
-            BeanUtils.copyProperties(pageInfo, pageResult);
-            return pageResult;
-        }
-        //对于primaryKey 和 titleKey位于不同的datasource的 先不支持
-        return null;
-    }
+//    @Override
+//    public PageInfo<DirectoryItemVO> queryDirectories(String ontologyUniqueIdentifier, Integer page, Integer size) {
+//
+//        List<OntologyProperty> ontologyPropertyList = ontologyPropertyMapper.selectByOntologyUniqueIdentifier(ontologyUniqueIdentifier);
+//        OntologyProperty primaryKeyProperty = null;
+//        OntologyProperty titleKeyProperty = null;
+//        for (OntologyProperty property : ontologyPropertyList) {
+//            if (property.getIsPrimaryKey() == 1) {
+//                primaryKeyProperty = property;
+//            }
+//            if (property.getIsTitleKey() == 1) {
+//                titleKeyProperty = property;
+//            }
+//        }
+//        if (primaryKeyProperty == null || titleKeyProperty == null) {
+//            return null;
+//        }
+//        if (primaryKeyProperty.getDatasourceId() != null && primaryKeyProperty.getDatasourceId().equals(titleKeyProperty.getDatasourceId())) {
+//            String tableName = primaryKeyProperty.getDatasourceId();
+//            String primaryKeyColumnName = primaryKeyProperty.getDatasourceColumnName();
+//            String titleKeyColumnName = titleKeyProperty.getDatasourceColumnName();
+//            PageHelper.startPage(page, size);
+//            PageInfo<DirectoryItem> pageInfo = new PageInfo<>(objectMapper.queryDirectory(tableName, primaryKeyColumnName, titleKeyColumnName));
+//            List<DirectoryItemVO> collect = pageInfo.getList().stream().map(item -> {
+//                DirectoryItemVO directoryItemVO = new DirectoryItemVO();
+//                directoryItemVO.setDisplayName(item.getDisplayName());
+//                directoryItemVO.setPrimaryKey(item.getPrimaryKey());
+//                return directoryItemVO;
+//            }).collect(Collectors.toList());
+//            PageInfo<DirectoryItemVO> pageResult = new PageInfo<>(collect);
+//            BeanUtils.copyProperties(pageInfo, pageResult);
+//            return pageResult;
+//        }
+//        //对于primaryKey 和 titleKey位于不同的datasource的 先不支持
+//        return null;
+//    }
 
     @Override
     public ObjectOneInfoVO queryObjectByPrimaryKey(String ontologyUniqueIdentifier, String primaryKey) {

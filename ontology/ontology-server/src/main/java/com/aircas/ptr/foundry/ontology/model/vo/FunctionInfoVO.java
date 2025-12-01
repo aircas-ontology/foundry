@@ -1,11 +1,14 @@
 package com.aircas.ptr.foundry.ontology.model.vo;
 
+import com.aircas.ptr.foundry.common.constant.FunctionModelEnum;
 import com.aircas.ptr.foundry.common.constant.FunctionTypeEnum;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
 import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
+
+import javax.validation.constraints.NotNull;
 
 @Data
 @SuperBuilder
@@ -21,6 +24,10 @@ public class FunctionInfoVO {
 
     @ApiModelProperty(name = "description", value = "描述")
     private String description;
+
+    @ApiModelProperty(name = "type", value = "函数模型")
+    @NotNull(message = "model is null")
+    private FunctionModelEnum model;
 
     @ApiModelProperty(name = "type", value = "函数类型")
     private FunctionTypeEnum type;

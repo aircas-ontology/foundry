@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
+import com.aircas.ptr.foundry.common.constant.FunctionModelEnum;
 import com.aircas.ptr.foundry.common.constant.FunctionTypeEnum;
 import com.aircas.ptr.foundry.ontology.controller.validator.FunctionApiVerify;
 import io.swagger.annotations.ApiModel;
@@ -35,6 +36,10 @@ public class FunctionCreateParam {
     @ApiModelProperty(name = "type", value = "函数类型")
     @NotNull(message = "type is null")
     private FunctionTypeEnum type;
+
+    @ApiModelProperty(name = "type", value = "函数模型")
+    @NotNull(message = "model is null")
+    private FunctionModelEnum model;
 
     @ApiModelProperty(name = "code", value = "自定义函数：函数代码")
     private String code;

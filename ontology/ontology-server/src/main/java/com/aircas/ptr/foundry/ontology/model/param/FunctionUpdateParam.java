@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
+import com.aircas.ptr.foundry.common.constant.FunctionModelEnum;
 import com.aircas.ptr.foundry.common.constant.FunctionTypeEnum;
 import com.aircas.ptr.foundry.ontology.controller.validator.FunctionApiVerify;
 import io.swagger.annotations.ApiModel;
@@ -39,4 +40,8 @@ public class FunctionUpdateParam {
 
     @ApiModelProperty(name = "referenceName", value = "外部函数：函数全限定名")
     private String referenceName;
+
+    @ApiModelProperty(name = "type", value = "函数模型")
+    @NotNull(message = "model is null")
+    private FunctionModelEnum model;
 }

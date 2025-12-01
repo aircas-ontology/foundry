@@ -105,6 +105,16 @@ public enum OntologyDataTypeEnum {
         put(OntologyDataTypeEnum.String, OWL2Datatype.XSD_STRING);
     }};
 
+
+    private static final Map<FunctionParamTypeEnum, OntologyDataTypeEnum> FUNCTION_PARAM_TO_ONTOLOGY_DATA = new HashMap<FunctionParamTypeEnum, OntologyDataTypeEnum>() {{
+        put(FunctionParamTypeEnum.STRING, OntologyDataTypeEnum.String);
+        put(FunctionParamTypeEnum.INTEGER, OntologyDataTypeEnum.Int);
+        put(FunctionParamTypeEnum.BOOL, OntologyDataTypeEnum.Bool);
+        put(FunctionParamTypeEnum.DOUBLE, OntologyDataTypeEnum.Double);
+        put(FunctionParamTypeEnum.FLOAT, OntologyDataTypeEnum.Float);
+        put(FunctionParamTypeEnum.LONG, OntologyDataTypeEnum.Long);
+    }};
+
     private final String value;
     @Setter
     private String ontologyApi;
@@ -140,6 +150,12 @@ public enum OntologyDataTypeEnum {
         return type;
     }
 
+
+    public static OntologyDataTypeEnum valueOfDataType(FunctionParamTypeEnum paramType) {
+        return FUNCTION_PARAM_TO_ONTOLOGY_DATA.get(paramType);
+
+    }
+
     /**
      * 根据OntologyDataTypeEnum枚举转换为PostgreSQL数据类型字符串
      *
@@ -161,6 +177,8 @@ public enum OntologyDataTypeEnum {
         assert (type != null);
         return type;
     }
+
+
 }
 
 

@@ -20,17 +20,9 @@ public class ActionParamMappingVO {
     private String functionParamExpression;
 
     @ApiModelProperty(value = "关联的函数参数id", required = true)
-    private String functionParamId;
+    private Long functionParamId;
 
     @ApiModelProperty(value = "参数对应的本体属性ID", required = true, example = "fdsfa-gfdsagf-dfs")
     private String propertyUniqueIdentifier;
 
-    @ApiModelProperty(value = "参数对应的本体属性名称", required = true, example = "名字")
-    private String propertyName;
-
-    @ApiModelProperty(value = "参数对应的本体名称", required = true, example = "测试")
-    private String ontologyName;
-
-    @ApiModelProperty(value = "参数对应的本体id", required = true, example = "fdsfa-gfdsagf-dfs")
-    private String ontologyUniqueIdentifier;
 }

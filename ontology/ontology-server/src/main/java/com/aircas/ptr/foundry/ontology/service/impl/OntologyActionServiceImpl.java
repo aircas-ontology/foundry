@@ -1,8 +1,6 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
-import com.aircas.ptr.foundry.common.constant.ActionRuleConnectType;
-import com.aircas.ptr.foundry.common.constant.FunctionTypeEnum;
-import com.aircas.ptr.foundry.common.constant.Status;
+import com.aircas.ptr.foundry.common.constant.*;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.ontology.exception.*;
 import com.aircas.ptr.foundry.ontology.model.bo.OntologyActionBo;
@@ -10,14 +8,14 @@ import com.aircas.ptr.foundry.ontology.model.bo.OntologyActionMappingInBO;
 import com.aircas.ptr.foundry.ontology.model.param.ActionCreateOrUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionHandleMappingInParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionHandleRuleAddParam;
+import com.aircas.ptr.foundry.ontology.model.param.ActionLinkMappingParam;
 import com.aircas.ptr.foundry.ontology.model.po.*;
-import com.aircas.ptr.foundry.ontology.model.vo.OntologyActionVO;
-import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyVO;
-import com.aircas.ptr.foundry.ontology.model.vo.ParameterMetadataVO;
+import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.*;
 import com.aircas.ptr.foundry.ontology.service.*;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -30,6 +28,7 @@ import com.jayway.jsonpath.JsonPath;
 import lombok.extern.slf4j.Slf4j;
 import lombok.var;
 import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.collections4.MapUtils;
 import org.apache.commons.compress.utils.Lists;
 import org.apache.commons.lang.StringUtils;
 import org.springframework.beans.BeanUtils;
@@ -48,6 +47,8 @@ import java.util.stream.Collectors;
 @Slf4j
 public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper, OntologyAction> implements OntologyActionService {
 
+    @Resource
+    private OntologyLinkGroupMapper linkGroupMapper;
 
     @Resource
     private FunctionMapper functionMapper;
@@ -63,6 +64,9 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
 
     @Resource
     private OntologyActionMappingInMapper ontologyActionMappingInMapper;
+
+    @Resource
+    private OntologyActionMappingInService ontologyActionMappingInService;
 
     @Resource
     private OntologyMetaMapper ontologyMetaMapper;
@@ -315,13 +319,131 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         var func = functionMapper.selectOne(new LambdaQueryWrapper<Function>().eq(Function::getApi, funcApi));
         //目前仅支行为与自定义函数api绑定
         PreconditionUtils.checkArgument(func != null && func.getType().equals(FunctionTypeEnum.CUSTOMIZE), "function api 不存在：" + func, HttpStatus.BAD_REQUEST);
-        //校验函数参数
         var functionParams = functionParamMapper.selectList(new LambdaQueryWrapper<FunctionParamPO>().eq(FunctionParamPO::getFunctionId, func.getId()));
-        if(CollectionUtils.isNotEmpty(functionParams)) {
-            param.getMappingIns();
-        }
         //校验本体关系
+        var ontologyId = param.getOntologyIdentifier();
+        var link = param.getLinkMapping();
+        if (link != null) {
+            var ontologyLink = linkGroupMapper.selectOne(new LambdaQueryWrapper<OntologyLinkGroup>().eq(OntologyLinkGroup::getId, link.getOntologyLinkUniqIdentifier()));
+            PreconditionUtils.checkArgument(ontologyLink != null
+                            && (ontologyLink.getOntologyUniqueIdentifierTo().equals(ontologyId) || ontologyLink.getOntologyUniqueIdentifierFrom().equals(ontologyId)),
+                    "无效的本体关系" + link.getOntologyLinkUniqIdentifier(), HttpStatus.BAD_REQUEST);
 
+            var output = functionParams.stream().filter(p -> p.getCategory().equals(FunctionParamCategoryEnum.OUTPUT)).findFirst().orElse(null);
+            PreconditionUtils.checkArgument(output != null, "函数无输出参数,functionId:" + func.getId());
+            PreconditionUtils.checkArgument(output.getId().equals(link.getStartTimeFunctionParamId()) && output.getId().equals(link.getEndTimeFunctionParamId()), "行为-函数参数id映射错误");
+            actionLinkMapper.insert(OntologyActionLink.builder()
+                    .ontologyActionId(ontologyAction.getId())
+                    .endTimeFunctionParamExpression(link.getEndTimeFunctionParamExpression())
+                    .endTimeFunctionParamId(link.getEndTimeFunctionParamId())
+                    .startTimeFunctionParamExpression(link.getStartTimeFunctionParamExpression())
+                    .startTimeFunctionParamId(link.getStartTimeFunctionParamId())
+                    .ontologyLinkParamExpression(link.getOntologyLinkFunctionParamExpression())
+                    .ontologyLinkUniqueIdentifier(link.getOntologyLinkUniqIdentifier())
+                    .build());
+        }
+
+        //校验函数输入参数
+        var inputMap = functionParams.stream().filter(p -> p.getCategory().equals(FunctionParamCategoryEnum.INPUT))
+                .collect(Collectors.toMap(v -> v.getId(), v -> v));
+
+        if (MapUtils.isNotEmpty(inputMap)) {
+            var mappingIns = param.getMappingIns();
+            PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(mappingIns), "缺少行为输入参数", HttpStatus.BAD_REQUEST);
+            List<OntologyActionMappingIn> list = Lists.newArrayList();
+            mappingIns.forEach(mapping -> {
+                var propertyId = mapping.getPropertyUniqueIdentifier();
+                //本体属性是否存在，函数参数是否存在
+                var prop = propertyMapper.selectOne(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getUniqueIdentifier, propertyId));
+                PreconditionUtils.checkArgument(prop != null && inputMap.keySet().contains(mapping.getFunctionParamId()), "无效的行为参数：" + propertyId, HttpStatus.BAD_REQUEST);
+                //行为属性类型与函数参数类型是否匹配
+                var dataType = OntologyDataTypeEnum.valueOfDataType(inputMap.get(mapping.getFunctionParamId()).getParamType());
+                PreconditionUtils.checkArgument(prop.getPropertyType().equals(dataType), "行为属性类型与函数参数类型不匹配：", HttpStatus.BAD_REQUEST);
+                list.add(OntologyActionMappingIn.builder()
+                        .ontologyActionId(ontologyAction.getId())
+                        .functionParamExpression(mapping.getFunctionParamExpression())
+                        .functionParamId(mapping.getFunctionParamId())
+                        .propertyUniqueIdentifier(mapping.getPropertyUniqueIdentifier())
+                        .build());
+            });
+            ontologyActionMappingInService.saveBatch(list);
+        }
+    }
+
+    @Override
+    @Transactional(value = "mainTransactionManager")
+    public void updateAction(ActionCreateOrUpdateParam param) {
+        deleteActionByApi(param.getActionApi());
+        createAction(param);
+    }
+
+    @Override
+    @Transactional(value = "mainTransactionManager")
+    public void deleteActionByApi(String actionApi) {
+        var action = getOne(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getApi, actionApi));
+        PreconditionUtils.checkArgument(action != null, "行为不存在", HttpStatus.BAD_REQUEST);
+        var actionHandleRule = actionHandleRuleService.getOne(new LambdaQueryWrapper<ActionHandleRule>()
+                .eq(ActionHandleRule::getActionId, action.getId()).eq(ActionHandleRule::getStatus, Status.ENABLE.getValue()));
+        var actionHandleTask = actionHandleTaskService.getOne(new LambdaQueryWrapper<ActionHandleTask>()
+                .eq(ActionHandleTask::getActionId, action.getId()).eq(ActionHandleTask::getStatus, Status.ENABLE.getValue()));
+        PreconditionUtils.checkArgument(actionHandleRule == null && actionHandleTask == null, "该行为被调度中，不能删除", HttpStatus.BAD_REQUEST);
+        actionLinkMapper.delete(new LambdaQueryWrapper<OntologyActionLink>().eq(OntologyActionLink::getOntologyActionId, action.getId()));
+        ontologyActionMapper.delete(new LambdaQueryWrapper<OntologyAction>().in(OntologyAction::getId, action.getId()));
+        ontologyActionMappingInMapper.delete(new LambdaQueryWrapper<OntologyActionMappingIn>().in(OntologyActionMappingIn::getOntologyActionId, action.getId()));
+    }
+
+    @Override
+    public Page<OntologyActionInfoVO> pageGetActionByOntologyId(String ontologyUniqIdentifier, Integer pageNum, Integer pageSize) {
+        Page<OntologyActionInfoVO> result = new Page<>(pageNum, pageSize);
+        var pageResult = page(new Page<>(pageNum, pageSize),
+                new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getOntologyUniqueIdentifier, ontologyUniqIdentifier));
+        List<OntologyActionInfoVO> records = pageResult.getRecords().stream()
+                .map(v -> OntologyActionInfoVO.builder()
+                        .actionApi(v.getApi())
+                        .description(v.getDescription())
+                        .ontologyUniqIdentifier(v.getOntologyUniqueIdentifier())
+                        .displayName(v.getDisplayName())
+                        .icon(v.getIcon())
+                        .build())
+                .collect(Collectors.toList());
+        result.setRecords(records).setTotal(pageResult.getTotal());
+        return result;
+    }
+
+    @Override
+    public OntologyActionDetailVO getActionByApi(String actionApi) {
+        var action = getOne(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getApi, actionApi));
+        PreconditionUtils.checkArgument(action != null, "无效的action api", HttpStatus.BAD_REQUEST);
+        var detailVO = OntologyActionDetailVO
+                .builder()
+                .functionApi(action.getFunctionApi())
+                .actionApi(action.getApi())
+                .description(action.getDescription())
+                .displayName(action.getDisplayName())
+                .icon(action.getIcon())
+                .build();
+        var link = actionLinkMapper.selectOne(new LambdaQueryWrapper<OntologyActionLink>().eq(OntologyActionLink::getOntologyActionId, action.getId()));
+        if (link != null) {
+            detailVO.setLinkMapping(ActionLinkMappingParam.builder()
+                    .endTimeFunctionParamExpression(link.getEndTimeFunctionParamExpression())
+                    .endTimeFunctionParamId(link.getEndTimeFunctionParamId())
+                    .ontologyLinkFunctionParamExpression(link.getOntologyLinkParamExpression())
+                    .ontologyLinkUniqIdentifier(link.getOntologyLinkUniqueIdentifier())
+                    .startTimeFunctionParamExpression(link.getStartTimeFunctionParamExpression())
+                    .startTimeFunctionParamId(link.getStartTimeFunctionParamId())
+                    .build());
+        }
+        var mappings = ontologyActionMappingInService.list(new LambdaQueryWrapper<OntologyActionMappingIn>().eq(OntologyActionMappingIn::getOntologyActionId, action.getId()));
+        if (CollectionUtils.isNotEmpty(mappings)) {
+            var mappingVOS = mappings.stream().map(v -> ActionParamMappingVO.builder()
+                            .functionParamExpression(v.getFunctionParamExpression())
+                            .functionParamId(v.getFunctionParamId())
+                            .propertyUniqueIdentifier(v.getPropertyUniqueIdentifier())
+                            .build())
+                    .collect(Collectors.toList());
+            detailVO.setMappingIns(mappingVOS);
+        }
+        return detailVO;
     }
 
 //    private void checkBindingConsistence(OntologyActionBo ontologyFunctionBo)

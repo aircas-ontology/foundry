@@ -14,7 +14,7 @@ import java.util.Map;
 
 public interface ObjectService extends IService<Object> {
 
-    PageInfo<DirectoryItemVO> queryDirectories(String ontologyUniqueIdentifier, Integer page, Integer size);
+    //PageInfo<DirectoryItemVO> queryDirectories(String ontologyUniqueIdentifier, Integer page, Integer size);
 
     ObjectOneInfoVO queryObjectByPrimaryKey(String ontologyUniqueIdentifier, String key);
 
