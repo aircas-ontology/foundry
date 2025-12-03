@@ -236,18 +236,19 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         var tableMap = tableMetadataMapper.listTables().stream().collect(Collectors.toMap(v -> v.getTableName(), v -> v.getDescription() != null ? v.getDescription() : ""));
 
         return props.stream().map(v -> OntologyPropertyDetailVO.builder()
-                .description(v.getDescription())
-                .displayName(v.getDisplayName())
-                .isPrimaryKey(v.getIsPrimaryKey() == 1)
-                .isTitleKey(v.getIsTitleKey() == 1)
-                .tag(v.getTag())
-                .uniqueIdentifier(v.getUniqueIdentifier())
-                .apiName(v.getApiName())
-                .propertyType(v.getPropertyType())
-                .datasourceId(v.getDatasourceId())
-                .datasourceColumnName(v.getDatasourceColumnName())
-                .datasourceDescription(tableMap.get(v.getDatasourceId()))
-                .build())
+                        .description(v.getDescription())
+                        .displayName(v.getDisplayName())
+                        .isPrimaryKey(v.getIsPrimaryKey() == 1)
+                        .isTitleKey(v.getIsTitleKey() == 1)
+                        .tag(v.getTag())
+                        .uniqueIdentifier(v.getUniqueIdentifier())
+                        .ontologyUniqueIdentifier(v.getOntologyUniqueIdentifier())
+                        .apiName(v.getApiName())
+                        .propertyType(v.getPropertyType())
+                        .datasourceId(v.getDatasourceId())
+                        .datasourceColumnName(v.getDatasourceColumnName())
+                        .datasourceDescription(tableMap.get(v.getDatasourceId()))
+                        .build())
                 .collect(Collectors.toList());
     }
 
@@ -257,13 +258,14 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         var props = list(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier));
 
         return props.stream().map(v -> OntologyPropertyInfoVO.builder()
-                .description(v.getDescription())
-                .displayName(v.getDisplayName())
-                .isPrimaryKey(v.getIsPrimaryKey() == 1)
-                .isTitleKey(v.getIsTitleKey() == 1)
-                .tag(v.getTag())
-                .uniqueIdentifier(v.getUniqueIdentifier())
-                .build())
+                        .description(v.getDescription())
+                        .displayName(v.getDisplayName())
+                        .isPrimaryKey(v.getIsPrimaryKey() == 1)
+                        .isTitleKey(v.getIsTitleKey() == 1)
+                        .tag(v.getTag())
+                        .uniqueIdentifier(v.getUniqueIdentifier())
+                        .ontologyUniqueIdentifier(ontologyUniqueIdentifier)
+                        .build())
                 .collect(Collectors.toList());
     }
 
@@ -278,6 +280,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                 .isTitleKey(prop.getIsTitleKey() == 1)
                 .tag(prop.getTag())
                 .uniqueIdentifier(prop.getUniqueIdentifier())
+                .ontologyUniqueIdentifier(prop.getOntologyUniqueIdentifier())
                 .apiName(prop.getApiName())
                 .propertyType(prop.getPropertyType())
                 .datasourceId(prop.getDatasourceId())

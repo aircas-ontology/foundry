@@ -39,14 +39,6 @@ public class OntologyActionController {
     @Autowired
     private ActionHandleTaskService actionHandleTaskService;
 
-
-    @ApiOperation(value = "执行行为")
-    @PostMapping(value = "/execute/{actionApi}")
-    public RestResult executeAction(@PathVariable(name = "actionApi", required = true) String actionApi) {
-        return RestResult.success();
-    }
-
-
     @ApiOperation(value = "新增行为")
     @PostMapping("")
     public RestResult createAction(@RequestBody @Valid ActionCreateOrUpdateParam param) {

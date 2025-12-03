@@ -1,24 +1,36 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
+import com.aircas.ptr.foundry.common.constant.FunctionParamCategoryEnum;
 import com.aircas.ptr.foundry.common.constant.OntologyLinkTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.document.EntityNode;
 import com.aircas.ptr.foundry.ontology.model.document.EntityRelation;
-import com.aircas.ptr.foundry.ontology.model.po.OntologyAction;
+import com.aircas.ptr.foundry.ontology.model.param.EntityActionExecuteParam;
+import com.aircas.ptr.foundry.ontology.model.param.FunctionExecuteParam;
+import com.aircas.ptr.foundry.ontology.model.param.FunctionParameter;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
 import com.aircas.ptr.foundry.ontology.model.po.TableFieldMapping;
-import com.aircas.ptr.foundry.ontology.model.vo.*;
+import com.aircas.ptr.foundry.ontology.model.vo.EntityInfoVO;
+import com.aircas.ptr.foundry.ontology.model.vo.EntityLinkPropertyVO;
+import com.aircas.ptr.foundry.ontology.model.vo.EntityPropertyDetailVO;
+import com.aircas.ptr.foundry.ontology.model.vo.EntityPropertyVO;
 import com.aircas.ptr.foundry.ontology.repository.arangodb.EntityNodeRepository;
 import com.aircas.ptr.foundry.ontology.repository.arangodb.EntityRelationRepository;
 import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.ObjectMapper;
 import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.TableFieldMappingMapper;
 import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.TableMetadataMapper;
+import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyActionLinkMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyActionMapper;
+import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyActionMappingInMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyPropertyMapper;
 import com.aircas.ptr.foundry.ontology.service.EntityService;
+import com.aircas.ptr.foundry.ontology.service.FunctionService;
+import com.aircas.ptr.foundry.ontology.service.OntologyActionService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.collect.Lists;
+import com.jayway.jsonpath.JsonPath;
 import lombok.extern.slf4j.Slf4j;
 import lombok.var;
 import org.apache.commons.collections4.CollectionUtils;
@@ -26,10 +38,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -47,11 +56,24 @@ public class EntityServiceImpl implements EntityService {
 
 
     @Resource
+    private FunctionService functionService;
+
+    @Resource
+    private OntologyActionService actionService;
+
+
+    @Resource
     private OntologyPropertyMapper propertyMapper;
 
 
     @Resource
     private OntologyActionMapper actionMapper;
+
+    @Resource
+    private OntologyActionMappingInMapper actionMappingInMapper;
+
+    @Resource
+    private OntologyActionLinkMapper actionLinkMapper;
 
     @Resource
     private EntityRelationRepository relationRepository;
@@ -67,6 +89,9 @@ public class EntityServiceImpl implements EntityService {
 
     @Resource
     private TableMetadataMapper tableMetadataMapper;
+
+
+    private final com.fasterxml.jackson.databind.ObjectMapper jsonMapper = new com.fasterxml.jackson.databind.ObjectMapper();
 
 
     @Override
@@ -170,17 +195,6 @@ public class EntityServiceImpl implements EntityService {
 
 
     @Override
-    public List<EntityActionVO> getEntityActionsByPrimaryKey(String ontologyUniqueIdentifier) {
-        var actions = actionMapper.selectList(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getOntologyUniqueIdentifier, ontologyUniqueIdentifier));
-        return actions.stream().map(action -> EntityActionVO.builder()
-                .actionApi(action.getApi())
-                .description(action.getDescription())
-                .displayName(action.getDisplayName())
-                .functionApi(action.getFunctionApi())
-                .build()).collect(Collectors.toList());
-    }
-
-    @Override
     public List<EntityLinkPropertyVO> getEntityLinksByPrimaryKey(String ontologyUniqueIdentifier,
                                                                  Object entityPrimaryKey) {
 
@@ -191,17 +205,17 @@ public class EntityServiceImpl implements EntityService {
         }
 
         return relations.stream().map(v -> EntityLinkPropertyVO.builder()
-                .ontologyFrom(v.getFrom().getOntologyUniqIdentifier())
-                .ontologyTo(v.getTo().getOntologyUniqIdentifier())
-                .entityPrimaryKeyFrom(v.getFrom().getPrimaryKey())
-                .entityPrimaryKeyTo(v.getTo().getPrimaryKey())
-                .displayNameFrom(v.getFrom().getDisplayName())
-                .displayNameTo(v.getTo().getDisplayName())
-                .linkName(v.getName())
-                .linkType(v.getType())
-                .entityNodeFrom(v.getFrom().getId())
-                .entityNodeTo(v.getTo().getId())
-                .build())
+                        .ontologyFrom(v.getFrom().getOntologyUniqIdentifier())
+                        .ontologyTo(v.getTo().getOntologyUniqIdentifier())
+                        .entityPrimaryKeyFrom(v.getFrom().getPrimaryKey())
+                        .entityPrimaryKeyTo(v.getTo().getPrimaryKey())
+                        .displayNameFrom(v.getFrom().getDisplayName())
+                        .displayNameTo(v.getTo().getDisplayName())
+                        .linkName(v.getName())
+                        .linkType(v.getType())
+                        .entityNodeFrom(v.getFrom().getId())
+                        .entityNodeTo(v.getTo().getId())
+                        .build())
                 .collect(Collectors.toList());
     }
 
@@ -209,7 +223,7 @@ public class EntityServiceImpl implements EntityService {
     public List<EntityPropertyDetailVO> getEntityDetail(String ontologyUniqueIdentifier, Object entityPrimaryKey) {
         List<EntityPropertyDetailVO> res = Lists.newArrayList();
         var props = propertyMapper.selectList(new LambdaQueryWrapper<OntologyProperty>()
-                .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier))
+                        .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier))
                 .stream()
                 .filter(v -> StringUtils.isNotEmpty(v.getDatasourceColumnName()))
                 .collect(Collectors.toList());
@@ -232,6 +246,7 @@ public class EntityServiceImpl implements EntityService {
                     .tag(p.getTag())
                     .propertyDisplayName(p.getDisplayName())
                     .propertyValues(Lists.newArrayList(colValue))
+                    .propertyUniqIdentifier(p.getUniqueIdentifier())
                     .build();
         }).collect(Collectors.toList());
         res.addAll(details);
@@ -267,6 +282,7 @@ public class EntityServiceImpl implements EntityService {
                     return EntityPropertyDetailVO.builder()
                             .tag(p.getTag())
                             .propertyDisplayName(p.getDisplayName())
+                            .propertyUniqIdentifier(p.getUniqueIdentifier())
                             .propertyValues(values)
                             .build();
                 }).collect(Collectors.toList());
@@ -330,6 +346,55 @@ public class EntityServiceImpl implements EntityService {
     @Override
     public List<EntityNode> getByByOntologyUniqIdentifier(String ontologyIdentifier) {
         return nodeRepository.findByOntologyUniqIdentifier(ontologyIdentifier);
+    }
+
+    @Override
+    public String executeAction(EntityActionExecuteParam param) throws Exception {
+        var actionDetailVO = actionService.getActionByApi(param.getActionApi());
+        var functionDetailVO = functionService.getFunctionDetailByApi(actionDetailVO.getFunctionApi());
+        var link = actionDetailVO.getLinkMapping();
+        var mappings = actionDetailVO.getMappingIns();
+
+        if (link != null) {
+
+        }
+
+        //构造函数的输入参数
+        var functionInputParams = functionDetailVO.getParams().stream()
+                .filter(v -> v.getCategory().equals(FunctionParamCategoryEnum.INPUT))
+                .sorted(Comparator.comparing(v -> v.getParamOrder()))
+                .collect(Collectors.toList());
+        Map<String, List<Object>> entityDetailMap = getEntityDetail(param.getOntologyUniqueIdentifier(), param.getEntityPrimaryKey())
+                .stream().collect(Collectors.toMap(v -> v.getPropertyUniqIdentifier(), v -> v.getPropertyValues()));
+        List<FunctionParameter> parameters = functionInputParams.stream().map(p -> {
+            var mappingVO = mappings.stream().filter(m -> m.getFunctionParamId().equals(p.getParamId())).findFirst().get();
+            var value = entityDetailMap.get(mappingVO.getPropertyUniqueIdentifier());
+            return FunctionParameter.builder()
+                    .paramName(p.getParamName())
+                    .paramValue(value)
+                    .build();
+        }).collect(Collectors.toList());
+        //执行函数
+        var result = functionService.executeFunction(FunctionExecuteParam.builder()
+                .functionApi(actionDetailVO.getFunctionApi())
+                .parameters(parameters)
+                .build());
+
+        //根据函数的输出结果更新属性
+        var functionOutputParam = functionDetailVO.getParams().stream()
+                .filter(v -> v.getCategory().equals(FunctionParamCategoryEnum.OUTPUT))
+                .findFirst();
+        if (functionOutputParam.isPresent()) {
+            var output = mappings.stream().filter(m -> m.getFunctionParamId().equals(functionOutputParam.get().getParamId())).collect(Collectors.toList());
+            JsonNode jsonNode = jsonMapper.readTree(result);
+            output.stream().forEach(out -> {
+                Object actualValue = JsonPath.read(jsonNode.toString(), out.getFunctionParamExpression());
+
+            });
+
+        }
+
+        return result;
     }
 
 

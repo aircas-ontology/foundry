@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.ontology.service;
 
 import com.aircas.ptr.foundry.ontology.model.document.EntityNode;
+import com.aircas.ptr.foundry.ontology.model.param.EntityActionExecuteParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup;
 import com.aircas.ptr.foundry.ontology.model.vo.EntityActionVO;
 import com.aircas.ptr.foundry.ontology.model.vo.EntityInfoVO;
@@ -29,8 +30,6 @@ public interface EntityService {
 
     void deleteNodesAndRelationsByOntologyId(String ontologyUniqueIdentifier);
 
-    List<EntityActionVO> getEntityActionsByPrimaryKey(String ontologyUniqueIdentifier);
-
     List<EntityLinkPropertyVO> getEntityLinksByPrimaryKey(String ontologyUniqueIdentifier, Object entityPrimaryKey);
 
     List<EntityPropertyDetailVO> getEntityDetail(String ontologyUniqueIdentifier, Object entityPrimaryKey);
@@ -39,5 +38,5 @@ public interface EntityService {
 
     List<EntityNode> getByByOntologyUniqIdentifier(String ontologyIdentifier);
 
-
+    String executeAction(EntityActionExecuteParam param) throws Exception;
 }

@@ -139,22 +139,24 @@ public class GroovyServiceImpl implements GroovyService {
         List<FunctionParamDTO> funcParams = new ArrayList<>();
 
         try {
-            for (int i = 0; i < parameters.length; i++) {
-                //目前先用arg0，arg1....
-                String paramName = parameters[i].getName();
-                Class<?> paramType = parameters[i].getType();
-                //校验参数类型，先支持基本参数类型
-                PreconditionUtils.checkArgument(FunctionParamTypeEnum.isBasicType(paramType.getName()), "暂不支持复杂类型参数", HttpStatus.BAD_REQUEST);
-                JsonSchema schema = generator.generateSchema(paramType);
-                String jsonSchema = objectMapper.writeValueAsString(schema);
-                funcParams.add(FunctionParamDTO.builder()
-                        .paramName(paramName)
-                        .paramType(FunctionParamTypeEnum.getByTypeName(paramType.getName()))
-                        .category(FunctionParamCategoryEnum.INPUT)
-                        .paramOrder(i + 1)
-                        .referenceType(paramType.getName())
-                        .paramSchema(jsonSchema)
-                        .build());
+            if (parameters != null) {
+                for (int i = 0; i < parameters.length; i++) {
+                    //目前先用arg0，arg1....
+                    String paramName = parameters[i].getName();
+                    Class<?> paramType = parameters[i].getType();
+                    //校验参数类型，先支持基本参数类型
+                    PreconditionUtils.checkArgument(FunctionParamTypeEnum.isBasicType(paramType.getName()), "暂不支持复杂类型参数", HttpStatus.BAD_REQUEST);
+                    JsonSchema schema = generator.generateSchema(paramType);
+                    String jsonSchema = objectMapper.writeValueAsString(schema);
+                    funcParams.add(FunctionParamDTO.builder()
+                            .paramName(paramName)
+                            .paramType(FunctionParamTypeEnum.getByTypeName(paramType.getName()))
+                            .category(FunctionParamCategoryEnum.INPUT)
+                            .paramOrder(i + 1)
+                            .referenceType(paramType.getName())
+                            .paramSchema(jsonSchema)
+                            .build());
+                }
             }
             JavaType returnType = objectMapper.getTypeFactory().constructType(handleMethod.get().getGenericReturnType());
             JsonSchema returnSchema = generator.generateSchema(returnType);

@@ -40,8 +40,12 @@ public class OntologyPropertyInfoVO {
     /**
      * 唯一标示
      */
-    @ApiModelProperty(name = "uniqueIdentifier", value = "id")
+    @ApiModelProperty(name = "uniqueIdentifier", value = "abcd")
     private String uniqueIdentifier;
+
+
+    @ApiModelProperty(name = "ontologyUniqueIdentifier", value = "123")
+    private String ontologyUniqueIdentifier;
 
     /**
      * 属性标签

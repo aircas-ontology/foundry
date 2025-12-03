@@ -21,6 +21,9 @@ public class EntityPropertyDetailVO  {
     @ApiModelProperty(name = "tag", value = "属性标签", example = "基本属性")
     private String tag;
 
+    @ApiModelProperty(name = "propertyUniqIdentifier", value = "属性名称", example = "名称")
+    private String propertyUniqIdentifier;
+
     @ApiModelProperty(name = "propertyDisplayName", value = "属性名称", example = "名称")
     private String propertyDisplayName;
 

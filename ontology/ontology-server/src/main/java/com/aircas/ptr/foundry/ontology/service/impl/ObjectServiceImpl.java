@@ -1,9 +1,6 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
-import com.aircas.ptr.foundry.common.constant.ActionHandleRuleAddConditionEnum;
-import com.aircas.ptr.foundry.ontology.model.po.DirectoryItem;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup;
-import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
 import com.aircas.ptr.foundry.ontology.service.ObjectService;
 import com.aircas.ptr.foundry.ontology.service.OntologyLinkGroupService;
 import com.aircas.ptr.foundry.ontology.service.OntologyPropertyService;
@@ -17,7 +14,6 @@ import com.aircas.ptr.foundry.ontology.model.param.QuerySortParam;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
-import joptsimple.internal.Strings;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.compress.utils.Lists;
 import org.springframework.beans.BeanUtils;

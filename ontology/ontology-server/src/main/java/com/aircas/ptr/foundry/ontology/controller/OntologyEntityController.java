@@ -2,8 +2,8 @@ package com.aircas.ptr.foundry.ontology.controller;
 
 import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.controller.validator.OntologyIdVerify;
+import com.aircas.ptr.foundry.ontology.model.param.EntityActionExecuteParam;
 import com.aircas.ptr.foundry.ontology.model.param.EntityQueryParam;
-import com.aircas.ptr.foundry.ontology.model.vo.EntityActionVO;
 import com.aircas.ptr.foundry.ontology.model.vo.EntityInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.EntityLinkPropertyVO;
 import com.aircas.ptr.foundry.ontology.model.vo.EntityPropertyDetailVO;
@@ -52,10 +52,10 @@ public class OntologyEntityController {
         return RestResult.ofData(entityService.getEntityLinksByPrimaryKey(param.getOntologyUniqueIdentifier(), param.getEntityPrimaryKey()));
     }
 
-    @PostMapping("/action")
-    @ApiOperation(value = "查询实体的行为")
-    public RestResult<List<EntityActionVO>> getEntityActionsByPrimaryKey(@RequestBody @Valid EntityQueryParam param) {
-        return RestResult.ofData(entityService.getEntityActionsByPrimaryKey(param.getOntologyUniqueIdentifier()));
+    @PostMapping("/action/execute")
+    @ApiOperation(value = "执行实体的行为")
+    public RestResult<String> executeAction(@RequestBody @Valid EntityActionExecuteParam param) throws Exception {
+        return RestResult.ofData(entityService.executeAction(param));
 
     }
 

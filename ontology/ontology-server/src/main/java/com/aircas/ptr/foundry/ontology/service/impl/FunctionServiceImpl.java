@@ -38,6 +38,7 @@ import javax.annotation.Resource;
 import java.io.File;
 import java.io.IOException;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -183,7 +184,8 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                         .eq(FunctionParamPO::getCategory, FunctionParamCategoryEnum.INPUT)
                         .orderByAsc(FunctionParamPO::getParamOrder));
         //参数取值
-        Map<String, Object> funParamMap = param.getParameters().stream().collect(Collectors.toMap(FunctionParameter::getParamName, FunctionParameter::getParamValue));
+        Map<String, Object> funParamMap = CollectionUtils.isEmpty(param.getParameters()) ?
+                new HashMap<>() : param.getParameters().stream().collect(Collectors.toMap(FunctionParameter::getParamName, FunctionParameter::getParamValue));
         return groovyService.executeGroovy(function.getCode(), funParamMap, executeInputParams);
     }
 

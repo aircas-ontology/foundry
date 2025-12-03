@@ -19,7 +19,7 @@ class trajectoryPredict {
     def handle(@Parameter(name = "primaryKey", description = "舰船的主键") String primaryKey) {
 
         ObjectService objectService = OntologyServerApplication.context.getBean(ObjectService.class)
-        def url = 'http://192.168.9.11:15000/predict'
+        def url = 'http://192.168.9.29:15000/predict'
         List<QuerySortParam> sorts = new ArrayList<>()
         sorts.add(new QuerySortParam("wzsj", QuerySortEnum.DESC))
         List<FilterParam> filters = new ArrayList<>()
