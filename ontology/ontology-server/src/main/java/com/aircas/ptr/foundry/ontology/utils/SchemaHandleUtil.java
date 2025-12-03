@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.ontology.utils;
 
 import com.aircas.ptr.foundry.common.exception.BusinessException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -26,6 +27,7 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 public class SchemaHandleUtil {
+
 
     private static final int MAX_DEPTH = 8;
     private static final Set<Class<?>> SIMPLE_TYPES = new HashSet<>(Arrays.asList(
@@ -392,8 +394,12 @@ public class SchemaHandleUtil {
     @SneakyThrows
     public static Object convertValue(Object value, String className) {
         if (Objects.nonNull(value)) {
-            String valueStr = value.toString();
             Class clazz = getClassByTypeExpression(className);
+            if (clazz == List.class) {
+                return MAPPER.readValue(value.toString(), new TypeReference<List<?>>() {
+                });
+            }
+            String valueStr = value.toString();
             if (clazz == Integer.class || clazz == int.class) {
                 return Integer.parseInt(valueStr);
             }

@@ -23,6 +23,7 @@ public enum FunctionParamTypeEnum {
     BYTE(8, "字节"),
     SHORT(9, "短整型"),
     CHAR(10, "字符"),
+    List(11, "列表"),
     ;
 
     private final int value;
@@ -50,6 +51,7 @@ public enum FunctionParamTypeEnum {
         FUNC_PARAM_TYPE_MAP.put("java.lang.Byte", FunctionParamTypeEnum.BYTE);
         FUNC_PARAM_TYPE_MAP.put("java.lang.Short", FunctionParamTypeEnum.SHORT);
         FUNC_PARAM_TYPE_MAP.put("java.lang.String", FunctionParamTypeEnum.STRING);
+        FUNC_PARAM_TYPE_MAP.put("java.util.List", FunctionParamTypeEnum.List);
     }
 
     public static FunctionParamTypeEnum getByTypeName(String type) {
