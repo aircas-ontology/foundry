@@ -113,6 +113,8 @@ public enum OntologyDataTypeEnum {
         put(FunctionParamTypeEnum.DOUBLE, OntologyDataTypeEnum.Double);
         put(FunctionParamTypeEnum.FLOAT, OntologyDataTypeEnum.Float);
         put(FunctionParamTypeEnum.LONG, OntologyDataTypeEnum.Long);
+        put(FunctionParamTypeEnum.List, OntologyDataTypeEnum.Array);
+
     }};
 
     private final String value;

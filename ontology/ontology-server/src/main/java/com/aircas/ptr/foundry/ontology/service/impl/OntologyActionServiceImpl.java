@@ -358,7 +358,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 PreconditionUtils.checkArgument(prop != null && inputMap.keySet().contains(mapping.getFunctionParamId()), "无效的行为参数：" + propertyId, HttpStatus.BAD_REQUEST);
                 //行为属性类型与函数参数类型是否匹配
                 var dataType = OntologyDataTypeEnum.valueOfDataType(inputMap.get(mapping.getFunctionParamId()).getParamType());
-                PreconditionUtils.checkArgument(prop.getPropertyType().equals(dataType), "行为属性类型与函数参数类型不匹配：", HttpStatus.BAD_REQUEST);
+                PreconditionUtils.checkArgument(dataType.equals(OntologyDataTypeEnum.Array) || prop.getPropertyType().equals(dataType), "行为属性类型与函数参数类型不匹配：", HttpStatus.BAD_REQUEST);
                 list.add(OntologyActionMappingIn.builder()
                         .ontologyActionId(ontologyAction.getId())
                         .functionParamExpression(mapping.getFunctionParamExpression())

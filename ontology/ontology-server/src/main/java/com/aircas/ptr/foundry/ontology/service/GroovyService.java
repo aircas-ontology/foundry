@@ -8,16 +8,15 @@ import java.util.Map;
 
 public interface GroovyService {
 
-    List<FunctionParamDTO> parseGroovyCode(String code);
-
-
     /**
      * 解析groovy代码片段，获取handle方法参数列表及返回值信息
      *
      * @param code
      * @return
      */
-    List<FunctionParamDTO> parseFunctionParam(String code);
+
+    List<FunctionParamDTO> parseGroovyCode(String code);
+
 
     /**
      * 编译groovy代码片段，动态执行handle方法

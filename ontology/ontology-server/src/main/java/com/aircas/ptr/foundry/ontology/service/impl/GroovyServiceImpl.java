@@ -186,57 +186,6 @@ public class GroovyServiceImpl implements GroovyService {
     }
 
 
-    @Override
-    public List<FunctionParamDTO> parseFunctionParam(String code) {
-        //Groovy编译器配置
-        var config = new CompilerConfiguration();
-        var compilationUnit = new CompilationUnit(config);
-        //添加代码块
-        compilationUnit.addSource("temp.groovy", code);
-        //compile方法用于执行编译过程,Phases.SEMANTIC_ANALYSIS 表示编译到语义分析阶段。这个阶段会生成抽象语法树（AST），但不会生成字节码
-        compilationUnit.compile(Phases.SEMANTIC_ANALYSIS);
-        //校验方法名和返回类型
-        var handleClassNode = compilationUnit.getAST().getClasses().stream().filter(classNode -> {
-            var handleMethod = classNode.getMethods().stream().filter(m -> StringUtils.equals("handle", m.getName())).findFirst();
-            if (!handleMethod.isPresent()) {
-                return false;
-            }
-            return StringUtils.equals(handleMethod.get().getReturnType().getName(), FUNCTION_RESULT_REFERENCE_NAME);
-        }).findFirst();
-        PreconditionUtils.checkArgument(handleClassNode.isPresent(), "函数名称handle不存在或者返回类型错误");
-
-        var classNode = handleClassNode.get();
-        var handleMethod = classNode.getMethods().stream().filter(m -> StringUtils.equals("handle", m.getName())).findFirst().get();
-        //提取方法信息
-        List<FunctionParamDTO> funcParams = new ArrayList<>();
-        //1.参数信息提取
-        var parameters = handleMethod.getParameters();
-        for (int i = 0; i < parameters.length; i++) {
-            var parameter = parameters[i];
-            var name = parameter.getName();
-            //目前只支持基本类型，暂不支持复杂类型
-            var basicType = isBasicType(parameter.getType());
-            PreconditionUtils.checkArgument(basicType, "暂不支持复杂类型参数");
-            funcParams.add(FunctionParamDTO.builder()
-                    .category(FunctionParamCategoryEnum.INPUT)
-                    .paramType(FunctionParamTypeEnum.getByTypeName(parameter.getType().getName()))
-                    .referenceType(parameter.getType().getName())
-                    .paramName(name)
-                    .paramOrder(i + 1)
-                    .build());
-        }
-        //2.返回值信息提取
-        var returnParam = FunctionParamDTO.builder()
-                .category(FunctionParamCategoryEnum.OUTPUT)
-                .paramType(FunctionParamTypeEnum.OBJECT)
-                .referenceType(handleMethod.getReturnType().getName())
-                .paramName("result")
-                .paramSchema(getJsonSchemaByClassNode(handleMethod.getReturnType()))
-                .paramOrder(1)
-                .build();
-        funcParams.add(returnParam);
-        return funcParams;
-    }
 
 
     @SneakyThrows
