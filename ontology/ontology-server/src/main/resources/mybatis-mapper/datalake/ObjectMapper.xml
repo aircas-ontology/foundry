@@ -38,7 +38,8 @@
     </select>
 
     <select id="queryPrimaryKeyValue" resultType="java.util.List">
-        SELECT "${primaryKeyColumnName}" FROM ${tableName}
+        SELECT "${primaryKeyColumnName}"
+        FROM ${tableName}
     </select>
 
     <select id="queryPrimaryKeyAndTitleKeyValue" resultType="java.util.HashMap">
@@ -54,7 +55,8 @@
     <select id="queryColumnNames" resultType="string">
         SELECT COLUMN_NAME
         FROM INFORMATION_SCHEMA.COLUMNS
-        WHERE TABLE_SCHEMA = 'public' AND  TABLE_NAME = #{tableName}
+        WHERE TABLE_SCHEMA = 'public'
+          AND TABLE_NAME = #{tableName}
     </select>
 
     <select id="queryMapsPage" resultType="java.util.HashMap">
@@ -73,7 +75,8 @@
 
 
     <select id="queryCount" resultType="java.lang.Integer">
-        SELECT count(*) FROM ${tableName}
+        SELECT count(*)
+        FROM ${tableName}
     </select>
 
 
@@ -109,6 +112,34 @@
         FROM ${tableName}
         WHERE "${primaryKeyColumn}" = #{primaryKeyValue}
     </select>
+
+    <update id="updateObject">
+        UPDATE ${tableName}
+        SET
+        <foreach collection="columnMap" index="key" item="value" separator=",">
+            "${key}" = #{value}
+        </foreach>
+        WHERE "${primaryKeyColumn}" = #{primaryKeyValue}
+    </update>
+
+
+    <insert id="insertObject">
+        INSERT  INTO ${tableName}
+        (
+          <foreach collection="columnMap.keys" item="column" separator=",">
+              "${column}"
+          </foreach>
+        )
+        values
+        (
+        <foreach collection="columnMap.keys" item="column" separator=",">
+            #{columnMap[${column}]}
+        </foreach>
+        )
+    </insert>
+
+
+
 
 </mapper>
 

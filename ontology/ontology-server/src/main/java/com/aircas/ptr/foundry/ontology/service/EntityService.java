@@ -2,6 +2,7 @@ package com.aircas.ptr.foundry.ontology.service;
 
 import com.aircas.ptr.foundry.ontology.model.document.EntityNode;
 import com.aircas.ptr.foundry.ontology.model.param.EntityActionExecuteParam;
+import com.aircas.ptr.foundry.ontology.model.param.EntityUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup;
 import com.aircas.ptr.foundry.ontology.model.vo.EntityActionVO;
 import com.aircas.ptr.foundry.ontology.model.vo.EntityInfoVO;
@@ -39,4 +40,6 @@ public interface EntityService {
     List<EntityNode> getByByOntologyUniqIdentifier(String ontologyIdentifier);
 
     String executeAction(EntityActionExecuteParam param) throws Exception;
+
+    void updateEntity(EntityUpdateParam param);
 }

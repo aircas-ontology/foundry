@@ -43,26 +43,6 @@ public class OntologyActionLink {
      */
     private String ontologyLinkParamExpression;
 
-    /**
-     * 开始时间关联的函数参数id
-     */
-    private Long startTimeFunctionParamId;
-
-    /**
-     * 开始时间关联的函数参数的表达式
-     */
-    private String startTimeFunctionParamExpression;
-
-    /**
-     * 结束时间关联的函数参数id
-     */
-    private Long endTimeFunctionParamId;
-
-    /**
-     * 结束时间关联的函数参数的表达式
-     */
-    private String endTimeFunctionParamExpression;
-
 
     @JsonFormat(pattern = DATE_FORMAT_DEFAULT, timezone = "GMT+8")
     @TableField(fill = FieldFill.INSERT)

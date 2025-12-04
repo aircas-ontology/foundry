@@ -6,7 +6,6 @@ import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.extension.spring.MybatisSqlSessionFactoryBean;
 import org.apache.ibatis.logging.stdout.StdOutImpl;
 import org.apache.ibatis.session.SqlSessionFactory;
-import org.mybatis.spring.SqlSessionFactoryBean;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -31,7 +30,7 @@ public class DatalakeDataSourceConfiguration {
 
     @Primary
     @Bean("datalakeSqlSessionFactory")
-    public SqlSessionFactory createMainSqlSessionFactory(@Qualifier("datalakeDataSource")DataSource dataSource) throws Exception {
+    public SqlSessionFactory createMainSqlSessionFactory(@Qualifier("datalakeDataSource") DataSource dataSource) throws Exception {
 
         MybatisSqlSessionFactoryBean sessionFactoryBean = new MybatisSqlSessionFactoryBean();
         sessionFactoryBean.setDataSource(dataSource);
@@ -44,16 +43,10 @@ public class DatalakeDataSourceConfiguration {
         sessionFactoryBean.setConfiguration(configuration);
 
         return sessionFactoryBean.getObject();
-
-//        SqlSessionFactoryBean sqlSessionFactoryBean = new SqlSessionFactoryBean();
-//        sqlSessionFactoryBean.setDataSource(dataSource);
-//        String resourcePath = "classpath:mybatis-mapper/datalake/*.xml";
-//        sqlSessionFactoryBean.setMapperLocations(new PathMatchingResourcePatternResolver().getResources(resourcePath));
-//        return sqlSessionFactoryBean.getObject();
     }
 
-//    @Bean(name = "datalakeTransactionManager")
-//    public DataSourceTransactionManager mainTransactionManager(@Qualifier("datalakeDataSource")DataSource dataSource) {
-//        return new DataSourceTransactionManager(dataSource);
-//    }
+    @Bean(name = "datalakeTransactionManager")
+    public DataSourceTransactionManager mainTransactionManager(@Qualifier("datalakeDataSource") DataSource dataSource) {
+        return new DataSourceTransactionManager(dataSource);
+    }
 }

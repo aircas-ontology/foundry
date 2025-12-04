@@ -159,10 +159,6 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                         .ontologyActionId(actionLink.getOntologyActionId())
                         .ontologyLinkUniqueIdentifier(parentChildLinkMap.get(actionLink.getOntologyLinkUniqueIdentifier()))
                         .ontologyLinkParamExpression(actionLink.getOntologyLinkParamExpression())
-                        .startTimeFunctionParamId(actionLink.getStartTimeFunctionParamId())
-                        .startTimeFunctionParamExpression(actionLink.getStartTimeFunctionParamExpression())
-                        .endTimeFunctionParamId(actionLink.getEndTimeFunctionParamId())
-                        .endTimeFunctionParamExpression(actionLink.getEndTimeFunctionParamExpression())
                         .build());
             }
 

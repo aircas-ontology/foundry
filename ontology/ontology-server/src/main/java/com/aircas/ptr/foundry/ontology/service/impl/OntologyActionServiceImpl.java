@@ -325,19 +325,12 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         var link = param.getLinkMapping();
         if (link != null) {
             var ontologyLink = linkGroupMapper.selectOne(new LambdaQueryWrapper<OntologyLinkGroup>().eq(OntologyLinkGroup::getId, link.getOntologyLinkUniqIdentifier()));
-            PreconditionUtils.checkArgument(ontologyLink != null
-                            && (ontologyLink.getOntologyUniqueIdentifierTo().equals(ontologyId) || ontologyLink.getOntologyUniqueIdentifierFrom().equals(ontologyId)),
-                    "无效的本体关系" + link.getOntologyLinkUniqIdentifier(), HttpStatus.BAD_REQUEST);
+            PreconditionUtils.checkArgument(ontologyLink != null && ontologyLink.getOntologyUniqueIdentifierFrom().equals(ontologyId), "无效的本体关系" + link.getOntologyLinkUniqIdentifier(), HttpStatus.BAD_REQUEST);
 
             var output = functionParams.stream().filter(p -> p.getCategory().equals(FunctionParamCategoryEnum.OUTPUT)).findFirst().orElse(null);
             PreconditionUtils.checkArgument(output != null, "函数无输出参数,functionId:" + func.getId());
-            PreconditionUtils.checkArgument(output.getId().equals(link.getStartTimeFunctionParamId()) && output.getId().equals(link.getEndTimeFunctionParamId()), "行为-函数参数id映射错误");
             actionLinkMapper.insert(OntologyActionLink.builder()
                     .ontologyActionId(ontologyAction.getId())
-                    .endTimeFunctionParamExpression(link.getEndTimeFunctionParamExpression())
-                    .endTimeFunctionParamId(link.getEndTimeFunctionParamId())
-                    .startTimeFunctionParamExpression(link.getStartTimeFunctionParamExpression())
-                    .startTimeFunctionParamId(link.getStartTimeFunctionParamId())
                     .ontologyLinkParamExpression(link.getOntologyLinkFunctionParamExpression())
                     .ontologyLinkUniqueIdentifier(link.getOntologyLinkUniqIdentifier())
                     .build());
@@ -425,12 +418,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         var link = actionLinkMapper.selectOne(new LambdaQueryWrapper<OntologyActionLink>().eq(OntologyActionLink::getOntologyActionId, action.getId()));
         if (link != null) {
             detailVO.setLinkMapping(ActionLinkMappingParam.builder()
-                    .endTimeFunctionParamExpression(link.getEndTimeFunctionParamExpression())
-                    .endTimeFunctionParamId(link.getEndTimeFunctionParamId())
                     .ontologyLinkFunctionParamExpression(link.getOntologyLinkParamExpression())
                     .ontologyLinkUniqIdentifier(link.getOntologyLinkUniqueIdentifier())
-                    .startTimeFunctionParamExpression(link.getStartTimeFunctionParamExpression())
-                    .startTimeFunctionParamId(link.getStartTimeFunctionParamId())
                     .build());
         }
         var mappings = ontologyActionMappingInService.list(new LambdaQueryWrapper<OntologyActionMappingIn>().eq(OntologyActionMappingIn::getOntologyActionId, action.getId()));

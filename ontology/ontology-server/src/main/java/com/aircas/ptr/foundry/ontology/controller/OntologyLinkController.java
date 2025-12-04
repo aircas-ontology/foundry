@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.ontology.controller;
 
 import com.aircas.ptr.foundry.common.base.RestResult;
+import com.aircas.ptr.foundry.ontology.common.enums.OntologyLinkDirectionEnum;
 import com.aircas.ptr.foundry.ontology.controller.validator.OntologyIdVerify;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyLinkCreateParam;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkInfoVO;
@@ -62,8 +63,9 @@ public class OntologyLinkController {
     @GetMapping("/by_ontology")
     @ApiOperation(value = "根据本体id查询关系(1跳)")
     public RestResult<List<OntologyLinkInfoVO>> getLinkByOntologyUniqueIdentifier(@RequestParam(required = true, name = "ontologyUniqueIdentifier") @ApiParam(value = "本体uniqueIdentifier", required = true)
-                                                                                  @OntologyIdVerify String ontologyUniqueIdentifier) {
-        return RestResult.ofData(ontologyLinkGroupService.getLinksByOntologyUniqueIdentifier(ontologyUniqueIdentifier));
+                                                                                  @OntologyIdVerify String ontologyUniqueIdentifier,
+                                                                                  @RequestParam(required = false, name = "direction", defaultValue = "ALL") @ApiParam(value = "关系方向", required = false) OntologyLinkDirectionEnum direction) {
+        return RestResult.ofData(ontologyLinkGroupService.getLinksByOntologyUniqueIdentifier(ontologyUniqueIdentifier, direction));
     }
 
     @GetMapping("/by_group")

@@ -23,7 +23,6 @@ public interface ObjectMapper extends BaseMapper<Object> {
     int updateAnySQL(String updateSql);
 
 
-    //todo 后续改成分页查询，前期数据量小暂不考虑
     List<Map<String, Object>> queryTableDataByColumn(@Param("tableName") String tableName,
                                                      @Param("columnNames") Map<String, String> columnNames,
                                                      @Param("orderBy") String orderBy);
@@ -126,5 +125,10 @@ public interface ObjectMapper extends BaseMapper<Object> {
         return populate(records, tableName, columnNames);
     }
 
+
+    void updateObject(String tableName, Map<String, Object> columnMap, String primaryKeyColumn, Object primaryKeyValue);
+
+
+    void insertObject(String tableName, Map<String, Object> columnMap);
 
 }

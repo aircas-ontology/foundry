@@ -1,10 +1,14 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
 import com.aircas.ptr.foundry.common.constant.FunctionParamCategoryEnum;
+import com.aircas.ptr.foundry.common.constant.FunctionParamTypeEnum;
 import com.aircas.ptr.foundry.common.constant.OntologyLinkTypeEnum;
+import com.aircas.ptr.foundry.common.constant.Status;
+import com.aircas.ptr.foundry.common.util.DateUtils;
 import com.aircas.ptr.foundry.ontology.model.document.EntityNode;
 import com.aircas.ptr.foundry.ontology.model.document.EntityRelation;
 import com.aircas.ptr.foundry.ontology.model.param.EntityActionExecuteParam;
+import com.aircas.ptr.foundry.ontology.model.param.EntityUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionExecuteParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionParameter;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup;
@@ -19,9 +23,7 @@ import com.aircas.ptr.foundry.ontology.repository.arangodb.EntityRelationReposit
 import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.ObjectMapper;
 import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.TableFieldMappingMapper;
 import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.TableMetadataMapper;
-import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyActionLinkMapper;
-import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyActionMapper;
-import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyActionMappingInMapper;
+import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyLinkGroupMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyPropertyMapper;
 import com.aircas.ptr.foundry.ontology.service.EntityService;
 import com.aircas.ptr.foundry.ontology.service.FunctionService;
@@ -30,16 +32,27 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
+import com.jayway.jsonpath.Configuration;
 import com.jayway.jsonpath.JsonPath;
+import com.jayway.jsonpath.Option;
 import lombok.extern.slf4j.Slf4j;
 import lombok.var;
+import org.apache.commons.collections.MapUtils;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.context.expression.MapAccessor;
+import org.springframework.expression.Expression;
+import org.springframework.expression.ExpressionParser;
+import org.springframework.expression.spel.standard.SpelExpressionParser;
+import org.springframework.expression.spel.support.StandardEvaluationContext;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * todo 添加事务
@@ -54,6 +67,8 @@ import java.util.stream.Collectors;
 @Service
 public class EntityServiceImpl implements EntityService {
 
+    @Resource
+    private OntologyLinkGroupMapper linkGroupMapper;
 
     @Resource
     private FunctionService functionService;
@@ -64,16 +79,6 @@ public class EntityServiceImpl implements EntityService {
 
     @Resource
     private OntologyPropertyMapper propertyMapper;
-
-
-    @Resource
-    private OntologyActionMapper actionMapper;
-
-    @Resource
-    private OntologyActionMappingInMapper actionMappingInMapper;
-
-    @Resource
-    private OntologyActionLinkMapper actionLinkMapper;
 
     @Resource
     private EntityRelationRepository relationRepository;
@@ -90,8 +95,12 @@ public class EntityServiceImpl implements EntityService {
     @Resource
     private TableMetadataMapper tableMetadataMapper;
 
+    private Configuration safeConfig = Configuration.builder().build().addOptions(Option.DEFAULT_PATH_LEAF_TO_NULL, Option.SUPPRESS_EXCEPTIONS);
+
 
     private final com.fasterxml.jackson.databind.ObjectMapper jsonMapper = new com.fasterxml.jackson.databind.ObjectMapper();
+
+    private final ExpressionParser parser = new SpelExpressionParser();
 
 
     @Override
@@ -350,52 +359,163 @@ public class EntityServiceImpl implements EntityService {
 
     @Override
     public String executeAction(EntityActionExecuteParam param) throws Exception {
+        List<String> executeResult = Lists.newArrayList();
         var actionDetailVO = actionService.getActionByApi(param.getActionApi());
         var functionDetailVO = functionService.getFunctionDetailByApi(actionDetailVO.getFunctionApi());
         var link = actionDetailVO.getLinkMapping();
         var mappings = actionDetailVO.getMappingIns();
-
-        if (link != null) {
-
-        }
+        //src本体属性
+        var ontologyProperties = propertyMapper.selectList(new LambdaQueryWrapper<OntologyProperty>()
+                .eq(OntologyProperty::getOntologyUniqueIdentifier, param.getOntologyUniqueIdentifier()));
 
         //构造函数的输入参数
         var functionInputParams = functionDetailVO.getParams().stream()
                 .filter(v -> v.getCategory().equals(FunctionParamCategoryEnum.INPUT))
                 .sorted(Comparator.comparing(v -> v.getParamOrder()))
                 .collect(Collectors.toList());
-        Map<String, List<Object>> entityDetailMap = getEntityDetail(param.getOntologyUniqueIdentifier(), param.getEntityPrimaryKey())
-                .stream().collect(Collectors.toMap(v -> v.getPropertyUniqIdentifier(), v -> v.getPropertyValues()));
-        List<FunctionParameter> parameters = functionInputParams.stream().map(p -> {
-            var mappingVO = mappings.stream().filter(m -> m.getFunctionParamId().equals(p.getParamId())).findFirst().get();
-            var value = entityDetailMap.get(mappingVO.getPropertyUniqueIdentifier());
-            return FunctionParameter.builder()
-                    .paramName(p.getParamName())
-                    .paramValue(value)
-                    .build();
-        }).collect(Collectors.toList());
-        //执行函数
-        var result = functionService.executeFunction(FunctionExecuteParam.builder()
-                .functionApi(actionDetailVO.getFunctionApi())
-                .parameters(parameters)
-                .build());
 
-        //根据函数的输出结果更新属性
-        var functionOutputParam = functionDetailVO.getParams().stream()
-                .filter(v -> v.getCategory().equals(FunctionParamCategoryEnum.OUTPUT))
-                .findFirst();
-        if (functionOutputParam.isPresent()) {
-            var output = mappings.stream().filter(m -> m.getFunctionParamId().equals(functionOutputParam.get().getParamId())).collect(Collectors.toList());
-            JsonNode jsonNode = jsonMapper.readTree(result);
-            output.stream().forEach(out -> {
-                Object actualValue = JsonPath.read(jsonNode.toString(), out.getFunctionParamExpression());
+        //存在关联关系
+        if (link != null) {
+            //如果行为影响关系，找到关联的本体
+            var linkedOntology = linkGroupMapper.selectOne(new LambdaQueryWrapper<OntologyLinkGroup>().eq(OntologyLinkGroup::getUniqueIdentifier, link.getOntologyLinkUniqIdentifier()))
+                    .getOntologyUniqueIdentifierTo();
+            //获取关联本体下的所有实体详情
+            var entities = getEntities(linkedOntology, 1, Integer.MAX_VALUE);
+            var records = entities.getRecords();
+            //实体数据必须存在
+            if (CollectionUtils.isNotEmpty(records)) {
+                //获取源本体实体属性详情
+                Map<String, List<Object>> srcEntityDetailMap = getEntityDetail(param.getOntologyUniqueIdentifier(), param.getEntityPrimaryKey())
+                        .stream().collect(Collectors.toMap(v -> v.getPropertyUniqIdentifier(), v -> v.getPropertyValues()));
+                //和关联本体下的所有实体计算关系
+                records.stream().forEach(entity -> {
+                    try {
+                        Map<String, List<Object>> linkedEntityDetailMap = getEntityDetail(linkedOntology, entity.getPrimaryKey())
+                                .stream().collect(Collectors.toMap(v -> v.getPropertyUniqIdentifier(), v -> v.getPropertyValues()));
+                        // 合并两个实体，propertyId作为key
+                        Map<String, List<Object>> mergedEntityDetailMap = Stream.of(srcEntityDetailMap, linkedEntityDetailMap)
+                                .flatMap(map -> map.entrySet().stream())
+                                .collect(Collectors.toMap(v -> v.getKey(), v -> v.getValue(),
+                                        (list1, list2) -> {
+                                            list1.addAll(list2);
+                                            return list1;
+                                        }));
+                        //构造函数参数，list类型返回所有值，其他类型取第一个值
+                        List<FunctionParameter> parameters = functionInputParams.stream().map(p -> {
+                            var mappingVO = mappings.stream().filter(m -> m.getFunctionParamId().equals(p.getParamId())).findFirst().get();
+                            Object value = null;
+                            // 如果本体没有给属性绑定数据源，则获取的values为null，函数执行失败
+                            List<Object> values = mergedEntityDetailMap.get(mappingVO.getPropertyUniqueIdentifier());
+                            if (CollectionUtils.isNotEmpty(values)) {
+                                value = p.getParamType().equals(FunctionParamTypeEnum.List) ? values : values.get(0);
+                            }
+                            return FunctionParameter.builder()
+                                    .paramName(p.getParamName())
+                                    .paramValue(value)
+                                    .build();
+                        }).collect(Collectors.toList());
+                        //执行函数
+                        var functionResult = functionService.executeFunction(FunctionExecuteParam.builder()
+                                .functionApi(actionDetailVO.getFunctionApi())
+                                .parameters(parameters)
+                                .build());
+                        executeResult.add(functionResult);
+                        //根据函数的输出结果更新源实体属性：通过json path获取value
+                        var functionOutputParam = functionDetailVO.getParams().stream()
+                                .filter(v -> v.getCategory().equals(FunctionParamCategoryEnum.OUTPUT))
+                                .findFirst().get();
 
-            });
+                        var output = mappings.stream().filter(m -> m.getFunctionParamId().equals(functionOutputParam.getParamId())).collect(Collectors.toList());
+                        JsonNode jsonNode = jsonMapper.readTree(functionResult);
+                        //primary datasource
+                        var primaryDatasource = ontologyProperties.stream().filter(v -> v.getIsPrimaryKey() == 1).findFirst().get().getDatasourceId();
+                        var propMap = ontologyProperties.stream().collect(Collectors.toMap(v -> v.getUniqueIdentifier(), v -> v));
+                        List<EntityUpdateParam.ColumnUpdate> columnUpdates = Lists.newArrayList();
+                        Map<String, Map<String, Object>> insertMap = Maps.newHashMap();
+                        output.stream().forEach(out -> {
+                            Object actualValue = JsonPath.using(safeConfig).parse(jsonNode.toString()).read(out.getFunctionParamExpression());
+                            var prop = propMap.get(out.getPropertyUniqueIdentifier());
+                            //主数据源列
+                            if (prop.getDatasourceId().equals(primaryDatasource)) {
+                                columnUpdates.add(EntityUpdateParam.ColumnUpdate.builder()
+                                        .datasourceColumnName(prop.getDatasourceColumnName())
+                                        .columnValue(actualValue)
+                                        .propertyUniqIdentifier(out.getPropertyUniqueIdentifier())
+                                        .build());
+                            } else {
+                                var map = insertMap.getOrDefault(prop.getDatasourceId(), new HashMap<String, Object>());
+                                map.put(prop.getDatasourceColumnName(), actualValue);
+                                insertMap.put(prop.getDatasourceId(), map);
+                            }
+
+                        });
+                        //主数据源数据update
+                        if (CollectionUtils.isNotEmpty(columnUpdates)) {
+                            updateEntity(EntityUpdateParam.builder()
+                                    .columnUpdates(columnUpdates)
+                                    .primaryKeyValue(param.getEntityPrimaryKey())
+                                    .datasourceId(primaryDatasource)
+                                    .build());
+                        }
+                        //其他数据源数据insert
+                        if (MapUtils.isNotEmpty(insertMap)) {
+                            insertMap.entrySet().forEach(entry -> {
+                                //查询关联建，补全columns
+                                var tableName = entry.getKey();
+                                var mapping = tableFieldMappingMapper.selectOne(new LambdaQueryWrapper<TableFieldMapping>().eq(TableFieldMapping::getTargetTableName, tableName));
+                                entry.getValue().put(mapping.getTargetColumnName(), param.getEntityPrimaryKey());
+                                objectMapper.insertObject(tableName, entry.getValue());
+                            });
+                        }
+                        //根据函数的输出结果更新实体关系
+                        var relation = relationRepository.queryRelationByFromNodeAndToNode(param.getOntologyUniqueIdentifier(), param.getEntityPrimaryKey(), linkedOntology, entity.getPrimaryKey());
+                        if (relation != null) {
+                            var startTime = jsonNode.get("startTime").asText("");
+                            var endTime = jsonNode.get("endTime").asText("");
+
+                            //返回结果有可见窗口，直接更新relation startTime/endTime
+                            if (StringUtils.isNotEmpty(startTime) && StringUtils.isNotEmpty(endTime)) {
+                                relationRepository.updateRelation(DateUtils.parseISO8601(startTime), DateUtils.parseISO8601(endTime), relation.getStatus(), relation.getId());
+                            } else {
+                                //无可见窗口时，解析spel表达式,更新relation enable
+                                Boolean expResult = evaluateJsonCondition(functionResult, link.getOntologyLinkFunctionParamExpression());
+                                relationRepository.updateRelation(relation.getStartTime(), relation.getEndTime(), expResult ? Status.ENABLE : Status.DELETE, relation.getId());
+                            }
+                        }
+                    } catch (Exception e) {
+                        log.error("函数执行异常：" + entity.toString(), e);
+                    }
+                });
+            }
+        }
+        //无关联关系
+        else {
 
         }
 
-        return result;
+
+        return jsonMapper.writeValueAsString(executeResult);
     }
 
+    @Override
+    @Transactional(transactionManager = "datalakeTransactionManager")
+    public void updateEntity(EntityUpdateParam param) {
+        var primaryKeyColumnName = tableMetadataMapper.queryPrimaryKeyColumnName(param.getDatasourceId());
+        var columnMap = param.getColumnUpdates().stream().collect(Collectors.toMap(v -> v.getDatasourceColumnName(), v -> v.getColumnValue()));
+        objectMapper.updateObject(param.getDatasourceId(), columnMap, primaryKeyColumnName, param.getPrimaryKeyValue());
+    }
 
+    private Boolean evaluateJsonCondition(String jsonStr, String conditionExpr) {
+        try {
+            Map<String, Object> dataMap = jsonMapper.readValue(jsonStr, Map.class);
+            StandardEvaluationContext context = new StandardEvaluationContext(dataMap);
+            context.addPropertyAccessor(new MapAccessor());
+            Expression expression = parser.parseExpression(conditionExpr);
+            Boolean result = expression.getValue(context, Boolean.class);
+            return result != null ? result : false;
+        } catch (Exception e) {
+            log.error("evaluateJsonCondition failed! jsonStr: " + jsonStr + ", conditionExpr:" + conditionExpr, e);
+            return false;
+        }
+    }
 }

@@ -7,6 +7,8 @@ import org.springframework.util.Assert;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.Map;
@@ -19,6 +21,9 @@ public class DateUtils {
     public static final long MILLIS_PER_HOUR = 3600000L;
     public static final long MILLIS_PER_DAY = 86400000L;
     private static final Map<String, DateFormat> dateFormatMap = new ConcurrentHashMap();
+
+    private static final DateTimeFormatter formatter = DateTimeFormatter.ISO_ZONED_DATE_TIME;
+
 
     static {
         dateFormatMap.put("yyyy-MM-dd", new SimpleDateFormat("yyyy-MM-dd"));
@@ -271,6 +276,12 @@ public class DateUtils {
         }
 
         return (DateFormat) dateFormat;
+    }
+
+
+    public static Date parseISO8601(String isoString) {
+        ZonedDateTime zonedDateTime = ZonedDateTime.parse(isoString, formatter);
+        return Date.from(zonedDateTime.toInstant());
     }
 
 }

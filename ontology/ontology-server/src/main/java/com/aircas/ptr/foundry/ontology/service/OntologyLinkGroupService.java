@@ -1,6 +1,6 @@
 package com.aircas.ptr.foundry.ontology.service;
 
-import com.aircas.ptr.foundry.common.base.RestResult;
+import com.aircas.ptr.foundry.ontology.common.enums.OntologyLinkDirectionEnum;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyLinkCreateParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkInfoVO;
@@ -26,7 +26,7 @@ public interface OntologyLinkGroupService extends IService<OntologyLinkGroup> {
 
     List<OntologyLinkInfoVO> getLinksByGroupId(String groupId);
 
-    List<OntologyLinkInfoVO> getLinksByOntologyUniqueIdentifier(String ontologyUniqueIdentifier);
+    List<OntologyLinkInfoVO> getLinksByOntologyUniqueIdentifier(String ontologyUniqueIdentifier, OntologyLinkDirectionEnum direction);
 
     void deleteLinkByLinkUniqueIdentifier(String linkUniqIdentifier);
 

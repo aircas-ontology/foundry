@@ -4,6 +4,7 @@ import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.controller.validator.OntologyIdVerify;
 import com.aircas.ptr.foundry.ontology.model.param.EntityActionExecuteParam;
 import com.aircas.ptr.foundry.ontology.model.param.EntityQueryParam;
+import com.aircas.ptr.foundry.ontology.model.param.EntityUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.vo.EntityInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.EntityLinkPropertyVO;
 import com.aircas.ptr.foundry.ontology.model.vo.EntityPropertyDetailVO;
@@ -59,6 +60,13 @@ public class OntologyEntityController {
 
     }
 
+
+    @ApiOperation(value = "实体属性更新")
+    @PutMapping("/update")
+    public RestResult updateEntity(@RequestBody @Valid EntityUpdateParam param) {
+        entityService.updateEntity(param);
+        return RestResult.success();
+    }
 
 
 }
