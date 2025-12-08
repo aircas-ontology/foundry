@@ -16,11 +16,14 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.EnableTransactionManagement;
 import tk.mybatis.spring.annotation.MapperScan;
 
 import javax.sql.DataSource;
 
 @Configuration
+@EnableTransactionManagement
 @MapperScan(basePackages = "com.aircas.ptr.foundry.ontology.repository.mainMapper", sqlSessionFactoryRef = "mainSqlSessionFactory")
 public class MainDataSourceConfiguration {
 
@@ -55,8 +58,9 @@ public class MainDataSourceConfiguration {
         return sessionFactoryBean.getObject();
     }
 
+    @Primary
     @Bean(name = "mainTransactionManager")
-    public DataSourceTransactionManager mainTransactionManager(@Qualifier("mainDataSource")DataSource dataSource) {
+    public PlatformTransactionManager mainTransactionManager(@Qualifier("mainDataSource")DataSource dataSource) {
         return new DataSourceTransactionManager(dataSource);
     }
 }

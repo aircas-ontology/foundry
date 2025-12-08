@@ -64,7 +64,7 @@ public class OntologyFunctionController {
     }
 
 
-    @ApiOperation(value = "根据id删除函数")
+    @ApiOperation(value = "根据functionApi删除函数")
     @DeleteMapping("/delete/{functionApi}")
     public RestResult deleteById(@PathVariable(required = true, name = "functionApi") String functionApi) {
         //需要校验函数有没有被本体行为使用到

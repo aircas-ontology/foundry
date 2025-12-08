@@ -13,11 +13,14 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.EnableTransactionManagement;
 import tk.mybatis.spring.annotation.MapperScan;
 
 import javax.sql.DataSource;
 
 @Configuration
+@EnableTransactionManagement
 @MapperScan(basePackages = "com.aircas.ptr.foundry.ontology.repository.datalakeMapper", sqlSessionFactoryRef = "datalakeSqlSessionFactory")
 public class DatalakeDataSourceConfiguration {
 
@@ -46,7 +49,7 @@ public class DatalakeDataSourceConfiguration {
     }
 
     @Bean(name = "datalakeTransactionManager")
-    public DataSourceTransactionManager mainTransactionManager(@Qualifier("datalakeDataSource") DataSource dataSource) {
+    public PlatformTransactionManager mainTransactionManager(@Qualifier("datalakeDataSource") DataSource dataSource) {
         return new DataSourceTransactionManager(dataSource);
     }
 }

@@ -2,6 +2,7 @@ package com.aircas.ptr.foundry.ontology.controller;
 
 import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.controller.validator.OntologyIdVerify;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyBatchCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyDetailVO;
@@ -37,8 +38,8 @@ public class OntologyPropertyController {
 
     @PostMapping("/batch")
     @ApiOperation(value = "批量新增属性")
-    public RestResult batchCreateProperties(@RequestBody @Valid  List<OntologyPropertyCreateParam> param) {
-        ontologyPropertyService.batchCreateProperties(param);
+    public RestResult batchCreateProperties(@RequestBody @Valid OntologyPropertyBatchCreateParam param) {
+        ontologyPropertyService.batchCreateProperties(param.getProperties());
         return RestResult.success();
     }
 
