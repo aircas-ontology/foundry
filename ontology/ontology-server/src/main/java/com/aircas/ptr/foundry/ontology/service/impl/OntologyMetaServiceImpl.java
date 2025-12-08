@@ -89,7 +89,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         var childIdentifier = meta.getUniqueIdentifier();
         var parentIdentifier = ontologyCreateParam.getParentOntologyUniqueIdentifier();
         //校验父本体
-        var parentOntology = this.getOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, parentIdentifier));
+        var parentOntology = this.getOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, parentIdentifier).eq(OntologyMeta::getStatus, Status.ENABLE.getValue()));
         PreconditionUtils.checkArgument(parentOntology != null, "父本体不存在", ResultCode.PARAM_ERROR, HttpStatus.BAD_REQUEST);
         //创建子本体元数据
         meta.setMetaGroupId(parentOntology.getMetaGroupId())
@@ -99,19 +99,19 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         // 创建属性
         var parentProperties = ontologyPropertyService.list(new LambdaUpdateWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyCreateParam.getParentOntologyUniqueIdentifier()));
         var childProps = parentProperties.stream().map(v -> OntologyProperty.builder()
-                .ontologyUniqueIdentifier(childIdentifier)
-                .apiName(v.getApiName())
-                .datasourceColumnName(v.getDatasourceColumnName())
-                .datasourceId(v.getDatasourceId())
-                .description(v.getDescription())
-                .displayName(v.getDisplayName())
-                .isPrimaryKey(v.getIsPrimaryKey())
-                .isTitleKey(v.getIsTitleKey())
-                .propertyType(v.getPropertyType())
-                .status(v.getStatus())
-                .uniqueIdentifier(IdGenerator.generateUUID())
-                .tag(v.getTag())
-                .build())
+                        .ontologyUniqueIdentifier(childIdentifier)
+                        .apiName(v.getApiName())
+                        .datasourceColumnName(v.getDatasourceColumnName())
+                        .datasourceId(v.getDatasourceId())
+                        .description(v.getDescription())
+                        .displayName(v.getDisplayName())
+                        .isPrimaryKey(v.getIsPrimaryKey())
+                        .isTitleKey(v.getIsTitleKey())
+                        .propertyType(v.getPropertyType())
+                        .status(v.getStatus())
+                        .uniqueIdentifier(IdGenerator.generateUUID())
+                        .tag(v.getTag())
+                        .build())
                 .collect(Collectors.toList());
         ontologyPropertyService.saveBatch(childProps);
         // 创建关系
@@ -233,7 +233,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
 
     @Override
     public OntologyMetaInfoVO getMetaByUniqueIdentifier(String uniqueIdentifier) {
-        OntologyMeta ontologyMeta = getOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, uniqueIdentifier));
+        OntologyMeta ontologyMeta = getOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, uniqueIdentifier).eq(OntologyMeta::getStatus, Status.ENABLE.getValue()));
         return DataConverter.convert(ontologyMeta);
     }
 
@@ -242,8 +242,12 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
     public List<OntologyMetaInfoVO> searchByKeyword(String keyword) {
         var searchKeyword = StringUtils.isEmpty(keyword) ? "" : keyword;
         return list(new LambdaQueryWrapper<OntologyMeta>().like(OntologyMeta::getDisplayName, searchKeyword)
-                .or().like(OntologyMeta::getDescription, keyword)
-                .or().like(OntologyMeta::getApiName, keyword))
+                .eq(OntologyMeta::getStatus, Status.ENABLE.getValue())
+                .and(wrapper -> wrapper
+                        .or().like(OntologyMeta::getDescription, keyword)
+                        .or().like(OntologyMeta::getApiName, keyword)
+                        .or().like(OntologyMeta::getDisplayName, keyword)
+                ))
                 .stream().map(DataConverter::convert).collect(Collectors.toList());
     }
 
@@ -253,7 +257,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         if (StringUtils.isEmpty(groupId)) {
             queryWrapper = new LambdaQueryWrapper<>();
         } else {
-            queryWrapper = new LambdaQueryWrapper<OntologyMeta>().like(OntologyMeta::getMetaGroupId, groupId);
+            queryWrapper = new LambdaQueryWrapper<OntologyMeta>().like(OntologyMeta::getMetaGroupId, groupId).eq(OntologyMeta::getStatus, Status.ENABLE.getValue());
         }
         var metaMap = list(queryWrapper)
                 .stream().collect(Collectors.toMap(v -> v.getUniqueIdentifier(), v -> OntologyMetaNodeVO.builder()

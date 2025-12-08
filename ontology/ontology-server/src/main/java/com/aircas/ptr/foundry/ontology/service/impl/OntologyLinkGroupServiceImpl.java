@@ -77,7 +77,7 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
             return Lists.newArrayList();
         }
         var ontologyIds = links.stream().flatMap(v -> Stream.of(v.getOntologyUniqueIdentifierFrom(), v.getOntologyUniqueIdentifierTo())).collect(Collectors.toList());
-        var metas = ontologyMetaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>().in(OntologyMeta::getUniqueIdentifier, ontologyIds));
+        var metas = ontologyMetaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>().in(OntologyMeta::getUniqueIdentifier, ontologyIds).eq(OntologyMeta::getStatus, Status.ENABLE.getValue()));
         return metas.stream().map(DataConverter::convert).collect(Collectors.toList());
     }
 
@@ -86,7 +86,7 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
         var link = getOne(new LambdaQueryWrapper<OntologyLinkGroup>().eq(OntologyLinkGroup::getUniqueIdentifier, uniqueIdentifier));
         PreconditionUtils.checkArgument(link != null, "关系不存在：" + uniqueIdentifier);
         var ontologyIds = Lists.newArrayList(link.getOntologyUniqueIdentifierFrom(), link.getOntologyUniqueIdentifierTo());
-        var metaMap = ontologyMetaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>().in(OntologyMeta::getUniqueIdentifier, ontologyIds))
+        var metaMap = ontologyMetaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>().in(OntologyMeta::getUniqueIdentifier, ontologyIds).eq(OntologyMeta::getStatus, Status.ENABLE.getValue()))
                 .stream().collect(Collectors.toMap(v -> v.getUniqueIdentifier(), v -> v));
         var from = metaMap.get(link.getOntologyUniqueIdentifierFrom());
         var to = metaMap.get(link.getOntologyUniqueIdentifierTo());
@@ -103,7 +103,7 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
             return buildLinkInfo(links);
         }
 
-        var ids = ontologyMetaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>().like(OntologyMeta::getMetaGroupId, groupId))
+        var ids = ontologyMetaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>().like(OntologyMeta::getMetaGroupId, groupId).eq(OntologyMeta::getStatus, Status.ENABLE.getValue()))
                 .stream().map(v -> v.getUniqueIdentifier()).collect(Collectors.toList());
 
         if (CollectionUtils.isEmpty(ids)) {
@@ -157,7 +157,7 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
     private List<OntologyLinkInfoVO> buildLinkInfo(List<OntologyLinkGroup> links) {
         var idList = links.stream().flatMap(l -> Stream.of(l.getOntologyUniqueIdentifierFrom(), l.getOntologyUniqueIdentifierTo())).collect(Collectors.toList());
 
-        var metaMap = ontologyMetaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>().in(OntologyMeta::getUniqueIdentifier, idList))
+        var metaMap = ontologyMetaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>().in(OntologyMeta::getUniqueIdentifier, idList).eq(OntologyMeta::getStatus, Status.ENABLE.getValue()))
                 .stream().collect(Collectors.toMap(v -> v.getUniqueIdentifier(), v -> v));
 
         return links.stream().map(link -> {
