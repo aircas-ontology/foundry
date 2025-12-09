@@ -1,8 +1,5 @@
 package com.aircas.ptr.foundry.ontology.model.po;
 
-import java.io.Serializable;
-import java.util.Date;
-
 import com.baomidou.mybatisplus.annotation.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -10,9 +7,13 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 
+import java.io.Serializable;
+import java.util.Date;
+
 /**
  * ontology_meta
- * @author 
+ *
+ * @author
  */
 @Data
 @AllArgsConstructor
@@ -65,12 +66,6 @@ public class OntologyMeta implements Serializable {
      * todo 后续删除
      */
     private String backingDatasourceId;
-
-    /**
-     * 本体对应的其他非主数据源，逗号分隔
-     * todo 后续删除
-     */
-    private String otherDatasourceId;
 
 
     /**
