@@ -413,6 +413,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 .actionApi(action.getApi())
                 .description(action.getDescription())
                 .displayName(action.getDisplayName())
+                .ontologyUniqIdentifier(action.getOntologyUniqueIdentifier())
                 .icon(action.getIcon())
                 .build();
         var link = actionLinkMapper.selectOne(new LambdaQueryWrapper<OntologyActionLink>().eq(OntologyActionLink::getOntologyActionId, action.getId()));
