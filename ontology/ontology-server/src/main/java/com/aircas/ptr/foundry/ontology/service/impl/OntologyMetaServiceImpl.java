@@ -294,7 +294,8 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
             groups.add(groupService.getOne(new LambdaQueryWrapper<OntologyGroup>().eq(OntologyGroup::getGroupId, groupId)));
         }
 
-        var metaList = list(new QueryWrapper<OntologyMeta>().orderBy(orderBy != null, sort != null && sort.equals(QuerySortEnum.ASC), orderBy == null ? "id" : orderBy.getValue()))
+        var metaList = list(new QueryWrapper<OntologyMeta>()
+                .eq("status", Status.ENABLE.getValue()).orderBy(orderBy != null, sort != null && sort.equals(QuerySortEnum.ASC), orderBy == null ? "id" : orderBy.getValue()))
                 .stream().map(meta -> DataConverter.convert(meta)).collect(Collectors.toList());
         return groups.stream().map(group -> {
             var metaInfoVOList = metaList.stream().filter(meta -> meta.getMetaGroupId().contains(group.getGroupId())).collect(Collectors.toList());
