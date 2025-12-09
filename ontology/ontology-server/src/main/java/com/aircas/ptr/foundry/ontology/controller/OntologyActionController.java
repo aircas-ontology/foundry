@@ -95,7 +95,7 @@ public class OntologyActionController {
 //        return DataResult.ofData(ontologyActionService.update(ontologyActionBo));
 //    }
 
-    @ApiOperation(value = "依据id删除行为")
+    @ApiOperation(value = "依据actionApi删除行为")
     @DeleteMapping("/{actionApi}")
     public RestResult delete(@PathVariable(required = true, name = "actionApi") String actionApi) {
         //已经被行为调度的行为不可直接编辑，需要先暂停调度

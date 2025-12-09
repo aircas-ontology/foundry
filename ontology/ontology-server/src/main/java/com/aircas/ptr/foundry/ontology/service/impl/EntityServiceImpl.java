@@ -14,10 +14,7 @@ import com.aircas.ptr.foundry.ontology.model.param.FunctionParameter;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
 import com.aircas.ptr.foundry.ontology.model.po.TableFieldMapping;
-import com.aircas.ptr.foundry.ontology.model.vo.EntityInfoVO;
-import com.aircas.ptr.foundry.ontology.model.vo.EntityLinkPropertyVO;
-import com.aircas.ptr.foundry.ontology.model.vo.EntityPropertyDetailVO;
-import com.aircas.ptr.foundry.ontology.model.vo.EntityPropertyVO;
+import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.aircas.ptr.foundry.ontology.repository.arangodb.EntityNodeRepository;
 import com.aircas.ptr.foundry.ontology.repository.arangodb.EntityRelationRepository;
 import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.ObjectMapper;
@@ -385,15 +382,15 @@ public class EntityServiceImpl implements EntityService {
             //实体数据必须存在
             if (CollectionUtils.isNotEmpty(records)) {
                 //获取源本体实体属性详情
-                Map<String, List<Object>> srcEntityDetailMap = getEntityDetail(param.getOntologyUniqueIdentifier(), param.getEntityPrimaryKey())
+                var srcEntityDetailMap = getEntityDetail(param.getOntologyUniqueIdentifier(), param.getEntityPrimaryKey())
                         .stream().collect(Collectors.toMap(v -> v.getPropertyUniqIdentifier(), v -> v.getPropertyValues()));
                 //和关联本体下的所有实体计算关系
                 records.stream().forEach(entity -> {
                     try {
-                        Map<String, List<Object>> linkedEntityDetailMap = getEntityDetail(linkedOntology, entity.getPrimaryKey())
+                        var linkedEntityDetailMap = getEntityDetail(linkedOntology, entity.getPrimaryKey())
                                 .stream().collect(Collectors.toMap(v -> v.getPropertyUniqIdentifier(), v -> v.getPropertyValues()));
                         // 合并两个实体，propertyId作为key
-                        Map<String, List<Object>> mergedEntityDetailMap = Stream.of(srcEntityDetailMap, linkedEntityDetailMap)
+                        var mergedEntityDetailMap = Stream.of(srcEntityDetailMap, linkedEntityDetailMap)
                                 .flatMap(map -> map.entrySet().stream())
                                 .collect(Collectors.toMap(v -> v.getKey(), v -> v.getValue(),
                                         (list1, list2) -> {
@@ -401,72 +398,9 @@ public class EntityServiceImpl implements EntityService {
                                             return list1;
                                         }));
                         //构造函数参数，list类型返回所有值，其他类型取第一个值
-                        List<FunctionParameter> parameters = functionInputParams.stream().map(p -> {
-                            var mappingVO = mappings.stream().filter(m -> m.getFunctionParamId().equals(p.getParamId())).findFirst().get();
-                            Object value = null;
-                            // 如果本体没有给属性绑定数据源，则获取的values为null，函数执行失败
-                            List<Object> values = mergedEntityDetailMap.get(mappingVO.getPropertyUniqueIdentifier());
-                            if (CollectionUtils.isNotEmpty(values)) {
-                                value = p.getParamType().equals(FunctionParamTypeEnum.List) ? values : values.get(0);
-                            }
-                            return FunctionParameter.builder()
-                                    .paramName(p.getParamName())
-                                    .paramValue(value)
-                                    .build();
-                        }).collect(Collectors.toList());
-                        //执行函数
-                        var functionResult = functionService.executeFunction(FunctionExecuteParam.builder()
-                                .functionApi(actionDetailVO.getFunctionApi())
-                                .parameters(parameters)
-                                .build());
+                        var functionResult = callFunction(functionInputParams, mappings, mergedEntityDetailMap, actionDetailVO, functionDetailVO, ontologyProperties, param.getEntityPrimaryKey());
                         executeResult.add(functionResult);
-                        //根据函数的输出结果更新源实体属性：通过json path获取value
-                        var functionOutputParam = functionDetailVO.getParams().stream()
-                                .filter(v -> v.getCategory().equals(FunctionParamCategoryEnum.OUTPUT))
-                                .findFirst().get();
-
-                        var output = mappings.stream().filter(m -> m.getFunctionParamId().equals(functionOutputParam.getParamId())).collect(Collectors.toList());
                         JsonNode jsonNode = jsonMapper.readTree(functionResult);
-                        //primary datasource
-                        var primaryDatasource = ontologyProperties.stream().filter(v -> v.getIsPrimaryKey() == 1).findFirst().get().getDatasourceId();
-                        var propMap = ontologyProperties.stream().collect(Collectors.toMap(v -> v.getUniqueIdentifier(), v -> v));
-                        List<EntityUpdateParam.ColumnUpdate> columnUpdates = Lists.newArrayList();
-                        Map<String, Map<String, Object>> insertMap = Maps.newHashMap();
-                        output.stream().forEach(out -> {
-                            Object actualValue = JsonPath.using(safeConfig).parse(jsonNode.toString()).read(out.getFunctionParamExpression());
-                            var prop = propMap.get(out.getPropertyUniqueIdentifier());
-                            //主数据源列
-                            if (prop.getDatasourceId().equals(primaryDatasource)) {
-                                columnUpdates.add(EntityUpdateParam.ColumnUpdate.builder()
-                                        .datasourceColumnName(prop.getDatasourceColumnName())
-                                        .columnValue(actualValue)
-                                        .propertyUniqIdentifier(out.getPropertyUniqueIdentifier())
-                                        .build());
-                            } else {
-                                var map = insertMap.getOrDefault(prop.getDatasourceId(), new HashMap<String, Object>());
-                                map.put(prop.getDatasourceColumnName(), actualValue);
-                                insertMap.put(prop.getDatasourceId(), map);
-                            }
-
-                        });
-                        //主数据源数据update
-                        if (CollectionUtils.isNotEmpty(columnUpdates)) {
-                            updateEntity(EntityUpdateParam.builder()
-                                    .columnUpdates(columnUpdates)
-                                    .primaryKeyValue(param.getEntityPrimaryKey())
-                                    .datasourceId(primaryDatasource)
-                                    .build());
-                        }
-                        //其他数据源数据insert
-                        if (MapUtils.isNotEmpty(insertMap)) {
-                            insertMap.entrySet().forEach(entry -> {
-                                //查询关联建，补全columns
-                                var tableName = entry.getKey();
-                                var mapping = tableFieldMappingMapper.selectOne(new LambdaQueryWrapper<TableFieldMapping>().eq(TableFieldMapping::getTargetTableName, tableName));
-                                entry.getValue().put(mapping.getTargetColumnName(), param.getEntityPrimaryKey());
-                                objectMapper.insertObject(tableName, entry.getValue());
-                            });
-                        }
                         //根据函数的输出结果更新实体关系
                         var relation = relationRepository.queryRelationByFromNodeAndToNode(param.getOntologyUniqueIdentifier(), param.getEntityPrimaryKey(), linkedOntology, entity.getPrimaryKey());
                         if (relation != null) {
@@ -490,11 +424,13 @@ public class EntityServiceImpl implements EntityService {
         }
         //无关联关系
         else {
-
-
+            //获取源本体实体属性详情
+            var srcEntityDetailMap = getEntityDetail(param.getOntologyUniqueIdentifier(), param.getEntityPrimaryKey())
+                    .stream().collect(Collectors.toMap(v -> v.getPropertyUniqIdentifier(), v -> v.getPropertyValues()));
+            //函数调用
+            var functionResult = callFunction(functionInputParams, mappings, srcEntityDetailMap, actionDetailVO, functionDetailVO, ontologyProperties, param.getEntityPrimaryKey());
+            executeResult.add(functionResult);
         }
-
-
         return jsonMapper.writeValueAsString(executeResult);
     }
 
@@ -518,5 +454,82 @@ public class EntityServiceImpl implements EntityService {
             log.error("evaluateJsonCondition failed! jsonStr: " + jsonStr + ", conditionExpr:" + conditionExpr, e);
             return false;
         }
+    }
+
+    private String callFunction(List<FunctionParameterVO> functionInputParams,
+                                List<ActionParamMappingVO> mappings,
+                                Map<String, List<Object>> entityDetailMap,
+                                OntologyActionDetailVO actionDetailVO,
+                                FunctionDetailVO functionDetailVO,
+                                List<OntologyProperty> ontologyProperties,
+                                Object entityPrimaryKey) throws Exception {
+
+        //构造函数参数，list类型返回所有值，其他类型取第一个值
+        List<FunctionParameter> parameters = functionInputParams.stream().map(p -> {
+            var mappingVO = mappings.stream().filter(m -> m.getFunctionParamId().equals(p.getParamId())).findFirst().get();
+            Object value = null;
+            // 如果本体没有给属性绑定数据源，则获取的values为null，函数执行失败
+            List<Object> values = entityDetailMap.get(mappingVO.getPropertyUniqueIdentifier());
+            if (CollectionUtils.isNotEmpty(values)) {
+                value = p.getParamType().equals(FunctionParamTypeEnum.List) ? values : values.get(0);
+            }
+            return FunctionParameter.builder()
+                    .paramName(p.getParamName())
+                    .paramValue(value)
+                    .build();
+        }).collect(Collectors.toList());
+        //执行函数
+        var functionResult = functionService.executeFunction(FunctionExecuteParam.builder()
+                .functionApi(actionDetailVO.getFunctionApi())
+                .parameters(parameters)
+                .build());
+        //根据函数的输出结果更新源实体属性：通过json path获取value
+        var functionOutputParam = functionDetailVO.getParams().stream()
+                .filter(v -> v.getCategory().equals(FunctionParamCategoryEnum.OUTPUT))
+                .findFirst().get();
+
+        var output = mappings.stream().filter(m -> m.getFunctionParamId().equals(functionOutputParam.getParamId())).collect(Collectors.toList());
+        JsonNode jsonNode = jsonMapper.readTree(functionResult);
+        //primary datasource
+        var primaryDatasource = ontologyProperties.stream().filter(v -> v.getIsPrimaryKey() == 1).findFirst().get().getDatasourceId();
+        var propMap = ontologyProperties.stream().collect(Collectors.toMap(v -> v.getUniqueIdentifier(), v -> v));
+        List<EntityUpdateParam.ColumnUpdate> columnUpdates = Lists.newArrayList();
+        Map<String, Map<String, Object>> insertMap = Maps.newHashMap();
+        output.stream().forEach(out -> {
+            Object actualValue = JsonPath.using(safeConfig).parse(jsonNode.toString()).read(out.getFunctionParamExpression());
+            var prop = propMap.get(out.getPropertyUniqueIdentifier());
+            //主数据源列
+            if (prop.getDatasourceId().equals(primaryDatasource)) {
+                columnUpdates.add(EntityUpdateParam.ColumnUpdate.builder()
+                        .datasourceColumnName(prop.getDatasourceColumnName())
+                        .columnValue(actualValue)
+                        .propertyUniqIdentifier(out.getPropertyUniqueIdentifier())
+                        .build());
+            } else {
+                var map = insertMap.getOrDefault(prop.getDatasourceId(), new HashMap<String, Object>());
+                map.put(prop.getDatasourceColumnName(), actualValue);
+                insertMap.put(prop.getDatasourceId(), map);
+            }
+
+        });
+        //主数据源数据update
+        if (CollectionUtils.isNotEmpty(columnUpdates)) {
+            updateEntity(EntityUpdateParam.builder()
+                    .columnUpdates(columnUpdates)
+                    .primaryKeyValue(entityPrimaryKey)
+                    .datasourceId(primaryDatasource)
+                    .build());
+        }
+        //其他数据源数据insert
+        if (MapUtils.isNotEmpty(insertMap)) {
+            insertMap.entrySet().forEach(entry -> {
+                //查询关联建，补全columns
+                var tableName = entry.getKey();
+                var mapping = tableFieldMappingMapper.selectOne(new LambdaQueryWrapper<TableFieldMapping>().eq(TableFieldMapping::getTargetTableName, tableName));
+                entry.getValue().put(mapping.getTargetColumnName(), entityPrimaryKey);
+                objectMapper.insertObject(tableName, entry.getValue());
+            });
+        }
+        return functionResult;
     }
 }
