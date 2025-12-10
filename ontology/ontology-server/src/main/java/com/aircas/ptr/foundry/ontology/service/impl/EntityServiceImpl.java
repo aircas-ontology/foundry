@@ -398,7 +398,7 @@ public class EntityServiceImpl implements EntityService {
                                             return list1;
                                         }));
                         //构造函数参数，list类型返回所有值，其他类型取第一个值
-                        var functionResult = callFunction(functionInputParams, mappings, mergedEntityDetailMap, actionDetailVO, functionDetailVO, ontologyProperties, param.getEntityPrimaryKey());
+                        var functionResult = callFunctionAndUpdateProperty(functionInputParams, mappings, mergedEntityDetailMap, actionDetailVO, functionDetailVO, ontologyProperties, param.getEntityPrimaryKey());
                         executeResult.add(functionResult);
                         JsonNode jsonNode = jsonMapper.readTree(functionResult);
                         //根据函数的输出结果更新实体关系
@@ -428,7 +428,7 @@ public class EntityServiceImpl implements EntityService {
             var srcEntityDetailMap = getEntityDetail(param.getOntologyUniqueIdentifier(), param.getEntityPrimaryKey())
                     .stream().collect(Collectors.toMap(v -> v.getPropertyUniqIdentifier(), v -> v.getPropertyValues()));
             //函数调用
-            var functionResult = callFunction(functionInputParams, mappings, srcEntityDetailMap, actionDetailVO, functionDetailVO, ontologyProperties, param.getEntityPrimaryKey());
+            var functionResult = callFunctionAndUpdateProperty(functionInputParams, mappings, srcEntityDetailMap, actionDetailVO, functionDetailVO, ontologyProperties, param.getEntityPrimaryKey());
             executeResult.add(functionResult);
         }
         return jsonMapper.writeValueAsString(executeResult);
@@ -456,13 +456,13 @@ public class EntityServiceImpl implements EntityService {
         }
     }
 
-    private String callFunction(List<FunctionParameterVO> functionInputParams,
-                                List<ActionParamMappingVO> mappings,
-                                Map<String, List<Object>> entityDetailMap,
-                                OntologyActionDetailVO actionDetailVO,
-                                FunctionDetailVO functionDetailVO,
-                                List<OntologyProperty> ontologyProperties,
-                                Object entityPrimaryKey) throws Exception {
+    private String callFunctionAndUpdateProperty(List<FunctionParameterVO> functionInputParams,
+                                                 List<ActionParamMappingVO> mappings,
+                                                 Map<String, List<Object>> entityDetailMap,
+                                                 OntologyActionDetailVO actionDetailVO,
+                                                 FunctionDetailVO functionDetailVO,
+                                                 List<OntologyProperty> ontologyProperties,
+                                                 Object entityPrimaryKey) throws Exception {
 
         //构造函数参数，list类型返回所有值，其他类型取第一个值
         List<FunctionParameter> parameters = functionInputParams.stream().map(p -> {

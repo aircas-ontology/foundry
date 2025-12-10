@@ -5,10 +5,7 @@ import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.ontology.exception.*;
 import com.aircas.ptr.foundry.ontology.model.bo.OntologyActionBo;
 import com.aircas.ptr.foundry.ontology.model.bo.OntologyActionMappingInBO;
-import com.aircas.ptr.foundry.ontology.model.param.ActionCreateOrUpdateParam;
-import com.aircas.ptr.foundry.ontology.model.param.ActionHandleMappingInParam;
-import com.aircas.ptr.foundry.ontology.model.param.ActionHandleRuleAddParam;
-import com.aircas.ptr.foundry.ontology.model.param.ActionLinkMappingParam;
+import com.aircas.ptr.foundry.ontology.model.param.*;
 import com.aircas.ptr.foundry.ontology.model.po.*;
 import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.*;
@@ -37,10 +34,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -336,22 +330,24 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                     .build());
         }
 
-        //校验函数输入参数
-        var inputMap = functionParams.stream().filter(p -> p.getCategory().equals(FunctionParamCategoryEnum.INPUT))
-                .collect(Collectors.toMap(v -> v.getId(), v -> v));
+        //校验函数参数
+        var paramMap = functionParams.stream().collect(Collectors.toMap(v -> v.getId(), v -> v));
 
-        if (MapUtils.isNotEmpty(inputMap)) {
-            var mappingIns = param.getMappingIns();
-            PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(mappingIns), "缺少行为输入参数", HttpStatus.BAD_REQUEST);
+        if (MapUtils.isNotEmpty(paramMap)) {
+            List<ActionParamMappingCreateParam> mappingIns = CollectionUtils.isEmpty(param.getMappingIns()) ?
+                    new ArrayList<>() : param.getMappingIns();
             List<OntologyActionMappingIn> list = Lists.newArrayList();
             mappingIns.forEach(mapping -> {
                 var propertyId = mapping.getPropertyUniqueIdentifier();
                 //本体属性是否存在，函数参数是否存在
                 var prop = propertyMapper.selectOne(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getUniqueIdentifier, propertyId));
-                PreconditionUtils.checkArgument(prop != null && inputMap.keySet().contains(mapping.getFunctionParamId()), "无效的行为参数：" + propertyId, HttpStatus.BAD_REQUEST);
+                PreconditionUtils.checkArgument(prop != null && paramMap.keySet().contains(mapping.getFunctionParamId()), "无效的行为参数：" + propertyId, HttpStatus.BAD_REQUEST);
                 //行为属性类型与函数参数类型是否匹配
-                var dataType = OntologyDataTypeEnum.valueOfDataType(inputMap.get(mapping.getFunctionParamId()).getParamType());
-                PreconditionUtils.checkArgument(dataType.equals(OntologyDataTypeEnum.Array) || prop.getPropertyType().equals(dataType), "行为属性类型与函数参数类型不匹配：", HttpStatus.BAD_REQUEST);
+                var paramPO = paramMap.get(mapping.getFunctionParamId());
+                if (paramPO.getCategory().equals(FunctionParamCategoryEnum.INPUT)) {
+                    var dataType = OntologyDataTypeEnum.valueOfDataType(paramPO.getParamType());
+                    PreconditionUtils.checkArgument(dataType.equals(OntologyDataTypeEnum.Array) || prop.getPropertyType().equals(dataType), "行为属性类型与函数参数类型不匹配：", HttpStatus.BAD_REQUEST);
+                }
                 list.add(OntologyActionMappingIn.builder()
                         .ontologyActionId(ontologyAction.getId())
                         .functionParamExpression(mapping.getFunctionParamExpression())
