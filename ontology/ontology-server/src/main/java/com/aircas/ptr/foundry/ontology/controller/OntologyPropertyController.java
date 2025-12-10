@@ -86,4 +86,10 @@ public class OntologyPropertyController {
         return RestResult.ofData(ontologyPropertyService.getPropertyDetailById(uniqueIdentifier));
     }
 
+    @PostMapping("/query_list")
+    @ApiOperation(value = "根据uniqid查询属性列表")
+    public RestResult<List<OntologyPropertyDetailVO>> getPropertiesByUniqueIdentifier(@RequestBody @Valid List<String> uniqueIdentifiers) {
+        return RestResult.ofData(ontologyPropertyService.getPropertiesDetailById(uniqueIdentifiers));
+    }
+
 }

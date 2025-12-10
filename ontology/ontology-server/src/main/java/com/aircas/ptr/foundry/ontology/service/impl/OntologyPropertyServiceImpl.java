@@ -273,19 +273,13 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
     public OntologyPropertyDetailVO getPropertyDetailById(String uniqueIdentifier) {
         var prop = getOne(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getUniqueIdentifier, uniqueIdentifier));
         PreconditionUtils.checkArgument(prop != null, "属性不存在：" + uniqueIdentifier, HttpStatus.BAD_REQUEST);
-        return OntologyPropertyDetailVO.builder()
-                .description(prop.getDescription())
-                .displayName(prop.getDisplayName())
-                .isPrimaryKey(prop.getIsPrimaryKey() == 1)
-                .isTitleKey(prop.getIsTitleKey() == 1)
-                .tag(prop.getTag())
-                .uniqueIdentifier(prop.getUniqueIdentifier())
-                .ontologyUniqueIdentifier(prop.getOntologyUniqueIdentifier())
-                .apiName(prop.getApiName())
-                .propertyType(prop.getPropertyType())
-                .datasourceId(prop.getDatasourceId())
-                .datasourceColumnName(prop.getDatasourceColumnName())
-                .build();
+        return DataConverter.convert(prop);
+    }
+
+    @Override
+    public List<OntologyPropertyDetailVO> getPropertiesDetailById(List<String> uniqueIdentifiers) {
+        var prop = list(new LambdaQueryWrapper<OntologyProperty>().in(OntologyProperty::getUniqueIdentifier, uniqueIdentifiers));
+        return prop.stream().map(v -> DataConverter.convert(v)).collect(Collectors.toList());
     }
 
 
