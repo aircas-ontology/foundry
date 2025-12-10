@@ -70,6 +70,9 @@
             *
         </if>
         FROM ${tableName}
+        <if test="filterColumnName != null and filterColumnName != ''">
+            WHERE "${filterColumnName}" = #{filterColumnValue}
+        </if>
         LIMIT ${limit} OFFSET ${offset}
     </select>
 
@@ -77,6 +80,9 @@
     <select id="queryCount" resultType="java.lang.Integer">
         SELECT count(*)
         FROM ${tableName}
+        <if test="filterColumnName != null and filterColumnName != ''">
+            WHERE "${filterColumnName}" = #{filterColumnValue}
+        </if>
     </select>
 
 

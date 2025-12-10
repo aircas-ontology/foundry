@@ -5,6 +5,7 @@ import com.aircas.ptr.foundry.common.constant.FunctionParamTypeEnum;
 import com.aircas.ptr.foundry.common.constant.OntologyLinkTypeEnum;
 import com.aircas.ptr.foundry.common.constant.Status;
 import com.aircas.ptr.foundry.common.util.DateUtils;
+import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.ontology.model.document.EntityNode;
 import com.aircas.ptr.foundry.ontology.model.document.EntityRelation;
 import com.aircas.ptr.foundry.ontology.model.param.EntityActionExecuteParam;
@@ -43,6 +44,7 @@ import org.springframework.expression.Expression;
 import org.springframework.expression.ExpressionParser;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
 import org.springframework.expression.spel.support.StandardEvaluationContext;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -301,7 +303,7 @@ public class EntityServiceImpl implements EntityService {
 
 
     @Override
-    public Page<EntityInfoVO> getEntities(String ontologyUniqueIdentifier, Integer pageNum, Integer pageSize) {
+    public Page<EntityInfoVO> getEntities(String ontologyUniqueIdentifier, String propertyName, Object propertyValue, Integer pageNum, Integer pageSize) {
         Page<EntityInfoVO> result = new Page<EntityInfoVO>().setSize(pageSize).setCurrent(pageNum);
         var props = propertyMapper.selectList(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier));
         if (CollectionUtils.isEmpty(props)) {
@@ -316,9 +318,22 @@ public class EntityServiceImpl implements EntityService {
         var primaryPropMap = props.stream().filter(v -> v.getDatasourceId().equals(primaryDatasource)).collect(Collectors.toMap(v -> v.getDatasourceColumnName(), v -> v));
         var titleKey = primaryPropMap.values().stream().filter(v -> v.getIsTitleKey() == 1).findFirst();
 
+        String columnName = null;
+        if (StringUtils.isNotEmpty(propertyName)) {
+            var property = props.stream().filter(v -> v.getDisplayName().equals(propertyName)).findFirst();
+            PreconditionUtils.checkArgument(property.isPresent() && StringUtils.isNotEmpty(property.get().getDatasourceColumnName()), "属性名称不存在获没有关联数据源：" + propertyName, HttpStatus.BAD_REQUEST);
+            columnName = property.get().getDatasourceColumnName();
+        }
         //分页查询实体数据
-        var records = objectMapper.pageQuery(primaryDatasource, primaryPropMap.values().stream().map(v -> v.getDatasourceColumnName()).collect(Collectors.toList()), pageSize, (pageNum - 1) * pageSize);
-        var total = objectMapper.queryCount(primaryDatasource);
+        var records = objectMapper.pageQuery(
+                primaryDatasource,
+                primaryPropMap.values().stream().map(v -> v.getDatasourceColumnName()).collect(Collectors.toList()),
+                columnName,
+                propertyValue,
+                pageSize,
+                (pageNum - 1) * pageSize);
+        var total = objectMapper.queryCount(primaryDatasource, columnName, propertyValue);
+
         var entityRecords = records.stream().map(r -> {
             var entityPK = r.entrySet().stream()
                     .filter(v -> v.getKey().equals(primaryProperty.getDatasourceColumnName()))
@@ -377,7 +392,7 @@ public class EntityServiceImpl implements EntityService {
             var linkedOntology = linkGroupMapper.selectOne(new LambdaQueryWrapper<OntologyLinkGroup>().eq(OntologyLinkGroup::getUniqueIdentifier, link.getOntologyLinkUniqIdentifier()))
                     .getOntologyUniqueIdentifierTo();
             //获取关联本体下的所有实体详情
-            var entities = getEntities(linkedOntology, 1, Integer.MAX_VALUE);
+            var entities = getEntities(linkedOntology, "", "", 1, Integer.MAX_VALUE);
             var records = entities.getRecords();
             //实体数据必须存在
             if (CollectionUtils.isNotEmpty(records)) {

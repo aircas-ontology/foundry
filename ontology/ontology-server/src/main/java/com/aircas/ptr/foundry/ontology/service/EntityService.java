@@ -4,7 +4,6 @@ import com.aircas.ptr.foundry.ontology.model.document.EntityNode;
 import com.aircas.ptr.foundry.ontology.model.param.EntityActionExecuteParam;
 import com.aircas.ptr.foundry.ontology.model.param.EntityUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup;
-import com.aircas.ptr.foundry.ontology.model.vo.EntityActionVO;
 import com.aircas.ptr.foundry.ontology.model.vo.EntityInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.EntityLinkPropertyVO;
 import com.aircas.ptr.foundry.ontology.model.vo.EntityPropertyDetailVO;
@@ -35,7 +34,7 @@ public interface EntityService {
 
     List<EntityPropertyDetailVO> getEntityDetail(String ontologyUniqueIdentifier, Object entityPrimaryKey);
 
-    Page<EntityInfoVO> getEntities(String ontologyUniqueIdentifier, Integer pageNum, Integer pageSize);
+    Page<EntityInfoVO> getEntities(String ontologyUniqueIdentifier, String propertyName, Object propertyValue, Integer pageNum, Integer pageSize);
 
     List<EntityNode> getByByOntologyUniqIdentifier(String ontologyIdentifier);
 

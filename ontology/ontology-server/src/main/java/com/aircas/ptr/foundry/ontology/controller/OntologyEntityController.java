@@ -4,6 +4,7 @@ import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.controller.validator.OntologyIdVerify;
 import com.aircas.ptr.foundry.ontology.model.param.EntityActionExecuteParam;
 import com.aircas.ptr.foundry.ontology.model.param.EntityQueryParam;
+import com.aircas.ptr.foundry.ontology.model.param.EntitySearchParam;
 import com.aircas.ptr.foundry.ontology.model.param.EntityUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.vo.EntityInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.EntityLinkPropertyVO;
@@ -36,7 +37,19 @@ public class OntologyEntityController {
             @RequestParam(required = true, name = "ontologyUniqueIdentifier") @ApiParam(value = "本体id", required = true) @OntologyIdVerify String ontologyUniqueIdentifier,
             @RequestParam(required = false, defaultValue = "1") Integer pageNum,
             @RequestParam(required = false, defaultValue = "10") Integer pageSize) {
-        return RestResult.ofData(entityService.getEntities(ontologyUniqueIdentifier, pageNum, pageSize));
+        return RestResult.ofData(entityService.getEntities(ontologyUniqueIdentifier, "", "", pageNum, pageSize));
+    }
+
+
+    @ApiOperation(value = "实体搜索", notes = "实体根据属性值进行搜索")
+    @PostMapping("/search")
+    public RestResult<Page<EntityInfoVO>> searchEntities(@RequestBody @Valid EntitySearchParam param) {
+        return RestResult.ofData(entityService.getEntities(
+                param.getOntologyUniqueIdentifier(),
+                param.getPropertyName(),
+                param.getPropertyValue(),
+                param.getPageNum(),
+                param.getPageSize()));
     }
 
 

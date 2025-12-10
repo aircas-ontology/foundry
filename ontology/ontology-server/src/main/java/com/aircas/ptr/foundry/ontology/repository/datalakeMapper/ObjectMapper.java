@@ -50,14 +50,18 @@ public interface ObjectMapper extends BaseMapper<Object> {
 
     default List<Map<String, Object>> pageQuery(@Param("tableName") String tableName,
                                                 @Param("columnNames") List<String> columnNames,
+                                                @Param("filterColumnName") String filterColumnName,
+                                                @Param("filterColumnValue") Object filterColumnValue,
                                                 @Param("limit") Integer limit,
                                                 @Param("offset") Integer offset) {
-        var records = queryMapsPage(tableName, columnNames, limit, offset);
+        var records = queryMapsPage(tableName, columnNames, filterColumnName, filterColumnValue, limit, offset);
         return populate(records, tableName, columnNames);
     }
 
     List<Map<String, Object>> queryMapsPage(@Param("tableName") String tableName,
                                             @Param("columnNames") List<String> columnNames,
+                                            @Param("filterColumnName") String filterColumnName,
+                                            @Param("filterColumnValue") Object filterColumnValue,
                                             @Param("limit") Integer limit,
                                             @Param("offset") Integer offset);
 
@@ -65,7 +69,9 @@ public interface ObjectMapper extends BaseMapper<Object> {
     List<String> queryColumnNames(@Param("tableName") String tableName);
 
 
-    Integer queryCount(@Param("tableName") String tableName);
+    Integer queryCount(@Param("tableName") String tableName,
+                       @Param("filterColumnName") String filterColumnName,
+                       @Param("filterColumnValue") Object filterColumnValue);
 
 
     default List<Map<String, Object>> populate(List<Map<String, Object>> records, String tableName, List<String> columns) {
