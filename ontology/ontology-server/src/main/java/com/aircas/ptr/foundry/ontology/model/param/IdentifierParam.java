@@ -19,7 +19,7 @@ import javax.validation.constraints.NotBlank;
 public class IdentifierParam {
 
 
-    @NotBlank(message = "uniqIdentifier is empty")
-    @ApiModelProperty(name = "uniqIdentifier", value = "uniqIdentifier", dataType = "java.lang.String", example = "abcdef")
-    private String uniqIdentifier;
+    @NotBlank(message = "uniqueIdentifier is empty")
+    @ApiModelProperty(name = "uniqueIdentifier", value = "uniqIdentifier", dataType = "java.lang.String", example = "abcdef")
+    private String uniqueIdentifier;
 }
