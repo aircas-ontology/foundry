@@ -24,6 +24,9 @@ public class DatasourceValidator implements ConstraintValidator<DatasourceVerify
         }
         var dsId = value.getDatasourceId();
         var columnName = value.getDatasourceColumnName();
+        if (StringUtils.isEmpty(dsId) && StringUtils.isEmpty(columnName)) {
+            return true;
+        }
         if (StringUtils.isNotEmpty(dsId) && StringUtils.isNotEmpty(columnName)) {
             return tableMetadataMapper.isColumnExist(dsId, columnName);
         } else {

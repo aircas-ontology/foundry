@@ -51,13 +51,13 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
     @Transactional(value = "mainTransactionManager")
     public void updateProperty(OntologyPropertyUpdateParam param) {
         //check property existence
-        var uniqIdentifier = param.getUniqIdentifier();
+        var uniqIdentifier = param.getUniqueIdentifier();
         var originalProperty = getOne(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getUniqueIdentifier, uniqIdentifier));
         PreconditionUtils.checkArgument(originalProperty != null, "属性不存在", HttpStatus.BAD_REQUEST);
 
         var otherProps = list(new LambdaQueryWrapper<OntologyProperty>()
                 .eq(OntologyProperty::getOntologyUniqueIdentifier, originalProperty.getOntologyUniqueIdentifier()))
-                .stream().filter(v -> !v.getUniqueIdentifier().equals(param.getUniqIdentifier())).collect(Collectors.toList());
+                .stream().filter(v -> !v.getUniqueIdentifier().equals(param.getUniqueIdentifier())).collect(Collectors.toList());
         //check columnName
         checkDatasourceColumnName(otherProps, param.getDatasource());
         //check titleKey
@@ -89,7 +89,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         }
         //参数校验
         //属性id是否有效
-        var updateUniqIds = params.stream().map(v -> v.getUniqIdentifier()).collect(Collectors.toList());
+        var updateUniqIds = params.stream().map(v -> v.getUniqueIdentifier()).collect(Collectors.toList());
         var updateProperties = list(new LambdaQueryWrapper<OntologyProperty>().in(OntologyProperty::getUniqueIdentifier, updateUniqIds));
         PreconditionUtils.checkArgument(updateUniqIds.size() == updateProperties.size(), "属性不存在", HttpStatus.BAD_REQUEST);
         ///主键，标题健，数据源校验
@@ -121,7 +121,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                 hasPrimaryKey = true;
                 checkPrimaryKey(otherProps, p.getDatasource());
             }
-            var prop = updatePropMap.get(p.getUniqIdentifier());
+            var prop = updatePropMap.get(p.getUniqueIdentifier());
             prop.setPropertyType(p.getDataType())
                     .setIsTitleKey(p.getIsTitleKey() ? 1 : 0)
                     .setIsPrimaryKey(p.getIsPrimaryKey() ? 1 : 0)
