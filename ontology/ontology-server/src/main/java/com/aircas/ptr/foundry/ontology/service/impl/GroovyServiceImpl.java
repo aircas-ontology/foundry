@@ -207,7 +207,7 @@ public class GroovyServiceImpl implements GroovyService {
         //参数列表反序列化
         var paramValues = paramInfos.stream().map(p -> {
             var value = paramMap.get(p.getParamName());
-            PreconditionUtils.checkArgument(value != null, "未找到函数参数：" + p.getParamName());
+            //PreconditionUtils.checkArgument(value != null, "未找到函数参数：" + p.getParamName());
             //非基本类型暂时不支持
             if (p.getParamType() == FunctionParamTypeEnum.OBJECT) {
                 throw new BusinessException("parse error");

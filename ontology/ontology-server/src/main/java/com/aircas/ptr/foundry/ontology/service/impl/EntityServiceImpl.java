@@ -481,10 +481,13 @@ public class EntityServiceImpl implements EntityService {
 
         //构造函数参数，list类型返回所有值，其他类型取第一个值
         List<FunctionParameter> parameters = functionInputParams.stream().map(p -> {
-            var mappingVO = mappings.stream().filter(m -> m.getFunctionParamId().equals(p.getParamId())).findFirst().get();
+            var mappingVO = mappings.stream().filter(m -> m.getFunctionParamId().equals(p.getParamId())).findFirst();
+            if (!mappingVO.isPresent()) {
+                return new FunctionParameter().setParamName(p.getParamName());
+            }
             Object value = null;
-            // 如果本体没有给属性绑定数据源，则获取的values为null，函数执行失败
-            List<Object> values = entityDetailMap.get(mappingVO.getPropertyUniqueIdentifier());
+            // 如果本体没有给属性绑定数据源，则获取的values为null，函数可能执行失败
+            List<Object> values = entityDetailMap.get(mappingVO.get().getPropertyUniqueIdentifier());
             if (CollectionUtils.isNotEmpty(values)) {
                 value = p.getParamType().equals(FunctionParamTypeEnum.List) ? values : values.get(0);
             }

@@ -32,7 +32,7 @@ public class EntitySearchParam {
     private Integer pageNum = 1;
 
     @ApiModelProperty(name = "pageSize")
-    private Integer pageSize = 100;
+    private Integer pageSize = 10;
 
 
 }

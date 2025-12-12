@@ -9,7 +9,6 @@ import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.ontology.model.dto.FunctionParamDTO;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionExecuteParam;
-import com.aircas.ptr.foundry.ontology.model.param.FunctionParameter;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.po.Function;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionParamPO;
@@ -185,7 +184,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                         .orderByAsc(FunctionParamPO::getParamOrder));
         //参数取值
         Map<String, Object> funParamMap = CollectionUtils.isEmpty(param.getParameters()) ?
-                new HashMap<>() : param.getParameters().stream().collect(Collectors.toMap(FunctionParameter::getParamName, FunctionParameter::getParamValue));
+                new HashMap<>() : param.getParameters().stream().collect(HashMap::new, (m, p) -> m.put(p.getParamName(), p.getParamValue()), HashMap::putAll);
         return groovyService.executeGroovy(function.getCode(), funParamMap, executeInputParams);
     }
 
