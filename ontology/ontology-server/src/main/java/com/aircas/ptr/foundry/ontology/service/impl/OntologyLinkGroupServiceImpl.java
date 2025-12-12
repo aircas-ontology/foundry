@@ -125,10 +125,13 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
             case ALL:
                 links = list(new LambdaQueryWrapper<OntologyLinkGroup>().eq(OntologyLinkGroup::getOntologyUniqueIdentifierFrom, ontologyUniqueIdentifier)
                         .or().eq(OntologyLinkGroup::getOntologyUniqueIdentifierTo, ontologyUniqueIdentifier));
+                break;
             case FROM:
                 links = list(new LambdaQueryWrapper<OntologyLinkGroup>().eq(OntologyLinkGroup::getOntologyUniqueIdentifierFrom, ontologyUniqueIdentifier));
+                break;
             case TO:
                 links = list(new LambdaQueryWrapper<OntologyLinkGroup>().eq(OntologyLinkGroup::getOntologyUniqueIdentifierTo, ontologyUniqueIdentifier));
+                break;
         }
 
         if (CollectionUtils.isEmpty(links)) {

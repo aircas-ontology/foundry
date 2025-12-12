@@ -315,7 +315,7 @@ public class EntityServiceImpl implements EntityService {
             return result;
         }
         var primaryDatasource = primaryProperty.getDatasourceId();
-        var primaryPropMap = props.stream().filter(v -> v.getDatasourceId().equals(primaryDatasource)).collect(Collectors.toMap(v -> v.getDatasourceColumnName(), v -> v));
+        var primaryPropMap = props.stream().filter(v -> StringUtils.equals(v.getDatasourceId(), primaryDatasource)).collect(Collectors.toMap(v -> v.getDatasourceColumnName(), v -> v));
         var titleKey = primaryPropMap.values().stream().filter(v -> v.getIsTitleKey() == 1).findFirst();
 
         String columnName = null;
