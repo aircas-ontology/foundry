@@ -14,9 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
+import java.io.*;
 
 @Service
 @Slf4j
@@ -60,6 +58,29 @@ public class FileServiceImpl implements FileService {
         PreconditionUtils.checkArgument(contentType != null && contentType.startsWith("image/"), "not image file");
         //save to minio
         var imageUrl = saveToMinio(image, image.getInputStream());
+        return imageUrl.substring(0, imageUrl.indexOf("?"));
+    }
+
+
+    public String getPreviewUrlByFile(File file) throws Exception {
+        //save to minio
+        String fileName = System.currentTimeMillis() + "_" + file.getName();
+        minioClient.putObject(
+                PutObjectArgs.builder()
+                        .bucket(bucketName)
+                        .object(fileName)
+                        .stream(new FileInputStream(file), file.length(), -1)
+                        .contentType("image/jpeg")
+                        .build()
+        );
+        //get url
+        String imageUrl = minioClient.getPresignedObjectUrl(
+                GetPresignedObjectUrlArgs.builder()
+                        .method(Method.GET)
+                        .bucket(bucketName)
+                        .object(fileName)
+                        .build()
+        );
         return imageUrl.substring(0, imageUrl.indexOf("?"));
     }
 
