@@ -429,7 +429,7 @@ public class EntityServiceImpl implements EntityService {
                             } else {
                                 //无可见窗口时，解析spel表达式,更新relation enable
                                 Boolean expResult = evaluateJsonCondition(functionResult, link.getOntologyLinkFunctionParamExpression());
-                                relationRepository.updateRelation(relation.getStartTime(), relation.getEndTime(), expResult ? Status.ENABLE : Status.DELETE, relation.getId());
+                                relationRepository.updateRelation(null, null, expResult ? Status.ENABLE : Status.DELETE, relation.getId());
                             }
                         }
                     } catch (Exception e) {
