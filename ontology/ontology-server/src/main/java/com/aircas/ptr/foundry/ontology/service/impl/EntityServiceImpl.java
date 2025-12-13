@@ -424,7 +424,8 @@ public class EntityServiceImpl implements EntityService {
 
                             //返回结果有可见窗口，直接更新relation startTime/endTime
                             if (StringUtils.isNotEmpty(startTime) && StringUtils.isNotEmpty(endTime)) {
-                                relationRepository.updateRelation(DateUtils.parseISO8601(startTime), DateUtils.parseISO8601(endTime), relation.getStatus(), relation.getId());
+                                relationRepository.updateRelation(DateUtils.fromString2Date(startTime, "yyyy-MM-dd HH:mm:ss.SSS"),
+                                        DateUtils.fromString2Date(endTime, "yyyy-MM-dd HH:mm:ss.SSS"), relation.getStatus(), relation.getId());
                             } else {
                                 //无可见窗口时，解析spel表达式,更新relation enable
                                 Boolean expResult = evaluateJsonCondition(functionResult, link.getOntologyLinkFunctionParamExpression());
@@ -459,6 +460,9 @@ public class EntityServiceImpl implements EntityService {
 
     private Boolean evaluateJsonCondition(String jsonStr, String conditionExpr) {
         try {
+            if (StringUtils.isEmpty(jsonStr) || StringUtils.isEmpty(conditionExpr)) {
+                return false;
+            }
             Map<String, Object> dataMap = jsonMapper.readValue(jsonStr, Map.class);
             StandardEvaluationContext context = new StandardEvaluationContext(dataMap);
             context.addPropertyAccessor(new MapAccessor());

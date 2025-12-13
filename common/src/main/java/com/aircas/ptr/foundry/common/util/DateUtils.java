@@ -34,6 +34,8 @@ public class DateUtils {
         dateFormatMap.put("yyyy/MM/dd HH:mm:ss", new SimpleDateFormat("yyyy/MM/dd HH:mm:ss"));
         dateFormatMap.put("yyyyMMdd", new SimpleDateFormat("yyyyMMdd"));
         dateFormatMap.put("yyyyMMddhhmmss", new SimpleDateFormat("yyyyMMddhhmmss"));
+        dateFormatMap.put("yyyy-MM-dd HH:mm:ss.SSS", new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS"));
+
     }
 
     private DateUtils() {

@@ -318,7 +318,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         var ontologyId = param.getOntologyIdentifier();
         var link = param.getLinkMapping();
         if (link != null) {
-            var ontologyLink = linkGroupMapper.selectOne(new LambdaQueryWrapper<OntologyLinkGroup>().eq(OntologyLinkGroup::getId, link.getOntologyLinkUniqIdentifier()));
+            var ontologyLink = linkGroupMapper.selectOne(new LambdaQueryWrapper<OntologyLinkGroup>().eq(OntologyLinkGroup::getUniqueIdentifier, link.getOntologyLinkUniqIdentifier()));
             PreconditionUtils.checkArgument(ontologyLink != null && ontologyLink.getOntologyUniqueIdentifierFrom().equals(ontologyId), "无效的本体关系" + link.getOntologyLinkUniqIdentifier(), HttpStatus.BAD_REQUEST);
 
             var output = functionParams.stream().filter(p -> p.getCategory().equals(FunctionParamCategoryEnum.OUTPUT)).findFirst().orElse(null);
