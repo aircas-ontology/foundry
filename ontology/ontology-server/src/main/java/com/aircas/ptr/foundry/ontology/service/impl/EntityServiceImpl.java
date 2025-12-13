@@ -417,7 +417,7 @@ public class EntityServiceImpl implements EntityService {
                         executeResult.add(functionResult);
                         JsonNode jsonNode = jsonMapper.readTree(functionResult);
                         //根据函数的输出结果更新实体关系
-                        var relation = relationRepository.queryRelationByFromNodeAndToNode(param.getOntologyUniqueIdentifier(), param.getEntityPrimaryKey(), linkedOntology, entity.getPrimaryKey());
+                        var relation = relationRepository.queryRelationByFromNodeAndToNode(param.getOntologyUniqueIdentifier(), param.getEntityPrimaryKey(), linkedOntology, entity.getPrimaryKey(), link.getOntologyLinkUniqIdentifier());
                         if (relation != null) {
                             var startTime = jsonNode.get("startTime").asText("");
                             var endTime = jsonNode.get("endTime").asText("");
