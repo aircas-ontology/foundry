@@ -6,6 +6,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import lombok.var;
 import okhttp3.*;
 import org.apache.commons.collections4.MapUtils;
 import org.slf4j.MDC;
@@ -56,6 +57,7 @@ public class HttpUtil {
         String jsonString = "";
         try {
             jsonString = objectMapper.writeValueAsString(jsonBody);
+            log.info("reuest url:" + url + ", request param:" + jsonString);
         } catch (JsonProcessingException e) {
             log.error("json序列化失败", e);
             throw new BusinessException("json序列化失败");
@@ -109,7 +111,9 @@ public class HttpUtil {
             ResponseBody responseBody = response.body();
             if (responseBody != null) {
                 String respStr = responseBody.string();
-                return objectMapper.readValue(respStr, responseType);
+                var res = objectMapper.readValue(respStr, responseType);
+                //log.info("resp:" + res);
+                return res;
             }
             return null;
         } catch (Exception e) {
