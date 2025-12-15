@@ -316,7 +316,7 @@ public class EntityServiceImpl implements EntityService {
         var titleKey = primaryPropMap.values().stream().filter(v -> v.getIsTitleKey() == 1).findFirst();
 
         String columnName = null;
-        if (StringUtils.isNotEmpty(propertyName)) {
+        if (StringUtils.isNotEmpty(propertyName) && propertyValue != null) {
             var property = props.stream().filter(v -> v.getDisplayName().equals(propertyName)).findFirst();
             PreconditionUtils.checkArgument(property.isPresent() && StringUtils.isNotEmpty(property.get().getDatasourceColumnName()), "属性名称不存在获没有关联数据源：" + propertyName, HttpStatus.BAD_REQUEST);
             columnName = property.get().getDatasourceColumnName();
