@@ -275,7 +275,7 @@ public class EntityServiceImpl implements EntityService {
                         columns,
                         tableMapping.getTargetColumnName(),
                         orderBy,
-                        10
+                        15
                 );
 
                 var otherColumns = otherData.get(0).keySet().stream().collect(Collectors.toList());
