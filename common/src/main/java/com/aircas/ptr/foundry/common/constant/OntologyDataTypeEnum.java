@@ -180,6 +180,23 @@ public enum OntologyDataTypeEnum {
         return type;
     }
 
+    public static Object convert(OntologyDataTypeEnum type, Object value) {
+        switch (type) {
+            case Int:
+                return Integer.parseInt(value.toString());
+            case Long:
+                return java.lang.Long.parseLong(value.toString());
+            case Float:
+                return java.lang.Float.parseFloat(value.toString());
+            case Double:
+                return java.lang.Double.parseDouble(value.toString());
+            case String:
+                return value.toString();
+            default:
+                return value;
+        }
+    }
+
 
 }
 

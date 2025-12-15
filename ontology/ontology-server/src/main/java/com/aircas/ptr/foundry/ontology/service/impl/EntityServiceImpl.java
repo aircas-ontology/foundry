@@ -1,9 +1,6 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
-import com.aircas.ptr.foundry.common.constant.FunctionParamCategoryEnum;
-import com.aircas.ptr.foundry.common.constant.FunctionParamTypeEnum;
-import com.aircas.ptr.foundry.common.constant.OntologyLinkTypeEnum;
-import com.aircas.ptr.foundry.common.constant.Status;
+import com.aircas.ptr.foundry.common.constant.*;
 import com.aircas.ptr.foundry.common.util.DateUtils;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.ontology.model.document.EntityNode;
@@ -323,6 +320,8 @@ public class EntityServiceImpl implements EntityService {
             var property = props.stream().filter(v -> v.getDisplayName().equals(propertyName)).findFirst();
             PreconditionUtils.checkArgument(property.isPresent() && StringUtils.isNotEmpty(property.get().getDatasourceColumnName()), "属性名称不存在获没有关联数据源：" + propertyName, HttpStatus.BAD_REQUEST);
             columnName = property.get().getDatasourceColumnName();
+            var propertyType = property.get().getPropertyType();
+            propertyValue = OntologyDataTypeEnum.convert(propertyType, propertyValue);
         }
         //分页查询实体数据
         var records = objectMapper.pageQuery(

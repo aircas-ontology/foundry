@@ -22,10 +22,8 @@ public class EntitySearchParam {
     @OntologyIdVerify
     private String ontologyUniqueIdentifier;
 
-    @NotBlank(message = "propertyName is empty")
     private String propertyName;
 
-    @NotNull(message = "propertyValue is null")
     private Object propertyValue;
 
     @ApiModelProperty(name = "pageNum")
