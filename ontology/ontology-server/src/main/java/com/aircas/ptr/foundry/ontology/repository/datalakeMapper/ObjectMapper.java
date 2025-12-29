@@ -11,6 +11,7 @@ import org.apache.ibatis.annotations.Param;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 @Mapper
@@ -82,16 +83,17 @@ public interface ObjectMapper extends BaseMapper<Object> {
         if (records.size() == 1 && records.get(0) == null) {
             var map = new HashMap<String, Object>();
             columnNames.forEach(v -> map.put(v, null));
-            return Lists.newArrayList(map);
+            return Lists.newArrayList(new TreeMap<>(map));
         }
-        records.forEach(r -> {
+        List<Map<String, Object>> newRecords = records.stream().map(r -> {
             columnNames.forEach(col -> {
                 if (!r.containsKey(col)) {
                     r.put(col, null);
                 }
             });
-        });
-        return records;
+            return new TreeMap<>(r);
+        }).collect(Collectors.toList());
+        return newRecords;
     }
 
     List<Map<String, Object>> queryJoinTableData(@Param("tableName") String tableName,
