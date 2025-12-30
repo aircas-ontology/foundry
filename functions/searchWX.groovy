@@ -1,7 +1,0 @@
-class searchWX {
-
-   def handle() {
-
-   }
-
-}
