@@ -20,4 +20,6 @@ public class FunctionResultVO<T> {
     private String endTime;
 
     private T data;
+
+    private String description;
 }
