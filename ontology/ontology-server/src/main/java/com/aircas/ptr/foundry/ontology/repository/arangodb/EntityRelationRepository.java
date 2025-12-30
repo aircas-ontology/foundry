@@ -53,6 +53,12 @@ public interface EntityRelationRepository extends ArangoRepository<EntityRelatio
                                                     @Param("toEntityPrimaryKey") Object toEntityPrimaryKey,
                                                     @Param("linkId") String linkId);
 
+    @Query(         "FOR edge IN relation" +
+                    "    FILTER edge.ontologyLinkId == @linkId " +
+                    "    RETURN edge")
+    List<EntityRelation> queryRelationsByLinkId(@Param("linkId") String linkId);
+
+
 
     @Query("FOR r IN relation FILTER r._key == @id UPDATE r WITH { startTime: @startTime, endTime: @endTime, status: @status } IN relation")
     void updateRelation(@Param("startTime") Date startTime,

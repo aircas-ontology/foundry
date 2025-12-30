@@ -132,7 +132,14 @@ public class EntityServiceImpl implements EntityService {
     }
 
     @Override
-    public void createEntityRelations(OntologyLinkGroup link) {
+    public void createEntityRelations(String linkUniqueIdentifier) {
+        var link = linkGroupMapper.selectOne(new LambdaQueryWrapper<OntologyLinkGroup>().eq(OntologyLinkGroup::getUniqueIdentifier, linkUniqueIdentifier));
+        PreconditionUtils.checkArgument(link != null, "本体关系不存在");
+        var existRelations = relationRepository.queryRelationsByLinkId(link.getUniqueIdentifier());
+        //关系已存在
+        if (CollectionUtils.isNotEmpty(existRelations)) {
+            return;
+        }
         var fromNodes = nodeRepository.findByOntologyUniqIdentifier(link.getOntologyUniqueIdentifierFrom());
         var toNodes = nodeRepository.findByOntologyUniqIdentifier(link.getOntologyUniqueIdentifierTo());
 
@@ -456,6 +463,37 @@ public class EntityServiceImpl implements EntityService {
         var columnMap = param.getColumnUpdates().stream().collect(Collectors.toMap(v -> v.getDatasourceColumnName(), v -> v.getColumnValue()));
         objectMapper.updateObject(param.getDatasourceId(), columnMap, primaryKeyColumnName, param.getPrimaryKeyValue());
     }
+
+    @Override
+    public void createEntityNodes(String ontologyIdentifier) {
+        var primaryProperty = propertyMapper.selectOne(new LambdaQueryWrapper<OntologyProperty>()
+                .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyIdentifier)
+                .eq(OntologyProperty::getIsPrimaryKey, 1));
+
+        var titleProperty = propertyMapper.selectOne(new LambdaQueryWrapper<OntologyProperty>()
+                .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyIdentifier)
+                .eq(OntologyProperty::getIsTitleKey, 1));
+
+        var titleColumn = "";
+        if (titleProperty != null
+                && primaryProperty != null
+                && StringUtils.equals(titleProperty.getDatasourceId(), primaryProperty.getDatasourceId())) {
+            titleColumn = titleProperty.getDatasourceColumnName();
+        }
+
+        var nodes = getByByOntologyUniqIdentifier(ontologyIdentifier);
+
+        if (primaryProperty == null && CollectionUtils.isEmpty(nodes)) {
+            return;
+        }
+        //新增主键数据源
+        else if (primaryProperty != null && CollectionUtils.isEmpty(nodes)) {
+            if (StringUtils.isNotEmpty(primaryProperty.getDatasourceId())) {
+                createNodes(ontologyIdentifier, primaryProperty.getDatasourceId(), primaryProperty.getDatasourceColumnName(), titleColumn);
+            }
+        }
+    }
+
 
     private Boolean evaluateJsonCondition(String jsonStr, String conditionExpr) {
         try {

@@ -2,10 +2,7 @@ package com.aircas.ptr.foundry.ontology.controller;
 
 import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.controller.validator.OntologyIdVerify;
-import com.aircas.ptr.foundry.ontology.model.param.EntityActionExecuteParam;
-import com.aircas.ptr.foundry.ontology.model.param.EntityQueryParam;
-import com.aircas.ptr.foundry.ontology.model.param.EntitySearchParam;
-import com.aircas.ptr.foundry.ontology.model.param.EntityUpdateParam;
+import com.aircas.ptr.foundry.ontology.model.param.*;
 import com.aircas.ptr.foundry.ontology.model.vo.EntityInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.EntityLinkPropertyVO;
 import com.aircas.ptr.foundry.ontology.model.vo.EntityPropertyDetailVO;
@@ -78,6 +75,20 @@ public class OntologyEntityController {
     @PutMapping("/update")
     public RestResult updateEntity(@RequestBody @Valid EntityUpdateParam param) {
         entityService.updateEntity(param);
+        return RestResult.success();
+    }
+
+    @ApiOperation(value = "创建实体节点")
+    @PostMapping("/node")
+    public RestResult createEntityNodes(@RequestBody @Valid OntologyIdentifierParam param) {
+        entityService.createEntityNodes(param.getOntologyIdentifier());
+        return RestResult.success();
+    }
+
+    @ApiOperation(value = "创建实体节点关系")
+    @PostMapping("/relation/{linkUniqIdentifier}")
+    public RestResult createEntityRelations(@PathVariable String linkUniqIdentifier) {
+        entityService.createEntityRelations(linkUniqIdentifier);
         return RestResult.success();
     }
 

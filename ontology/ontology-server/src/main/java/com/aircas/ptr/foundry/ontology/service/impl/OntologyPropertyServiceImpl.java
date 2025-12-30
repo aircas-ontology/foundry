@@ -368,7 +368,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         var links = linkMapper.selectList(new LambdaQueryWrapper<OntologyLinkGroup>()
                 .eq(OntologyLinkGroup::getOntologyUniqueIdentifierFrom, ontologyIdentifier)
                 .or().eq(OntologyLinkGroup::getOntologyUniqueIdentifierTo, ontologyIdentifier));
-        links.stream().forEach(link -> entityService.createEntityRelations(link));
+        links.stream().forEach(link -> entityService.createEntityRelations(link.getUniqueIdentifier()));
     }
 
 

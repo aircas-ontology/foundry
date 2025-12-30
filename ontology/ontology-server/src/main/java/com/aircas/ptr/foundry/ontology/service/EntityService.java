@@ -22,7 +22,7 @@ public interface EntityService {
 
     void updateNodesDisplayName(String ontologyUniqueIdentifier, String datasourceId, String primaryKeyColumnName, String titleKeyColumnName);
 
-    void createEntityRelations(OntologyLinkGroup link);
+    void createEntityRelations(String linkUniqueIdentifier);
 
     void createNodes(String ontologyUniqueIdentifier, String datasourceId, String primaryKeyColumnName, String titleKeyColumnName);
 
@@ -41,4 +41,6 @@ public interface EntityService {
     String executeAction(EntityActionExecuteParam param) throws Exception;
 
     void updateEntity(EntityUpdateParam param);
+
+    void createEntityNodes(String ontologyIdentifier);
 }

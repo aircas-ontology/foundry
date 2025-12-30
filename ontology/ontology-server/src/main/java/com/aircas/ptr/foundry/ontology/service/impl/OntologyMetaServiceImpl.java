@@ -186,7 +186,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 titleColumn = titleKey.get().getDatasourceColumnName();
             }
             entityService.createNodes(meta.getUniqueIdentifier(), primaryKey.get().getDatasourceId(), primaryKey.get().getDatasourceColumnName(), titleColumn);
-            childLinks.stream().forEach(link -> entityService.createEntityRelations(link));
+            childLinks.stream().forEach(link -> entityService.createEntityRelations(link.getUniqueIdentifier()));
         }
     }
 
