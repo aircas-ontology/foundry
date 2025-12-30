@@ -100,10 +100,6 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         functionParamService.remove(new LambdaQueryWrapper<FunctionParamPO>().eq(FunctionParamPO::getFunctionId, function.getId()));
         //删除函数记录
         removeById(function.getId());
-        //自定义函数：删除groovy文件
-        if (function.getType().equals(FunctionTypeEnum.CUSTOMIZE)) {
-            deleteFunctionGroovy(api);
-        }
     }
 
 
@@ -128,8 +124,6 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         if (param.getType().equals(FunctionTypeEnum.CUSTOMIZE)) {
             //解析函数参数，批量入库
             insertBatchFuncParams(func.getId(), param.getCode());
-            //生成groovy文件
-            writeCodeToFile(param.getFunctionApi(), param.getCode());
         }
         //todo 暂不考虑注册的外部函数
     }
