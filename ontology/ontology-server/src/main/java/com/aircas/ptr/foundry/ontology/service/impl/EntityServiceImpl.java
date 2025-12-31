@@ -5,10 +5,7 @@ import com.aircas.ptr.foundry.common.util.DateUtils;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.ontology.model.document.EntityNode;
 import com.aircas.ptr.foundry.ontology.model.document.EntityRelation;
-import com.aircas.ptr.foundry.ontology.model.param.EntityActionExecuteParam;
-import com.aircas.ptr.foundry.ontology.model.param.EntityUpdateParam;
-import com.aircas.ptr.foundry.ontology.model.param.FunctionExecuteParam;
-import com.aircas.ptr.foundry.ontology.model.param.FunctionParameter;
+import com.aircas.ptr.foundry.ontology.model.param.*;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
 import com.aircas.ptr.foundry.ontology.model.po.TableFieldMapping;
@@ -492,6 +489,28 @@ public class EntityServiceImpl implements EntityService {
                 createNodes(ontologyIdentifier, primaryProperty.getDatasourceId(), primaryProperty.getDatasourceColumnName(), titleColumn);
             }
         }
+    }
+
+    @Override
+    public List<EntityIdsQueryVO> getByEntityIds(List<EntityIdsQueryParam> params) {
+        if (CollectionUtils.isEmpty(params)) {
+            return Lists.newArrayList();
+        }
+        return params.stream().map(p -> {
+            var entities = getEntities(p.getOntologyUniqueIdentifier(), null, null, 1, Integer.MAX_VALUE);
+            var entityPrimaryKeys = p.getEntityPrimaryKeys();
+            List<EntityInfoVO> entityList = Lists.newArrayList();
+            if (CollectionUtils.isEmpty(entityPrimaryKeys)) {
+                entityList = entities.getRecords();
+            } else {
+                var entityMap = entities.getRecords().stream().collect(Collectors.toMap(v -> v.getPrimaryKey(), v -> v));
+                entityList = entityPrimaryKeys.stream().map(k -> entityMap.get(k)).collect(Collectors.toList());
+            }
+            return EntityIdsQueryVO.builder()
+                    .entityList(entityList)
+                    .ontologyUniqueIdentifier(p.getOntologyUniqueIdentifier())
+                    .build();
+        }).collect(Collectors.toList());
     }
 
 

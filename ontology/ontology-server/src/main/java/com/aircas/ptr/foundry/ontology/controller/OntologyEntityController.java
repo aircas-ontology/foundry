@@ -3,6 +3,7 @@ package com.aircas.ptr.foundry.ontology.controller;
 import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.controller.validator.OntologyIdVerify;
 import com.aircas.ptr.foundry.ontology.model.param.*;
+import com.aircas.ptr.foundry.ontology.model.vo.EntityIdsQueryVO;
 import com.aircas.ptr.foundry.ontology.model.vo.EntityInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.EntityLinkPropertyVO;
 import com.aircas.ptr.foundry.ontology.model.vo.EntityPropertyDetailVO;
@@ -26,6 +27,13 @@ public class OntologyEntityController {
 
     @Resource
     private EntityService entityService;
+
+
+    @ApiOperation(value = "根据实体列表查询")
+    @PostMapping("/query")
+    public RestResult<List<EntityIdsQueryVO>> getByEntityIds(@RequestBody @Valid List<EntityIdsQueryParam> params) {
+        return RestResult.ofData(entityService.getByEntityIds(params));
+    }
 
 
     @ApiOperation(value = "实体分页查询", notes = "分页查询本体下实体信息列表")

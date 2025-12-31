@@ -2,8 +2,10 @@ package com.aircas.ptr.foundry.ontology.service;
 
 import com.aircas.ptr.foundry.ontology.model.document.EntityNode;
 import com.aircas.ptr.foundry.ontology.model.param.EntityActionExecuteParam;
+import com.aircas.ptr.foundry.ontology.model.param.EntityIdsQueryParam;
 import com.aircas.ptr.foundry.ontology.model.param.EntityUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup;
+import com.aircas.ptr.foundry.ontology.model.vo.EntityIdsQueryVO;
 import com.aircas.ptr.foundry.ontology.model.vo.EntityInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.EntityLinkPropertyVO;
 import com.aircas.ptr.foundry.ontology.model.vo.EntityPropertyDetailVO;
@@ -43,4 +45,6 @@ public interface EntityService {
     void updateEntity(EntityUpdateParam param);
 
     void createEntityNodes(String ontologyIdentifier);
+
+    List<EntityIdsQueryVO> getByEntityIds(List<EntityIdsQueryParam> params);
 }
