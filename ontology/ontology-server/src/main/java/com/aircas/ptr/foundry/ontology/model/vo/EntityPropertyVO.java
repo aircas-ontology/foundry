@@ -19,6 +19,11 @@ import lombok.experimental.SuperBuilder;
 public class EntityPropertyVO {
 
 
+
+    @ApiModelProperty(name = "propertyApiName", value = "属性api名称", example = "名称")
+    private String propertyApiName;
+
+
     @ApiModelProperty(name = "propertyName", value = "属性名称", example = "名称")
     private String propertyDisplayName;
 

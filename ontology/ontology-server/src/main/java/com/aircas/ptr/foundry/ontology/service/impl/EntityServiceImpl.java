@@ -299,7 +299,6 @@ public class EntityServiceImpl implements EntityService {
             }
         });
         return res;
-
     }
 
 
@@ -322,7 +321,7 @@ public class EntityServiceImpl implements EntityService {
         String columnName = null;
         if (StringUtils.isNotEmpty(propertyName) && propertyValue != null) {
             var property = props.stream().filter(v -> v.getDisplayName().equals(propertyName)).findFirst();
-            PreconditionUtils.checkArgument(property.isPresent() && StringUtils.isNotEmpty(property.get().getDatasourceColumnName()), "属性名称不存在获没有关联数据源：" + propertyName, HttpStatus.BAD_REQUEST);
+            PreconditionUtils.checkArgument(property.isPresent() && StringUtils.isNotEmpty(property.get().getDatasourceColumnName()), "属性名称不存在或没有关联数据源：" + propertyName, HttpStatus.BAD_REQUEST);
             columnName = property.get().getDatasourceColumnName();
             var propertyType = property.get().getPropertyType();
             propertyValue = OntologyDataTypeEnum.convert(propertyType, propertyValue);
@@ -352,6 +351,7 @@ public class EntityServiceImpl implements EntityService {
 
             var entityProps = r.entrySet().stream().map(entry -> {
                 return EntityPropertyVO.builder()
+                        .propertyApiName(primaryPropMap.get(entry.getKey()).getApiName())
                         .propertyDisplayName(primaryPropMap.get(entry.getKey()).getDisplayName())
                         .propertyValue(entry.getValue())
                         .build();
@@ -504,7 +504,7 @@ public class EntityServiceImpl implements EntityService {
                 entityList = entities.getRecords();
             } else {
                 var entityMap = entities.getRecords().stream().collect(Collectors.toMap(v -> v.getPrimaryKey(), v -> v));
-                entityList = entityPrimaryKeys.stream().map(k -> entityMap.get(k)).collect(Collectors.toList());
+                entityList = entityPrimaryKeys.stream().map(k -> entityMap.get(k)).filter(v -> v != null).collect(Collectors.toList());
             }
             return EntityIdsQueryVO.builder()
                     .entityList(entityList)
