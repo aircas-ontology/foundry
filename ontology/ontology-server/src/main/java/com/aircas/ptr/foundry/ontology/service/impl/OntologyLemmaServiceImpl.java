@@ -6,6 +6,7 @@ import com.aircas.ptr.foundry.ontology.model.param.OntologyStatisticLemmaCreateP
 import com.aircas.ptr.foundry.ontology.model.param.OntologyStatisticLemmaUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyLemma;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyLemmaTreeVO;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologyLemmaVO;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyLemmaMapper;
 import com.aircas.ptr.foundry.ontology.service.OntologyLemmaService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -26,7 +27,7 @@ public class OntologyLemmaServiceImpl extends ServiceImpl<OntologyLemmaMapper, O
     }
 
     @Override
-    public OntologyLemmaTreeVO queryLemma(String ontologyUniqueIdentifier) {
+    public OntologyLemmaTreeVO queryLemmaByOntologyId(String ontologyUniqueIdentifier) {
         return null;
     }
 
@@ -43,5 +44,10 @@ public class OntologyLemmaServiceImpl extends ServiceImpl<OntologyLemmaMapper, O
     @Override
     public void updateStatisticLemma(OntologyStatisticLemmaUpdateParam param) {
 
+    }
+
+    @Override
+    public OntologyLemmaVO queryLemmaById(Integer lemmaId) {
+        return null;
     }
 }

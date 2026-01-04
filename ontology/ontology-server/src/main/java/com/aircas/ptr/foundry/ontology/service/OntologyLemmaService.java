@@ -6,6 +6,7 @@ import com.aircas.ptr.foundry.ontology.model.param.OntologyStatisticLemmaCreateP
 import com.aircas.ptr.foundry.ontology.model.param.OntologyStatisticLemmaUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyLemma;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyLemmaTreeVO;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologyLemmaVO;
 import com.baomidou.mybatisplus.extension.service.IService;
 
 import java.util.List;
@@ -16,11 +17,13 @@ public interface OntologyLemmaService  extends IService<OntologyLemma>  {
 
     void updateLemma(List<OntologyLemmaUpdateParam> param);
 
-    OntologyLemmaTreeVO queryLemma(String ontologyUniqueIdentifier);
+    OntologyLemmaTreeVO queryLemmaByOntologyId(String ontologyUniqueIdentifier);
 
     void deleteLemma(Integer lemmaId);
 
     Integer createStatisticLemma(OntologyStatisticLemmaCreateParam param);
 
     void updateStatisticLemma(OntologyStatisticLemmaUpdateParam param);
+
+    OntologyLemmaVO queryLemmaById(Integer lemmaId);
 }

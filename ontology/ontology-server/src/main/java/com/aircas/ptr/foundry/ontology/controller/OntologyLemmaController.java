@@ -7,8 +7,8 @@ import com.aircas.ptr.foundry.ontology.model.param.OntologyLemmaCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyLemmaUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyStatisticLemmaCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyStatisticLemmaUpdateParam;
-import com.aircas.ptr.foundry.ontology.model.po.OntologyLemma;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyLemmaTreeVO;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologyLemmaVO;
 import com.aircas.ptr.foundry.ontology.service.OntologyLemmaService;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
@@ -53,12 +53,21 @@ public class OntologyLemmaController {
     }
 
 
-    @GetMapping("")
+    @GetMapping("/ontology")
     @ApiOperation(value = "查询本体词条")
-    public RestResult<OntologyLemmaTreeVO> queryLemma(@RequestParam(name = "ontologyUniqueIdentifier", required = true)
-                                   @ApiParam(name = "ontologyUniqueIdentifier", value = "本体unique identifier", required = true)
-                                   @OntologyIdVerify String ontologyUniqueIdentifier) {
-        OntologyLemmaTreeVO res = ontologyLemmaService.queryLemma(ontologyUniqueIdentifier);
+    public RestResult<OntologyLemmaTreeVO> queryLemmaByOntologyId(@RequestParam(name = "ontologyUniqueIdentifier", required = true)
+                                                      @ApiParam(name = "ontologyUniqueIdentifier", value = "本体unique identifier", required = true)
+                                                      @OntologyIdVerify String ontologyUniqueIdentifier) {
+        OntologyLemmaTreeVO res = ontologyLemmaService.queryLemmaByOntologyId(ontologyUniqueIdentifier);
+        return RestResult.ofData(res);
+    }
+
+
+    @GetMapping("")
+    @ApiOperation(value = "查询本体详情")
+    public RestResult<OntologyLemmaVO> queryLemmaById(@RequestParam(name = "lemmaId", required = true)
+                                   @ApiParam(name = "lemmaId", value = "本体词条id", required = true) Integer lemmaId) {
+        OntologyLemmaVO res = ontologyLemmaService.queryLemmaById(lemmaId);
         return RestResult.ofData(res);
     }
 
