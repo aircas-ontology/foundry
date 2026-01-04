@@ -20,7 +20,7 @@ import javax.validation.constraints.NotNull;
 public class OntologyStatisticLemmaUpdateParam extends OntologyStatisticLemmaCreateParam {
 
 
-    @ApiModelProperty(name = "lemmaId", required = true)
+    @ApiModelProperty(name = "lemmaId", required = true, value = "词条id")
     @NotNull(message = "lemmaId is null")
     private Integer lemmaId;
 
