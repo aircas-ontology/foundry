@@ -74,6 +74,7 @@ public class DataConverter {
                 .propertyType(p.getPropertyType())
                 .tag(p.getTag())
                 .uniqueIdentifier(p.getUniqueIdentifier())
+                .ontologyUniqueIdentifier(p.getOntologyUniqueIdentifier())
                 .build();
     }
 
