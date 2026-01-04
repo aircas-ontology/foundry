@@ -1,0 +1,46 @@
+package com.aircas.ptr.foundry.ontology.model.vo;
+
+
+import com.aircas.ptr.foundry.common.constant.OntologyLemmaTypeEnum;
+import io.swagger.annotations.ApiModel;
+import io.swagger.annotations.ApiModelProperty;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.NotNull;
+import java.util.List;
+
+@Data
+@Builder
+@AllArgsConstructor
+@NoArgsConstructor
+@ApiModel(description = "本体词条树")
+public class OntologyLemmaTreeVO {
+
+    @ApiModelProperty(name = "lemmaId", required = true, value = "词条id")
+    private Integer lemmaId;
+
+    @ApiModelProperty(name = "title", required = true)
+    private String title;
+
+    @ApiModelProperty(name = "content", required = true)
+    private String content;
+
+    @ApiModelProperty(name = "parentId", required = true)
+    private Integer parentId;
+
+    @ApiModelProperty(name = "type", required = true)
+    private OntologyLemmaTypeEnum type;
+
+    @ApiModelProperty(name = "orderIndex", required = false, value = "展示顺序", example = "1")
+    private Integer orderIndex;
+
+    @ApiModelProperty(name = "extraInfo", required = false)
+    private String extraInfo;
+
+    @ApiModelProperty(name = "child", required = false, value = "子词条")
+    private List<OntologyLemmaTreeVO> child;
+}
