@@ -15,7 +15,7 @@ public interface OntologyLemmaService  extends IService<OntologyLemma>  {
     
     Integer createLemma(OntologyLemmaCreateParam param);
 
-    void updateLemma(List<OntologyLemmaUpdateParam> param);
+    void batchUpdateLemma(List<OntologyLemmaUpdateParam> param);
 
     OntologyLemmaTreeVO queryLemmaByOntologyId(String ontologyUniqueIdentifier);
 

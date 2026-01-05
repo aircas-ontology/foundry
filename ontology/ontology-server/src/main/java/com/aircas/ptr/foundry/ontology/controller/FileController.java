@@ -35,4 +35,9 @@ public class FileController {
         return RestResult.ofData(fileService.getUrlByImage(image));
     }
 
+    @ApiOperation(value = "上传文件,获取预览链接")
+    @PostMapping("/previewUrl")
+    public RestResult<String> getPreviewUrl(@RequestParam(required = true, name = "file") MultipartFile file) throws Exception {
+        return RestResult.ofData(fileService.getPreviewUrl(file));
+    }
 }

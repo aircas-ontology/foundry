@@ -21,25 +21,23 @@ import javax.validation.constraints.NotNull;
 @ApiModel(description = "Ontology Lemma Create Param")
 public class OntologyLemmaCreateParam extends OntologyIdentifierParam {
 
-    @ApiModelProperty(name = "title", required = true)
-    @NotBlank(message = "title is empty")
+    @ApiModelProperty(name = "title", required = true, value = "标题")
     private String title;
 
-    @ApiModelProperty(name = "content", required = true)
-    @NotBlank(message = "content is empty")
+    @ApiModelProperty(name = "content", required = true, value = "内容")
     private String content;
 
-    @ApiModelProperty(name = "parentId", required = true)
-    @NotNull(message = "parentId is null")
-    private Integer parentId;
+    @ApiModelProperty(name = "parentId", required = false, value = "父词条id,默认为根目录id=0")
+    private Integer parentId = 0;
 
-    @ApiModelProperty(name = "type", required = true)
+    @ApiModelProperty(name = "type", required = true,  value = "词条类型")
     @NotNull(message = "type is null")
     private OntologyLemmaTypeEnum type;
 
-    @ApiModelProperty(name = "orderIndex", required = false, value = "展示顺序", example = "1")
+    @ApiModelProperty(name = "orderIndex", required = false, value = "目录内展示顺序", example = "1")
+    @NotNull(message = "orderIndex is null")
     private Integer orderIndex;
 
-    @ApiModelProperty(name = "extraInfo", required = false)
+    @ApiModelProperty(name = "extraInfo", required = false, value = "其他额外信息")
     private String extraInfo;
 }

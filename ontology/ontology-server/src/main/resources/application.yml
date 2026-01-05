@@ -8,8 +8,8 @@ spring:
     name: ontology
   servlet:
     multipart:
-      max-file-size: 10MB
-      max-request-size: 10MB
+      max-file-size: 500MB
+      max-request-size: 1024MB
   datasource:
     main:
       driver-class-name: org.postgresql.Driver

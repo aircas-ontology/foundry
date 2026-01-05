@@ -8,17 +8,21 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.experimental.Accessors;
+import org.jetbrains.annotations.NotNull;
 
-import javax.validation.constraints.NotBlank;
-import javax.validation.constraints.NotNull;
 import java.util.List;
 
 @Data
+@Accessors(chain = true)
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
 @ApiModel(description = "本体词条树")
-public class OntologyLemmaTreeVO {
+public class OntologyLemmaTreeVO implements Comparable<OntologyLemmaTreeVO> {
+
+    @ApiModelProperty(name = "ontologyUniqueIdentifier", required = true, value = "本体")
+    private String ontologyUniqueIdentifier;
 
     @ApiModelProperty(name = "lemmaId", required = true, value = "词条id")
     private Integer lemmaId;
@@ -43,4 +47,9 @@ public class OntologyLemmaTreeVO {
 
     @ApiModelProperty(name = "child", required = false, value = "子词条")
     private List<OntologyLemmaTreeVO> child;
+
+    @Override
+    public int compareTo(@NotNull OntologyLemmaTreeVO o) {
+        return this.orderIndex - o.orderIndex;
+    }
 }

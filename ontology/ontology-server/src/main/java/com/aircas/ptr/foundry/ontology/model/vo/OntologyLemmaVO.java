@@ -15,6 +15,9 @@ import lombok.NoArgsConstructor;
 @ApiModel(description = "本体词条详情")
 public class OntologyLemmaVO {
 
+    @ApiModelProperty(name = "ontologyUniqueIdentifier", required = true, value = "本体")
+    private String ontologyUniqueIdentifier;
+
     @ApiModelProperty(name = "lemmaId", required = true, value = "词条id")
     private Integer lemmaId;
 

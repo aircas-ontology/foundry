@@ -8,5 +8,7 @@ public enum OntologyLemmaTypeEnum {
     STATISTICS,
     TEXT,
     HTML,
-    URL
+    URL,
+    TABLE
+
 }

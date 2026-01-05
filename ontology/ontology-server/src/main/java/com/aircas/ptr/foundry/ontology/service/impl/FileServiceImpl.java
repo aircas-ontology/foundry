@@ -6,6 +6,7 @@ import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import io.minio.http.Method;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import lombok.var;
 import net.coobird.thumbnailator.Thumbnails;
@@ -14,7 +15,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
-import java.io.*;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.net.URLEncoder;
 
 @Service
 @Slf4j
@@ -62,26 +66,28 @@ public class FileServiceImpl implements FileService {
     }
 
 
-    public String getPreviewUrlByFile(File file) throws Exception {
+    @SneakyThrows
+    @Override
+    public String getPreviewUrl(MultipartFile file) {
         //save to minio
-        String fileName = System.currentTimeMillis() + "_" + file.getName();
+        String fileName = System.currentTimeMillis() + "_" + URLEncoder.encode(file.getOriginalFilename(), "UTF-8");
         minioClient.putObject(
                 PutObjectArgs.builder()
                         .bucket(bucketName)
                         .object(fileName)
-                        .stream(new FileInputStream(file), file.length(), -1)
-                        .contentType("image/jpeg")
+                        .stream(file.getInputStream(), file.getSize(), -1)
+                        .contentType(file.getContentType())
                         .build()
         );
         //get url
-        String imageUrl = minioClient.getPresignedObjectUrl(
+        String url = minioClient.getPresignedObjectUrl(
                 GetPresignedObjectUrlArgs.builder()
                         .method(Method.GET)
                         .bucket(bucketName)
                         .object(fileName)
                         .build()
         );
-        return imageUrl.substring(0, imageUrl.indexOf("?"));
+        return url.substring(0, url.indexOf("?"));
     }
 
     private String saveToMinio(MultipartFile image, InputStream inputStream) throws Exception {

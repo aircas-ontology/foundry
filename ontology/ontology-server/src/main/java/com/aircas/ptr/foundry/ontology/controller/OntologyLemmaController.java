@@ -40,14 +40,14 @@ public class OntologyLemmaController {
 
     @PutMapping("")
     @ApiOperation(value = "批量更新本体词条")
-    public RestResult updateLemma(@RequestBody @Valid List<OntologyLemmaUpdateParam> param) {
-        ontologyLemmaService.updateLemma(param);
+    public RestResult batchUpdateLemma(@RequestBody @Valid List<OntologyLemmaUpdateParam> param) {
+        ontologyLemmaService.batchUpdateLemma(param);
         return RestResult.success();
     }
 
     @DeleteMapping("/{lemmaId}")
     @ApiOperation(value = "删除本体词条")
-    public RestResult deleteLemma(@PathVariable Integer lemmaId) {
+    public RestResult deleteLemma(@PathVariable(required = true, name = "lemmaId") Integer lemmaId) {
         ontologyLemmaService.deleteLemma(lemmaId);
         return RestResult.success();
     }
@@ -64,22 +64,21 @@ public class OntologyLemmaController {
 
 
     @GetMapping("")
-    @ApiOperation(value = "查询本体详情")
-    public RestResult<OntologyLemmaVO> queryLemmaById(@RequestParam(name = "lemmaId", required = true)
-                                   @ApiParam(name = "lemmaId", value = "本体词条id", required = true) Integer lemmaId) {
+    @ApiOperation(value = "查询词条详情")
+    public RestResult<OntologyLemmaVO> queryLemmaById(@RequestParam(name = "lemmaId", required = true)  @ApiParam(name = "lemmaId", value = "本体词条id", required = true) Integer lemmaId) {
         OntologyLemmaVO res = ontologyLemmaService.queryLemmaById(lemmaId);
         return RestResult.ofData(res);
     }
 
     @PostMapping("/statistic")
-    @ApiOperation(value = "创建本体统计词条")
+    @ApiOperation(value = "创建本体统计词条(webhook)")
     public RestResult<Integer> createStatisticLemma(@RequestBody @Valid OntologyStatisticLemmaCreateParam param) {
         Integer id = ontologyLemmaService.createStatisticLemma(param);
         return RestResult.ofData(id);
     }
 
     @PutMapping("/statistic")
-    @ApiOperation(value = "更新本体统计词条")
+    @ApiOperation(value = "更新本体统计词条(webhook)")
     public RestResult updateStatisticLemma(@RequestBody @Valid OntologyStatisticLemmaUpdateParam param) {
         ontologyLemmaService.updateStatisticLemma(param);
         return RestResult.success();

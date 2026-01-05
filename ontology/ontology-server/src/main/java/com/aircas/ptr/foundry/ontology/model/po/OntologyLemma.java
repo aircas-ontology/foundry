@@ -4,10 +4,14 @@ import com.aircas.ptr.foundry.common.constant.OntologyLemmaTypeEnum;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import lombok.Builder;
 import lombok.Data;
+import lombok.experimental.Accessors;
 
 import java.util.Date;
 
+@Builder
+@Accessors(chain = true)
 @Data
 @TableName("ontology_lemma")
 public class OntologyLemma {
@@ -24,8 +28,6 @@ public class OntologyLemma {
     private Integer parentId;
 
     private OntologyLemmaTypeEnum type;
-
-    private Integer level;
 
     private Integer orderIndex;
 

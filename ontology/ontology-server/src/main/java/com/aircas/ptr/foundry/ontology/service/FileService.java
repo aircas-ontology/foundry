@@ -8,4 +8,6 @@ public interface FileService {
 
     String getUrlByImage(MultipartFile image) throws  Exception;
 
+    String getPreviewUrl(MultipartFile file);
+
 }
