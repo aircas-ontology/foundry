@@ -10,14 +10,25 @@ public class OnInsertUpdateHandler implements MetaObjectHandler {
     @Override
     public void insertFill(MetaObject metaObject) {
         Date now = new Date();
-        this.strictInsertFill(metaObject,"createTime",Date.class,now);
-        this.strictInsertFill(metaObject,"updateTime",Date.class,now);
-
+        if (metaObject.hasGetter("createTime")) {
+            this.strictInsertFill(metaObject, "createTime", Date.class, now);
+        }
+        if (metaObject.hasGetter("updateTime")) {
+            this.strictInsertFill(metaObject, "updateTime", Date.class, now);
+        }
+        if (metaObject.hasGetter("latestQueryTime")) {
+            this.strictInsertFill(metaObject, "latestQueryTime", Date.class, now);
+        }
     }
 
     @Override
     public void updateFill(MetaObject metaObject) {
         Date now = new Date();
-        this.strictUpdateFill(metaObject,"updateTime",Date.class,now);
+        if (metaObject.hasGetter("updateTime")) {
+            this.strictUpdateFill(metaObject, "updateTime", Date.class, now);
+        }
+        if (metaObject.hasGetter("latestQueryTime")) {
+            this.strictUpdateFill(metaObject, "latestQueryTime", Date.class, now);
+        }
     }
 }

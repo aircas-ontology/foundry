@@ -32,6 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -226,7 +227,9 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 .set(OntologyMeta::getMetaGroupId, String.join(",", updateParam.getGroupIds()))
                 .set(OntologyMeta::getIcon, updateParam.getIcon())
                 .set(OntologyMeta::getDescription, updateParam.getDescription())
-                .set(OntologyMeta::getDisplayName, updateParam.getDisplayName());
+                .set(OntologyMeta::getDisplayName, updateParam.getDisplayName())
+                .set(OntologyMeta::getLatestQueryTime, new Date())
+                .set(OntologyMeta::getUpdateTime, new Date());
         update(null, updateWrapper);
     }
 
@@ -234,6 +237,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
     @Override
     public OntologyMetaInfoVO getMetaByUniqueIdentifier(String uniqueIdentifier) {
         OntologyMeta ontologyMeta = getOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, uniqueIdentifier).eq(OntologyMeta::getStatus, Status.ENABLE.getValue()));
+        updateById(ontologyMeta.setLatestQueryTime(new Date()));
         return DataConverter.convert(ontologyMeta);
     }
 
@@ -295,7 +299,9 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         }
 
         var metaList = list(new QueryWrapper<OntologyMeta>()
-                .eq("status", Status.ENABLE.getValue()).orderBy(orderBy != null, sort != null && sort.equals(QuerySortEnum.ASC), orderBy == null ? "id" : orderBy.getValue()))
+                .eq("status", Status.ENABLE.getValue()).orderBy(orderBy != null,
+                        sort != null && sort.equals(QuerySortEnum.ASC),
+                        orderBy == null ? "id" : orderBy.getValue()).last("NULLS LAST "))
                 .stream().map(meta -> DataConverter.convert(meta)).collect(Collectors.toList());
         return groups.stream().map(group -> {
             var metaInfoVOList = metaList.stream().filter(meta -> meta.getMetaGroupId().contains(group.getGroupId())).collect(Collectors.toList());

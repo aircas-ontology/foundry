@@ -15,7 +15,9 @@ import lombok.Getter;
 public enum OntologyOrderByEnum {
 
     NAME("display_name"),
-    UPDATE_TIME("update_time");
+    UPDATE_TIME("update_time"),
+    QUERY_TIME("latest_query_time"),
+    ;
 
     private final String value;
 }

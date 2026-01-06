@@ -50,6 +50,10 @@ public class OntologyMeta implements Serializable {
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private Date updateTime;
 
+
+    @TableField(fill = FieldFill.INSERT_UPDATE)
+    private Date latestQueryTime;
+
     /**
      * 图标
      */

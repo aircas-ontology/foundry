@@ -100,6 +100,7 @@ public class DataConverter {
                 .apiName(ontologyMeta.getApiName())
                 .createTime(ontologyMeta.getCreateTime())
                 .updateTime(ontologyMeta.getUpdateTime())
+                .latestQueryTime(ontologyMeta.getLatestQueryTime())
                 .description(ontologyMeta.getDescription())
                 .icon(ontologyMeta.getIcon())
                 .metaGroupId(StringUtils.isEmpty(ontologyMeta.getMetaGroupId()) ? Sets.newHashSet() : Arrays.stream(ontologyMeta.getMetaGroupId().split(",")).collect(Collectors.toSet()))

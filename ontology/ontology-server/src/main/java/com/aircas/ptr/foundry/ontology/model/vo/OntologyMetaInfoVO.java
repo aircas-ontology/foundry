@@ -50,6 +50,13 @@ public class OntologyMetaInfoVO {
     private Date updateTime;
 
     /**
+     * 最新查看时间
+     */
+    @ApiModelProperty(name = "latestQueryTime", value = "最新查看时间")
+    @JsonFormat(pattern = DATE_FORMAT_DEFAULT, timezone = "GMT+8")
+    private Date latestQueryTime;
+
+    /**
      * 图标
      */
     @ApiModelProperty(name = "icon", value = "图标")
