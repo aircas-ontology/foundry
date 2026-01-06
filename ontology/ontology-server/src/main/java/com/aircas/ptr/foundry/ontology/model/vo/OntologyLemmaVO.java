@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.ontology.model.vo;
 
 import com.aircas.ptr.foundry.common.constant.OntologyLemmaTypeEnum;
+import com.fasterxml.jackson.databind.JsonNode;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.AllArgsConstructor;
@@ -37,5 +38,5 @@ public class OntologyLemmaVO {
     private Integer orderIndex;
 
     @ApiModelProperty(name = "extraInfo", required = false)
-    private String extraInfo;
+    private JsonNode extraInfo;
 }

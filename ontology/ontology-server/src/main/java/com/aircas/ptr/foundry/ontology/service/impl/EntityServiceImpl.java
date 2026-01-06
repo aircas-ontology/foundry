@@ -256,6 +256,7 @@ public class EntityServiceImpl implements EntityService {
                     .propertyDisplayName(p.getDisplayName())
                     .propertyValues(Lists.newArrayList(colValue))
                     .propertyUniqIdentifier(p.getUniqueIdentifier())
+                    .propertyApiName(p.getApiName())
                     .build();
         }).collect(Collectors.toList());
         res.addAll(details);
@@ -292,6 +293,7 @@ public class EntityServiceImpl implements EntityService {
                             .tag(p.getTag())
                             .propertyDisplayName(p.getDisplayName())
                             .propertyUniqIdentifier(p.getUniqueIdentifier())
+                            .propertyApiName(p.getApiName())
                             .propertyValues(values)
                             .build();
                 }).collect(Collectors.toList());

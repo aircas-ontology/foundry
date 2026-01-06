@@ -136,6 +136,7 @@ public class OntologyLemmaServiceImpl extends ServiceImpl<OntologyLemmaMapper, O
     }
 
     @Override
+    @SneakyThrows
     public OntologyLemmaVO queryLemmaById(Integer lemmaId) {
         var lemma = getById(lemmaId);
         PreconditionUtils.checkNotNull(lemma, "invalid lemmaId：" + lemmaId);
@@ -143,7 +144,7 @@ public class OntologyLemmaServiceImpl extends ServiceImpl<OntologyLemmaMapper, O
         return OntologyLemmaVO.builder()
                 .lemmaId(lemma.getId())
                 .content(lemma.getContent())
-                .extraInfo(lemma.getExtraInfo())
+                .extraInfo(objectMapper.readTree(lemma.getExtraInfo()))
                 .orderIndex(lemma.getOrderIndex())
                 .parentId(lemma.getParentId())
                 .title(lemma.getTitle())

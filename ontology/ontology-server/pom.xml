@@ -153,6 +153,13 @@
             <version>2.7.0</version>
         </dependency>
 
+        <dependency>
+            <groupId>org.orekit</groupId>
+            <artifactId>orekit</artifactId>
+            <version>11.3.1</version>
+        </dependency>
+
+
     </dependencies>
 
     <build>
