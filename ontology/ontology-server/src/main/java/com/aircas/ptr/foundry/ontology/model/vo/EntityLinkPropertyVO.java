@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.ontology.model.vo;
 
 import com.aircas.ptr.foundry.common.constant.OntologyLinkTypeEnum;
+import com.aircas.ptr.foundry.common.constant.Status;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.AllArgsConstructor;
@@ -8,6 +9,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
+
+import java.util.Date;
 
 
 @Data
@@ -51,5 +54,15 @@ public class EntityLinkPropertyVO {
 
     @ApiModelProperty(name = "displayNameTo", value = "结束实体展示名称")
     private String displayNameTo;
+
+    //先看可见窗口，若不存在，则通过status判断关联关系
+    @ApiModelProperty(name = "startTime", value = "可见窗口开始时间")
+    private Date startTime;
+
+    @ApiModelProperty(name = "endTime", value = "可见窗口结束时间")
+    private Date endTime;
+
+    @ApiModelProperty(name = "status", value = "关系状态")
+    private Status status;
 
 }

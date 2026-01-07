@@ -67,10 +67,18 @@ public class OntologyEntityController {
     }
 
     @PostMapping("/link")
-    @ApiOperation(value = "查询实体的关联关系")
+    @ApiOperation(value = "查询当前实体的所有可见关联关系")
     public RestResult<List<EntityLinkPropertyVO>> getEntityLinksByPrimaryKey(@RequestBody @Valid EntityQueryParam param) {
         return RestResult.ofData(entityService.getEntityLinksByPrimaryKey(param.getOntologyUniqueIdentifier(), param.getEntityPrimaryKey()));
     }
+
+
+    @PostMapping("/all_link")
+    @ApiOperation(value = "查询当前实体的所有关联关系")
+    public RestResult<List<EntityLinkPropertyVO>> getEntityAllLinksByPrimaryKey(@RequestBody @Valid EntityQueryParam param) {
+        return RestResult.ofData(entityService.getEntityAllLinksByPrimaryKey(param.getOntologyUniqueIdentifier(), param.getEntityPrimaryKey()));
+    }
+
 
     @PostMapping("/action/execute")
     @ApiOperation(value = "执行实体的行为")

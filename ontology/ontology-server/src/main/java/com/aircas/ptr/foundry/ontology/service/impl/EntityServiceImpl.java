@@ -3,6 +3,7 @@ package com.aircas.ptr.foundry.ontology.service.impl;
 import com.aircas.ptr.foundry.common.constant.*;
 import com.aircas.ptr.foundry.common.util.DateUtils;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
+import com.aircas.ptr.foundry.ontology.converter.DataConverter;
 import com.aircas.ptr.foundry.ontology.model.document.EntityNode;
 import com.aircas.ptr.foundry.ontology.model.document.EntityRelation;
 import com.aircas.ptr.foundry.ontology.model.param.*;
@@ -142,6 +143,9 @@ public class EntityServiceImpl implements EntityService {
 
         if (CollectionUtils.isNotEmpty(fromNodes) && CollectionUtils.isNotEmpty(toNodes)) {
             var relations = new ArrayList<EntityRelation>();
+            Date startTime = link.getType().equals(OntologyLinkTypeEnum.COMPOSITION) ? DateUtils.MIN_DATE : null;
+            Date endTime = link.getType().equals(OntologyLinkTypeEnum.COMPOSITION) ? DateUtils.MAX_DATE : null;
+
             fromNodes.forEach(from ->
                     toNodes.forEach(to ->
                             relations.add(EntityRelation.builder()
@@ -149,6 +153,8 @@ public class EntityServiceImpl implements EntityService {
                                     .from(from)
                                     .to(to)
                                     .status(OntologyLinkTypeEnum.mappingToStatus(link.getType()))
+                                    .startTime(startTime)
+                                    .endTime(endTime)
                                     .createTime(new Date())
                                     .updateTime(new Date())
                                     .type(link.getType())
@@ -213,19 +219,14 @@ public class EntityServiceImpl implements EntityService {
             return Lists.newArrayList();
         }
 
-        return relations.stream().map(v -> EntityLinkPropertyVO.builder()
-                        .ontologyFrom(v.getFrom().getOntologyUniqIdentifier())
-                        .ontologyTo(v.getTo().getOntologyUniqIdentifier())
-                        .entityPrimaryKeyFrom(v.getFrom().getPrimaryKey())
-                        .entityPrimaryKeyTo(v.getTo().getPrimaryKey())
-                        .displayNameFrom(v.getFrom().getDisplayName())
-                        .displayNameTo(v.getTo().getDisplayName())
-                        .linkName(v.getName())
-                        .linkType(v.getType())
-                        .entityNodeFrom(v.getFrom().getId())
-                        .entityNodeTo(v.getTo().getId())
-                        .build())
-                .collect(Collectors.toList());
+        return relations.stream().map(v -> DataConverter.convert(v)).collect(Collectors.toList());
+    }
+
+
+    @Override
+    public List<EntityLinkPropertyVO> getEntityAllLinksByPrimaryKey(String ontologyUniqueIdentifier, Object entityPrimaryKey) {
+        var relations = relationRepository.queryAllRelationsByEntity(ontologyUniqueIdentifier, entityPrimaryKey);
+        return relations.stream().map(v -> DataConverter.convert(v)).collect(Collectors.toList());
     }
 
     @Override

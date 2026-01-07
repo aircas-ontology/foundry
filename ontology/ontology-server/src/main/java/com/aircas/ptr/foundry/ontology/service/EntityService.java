@@ -46,4 +46,6 @@ public interface EntityService {
     void createEntityNodes(String ontologyIdentifier);
 
     List<EntityIdsQueryVO> getByEntityIds(List<EntityIdsQueryParam> params);
+
+    List<EntityLinkPropertyVO> getEntityAllLinksByPrimaryKey(String ontologyUniqueIdentifier, Object entityPrimaryKey);
 }

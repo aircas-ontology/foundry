@@ -5,12 +5,14 @@ import com.aircas.ptr.foundry.common.constant.Status;
 import com.aircas.ptr.foundry.common.util.IdGenerator;
 import com.aircas.ptr.foundry.ontology.common.param.EntityDataSourceColumnParam;
 import com.aircas.ptr.foundry.ontology.common.param.EntityDataSourceParam;
+import com.aircas.ptr.foundry.ontology.model.document.EntityRelation;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyDataSourceColumnParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyPrimaryDatasourceParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyCreateParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
+import com.aircas.ptr.foundry.ontology.model.vo.EntityLinkPropertyVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyDetailVO;
@@ -23,6 +25,24 @@ import java.util.Arrays;
 import java.util.stream.Collectors;
 
 public class DataConverter {
+
+    public static EntityLinkPropertyVO convert(EntityRelation relation) {
+        return EntityLinkPropertyVO.builder()
+                .ontologyFrom(relation.getFrom().getOntologyUniqIdentifier())
+                .ontologyTo(relation.getTo().getOntologyUniqIdentifier())
+                .entityPrimaryKeyFrom(relation.getFrom().getPrimaryKey())
+                .entityPrimaryKeyTo(relation.getTo().getPrimaryKey())
+                .displayNameFrom(relation.getFrom().getDisplayName())
+                .displayNameTo(relation.getTo().getDisplayName())
+                .linkName(relation.getName())
+                .linkType(relation.getType())
+                .entityNodeFrom(relation.getFrom().getId())
+                .entityNodeTo(relation.getTo().getId())
+                .startTime(relation.getStartTime())
+                .endTime(relation.getEndTime())
+                .status(relation.getStatus())
+                .build();
+    }
 
 
     public static OntologyLinkInfoVO convert(OntologyLinkGroup link, OntologyMeta from, OntologyMeta to) {
@@ -115,17 +135,17 @@ public class DataConverter {
         }
 
         var columnParamList = param.getColumnParamList().stream().map(v -> EntityDataSourceColumnParam.builder()
-                .columnName(v.getApiName())
-                .columnType(v.getDatasourceColumnType().getValue())
-                .description(v.getDescription())
-                .isAssociateKey(v.getIsAssociateKey())
-                .isPrimaryKey(v.getIsPrimaryKey())
-                .isTitleKey(v.getIsTitleKey())
-                .associateDatasourceColumnName(v.getAssociateDatasourceColumnName())
-                .tableName(tableName)
-                .datasourceId(v.getDatasourceId())
-                .datasourceColumnName(v.getDatasourceColumnName())
-                .build())
+                        .columnName(v.getApiName())
+                        .columnType(v.getDatasourceColumnType().getValue())
+                        .description(v.getDescription())
+                        .isAssociateKey(v.getIsAssociateKey())
+                        .isPrimaryKey(v.getIsPrimaryKey())
+                        .isTitleKey(v.getIsTitleKey())
+                        .associateDatasourceColumnName(v.getAssociateDatasourceColumnName())
+                        .tableName(tableName)
+                        .datasourceId(v.getDatasourceId())
+                        .datasourceColumnName(v.getDatasourceColumnName())
+                        .build())
                 .collect(Collectors.toList());
 
         return EntityDataSourceParam.builder()

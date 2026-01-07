@@ -37,6 +37,16 @@ public interface EntityRelationRepository extends ArangoRepository<EntityRelatio
                                                       @Param("entityPrimaryKey") Object entityPrimaryKey);
 
 
+    @Query("   FOR n IN node" +
+            "                FILTER n.ontologyUniqIdentifier == @ontologyUniqueIdentifier AND n.primaryKey ==@entityPrimaryKey " +
+            "                LET nodeId = n._id " +
+            "               FOR edge IN relation " +
+            "                   FILTER (edge._from == nodeId OR edge._to == nodeId) " +
+            "                   RETURN edge ")
+    List<EntityRelation> queryAllRelationsByEntity(@Param("ontologyUniqueIdentifier") String ontologyUniqueIdentifier,
+                                                   @Param("entityPrimaryKey") Object entityPrimaryKey);
+
+
     @Query(
             "LET fromNode = (FOR n IN node" +
                     "                FILTER n.ontologyUniqIdentifier == @fromOntologyUniqueIdentifier AND n.primaryKey == @fromEntityPrimaryKey " +
@@ -53,11 +63,10 @@ public interface EntityRelationRepository extends ArangoRepository<EntityRelatio
                                                     @Param("toEntityPrimaryKey") Object toEntityPrimaryKey,
                                                     @Param("linkId") String linkId);
 
-    @Query(         "FOR edge IN relation" +
-                    "    FILTER edge.ontologyLinkId == @linkId " +
-                    "    RETURN edge")
+    @Query("FOR edge IN relation" +
+            "    FILTER edge.ontologyLinkId == @linkId " +
+            "    RETURN edge")
     List<EntityRelation> queryRelationsByLinkId(@Param("linkId") String linkId);
-
 
 
     @Query("FOR r IN relation FILTER r._key == @id UPDATE r WITH { startTime: @startTime, endTime: @endTime, status: @status } IN relation")

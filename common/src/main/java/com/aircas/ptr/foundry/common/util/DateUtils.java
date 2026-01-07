@@ -20,6 +20,11 @@ public class DateUtils {
     public static final long MILLIS_PER_MINUTE = 60000L;
     public static final long MILLIS_PER_HOUR = 3600000L;
     public static final long MILLIS_PER_DAY = 86400000L;
+
+    public static Date MAX_DATE = null;
+    public static Date MIN_DATE = null;
+
+
     private static final Map<String, DateFormat> dateFormatMap = new ConcurrentHashMap();
 
     private static final DateTimeFormatter formatter = DateTimeFormatter.ISO_ZONED_DATE_TIME;
@@ -35,6 +40,13 @@ public class DateUtils {
         dateFormatMap.put("yyyyMMdd", new SimpleDateFormat("yyyyMMdd"));
         dateFormatMap.put("yyyyMMddhhmmss", new SimpleDateFormat("yyyyMMddhhmmss"));
         dateFormatMap.put("yyyy-MM-dd HH:mm:ss.SSS", new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS"));
+
+        try {
+            MAX_DATE = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse("9999-12-31 23:59:59");
+            MIN_DATE = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse("1970-01-01 00:00:00");
+        } catch (ParseException e) {
+            e.printStackTrace();
+        }
 
     }
 
