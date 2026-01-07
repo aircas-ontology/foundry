@@ -105,6 +105,12 @@ public class OntologyProperty implements Serializable {
     private String tag;
 
 
+    /**
+     * 属性在实体中可见性
+     */
+    private Integer visibility;
+
+
 
     private static final long serialVersionUID = 1L;
 

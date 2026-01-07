@@ -5,13 +5,16 @@ import com.aircas.ptr.foundry.ontology.controller.validator.OntologyIdVerify;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyBatchCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyUpdateParam;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyVisibilityUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyDetailVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyInfoVO;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyVisibilityVO;
 import com.aircas.ptr.foundry.ontology.service.OntologyPropertyService;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import lombok.RequiredArgsConstructor;
+import lombok.var;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -90,6 +93,24 @@ public class OntologyPropertyController {
     @ApiOperation(value = "根据uniqid查询属性列表")
     public RestResult<List<OntologyPropertyDetailVO>> getPropertiesByUniqueIdentifier(@RequestBody @Valid List<String> uniqueIdentifiers) {
         return RestResult.ofData(ontologyPropertyService.getPropertiesDetailById(uniqueIdentifiers));
+    }
+
+
+    @PostMapping("/visibility")
+    @ApiOperation(value = "保存属性可见性")
+    public RestResult updatePropertyVisibility(@RequestBody @Valid OntologyPropertyVisibilityUpdateParam param) {
+        ontologyPropertyService.updatePropertyVisibility(param);
+        return RestResult.success();
+    }
+
+
+    @GetMapping("/visibility")
+    @ApiOperation(value = "查询属性可见性")
+    public RestResult<List<OntologyPropertyVisibilityVO>> getPropertyVisibility(@RequestParam(required = true, name = "ontologyUniqueIdentifier")
+                                            @ApiParam(value = "本体uniqueIdentifier", required = true)
+                                            @OntologyIdVerify String ontologyUniqueIdentifier) {
+        var res = ontologyPropertyService.getPropertyVisibility(ontologyUniqueIdentifier);
+        return RestResult.ofData(res);
     }
 
 }

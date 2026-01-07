@@ -5,12 +5,14 @@ import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.ontology.converter.DataConverter;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyUpdateParam;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyVisibilityUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.param.PropertyDatasourceParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyActionMappingIn;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyDetailVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyInfoVO;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyVisibilityVO;
 import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.TableMetadataMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyActionMappingInMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyLinkGroupMapper;
@@ -280,6 +282,41 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
     public List<OntologyPropertyDetailVO> getPropertiesDetailById(List<String> uniqueIdentifiers) {
         var prop = list(new LambdaQueryWrapper<OntologyProperty>().in(OntologyProperty::getUniqueIdentifier, uniqueIdentifiers));
         return prop.stream().map(v -> DataConverter.convert(v)).collect(Collectors.toList());
+    }
+
+    @Override
+    public List<OntologyPropertyVisibilityVO> getPropertyVisibility(String ontologyUniqueIdentifier) {
+        var properties = list(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier));
+        var pk = properties.stream().filter(v -> v.getIsPrimaryKey() == 1).findFirst();
+        if (pk.isPresent() && StringUtils.isNotEmpty(pk.get().getDatasourceColumnName())) {
+            return properties.stream().filter(v -> StringUtils.equals(v.getDatasourceId(), pk.get().getDatasourceId()))
+                    .map(v -> OntologyPropertyVisibilityVO.builder()
+                            .visibility(v.getVisibility())
+                            .propertyApiName(v.getApiName())
+                            .propertyDisplayName(v.getDisplayName())
+                            .build())
+                    .collect(Collectors.toList());
+        }
+        return Lists.newArrayList();
+    }
+
+    @Transactional(transactionManager = "mainTransactionManager")
+    @Override
+    public void updatePropertyVisibility(OntologyPropertyVisibilityUpdateParam param) {
+        var propMap = param.getPropertyVisibility().stream().collect(Collectors.toMap(v -> v.getPropertyApiName(), v -> v.getVisibility()));
+        var properties = list(new LambdaQueryWrapper<OntologyProperty>()
+                .eq(OntologyProperty::getOntologyUniqueIdentifier, param.getOntologyIdentifier())
+                .in(OntologyProperty::getApiName, propMap.keySet()));
+
+        properties.stream().forEach(v -> {
+            var visibility = propMap.get(v.getApiName());
+            //主键和标题键不能设置为不可见
+            if (visibility == 0 && (v.getIsPrimaryKey() == 1 || v.getIsTitleKey() == 1)) {
+                throw new BusinessException("主键和标题键不能设置为不可见");
+            }
+            v.setVisibility(visibility);
+        });
+        updateBatchById(properties);
     }
 
 

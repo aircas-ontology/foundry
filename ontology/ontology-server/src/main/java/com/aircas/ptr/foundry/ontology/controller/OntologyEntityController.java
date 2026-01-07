@@ -42,7 +42,7 @@ public class OntologyEntityController {
             @RequestParam(required = true, name = "ontologyUniqueIdentifier") @ApiParam(value = "本体id", required = true) @OntologyIdVerify String ontologyUniqueIdentifier,
             @RequestParam(required = false, defaultValue = "1") Integer pageNum,
             @RequestParam(required = false, defaultValue = "10") Integer pageSize) {
-        return RestResult.ofData(entityService.getEntities(ontologyUniqueIdentifier, "", "", pageNum, pageSize));
+        return RestResult.ofData(entityService.getEntities(ontologyUniqueIdentifier, "", "", pageNum, pageSize, false));
     }
 
 
@@ -54,7 +54,8 @@ public class OntologyEntityController {
                 param.getPropertyName(),
                 param.getPropertyValue(),
                 param.getPageNum(),
-                param.getPageSize()));
+                param.getPageSize(),
+                true));
     }
 
 
@@ -75,7 +76,6 @@ public class OntologyEntityController {
     @ApiOperation(value = "执行实体的行为")
     public RestResult<String> executeAction(@RequestBody @Valid EntityActionExecuteParam param) throws Exception {
         return RestResult.ofData(entityService.executeAction(param));
-
     }
 
 

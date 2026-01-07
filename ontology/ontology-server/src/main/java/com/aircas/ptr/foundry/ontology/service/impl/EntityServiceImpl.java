@@ -305,7 +305,12 @@ public class EntityServiceImpl implements EntityService {
 
 
     @Override
-    public Page<EntityInfoVO> getEntities(String ontologyUniqueIdentifier, String propertyName, Object propertyValue, Integer pageNum, Integer pageSize) {
+    public Page<EntityInfoVO> getEntities(String ontologyUniqueIdentifier,
+                                          String propertyName,
+                                          Object propertyValue,
+                                          Integer pageNum,
+                                          Integer pageSize,
+                                          Boolean needFilterVisibility) {
         Page<EntityInfoVO> result = new Page<EntityInfoVO>().setSize(pageSize).setCurrent(pageNum);
         var props = propertyMapper.selectList(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier));
         if (CollectionUtils.isEmpty(props)) {
@@ -317,7 +322,14 @@ public class EntityServiceImpl implements EntityService {
             return result;
         }
         var primaryDatasource = primaryProperty.getDatasourceId();
-        var primaryPropMap = props.stream().filter(v -> StringUtils.equals(v.getDatasourceId(), primaryDatasource)).collect(Collectors.toMap(v -> v.getDatasourceColumnName(), v -> v));
+        Map<String, OntologyProperty> primaryPropMap;
+        if (needFilterVisibility) {
+            primaryPropMap = props.stream().filter(v -> StringUtils.equals(v.getDatasourceId(), primaryDatasource) && v.getVisibility() == 1)
+                    .collect(Collectors.toMap(v -> v.getDatasourceColumnName(), v -> v));
+        } else {
+            primaryPropMap = props.stream().filter(v -> StringUtils.equals(v.getDatasourceId(), primaryDatasource))
+                    .collect(Collectors.toMap(v -> v.getDatasourceColumnName(), v -> v));
+        }
         var titleKey = primaryPropMap.values().stream().filter(v -> v.getIsTitleKey() == 1).findFirst();
 
         String columnName = null;
@@ -397,7 +409,7 @@ public class EntityServiceImpl implements EntityService {
             var linkedOntology = linkGroupMapper.selectOne(new LambdaQueryWrapper<OntologyLinkGroup>().eq(OntologyLinkGroup::getUniqueIdentifier, link.getOntologyLinkUniqIdentifier()))
                     .getOntologyUniqueIdentifierTo();
             //获取关联本体下的所有实体详情
-            var entities = getEntities(linkedOntology, "", "", 1, Integer.MAX_VALUE);
+            var entities = getEntities(linkedOntology, "", "", 1, Integer.MAX_VALUE, false);
             var records = entities.getRecords();
             //实体数据必须存在
             if (CollectionUtils.isNotEmpty(records)) {
@@ -499,7 +511,7 @@ public class EntityServiceImpl implements EntityService {
             return Lists.newArrayList();
         }
         return params.stream().map(p -> {
-            var entities = getEntities(p.getOntologyUniqueIdentifier(), null, null, 1, Integer.MAX_VALUE);
+            var entities = getEntities(p.getOntologyUniqueIdentifier(), null, null, 1, Integer.MAX_VALUE, false);
             var entityPrimaryKeys = p.getEntityPrimaryKeys();
             List<EntityInfoVO> entityList = Lists.newArrayList();
             if (CollectionUtils.isEmpty(entityPrimaryKeys)) {
