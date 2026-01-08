@@ -3,10 +3,7 @@ package com.aircas.ptr.foundry.ontology.controller;
 import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.controller.validator.OntologyIdVerify;
 import com.aircas.ptr.foundry.ontology.model.param.*;
-import com.aircas.ptr.foundry.ontology.model.vo.EntityIdsQueryVO;
-import com.aircas.ptr.foundry.ontology.model.vo.EntityInfoVO;
-import com.aircas.ptr.foundry.ontology.model.vo.EntityLinkPropertyVO;
-import com.aircas.ptr.foundry.ontology.model.vo.EntityPropertyDetailVO;
+import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.aircas.ptr.foundry.ontology.service.EntityService;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import io.swagger.annotations.Api;
@@ -67,16 +64,16 @@ public class OntologyEntityController {
     }
 
     @PostMapping("/link")
-    @ApiOperation(value = "查询当前实体的所有可见关联关系")
+    @ApiOperation(value = "查询单个实体实体当前时刻的所有可见关联关系")
     public RestResult<List<EntityLinkPropertyVO>> getEntityLinksByPrimaryKey(@RequestBody @Valid EntityQueryParam param) {
         return RestResult.ofData(entityService.getEntityLinksByPrimaryKey(param.getOntologyUniqueIdentifier(), param.getEntityPrimaryKey()));
     }
 
 
     @PostMapping("/all_link")
-    @ApiOperation(value = "查询当前实体的所有关联关系")
-    public RestResult<List<EntityLinkPropertyVO>> getEntityAllLinksByPrimaryKey(@RequestBody @Valid EntityQueryParam param) {
-        return RestResult.ofData(entityService.getEntityAllLinksByPrimaryKey(param.getOntologyUniqueIdentifier(), param.getEntityPrimaryKey()));
+    @ApiOperation(value = "查询多个实体在指定时间段内的所有关联关系")
+    public RestResult<List<EntityLinksVO>> getAllLinksByEntityIdsAndTime(@RequestBody @Valid List<EntityIdsAndTimeRangeQueryParam> params) {
+        return RestResult.ofData(entityService.getAllLinksByEntityIdsAndTime(params));
     }
 
 

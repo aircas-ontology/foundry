@@ -37,14 +37,17 @@ public interface EntityRelationRepository extends ArangoRepository<EntityRelatio
                                                       @Param("entityPrimaryKey") Object entityPrimaryKey);
 
 
+
+
+
     @Query("   FOR n IN node" +
-            "                FILTER n.ontologyUniqIdentifier == @ontologyUniqueIdentifier AND n.primaryKey ==@entityPrimaryKey " +
+            "                FILTER n.ontologyUniqIdentifier == @ontologyUniqueIdentifier AND n.primaryKey IN @entityPrimaryKeys " +
             "                LET nodeId = n._id " +
             "               FOR edge IN relation " +
             "                   FILTER (edge._from == nodeId OR edge._to == nodeId) " +
             "                   RETURN edge ")
-    List<EntityRelation> queryAllRelationsByEntity(@Param("ontologyUniqueIdentifier") String ontologyUniqueIdentifier,
-                                                   @Param("entityPrimaryKey") Object entityPrimaryKey);
+    List<EntityRelation> queryAllRelationsByEntities(@Param("ontologyUniqueIdentifier") String ontologyUniqueIdentifier,
+                                                     @Param("entityPrimaryKeys") List<Object> entityPrimaryKeys);
 
 
     @Query(
@@ -80,4 +83,6 @@ public interface EntityRelationRepository extends ArangoRepository<EntityRelatio
         var partition = Lists.partition(nodes, 1000);
         partition.forEach(p -> saveAll(p));
     }
+
+
 }

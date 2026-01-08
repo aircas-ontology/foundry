@@ -69,3 +69,7 @@ minio:
   accessKey: root
   secretKey: iecas123
   bucketName: ptr
+
+#logging:
+#  level:
+#    com.arangodb: DEBUG

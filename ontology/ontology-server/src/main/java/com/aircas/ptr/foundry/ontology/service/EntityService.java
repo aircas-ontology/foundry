@@ -2,12 +2,10 @@ package com.aircas.ptr.foundry.ontology.service;
 
 import com.aircas.ptr.foundry.ontology.model.document.EntityNode;
 import com.aircas.ptr.foundry.ontology.model.param.EntityActionExecuteParam;
+import com.aircas.ptr.foundry.ontology.model.param.EntityIdsAndTimeRangeQueryParam;
 import com.aircas.ptr.foundry.ontology.model.param.EntityIdsQueryParam;
 import com.aircas.ptr.foundry.ontology.model.param.EntityUpdateParam;
-import com.aircas.ptr.foundry.ontology.model.vo.EntityIdsQueryVO;
-import com.aircas.ptr.foundry.ontology.model.vo.EntityInfoVO;
-import com.aircas.ptr.foundry.ontology.model.vo.EntityLinkPropertyVO;
-import com.aircas.ptr.foundry.ontology.model.vo.EntityPropertyDetailVO;
+import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 
 import java.util.List;
@@ -47,5 +45,5 @@ public interface EntityService {
 
     List<EntityIdsQueryVO> getByEntityIds(List<EntityIdsQueryParam> params);
 
-    List<EntityLinkPropertyVO> getEntityAllLinksByPrimaryKey(String ontologyUniqueIdentifier, Object entityPrimaryKey);
+    List<EntityLinksVO> getAllLinksByEntityIdsAndTime(List<EntityIdsAndTimeRangeQueryParam> params);
 }
