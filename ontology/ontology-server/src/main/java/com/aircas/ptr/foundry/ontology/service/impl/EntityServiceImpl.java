@@ -213,7 +213,8 @@ public class EntityServiceImpl implements EntityService {
     public List<EntityLinkPropertyVO> getEntityLinksByPrimaryKey(String ontologyUniqueIdentifier,
                                                                  Object entityPrimaryKey) {
 
-        var relations = relationRepository.queryEnableRelationsByEntity(ontologyUniqueIdentifier, entityPrimaryKey);
+   //     var relations = relationRepository.queryEnableRelationsByEntity(ontologyUniqueIdentifier, entityPrimaryKey);
+        var relations = relationRepository.queryAllRelationsByEntities(ontologyUniqueIdentifier, Lists.newArrayList(entityPrimaryKey));
         if (CollectionUtils.isEmpty(relations)) {
             return Lists.newArrayList();
         }
