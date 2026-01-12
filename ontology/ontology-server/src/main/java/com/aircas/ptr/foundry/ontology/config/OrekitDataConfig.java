@@ -15,7 +15,7 @@ public class OrekitDataConfig {
     @Value("${orekit.data.path}")
     private String path;
 
-    @Bean
+    @Bean("dataProvidersManager")
     public DataProvidersManager dataProvidersManager() {
         DataProvidersManager manager = DataContext.getDefault().getDataProvidersManager();
         File orekitData = new File(path);
