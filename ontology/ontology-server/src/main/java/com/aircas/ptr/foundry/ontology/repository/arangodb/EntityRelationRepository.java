@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.ontology.repository.arangodb;
 
 import com.aircas.ptr.foundry.common.constant.Status;
+import com.aircas.ptr.foundry.ontology.model.common.VisibilityWindow;
 import com.aircas.ptr.foundry.ontology.model.document.EntityNode;
 import com.aircas.ptr.foundry.ontology.model.document.EntityRelation;
 import com.arangodb.springframework.annotation.Query;
@@ -72,9 +73,10 @@ public interface EntityRelationRepository extends ArangoRepository<EntityRelatio
     List<EntityRelation> queryRelationsByLinkId(@Param("linkId") String linkId);
 
 
-    @Query("FOR r IN relation FILTER r._key == @id UPDATE r WITH { startTime: @startTime, endTime: @endTime, status: @status } IN relation")
+    @Query("FOR r IN relation FILTER r._key == @id UPDATE r WITH { startTime: @startTime, endTime: @endTime, status: @status, timeWindows: @timeWindows } IN relation")
     void updateRelation(@Param("startTime") Date startTime,
                         @Param("endTime") Date endTime,
+                        @Param("timeWindows") List<VisibilityWindow> timeWindows,
                         @Param("status") Status status,
                         @Param("id") String id);
 

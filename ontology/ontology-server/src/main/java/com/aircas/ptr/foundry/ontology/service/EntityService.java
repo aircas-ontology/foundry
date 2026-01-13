@@ -45,5 +45,5 @@ public interface EntityService {
 
     List<EntityIdsQueryVO> getByEntityIds(List<EntityIdsQueryParam> params);
 
-    List<EntityLinksVO> getAllLinksByEntityIdsAndTime(List<EntityIdsAndTimeRangeQueryParam> params);
+    List<EntityLinksVO> getAllLinksByEntityIds(List<EntityIdsQueryParam> param);
 }

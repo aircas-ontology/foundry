@@ -4,6 +4,7 @@ import com.aircas.ptr.foundry.common.constant.*;
 import com.aircas.ptr.foundry.common.util.DateUtils;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.ontology.converter.DataConverter;
+import com.aircas.ptr.foundry.ontology.model.common.VisibilityWindow;
 import com.aircas.ptr.foundry.ontology.model.document.EntityNode;
 import com.aircas.ptr.foundry.ontology.model.document.EntityRelation;
 import com.aircas.ptr.foundry.ontology.model.param.*;
@@ -23,6 +24,7 @@ import com.aircas.ptr.foundry.ontology.service.FunctionService;
 import com.aircas.ptr.foundry.ontology.service.OntologyActionService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -35,6 +37,7 @@ import org.apache.commons.collections.MapUtils;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.context.expression.MapAccessor;
+import org.springframework.core.task.TaskExecutor;
 import org.springframework.expression.Expression;
 import org.springframework.expression.ExpressionParser;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
@@ -88,6 +91,9 @@ public class EntityServiceImpl implements EntityService {
 
     @Resource
     private TableMetadataMapper tableMetadataMapper;
+
+    @Resource(name = "taskExecutor")
+    private TaskExecutor taskExecutor;
 
     private Configuration safeConfig = Configuration.builder().build().addOptions(Option.DEFAULT_PATH_LEAF_TO_NULL, Option.SUPPRESS_EXCEPTIONS);
 
@@ -143,8 +149,18 @@ public class EntityServiceImpl implements EntityService {
 
         if (CollectionUtils.isNotEmpty(fromNodes) && CollectionUtils.isNotEmpty(toNodes)) {
             var relations = new ArrayList<EntityRelation>();
+            var windows = new ArrayList<VisibilityWindow>();
+
             Date startTime = link.getType().equals(OntologyLinkTypeEnum.COMPOSITION) ? DateUtils.MIN_DATE : null;
             Date endTime = link.getType().equals(OntologyLinkTypeEnum.COMPOSITION) ? DateUtils.MAX_DATE : null;
+
+
+            if (link.getType().equals(OntologyLinkTypeEnum.COMPOSITION)) {
+                windows.add(VisibilityWindow.builder()
+                        .startTime(DateUtils.MIN_DATE)
+                        .endTime(DateUtils.MAX_DATE)
+                        .build());
+            }
 
             fromNodes.forEach(from ->
                     toNodes.forEach(to ->
@@ -153,6 +169,7 @@ public class EntityServiceImpl implements EntityService {
                                     .from(from)
                                     .to(to)
                                     .status(OntologyLinkTypeEnum.mappingToStatus(link.getType()))
+                                    .timeWindows(windows)
                                     .startTime(startTime)
                                     .endTime(endTime)
                                     .createTime(new Date())
@@ -213,7 +230,7 @@ public class EntityServiceImpl implements EntityService {
     public List<EntityLinkPropertyVO> getEntityLinksByPrimaryKey(String ontologyUniqueIdentifier,
                                                                  Object entityPrimaryKey) {
 
-   //     var relations = relationRepository.queryEnableRelationsByEntity(ontologyUniqueIdentifier, entityPrimaryKey);
+        //var relations = relationRepository.queryEnableRelationsByEntity(ontologyUniqueIdentifier, entityPrimaryKey);
         var relations = relationRepository.queryAllRelationsByEntities(ontologyUniqueIdentifier, Lists.newArrayList(entityPrimaryKey));
         if (CollectionUtils.isEmpty(relations)) {
             return Lists.newArrayList();
@@ -223,8 +240,28 @@ public class EntityServiceImpl implements EntityService {
 
 
     @Override
-    public List<EntityLinksVO> getAllLinksByEntityIdsAndTime(List<EntityIdsAndTimeRangeQueryParam> params) {
-        return null;
+    public List<EntityLinksVO> getAllLinksByEntityIds(List<EntityIdsQueryParam> params) {
+        List<EntityLinksVO> res = Lists.newArrayList();
+        params.stream().forEach(p -> {
+            var relations = relationRepository.queryAllRelationsByEntities(p.getOntologyUniqueIdentifier(), p.getEntityPrimaryKeys());
+
+            var map1 = relations.stream().collect(Collectors.groupingBy(v -> v.getFrom().getOntologyUniqIdentifier() + v.getFrom().getPrimaryKey()));
+            var map2 = relations.stream().collect(Collectors.groupingBy(v -> v.getTo().getOntologyUniqIdentifier() + v.getTo().getPrimaryKey()));
+
+            map2.forEach((key, list) -> map1.merge(key, list, (list1, list2) -> {
+                list1.addAll(list2);
+                return list1;
+            }));
+            p.getEntityPrimaryKeys().forEach(pk -> {
+                var r = map1.get(p.getOntologyUniqueIdentifier() + pk);
+                res.add(EntityLinksVO.builder()
+                        .links(r.stream().map(v -> DataConverter.convert(v)).collect(Collectors.toList()))
+                        .entityPrimaryKey(pk)
+                        .ontologyUniqueIdentifier(p.getOntologyUniqueIdentifier())
+                        .build());
+            });
+        });
+        return res;
     }
 
     @Override
@@ -431,21 +468,18 @@ public class EntityServiceImpl implements EntityService {
                         //构造函数参数，list类型返回所有值，其他类型取第一个值
                         var functionResult = callFunctionAndUpdateProperty(functionInputParams, mappings, mergedEntityDetailMap, actionDetailVO, functionDetailVO, ontologyProperties, param.getEntityPrimaryKey());
                         executeResult.add(functionResult);
-                        JsonNode jsonNode = jsonMapper.readTree(functionResult);
+                        FunctionResultVO resultVO = jsonMapper.readValue(functionResult, new TypeReference<FunctionResultVO>() {
+                        });
                         //根据函数的输出结果更新实体关系
                         var relation = relationRepository.queryRelationByFromNodeAndToNode(param.getOntologyUniqueIdentifier(), param.getEntityPrimaryKey(), linkedOntology, entity.getPrimaryKey(), link.getOntologyLinkUniqIdentifier());
                         if (relation != null) {
-                            var startTime = jsonNode.get("startTime").asText("");
-                            var endTime = jsonNode.get("endTime").asText("");
-
                             //返回结果有可见窗口，直接更新relation startTime/endTime
-                            if (StringUtils.isNotEmpty(startTime) && StringUtils.isNotEmpty(endTime)) {
-                                relationRepository.updateRelation(DateUtils.fromString2Date(startTime, "yyyy-MM-dd HH:mm:ss.SSS"),
-                                        DateUtils.fromString2Date(endTime, "yyyy-MM-dd HH:mm:ss.SSS"), relation.getStatus(), relation.getId());
+                            if (resultVO.getStartTime() != null && resultVO.getEndTime() != null) {
+                                relationRepository.updateRelation(resultVO.getStartTime(), resultVO.getEndTime(), resultVO.getTimeWindows(), Status.ENABLE, relation.getId());
                             } else {
                                 //无可见窗口时，解析spel表达式,更新relation enable
                                 Boolean expResult = evaluateJsonCondition(functionResult, link.getOntologyLinkFunctionParamExpression());
-                                relationRepository.updateRelation(null, null, expResult ? Status.ENABLE : Status.DELETE, relation.getId());
+                                relationRepository.updateRelation(null, null, resultVO.getTimeWindows(), expResult ? Status.ENABLE : Status.DELETE, relation.getId());
                             }
                         }
                     } catch (Exception e) {

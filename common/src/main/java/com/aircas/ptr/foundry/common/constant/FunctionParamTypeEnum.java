@@ -24,6 +24,8 @@ public enum FunctionParamTypeEnum {
     SHORT(9, "短整型"),
     CHAR(10, "字符"),
     List(11, "列表"),
+    Date(12, "日期"),
+
     ;
 
     private final int value;
@@ -52,6 +54,7 @@ public enum FunctionParamTypeEnum {
         FUNC_PARAM_TYPE_MAP.put("java.lang.Short", FunctionParamTypeEnum.SHORT);
         FUNC_PARAM_TYPE_MAP.put("java.lang.String", FunctionParamTypeEnum.STRING);
         FUNC_PARAM_TYPE_MAP.put("java.util.List", FunctionParamTypeEnum.List);
+        FUNC_PARAM_TYPE_MAP.put("java.util.Date", FunctionParamTypeEnum.Date);
     }
 
     public static FunctionParamTypeEnum getByTypeName(String type) {

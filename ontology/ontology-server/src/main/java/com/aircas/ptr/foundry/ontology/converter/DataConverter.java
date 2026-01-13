@@ -40,6 +40,7 @@ public class DataConverter {
                 .entityNodeTo(relation.getTo().getId())
                 .startTime(relation.getStartTime())
                 .endTime(relation.getEndTime())
+                .visibilityWindows(relation.getTimeWindows())
                 .status(relation.getStatus())
                 .build();
     }

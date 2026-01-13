@@ -8,6 +8,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 
+import javax.validation.constraints.NotNull;
 import java.util.Date;
 
 @Data
@@ -18,9 +19,11 @@ import java.util.Date;
 public class EntityIdsAndTimeRangeQueryParam extends EntityIdsQueryParam {
 
     @ApiModelProperty(name = "startTime", value = "开始时间", example = "2025-10-01T12:34:56Z")
+    @NotNull(message = "startTime is null")
     private Date startTime;
 
     @ApiModelProperty(name = "endTime", value = "结束时间", example = "2026-10-01T12:34:56Z")
+    @NotNull(message = "startTime is null")
     private Date endTime;
 
 }

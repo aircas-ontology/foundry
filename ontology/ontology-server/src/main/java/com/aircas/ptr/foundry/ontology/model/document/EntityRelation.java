@@ -2,6 +2,7 @@ package com.aircas.ptr.foundry.ontology.model.document;
 
 import com.aircas.ptr.foundry.common.constant.OntologyLinkTypeEnum;
 import com.aircas.ptr.foundry.common.constant.Status;
+import com.aircas.ptr.foundry.ontology.model.common.VisibilityWindow;
 import com.arangodb.springframework.annotation.ArangoId;
 import com.arangodb.springframework.annotation.Edge;
 import com.arangodb.springframework.annotation.From;
@@ -13,6 +14,7 @@ import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
 
 import java.util.Date;
+import java.util.List;
 
 @Data
 @Builder
@@ -46,6 +48,9 @@ public class EntityRelation {
 
     private Date updateTime;
 
+    private Status status;
+
+
     /**
      *  可见窗口开始时间
      */
@@ -56,8 +61,10 @@ public class EntityRelation {
      */
     private Date endTime;
 
-
-    private Status status;
+    /**
+     * 可见窗口（包含过去3天-未来7天）
+     */
+    private List<VisibilityWindow> timeWindows;
 
 
 } 

@@ -71,9 +71,9 @@ public class OntologyEntityController {
 
 
     @PostMapping("/all_link")
-    @ApiOperation(value = "查询多个实体在指定时间段内的所有关联关系")
-    public RestResult<List<EntityLinksVO>> getAllLinksByEntityIdsAndTime(@RequestBody @Valid List<EntityIdsAndTimeRangeQueryParam> params) {
-        return RestResult.ofData(entityService.getAllLinksByEntityIdsAndTime(params));
+    @ApiOperation(value = "查询多个实体所有关联关系")
+    public RestResult<List<EntityLinksVO>> getAllLinksByEntityIds(@RequestBody @Valid List<EntityIdsQueryParam> params) {
+        return RestResult.ofData(entityService.getAllLinksByEntityIds(params));
     }
 
 
