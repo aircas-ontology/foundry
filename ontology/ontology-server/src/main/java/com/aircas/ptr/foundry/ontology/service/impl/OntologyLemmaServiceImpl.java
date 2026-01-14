@@ -94,17 +94,23 @@ public class OntologyLemmaServiceImpl extends ServiceImpl<OntologyLemmaMapper, O
         var statistics = getOne(new LambdaQueryWrapper<OntologyLemma>().eq(OntologyLemma::getType, OntologyLemmaTypeEnum.STATISTICS)
                 .eq(OntologyLemma::getOntologyUniqueIdentifier, param.getOntologyIdentifier()));
 
-        PreconditionUtils.checkArgument(statistics == null, "统计报表已创建，请进行编辑");
+
+        var config = objectMapper.readTree(param.getSceneConfig());
+        var objectNode = (ObjectNode) config;
+        objectNode.put("sceneId", param.getSceneId());
+
+        //已创建词条，更新画布
+        if (statistics != null) {
+            updateById(statistics.setContent(param.getSceneUrl())
+                    .setExtraInfo(config.toPrettyString()));
+            return statistics.getId();
+        }
 
         //find max orderIndex
         var childs = list(new LambdaQueryWrapper<OntologyLemma>().eq(OntologyLemma::getParentId, 0)
                 .eq(OntologyLemma::getOntologyUniqueIdentifier, param.getOntologyIdentifier())
                 .orderByDesc(OntologyLemma::getOrderIndex));
         var orderIndex = CollectionUtils.isEmpty(childs) ? 1 : childs.get(0).getOrderIndex() + 1;
-
-        var config = objectMapper.readTree(param.getSceneConfig());
-        var objectNode = (ObjectNode) config;
-        objectNode.put("sceneId", param.getSceneId());
 
         var lemma = OntologyLemma.builder()
                 .content(param.getSceneUrl())
