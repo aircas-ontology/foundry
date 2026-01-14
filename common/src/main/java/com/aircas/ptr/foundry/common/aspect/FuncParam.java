@@ -1,4 +1,4 @@
-package com.aircas.ptr.foundry.ontology.function;
+package com.aircas.ptr.foundry.common.aspect;
 
 
 import java.lang.annotation.ElementType;
@@ -8,7 +8,7 @@ import java.lang.annotation.Target;
 
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.PARAMETER)
-public @interface Parameter{
-    String name ();
+public @interface FuncParam {
+    String name();
     String description();
 }

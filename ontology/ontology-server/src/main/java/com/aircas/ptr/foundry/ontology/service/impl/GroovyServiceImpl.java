@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
+import com.aircas.ptr.foundry.common.aspect.FuncParam;
 import com.aircas.ptr.foundry.common.constant.FunctionParamCategoryEnum;
 import com.aircas.ptr.foundry.common.constant.FunctionParamTypeEnum;
 import com.aircas.ptr.foundry.common.exception.BusinessException;
@@ -22,9 +23,6 @@ import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang.StringUtils;
 import org.codehaus.groovy.ast.ClassHelper;
 import org.codehaus.groovy.ast.ClassNode;
-import org.codehaus.groovy.control.CompilationUnit;
-import org.codehaus.groovy.control.CompilerConfiguration;
-import org.codehaus.groovy.control.Phases;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
@@ -141,8 +139,7 @@ public class GroovyServiceImpl implements GroovyService {
         try {
             if (parameters != null) {
                 for (int i = 0; i < parameters.length; i++) {
-                    //目前先用arg0，arg1....
-                    String paramName = parameters[i].getName();
+                    String paramName = getParameterName(parameters[i]);
                     Class<?> paramType = parameters[i].getType();
                     //校验参数类型，先支持基本参数类型
                     PreconditionUtils.checkArgument(FunctionParamTypeEnum.isBasicType(paramType.getName()), "暂不支持复杂类型参数", HttpStatus.BAD_REQUEST);
@@ -186,8 +183,6 @@ public class GroovyServiceImpl implements GroovyService {
     }
 
 
-
-
     @SneakyThrows
     @Override
     public String executeGroovy(String code, Map<String, Object> paramMap, List<FunctionParamPO> paramInfos) {
@@ -223,6 +218,15 @@ public class GroovyServiceImpl implements GroovyService {
                 groovyInstance.invokeMethod("handle", paramValues.toArray(new Object[]{}));
         //返回值 考虑到类型多样性，暂时仅使用json返回
         return objectMapper.writeValueAsString(result);
+    }
+
+
+    private String getParameterName(Parameter parameter) {
+        FuncParam funcParam = parameter.getAnnotation(FuncParam.class);
+        if (funcParam != null) {
+            return funcParam.name();
+        }
+        return parameter.getName();
     }
 
 
