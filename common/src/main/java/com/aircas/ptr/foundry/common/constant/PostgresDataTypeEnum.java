@@ -1,4 +1,4 @@
-package com.aircas.ptr.foundry.ontology.model.enums;
+package com.aircas.ptr.foundry.common.constant;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;

@@ -1,6 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.vo;
 
-import com.aircas.ptr.foundry.ontology.model.enums.OntologyDataTypeEnum;
+import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import lombok.Data;
 
 import java.util.Date;

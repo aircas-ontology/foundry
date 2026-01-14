@@ -7,7 +7,7 @@ import lombok.experimental.SuperBuilder;
 
 import java.util.Objects;
 
-import static com.aircas.ptr.foundry.ontology.model.enums.ActionMappingInTypeEnum.ONTOLOGY;
+import static com.aircas.ptr.foundry.common.constant.ActionMappingInTypeEnum.ONTOLOGY;
 
 /**
  * @author Lenovo
