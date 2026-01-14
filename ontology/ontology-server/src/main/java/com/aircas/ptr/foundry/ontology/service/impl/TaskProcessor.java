@@ -31,7 +31,6 @@ public class TaskProcessor {
         CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
         return futures.stream().map(future -> {
             try {
-                log.info("任务处理完成");
                 return future.get();
             } catch (Exception e) {
                 log.error("任务处理异常：" + e.getMessage());
