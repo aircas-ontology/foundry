@@ -55,46 +55,6 @@ public class OntologyActionController {
         return RestResult.success();
     }
 
-
-//    @ApiOperation(value = "新增行为")
-//    @PostMapping("/meta")
-//    public ApiResult metaSave(@RequestBody ActionAddParam param) throws OntologyFunctionParameterPropertyTypeNotSameException {
-//
-//        try {
-//            OntologyActionBo ontologyActionBo = new OntologyActionBo();
-//            BeanUtils.copyProperties(param, ontologyActionBo);
-//            if (param.getMappingIns() != null && param.getMappingIns().size() > 0) {
-//                List<OntologyActionMappingInBO> collect = param.getMappingIns().stream().map(item -> {
-//                    OntologyActionMappingInBO ontologyActionMappingInBO = new OntologyActionMappingInBO();
-//                    BeanUtils.copyProperties(item, ontologyActionMappingInBO);
-//                    return ontologyActionMappingInBO;
-//                }).collect(Collectors.toList());
-//                ontologyActionBo.setMappingIns(collect);
-//            }
-//            return DataResult.ofData(ontologyActionService.save(ontologyActionBo));
-//        } catch (BaseException e) {
-//            return DataResult.fail(e.getMessage(), e.code, e.getRootCauseMessage());
-//        }
-//    }
-
-//    @ApiOperation(value = "修改行为")
-//    @PutMapping("/meta")
-//    public ApiResult metaUpdate(@RequestBody ActionAddParam param) throws OntologyFunctionParameterPropertyTypeNotSameException {
-//
-//        OntologyActionBo ontologyActionBo = new OntologyActionBo();
-//        BeanUtils.copyProperties(param, ontologyActionBo);
-//        ontologyActionBo.setApi(null);
-//        if (param.getMappingIns() != null && param.getMappingIns().size() > 0) {
-//            List<OntologyActionMappingInBO> collect = param.getMappingIns().stream().map(item -> {
-//                OntologyActionMappingInBO ontologyActionMappingInBO = new OntologyActionMappingInBO();
-//                BeanUtils.copyProperties(item, ontologyActionMappingInBO);
-//                return ontologyActionMappingInBO;
-//            }).collect(Collectors.toList());
-//            ontologyActionBo.setMappingIns(collect);
-//        }
-//        return DataResult.ofData(ontologyActionService.update(ontologyActionBo));
-//    }
-
     @ApiOperation(value = "依据actionApi删除行为")
     @DeleteMapping("/{actionApi}")
     public RestResult delete(@PathVariable(required = true, name = "actionApi") String actionApi) {
@@ -112,23 +72,6 @@ public class OntologyActionController {
         return RestResult.ofData(ontologyActionService.pageGetActionByOntologyId(ontologyUniqIdentifier, pageNum, pageSize));
     }
 
-//    //读取函数列表
-//    @ApiOperation(value = "根据api name获取行为")
-//    @GetMapping("/meta/{apiName}")
-//    public ApiResult getMetadataByApi(@PathVariable String apiName) {
-//        try {
-//            return DataResult.ofData(ontologyActionService.getMetadataByApi(apiName));
-//        } catch (BaseException e) {
-//            return DataResult.fail(e.getMessage(), e.code, e.getRootCauseMessage());
-//        }
-//    }
-
-//    @ApiOperation(value = "行为列表")
-//    @GetMapping("/meta/list")
-//    public DataResult<PageInfo<OntologyActionVO>> queryMetadataList(@RequestParam(required = false, defaultValue = "1") Integer page, @RequestParam(required = false, defaultValue = "10") Integer size) {
-//
-//        return DataResult.ofData(ontologyActionService.metaList(page, size));
-//    }
 
     @ApiOperation(value = "根据actionApi获取行为详情")
     @GetMapping("")
@@ -136,15 +79,6 @@ public class OntologyActionController {
         return RestResult.ofData(ontologyActionService.getActionByApi(actionApi));
     }
 
-//    @ApiOperation(value = "获取本体关联的行为")
-//    @GetMapping("/by_ontology")
-//    public ApiResult queryByOntologyUniqueIdentifier(@RequestParam @ApiParam(value = "本体identifier", required = true) String ontologyUniqueIdentifier) {
-//        try {
-//            return DataResult.ofData(ontologyActionService.queryByOntologyUniqueIdentifier(ontologyUniqueIdentifier));
-//        } catch (BaseException e) {
-//            return DataResult.fail(e.getMessage(), e.code, e.getRootCauseMessage());
-//        }
-//    }
 
 
     @ApiOperation(value = "创建行为调度")

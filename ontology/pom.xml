@@ -17,7 +17,6 @@
         <module>ontology-rule-executor</module>
         <module>ontology-db-service</module>
         <module>ontology-api</module>
-        <module>ontology-entity</module>
     </modules>
 
     <dependencies>

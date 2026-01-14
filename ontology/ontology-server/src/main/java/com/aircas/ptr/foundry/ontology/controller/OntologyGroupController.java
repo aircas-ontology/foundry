@@ -2,7 +2,7 @@ package com.aircas.ptr.foundry.ontology.controller;
 
 import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.controller.validator.GroupIdVerify;
-import com.aircas.ptr.foundry.ontology.model.param.OntologyGroupAddParam;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyGroupCreateParam;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyGroupInfoVO;
 import com.aircas.ptr.foundry.ontology.service.OntologyGroupService;
 import io.swagger.annotations.Api;
@@ -32,7 +32,7 @@ public class OntologyGroupController {
 
     @PostMapping("")
     @ApiOperation(value = "新增本体分组")
-    public RestResult createGroup(@RequestBody @Valid OntologyGroupAddParam param) {
+    public RestResult createGroup(@RequestBody @Valid OntologyGroupCreateParam param) {
         ontologyGroupService.createGroup(param);
         return RestResult.success();
     }

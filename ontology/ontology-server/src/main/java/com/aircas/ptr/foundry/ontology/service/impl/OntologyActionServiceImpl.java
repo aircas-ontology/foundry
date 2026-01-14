@@ -72,8 +72,6 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     @Resource
     private OntologyPropertyMapper propertyMapper;
 
-    @Resource
-    private ObjectService objectService;
 
     @Resource
     private OntologyPropertyService ontologyPropertyService;

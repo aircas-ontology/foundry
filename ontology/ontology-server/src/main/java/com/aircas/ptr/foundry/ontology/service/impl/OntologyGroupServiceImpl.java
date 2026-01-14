@@ -4,7 +4,7 @@ import com.aircas.ptr.foundry.common.base.ResultCode;
 import com.aircas.ptr.foundry.common.constant.Status;
 import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.common.util.IdGenerator;
-import com.aircas.ptr.foundry.ontology.model.param.OntologyGroupAddParam;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyGroupCreateParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyGroup;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyGroupInfoVO;
@@ -36,7 +36,7 @@ public class OntologyGroupServiceImpl extends ServiceImpl<OntologyGroupMapper, O
     private OntologyMetaService ontologyMetaService;
 
     @Override
-    public void createGroup(OntologyGroupAddParam param) {
+    public void createGroup(OntologyGroupCreateParam param) {
         save(OntologyGroup.builder()
                 .groupName(param.getGroupName())
                 .groupId(IdGenerator.generateUUID())
