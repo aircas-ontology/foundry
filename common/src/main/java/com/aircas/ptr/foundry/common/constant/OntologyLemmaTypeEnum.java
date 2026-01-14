@@ -11,6 +11,8 @@ public enum OntologyLemmaTypeEnum {
     URL,
     TABLE,
     MODEL,
-    GRAPH
+    GRAPH,
+    IMAGE,
+    PDF
 
 }
