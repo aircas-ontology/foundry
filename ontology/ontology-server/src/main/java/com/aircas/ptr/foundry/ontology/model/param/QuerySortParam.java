@@ -1,6 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
-import com.aircas.ptr.foundry.common.constant.QuerySortEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.QuerySortEnum;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.AllArgsConstructor;

@@ -1,8 +1,7 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
-import com.aircas.ptr.foundry.common.constant.FunctionModelEnum;
-import com.aircas.ptr.foundry.common.constant.FunctionTypeEnum;
-import com.aircas.ptr.foundry.ontology.controller.validator.FunctionApiVerify;
+import com.aircas.ptr.foundry.ontology.model.enums.FunctionModelEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.AllArgsConstructor;

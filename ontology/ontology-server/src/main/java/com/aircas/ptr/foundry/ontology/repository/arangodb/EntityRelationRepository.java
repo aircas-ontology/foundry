@@ -1,6 +1,6 @@
 package com.aircas.ptr.foundry.ontology.repository.arangodb;
 
-import com.aircas.ptr.foundry.common.constant.Status;
+import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import com.aircas.ptr.foundry.ontology.model.common.VisibilityWindow;
 import com.aircas.ptr.foundry.ontology.model.document.EntityNode;
 import com.aircas.ptr.foundry.ontology.model.document.EntityRelation;

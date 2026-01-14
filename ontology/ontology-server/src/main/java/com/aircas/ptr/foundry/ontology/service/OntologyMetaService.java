@@ -1,16 +1,14 @@
 package com.aircas.ptr.foundry.ontology.service;
 
-import com.aircas.ptr.foundry.common.constant.QuerySortEnum;
-import com.aircas.ptr.foundry.ontology.common.enums.OntologyOrderByEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.QuerySortEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.OntologyOrderByEnum;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyMetaCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyGroupMetaVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaNodeVO;
-import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaVO;
 import com.baomidou.mybatisplus.extension.service.IService;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 

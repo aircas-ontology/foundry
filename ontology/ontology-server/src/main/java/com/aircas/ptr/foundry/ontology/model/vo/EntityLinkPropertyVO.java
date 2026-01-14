@@ -1,7 +1,7 @@
 package com.aircas.ptr.foundry.ontology.model.vo;
 
-import com.aircas.ptr.foundry.common.constant.OntologyLinkTypeEnum;
-import com.aircas.ptr.foundry.common.constant.Status;
+import com.aircas.ptr.foundry.ontology.model.enums.OntologyLinkTypeEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import com.aircas.ptr.foundry.ontology.model.common.VisibilityWindow;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;

@@ -1,7 +1,7 @@
 package com.aircas.ptr.foundry.ontology.model.dto;
 
-import com.aircas.ptr.foundry.common.constant.FunctionParamCategoryEnum;
-import com.aircas.ptr.foundry.common.constant.FunctionParamTypeEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamCategoryEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamTypeEnum;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

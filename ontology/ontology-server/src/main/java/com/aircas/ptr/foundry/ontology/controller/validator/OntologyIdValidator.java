@@ -1,6 +1,6 @@
 package com.aircas.ptr.foundry.ontology.controller.validator;
 
-import com.aircas.ptr.foundry.common.constant.Status;
+import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyMetaMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;

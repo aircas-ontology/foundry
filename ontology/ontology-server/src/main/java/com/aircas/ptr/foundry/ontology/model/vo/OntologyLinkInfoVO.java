@@ -1,17 +1,11 @@
 package com.aircas.ptr.foundry.ontology.model.vo;
 
-import com.aircas.ptr.foundry.common.constant.OntologyLinkTypeEnum;
-import com.alibaba.fastjson.annotation.JSONField;
-import com.fasterxml.jackson.annotation.JsonFormat;
+import com.aircas.ptr.foundry.ontology.model.enums.OntologyLinkTypeEnum;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Builder;
 import lombok.Data;
 import lombok.experimental.Accessors;
-
-import java.util.Date;
-
-import static com.aircas.ptr.foundry.common.constant.DateFormat.DATE_FORMAT_DEFAULT;
 
 
 @Data

@@ -1,9 +1,9 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
-import com.aircas.ptr.foundry.common.constant.Status;
+import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import com.aircas.ptr.foundry.common.util.IdGenerator;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
-import com.aircas.ptr.foundry.ontology.common.enums.OntologyLinkDirectionEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.OntologyLinkDirectionEnum;
 import com.aircas.ptr.foundry.ontology.converter.DataConverter;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyLinkCreateParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyActionLink;

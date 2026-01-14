@@ -1,10 +1,10 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
-import com.aircas.ptr.foundry.common.constant.*;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.ontology.exception.*;
 import com.aircas.ptr.foundry.ontology.model.bo.OntologyActionBo;
 import com.aircas.ptr.foundry.ontology.model.bo.OntologyActionMappingInBO;
+import com.aircas.ptr.foundry.ontology.model.enums.*;
 import com.aircas.ptr.foundry.ontology.model.param.*;
 import com.aircas.ptr.foundry.ontology.model.po.*;
 import com.aircas.ptr.foundry.ontology.model.vo.*;

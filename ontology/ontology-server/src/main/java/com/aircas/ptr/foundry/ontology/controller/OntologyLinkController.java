@@ -1,7 +1,7 @@
 package com.aircas.ptr.foundry.ontology.controller;
 
 import com.aircas.ptr.foundry.common.base.RestResult;
-import com.aircas.ptr.foundry.ontology.common.enums.OntologyLinkDirectionEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.OntologyLinkDirectionEnum;
 import com.aircas.ptr.foundry.ontology.controller.validator.OntologyIdVerify;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyLinkCreateParam;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkInfoVO;

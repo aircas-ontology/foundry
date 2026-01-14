@@ -1,6 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.vo;
 
-import com.aircas.ptr.foundry.common.constant.OntologyLemmaTypeEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.OntologyLemmaTypeEnum;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;

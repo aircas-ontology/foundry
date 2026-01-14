@@ -1,6 +1,6 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
-import com.aircas.ptr.foundry.common.constant.Status;
+import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import com.aircas.ptr.foundry.ontology.model.po.*;
 import com.aircas.ptr.foundry.ontology.model.vo.OverviewCountVO;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.*;

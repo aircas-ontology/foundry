@@ -1,6 +1,6 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
-import com.aircas.ptr.foundry.common.constant.OntologyLemmaTypeEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.OntologyLemmaTypeEnum;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyLemmaCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyLemmaUpdateParam;

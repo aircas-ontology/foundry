@@ -1,6 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
-import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.OntologyDataTypeEnum;
 import com.aircas.ptr.foundry.ontology.controller.validator.DatasourceVerify;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
@@ -10,7 +10,6 @@ import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
 
-import javax.validation.Valid;
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
 import javax.validation.constraints.Pattern;

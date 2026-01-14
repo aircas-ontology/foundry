@@ -1,6 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.po;
 
-import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.OntologyDataTypeEnum;
 import com.baomidou.mybatisplus.annotation.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;

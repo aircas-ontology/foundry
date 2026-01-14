@@ -1,7 +1,7 @@
 package com.aircas.ptr.foundry.ontology.model.po;
 
-import com.aircas.ptr.foundry.common.constant.FunctionModelEnum;
-import com.aircas.ptr.foundry.common.constant.FunctionTypeEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.FunctionModelEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
 import com.baomidou.mybatisplus.annotation.FieldFill;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;

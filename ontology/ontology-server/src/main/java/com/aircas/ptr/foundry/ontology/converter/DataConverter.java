@@ -1,6 +1,6 @@
 package com.aircas.ptr.foundry.ontology.converter;
 
-import com.aircas.ptr.foundry.common.constant.Status;
+import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import com.aircas.ptr.foundry.common.util.IdGenerator;
 import com.aircas.ptr.foundry.ontology.model.document.EntityRelation;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyCreateParam;

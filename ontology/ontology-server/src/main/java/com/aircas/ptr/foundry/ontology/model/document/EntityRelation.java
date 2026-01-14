@@ -1,7 +1,7 @@
 package com.aircas.ptr.foundry.ontology.model.document;
 
-import com.aircas.ptr.foundry.common.constant.OntologyLinkTypeEnum;
-import com.aircas.ptr.foundry.common.constant.Status;
+import com.aircas.ptr.foundry.ontology.model.enums.OntologyLinkTypeEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import com.aircas.ptr.foundry.ontology.model.common.VisibilityWindow;
 import com.arangodb.springframework.annotation.ArangoId;
 import com.arangodb.springframework.annotation.Edge;

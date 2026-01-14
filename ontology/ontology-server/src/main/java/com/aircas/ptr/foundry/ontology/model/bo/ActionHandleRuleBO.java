@@ -7,7 +7,7 @@ import lombok.EqualsAndHashCode;
 
 import java.util.Date;
 
-import static com.aircas.ptr.foundry.common.constant.Status.ENABLE;
+import static com.aircas.ptr.foundry.ontology.model.enums.Status.ENABLE;
 
 /**
  * @className: ActionHandleRuleBO

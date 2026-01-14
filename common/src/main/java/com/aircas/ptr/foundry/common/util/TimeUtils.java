@@ -2,7 +2,7 @@ package com.aircas.ptr.foundry.common.util;
 /**
  * Copyright: 2017 dingxiang-inc.com Inc. All rights reserved.
  */
-import com.aircas.ptr.foundry.common.exception.DmException;
+
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.math.NumberUtils;

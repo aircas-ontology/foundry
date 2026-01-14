@@ -1,7 +1,7 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
 
-import com.aircas.ptr.foundry.common.constant.OntologyPropertyCategoryEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.OntologyPropertyCategoryEnum;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.AllArgsConstructor;

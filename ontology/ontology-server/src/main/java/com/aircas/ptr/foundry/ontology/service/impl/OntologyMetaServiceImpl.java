@@ -1,12 +1,12 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
 import com.aircas.ptr.foundry.common.base.ResultCode;
-import com.aircas.ptr.foundry.common.constant.QuerySortEnum;
-import com.aircas.ptr.foundry.common.constant.Status;
+import com.aircas.ptr.foundry.ontology.model.enums.QuerySortEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import com.aircas.ptr.foundry.common.util.IdGenerator;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.common.util.SnowflakeIdUtil;
-import com.aircas.ptr.foundry.ontology.common.enums.OntologyOrderByEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.OntologyOrderByEnum;
 import com.aircas.ptr.foundry.ontology.converter.DataConverter;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyMetaCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyUpdateParam;

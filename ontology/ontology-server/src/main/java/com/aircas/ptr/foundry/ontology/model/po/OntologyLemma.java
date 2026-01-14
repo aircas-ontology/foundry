@@ -1,6 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.po;
 
-import com.aircas.ptr.foundry.common.constant.OntologyLemmaTypeEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.OntologyLemmaTypeEnum;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;

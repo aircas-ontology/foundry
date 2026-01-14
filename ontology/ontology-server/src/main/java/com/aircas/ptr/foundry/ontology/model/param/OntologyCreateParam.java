@@ -1,6 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
-import com.aircas.ptr.foundry.common.constant.OntologyLinkMappingEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.OntologyLinkMappingEnum;
 import com.aircas.ptr.foundry.ontology.controller.validator.GroupIdsVerify;
 import com.aircas.ptr.foundry.ontology.controller.validator.OntologyApiNameVerify;
 import com.aircas.ptr.foundry.ontology.controller.validator.OntologyDisplayNameVerify;

@@ -1,7 +1,7 @@
 package com.aircas.ptr.foundry.ontology.service;
 
 
-import com.aircas.ptr.foundry.common.constant.ActionRuleConnectType;
+import com.aircas.ptr.foundry.ontology.model.enums.ActionRuleConnectType;
 import com.aircas.ptr.foundry.ontology.model.param.ActionCreateOrUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.po.ActionHandleCommitFlashMemory;
 import com.aircas.ptr.foundry.ontology.model.po.ActionHandleRule;

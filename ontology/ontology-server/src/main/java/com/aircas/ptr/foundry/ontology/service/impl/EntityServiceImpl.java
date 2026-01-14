@@ -1,12 +1,12 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
-import com.aircas.ptr.foundry.common.constant.*;
 import com.aircas.ptr.foundry.common.util.DateUtils;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.ontology.converter.DataConverter;
 import com.aircas.ptr.foundry.ontology.model.common.VisibilityWindow;
 import com.aircas.ptr.foundry.ontology.model.document.EntityNode;
 import com.aircas.ptr.foundry.ontology.model.document.EntityRelation;
+import com.aircas.ptr.foundry.ontology.model.enums.*;
 import com.aircas.ptr.foundry.ontology.model.param.*;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;

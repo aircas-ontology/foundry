@@ -1,8 +1,8 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
-import com.aircas.ptr.foundry.common.aspect.FuncParam;
-import com.aircas.ptr.foundry.common.constant.FunctionParamCategoryEnum;
-import com.aircas.ptr.foundry.common.constant.FunctionParamTypeEnum;
+import com.aircas.ptr.foundry.ontology.aspect.FuncParam;
+import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamCategoryEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamTypeEnum;
 import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.ontology.model.dto.FunctionParamDTO;

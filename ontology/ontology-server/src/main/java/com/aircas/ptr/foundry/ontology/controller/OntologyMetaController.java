@@ -1,8 +1,8 @@
 package com.aircas.ptr.foundry.ontology.controller;
 
 import com.aircas.ptr.foundry.common.base.RestResult;
-import com.aircas.ptr.foundry.common.constant.QuerySortEnum;
-import com.aircas.ptr.foundry.ontology.common.enums.OntologyOrderByEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.QuerySortEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.OntologyOrderByEnum;
 import com.aircas.ptr.foundry.ontology.controller.validator.OntologyIdVerify;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyMetaCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyUpdateParam;
@@ -16,7 +16,6 @@ import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
 import javax.validation.Valid;

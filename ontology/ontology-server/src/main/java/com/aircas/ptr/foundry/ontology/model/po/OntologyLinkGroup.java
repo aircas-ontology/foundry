@@ -1,6 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.po;
 
-import com.aircas.ptr.foundry.common.constant.OntologyLinkTypeEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.OntologyLinkTypeEnum;
 import com.baomidou.mybatisplus.annotation.*;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.AllArgsConstructor;
@@ -8,7 +8,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
-import org.springframework.beans.BeanUtils;
 
 import java.io.Serializable;
 import java.util.Date;

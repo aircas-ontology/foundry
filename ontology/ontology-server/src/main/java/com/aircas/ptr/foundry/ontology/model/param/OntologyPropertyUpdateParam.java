@@ -1,6 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
-import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.OntologyDataTypeEnum;
 import com.aircas.ptr.foundry.ontology.controller.validator.DatasourceVerify;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;

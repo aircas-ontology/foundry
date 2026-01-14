@@ -1,7 +1,7 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
 import com.aircas.ptr.foundry.common.base.ResultCode;
-import com.aircas.ptr.foundry.common.constant.Status;
+import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.common.util.IdGenerator;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyGroupCreateParam;
