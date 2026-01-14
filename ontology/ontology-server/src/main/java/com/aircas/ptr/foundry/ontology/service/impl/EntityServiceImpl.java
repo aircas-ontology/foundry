@@ -37,7 +37,6 @@ import org.apache.commons.collections.MapUtils;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.context.expression.MapAccessor;
-import org.springframework.core.task.TaskExecutor;
 import org.springframework.expression.Expression;
 import org.springframework.expression.ExpressionParser;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
@@ -92,8 +91,8 @@ public class EntityServiceImpl implements EntityService {
     @Resource
     private TableMetadataMapper tableMetadataMapper;
 
-    @Resource(name = "taskExecutor")
-    private TaskExecutor taskExecutor;
+    @Resource
+    private TaskProcessor taskProcessor;
 
     private Configuration safeConfig = Configuration.builder().build().addOptions(Option.DEFAULT_PATH_LEAF_TO_NULL, Option.SUPPRESS_EXCEPTIONS);
 
@@ -452,40 +451,47 @@ public class EntityServiceImpl implements EntityService {
                 //获取源本体实体属性详情
                 var srcEntityDetailMap = getEntityDetail(param.getOntologyUniqueIdentifier(), param.getEntityPrimaryKey())
                         .stream().collect(Collectors.toMap(v -> v.getPropertyUniqIdentifier(), v -> v.getPropertyValues()));
+
                 //和关联本体下的所有实体计算关系
-                records.stream().forEach(entity -> {
-                    try {
-                        var linkedEntityDetailMap = getEntityDetail(linkedOntology, entity.getPrimaryKey())
-                                .stream().collect(Collectors.toMap(v -> v.getPropertyUniqIdentifier(), v -> v.getPropertyValues()));
-                        // 合并两个实体，propertyId作为key
-                        var mergedEntityDetailMap = Stream.of(srcEntityDetailMap, linkedEntityDetailMap)
-                                .flatMap(map -> map.entrySet().stream())
-                                .collect(Collectors.toMap(v -> v.getKey(), v -> v.getValue(),
-                                        (list1, list2) -> {
-                                            list1.addAll(list2);
-                                            return list1;
-                                        }));
-                        //构造函数参数，list类型返回所有值，其他类型取第一个值
-                        var functionResult = callFunctionAndUpdateProperty(functionInputParams, mappings, mergedEntityDetailMap, actionDetailVO, functionDetailVO, ontologyProperties, param.getEntityPrimaryKey());
-                        executeResult.add(functionResult);
-                        FunctionResultVO resultVO = jsonMapper.readValue(functionResult, new TypeReference<FunctionResultVO>() {
-                        });
-                        //根据函数的输出结果更新实体关系
-                        var relation = relationRepository.queryRelationByFromNodeAndToNode(param.getOntologyUniqueIdentifier(), param.getEntityPrimaryKey(), linkedOntology, entity.getPrimaryKey(), link.getOntologyLinkUniqIdentifier());
-                        if (relation != null) {
-                            //返回结果有可见窗口，直接更新relation startTime/endTime
-                            if (resultVO.getStartTime() != null && resultVO.getEndTime() != null) {
-                                relationRepository.updateRelation(resultVO.getStartTime(), resultVO.getEndTime(), resultVO.getTimeWindows(), Status.ENABLE, relation.getId());
-                            } else {
-                                //无可见窗口时，解析spel表达式,更新relation enable
-                                Boolean expResult = evaluateJsonCondition(functionResult, link.getOntologyLinkFunctionParamExpression());
-                                relationRepository.updateRelation(null, null, resultVO.getTimeWindows(), expResult ? Status.ENABLE : Status.DELETE, relation.getId());
-                            }
-                        }
-                    } catch (Exception e) {
-                        log.error("函数执行异常：" + entity.toString(), e);
-                    }
-                });
+                var taskResults = taskProcessor.processTask(records,
+                        partitionRecords -> {
+                            return partitionRecords.stream().map(entity -> {
+                                try {
+                                    Map<String,List<Object>> linkedEntityDetailMap = getEntityDetail(linkedOntology, entity.getPrimaryKey())
+                                            .stream().collect(Collectors.toMap(v -> v.getPropertyUniqIdentifier(), v -> v.getPropertyValues()));
+                                    // 合并两个实体，propertyId作为key
+                                    Map<String,List<Object>> mergedEntityDetailMap = Stream.of(srcEntityDetailMap, linkedEntityDetailMap)
+                                            .flatMap(map -> map.entrySet().stream())
+                                            .collect(Collectors.toMap(v -> v.getKey(), v -> v.getValue(),
+                                                    (list1, list2) -> {
+                                                        list1.addAll(list2);
+                                                        return list1;
+                                                    }));
+                                    //构造函数参数，list类型返回所有值，其他类型取第一个值
+                                    String functionResult = callFunctionAndUpdateProperty(functionInputParams, mappings, mergedEntityDetailMap, actionDetailVO, functionDetailVO, ontologyProperties, param.getEntityPrimaryKey());
+                                    FunctionResultVO resultVO = jsonMapper.readValue(functionResult, new TypeReference<FunctionResultVO>() {
+                                    });
+                                    //根据函数的输出结果更新实体关系
+                                    EntityRelation relation = relationRepository.queryRelationByFromNodeAndToNode(param.getOntologyUniqueIdentifier(), param.getEntityPrimaryKey(), linkedOntology, entity.getPrimaryKey(), link.getOntologyLinkUniqIdentifier());
+                                    if (relation != null) {
+                                        //返回结果有可见窗口，直接更新relation startTime/endTime
+                                        if (resultVO.getStartTime() != null && resultVO.getEndTime() != null) {
+                                            relationRepository.updateRelation(resultVO.getStartTime(), resultVO.getEndTime(), resultVO.getTimeWindows(), Status.ENABLE, relation.getId());
+                                        } else {
+                                            //无可见窗口时，解析spel表达式,更新relation enable
+                                            Boolean expResult = evaluateJsonCondition(functionResult, link.getOntologyLinkFunctionParamExpression());
+                                            relationRepository.updateRelation(null, null, resultVO.getTimeWindows(), expResult ? Status.ENABLE : Status.DELETE, relation.getId());
+                                        }
+                                    }
+                                    return functionResult;
+                                } catch (Exception e) {
+                                    log.error("函数执行异常：" + entity.toString(), e);
+                                    return "";
+                                }
+                            }).collect(Collectors.toList());
+                        },
+                        20);
+                executeResult.addAll(taskResults.stream().flatMap(v -> v.stream()).collect(Collectors.toList()));
             }
         }
         //无关联关系
