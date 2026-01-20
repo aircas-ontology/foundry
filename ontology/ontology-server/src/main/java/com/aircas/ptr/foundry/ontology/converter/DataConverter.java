@@ -1,8 +1,9 @@
 package com.aircas.ptr.foundry.ontology.converter;
 
-import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import com.aircas.ptr.foundry.common.util.IdGenerator;
 import com.aircas.ptr.foundry.ontology.model.document.EntityRelation;
+import com.aircas.ptr.foundry.ontology.model.enums.Status;
+import com.aircas.ptr.foundry.ontology.model.enums.VisibilityEnum;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyCreateParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
@@ -69,6 +70,7 @@ public class DataConverter {
                 .description(param.getDescription())
                 .apiName(param.getApiName())
                 .ontologyUniqueIdentifier(param.getOntologyIdentifier())
+                .visibility(VisibilityEnum.NORMAL.getValue())
                 .build();
         if (datasource != null) {
             prop.setDatasourceId(datasource.getDatasourceId())

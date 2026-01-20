@@ -11,11 +11,11 @@ import lombok.Getter;
 
 @AllArgsConstructor
 @Getter
-public enum Visibility {
+public enum VisibilityEnum {
 
     NORMAL(1, "正常"),
-    HIDDEN(2, "隐藏"),
-    PROMINENT(3, "突出显示");
+    HIDDEN(0, "隐藏"),
+    ;
 
     private final int value;
     private final String name;
