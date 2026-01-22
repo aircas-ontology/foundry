@@ -5,6 +5,7 @@ import io.swagger.annotations.ApiModelProperty;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.experimental.SuperBuilder;
 
 import javax.validation.constraints.NotBlank;
 import java.util.List;
@@ -13,6 +14,7 @@ import java.util.List;
  * @author yangj
  */
 @Data
+@SuperBuilder
 @AllArgsConstructor
 @NoArgsConstructor
 @ApiModel(description = "新增/编辑行为请求")

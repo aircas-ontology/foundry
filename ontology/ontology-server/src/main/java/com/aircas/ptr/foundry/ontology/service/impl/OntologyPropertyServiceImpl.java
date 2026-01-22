@@ -51,9 +51,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
 
     @Override
     @Transactional(value = "mainTransactionManager")
-    public void
-
-    updateProperty(OntologyPropertyUpdateParam param) {
+    public void updateProperty(OntologyPropertyUpdateParam param) {
         //check property existence
         var uniqIdentifier = param.getUniqueIdentifier();
         var originalProperty = getOne(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getUniqueIdentifier, uniqIdentifier));

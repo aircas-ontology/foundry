@@ -13,24 +13,26 @@ import java.util.Map;
 @Getter
 public enum FunctionParamTypeEnum {
 
-    OBJECT(1, "对象类型"),
-    STRING(2, "字符串"),
-    INTEGER(3, "整型"),
-    LONG(4, "长整型"),
-    FLOAT(5, "单浮点型"),
-    DOUBLE(6, "双浮点型"),
-    BOOL(7, "布尔类型"),
-    BYTE(8, "字节"),
-    SHORT(9, "短整型"),
-    CHAR(10, "字符"),
-    List(11, "列表"),
-    Date(12, "日期"),
+    OBJECT(1, "对象类型", "Object"),
+    STRING(2, "字符串", "String"),
+    INTEGER(3, "整型", "Integer"),
+    LONG(4, "长整型", "Long"),
+    FLOAT(5, "单浮点型", "Float"),
+    DOUBLE(6, "双浮点型", "Double"),
+    BOOL(7, "布尔类型", "Boolean"),
+    BYTE(8, "字节", "Byte"),
+    SHORT(9, "短整型", "Short"),
+    CHAR(10, "字符", "Char"),
+    LIST(11, "列表", "List"),
+    DATE(12, "日期", "Date"),
 
     ;
 
-    private final int value;
+    private final int id;
 
     private final String name;
+
+    private final String vale;
 
 
     public static final Map<String, FunctionParamTypeEnum> FUNC_PARAM_TYPE_MAP = new HashMap<>();
@@ -53,8 +55,8 @@ public enum FunctionParamTypeEnum {
         FUNC_PARAM_TYPE_MAP.put("java.lang.Byte", FunctionParamTypeEnum.BYTE);
         FUNC_PARAM_TYPE_MAP.put("java.lang.Short", FunctionParamTypeEnum.SHORT);
         FUNC_PARAM_TYPE_MAP.put("java.lang.String", FunctionParamTypeEnum.STRING);
-        FUNC_PARAM_TYPE_MAP.put("java.util.List", FunctionParamTypeEnum.List);
-        FUNC_PARAM_TYPE_MAP.put("java.util.Date", FunctionParamTypeEnum.Date);
+        FUNC_PARAM_TYPE_MAP.put("java.util.List", FunctionParamTypeEnum.LIST);
+        FUNC_PARAM_TYPE_MAP.put("java.util.Date", FunctionParamTypeEnum.DATE);
     }
 
     public static FunctionParamTypeEnum getByTypeName(String type) {

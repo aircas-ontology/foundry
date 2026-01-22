@@ -1,15 +1,16 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
 import com.aircas.ptr.foundry.common.base.ResultCode;
-import com.aircas.ptr.foundry.ontology.model.enums.QuerySortEnum;
-import com.aircas.ptr.foundry.ontology.model.enums.Status;
+import com.aircas.ptr.foundry.common.constant.FunctionParamTypeEnum;
 import com.aircas.ptr.foundry.common.util.IdGenerator;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.common.util.SnowflakeIdUtil;
-import com.aircas.ptr.foundry.ontology.model.enums.OntologyOrderByEnum;
 import com.aircas.ptr.foundry.ontology.converter.DataConverter;
-import com.aircas.ptr.foundry.ontology.model.param.OntologyMetaCreateParam;
-import com.aircas.ptr.foundry.ontology.model.param.OntologyUpdateParam;
+import com.aircas.ptr.foundry.ontology.model.dto.OntologyCreateDTO;
+import com.aircas.ptr.foundry.ontology.model.enums.OntologyOrderByEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.QuerySortEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.Status;
+import com.aircas.ptr.foundry.ontology.model.param.*;
 import com.aircas.ptr.foundry.ontology.model.po.*;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyGroupMetaVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaInfoVO;
@@ -20,17 +21,23 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import lombok.val;
 import lombok.var;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -55,6 +62,9 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
     private OntologyLinkGroupService linkService;
 
     @Resource
+    private FunctionService functionService;
+
+    @Resource
     private OntologyActionService actionService;
 
     @Resource
@@ -62,6 +72,9 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
 
     @Resource
     private EntityService entityService;
+
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
     @Transactional(value = "mainTransactionManager")
@@ -193,10 +206,16 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
 
 
     private String findChildOntologyProperty(List<OntologyProperty> parentProperties, List<OntologyProperty> childProps, String targetUniqId) {
-        var apiName = parentProperties.stream()
+        var property = parentProperties.stream()
                 .filter(p -> p.getUniqueIdentifier().equals(targetUniqId))
-                .findFirst().get().getApiName();
-        return childProps.stream().filter(p -> p.getApiName().equals(apiName)).findFirst().get().getUniqueIdentifier();
+                .findFirst();
+
+        if (property.isPresent()) {
+            return childProps.stream().filter(p -> p.getApiName().equals(property.get().getApiName()))
+                    .findFirst().get().getUniqueIdentifier();
+        } else {
+            return targetUniqId;
+        }
     }
 
 
@@ -276,8 +295,160 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                     return parent;
                 }
         ).collect(Collectors.toList());
-
     }
+
+    @Transactional
+    @SneakyThrows
+    @Override
+    public void importOntologies(MultipartFile file) {
+        InputStream inputStream = file.getInputStream();
+        List<OntologyCreateDTO> ontologyList = objectMapper.readValue(inputStream, new TypeReference<List<OntologyCreateDTO>>() {
+        });
+        ontologyList.forEach(dto -> importOntology(dto));
+    }
+
+
+    private void importOntology(OntologyCreateDTO dto) {
+        var metaData = dto.getMetadata();
+        PreconditionUtils.checkNotNull(metaData, "ontology meta data is null");
+        var groups = groupService.list().stream().filter(g -> metaData.getGroupNames().contains(g.getGroupName())).collect(Collectors.toList());
+        PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(groups), "invalid group names:" + metaData.getGroupNames());
+        var metaGroups = String.join(",", groups.stream().map(v -> v.getGroupId()).collect(Collectors.toList()));
+
+        //保存基本信息
+        var meta = OntologyMeta.builder()
+                .apiName(metaData.getApiName())
+                .description(metaData.getDescription())
+                .status(Status.ENABLE.getValue())
+                .displayName(metaData.getDisplayName())
+                .metaGroupId(metaGroups)
+                .uniqueIdentifier(IdGenerator.generateUUID())
+                .build();
+        save(meta);
+        //保存属性
+        var props = dto.getProperties();
+        if (CollectionUtils.isNotEmpty(props)) {
+            var ontologyPropertyCreateParams = props.stream().<OntologyPropertyCreateParam>map(p -> OntologyPropertyCreateParam.builder()
+                            .apiName(p.getApiName())
+                            .tag(p.getTag())
+                            .description(p.getDescription())
+                            .displayName(p.getDisplayName())
+                            .dataType(p.getDataType())
+                            .isPrimaryKey(p.getIsPrimaryKey())
+                            .isTitleKey(p.getIsTitleKey())
+                            .ontologyIdentifier(meta.getUniqueIdentifier())
+                            .build())
+                    .collect(Collectors.toList());
+            ontologyPropertyService.batchCreateProperties(ontologyPropertyCreateParams);
+        }
+        //保存关系
+        var relations = dto.getRelations();
+        Map<Integer, String> relationMap = Maps.newHashMap();
+        if (CollectionUtils.isNotEmpty(relations)) {
+            List<OntologyLinkGroup> links = Lists.newArrayList();
+            for (int i = 0; i < relations.size(); i++) {
+                var r = relations.get(i);
+                var fromName = r.getOntologyUniqueIdentifierFrom();
+                var toName = r.getOntologyUniqueIdentifierTo();
+                var fromMeta = getOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getDisplayName, fromName));
+                var toMeta = getOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getDisplayName, toName));
+
+                var linkId = IdGenerator.generateUUID();
+                relationMap.put(i, linkId);
+                links.add(OntologyLinkGroup.builder()
+                        .uniqueIdentifier(linkId)
+                        .name(r.getName())
+                        .type(r.getType())
+                        .ontologyUniqueIdentifierFrom(fromMeta.getUniqueIdentifier())
+                        .ontologyUniqueIdentifierTo(toMeta.getUniqueIdentifier())
+                        .build());
+            }
+            linkService.saveBatch(links);
+        }
+        //保存函数
+        var funcs = dto.getFunctions();
+        if (CollectionUtils.isNotEmpty(funcs)) {
+            funcs.stream().forEach(f -> {
+                var input = f.getInputParams();
+                String inputParamString = "";
+                if (CollectionUtils.isNotEmpty(input)) {
+                    List<String> paramList = Lists.newArrayList();
+                    String paramFormat = "@FuncParam(name = \"%s\") %s %s";
+                    input.forEach(p -> paramList.add(String.format(paramFormat, p.getParamName(),
+                            FunctionParamTypeEnum.valueOf(p.getParamType().toUpperCase()).getVale(),
+                            p.getParamName())));
+                    inputParamString = String.join(",", paramList);
+                }
+                String codeTemplate = "import com.aircas.ptr.foundry.ontology.aspect.FuncParam\n" +
+                        "import com.aircas.ptr.foundry.ontology.model.vo.FunctionResultVO\n" +
+                        "import groovy.util.logging.Slf4j\n" +
+                        "\n" +
+                        "@Slf4j\n" +
+                        "class %s {\n" +
+                        "    FunctionResultVO handle(%s) {\n" +
+                        "        return FunctionResultVO.builder()\n" +
+                        "                .build()\n" +
+                        "    }\n" +
+                        "}";
+                String code = String.format(codeTemplate, f.getFunctionApi(), inputParamString);
+
+                functionService.createFunction(FunctionCreateParam.builder()
+                        .code(code)
+                        .description(f.getDescription())
+                        .functionApi(f.getFunctionApi())
+                        .displayName(f.getDisplayName())
+                        .model(f.getModel())
+                        .type(f.getType())
+                        .build());
+            });
+        }
+        //保存行为
+        var actions = dto.getActions();
+        if (CollectionUtils.isNotEmpty(actions)) {
+            actions.forEach(action -> {
+                val relationIndex = action.getRelationIndex();
+                ActionLinkMappingParam linkMapping = null;
+                if (relationIndex != null) {
+                    linkMapping = ActionLinkMappingParam.builder()
+                            .ontologyLinkUniqIdentifier(relationMap.get(relationIndex))
+                            .build();
+                }
+                List<ActionParamMappingCreateParam> mappingIns = null;
+                var mapping = action.getMappingIns();
+                if (CollectionUtils.isNotEmpty(mapping)) {
+                    var detail = functionService.getFunctionDetailByApi(action.getFunctionApi());
+                    var paramMap = detail.getParams().stream().collect(Collectors.toMap(v -> v.getParamName(), v -> v));
+
+                    mappingIns = mapping.stream().map(m -> {
+                        var ontologyMeta = getOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getDisplayName, m.getOntologyName()));
+                        var property = ontologyPropertyService.getOne(new LambdaQueryWrapper<OntologyProperty>()
+                                .eq(OntologyProperty::getDisplayName, m.getPropertyName())
+                                .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyMeta.getUniqueIdentifier()));
+
+                        return ActionParamMappingCreateParam.builder()
+                                .ontologyUniqueIdentifier(ontologyMeta.getUniqueIdentifier())
+                                .functionParamId(paramMap.get(m.getFunctionParamName()).getParamId())
+                                .propertyUniqueIdentifier(property.getUniqueIdentifier())
+                                .build();
+
+                    }).collect(Collectors.toList());
+
+                }
+
+                actionService.createAction(ActionCreateOrUpdateParam.builder()
+                        .ontologyIdentifier(meta.getUniqueIdentifier())
+                        .actionApi(action.getActionApi())
+                        .description(action.getDescription())
+                        .displayName(action.getDisplayName())
+                        .functionApi(action.getFunctionApi())
+                        .linkMapping(linkMapping)
+                        .mappingIns(mappingIns)
+                        .build());
+
+            });
+        }
+    }
+
 
     private void buildTree(OntologyMetaNodeVO parent, Map<String, OntologyMetaNodeVO> metaMap) {
         metaMap.values().forEach(child -> {

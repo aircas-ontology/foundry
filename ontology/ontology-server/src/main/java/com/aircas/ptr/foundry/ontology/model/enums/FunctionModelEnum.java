@@ -11,7 +11,9 @@ import lombok.Getter;
 public enum FunctionModelEnum {
 
     PYTORCH(1, "pytorch"),
-    TENSORFLOW(2, "tensorflow");
+    TENSORFLOW(2, "tensorflow"),
+    OTHER(3, "other"),
+    ;
 
     private final int value;
 

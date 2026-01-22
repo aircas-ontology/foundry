@@ -604,7 +604,7 @@ public class EntityServiceImpl implements EntityService {
             // 如果本体没有给属性绑定数据源，则获取的values为null，函数可能执行失败
             List<Object> values = entityDetailMap.get(mappingVO.get().getPropertyUniqueIdentifier());
             if (CollectionUtils.isNotEmpty(values)) {
-                value = p.getParamType().equals(FunctionParamTypeEnum.List) ? values : values.get(0);
+                value = p.getParamType().equals(FunctionParamTypeEnum.LIST) ? values : values.get(0);
             }
             return FunctionParameter.builder()
                     .paramName(p.getParamName())

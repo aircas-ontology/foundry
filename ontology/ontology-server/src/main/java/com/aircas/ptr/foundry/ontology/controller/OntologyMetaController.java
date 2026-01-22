@@ -36,6 +36,7 @@ public class OntologyMetaController {
     @PostMapping("/import")
     @ApiOperation(value = "本体批量导入创建")
     public RestResult importOntologies(@RequestParam(required = true, name = "file") MultipartFile file) {
+        ontologyMetaService.importOntologies(file);
         return RestResult.success();
     }
 

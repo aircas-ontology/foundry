@@ -9,6 +9,7 @@ import com.aircas.ptr.foundry.ontology.model.vo.OntologyGroupMetaVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaNodeVO;
 import com.baomidou.mybatisplus.extension.service.IService;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -35,4 +36,5 @@ public interface OntologyMetaService extends IService<OntologyMeta> {
     List<OntologyMetaNodeVO> getOntologyTreeByByGroupId(String groupId);
 
 
+    void importOntologies(MultipartFile file);
 }
