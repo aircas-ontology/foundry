@@ -16,6 +16,7 @@ import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
 import javax.validation.Valid;
@@ -30,6 +31,14 @@ public class OntologyMetaController {
 
     @Resource
     private OntologyMetaService ontologyMetaService;
+
+
+    @PostMapping("/import")
+    @ApiOperation(value = "本体批量导入创建")
+    public RestResult importOntologies(@RequestParam(required = true, name = "file") MultipartFile file) {
+        return RestResult.success();
+    }
+
 
     @PostMapping("")
     @ApiOperation(value = "创建本体")

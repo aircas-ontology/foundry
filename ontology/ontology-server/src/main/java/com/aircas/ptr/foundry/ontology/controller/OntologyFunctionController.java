@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.ontology.controller;
 
 import com.aircas.ptr.foundry.common.base.RestResult;
+import com.aircas.ptr.foundry.ontology.model.param.FunctionCallbackParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionExecuteParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionUpdateParam;
@@ -72,5 +73,18 @@ public class OntologyFunctionController {
         return RestResult.success();
     }
 
+
+    @PostMapping("/callback")
+    @ApiOperation(value = "异步函数执行结果回调")
+    public RestResult functionCallback(@RequestBody @Valid FunctionCallbackParam param) {
+        return RestResult.success();
+    }
+
+
+    @GetMapping("/callback_result")
+    @ApiOperation(value = "根据taskId查询异步函数执行结果")
+    public RestResult queryExecuteResult(@RequestParam(required = true, name = "taskId") @ApiParam(value = "任务id", required = true) String taskId) {
+        return RestResult.success();
+    }
 
 }

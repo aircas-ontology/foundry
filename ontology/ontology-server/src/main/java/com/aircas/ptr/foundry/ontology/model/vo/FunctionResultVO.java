@@ -34,6 +34,12 @@ public class FunctionResultVO<T> {
 
     private String description;
 
+
+    /**
+     * 异步处理任务id
+     */
+    private String taskId;
+
     /**
      * 一段时间范围内所有可见窗口列表
      */

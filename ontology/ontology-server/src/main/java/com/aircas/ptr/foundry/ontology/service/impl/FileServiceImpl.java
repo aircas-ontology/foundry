@@ -70,13 +70,14 @@ public class FileServiceImpl implements FileService {
     @Override
     public String getPreviewUrl(MultipartFile file) {
         //save to minio
-        String fileName = System.currentTimeMillis() + "_" + URLEncoder.encode(file.getOriginalFilename(), "UTF-8");
+        var originalFileName = URLEncoder.encode(file.getOriginalFilename(), "UTF-8");
+        String fileName = System.currentTimeMillis() + "_" + originalFileName;
         minioClient.putObject(
                 PutObjectArgs.builder()
                         .bucket(bucketName)
                         .object(fileName)
                         .stream(file.getInputStream(), file.getSize(), -1)
-                        .contentType(file.getContentType())
+                        .contentType(getContentType(originalFileName))
                         .build()
         );
         //get url
@@ -88,6 +89,54 @@ public class FileServiceImpl implements FileService {
                         .build()
         );
         return url.substring(0, url.indexOf("?"));
+    }
+
+
+    private String getContentType(String fileName) {
+        // 获取文件后缀名
+        int dotIndex = fileName.lastIndexOf('.');
+        String extension = dotIndex == -1 ? "" : fileName.substring(dotIndex + 1).toLowerCase();
+
+        // 如果没有后缀名，直接返回application/octet-stream
+        if (extension.isEmpty()) {
+            return "application/octet-stream";
+        }
+
+        // 使用switch case根据文件后缀名生成Content-Type
+        switch (extension) {
+            case "jpg":
+            case "jpeg":
+                return "image/jpeg";
+            case "png":
+                return "image/png";
+            case "gif":
+                return "image/gif";
+            case "bmp":
+                return "image/bmp";
+            case "tiff":
+                return "image/tiff";
+            case "txt":
+            case "sql":
+            case "csv":
+            case "json":
+                return "text/plain";
+            case "pdf":
+                return "application/pdf";
+            case "mp4":
+                return "video/mp4";
+            case "avi":
+                return "video/x-msvideo";
+            case "mkv":
+                return "video/x-matroska";
+            case "mov":
+                return "video/quicktime";
+            case "mp3":
+                return "audio/mpeg";
+            case "wav":
+                return "audio/wav";
+            default:
+                return "application/octet-stream";
+        }
     }
 
     private String saveToMinio(MultipartFile image, InputStream inputStream) throws Exception {
