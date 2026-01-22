@@ -245,6 +245,9 @@ public class EntityServiceImpl implements EntityService {
         List<EntityLinksVO> res = Lists.newArrayList();
         params.stream().forEach(p -> {
             var relations = relationRepository.queryAllRelationsByEntities(p.getOntologyUniqueIdentifier(), p.getEntityPrimaryKeys());
+            if(CollectionUtils.isEmpty(relations)) {
+                return;
+            }
 
             var map1 = relations.stream().collect(Collectors.groupingBy(v -> v.getFrom().getOntologyUniqIdentifier() + v.getFrom().getPrimaryKey()));
             var map2 = relations.stream().collect(Collectors.groupingBy(v -> v.getTo().getOntologyUniqIdentifier() + v.getTo().getPrimaryKey()));

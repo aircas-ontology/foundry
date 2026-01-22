@@ -377,14 +377,14 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                     input.forEach(p -> paramList.add(String.format(paramFormat, p.getParamName(),
                             FunctionParamTypeEnum.valueOf(p.getParamType().toUpperCase()).getVale(),
                             p.getParamName())));
-                    inputParamString = String.join(",", paramList);
+                    inputParamString = String.join(",\n", paramList);
                 }
                 String codeTemplate = "import com.aircas.ptr.foundry.ontology.aspect.FuncParam\n" +
                         "import com.aircas.ptr.foundry.ontology.model.vo.FunctionResultVO\n" +
                         "import groovy.util.logging.Slf4j\n" +
                         "\n" +
                         "@Slf4j\n" +
-                        "class %s {\n" +
+                        "class %s {\n\n" +
                         "    FunctionResultVO handle(%s) {\n" +
                         "        return FunctionResultVO.builder()\n" +
                         "                .build()\n" +
