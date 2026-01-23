@@ -106,16 +106,15 @@ public class EntityServiceImpl implements EntityService {
     private final ExpressionParser parser = new SpelExpressionParser();
 
 
-
     @Override
     public void createEntityRelations(String linkUniqueIdentifier) {
         var link = linkGroupMapper.selectOne(new LambdaQueryWrapper<OntologyLinkGroup>().eq(OntologyLinkGroup::getUniqueIdentifier, linkUniqueIdentifier));
         PreconditionUtils.checkArgument(link != null, "本体关系不存在");
         var existRelations = relationRepository.queryRelationsByLinkId(link.getUniqueIdentifier());
-        //关系已存在
-        if (CollectionUtils.isNotEmpty(existRelations)) {
-            return;
-        }
+        var existRelationSet = existRelations.stream()
+                .map(v -> v.getFrom().getId() + v.getTo().getId())
+                .collect(Collectors.toSet());
+
         var fromNodes = nodeRepository.findByOntologyUniqIdentifier(link.getOntologyUniqueIdentifierFrom());
         var toNodes = nodeRepository.findByOntologyUniqIdentifier(link.getOntologyUniqueIdentifierTo());
 
@@ -126,7 +125,6 @@ public class EntityServiceImpl implements EntityService {
             Date startTime = link.getType().equals(OntologyLinkTypeEnum.COMPOSITION) ? DateUtils.MIN_DATE : null;
             Date endTime = link.getType().equals(OntologyLinkTypeEnum.COMPOSITION) ? DateUtils.MAX_DATE : null;
 
-
             if (link.getType().equals(OntologyLinkTypeEnum.COMPOSITION)) {
                 windows.add(VisibilityWindow.builder()
                         .startTime(DateUtils.MIN_DATE)
@@ -135,23 +133,30 @@ public class EntityServiceImpl implements EntityService {
             }
 
             fromNodes.forEach(from ->
-                    toNodes.forEach(to ->
-                            relations.add(EntityRelation.builder()
-                                    .ontologyLinkId(link.getUniqueIdentifier())
-                                    .from(from)
-                                    .to(to)
-                                    .status(OntologyLinkTypeEnum.mappingToStatus(link.getType()))
-                                    .timeWindows(windows)
-                                    .startTime(startTime)
-                                    .endTime(endTime)
-                                    .createTime(new Date())
-                                    .updateTime(new Date())
-                                    .type(link.getType())
-                                    .name(link.getName())
-                                    .build())
+                    toNodes.forEach(to -> {
+                                if (existRelationSet.contains(from.getId() + to.getId())) {
+                                    return;
+                                }
+                                relations.add(EntityRelation.builder()
+                                        .ontologyLinkId(link.getUniqueIdentifier())
+                                        .from(from)
+                                        .to(to)
+                                        .status(OntologyLinkTypeEnum.mappingToStatus(link.getType()))
+                                        .timeWindows(windows)
+                                        .startTime(startTime)
+                                        .endTime(endTime)
+                                        .createTime(new Date())
+                                        .updateTime(new Date())
+                                        .type(link.getType())
+                                        .name(link.getName())
+                                        .build());
+                            }
                     )
             );
-            relationRepository.batchSave(relations);
+
+            if (CollectionUtils.isNotEmpty(relations)) {
+                relationRepository.batchSave(relations);
+            }
         }
     }
 
@@ -236,7 +241,16 @@ public class EntityServiceImpl implements EntityService {
     public List<EntityLinksVO> getAllLinksByEntityIds(List<EntityIdsQueryParam> params) {
         List<EntityLinksVO> res = Lists.newArrayList();
         params.stream().forEach(p -> {
-            var relations = relationRepository.queryAllRelationsByEntities(p.getOntologyUniqueIdentifier(), p.getEntityPrimaryKeys());
+            var primaryKeys = p.getEntityPrimaryKeys();
+            if (CollectionUtils.isEmpty(primaryKeys)) {
+                var entities = getByEntityIds(Lists.newArrayList(EntityIdsQueryParam
+                        .builder()
+                        .ontologyUniqueIdentifier(p.getOntologyUniqueIdentifier())
+                        .build()));
+                primaryKeys = entities.stream().flatMap(v -> v.getEntityList().stream().map(e -> e.getPrimaryKey())).collect(Collectors.toList());
+            }
+            var relations = relationRepository.queryAllRelationsByEntities(p.getOntologyUniqueIdentifier(), primaryKeys);
+
             if (CollectionUtils.isEmpty(relations)) {
                 return;
             }
@@ -248,7 +262,8 @@ public class EntityServiceImpl implements EntityService {
                 list1.addAll(list2);
                 return list1;
             }));
-            p.getEntityPrimaryKeys().forEach(pk -> {
+
+            primaryKeys.forEach(pk -> {
                 var r = map1.get(p.getOntologyUniqueIdentifier() + pk);
                 res.add(EntityLinksVO.builder()
                         .links(r.stream().map(v -> DataConverter.convert(v)).collect(Collectors.toList()))
@@ -256,6 +271,7 @@ public class EntityServiceImpl implements EntityService {
                         .ontologyUniqueIdentifier(p.getOntologyUniqueIdentifier())
                         .build());
             });
+
         });
         return res;
     }

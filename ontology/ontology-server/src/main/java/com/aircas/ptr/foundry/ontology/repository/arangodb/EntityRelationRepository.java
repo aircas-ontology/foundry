@@ -51,6 +51,15 @@ public interface EntityRelationRepository extends ArangoRepository<EntityRelatio
                                                      @Param("entityPrimaryKeys") List<Object> entityPrimaryKeys);
 
 
+    @Query("   FOR n IN node" +
+            "                FILTER n.ontologyUniqIdentifier == @ontologyUniqueIdentifier " +
+            "                LET nodeId = n._id " +
+            "               FOR edge IN relation " +
+            "                   FILTER (edge._from == nodeId OR edge._to == nodeId) " +
+            "                   RETURN edge ")
+    List<EntityRelation> queryAllRelationsByOntology(@Param("ontologyUniqueIdentifier") String ontologyUniqueIdentifier);
+
+
     @Query(
             "LET fromNode = (FOR n IN node" +
                     "                FILTER n.ontologyUniqIdentifier == @fromOntologyUniqueIdentifier AND n.primaryKey == @fromEntityPrimaryKey " +
