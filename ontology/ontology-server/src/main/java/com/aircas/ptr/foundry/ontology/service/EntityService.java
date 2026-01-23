@@ -18,11 +18,9 @@ import java.util.List;
  */
 public interface EntityService {
 
-    void updateNodesDisplayName(String ontologyUniqueIdentifier, String datasourceId, String primaryKeyColumnName, String titleKeyColumnName);
-
     void createEntityRelations(String linkUniqueIdentifier);
 
-    void createNodes(String ontologyUniqueIdentifier, String datasourceId, String primaryKeyColumnName, String titleKeyColumnName);
+    void syncNodes(String ontologyUniqueIdentifier, String datasourceId, String primaryKeyColumnName, String titleKeyColumnName);
 
     void deleteRelationsByLinkId(String linkId);
 

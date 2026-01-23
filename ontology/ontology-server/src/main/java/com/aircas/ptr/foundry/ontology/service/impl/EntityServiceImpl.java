@@ -8,7 +8,9 @@ import com.aircas.ptr.foundry.ontology.converter.DataConverter;
 import com.aircas.ptr.foundry.ontology.model.common.VisibilityWindow;
 import com.aircas.ptr.foundry.ontology.model.document.EntityNode;
 import com.aircas.ptr.foundry.ontology.model.document.EntityRelation;
-import com.aircas.ptr.foundry.ontology.model.enums.*;
+import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamCategoryEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.OntologyLinkTypeEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import com.aircas.ptr.foundry.ontology.model.param.*;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
@@ -104,37 +106,6 @@ public class EntityServiceImpl implements EntityService {
     private final ExpressionParser parser = new SpelExpressionParser();
 
 
-    @Override
-    public void updateNodesDisplayName(String ontologyUniqueIdentifier, String datasourceId, String primaryKeyColumnName, String titleKeyColumnName) {
-        if (StringUtils.isEmpty(titleKeyColumnName)) {
-            nodeRepository.updateDisplayNameEqualPrimaryKey(ontologyUniqueIdentifier);
-            return;
-        }
-        var nodes = nodeRepository.findByOntologyUniqIdentifier(ontologyUniqueIdentifier);
-        if (CollectionUtils.isEmpty(nodes)) {
-            createNodes(ontologyUniqueIdentifier, datasourceId, primaryKeyColumnName, titleKeyColumnName);
-            return;
-        }
-        var rows = objectMapper.queryPrimaryKeyAndTitleKeyValue(datasourceId, primaryKeyColumnName, titleKeyColumnName);
-        var rowMap = rows.stream().collect(Collectors.toMap(
-                v -> {
-                    var primaryKeyValue = v.get(primaryKeyColumnName);
-                    if (primaryKeyValue instanceof Integer) {
-                        return ((Integer) primaryKeyValue).longValue();
-                    } else {
-                        return primaryKeyValue;
-                    }
-                },
-                v -> v.get(titleKeyColumnName) != null ? v.get(titleKeyColumnName).toString() : "",
-                (existingValue, newValue) -> existingValue // 处理键冲突，保留第一个值
-        ));
-
-        nodes.forEach(n -> {
-            var pk = n.getPrimaryKey();
-            n.setDisplayName(rowMap.get(pk));
-        });
-        nodeRepository.batchSave(nodes);
-    }
 
     @Override
     public void createEntityRelations(String linkUniqueIdentifier) {
@@ -194,16 +165,37 @@ public class EntityServiceImpl implements EntityService {
      * @param titleKeyColumnName
      */
     @Override
-    public void createNodes(String ontologyUniqueIdentifier, String datasourceId, String primaryKeyColumnName, String titleKeyColumnName) {
+    public void syncNodes(String ontologyUniqueIdentifier, String datasourceId, String primaryKeyColumnName, String titleKeyColumnName) {
 
-        List<Map<String, Object>> rows = objectMapper.queryPrimaryKeyAndTitleKeyValue(datasourceId, primaryKeyColumnName, titleKeyColumnName);
-        List<EntityNode> nodes = rows.stream().map(r -> EntityNode.builder()
-                .ontologyUniqIdentifier(ontologyUniqueIdentifier)
-                .primaryKey(r.get(primaryKeyColumnName))
-                .tableName(datasourceId)
-                .displayName(StringUtils.isEmpty(titleKeyColumnName) ? r.get(primaryKeyColumnName).toString() : r.get(titleKeyColumnName).toString())
-                .build()).collect(Collectors.toList());
-        nodeRepository.batchSave(nodes);
+        var existNodes = getByByOntologyUniqIdentifier(ontologyUniqueIdentifier);
+        var existNodesMap = existNodes.stream().collect(Collectors.toMap(v -> v.getPrimaryKey(), v -> v));
+
+        List<Map<String, Object>> allRows = objectMapper.queryPrimaryKeyAndTitleKeyValue(datasourceId, primaryKeyColumnName, titleKeyColumnName);
+        List<EntityNode> nodes = Lists.newArrayList();
+
+        allRows.stream().forEach(r -> {
+            var primaryKeyValue = r.get(primaryKeyColumnName);
+            if (primaryKeyValue instanceof Integer) {
+                primaryKeyValue = Long.parseLong(primaryKeyValue.toString());
+            }
+            if (existNodesMap.containsKey(primaryKeyValue)) {
+                var exist = existNodesMap.get(primaryKeyValue);
+                exist.setDisplayName(StringUtils.isEmpty(titleKeyColumnName) ? r.get(primaryKeyColumnName).toString() : r.get(titleKeyColumnName).toString());
+                nodes.add(exist);
+            } else {
+                nodes.add(EntityNode.builder()
+                        .ontologyUniqIdentifier(ontologyUniqueIdentifier)
+                        .primaryKey(r.get(primaryKeyColumnName))
+                        .tableName(datasourceId)
+                        .displayName(StringUtils.isEmpty(titleKeyColumnName) ? r.get(primaryKeyColumnName).toString() : r.get(titleKeyColumnName).toString())
+                        .build());
+            }
+        });
+
+        if (CollectionUtils.isNotEmpty(nodes)) {
+            nodeRepository.batchSave(nodes);
+        }
+
     }
 
     @Override
@@ -245,7 +237,7 @@ public class EntityServiceImpl implements EntityService {
         List<EntityLinksVO> res = Lists.newArrayList();
         params.stream().forEach(p -> {
             var relations = relationRepository.queryAllRelationsByEntities(p.getOntologyUniqueIdentifier(), p.getEntityPrimaryKeys());
-            if(CollectionUtils.isEmpty(relations)) {
+            if (CollectionUtils.isEmpty(relations)) {
                 return;
             }
 
@@ -462,10 +454,10 @@ public class EntityServiceImpl implements EntityService {
                         partitionRecords -> {
                             return partitionRecords.stream().map(entity -> {
                                 try {
-                                    Map<String,List<Object>> linkedEntityDetailMap = getEntityDetail(linkedOntology, entity.getPrimaryKey())
+                                    Map<String, List<Object>> linkedEntityDetailMap = getEntityDetail(linkedOntology, entity.getPrimaryKey())
                                             .stream().collect(Collectors.toMap(v -> v.getPropertyUniqIdentifier(), v -> v.getPropertyValues()));
                                     // 合并两个实体，propertyId作为key
-                                    Map<String,List<Object>> mergedEntityDetailMap = Stream.of(srcEntityDetailMap, linkedEntityDetailMap)
+                                    Map<String, List<Object>> mergedEntityDetailMap = Stream.of(srcEntityDetailMap, linkedEntityDetailMap)
                                             .flatMap(map -> map.entrySet().stream())
                                             .collect(Collectors.toMap(v -> v.getKey(), v -> v.getValue(),
                                                     (list1, list2) -> {
@@ -536,16 +528,8 @@ public class EntityServiceImpl implements EntityService {
             titleColumn = titleProperty.getDatasourceColumnName();
         }
 
-        var nodes = getByByOntologyUniqIdentifier(ontologyIdentifier);
-
-        if (primaryProperty == null && CollectionUtils.isEmpty(nodes)) {
-            return;
-        }
-        //新增主键数据源
-        else if (primaryProperty != null && CollectionUtils.isEmpty(nodes)) {
-            if (StringUtils.isNotEmpty(primaryProperty.getDatasourceId())) {
-                createNodes(ontologyIdentifier, primaryProperty.getDatasourceId(), primaryProperty.getDatasourceColumnName(), titleColumn);
-            }
+        if (primaryProperty != null && StringUtils.isNotEmpty(primaryProperty.getDatasourceId())) {
+            syncNodes(ontologyIdentifier, primaryProperty.getDatasourceId(), primaryProperty.getDatasourceColumnName(), titleColumn);
         }
     }
 

@@ -374,7 +374,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         //新增主键数据源
         else if (primaryProperty != null && CollectionUtils.isEmpty(nodes)) {
             if (StringUtils.isNotEmpty(primaryProperty.getDatasourceId())) {
-                entityService.createNodes(ontologyIdentifier, primaryProperty.getDatasourceId(), primaryProperty.getDatasourceColumnName(), titleColumn);
+                entityService.syncNodes(ontologyIdentifier, primaryProperty.getDatasourceId(), primaryProperty.getDatasourceColumnName(), titleColumn);
                 createRelationsByLink(ontologyIdentifier);
             }
         }
@@ -386,12 +386,12 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                 //主键数据源发生了变更
                 if (!primaryProperty.getDatasourceId().equals(nodes.get(0).getTableName())) {
                     entityService.deleteNodesAndRelationsByOntologyId(ontologyIdentifier);
-                    entityService.createNodes(ontologyIdentifier, primaryProperty.getDatasourceId(), primaryProperty.getDatasourceColumnName(), titleColumn);
+                    entityService.syncNodes(ontologyIdentifier, primaryProperty.getDatasourceId(), primaryProperty.getDatasourceColumnName(), titleColumn);
                     createRelationsByLink(ontologyIdentifier);
                 }
                 //更新titleKey
                 else {
-                    entityService.updateNodesDisplayName(ontologyIdentifier, primaryProperty.getDatasourceId(), primaryProperty.getDatasourceColumnName(), titleColumn);
+                    entityService.syncNodes(ontologyIdentifier, primaryProperty.getDatasourceId(), primaryProperty.getDatasourceColumnName(), titleColumn);
                 }
             }
             //主键数据源取消设置
