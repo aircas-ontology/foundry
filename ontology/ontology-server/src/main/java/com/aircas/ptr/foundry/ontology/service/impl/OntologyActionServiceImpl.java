@@ -5,7 +5,10 @@ import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.ontology.exception.*;
 import com.aircas.ptr.foundry.ontology.model.bo.OntologyActionBo;
 import com.aircas.ptr.foundry.ontology.model.bo.OntologyActionMappingInBO;
-import com.aircas.ptr.foundry.ontology.model.enums.*;
+import com.aircas.ptr.foundry.ontology.model.enums.ActionRuleConnectType;
+import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamCategoryEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import com.aircas.ptr.foundry.ontology.model.param.*;
 import com.aircas.ptr.foundry.ontology.model.po.*;
 import com.aircas.ptr.foundry.ontology.model.vo.*;
@@ -419,11 +422,18 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                     .build());
         }
         var mappings = ontologyActionMappingInService.list(new LambdaQueryWrapper<OntologyActionMappingIn>().eq(OntologyActionMappingIn::getOntologyActionId, action.getId()));
+
         if (CollectionUtils.isNotEmpty(mappings)) {
+
+            var propUniqIds = mappings.stream().map(v -> v.getPropertyUniqueIdentifier()).collect(Collectors.toList());
+            var props = ontologyPropertyService.list(new LambdaQueryWrapper<OntologyProperty>().in(OntologyProperty::getUniqueIdentifier, propUniqIds));
+            var propMap = props.stream().collect(Collectors.toMap(v -> v.getUniqueIdentifier(), v -> v.getOntologyUniqueIdentifier()));
+
             var mappingVOS = mappings.stream().map(v -> ActionParamMappingVO.builder()
                             .functionParamExpression(v.getFunctionParamExpression())
                             .functionParamId(v.getFunctionParamId())
                             .propertyUniqueIdentifier(v.getPropertyUniqueIdentifier())
+                            .ontologyUniqueIdentifier(propMap.get(v.getPropertyUniqueIdentifier()))
                             .build())
                     .collect(Collectors.toList());
             detailVO.setMappingIns(mappingVOS);
