@@ -152,7 +152,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     @Override
     public Page<FunctionInfoVO> getFunctions(Integer pageNum, Integer pageSize) {
         var pageInfo = new Page<Function>(pageNum, pageSize);
-        pageInfo.setOrders(Lists.newArrayList(new OrderItem().setAsc(false).setColumn("create_time")));
+        pageInfo.addOrder(OrderItem.desc("create_time"));
         var functionPage = page(pageInfo);
         var records = functionPage.getRecords().stream().<FunctionInfoVO>map(func ->
                 FunctionInfoVO.builder()
