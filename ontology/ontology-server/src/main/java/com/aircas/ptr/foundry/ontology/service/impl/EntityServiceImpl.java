@@ -442,7 +442,7 @@ public class EntityServiceImpl implements EntityService {
 
     @Override
     public String executeAction(EntityActionExecuteParam param) throws Exception {
-        List<FunctionResultVO> executeResult = Lists.newArrayList();
+        List<String> executeResult = Lists.newArrayList();
         var actionDetailVO = actionService.getActionByApi(param.getActionApi());
         var functionDetailVO = functionService.getFunctionDetailByApi(actionDetailVO.getFunctionApi());
         var link = actionDetailVO.getLinkMapping();
@@ -506,10 +506,10 @@ public class EntityServiceImpl implements EntityService {
                                     if (functionResult != null && StringUtils.isEmpty(functionResult.getTaskId())) {
                                         updateEntityPropertyAndRelation(functionResultJson, contextInfoDTO);
                                     }
-                                    return functionResult;
+                                    return functionResultJson;
                                 } catch (Exception e) {
                                     log.error("函数执行异常：" + entity.toString(), e);
-                                    return new FunctionResultVO();
+                                    return "";
                                 }
                             }).collect(Collectors.toList());
                         },
@@ -539,7 +539,7 @@ public class EntityServiceImpl implements EntityService {
             if (functionResult != null && StringUtils.isEmpty(functionResult.getTaskId())) {
                 updateEntityPropertyAndRelation(functionResultJson, contextInfoDTO);
             }
-            executeResult.add(functionResult);
+            executeResult.add(functionResultJson);
         }
         return jsonMapper.writeValueAsString(executeResult);
     }
