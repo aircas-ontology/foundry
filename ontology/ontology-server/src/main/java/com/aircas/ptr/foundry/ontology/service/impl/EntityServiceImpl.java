@@ -546,7 +546,7 @@ public class EntityServiceImpl implements EntityService {
 
     @Override
     @Transactional(transactionManager = "datalakeTransactionManager")
-    public void updateEntity(EntityUpdateParam param) {
+    public void updateProperty(EntityUpdateParam param) {
         var primaryKeyColumnName = tableMetadataMapper.queryPrimaryKeyColumnName(param.getDatasourceId());
         var columnMap = param.getColumnUpdates().stream().collect(Collectors.toMap(v -> v.getDatasourceColumnName(), v -> v.getColumnValue()));
         objectMapper.updateObject(param.getDatasourceId(), columnMap, primaryKeyColumnName, param.getPrimaryKeyValue());
@@ -670,7 +670,7 @@ public class EntityServiceImpl implements EntityService {
         });
         //主数据源数据update
         if (CollectionUtils.isNotEmpty(columnUpdates)) {
-            updateEntity(EntityUpdateParam.builder()
+            updateProperty(EntityUpdateParam.builder()
                     .columnUpdates(columnUpdates)
                     .primaryKeyValue(actionContext.getEntityActionExecuteParam().getEntityPrimaryKey())
                     .datasourceId(primaryDatasource)

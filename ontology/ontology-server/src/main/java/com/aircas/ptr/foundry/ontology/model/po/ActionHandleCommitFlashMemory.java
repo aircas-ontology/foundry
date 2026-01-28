@@ -1,8 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.po;
 
-import com.baomidou.mybatisplus.annotation.FieldFill;
-import com.baomidou.mybatisplus.annotation.TableField;
-import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.annotation.*;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 
@@ -19,8 +17,7 @@ import static com.aircas.ptr.foundry.common.constant.DateFormat.DATE_FORMAT_DEFA
 @TableName(value = "action_handle_commit_flash_memory")
 public class ActionHandleCommitFlashMemory {
 
-    @Id
-    @Column(name = "id")
+    @TableId(type = IdType.AUTO)
     private Long id;
 
     private String primaryKey;

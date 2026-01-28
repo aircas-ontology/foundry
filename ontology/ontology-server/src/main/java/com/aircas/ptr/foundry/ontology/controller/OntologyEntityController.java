@@ -86,8 +86,8 @@ public class OntologyEntityController {
 
     @ApiOperation(value = "实体属性更新")
     @PutMapping("/update")
-    public RestResult updateEntity(@RequestBody @Valid EntityUpdateParam param) {
-        entityService.updateEntity(param);
+    public RestResult updateProperty(@RequestBody @Valid EntityUpdateParam param) {
+        entityService.updateProperty(param);
         return RestResult.success();
     }
 

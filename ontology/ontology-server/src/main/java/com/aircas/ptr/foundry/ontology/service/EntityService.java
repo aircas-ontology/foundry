@@ -36,7 +36,7 @@ public interface EntityService {
 
     String executeAction(EntityActionExecuteParam param) throws Exception;
 
-    void updateEntity(EntityUpdateParam param);
+    void updateProperty(EntityUpdateParam param);
 
     void createEntityNodes(String ontologyIdentifier);
 

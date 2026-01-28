@@ -1,8 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.po;
 
-import com.baomidou.mybatisplus.annotation.FieldFill;
-import com.baomidou.mybatisplus.annotation.TableField;
-import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.annotation.*;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -43,8 +41,7 @@ public class OntologyAction {
     /**
      * Column: id
      */
-    @Id
-    @Column(name = "id")
+    @TableId(type = IdType.AUTO)
     private Long id;
 
     private String description;

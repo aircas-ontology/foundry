@@ -1,8 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.po;
 
-import com.baomidou.mybatisplus.annotation.FieldFill;
-import com.baomidou.mybatisplus.annotation.TableField;
-import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.annotation.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -61,8 +59,7 @@ public class FunctionExecuteResult {
     /**
      * Column: id
      */
-    @Id
-    @Column(name = "id")
+    @TableId(type = IdType.AUTO)
     private Integer id;
 
 
