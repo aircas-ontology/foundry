@@ -4,12 +4,16 @@ import com.aircas.ptr.foundry.ontology.model.enums.FunctionModelEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
 
 import javax.validation.constraints.NotNull;
 
+@NoArgsConstructor
+@AllArgsConstructor
 @Data
 @SuperBuilder
 @Accessors(chain = true)

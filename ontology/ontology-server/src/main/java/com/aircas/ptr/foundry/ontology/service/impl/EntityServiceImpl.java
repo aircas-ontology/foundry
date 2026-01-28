@@ -8,10 +8,12 @@ import com.aircas.ptr.foundry.ontology.converter.DataConverter;
 import com.aircas.ptr.foundry.ontology.model.common.VisibilityWindow;
 import com.aircas.ptr.foundry.ontology.model.document.EntityNode;
 import com.aircas.ptr.foundry.ontology.model.document.EntityRelation;
+import com.aircas.ptr.foundry.ontology.model.dto.ActionContextInfoDTO;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamCategoryEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyLinkTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import com.aircas.ptr.foundry.ontology.model.param.*;
+import com.aircas.ptr.foundry.ontology.model.po.FunctionExecuteResult;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
 import com.aircas.ptr.foundry.ontology.model.po.TableFieldMapping;
@@ -21,6 +23,7 @@ import com.aircas.ptr.foundry.ontology.repository.arangodb.EntityRelationReposit
 import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.ObjectMapper;
 import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.TableFieldMappingMapper;
 import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.TableMetadataMapper;
+import com.aircas.ptr.foundry.ontology.repository.mainMapper.FunctionExecuteResultMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyLinkGroupMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyPropertyMapper;
 import com.aircas.ptr.foundry.ontology.service.EntityService;
@@ -29,12 +32,12 @@ import com.aircas.ptr.foundry.ontology.service.OntologyActionService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.jayway.jsonpath.Configuration;
 import com.jayway.jsonpath.JsonPath;
 import com.jayway.jsonpath.Option;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import lombok.var;
 import org.apache.commons.collections.MapUtils;
@@ -94,6 +97,9 @@ public class EntityServiceImpl implements EntityService {
 
     @Resource
     private TableMetadataMapper tableMetadataMapper;
+
+    @Resource
+    private FunctionExecuteResultMapper executeResultMapper;
 
     @Resource
     private TaskProcessor taskProcessor;
@@ -436,7 +442,7 @@ public class EntityServiceImpl implements EntityService {
 
     @Override
     public String executeAction(EntityActionExecuteParam param) throws Exception {
-        List<String> executeResult = Lists.newArrayList();
+        List<FunctionResultVO> executeResult = Lists.newArrayList();
         var actionDetailVO = actionService.getActionByApi(param.getActionApi());
         var functionDetailVO = functionService.getFunctionDetailByApi(actionDetailVO.getFunctionApi());
         var link = actionDetailVO.getLinkMapping();
@@ -480,26 +486,30 @@ public class EntityServiceImpl implements EntityService {
                                                         list1.addAll(list2);
                                                         return list1;
                                                     }));
-                                    //构造函数参数，list类型返回所有值，其他类型取第一个值
-                                    String functionResult = callFunctionAndUpdateProperty(functionInputParams, mappings, mergedEntityDetailMap, actionDetailVO, functionDetailVO, ontologyProperties, param.getEntityPrimaryKey());
-                                    FunctionResultVO resultVO = jsonMapper.readValue(functionResult, new TypeReference<FunctionResultVO>() {
+                                    ActionContextInfoDTO contextInfoDTO = ActionContextInfoDTO.builder()
+                                            .functionInputParams(functionInputParams)
+                                            .mappings(mappings)
+                                            .entityDetailMap(mergedEntityDetailMap)
+                                            .actionDetailVO(actionDetailVO)
+                                            .functionDetailVO(functionDetailVO)
+                                            .ontologyProperties(ontologyProperties)
+                                            .entityActionExecuteParam(param)
+                                            .link(link)
+                                            .entity(entity)
+                                            .linkToOntologyUniqueIdentifier(linkedOntology)
+                                            .build();
+                                    //执行函数
+                                    String functionResultJson = callFunction(contextInfoDTO);
+                                    var functionResult = jsonMapper.readValue(functionResultJson, new TypeReference<FunctionResultVO>() {
                                     });
-                                    //根据函数的输出结果更新实体关系
-                                    EntityRelation relation = relationRepository.queryRelationByFromNodeAndToNode(param.getOntologyUniqueIdentifier(), param.getEntityPrimaryKey(), linkedOntology, entity.getPrimaryKey(), link.getOntologyLinkUniqIdentifier());
-                                    if (relation != null) {
-                                        //返回结果有可见窗口，直接更新relation startTime/endTime
-                                        if (resultVO.getStartTime() != null && resultVO.getEndTime() != null) {
-                                            relationRepository.updateRelation(resultVO.getStartTime(), resultVO.getEndTime(), resultVO.getTimeWindows(), Status.ENABLE, relation.getId());
-                                        } else {
-                                            //无可见窗口时，解析spel表达式,更新relation enable
-                                            Boolean expResult = evaluateJsonCondition(functionResult, link.getOntologyLinkFunctionParamExpression());
-                                            relationRepository.updateRelation(null, null, resultVO.getTimeWindows(), expResult ? Status.ENABLE : Status.DELETE, relation.getId());
-                                        }
+                                    //如果函数是同步执行，更新实体属性和关系
+                                    if (functionResult != null && StringUtils.isEmpty(functionResult.getTaskId())) {
+                                        updateEntityPropertyAndRelation(functionResultJson, contextInfoDTO);
                                     }
                                     return functionResult;
                                 } catch (Exception e) {
                                     log.error("函数执行异常：" + entity.toString(), e);
-                                    return "";
+                                    return new FunctionResultVO();
                                 }
                             }).collect(Collectors.toList());
                         },
@@ -513,7 +523,22 @@ public class EntityServiceImpl implements EntityService {
             var srcEntityDetailMap = getEntityDetail(param.getOntologyUniqueIdentifier(), param.getEntityPrimaryKey())
                     .stream().collect(Collectors.toMap(v -> v.getPropertyUniqIdentifier(), v -> v.getPropertyValues()));
             //函数调用
-            var functionResult = callFunctionAndUpdateProperty(functionInputParams, mappings, srcEntityDetailMap, actionDetailVO, functionDetailVO, ontologyProperties, param.getEntityPrimaryKey());
+            var contextInfoDTO = ActionContextInfoDTO.builder()
+                    .functionInputParams(functionInputParams)
+                    .mappings(mappings)
+                    .entityDetailMap(srcEntityDetailMap)
+                    .actionDetailVO(actionDetailVO)
+                    .functionDetailVO(functionDetailVO)
+                    .ontologyProperties(ontologyProperties)
+                    .entityActionExecuteParam(param)
+                    .build();
+            var functionResultJson = callFunction(contextInfoDTO);
+            var functionResult = jsonMapper.readValue(functionResultJson, new TypeReference<FunctionResultVO>() {
+            });
+            //函数同步执行，更新结果
+            if (functionResult != null && StringUtils.isEmpty(functionResult.getTaskId())) {
+                updateEntityPropertyAndRelation(functionResultJson, contextInfoDTO);
+            }
             executeResult.add(functionResult);
         }
         return jsonMapper.writeValueAsString(executeResult);
@@ -572,6 +597,119 @@ public class EntityServiceImpl implements EntityService {
     }
 
 
+    public String callFunction(ActionContextInfoDTO actionContext) throws Exception {
+
+        //构造函数参数，list类型返回所有值，其他类型取第一个值
+        List<FunctionParameter> parameters = actionContext.getFunctionInputParams().stream().map(p -> {
+            var mappingVO = actionContext.getMappings().stream().filter(m -> m.getFunctionParamId().equals(p.getParamId())).findFirst();
+            if (!mappingVO.isPresent()) {
+                return new FunctionParameter().setParamName(p.getParamName());
+            }
+            Object value = null;
+            // 如果本体没有给属性绑定数据源，则获取的values为null，函数可能执行失败
+            List<Object> values = actionContext.getEntityDetailMap().get(mappingVO.get().getPropertyUniqueIdentifier());
+            if (CollectionUtils.isNotEmpty(values)) {
+                value = p.getParamType().equals(FunctionParamTypeEnum.LIST) ? values : values.get(0);
+            }
+            return FunctionParameter.builder()
+                    .paramName(p.getParamName())
+                    .paramValue(value)
+                    .build();
+        }).collect(Collectors.toList());
+        //执行函数
+        var functionResultJson = functionService.executeFunction(FunctionExecuteParam.builder()
+                .functionApi(actionContext.getActionDetailVO().getFunctionApi())
+                .parameters(parameters)
+                .build());
+
+        var functionResult = jsonMapper.readValue(functionResultJson, new TypeReference<FunctionResultVO>() {
+        });
+        //异步接口，需要保存调用时的上下文信息
+        if (functionResult != null && StringUtils.isNotEmpty(functionResult.getTaskId())) {
+            var executeResult = executeResultMapper.selectOne(new LambdaQueryWrapper<FunctionExecuteResult>().eq(FunctionExecuteResult::getTaskId, functionResult.getTaskId()));
+            if (executeResult != null) {
+                executeResultMapper.updateById(executeResult
+                        .setActionApi(actionContext.getActionDetailVO().getActionApi())
+                        .setActionContextInfo(jsonMapper.writeValueAsString(actionContext)));
+            }
+        }
+        return functionResultJson;
+    }
+
+
+    @SneakyThrows
+    public void updateEntityPropertyAndRelation(String jsonString, ActionContextInfoDTO actionContext) {
+
+        //更新实体属性值
+        //根据函数的输出结果更新源实体属性：通过json path获取value
+        var functionOutputParam = actionContext.getFunctionDetailVO().getParams().stream()
+                .filter(v -> v.getCategory().equals(FunctionParamCategoryEnum.OUTPUT))
+                .findFirst().get();
+
+        var output = actionContext.getMappings().stream().filter(m -> m.getFunctionParamId().equals(functionOutputParam.getParamId())).collect(Collectors.toList());
+        //primary datasource
+        var primaryDatasource = actionContext.getOntologyProperties().stream().filter(v -> v.getIsPrimaryKey() == 1).findFirst().get().getDatasourceId();
+        var propMap = actionContext.getOntologyProperties().stream().collect(Collectors.toMap(v -> v.getUniqueIdentifier(), v -> v));
+        List<EntityUpdateParam.ColumnUpdate> columnUpdates = Lists.newArrayList();
+        Map<String, Map<String, Object>> insertMap = Maps.newHashMap();
+        output.stream().forEach(out -> {
+            Object actualValue = JsonPath.using(safeConfig).parse(jsonString).read(out.getFunctionParamExpression());
+            var prop = propMap.get(out.getPropertyUniqueIdentifier());
+            //主数据源列
+            if (prop.getDatasourceId().equals(primaryDatasource)) {
+                columnUpdates.add(EntityUpdateParam.ColumnUpdate.builder()
+                        .datasourceColumnName(prop.getDatasourceColumnName())
+                        .columnValue(actualValue)
+                        .propertyUniqIdentifier(out.getPropertyUniqueIdentifier())
+                        .build());
+            } else {
+                var map = insertMap.getOrDefault(prop.getDatasourceId(), new HashMap<String, Object>());
+                map.put(prop.getDatasourceColumnName(), actualValue);
+                insertMap.put(prop.getDatasourceId(), map);
+            }
+        });
+        //主数据源数据update
+        if (CollectionUtils.isNotEmpty(columnUpdates)) {
+            updateEntity(EntityUpdateParam.builder()
+                    .columnUpdates(columnUpdates)
+                    .primaryKeyValue(actionContext.getEntityActionExecuteParam().getEntityPrimaryKey())
+                    .datasourceId(primaryDatasource)
+                    .build());
+        }
+        //其他数据源数据insert
+        if (MapUtils.isNotEmpty(insertMap)) {
+            insertMap.entrySet().forEach(entry -> {
+                //查询关联建，补全columns
+                var tableName = entry.getKey();
+                var mapping = tableFieldMappingMapper.selectOne(new LambdaQueryWrapper<TableFieldMapping>().eq(TableFieldMapping::getTargetTableName, tableName));
+                entry.getValue().put(mapping.getTargetColumnName(), actionContext.getEntityActionExecuteParam().getEntityPrimaryKey());
+                objectMapper.insertObject(tableName, entry.getValue());
+            });
+        }
+
+        //更新实体关系
+        if (actionContext.getLink() != null) {
+            //根据函数的输出结果更新实体关系
+            EntityRelation relation = relationRepository.queryRelationByFromNodeAndToNode(actionContext.getEntityActionExecuteParam().getOntologyUniqueIdentifier(),
+                    actionContext.getEntityActionExecuteParam().getEntityPrimaryKey(),
+                    actionContext.getLinkToOntologyUniqueIdentifier(),
+                    actionContext.getEntity().getPrimaryKey(),
+                    actionContext.getLink().getOntologyLinkUniqIdentifier());
+            if (relation != null) {
+                FunctionResultVO resultVO = jsonMapper.readValue(jsonString, new TypeReference<FunctionResultVO>() {
+                });
+                //返回结果有可见窗口，直接更新relation startTime/endTime
+                if (resultVO.getStartTime() != null && resultVO.getEndTime() != null) {
+                    relationRepository.updateRelation(resultVO.getStartTime(), resultVO.getEndTime(), resultVO.getTimeWindows(), Status.ENABLE, relation.getId());
+                } else {
+                    //无可见窗口时，解析spel表达式,更新relation enable
+                    Boolean expResult = evaluateJsonCondition(jsonString, actionContext.getLink().getOntologyLinkFunctionParamExpression());
+                    relationRepository.updateRelation(null, null, resultVO.getTimeWindows(), expResult ? Status.ENABLE : Status.DELETE, relation.getId());
+                }
+            }
+        }
+    }
+
     private Boolean evaluateJsonCondition(String jsonStr, String conditionExpr) {
         try {
             if (StringUtils.isEmpty(jsonStr) || StringUtils.isEmpty(conditionExpr)) {
@@ -589,83 +727,5 @@ public class EntityServiceImpl implements EntityService {
         }
     }
 
-    private String callFunctionAndUpdateProperty(List<FunctionParameterVO> functionInputParams,
-                                                 List<ActionParamMappingVO> mappings,
-                                                 Map<String, List<Object>> entityDetailMap,
-                                                 OntologyActionDetailVO actionDetailVO,
-                                                 FunctionDetailVO functionDetailVO,
-                                                 List<OntologyProperty> ontologyProperties,
-                                                 Object entityPrimaryKey) throws Exception {
 
-        //构造函数参数，list类型返回所有值，其他类型取第一个值
-        List<FunctionParameter> parameters = functionInputParams.stream().map(p -> {
-            var mappingVO = mappings.stream().filter(m -> m.getFunctionParamId().equals(p.getParamId())).findFirst();
-            if (!mappingVO.isPresent()) {
-                return new FunctionParameter().setParamName(p.getParamName());
-            }
-            Object value = null;
-            // 如果本体没有给属性绑定数据源，则获取的values为null，函数可能执行失败
-            List<Object> values = entityDetailMap.get(mappingVO.get().getPropertyUniqueIdentifier());
-            if (CollectionUtils.isNotEmpty(values)) {
-                value = p.getParamType().equals(FunctionParamTypeEnum.LIST) ? values : values.get(0);
-            }
-            return FunctionParameter.builder()
-                    .paramName(p.getParamName())
-                    .paramValue(value)
-                    .build();
-        }).collect(Collectors.toList());
-        //执行函数
-        var functionResult = functionService.executeFunction(FunctionExecuteParam.builder()
-                .functionApi(actionDetailVO.getFunctionApi())
-                .parameters(parameters)
-                .build());
-        //根据函数的输出结果更新源实体属性：通过json path获取value
-        var functionOutputParam = functionDetailVO.getParams().stream()
-                .filter(v -> v.getCategory().equals(FunctionParamCategoryEnum.OUTPUT))
-                .findFirst().get();
-
-        var output = mappings.stream().filter(m -> m.getFunctionParamId().equals(functionOutputParam.getParamId())).collect(Collectors.toList());
-        JsonNode jsonNode = jsonMapper.readTree(functionResult);
-        //primary datasource
-        var primaryDatasource = ontologyProperties.stream().filter(v -> v.getIsPrimaryKey() == 1).findFirst().get().getDatasourceId();
-        var propMap = ontologyProperties.stream().collect(Collectors.toMap(v -> v.getUniqueIdentifier(), v -> v));
-        List<EntityUpdateParam.ColumnUpdate> columnUpdates = Lists.newArrayList();
-        Map<String, Map<String, Object>> insertMap = Maps.newHashMap();
-        output.stream().forEach(out -> {
-            Object actualValue = JsonPath.using(safeConfig).parse(jsonNode.toString()).read(out.getFunctionParamExpression());
-            var prop = propMap.get(out.getPropertyUniqueIdentifier());
-            //主数据源列
-            if (prop.getDatasourceId().equals(primaryDatasource)) {
-                columnUpdates.add(EntityUpdateParam.ColumnUpdate.builder()
-                        .datasourceColumnName(prop.getDatasourceColumnName())
-                        .columnValue(actualValue)
-                        .propertyUniqIdentifier(out.getPropertyUniqueIdentifier())
-                        .build());
-            } else {
-                var map = insertMap.getOrDefault(prop.getDatasourceId(), new HashMap<String, Object>());
-                map.put(prop.getDatasourceColumnName(), actualValue);
-                insertMap.put(prop.getDatasourceId(), map);
-            }
-
-        });
-        //主数据源数据update
-        if (CollectionUtils.isNotEmpty(columnUpdates)) {
-            updateEntity(EntityUpdateParam.builder()
-                    .columnUpdates(columnUpdates)
-                    .primaryKeyValue(entityPrimaryKey)
-                    .datasourceId(primaryDatasource)
-                    .build());
-        }
-        //其他数据源数据insert
-        if (MapUtils.isNotEmpty(insertMap)) {
-            insertMap.entrySet().forEach(entry -> {
-                //查询关联建，补全columns
-                var tableName = entry.getKey();
-                var mapping = tableFieldMappingMapper.selectOne(new LambdaQueryWrapper<TableFieldMapping>().eq(TableFieldMapping::getTargetTableName, tableName));
-                entry.getValue().put(mapping.getTargetColumnName(), entityPrimaryKey);
-                objectMapper.insertObject(tableName, entry.getValue());
-            });
-        }
-        return functionResult;
-    }
 }

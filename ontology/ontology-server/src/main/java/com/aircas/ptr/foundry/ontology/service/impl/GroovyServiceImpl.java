@@ -1,14 +1,16 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
-import com.aircas.ptr.foundry.ontology.aspect.FuncParam;
-import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamCategoryEnum;
 import com.aircas.ptr.foundry.common.constant.FunctionParamTypeEnum;
 import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
+import com.aircas.ptr.foundry.ontology.aspect.FuncParam;
 import com.aircas.ptr.foundry.ontology.model.dto.FunctionParamDTO;
+import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamCategoryEnum;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionParamPO;
+import com.aircas.ptr.foundry.ontology.model.vo.FunctionResultVO;
 import com.aircas.ptr.foundry.ontology.service.GroovyService;
 import com.aircas.ptr.foundry.ontology.utils.SchemaHandleUtil;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.module.jsonSchema.JsonSchema;
@@ -217,7 +219,8 @@ public class GroovyServiceImpl implements GroovyService {
                 groovyInstance.invokeMethod("handle", null) :
                 groovyInstance.invokeMethod("handle", paramValues.toArray(new Object[]{}));
         //返回值 考虑到类型多样性，暂时仅使用json返回
-        return objectMapper.writeValueAsString(result);
+        var resultJsonString = objectMapper.writeValueAsString(result);
+        return resultJsonString;
     }
 
 

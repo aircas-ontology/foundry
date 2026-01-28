@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
 
+import com.aircas.ptr.foundry.ontology.model.vo.FunctionResultVO;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
@@ -21,13 +22,9 @@ import javax.validation.constraints.NotNull;
 @NoArgsConstructor
 public class FunctionCallbackParam {
 
-    @ApiModelProperty(name = "taskId", value = "任务id")
-    @NotBlank(message = "taskId is empty")
-    private String taskId;
-
 
     @ApiModelProperty(name = "result", value = "函数执行结果")
     @NotNull(message = "result is null")
-    private JsonNode result;
+    private FunctionResultVO result;
 
 }

@@ -3,12 +3,16 @@ package com.aircas.ptr.foundry.ontology.model.vo;
 
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
 
 import java.util.List;
 
+@NoArgsConstructor
+@AllArgsConstructor
 @Data
 @SuperBuilder
 @Accessors(chain = true)

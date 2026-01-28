@@ -6,7 +6,9 @@ import com.aircas.ptr.foundry.ontology.model.param.FunctionCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionExecuteParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.vo.FunctionDetailVO;
+import com.aircas.ptr.foundry.ontology.model.vo.FunctionExecuteResultVO;
 import com.aircas.ptr.foundry.ontology.model.vo.FunctionInfoVO;
+import com.aircas.ptr.foundry.ontology.model.vo.FunctionResultVO;
 import com.aircas.ptr.foundry.ontology.service.FunctionService;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import io.swagger.annotations.Api;
@@ -77,14 +79,15 @@ public class OntologyFunctionController {
     @PostMapping("/callback")
     @ApiOperation(value = "异步函数执行结果回调")
     public RestResult functionCallback(@RequestBody @Valid FunctionCallbackParam param) {
+        functionService.callback(param.getResult());
         return RestResult.success();
     }
 
 
     @GetMapping("/callback_result")
     @ApiOperation(value = "根据taskId查询异步函数执行结果")
-    public RestResult queryExecuteResult(@RequestParam(required = true, name = "taskId") @ApiParam(value = "任务id", required = true) String taskId) {
-        return RestResult.success();
+    public RestResult<FunctionExecuteResultVO> getExecuteResult(@RequestParam(required = true, name = "taskId") @ApiParam(value = "任务id", required = true) String taskId) {
+        return RestResult.ofData(functionService.getExecuteResult(taskId));
     }
 
 }

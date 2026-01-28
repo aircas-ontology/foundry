@@ -3,6 +3,7 @@ package com.aircas.ptr.foundry.ontology.service.impl;
 
 import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
+import com.aircas.ptr.foundry.ontology.model.dto.ActionContextInfoDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.FunctionParamDTO;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamCategoryEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
@@ -11,11 +12,11 @@ import com.aircas.ptr.foundry.ontology.model.param.FunctionCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionExecuteParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.po.Function;
+import com.aircas.ptr.foundry.ontology.model.po.FunctionExecuteResult;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionParamPO;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyAction;
-import com.aircas.ptr.foundry.ontology.model.vo.FunctionDetailVO;
-import com.aircas.ptr.foundry.ontology.model.vo.FunctionInfoVO;
-import com.aircas.ptr.foundry.ontology.model.vo.FunctionParameterVO;
+import com.aircas.ptr.foundry.ontology.model.vo.*;
+import com.aircas.ptr.foundry.ontology.repository.mainMapper.FunctionExecuteResultMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.FunctionMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyActionMapper;
 import com.aircas.ptr.foundry.ontology.service.FunctionParamService;
@@ -25,12 +26,15 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.OrderItem;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.google.common.collect.Lists;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import lombok.var;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.io.FileUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -55,10 +59,18 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     private OntologyActionMapper ontologyActionMapper;
 
     @Resource
+    private FunctionExecuteResultMapper executeResultMapper;
+
+    @Resource
     private FunctionParamService functionParamService;
 
     @Resource
     private GroovyService groovyService;
+
+    @Resource
+    private EntityServiceImpl entityService;
+
+    private ObjectMapper objectMapper = new ObjectMapper();
 
 
     @Override
@@ -148,6 +160,42 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 .build());
     }
 
+    @Override
+    public FunctionExecuteResultVO getExecuteResult(String taskId) {
+        var executeResult = executeResultMapper.selectOne(new LambdaQueryWrapper<FunctionExecuteResult>()
+                .eq(FunctionExecuteResult::getIsDeleted, false)
+                .eq(FunctionExecuteResult::getTaskId, taskId));
+        if (executeResult == null) {
+            return null;
+        }
+        return FunctionExecuteResultVO.builder()
+                .result(objectMapper.convertValue(executeResult.getResult(), new TypeReference<FunctionResultVO>() {
+                }))
+                .taskId(executeResult.getTaskId())
+                .actionApi(executeResult.getActionApi())
+                .functionApi(executeResult.getFunctionApi())
+                .functionParam(executeResult.getFunctionParam())
+                .build();
+    }
+
+    @SneakyThrows
+    @Override
+    public void callback(FunctionResultVO result) {
+        var executeResult = executeResultMapper.selectOne(new LambdaQueryWrapper<FunctionExecuteResult>()
+                .eq(FunctionExecuteResult::getIsDeleted, false)
+                .eq(FunctionExecuteResult::getTaskId, result.getTaskId()));
+        PreconditionUtils.checkNotNull(executeResult, "task id 不存在：" + result.getTaskId());
+        if (StringUtils.isNotEmpty(executeResult.getActionApi()) && StringUtils.isNotEmpty(executeResult.getActionContextInfo())) {
+            //todo 更新实体行为、关系、属性
+            var contextInfoDTO = objectMapper.readValue(executeResult.getActionContextInfo(), new TypeReference<ActionContextInfoDTO>() {
+            });
+            entityService.updateEntityPropertyAndRelation(objectMapper.writeValueAsString(result), contextInfoDTO);
+        }
+        executeResult.setIsDeleted(true)
+                .setResult(objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(result));
+        executeResultMapper.updateById(executeResult);
+    }
+
 
     @Override
     public Page<FunctionInfoVO> getFunctions(Integer pageNum, Integer pageSize) {
@@ -171,6 +219,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     }
 
     @Override
+    @SneakyThrows
     public String executeFunction(FunctionExecuteParam param) {
         //查询函数
         var function = getOne(new LambdaQueryWrapper<Function>().eq(Function::getApi, param.getFunctionApi()));
@@ -183,7 +232,17 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         //参数取值
         Map<String, Object> funParamMap = CollectionUtils.isEmpty(param.getParameters()) ?
                 new HashMap<>() : param.getParameters().stream().collect(HashMap::new, (m, p) -> m.put(p.getParamName(), p.getParamValue()), HashMap::putAll);
-        return groovyService.executeGroovy(function.getCode(), funParamMap, executeInputParams);
+        var resultJsonStr = groovyService.executeGroovy(function.getCode(), funParamMap, executeInputParams);
+        var result = objectMapper.readValue(resultJsonStr, new TypeReference<FunctionResultVO>() {
+        });
+        if (result != null && StringUtils.isNotEmpty(result.getTaskId())) {
+            executeResultMapper.insert(FunctionExecuteResult.builder()
+                    .taskId(result.getTaskId())
+                    .functionApi(param.getFunctionApi())
+                    .functionParam(objectMapper.writeValueAsString(param.getParameters()))
+                    .build());
+        }
+        return resultJsonStr;
     }
 
 
