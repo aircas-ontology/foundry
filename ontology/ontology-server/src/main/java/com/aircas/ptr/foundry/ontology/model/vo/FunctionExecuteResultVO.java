@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.ontology.model.vo;
 
 
+import com.aircas.ptr.foundry.ontology.model.enums.FunctionTaskStatusEnum;
 import io.swagger.annotations.ApiModel;
 import lombok.Data;
 import lombok.experimental.Accessors;
@@ -22,5 +23,7 @@ public class FunctionExecuteResultVO {
     private String actionApi;
 
     private String functionParam;
+
+    private FunctionTaskStatusEnum taskStatus;
 
 }

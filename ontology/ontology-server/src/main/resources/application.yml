@@ -4,6 +4,8 @@ server:
     context-path: /ontology
 
 spring:
+  jackson:
+    default-property-inclusion: non_null
   application:
     name: ontology
   servlet:

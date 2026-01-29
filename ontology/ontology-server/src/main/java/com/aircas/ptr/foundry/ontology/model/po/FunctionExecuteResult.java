@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.po;
 
+import com.aircas.ptr.foundry.ontology.model.enums.FunctionTaskStatusEnum;
 import com.baomidou.mybatisplus.annotation.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -70,7 +71,7 @@ public class FunctionExecuteResult {
 
     private String functionParam;
 
-    private Boolean isDeleted;
+    private FunctionTaskStatusEnum taskStatus;
 
 
 }

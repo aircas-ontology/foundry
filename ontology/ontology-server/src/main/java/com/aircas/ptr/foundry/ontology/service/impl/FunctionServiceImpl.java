@@ -6,6 +6,7 @@ import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.ontology.model.dto.ActionContextInfoDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.FunctionParamDTO;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamCategoryEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.FunctionTaskStatusEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionCreateParam;
@@ -161,20 +162,21 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     }
 
     @Override
+    @SneakyThrows
     public FunctionExecuteResultVO getExecuteResult(String taskId) {
         var executeResult = executeResultMapper.selectOne(new LambdaQueryWrapper<FunctionExecuteResult>()
-                .eq(FunctionExecuteResult::getIsDeleted, false)
                 .eq(FunctionExecuteResult::getTaskId, taskId));
         if (executeResult == null) {
             return null;
         }
         return FunctionExecuteResultVO.builder()
-                .result(objectMapper.convertValue(executeResult.getResult(), new TypeReference<FunctionResultVO>() {
+                .result(StringUtils.isEmpty(executeResult.getResult()) ? null : objectMapper.readValue(executeResult.getResult(), new TypeReference<FunctionResultVO>() {
                 }))
                 .taskId(executeResult.getTaskId())
                 .actionApi(executeResult.getActionApi())
                 .functionApi(executeResult.getFunctionApi())
                 .functionParam(executeResult.getFunctionParam())
+                .taskStatus(executeResult.getTaskStatus())
                 .build();
     }
 
@@ -182,7 +184,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     @Override
     public void callback(FunctionResultVO result) {
         var executeResult = executeResultMapper.selectOne(new LambdaQueryWrapper<FunctionExecuteResult>()
-                .eq(FunctionExecuteResult::getIsDeleted, false)
+                .eq(FunctionExecuteResult::getTaskStatus, FunctionTaskStatusEnum.PENDING)
                 .eq(FunctionExecuteResult::getTaskId, result.getTaskId()));
         PreconditionUtils.checkNotNull(executeResult, "task id 不存在：" + result.getTaskId());
         if (StringUtils.isNotEmpty(executeResult.getActionApi()) && StringUtils.isNotEmpty(executeResult.getActionContextInfo())) {
@@ -191,7 +193,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
             });
             entityService.updateEntityPropertyAndRelation(objectMapper.writeValueAsString(result), contextInfoDTO);
         }
-        executeResult.setIsDeleted(true)
+        executeResult.setTaskStatus(FunctionTaskStatusEnum.COMPLETED)
                 .setResult(objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(result));
         executeResultMapper.updateById(executeResult);
     }
@@ -240,6 +242,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                     .taskId(result.getTaskId())
                     .functionApi(param.getFunctionApi())
                     .functionParam(objectMapper.writeValueAsString(param.getParameters()))
+                    .taskStatus(FunctionTaskStatusEnum.PENDING)
                     .build());
         }
         return resultJsonStr;
