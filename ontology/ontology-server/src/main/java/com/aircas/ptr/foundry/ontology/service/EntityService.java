@@ -43,4 +43,6 @@ public interface EntityService {
     List<EntityIdsQueryVO> getByEntityIds(List<EntityIdsQueryParam> params);
 
     List<EntityLinksVO> getAllLinksByEntityIds(List<EntityIdsQueryParam> param);
+
+    Long countByOntologyUniqIdentifier(String ontologyIdentifier);
 }

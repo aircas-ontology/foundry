@@ -13,6 +13,9 @@ import java.util.List;
 @Repository
 public interface EntityNodeRepository extends ArangoRepository<EntityNode, String> {
 
+    @Query("FOR n IN node FILTER n.ontologyUniqIdentifier == @ontologyUniqIdentifier COLLECT WITH COUNT INTO count RETURN count")
+    Long countByOntologyUniqIdentifier(@Param("ontologyUniqIdentifier") String ontologyUniqIdentifier);
+
     List<EntityNode> findByTableName(String tableName);
 
     List<EntityNode> findByOntologyUniqIdentifier(String ontologyUniqIdentifier);

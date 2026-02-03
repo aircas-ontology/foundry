@@ -366,24 +366,25 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
             titleColumn = tiltleProperty.getDatasourceColumnName();
         }
 
-        var nodes = entityService.getByByOntologyUniqIdentifier(ontologyIdentifier);
+        Long count = entityService.countByOntologyUniqIdentifier(ontologyIdentifier);
 
-        if (primaryProperty == null && CollectionUtils.isEmpty(nodes)) {
+        if (primaryProperty == null && count == 0) {
             return;
         }
         //新增主键数据源
-        else if (primaryProperty != null && CollectionUtils.isEmpty(nodes)) {
+        else if (primaryProperty != null && count == 0) {
             if (StringUtils.isNotEmpty(primaryProperty.getDatasourceId())) {
                 entityService.syncNodes(ontologyIdentifier, primaryProperty.getDatasourceId(), primaryProperty.getDatasourceColumnName(), titleColumn);
                 createRelationsByLink(ontologyIdentifier);
             }
         }
         //主键字段设置为false
-        else if (primaryProperty == null && !CollectionUtils.isEmpty(nodes)) {
+        else if (primaryProperty == null && count > 0) {
             entityService.deleteNodesAndRelationsByOntologyId(ontologyIdentifier);
-        } else if (primaryProperty != null && !CollectionUtils.isEmpty(nodes)) {
+        } else if (primaryProperty != null && count > 0) {
             if (StringUtils.isNotEmpty(primaryProperty.getDatasourceId())) {
                 //主键数据源发生了变更
+                var nodes = entityService.getByByOntologyUniqIdentifier(ontologyIdentifier);
                 if (!primaryProperty.getDatasourceId().equals(nodes.get(0).getTableName())) {
                     entityService.deleteNodesAndRelationsByOntologyId(ontologyIdentifier);
                     entityService.syncNodes(ontologyIdentifier, primaryProperty.getDatasourceId(), primaryProperty.getDatasourceColumnName(), titleColumn);

@@ -274,6 +274,11 @@ public class EntityServiceImpl implements EntityService {
     }
 
     @Override
+    public Long countByOntologyUniqIdentifier(String ontologyIdentifier) {
+        return nodeRepository.countByOntologyUniqIdentifier(ontologyIdentifier);
+    }
+
+    @Override
     public List<EntityPropertyDetailVO> getEntityDetail(String ontologyUniqueIdentifier, Object entityPrimaryKey) {
         List<EntityPropertyDetailVO> res = Lists.newArrayList();
         var props = propertyMapper.selectList(new LambdaQueryWrapper<OntologyProperty>()
