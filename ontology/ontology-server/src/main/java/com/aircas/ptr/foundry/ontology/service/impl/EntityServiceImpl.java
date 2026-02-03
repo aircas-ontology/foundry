@@ -274,8 +274,8 @@ public class EntityServiceImpl implements EntityService {
     }
 
     @Override
-    public Long countByOntologyUniqIdentifier(String ontologyIdentifier) {
-        return nodeRepository.countByOntologyUniqIdentifier(ontologyIdentifier);
+    public EntityNode findOneByOntologyUniqIdentifier(String ontologyIdentifier) {
+        return nodeRepository.findOneByOntologyUniqIdentifier(ontologyIdentifier);
     }
 
     @Override

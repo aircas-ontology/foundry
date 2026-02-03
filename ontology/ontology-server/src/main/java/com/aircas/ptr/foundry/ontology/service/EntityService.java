@@ -44,5 +44,5 @@ public interface EntityService {
 
     List<EntityLinksVO> getAllLinksByEntityIds(List<EntityIdsQueryParam> param);
 
-    Long countByOntologyUniqIdentifier(String ontologyIdentifier);
+    EntityNode findOneByOntologyUniqIdentifier(String ontologyIdentifier);
 }
