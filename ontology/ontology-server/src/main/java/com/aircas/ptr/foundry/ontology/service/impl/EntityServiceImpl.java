@@ -128,15 +128,6 @@ public class EntityServiceImpl implements EntityService {
             var relations = new ArrayList<EntityRelation>();
             var windows = new ArrayList<VisibilityWindow>();
 
-            Date startTime = link.getType().equals(OntologyLinkTypeEnum.COMPOSITION) ? DateUtils.MIN_DATE : null;
-            Date endTime = link.getType().equals(OntologyLinkTypeEnum.COMPOSITION) ? DateUtils.MAX_DATE : null;
-
-            if (link.getType().equals(OntologyLinkTypeEnum.COMPOSITION)) {
-                windows.add(VisibilityWindow.builder()
-                        .startTime(DateUtils.MIN_DATE)
-                        .endTime(DateUtils.MAX_DATE)
-                        .build());
-            }
 
             fromNodes.forEach(from ->
                     toNodes.forEach(to -> {
@@ -149,8 +140,8 @@ public class EntityServiceImpl implements EntityService {
                                         .to(to)
                                         .status(OntologyLinkTypeEnum.mappingToStatus(link.getType()))
                                         .timeWindows(windows)
-                                        .startTime(startTime)
-                                        .endTime(endTime)
+                                        .startTime(null)
+                                        .endTime(null)
                                         .createTime(new Date())
                                         .updateTime(new Date())
                                         .type(link.getType())
