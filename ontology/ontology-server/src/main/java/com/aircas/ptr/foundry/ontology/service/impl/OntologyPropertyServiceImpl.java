@@ -75,6 +75,8 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                 .setDatasourceId(param.getDatasource() != null ? param.getDatasource().getDatasourceId() : null)
                 .setDescription(param.getDescription())
                 .setDisplayName(param.getDisplayName())
+                .setPrimaryCategory(param.getPrimaryCategory())
+                .setSecondaryCategory(param.getSecondaryCategory())
                 .setTag(param.getTag())
                 .setPropertyType(param.getDataType())
                 .setIsTitleKey(param.getIsTitleKey() ? 1 : 0)
@@ -237,39 +239,16 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         var props = list(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier));
         var tableMap = tableMetadataMapper.listTables().stream().collect(Collectors.toMap(v -> v.getTableName(), v -> v.getDescription() != null ? v.getDescription() : ""));
 
-        return props.stream().map(v -> OntologyPropertyDetailVO.builder()
-                        .description(v.getDescription())
-                        .displayName(v.getDisplayName())
-                        .isPrimaryKey(v.getIsPrimaryKey() == 1)
-                        .isTitleKey(v.getIsTitleKey() == 1)
-                        .tag(v.getTag())
-                        .uniqueIdentifier(v.getUniqueIdentifier())
-                        .ontologyUniqueIdentifier(v.getOntologyUniqueIdentifier())
-                        .apiName(v.getApiName())
-                        .propertyType(v.getPropertyType())
-                        .datasourceId(v.getDatasourceId())
-                        .datasourceColumnName(v.getDatasourceColumnName())
-                        .datasourceDescription(tableMap.get(v.getDatasourceId()))
-                        .build())
+        return props.stream().map(v -> DataConverter.convert(v).setDatasourceDescription(tableMap.get(v.getDatasourceId())))
                 .collect(Collectors.toList());
     }
 
     @Override
     public List<OntologyPropertyInfoVO> getPropertyInfoByOntologyId(String ontologyUniqueIdentifier) {
-
         var props = list(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier));
-
-        return props.stream().map(v -> OntologyPropertyInfoVO.builder()
-                        .description(v.getDescription())
-                        .displayName(v.getDisplayName())
-                        .isPrimaryKey(v.getIsPrimaryKey() == 1)
-                        .isTitleKey(v.getIsTitleKey() == 1)
-                        .tag(v.getTag())
-                        .uniqueIdentifier(v.getUniqueIdentifier())
-                        .ontologyUniqueIdentifier(ontologyUniqueIdentifier)
-                        .build())
-                .collect(Collectors.toList());
+        return props.stream().map(v -> DataConverter.convertToPropertyInfoVO(v)).collect(Collectors.toList());
     }
+
 
     @Override
     public OntologyPropertyDetailVO getPropertyDetailById(String uniqueIdentifier) {

@@ -303,6 +303,8 @@ public class EntityServiceImpl implements EntityService {
             var p = propertyMap.get(colName);
             return EntityPropertyDetailVO.builder()
                     .tag(p.getTag())
+                    .primaryCategory(p.getPrimaryCategory().getName())
+                    .secondaryCategory(p.getSecondaryCategory())
                     .propertyDisplayName(p.getDisplayName())
                     .propertyValues(Lists.newArrayList(colValue))
                     .propertyUniqIdentifier(p.getUniqueIdentifier())

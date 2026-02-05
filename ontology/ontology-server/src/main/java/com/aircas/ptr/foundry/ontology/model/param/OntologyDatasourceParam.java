@@ -1,7 +1,7 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
 
-import com.aircas.ptr.foundry.ontology.model.enums.OntologyPropertyCategoryEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.OntologyPropertyPrimaryCategoryEnum;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.AllArgsConstructor;
@@ -22,6 +22,6 @@ public class OntologyDatasourceParam extends OntologyPrimaryDatasourceParam {
 
     @ApiModelProperty(name = "category", value = "数据源关联的一组属性的类别，STATIC/DYNAMIC", example = "STATIC")
     @NotNull(message = "category is null")
-    private OntologyPropertyCategoryEnum category;
+    private OntologyPropertyPrimaryCategoryEnum category;
 
 }

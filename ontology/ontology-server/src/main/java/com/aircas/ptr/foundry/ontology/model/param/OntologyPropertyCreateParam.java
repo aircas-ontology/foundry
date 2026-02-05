@@ -2,6 +2,8 @@ package com.aircas.ptr.foundry.ontology.model.param;
 
 import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import com.aircas.ptr.foundry.ontology.controller.validator.DatasourceVerify;
+import com.aircas.ptr.foundry.ontology.model.enums.OntologyPropertyPrimaryCategoryEnum;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyPrimaryCategoryVO;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.AllArgsConstructor;
@@ -50,6 +52,14 @@ public class OntologyPropertyCreateParam extends OntologyIdentifierParam {
     @ApiModelProperty(name = "isTitleKey", value = "是否为名称键", required = true, example = "true")
     @NotNull(message = "isTitleKey is empty")
     private Boolean isTitleKey;
+
+    @ApiModelProperty(name = "primaryCategory", value = "属性一级分类", example = "DESIGN_MANUFACTURING")
+    @NotNull(message = "primaryCategory is null")
+    private OntologyPropertyPrimaryCategoryEnum primaryCategory;
+
+    @ApiModelProperty(name = "secondaryCategory", value = "属性二级分类", example = "载荷")
+    @NotBlank(message = "secondaryCategory is empty")
+    private String secondaryCategory;
 
     @ApiModelProperty(name = "type", value = "属性的自定义标签，默认值：基本属性", example = "载荷基本信息")
     @NotBlank(message = "tag is empty")

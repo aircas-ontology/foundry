@@ -2,12 +2,14 @@ package com.aircas.ptr.foundry.ontology.controller;
 
 import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.controller.validator.OntologyIdVerify;
+import com.aircas.ptr.foundry.ontology.model.enums.OntologyPropertyPrimaryCategoryEnum;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyBatchCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyVisibilityUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyDetailVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyInfoVO;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyPrimaryCategoryVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyVisibilityVO;
 import com.aircas.ptr.foundry.ontology.service.OntologyPropertyService;
 import io.swagger.annotations.Api;
@@ -19,7 +21,9 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import javax.validation.Valid;
+import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Api(tags = "属性")
 @RestController
@@ -107,10 +111,24 @@ public class OntologyPropertyController {
     @GetMapping("/visibility")
     @ApiOperation(value = "查询属性可见性")
     public RestResult<List<OntologyPropertyVisibilityVO>> getPropertyVisibility(@RequestParam(required = true, name = "ontologyUniqueIdentifier")
-                                            @ApiParam(value = "本体uniqueIdentifier", required = true)
-                                            @OntologyIdVerify String ontologyUniqueIdentifier) {
+                                                                                @ApiParam(value = "本体uniqueIdentifier", required = true)
+                                                                                @OntologyIdVerify String ontologyUniqueIdentifier) {
         var res = ontologyPropertyService.getPropertyVisibility(ontologyUniqueIdentifier);
         return RestResult.ofData(res);
+    }
+
+
+    @GetMapping("/primaryCategory")
+    @ApiOperation(value = "属性一级分类列表")
+    public RestResult<List<OntologyPropertyPrimaryCategoryVO>> listPropertyPrimaryCategory() {
+        var list = Arrays.stream(OntologyPropertyPrimaryCategoryEnum.values())
+                .<OntologyPropertyPrimaryCategoryVO>map(v -> OntologyPropertyPrimaryCategoryVO.builder()
+                        .displayName(v.getName())
+                        .key(v.toString())
+                        .value(v.getValue())
+                        .build())
+                .collect(Collectors.toList());
+        return RestResult.ofData(list);
     }
 
 }

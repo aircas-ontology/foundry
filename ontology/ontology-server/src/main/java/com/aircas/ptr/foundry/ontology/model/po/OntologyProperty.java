@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.ontology.model.po;
 
 import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.OntologyPropertyPrimaryCategoryEnum;
 import com.baomidou.mybatisplus.annotation.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -103,6 +104,17 @@ public class OntologyProperty implements Serializable {
      * 属性标签
      */
     private String tag;
+
+    /**
+     * 属性一级分类
+     */
+    private OntologyPropertyPrimaryCategoryEnum primaryCategory;
+
+
+    /**
+     * 属性二级分类
+     */
+    private String secondaryCategory;
 
 
     /**

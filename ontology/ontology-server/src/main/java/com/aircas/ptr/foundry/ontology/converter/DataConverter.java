@@ -2,16 +2,14 @@ package com.aircas.ptr.foundry.ontology.converter;
 
 import com.aircas.ptr.foundry.common.util.IdGenerator;
 import com.aircas.ptr.foundry.ontology.model.document.EntityRelation;
+import com.aircas.ptr.foundry.ontology.model.enums.OntologyPropertyPrimaryCategoryEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import com.aircas.ptr.foundry.ontology.model.enums.VisibilityEnum;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyCreateParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
-import com.aircas.ptr.foundry.ontology.model.vo.EntityLinkPropertyVO;
-import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkInfoVO;
-import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaInfoVO;
-import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyDetailVO;
+import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.google.common.collect.Sets;
 import lombok.var;
 import org.apache.commons.lang3.StringUtils;
@@ -71,6 +69,8 @@ public class DataConverter {
                 .apiName(param.getApiName())
                 .ontologyUniqueIdentifier(param.getOntologyIdentifier())
                 .visibility(VisibilityEnum.NORMAL.getValue())
+                .primaryCategory(param.getPrimaryCategory())
+                .secondaryCategory(param.getSecondaryCategory())
                 .build();
         if (datasource != null) {
             prop.setDatasourceId(datasource.getDatasourceId())
@@ -89,6 +89,22 @@ public class DataConverter {
                 .isPrimaryKey(p.getIsPrimaryKey() == 1)
                 .isTitleKey(p.getIsTitleKey() == 1)
                 .propertyType(p.getPropertyType())
+                .secondaryCategory(p.getSecondaryCategory())
+                .primaryCategory(p.getPrimaryCategory().getName())
+                .tag(p.getTag())
+                .uniqueIdentifier(p.getUniqueIdentifier())
+                .ontologyUniqueIdentifier(p.getOntologyUniqueIdentifier())
+                .build();
+    }
+
+    public static OntologyPropertyInfoVO convertToPropertyInfoVO(OntologyProperty p) {
+        return OntologyPropertyInfoVO.builder()
+                .description(p.getDescription())
+                .displayName(p.getDisplayName())
+                .isPrimaryKey(p.getIsPrimaryKey() == 1)
+                .isTitleKey(p.getIsTitleKey() == 1)
+                .secondaryCategory(p.getSecondaryCategory())
+                .primaryCategory(p.getPrimaryCategory().getName())
                 .tag(p.getTag())
                 .uniqueIdentifier(p.getUniqueIdentifier())
                 .ontologyUniqueIdentifier(p.getOntologyUniqueIdentifier())
