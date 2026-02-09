@@ -347,6 +347,8 @@ public class EntityServiceImpl implements EntityService {
                             .propertyUniqIdentifier(p.getUniqueIdentifier())
                             .propertyApiName(p.getApiName())
                             .propertyValues(values)
+                            .primaryCategory(p.getPrimaryCategory().getName())
+                            .secondaryCategory(p.getSecondaryCategory())
                             .build();
                 }).collect(Collectors.toList());
                 res.addAll(detail);

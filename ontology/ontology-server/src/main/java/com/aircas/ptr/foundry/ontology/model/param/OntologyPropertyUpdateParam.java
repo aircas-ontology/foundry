@@ -55,8 +55,7 @@ public class OntologyPropertyUpdateParam extends IdentifierParam {
     @NotBlank(message = "secondaryCategory is empty")
     private String secondaryCategory;
 
-    @ApiModelProperty(name = "type", value = "属性的自定义标签，默认值：基本属性", example = "载荷基本信息")
-    @NotBlank(message = "tag is empty")
+    @ApiModelProperty(name = "type", value = "属性的自定义标签", example = "载荷基本信息")
     private String tag;
 
 }
