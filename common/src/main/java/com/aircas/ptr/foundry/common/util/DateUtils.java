@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.common.util;
 
+import lombok.var;
 import org.joda.time.DateTime;
 import org.joda.time.format.DateTimeFormat;
 import org.springframework.util.Assert;
@@ -7,6 +8,8 @@ import org.springframework.util.Assert;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Calendar;
@@ -136,14 +139,20 @@ public class DateUtils {
      */
     public static Date fromString2Date(String dateString, String pattern) {
 
-        Assert.hasLength(dateString);
-        DateFormat dateFormat = getDateFormat(pattern);
+        // 定义日期时间格式
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern(pattern);
 
-        try {
-            return dateFormat.parse(dateString);
-        } catch (ParseException var4) {
-            throw new IllegalArgumentException("日期解析错误。");
-        }
+        // 解析字符串为 LocalDateTime
+        LocalDateTime ldt = LocalDateTime.parse(dateString, formatter);
+
+        // 将 LocalDateTime 转换为 Date
+        Date date = Date.from(ldt.atZone(ZoneId.of("UTC")).toInstant());
+        return date;
+    }
+
+    public static void main(String[] args) {
+        var res = fromString2Date("2024-01-01T01:25:08.059","yyyy-MM-dd'T'HH:mm:ss.SSS");
+        System.out.println(res);
     }
 
 
