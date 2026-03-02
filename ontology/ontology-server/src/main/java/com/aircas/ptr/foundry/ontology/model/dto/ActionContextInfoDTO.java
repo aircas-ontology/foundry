@@ -41,7 +41,7 @@ public class ActionContextInfoDTO {
 
     private String linkToOntologyUniqueIdentifier;
 
-    private EntityInfoVO entity;
+    private Object linkEntityPrimaryKey;
 
 
 }

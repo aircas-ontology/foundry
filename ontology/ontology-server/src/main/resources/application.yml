@@ -80,3 +80,23 @@ orekit:
 #logging:
 #  level:
 #    com.arangodb: DEBUG
+
+
+xxl:
+  job:
+    admin:
+      addresses: http://192.168.9.11:18888/xxl-job-admin
+      addJobUrl:
+      updateJobUrl:
+      removeJobUrl:
+      startJobUrl:
+      stopJobUrl:
+    accessToken: iecas123
+    executor:
+      appname: ontology-xxl-job-executor
+      address:
+      ip:
+      port: 0
+      logpath: ./logs/xxl-job/jobhandler
+      logretentiondays: 30
+

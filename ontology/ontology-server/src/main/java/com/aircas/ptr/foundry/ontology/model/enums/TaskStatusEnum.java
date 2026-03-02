@@ -5,7 +5,7 @@ import lombok.Getter;
 
 @AllArgsConstructor
 @Getter
-public enum FunctionTaskStatusEnum {
+public enum TaskStatusEnum {
 
     PENDING, FAILED, COMPLETED
 

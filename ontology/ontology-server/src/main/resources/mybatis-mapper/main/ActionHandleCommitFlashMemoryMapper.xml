@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
-<mapper namespace="com.aircas.ptr.foundry.ontology.repository.mainMapper.ActionHandleCommitFlashMermoryMapper">
-    <resultMap id="BaseResultMap" type="com.aircas.ptr.foundry.ontology.model.po.ActionHandleCommitFlashMemory">
+<mapper namespace="com.aircas.ptr.foundry.ontology.repository.mainMapper.ActionHandleLogMapper">
+    <resultMap id="BaseResultMap" type="com.aircas.ptr.foundry.ontology.model.po.ActionHandleLog">
         <id column="id" jdbcType="BIGINT" property="id" />
         <result column="primary_key" jdbcType="VARCHAR" property="primaryKey" />
         <result column="action_id" jdbcType="BIGINT" property="actionId" />
@@ -17,14 +17,14 @@
 
     <select id="getActionFlashMemoryByActionAndPrimary"
             resultMap="BaseResultMap"
-            parameterType="com.aircas.ptr.foundry.ontology.model.po.ActionHandleCommitFlashMemory">
+            parameterType="com.aircas.ptr.foundry.ontology.model.po.ActionHandleLog">
         select
         <include refid="Base_Column_List" />
         from action_handle_commit_flash_memory
         where action_id = #{actionId,jdbcType=INTEGER} and primary_key = #{primaryKey,jdbcType=VARCHAR}
     </select>
 
-    <update id="updateActionDataLogById" parameterType="com.aircas.ptr.foundry.ontology.model.po.ActionHandleCommitFlashMemory">
+    <update id="updateActionDataLogById" parameterType="com.aircas.ptr.foundry.ontology.model.po.ActionHandleLog">
         insert into  "action_handle_commit_flash_memory"(id,primary_key,action_id,table_name,data,create_time,update_time)
         values (#{id,jdbcType=BIGINT},#{primaryKey,jdbcType=VARCHAR}, #{actionId,jdbcType=BIGINT},
         #{tableName,jdbcType=VARCHAR},#{data,jdbcType=VARCHAR}, now(), now())

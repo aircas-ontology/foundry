@@ -1,6 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.po;
 
-import com.aircas.ptr.foundry.ontology.model.enums.FunctionTaskStatusEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.TaskStatusEnum;
 import com.baomidou.mybatisplus.annotation.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -8,9 +8,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 
-import javax.persistence.Column;
 import javax.persistence.Entity;
-import javax.persistence.Id;
 import java.util.Date;
 
 
@@ -71,7 +69,7 @@ public class FunctionExecuteResult {
 
     private String functionParam;
 
-    private FunctionTaskStatusEnum taskStatus;
+    private TaskStatusEnum taskStatus;
 
 
 }

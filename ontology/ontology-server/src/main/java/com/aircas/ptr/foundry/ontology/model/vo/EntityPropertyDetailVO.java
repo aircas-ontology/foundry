@@ -39,4 +39,7 @@ public class EntityPropertyDetailVO  {
     @ApiModelProperty(name = "propertyValues", value = "属性值列表", example = "[123,456]")
     private List<Object> propertyValues;
 
+    @ApiModelProperty(name = "primaryKey", value = "主键", example = "1")
+    private Object entityPrimaryKey;
+
 }

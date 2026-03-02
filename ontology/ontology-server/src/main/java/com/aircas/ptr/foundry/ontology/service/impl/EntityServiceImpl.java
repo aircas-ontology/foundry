@@ -2,7 +2,6 @@ package com.aircas.ptr.foundry.ontology.service.impl;
 
 import com.aircas.ptr.foundry.common.constant.FunctionParamTypeEnum;
 import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
-import com.aircas.ptr.foundry.common.util.DateUtils;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.ontology.converter.DataConverter;
 import com.aircas.ptr.foundry.ontology.model.common.VisibilityWindow;
@@ -138,7 +137,7 @@ public class EntityServiceImpl implements EntityService {
                                         .ontologyLinkId(link.getUniqueIdentifier())
                                         .from(from)
                                         .to(to)
-                                        .status(OntologyLinkTypeEnum.mappingToStatus(link.getType()))
+                                        .status(Status.DELETE)
                                         .timeWindows(windows)
                                         .startTime(null)
                                         .endTime(null)
@@ -349,6 +348,7 @@ public class EntityServiceImpl implements EntityService {
                             .propertyValues(values)
                             .primaryCategory(p.getPrimaryCategory().getName())
                             .secondaryCategory(p.getSecondaryCategory())
+                            .entityPrimaryKey(entityPrimaryKey)
                             .build();
                 }).collect(Collectors.toList());
                 res.addAll(detail);
@@ -442,14 +442,41 @@ public class EntityServiceImpl implements EntityService {
 
     @Override
     public String executeAction(EntityActionExecuteParam param) throws Exception {
-        List<String> executeResult = Lists.newArrayList();
-        var actionDetailVO = actionService.getActionByApi(param.getActionApi());
+        var infoDTO = initActionContextInfoDTO(param.getOntologyUniqueIdentifier(), param.getActionApi());
+        //获取行为关联关系下的本体的所有实体详情
+        List<List<EntityPropertyDetailVO>> linkedEntities = getLinkedEntities(infoDTO);
+        return executeEntityAction(param, infoDTO, linkedEntities);
+    }
+
+    public List<List<EntityPropertyDetailVO>> getLinkedEntities(ActionContextInfoDTO infoDTO) {
+        if (infoDTO.getLink() != null) {
+            //如果行为影响关系，找到关联的本体
+            var linkedOntology = linkGroupMapper.selectOne(new LambdaQueryWrapper<OntologyLinkGroup>().eq(OntologyLinkGroup::getUniqueIdentifier, infoDTO.getLink().getOntologyLinkUniqIdentifier()))
+                    .getOntologyUniqueIdentifierTo();
+            infoDTO.setLinkToOntologyUniqueIdentifier(linkedOntology);
+            //获取关联本体下的所有实体详情
+            var entities = getEntities(linkedOntology, "", "", 1, Integer.MAX_VALUE, false);
+            var records = entities.getRecords();
+
+            var linkedEntities = records.stream().map(entity -> getEntityDetail(linkedOntology, entity.getPrimaryKey()))
+                    .collect(Collectors.toList());
+
+            return linkedEntities;
+        }
+        return null;
+    }
+
+
+    public ActionContextInfoDTO initActionContextInfoDTO(String ontologyUniqueIdentifier,
+                                                         String actionApi) {
+
+        var actionDetailVO = actionService.getActionByApi(actionApi);
         var functionDetailVO = functionService.getFunctionDetailByApi(actionDetailVO.getFunctionApi());
         var link = actionDetailVO.getLinkMapping();
         var mappings = actionDetailVO.getMappingIns();
         //src本体属性
         var ontologyProperties = propertyMapper.selectList(new LambdaQueryWrapper<OntologyProperty>()
-                .eq(OntologyProperty::getOntologyUniqueIdentifier, param.getOntologyUniqueIdentifier()));
+                .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier));
 
         //构造函数的输入参数
         var functionInputParams = functionDetailVO.getParams().stream()
@@ -457,66 +484,85 @@ public class EntityServiceImpl implements EntityService {
                 .sorted(Comparator.comparing(v -> v.getParamOrder()))
                 .collect(Collectors.toList());
 
-        //存在关联关系
-        if (link != null) {
-            //如果行为影响关系，找到关联的本体
-            var linkedOntology = linkGroupMapper.selectOne(new LambdaQueryWrapper<OntologyLinkGroup>().eq(OntologyLinkGroup::getUniqueIdentifier, link.getOntologyLinkUniqIdentifier()))
-                    .getOntologyUniqueIdentifierTo();
-            //获取关联本体下的所有实体详情
-            var entities = getEntities(linkedOntology, "", "", 1, Integer.MAX_VALUE, false);
-            var records = entities.getRecords();
-            //实体数据必须存在
-            if (CollectionUtils.isNotEmpty(records)) {
-                //获取源本体实体属性详情
-                var srcEntityDetailMap = getEntityDetail(param.getOntologyUniqueIdentifier(), param.getEntityPrimaryKey())
-                        .stream().collect(Collectors.toMap(v -> v.getPropertyUniqIdentifier(), v -> v.getPropertyValues()));
+        ActionContextInfoDTO infoDTO = ActionContextInfoDTO
+                .builder()
+                .actionDetailVO(actionDetailVO)
+                .functionDetailVO(functionDetailVO)
+                .link(link)
+                .mappings(mappings)
+                .ontologyProperties(ontologyProperties)
+                .functionInputParams(functionInputParams)
+                .build();
 
-                //和关联本体下的所有实体计算关系
-                var taskResults = taskProcessor.processTask(records,
-                        partitionRecords -> {
-                            return partitionRecords.stream().map(entity -> {
-                                try {
-                                    Map<String, List<Object>> linkedEntityDetailMap = getEntityDetail(linkedOntology, entity.getPrimaryKey())
-                                            .stream().collect(Collectors.toMap(v -> v.getPropertyUniqIdentifier(), v -> v.getPropertyValues()));
-                                    // 合并两个实体，propertyId作为key
-                                    Map<String, List<Object>> mergedEntityDetailMap = Stream.of(srcEntityDetailMap, linkedEntityDetailMap)
-                                            .flatMap(map -> map.entrySet().stream())
-                                            .collect(Collectors.toMap(v -> v.getKey(), v -> v.getValue(),
-                                                    (list1, list2) -> {
-                                                        list1.addAll(list2);
-                                                        return list1;
-                                                    }));
-                                    ActionContextInfoDTO contextInfoDTO = ActionContextInfoDTO.builder()
-                                            .functionInputParams(functionInputParams)
-                                            .mappings(mappings)
-                                            .entityDetailMap(mergedEntityDetailMap)
-                                            .actionDetailVO(actionDetailVO)
-                                            .functionDetailVO(functionDetailVO)
-                                            .ontologyProperties(ontologyProperties)
-                                            .entityActionExecuteParam(param)
-                                            .link(link)
-                                            .entity(entity)
-                                            .linkToOntologyUniqueIdentifier(linkedOntology)
-                                            .build();
-                                    //执行函数
-                                    String functionResultJson = callFunction(contextInfoDTO);
-                                    var functionResult = jsonMapper.readValue(functionResultJson, new TypeReference<FunctionResultVO>() {
-                                    });
-                                    //如果函数是同步执行，更新实体属性和关系
-                                    if (functionResult != null && StringUtils.isEmpty(functionResult.getTaskId())) {
-                                        updateEntityPropertyAndRelation(functionResultJson, contextInfoDTO);
-                                    }
-                                    return functionResultJson;
-                                } catch (Exception e) {
-                                    log.error("函数执行异常：" + entity.toString(), e);
-                                    return "";
+        return infoDTO;
+
+    }
+
+
+    public String executeEntityAction(EntityActionExecuteParam param, ActionContextInfoDTO infoDTO, List<List<EntityPropertyDetailVO>> linkedEntities) throws Exception {
+
+        var link = infoDTO.getLink();
+        var linkedOntology = infoDTO.getLinkToOntologyUniqueIdentifier();
+        var functionInputParams = infoDTO.getFunctionInputParams();
+        var mappings = infoDTO.getMappings();
+        var actionDetailVO = infoDTO.getActionDetailVO();
+        var functionDetailVO = infoDTO.getFunctionDetailVO();
+        var ontologyProperties = infoDTO.getOntologyProperties();
+
+        List<String> executeResult = Lists.newArrayList();
+
+        //存在关联关系,实体数据必须存在
+        if (CollectionUtils.isNotEmpty(linkedEntities)) {
+            //获取源本体实体属性详情
+            var srcEntityDetailMap = getEntityDetail(param.getOntologyUniqueIdentifier(), param.getEntityPrimaryKey())
+                    .stream().collect(Collectors.toMap(v -> v.getPropertyUniqIdentifier(), v -> v.getPropertyValues()));
+
+            //和关联本体下的所有实体计算关系
+            var taskResults = taskProcessor.processTask(linkedEntities,
+                    partitionRecords -> {
+                        return partitionRecords.stream().map(linkedEntityDetail -> {
+                            try {
+                                Map<String, List<Object>> linkedEntityDetailMap = linkedEntityDetail.stream()
+                                        .collect(Collectors.toMap(v -> v.getPropertyUniqIdentifier(), v -> v.getPropertyValues()));
+                                // 合并两个实体，propertyId作为key
+                                Map<String, List<Object>> mergedEntityDetailMap = Stream.of(srcEntityDetailMap, linkedEntityDetailMap)
+                                        .flatMap(map -> map.entrySet().stream())
+                                        .collect(Collectors.toMap(v -> v.getKey(), v -> v.getValue(),
+                                                (list1, list2) -> {
+                                                    list1.addAll(list2);
+                                                    return list1;
+                                                }));
+                                ActionContextInfoDTO contextInfoDTO = ActionContextInfoDTO.builder()
+                                        .functionInputParams(functionInputParams)
+                                        .mappings(mappings)
+                                        .entityDetailMap(mergedEntityDetailMap)
+                                        .actionDetailVO(actionDetailVO)
+                                        .functionDetailVO(functionDetailVO)
+                                        .ontologyProperties(ontologyProperties)
+                                        .entityActionExecuteParam(param)
+                                        .link(link)
+                                        .linkEntityPrimaryKey(linkedEntityDetail.get(0).getEntityPrimaryKey())
+                                        .linkToOntologyUniqueIdentifier(linkedOntology)
+                                        .build();
+                                //执行函数
+                                String functionResultJson = callFunction(contextInfoDTO);
+                                var functionResult = jsonMapper.readValue(functionResultJson, new TypeReference<FunctionResultVO>() {
+                                });
+                                //如果函数是同步执行，更新实体属性和关系
+                                if (functionResult != null && StringUtils.isEmpty(functionResult.getTaskId())) {
+                                    updateEntityPropertyAndRelation(functionResultJson, contextInfoDTO);
                                 }
-                            }).collect(Collectors.toList());
-                        },
-                        20);
-                executeResult.addAll(taskResults.stream().flatMap(v -> v.stream()).collect(Collectors.toList()));
-            }
+                                return functionResultJson;
+                            } catch (Exception e) {
+                                log.error("函数执行异常：" + linkedEntityDetail.toString(), e);
+                                return "";
+                            }
+                        }).collect(Collectors.toList());
+                    },
+                    20);
+            executeResult.addAll(taskResults.stream().flatMap(v -> v.stream()).collect(Collectors.toList()));
         }
+
         //无关联关系
         else {
             //获取源本体实体属性详情
@@ -543,6 +589,7 @@ public class EntityServiceImpl implements EntityService {
         }
         return jsonMapper.writeValueAsString(executeResult);
     }
+
 
     @Override
     @Transactional(transactionManager = "datalakeTransactionManager")
@@ -638,6 +685,7 @@ public class EntityServiceImpl implements EntityService {
 
 
     @SneakyThrows
+    @Override
     public void updateEntityPropertyAndRelation(String jsonString, ActionContextInfoDTO actionContext) {
 
         //更新实体属性值
@@ -667,6 +715,7 @@ public class EntityServiceImpl implements EntityService {
                 map.put(prop.getDatasourceColumnName(), actualValue);
                 insertMap.put(prop.getDatasourceId(), map);
             }
+
         });
         //主数据源数据update
         if (CollectionUtils.isNotEmpty(columnUpdates)) {
@@ -693,7 +742,7 @@ public class EntityServiceImpl implements EntityService {
             EntityRelation relation = relationRepository.queryRelationByFromNodeAndToNode(actionContext.getEntityActionExecuteParam().getOntologyUniqueIdentifier(),
                     actionContext.getEntityActionExecuteParam().getEntityPrimaryKey(),
                     actionContext.getLinkToOntologyUniqueIdentifier(),
-                    actionContext.getEntity().getPrimaryKey(),
+                    actionContext.getLinkEntityPrimaryKey(),
                     actionContext.getLink().getOntologyLinkUniqIdentifier());
             if (relation != null) {
                 FunctionResultVO resultVO = jsonMapper.readValue(jsonString, new TypeReference<FunctionResultVO>() {

@@ -2,17 +2,12 @@ package com.aircas.ptr.foundry.ontology.model.po;
 
 import com.baomidou.mybatisplus.annotation.*;
 import com.fasterxml.jackson.annotation.JsonFormat;
-import io.swagger.annotations.ApiModelProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import javax.persistence.Column;
 import javax.persistence.Entity;
-import javax.persistence.Id;
-import javax.persistence.Table;
-import javax.validation.constraints.NotBlank;
 import java.util.Date;
 
 import static com.aircas.ptr.foundry.common.constant.DateFormat.DATE_FORMAT_DEFAULT;
@@ -47,15 +42,12 @@ public class ActionHandleRule {
 
     private Long actionId;
 
-
     private String name;
 
     private String description;
 
     private String rules;
 
-    @Column(name = "rule_connect_type")
     private Integer ruleConnectType;
 
-    private String objectPrimaryKey;
 }

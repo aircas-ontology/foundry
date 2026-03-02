@@ -44,27 +44,14 @@ public class ActionHandleTask {
 
     private Long actionId;
 
-    /**
-     * 任务开始时间
-     */
-    private Date startTime;
-
-    /**
-     * 任务结束时间
-     */
-    private Date endTime;
 
     /**
      * 定时任务表达式
      */
-    private String corn;
+    private String cron;
 
     private String name;
 
     private String description;
-
-
-    private String objectPrimaryKey;
-
 
 }

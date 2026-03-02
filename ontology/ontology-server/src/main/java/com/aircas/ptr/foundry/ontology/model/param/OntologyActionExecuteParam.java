@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
 
+import com.aircas.ptr.foundry.ontology.controller.validator.OntologyIdVerify;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.AllArgsConstructor;
@@ -14,8 +15,13 @@ import javax.validation.constraints.NotBlank;
 @AllArgsConstructor
 @NoArgsConstructor
 @SuperBuilder
-@ApiModel(description = "实体行为执行请求")
-public class EntityActionExecuteParam extends EntityQueryParam {
+@ApiModel(description = "本体行为执行请求")
+public class OntologyActionExecuteParam {
+
+
+    @ApiModelProperty(name = "ontologyUniqueIdentifier" , value = "本体id", example = "123")
+    @OntologyIdVerify
+    private String ontologyUniqueIdentifier;
 
 
     @ApiModelProperty(name = "actionApi", value = "actionApi", example = "compute")

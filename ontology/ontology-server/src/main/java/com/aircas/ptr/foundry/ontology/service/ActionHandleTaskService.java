@@ -13,9 +13,4 @@ import com.baomidou.mybatisplus.extension.service.IService;
  */
 public interface ActionHandleTaskService extends IService<ActionHandleTask> {
 
-    int insert(ActionHandleTaskBO actionHandleTaskBO);
-
-    ActionHandleTaskBO selectByActionId(Long actionId);
-
-    ActionHandleTaskBO selectById(Long taskId);
 }

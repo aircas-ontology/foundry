@@ -8,3 +8,5 @@ import org.apache.ibatis.annotations.Mapper;
 @Mapper
 public interface FunctionExecuteResultMapper extends BaseMapper<FunctionExecuteResult> {
 }
+
+
