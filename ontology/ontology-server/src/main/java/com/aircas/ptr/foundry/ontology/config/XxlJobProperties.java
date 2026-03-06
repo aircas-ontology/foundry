@@ -20,6 +20,8 @@ public class XxlJobProperties {
 
         private String addresses;
 
+        private String queryJobExecutor;
+
         private String addJobUrl;
 
         private String updateJobUrl;

@@ -86,7 +86,8 @@ xxl:
   job:
     admin:
       addresses: http://192.168.9.11:18888/xxl-job-admin
-      addJobUrl:
+      addJobUrl:  http://192.168.9.11:18888/xxl-job-admin/jobinfo/add
+      queryJobExecutor: http://192.168.9.11:18888/xxl-job-admin/jobgroup/pageList
       updateJobUrl:
       removeJobUrl:
       startJobUrl:

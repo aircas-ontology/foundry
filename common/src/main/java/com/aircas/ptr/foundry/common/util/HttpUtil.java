@@ -33,6 +33,43 @@ public class HttpUtil {
     }
 
 
+    public static <T> T postFormData(String url, Map<String, String> params, Map<String, String> formData, TypeReference<T> responseType) {
+        HttpUrl.Builder urlBuilder = HttpUrl.parse(url).newBuilder();
+        if (MapUtils.isNotEmpty(params)) {
+            params.entrySet().forEach(entry -> urlBuilder.addQueryParameter(entry.getKey(), entry.getValue()));
+        }
+
+        FormBody.Builder formBodyBuilder = new FormBody.Builder();
+        formData.forEach((k, v) -> {
+            if (k != null && v != null) {
+                formBodyBuilder.add(k, v);
+            }
+        });
+
+        Request.Builder requestBuilder = new Request.Builder()
+                .header(LoggingFilter.LOG_ID_HEADER, MDC.get(LoggingFilter.LOG_ID_KEY) == null ? IdGenerator.generateLogId() : MDC.get(LoggingFilter.LOG_ID_KEY))
+                .post(formBodyBuilder.build())
+                .url(urlBuilder.build());
+
+        Request request = requestBuilder.build();
+
+        return executeRequest(request, responseType);
+    }
+
+    private static String buildFormDataString(Map<String, String> formData) {
+        StringBuilder sb = new StringBuilder();
+        if (MapUtils.isNotEmpty(formData)) {
+            formData.forEach((key, value) -> {
+                if (sb.length() > 0) {
+                    sb.append("&");
+                }
+                sb.append(key).append("=").append(value);
+            });
+        }
+        return sb.toString();
+    }
+
+
     public static <T> T get(String url, Map<String, String> params, TypeReference<T> responseType) {
         HttpUrl.Builder urlBuilder = HttpUrl.parse(url).newBuilder();
         if (MapUtils.isNotEmpty(params)) {

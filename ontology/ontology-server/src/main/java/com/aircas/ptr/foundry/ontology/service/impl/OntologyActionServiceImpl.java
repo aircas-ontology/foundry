@@ -1,8 +1,9 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
 import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
+import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
-import com.aircas.ptr.foundry.ontology.config.XxlJobProperties;
+import com.aircas.ptr.foundry.ontology.client.XxlJobClient;
 import com.aircas.ptr.foundry.ontology.model.enums.ActionSchedulingTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamCategoryEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
@@ -52,6 +53,9 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     @Resource
     private OntologyActionLinkMapper actionLinkMapper;
 
+    @Resource
+    private OntologyActionMapper actionMapper;
+
 
     @Resource
     private ObjectMapper entityMapper;
@@ -73,7 +77,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     private EntityServiceImpl entityService;
 
     @Resource
-    private XxlJobProperties xxlJobProperties;
+    private XxlJobClient xxlJobClient;
 
     private final com.fasterxml.jackson.databind.ObjectMapper jsonMapper = new com.fasterxml.jackson.databind.ObjectMapper();
 
@@ -292,14 +296,29 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     }
 
     @Override
+    @Transactional
     public void createScheduling(ActionSchedulingCreateParam param) {
         //todo 目前只考虑定时调度
         var schedulingType = param.getType();
+        var action = actionMapper.selectOne(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getApi, param.getActionApi()));
         //允许同一个行为配置多个调度策略
         if (schedulingType.equals(ActionSchedulingTypeEnum.TASK)) {
-
+            var taskParam = param.getTask();
+            actionHandleTaskService.save(ActionHandleTask.builder()
+                    .actionId(action.getId())
+                    .cron(taskParam.getTaskCronExpression())
+                    .name(param.getName())
+                    .description(param.getDescription())
+                    .status(Status.DISABLE.getValue())
+                    .build());
+            try {
+                xxlJobClient.createJobInfo(param.getDescription(),
+                        taskParam.getTaskCronExpression(),
+                        OntologyActionExecuteParam.builder().actionApi(param.getActionApi()).ontologyUniqueIdentifier(param.getOntologyIdentifier()).build());
+            } catch (Exception e) {
+                throw new BusinessException("远程调用xxl-job创建jobinfo失败");
+            }
         }
-
     }
 
 
