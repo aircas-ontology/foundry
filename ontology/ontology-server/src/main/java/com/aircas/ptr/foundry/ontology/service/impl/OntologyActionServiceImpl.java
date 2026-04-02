@@ -15,6 +15,7 @@ import com.aircas.ptr.foundry.ontology.model.vo.EntityPropertyDetailVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyActionDetailVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyActionInfoVO;
 import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.ObjectMapper;
+import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.TableMetadataMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.*;
 import com.aircas.ptr.foundry.ontology.service.*;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -59,6 +60,9 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
 
     @Resource
     private ObjectMapper entityMapper;
+
+    @Resource
+    private TableMetadataMapper tableMetadataMapper;
 
 
     @Resource
@@ -250,7 +254,10 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     @Override
     public String executeAction(OntologyActionExecuteParam param) {
 
-        var contextInfoDTO = entityService.initActionContextInfoDTO(param.getOntologyUniqueIdentifier(), param.getActionApi());
+        var contextInfoDTO = entityService.initActionContextInfoDTO(EntityActionExecuteParam.builder()
+                .actionApi(param.getActionApi())
+                .ontologyUniqueIdentifier(param.getOntologyUniqueIdentifier())
+                .build());
         //获取实体主键列表
         var primaryProperty = contextInfoDTO.getOntologyProperties().stream().filter(v -> v.getIsPrimaryKey() == 1).findFirst().orElse(null);
         //主键数据源未绑定
@@ -258,15 +265,20 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             return "";
         }
         //查询本体的实体主键
+        var hasDeletedField = tableMetadataMapper.isColumnExist(primaryProperty.getDatasourceId(), "is_deleted");
         var records = entityMapper.pageQuery(
                 primaryProperty.getDatasourceId(),
                 Lists.newArrayList(primaryProperty.getDatasourceColumnName()),
                 null,
                 null,
                 Integer.MAX_VALUE,
-                0);
+                0,
+                hasDeletedField);
         //执行每个实体的行为
-        var infoDTO = entityService.initActionContextInfoDTO(param.getOntologyUniqueIdentifier(), param.getActionApi());
+        var infoDTO = entityService.initActionContextInfoDTO(EntityActionExecuteParam.builder()
+                .ontologyUniqueIdentifier(param.getOntologyUniqueIdentifier())
+                .actionApi(param.getActionApi())
+                .build());
         //获取行为关联关系下的本体的所有实体详情
         List<List<EntityPropertyDetailVO>> linkedEntities = entityService.getLinkedEntities(infoDTO);
 

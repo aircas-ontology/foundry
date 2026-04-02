@@ -17,13 +17,6 @@ import java.util.stream.Collectors;
 @Mapper
 public interface ObjectMapper extends BaseMapper<Object> {
 
-    List<DirectoryItem> queryDirectory(String tableName, String primaryKey, String titleKey);
-
-    List<Map<String, Object>> queryAnySQL(String sql);
-
-    int updateAnySQL(String updateSql);
-
-
     List<Map<String, Object>> queryTableDataByColumn(@Param("tableName") String tableName,
                                                      @Param("columnNames") Map<String, String> columnNames,
                                                      @Param("orderBy") String orderBy);
@@ -54,8 +47,9 @@ public interface ObjectMapper extends BaseMapper<Object> {
                                                 @Param("filterColumnName") String filterColumnName,
                                                 @Param("filterColumnValue") Object filterColumnValue,
                                                 @Param("limit") Integer limit,
-                                                @Param("offset") Integer offset) {
-        var records = queryMapsPage(tableName, columnNames, filterColumnName, filterColumnValue, limit, offset);
+                                                @Param("offset") Integer offset,
+                                                @Param("hasDeletedField") Boolean hasDeletedField) {
+        var records = queryMapsPage(tableName, columnNames, filterColumnName, filterColumnValue, limit, offset, hasDeletedField);
         return populate(records, tableName, columnNames);
     }
 
@@ -64,7 +58,8 @@ public interface ObjectMapper extends BaseMapper<Object> {
                                             @Param("filterColumnName") String filterColumnName,
                                             @Param("filterColumnValue") Object filterColumnValue,
                                             @Param("limit") Integer limit,
-                                            @Param("offset") Integer offset);
+                                            @Param("offset") Integer offset,
+                                            @Param("hasDeletedField") Boolean hasDeletedField);
 
 
     List<String> queryColumnNames(@Param("tableName") String tableName);
@@ -72,7 +67,8 @@ public interface ObjectMapper extends BaseMapper<Object> {
 
     Integer queryCount(@Param("tableName") String tableName,
                        @Param("filterColumnName") String filterColumnName,
-                       @Param("filterColumnValue") Object filterColumnValue);
+                       @Param("filterColumnValue") Object filterColumnValue,
+                       @Param("hasDeletedField") Boolean hasDeletedField);
 
 
     default List<Map<String, Object>> populate(List<Map<String, Object>> records, String tableName, List<String> columns) {
@@ -96,26 +92,20 @@ public interface ObjectMapper extends BaseMapper<Object> {
         return newRecords;
     }
 
-    List<Map<String, Object>> queryJoinTableData(@Param("tableName") String tableName,
-                                                 @Param("tableKey") String tableKey,
-                                                 @Param("primaryKeyColumn") String primaryKeyColumn,
-                                                 @Param("primaryKeyValue") Object primaryKeyValue,
+    List<Map<String, Object>> queryJoinTableData(@Param("primaryKeyValue") Object primaryKeyValue,
                                                  @Param("joinTableName") String joinTableName,
                                                  @Param("joinTableColumnNames") List<String> joinTableColumnNames,
                                                  @Param("joinTableKey") String joinTableKey,
                                                  @Param("joinTableOrderBy") String joinTableOrderBy,
                                                  @Param("count") Integer count);
 
-    default List<Map<String, Object>> queryByJoinTable(@Param("tableName") String tableName,
-                                                       @Param("tableKey") String tableKey,
-                                                       @Param("primaryKeyColumn") String primaryKeyColumn,
-                                                       @Param("primaryKeyValue") Object primaryKeyValue,
+    default List<Map<String, Object>> queryByJoinTable(@Param("primaryKeyValue") Object primaryKeyValue,
                                                        @Param("joinTableName") String joinTableName,
                                                        @Param("joinTableColumnNames") List<String> joinTableColumnNames,
                                                        @Param("joinTableKey") String joinTableKey,
                                                        @Param("joinTableOrderBy") String joinTableOrderBy,
                                                        @Param("count") Integer count) {
-        var records = queryJoinTableData(tableName, tableKey, primaryKeyColumn, primaryKeyValue, joinTableName, joinTableColumnNames, joinTableKey, joinTableOrderBy, count);
+        var records = queryJoinTableData(primaryKeyValue, joinTableName, joinTableColumnNames, joinTableKey, joinTableOrderBy, count);
         return populate(records, joinTableName, joinTableColumnNames);
     }
 
@@ -138,5 +128,6 @@ public interface ObjectMapper extends BaseMapper<Object> {
 
 
     void insertObject(String tableName, Map<String, Object> columnMap);
+
 
 }

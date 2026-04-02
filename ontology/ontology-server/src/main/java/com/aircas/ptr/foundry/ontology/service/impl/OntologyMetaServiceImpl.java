@@ -125,6 +125,8 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                         .status(v.getStatus())
                         .uniqueIdentifier(IdGenerator.generateUUID())
                         .tag(v.getTag())
+                        .primaryCategory(v.getPrimaryCategory())
+                        .secondaryCategory(v.getSecondaryCategory())
                         .build())
                 .collect(Collectors.toList());
         ontologyPropertyService.saveBatch(childProps);

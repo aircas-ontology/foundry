@@ -9,7 +9,6 @@ import com.aircas.ptr.foundry.ontology.model.document.EntityNode;
 import com.aircas.ptr.foundry.ontology.model.document.EntityRelation;
 import com.aircas.ptr.foundry.ontology.model.dto.ActionContextInfoDTO;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamCategoryEnum;
-import com.aircas.ptr.foundry.ontology.model.enums.OntologyLinkTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import com.aircas.ptr.foundry.ontology.model.param.*;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionExecuteResult;
@@ -308,6 +307,7 @@ public class EntityServiceImpl implements EntityService {
                     .propertyValues(Lists.newArrayList(colValue))
                     .propertyUniqIdentifier(p.getUniqueIdentifier())
                     .propertyApiName(p.getApiName())
+                    .entityPrimaryKey(entityPrimaryKey)
                     .build();
         }).collect(Collectors.toList());
         res.addAll(details);
@@ -323,9 +323,7 @@ public class EntityServiceImpl implements EntityService {
                 }
                 var orderBy = tableMetadataMapper.queryPrimaryKeyColumnName(entry.getKey());
                 var columns = entry.getValue().stream().map(v -> v.getDatasourceColumnName()).collect(Collectors.toList());
-                var otherData = objectMapper.queryByJoinTable(tableMapping.getSourceTableName(),
-                        tableMapping.getSourceColumnName(),
-                        pk.getDatasourceColumnName(),
+                var otherData = objectMapper.queryByJoinTable(
                         entityPrimaryKey,
                         tableMapping.getTargetTableName(),
                         columns,
@@ -395,14 +393,17 @@ public class EntityServiceImpl implements EntityService {
             propertyValue = OntologyDataTypeEnum.convert(propertyType, propertyValue);
         }
         //分页查询实体数据
+        var hasDeletedField = tableMetadataMapper.isColumnExist(primaryDatasource, "is_deleted");
         var records = objectMapper.pageQuery(
                 primaryDatasource,
                 primaryPropMap.values().stream().map(v -> v.getDatasourceColumnName()).collect(Collectors.toList()),
                 columnName,
                 propertyValue,
                 pageSize,
-                (pageNum - 1) * pageSize);
-        var total = objectMapper.queryCount(primaryDatasource, columnName, propertyValue);
+                (pageNum - 1) * pageSize,
+                hasDeletedField
+        );
+        var total = objectMapper.queryCount(primaryDatasource, columnName, propertyValue, hasDeletedField);
 
         var entityRecords = records.stream().map(r -> {
             var entityPK = r.entrySet().stream()
@@ -442,8 +443,8 @@ public class EntityServiceImpl implements EntityService {
 
     @Override
     public String executeAction(EntityActionExecuteParam param) throws Exception {
-        var infoDTO = initActionContextInfoDTO(param.getOntologyUniqueIdentifier(), param.getActionApi());
-        //获取行为关联关系下的本体的所有实体详情
+        var infoDTO = initActionContextInfoDTO(param);
+        //获取行为关联关系下的本体的实体详情
         List<List<EntityPropertyDetailVO>> linkedEntities = getLinkedEntities(infoDTO);
         return executeEntityAction(param, infoDTO, linkedEntities);
     }
@@ -454,10 +455,20 @@ public class EntityServiceImpl implements EntityService {
             var linkedOntology = linkGroupMapper.selectOne(new LambdaQueryWrapper<OntologyLinkGroup>().eq(OntologyLinkGroup::getUniqueIdentifier, infoDTO.getLink().getOntologyLinkUniqIdentifier()))
                     .getOntologyUniqueIdentifierTo();
             infoDTO.setLinkToOntologyUniqueIdentifier(linkedOntology);
-            //获取关联本体下的所有实体详情
-            var entities = getEntities(linkedOntology, "", "", 1, Integer.MAX_VALUE, false);
+            //如果已指定单个实体
+            var param = infoDTO.getEntityActionExecuteParam();
+            Page<EntityInfoVO> entities;
+            if (StringUtils.isNotEmpty(param.getLinkedOntologyUniqueIdentifier())
+                    && param.getLinkedEntityPrimaryKey() != null) {
+                PreconditionUtils.checkArgument(StringUtils.equals(linkedOntology, param.getLinkedOntologyUniqueIdentifier()), "关联的本体id不一致");
+                var primaryProp = propertyMapper.selectOne(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getIsPrimaryKey, 1)
+                        .eq(OntologyProperty::getOntologyUniqueIdentifier, linkedOntology));
+                entities = getEntities(linkedOntology, primaryProp.getDisplayName(), param.getLinkedEntityPrimaryKey(), 1, Integer.MAX_VALUE, false);
+            } else {
+                //否则获取关联本体下的所有实体详情
+                entities = getEntities(linkedOntology, "", "", 1, Integer.MAX_VALUE, false);
+            }
             var records = entities.getRecords();
-
             var linkedEntities = records.stream().map(entity -> getEntityDetail(linkedOntology, entity.getPrimaryKey()))
                     .collect(Collectors.toList());
 
@@ -467,16 +478,15 @@ public class EntityServiceImpl implements EntityService {
     }
 
 
-    public ActionContextInfoDTO initActionContextInfoDTO(String ontologyUniqueIdentifier,
-                                                         String actionApi) {
+    public ActionContextInfoDTO initActionContextInfoDTO(EntityActionExecuteParam param) {
 
-        var actionDetailVO = actionService.getActionByApi(actionApi);
+        var actionDetailVO = actionService.getActionByApi(param.getActionApi());
         var functionDetailVO = functionService.getFunctionDetailByApi(actionDetailVO.getFunctionApi());
         var link = actionDetailVO.getLinkMapping();
         var mappings = actionDetailVO.getMappingIns();
         //src本体属性
         var ontologyProperties = propertyMapper.selectList(new LambdaQueryWrapper<OntologyProperty>()
-                .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier));
+                .eq(OntologyProperty::getOntologyUniqueIdentifier, param.getOntologyUniqueIdentifier()));
 
         //构造函数的输入参数
         var functionInputParams = functionDetailVO.getParams().stream()
@@ -492,6 +502,7 @@ public class EntityServiceImpl implements EntityService {
                 .mappings(mappings)
                 .ontologyProperties(ontologyProperties)
                 .functionInputParams(functionInputParams)
+                .entityActionExecuteParam(param)
                 .build();
 
         return infoDTO;

@@ -10,21 +10,6 @@
 
     </resultMap>
 
-    <select id="queryDirectory" resultMap="BaseResultMap">
-        select "${primaryKey}" as primaryKey,
-               "${titleKey}"   as displayName
-        from ${tableName}
-    </select>
-
-    <select id="queryAnySQL" resultMap="ObjectResultMap">
-        ${query}
-    </select>
-
-
-    <update id="updateAnySQL">
-        ${updateSql}
-    </update>
-
 
     <select id="queryTableDataByColumn" resultType="java.util.Map">
         SELECT
@@ -70,9 +55,14 @@
             *
         </if>
         FROM ${tableName}
-        <if test="filterColumnName != null and filterColumnName != ''">
-            WHERE "${filterColumnName}" = #{filterColumnValue}
-        </if>
+        <where>
+            <if test="filterColumnName != null and filterColumnName != ''">
+                 "${filterColumnName}" = #{filterColumnValue}
+            </if>
+            <if test="hasDeletedField">
+                AND "is_deleted" = 0
+            </if>
+        </where>
         LIMIT ${limit} OFFSET ${offset}
     </select>
 
@@ -80,30 +70,36 @@
     <select id="queryCount" resultType="java.lang.Integer">
         SELECT count(*)
         FROM ${tableName}
-        <if test="filterColumnName != null and filterColumnName != ''">
-            WHERE "${filterColumnName}" = #{filterColumnValue}
-        </if>
+        <where>
+            <if test="filterColumnName != null and filterColumnName != ''">
+                "${filterColumnName}" = #{filterColumnValue}
+            </if>
+            <if test="hasDeletedField">
+                AND "is_deleted" = 0
+            </if>
+        </where>
     </select>
+
 
 
     <select id="queryJoinTableData" resultType="java.util.HashMap">
         SELECT
         <if test="joinTableColumnNames != null and joinTableColumnNames.size() > 0">
             <foreach item="column" collection="joinTableColumnNames" separator=",">
-                t2."${column}"
+                t."${column}"
             </foreach>
         </if>
         <if test="joinTableColumnNames == null or joinTableColumnNames.size() == 0">
-            t2.*
+            t.*
         </if>
-        FROM ${tableName} t1
-        LEFT JOIN ${joinTableName} t2 ON t1."${tableKey}" = t2."${joinTableKey}"
-        WHERE t1."${primaryKeyColumn}" = #{primaryKeyValue}
-        ORDER BY t2."${joinTableOrderBy}" DESC
+        FROM  ${joinTableName} t
+        WHERE t."${joinTableKey}" = #{primaryKeyValue}
+        ORDER BY t."${joinTableOrderBy}" DESC
         <if test="count != null">
             LIMIT ${count}
         </if>
     </select>
+
 
     <select id="queryByPrimaryKey" resultType="java.util.HashMap">
         SELECT
@@ -130,11 +126,11 @@
 
 
     <insert id="insertObject">
-        INSERT  INTO ${tableName}
+        INSERT INTO ${tableName}
         (
-          <foreach collection="columnMap.keys" item="column" separator=",">
-              "${column}"
-          </foreach>
+        <foreach collection="columnMap.keys" item="column" separator=",">
+            "${column}"
+        </foreach>
         )
         values
         (
@@ -143,8 +139,6 @@
         </foreach>
         )
     </insert>
-
-
 
 
 </mapper>
