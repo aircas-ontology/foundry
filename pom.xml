@@ -35,6 +35,7 @@
         <module>server-discover</module>
         <module>sync</module>
         <module>mq-client</module>
+        <module>license-generator</module>
     </modules>
     <properties>
         <java.version>1.8</java.version>
@@ -77,6 +78,7 @@
         <owl-api-version>5.5.0</owl-api-version>
         <quartz.version>2.3.0</quartz.version>
         <org.apache.rocketmq.version>2.2.3</org.apache.rocketmq.version>
+        <truelicense.version>1.32</truelicense.version>
     </properties>
     <dependencyManagement>
         <dependencies>
@@ -308,6 +310,17 @@
                 <groupId>org.apache.rocketmq</groupId>
                 <artifactId>rocketmq-spring-boot-starter</artifactId>
                 <version>${org.apache.rocketmq.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>de.schlichtherle.truelicense</groupId>
+                <artifactId>truelicense-core</artifactId>
+                <version>${truelicense.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>de.schlichtherle.truelicense</groupId>
+                <artifactId>truelicense-xml</artifactId>
+                <version>${truelicense.version}</version>
             </dependency>
 
         </dependencies>

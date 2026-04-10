@@ -61,6 +61,7 @@ ontology:
   swagger:
     enable: true
 
+
 #elasticsearch:
 #  addr: 192.168.9.101:9200
 
@@ -101,3 +102,11 @@ xxl:
       logpath: ./logs/xxl-job/jobhandler
       logretentiondays: 30
 
+
+license:
+  enable: true
+  licensePath: "D:\\ideaProjects\\license-generator\\target\\license.lic"
+  publicKeyStorePath: "/publicCerts.keystore"
+  storePass: iecas123
+  alias: publiccert
+  subject: aircas
