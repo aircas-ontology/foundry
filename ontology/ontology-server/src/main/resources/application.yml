@@ -105,7 +105,7 @@ xxl:
 
 license:
   enable: true
-  licensePath: "D:\\ideaProjects\\license-generator\\target\\license.lic"
+  licensePath: "D:\\ideaProjects\\license.lic"
   publicKeyStorePath: "/publicCerts.keystore"
   storePass: iecas123
   alias: publiccert
