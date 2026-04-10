@@ -3,8 +3,8 @@
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <parent>
-        <artifactId>foundry</artifactId>
         <groupId>com.aircas.ptr</groupId>
+        <artifactId>ontology</artifactId>
         <version>0.0.1-SNAPSHOT</version>
     </parent>
 
@@ -53,7 +53,9 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+
                 <configuration>
+                    <classifier>exec</classifier>
                     <executable>true</executable>
                     <mainClass>com.aircas.ptr.foundry.license.LicenseApplication</mainClass>
                 </configuration>

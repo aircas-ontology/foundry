@@ -42,7 +42,7 @@ public class LicenseVerifyService implements ApplicationRunner {
         }
 
         log.info("开始验证许可证");
-        var param = LicenseCreatorParam.builder()
+        LicenseCreatorParam param = LicenseCreatorParam.builder()
                 .subject(subject)
                 .alias(alias)
                 .licenseCheckModel(NetworkUtil.getNetworkInfo())
@@ -50,8 +50,8 @@ public class LicenseVerifyService implements ApplicationRunner {
                 .storePass(storePass)
                 .keysStorePath(publicKeyStorePath)
                 .build();
-        var licenseService = new LicenseService();
-        var res = licenseService.verifyLicense(param);
+        LicenseService licenseService = new LicenseService();
+        boolean res = licenseService.verifyLicense(param);
         if (res) {
             log.info("验证许可证成功");
         } else {

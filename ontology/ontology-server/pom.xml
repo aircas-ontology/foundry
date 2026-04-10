@@ -32,6 +32,7 @@
             <artifactId>license-generator</artifactId>
             <version>${project.version}</version>
         </dependency>
+
         <!--swagger-->
         <dependency>
             <groupId>com.github.xiaoymin</groupId>
@@ -171,17 +172,6 @@
             <version>2.3.0</version>
         </dependency>
 
-        <dependency>
-            <groupId>de.schlichtherle.truelicense</groupId>
-            <artifactId>truelicense-core</artifactId>
-            <version>1.32</version>
-        </dependency>
-
-        <dependency>
-            <groupId>de.schlichtherle.truelicense</groupId>
-            <artifactId>truelicense-xml</artifactId>
-            <version>1.32</version>
-        </dependency>
 
     </dependencies>
 
