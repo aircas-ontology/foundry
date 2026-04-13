@@ -27,7 +27,18 @@ mvn clean package license-generator对项目打包
 将license.lic证书文件放置到待验证的客户端项目中验证，调用com.aircas.ptr.foundry.license.service.LicenseService.verifyLicense进行验证。
 以springboot项目验证证书为例：
 ```java
+import com.aircas.ptr.foundry.license.param.LicenseCreatorParam;
+import com.aircas.ptr.foundry.license.service.LicenseService;
+import com.aircas.ptr.foundry.license.util.NetworkUtil;
+import lombok.extern.slf4j.Slf4j;
+import lombok.var;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.ApplicationArguments;
+import org.springframework.boot.ApplicationRunner;
+import org.springframework.stereotype.Service;
 
+@Service
+@Slf4j
 public class LicenseVerifyService implements ApplicationRunner {
 
 
