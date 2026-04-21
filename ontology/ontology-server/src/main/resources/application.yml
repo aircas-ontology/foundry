@@ -91,9 +91,9 @@ xxl:
       queryJobExecutorUrl: http://192.168.53.18:18888/xxl-job-admin/jobgroup/pageList
       queryJobInfoUrl: http://192.168.53.18:18888/xxl-job-admin/jobinfo/pageList
       updateJobUrl: http://192.168.53.18:18888/xxl-job-admin/jobinfo/update
-      removeJobUrl:
-      startJobUrl:
-      stopJobUrl:
+      removeJobUrl: http://192.168.53.18:18888/xxl-job-admin/jobinfo/remove
+      startJobUrl: http://192.168.53.18:18888/xxl-job-admin/jobinfo/start
+      stopJobUrl: http://192.168.53.18:18888/xxl-job-admin/jobinfo/stop
     accessToken: iecas123
     cookie: XXL_JOB_LOGIN_IDENTITY=7b226964223a312c22757365726e616d65223a2261646d696e222c2270617373776f7264223a226531306164633339343962613539616262653536653035376632306638383365222c22726f6c65223a312c227065726d697373696f6e223a6e756c6c7d
     executor:

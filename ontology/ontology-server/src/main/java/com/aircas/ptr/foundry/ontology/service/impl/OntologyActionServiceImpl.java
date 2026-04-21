@@ -7,15 +7,13 @@ import com.aircas.ptr.foundry.ontology.client.XxlJobClient;
 import com.aircas.ptr.foundry.ontology.model.enums.*;
 import com.aircas.ptr.foundry.ontology.model.param.*;
 import com.aircas.ptr.foundry.ontology.model.po.*;
-import com.aircas.ptr.foundry.ontology.model.vo.ActionParamMappingVO;
-import com.aircas.ptr.foundry.ontology.model.vo.EntityPropertyDetailVO;
-import com.aircas.ptr.foundry.ontology.model.vo.OntologyActionDetailVO;
-import com.aircas.ptr.foundry.ontology.model.vo.OntologyActionInfoVO;
+import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.ObjectMapper;
 import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.TableMetadataMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.*;
 import com.aircas.ptr.foundry.ontology.service.*;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.OrderItem;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.google.common.collect.Lists;
@@ -39,6 +37,13 @@ import java.util.stream.Collectors;
 @Slf4j
 public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper, OntologyAction> implements OntologyActionService {
 
+
+    @Resource
+    private ActionHandleLogMapper actionHandleLogMapper;
+
+    @Resource
+    private OntologyMetaMapper ontologyMetaMapper;
+
     @Resource
     private OntologyLinkGroupMapper linkGroupMapper;
 
@@ -54,13 +59,11 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     @Resource
     private OntologyActionMapper actionMapper;
 
-
     @Resource
     private ObjectMapper entityMapper;
 
     @Resource
     private TableMetadataMapper tableMetadataMapper;
-
 
     @Resource
     private OntologyActionMappingInService ontologyActionMappingInService;
@@ -73,6 +76,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
 
     @Resource
     private ActionHandleTaskService actionHandleTaskService;
+
 
     @Resource
     private EntityServiceImpl entityService;
@@ -328,7 +332,11 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             try {
                 var jonInfoId = xxlJobClient.createJobInfo(param.getName(),
                         taskParam.getTaskCronExpression(),
-                        OntologyActionExecuteParam.builder().actionApi(param.getActionApi()).ontologyUniqueIdentifier(param.getOntologyIdentifier()).build());
+                        XxlJobActionExecuteParam.builder()
+                                .actionApi(param.getActionApi())
+                                .ontologyUniqueIdentifier(param.getOntologyIdentifier())
+                                .scheduleId(id)
+                                .build());
                 actionHandleTaskService.updateById(actionHandleTask.setRemark(jonInfoId));
             } catch (Exception e) {
                 log.error("createScheduling failed", e);
@@ -364,6 +372,150 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 throw new BusinessException("远程调用xxl-job更新jobinfo失败");
             }
         }
+    }
+
+    @Override
+    @Transactional
+    public void removeScheduling(ActionSchedulingTypeEnum type, Long id) {
+        //todo 只考虑定时任务
+        if (ActionSchedulingTypeEnum.TASK.equals(type)) {
+            var handleTask = actionHandleTaskService.getById(id);
+            PreconditionUtils.checkNotNull(handleTask, "定时调度任务不存在：" + id);
+            actionHandleTaskService.removeById(handleTask.getId());
+            try {
+                xxlJobClient.removeJob(handleTask.getRemark());
+            } catch (Exception e) {
+                log.error("removeScheduling failed", e);
+                throw new BusinessException("远程调用xxl-job删除任务失败");
+            }
+        }
+    }
+
+    @Override
+    @Transactional
+    public void startScheduling(ActionSchedulingTypeEnum type, Long id) {
+        //todo 只考虑定时任务
+        if (ActionSchedulingTypeEnum.TASK.equals(type)) {
+            var handleTask = actionHandleTaskService.getById(id);
+            PreconditionUtils.checkNotNull(handleTask, "定时调度任务不存在：" + id);
+            actionHandleTaskService.updateById(handleTask.setStatus(ScheduleStatus.START));
+            try {
+                xxlJobClient.startJob(handleTask.getRemark());
+            } catch (Exception e) {
+                log.error("startScheduling failed", e);
+                throw new BusinessException("远程调用xxl-job启动任务失败");
+            }
+        }
+    }
+
+    @Override
+    @Transactional
+    public void stopScheduling(ActionSchedulingTypeEnum type, Long id) {
+        //todo 只考虑定时任务
+        if (ActionSchedulingTypeEnum.TASK.equals(type)) {
+            var handleTask = actionHandleTaskService.getById(id);
+            PreconditionUtils.checkNotNull(handleTask, "定时调度任务不存在：" + id);
+            actionHandleTaskService.updateById(handleTask.setStatus(ScheduleStatus.STOP));
+            try {
+                xxlJobClient.stopJob(handleTask.getRemark());
+            } catch (Exception e) {
+                log.error("stopScheduling failed", e);
+                throw new BusinessException("远程调用xxl-job暂停任务失败");
+            }
+        }
+
+    }
+
+    @Override
+    public ActionSchedulingDetailVO getSchedulingDetailById(Long id, ActionSchedulingTypeEnum type) {
+        //todo 只考虑定时任务
+        if (ActionSchedulingTypeEnum.TASK.equals(type)) {
+            var handleTask = actionHandleTaskService.getById(id);
+            PreconditionUtils.checkNotNull(handleTask, "定时调度任务不存在：" + id);
+            var action = actionMapper.selectOne(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getId, handleTask.getActionId()));
+            var ontology = ontologyMetaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, action.getOntologyUniqueIdentifier()));
+            return ActionSchedulingDetailVO.builder()
+                    .actionApi(action.getApi())
+                    .ontologyName(ontology.getDisplayName())
+                    .schedulingName(handleTask.getName())
+                    .id(handleTask.getId())
+                    .description(handleTask.getDescription())
+                    .type(ActionSchedulingTypeEnum.TASK)
+                    .ontologyIdentifier(action.getOntologyUniqueIdentifier())
+                    .taskVO(ActionHandleTaskInfoVO.builder().taskCronExpression(handleTask.getCron()).build())
+                    .status(handleTask.getStatus())
+                    .build();
+        }
+        return null;
+    }
+
+    @Override
+    public Page<ActionSchedulingInfoVO> listScheduling(Integer pageNum, Integer pageSize) {
+        //todo 只考虑定时任务
+        var pageInfo = new Page<ActionHandleTask>(pageNum, pageSize).addOrder(OrderItem.desc("id"));
+        var pages = actionHandleTaskService.page(pageInfo);
+        var records = pages.getRecords();
+
+        if (CollectionUtils.isEmpty(records)) {
+            return new Page<ActionSchedulingInfoVO>(pageNum, pageSize);
+        }
+
+        var actionIds = records.stream().map(v -> v.getActionId()).collect(Collectors.toList());
+        var actionMap = actionMapper.selectList(new LambdaQueryWrapper<OntologyAction>().in(OntologyAction::getId, actionIds))
+                .stream().collect(Collectors.toMap(v -> v.getId(), v -> v, (existingValue, newValue) -> existingValue));
+
+        var ontologyUniqIds = actionMap.values().stream().map(v -> v.getOntologyUniqueIdentifier()).collect(Collectors.toList());
+        var ontologyMap = ontologyMetaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>().in(OntologyMeta::getUniqueIdentifier, ontologyUniqIds))
+                .stream().collect(Collectors.toMap(v -> v.getUniqueIdentifier(), v -> v, (existingValue, newValue) -> existingValue));
+
+
+        var vo = records.stream().<ActionSchedulingInfoVO>map(v -> {
+            var actionId = v.getActionId();
+            var action = actionMap.get(actionId);
+            var ontologyMeta = ontologyMap.get(action.getOntologyUniqueIdentifier());
+            return ActionSchedulingInfoVO.builder()
+                    .actionApi(action.getApi())
+                    .ontologyName(ontologyMeta.getDisplayName())
+                    .schedulingName(v.getName())
+                    .id(v.getId())
+                    .description(v.getDescription())
+                    .type(ActionSchedulingTypeEnum.TASK)
+                    .ontologyIdentifier(ontologyMeta.getUniqueIdentifier())
+                    .status(v.getStatus())
+                    .build();
+
+        }).collect(Collectors.toList());
+
+
+        return new Page<ActionSchedulingInfoVO>(pageNum, pageSize)
+                .setTotal(pages.getTotal())
+                .setRecords(vo);
+
+    }
+
+    @Override
+    public Page<SchedulingResultVO> getSchedulingResult(Long id, ActionSchedulingTypeEnum type, Integer pageNum, Integer pageSize) {
+        //todo 只考虑定时任务
+        var pageInfo = new Page<ActionHandleLog>(pageNum, pageSize).addOrder(OrderItem.desc("id"));
+        var pages = actionHandleLogMapper.selectPage(pageInfo, new LambdaQueryWrapper<ActionHandleLog>()
+                .eq(ActionHandleLog::getActionHandleId, id)
+                .eq(ActionHandleLog::getActionHandleType, ActionSchedulingTypeEnum.TASK));
+        var records = pages.getRecords();
+        if (CollectionUtils.isEmpty(records)) {
+            return new Page<>(pageNum, pageSize);
+        }
+        var vo = records.stream().map(v -> SchedulingResultVO.builder()
+                        .msg(v.getMsg())
+                        .taskStatus(v.getTaskStatus())
+                        .requestParam(v.getRequestParam())
+                        .triggerTime(v.getTriggerTime())
+                        .completeTime(v.getCompleteTime())
+                        .build())
+                .collect(Collectors.toList());
+
+        return new Page<SchedulingResultVO>(pageNum, pageSize)
+                .setTotal(pages.getTotal())
+                .setRecords(vo);
     }
 
 

@@ -22,7 +22,7 @@ public class ActionHandleLog {
 
     private Long actionHandleId;
 
-    private ActionSchedulingTypeEnum type;
+    private ActionSchedulingTypeEnum actionHandleType;
 
     private String requestParam;
 

@@ -9,6 +9,7 @@ import com.aircas.ptr.foundry.ontology.model.vo.XxlJobInfoQueryVO;
 import com.aircas.ptr.foundry.ontology.model.vo.XxlJobResultVO;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.collect.Maps;
 import lombok.extern.slf4j.Slf4j;
 import lombok.var;
 import org.springframework.stereotype.Component;
@@ -27,7 +28,7 @@ public class XxlJobClient {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
 
-    public String createJobInfo(String jobDesc, String scheduleConf, OntologyActionExecuteParam executorParam) throws Exception {
+    public String createJobInfo(String jobDesc, String scheduleConf, XxlJobActionExecuteParam executorParam) throws Exception {
 
         var jobGroupId = getJobGroupId();
 
@@ -68,6 +69,33 @@ public class XxlJobClient {
         });
     }
 
+    public void startJob(String jobId) {
+        var url = properties.getAdmin().getStartJobUrl();
+        Map<String, String> map = Maps.newHashMap();
+        map.put("id", jobId);
+        HttpUtil.postFormData(url, new HashMap<>(), map, properties.getCookie(), new TypeReference<XxlJobResultVO>() {
+        });
+    }
+
+    public void stopJob(String jobId) {
+        var url = properties.getAdmin().getStopJobUrl();
+        Map<String, String> map = Maps.newHashMap();
+        map.put("id", jobId);
+        HttpUtil.postFormData(url, new HashMap<>(), map, properties.getCookie(), new TypeReference<XxlJobResultVO>() {
+        });
+    }
+
+
+    public void removeJob(String jobId) {
+        var url = properties.getAdmin().getRemoveJobUrl();
+        Map<String, String> map = Maps.newHashMap();
+        map.put("id", jobId);
+        HttpUtil.postFormData(url, new HashMap<>(), map, properties.getCookie(), new TypeReference<XxlJobResultVO>() {
+        });
+    }
+
+
+
     private String getJobGroupId() {
 
         var executorQueryParam = new XxlJobExecutorQueryParam().setAppname(properties.getExecutor().getAppname());
@@ -90,4 +118,6 @@ public class XxlJobClient {
         var jobInfoId = vo.getData().get(0).getId();
         return jobInfoId.toString();
     }
+
+
 }

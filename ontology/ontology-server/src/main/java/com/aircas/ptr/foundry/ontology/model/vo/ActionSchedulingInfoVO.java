@@ -2,6 +2,7 @@ package com.aircas.ptr.foundry.ontology.model.vo;
 
 
 import com.aircas.ptr.foundry.ontology.model.enums.ActionSchedulingTypeEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.ScheduleStatus;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.AllArgsConstructor;
@@ -36,11 +37,11 @@ public class ActionSchedulingInfoVO {
     @ApiModelProperty(name = "id", value = "行为调度id", required = true, example = "123")
     private Long id;
 
-    @ApiModelProperty(name = "type", value = "行为调度类型", required = true, example = "123")
+    @ApiModelProperty(name = "type", value = "行为调度类型：TASK（定时）、RULE（规则）", required = true, example = "123")
     private ActionSchedulingTypeEnum type;
 
 
-    @ApiModelProperty(name = "status", value = "行为调度状态 1 启动 0 暂停", required = true, example = "1")
-    private Integer status;
+    @ApiModelProperty(name = "status", value = "行为调度状态 START、STOP", required = true, example = "1")
+    private ScheduleStatus status;
 
 }
