@@ -4,10 +4,7 @@ import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.ontology.client.XxlJobClient;
-import com.aircas.ptr.foundry.ontology.model.enums.ActionSchedulingTypeEnum;
-import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamCategoryEnum;
-import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
-import com.aircas.ptr.foundry.ontology.model.enums.Status;
+import com.aircas.ptr.foundry.ontology.model.enums.*;
 import com.aircas.ptr.foundry.ontology.model.param.*;
 import com.aircas.ptr.foundry.ontology.model.po.*;
 import com.aircas.ptr.foundry.ontology.model.vo.ActionParamMappingVO;
@@ -82,6 +79,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
 
     @Resource
     private XxlJobClient xxlJobClient;
+
 
     private final com.fasterxml.jackson.databind.ObjectMapper jsonMapper = new com.fasterxml.jackson.databind.ObjectMapper();
 
@@ -183,10 +181,10 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         var action = getOne(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getApi, actionApi));
         PreconditionUtils.checkArgument(action != null, "行为不存在", HttpStatus.BAD_REQUEST);
         var actionHandleRule = actionHandleRuleService.getOne(new LambdaQueryWrapper<ActionHandleRule>()
-                .eq(ActionHandleRule::getActionId, action.getId()).eq(ActionHandleRule::getStatus, Status.ENABLE.getValue()));
+                .eq(ActionHandleRule::getActionId, action.getId()));
         var actionHandleTask = actionHandleTaskService.getOne(new LambdaQueryWrapper<ActionHandleTask>()
-                .eq(ActionHandleTask::getActionId, action.getId()).eq(ActionHandleTask::getStatus, Status.ENABLE.getValue()));
-        PreconditionUtils.checkArgument(actionHandleRule == null && actionHandleTask == null, "该行为被调度中，不能删除", HttpStatus.BAD_REQUEST);
+                .eq(ActionHandleTask::getActionId, action.getId()));
+        PreconditionUtils.checkArgument(actionHandleRule == null && actionHandleTask == null, "该行为在调度中，不能直接删除", HttpStatus.BAD_REQUEST);
         actionLinkMapper.delete(new LambdaQueryWrapper<OntologyActionLink>().eq(OntologyActionLink::getOntologyActionId, action.getId()));
         remove(new LambdaQueryWrapper<OntologyAction>().in(OntologyAction::getId, action.getId()));
         ontologyActionMappingInService.remove(new LambdaQueryWrapper<OntologyActionMappingIn>().in(OntologyActionMappingIn::getOntologyActionId, action.getId()));
@@ -309,26 +307,61 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
 
     @Override
     @Transactional
-    public void createScheduling(ActionSchedulingCreateParam param) {
+    public Long createScheduling(ActionSchedulingCreateParam param) {
         //todo 目前只考虑定时调度
         var schedulingType = param.getType();
         var action = actionMapper.selectOne(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getApi, param.getActionApi()));
+        PreconditionUtils.checkNotNull(action, "action不存在：" + param.getActionApi());
+        Long id = null;
         //允许同一个行为配置多个调度策略
         if (schedulingType.equals(ActionSchedulingTypeEnum.TASK)) {
             var taskParam = param.getTask();
-            actionHandleTaskService.save(ActionHandleTask.builder()
+            var actionHandleTask = ActionHandleTask.builder()
                     .actionId(action.getId())
                     .cron(taskParam.getTaskCronExpression())
                     .name(param.getName())
                     .description(param.getDescription())
-                    .status(Status.DISABLE.getValue())
-                    .build());
+                    .status(ScheduleStatus.STOP)
+                    .build();
+            actionHandleTaskService.save(actionHandleTask);
+            id = actionHandleTask.getId();
             try {
-                xxlJobClient.createJobInfo(param.getDescription(),
+                var jonInfoId = xxlJobClient.createJobInfo(param.getName(),
                         taskParam.getTaskCronExpression(),
                         OntologyActionExecuteParam.builder().actionApi(param.getActionApi()).ontologyUniqueIdentifier(param.getOntologyIdentifier()).build());
+                actionHandleTaskService.updateById(actionHandleTask.setRemark(jonInfoId));
             } catch (Exception e) {
+                log.error("createScheduling failed", e);
                 throw new BusinessException("远程调用xxl-job创建jobinfo失败");
+            }
+        }
+        return id;
+    }
+
+    @Override
+    @Transactional
+    public void updateScheduling(ActionSchedulingUpdateParam param) {
+        var action = actionMapper.selectOne(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getApi, param.getActionApi()));
+        PreconditionUtils.checkNotNull(action, "action不存在：" + param.getActionApi());
+        //todo 目前只考虑定时调度
+        var schedulingType = param.getType();
+        if (schedulingType.equals(ActionSchedulingTypeEnum.TASK)) {
+            var handleTask = actionHandleTaskService.getById(param.getId());
+            PreconditionUtils.checkNotNull(handleTask, "定时调度任务不存在：" + param.getId());
+            handleTask.setActionId(action.getId())
+                    .setDescription(param.getDescription())
+                    .setCron(param.getTask().getTaskCronExpression())
+                    .setName(param.getName());
+            actionHandleTaskService.updateById(handleTask);
+            try {
+                xxlJobClient.updateJobInfo(
+                        handleTask.getRemark(),
+                        param.getName(),
+                        param.getTask().getTaskCronExpression(),
+                        OntologyActionExecuteParam.builder().actionApi(param.getActionApi()).ontologyUniqueIdentifier(param.getOntologyIdentifier()).build());
+            } catch (Exception e) {
+                log.error("updateJobInfo failed", e);
+                throw new BusinessException("远程调用xxl-job更新jobinfo失败");
             }
         }
     }

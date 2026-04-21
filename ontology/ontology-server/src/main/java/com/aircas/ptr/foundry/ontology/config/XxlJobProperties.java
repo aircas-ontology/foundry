@@ -15,12 +15,16 @@ public class XxlJobProperties {
 
     private Executor executor;
 
+    private String cookie;
+
     @Data
     public static class Admin {
 
         private String addresses;
 
-        private String queryJobExecutor;
+        private String queryJobInfoUrl;
+
+        private String queryJobExecutorUrl;
 
         private String addJobUrl;
 

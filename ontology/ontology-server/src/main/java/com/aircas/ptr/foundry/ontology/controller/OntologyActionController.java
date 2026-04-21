@@ -2,6 +2,7 @@ package com.aircas.ptr.foundry.ontology.controller;
 
 import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.controller.validator.OntologyIdVerify;
+import com.aircas.ptr.foundry.ontology.model.enums.ActionSchedulingTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.param.ActionCreateOrUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionSchedulingCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionSchedulingUpdateParam;
@@ -15,6 +16,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
+import lombok.var;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
@@ -81,13 +83,14 @@ public class OntologyActionController {
     @ApiOperation(value = "创建行为调度")
     @PostMapping("/scheduling")
     public RestResult<Long> createScheduling(@RequestBody @Valid ActionSchedulingCreateParam param) {
-        ontologyActionService.createScheduling(param);
-        return RestResult.success();
+        var id = ontologyActionService.createScheduling(param);
+        return RestResult.ofData(id);
     }
 
     @ApiOperation(value = "编辑行为调度")
     @PutMapping("/scheduling")
     public RestResult updateScheduling(@RequestBody @Valid ActionSchedulingUpdateParam param) {
+        ontologyActionService.updateScheduling(param);
         return RestResult.success();
     }
 
@@ -102,21 +105,23 @@ public class OntologyActionController {
 
     @ApiOperation(value = "查询行为调度详情")
     @GetMapping("/scheduling/detail")
-    public RestResult<ActionSchedulingDetailVO> getSchedulingDetailById(@RequestParam(required = true, name = "id") @ApiParam(name = "id", value = "id", required = true) Long id) {
+    public RestResult<ActionSchedulingDetailVO> getSchedulingDetailById(@RequestParam(required = true, name = "id") @ApiParam(name = "id", value = "id", required = true) Long id,
+                                                                        @RequestParam(required = true, name = "type") @ApiParam(name = "type", value = "TASK/RULE", required = true) ActionSchedulingTypeEnum type) {
         return RestResult.success();
     }
 
 
     @ApiOperation(value = "删除行为调度")
-    @DeleteMapping("/scheduling/{id}")
-    public RestResult deleteSchedulingById(@PathVariable(name = "id") Long id) {
+    @DeleteMapping("/scheduling/{type}/{id}")
+    public RestResult deleteScheduling(@PathVariable(name = "type") ActionSchedulingTypeEnum type, @PathVariable(name = "id") Long id) {
         return RestResult.success();
     }
 
 
     @ApiOperation(value = "查询行为执行结果数据，默认10条最新结果")
     @GetMapping("/scheduling/result")
-    public RestResult<Page<String>> getSchedulingResult(@RequestParam(required = true, name = "id") @ApiParam(name = "id", value = "scheduling id", required = true) String id,
+    public RestResult<Page<String>> getSchedulingResult(@RequestParam(required = true, name = "id") @ApiParam(name = "id", value = "scheduling id", required = true) Long id,
+                                                        @RequestParam(required = true, name = "type") @ApiParam(name = "type", value = "TASK/RULE", required = true) ActionSchedulingTypeEnum type,
                                                         @RequestParam(required = false, defaultValue = "1") Integer pageNum,
                                                         @RequestParam(required = false, defaultValue = "10") Integer pageSize) {
         return RestResult.success();
@@ -124,15 +129,15 @@ public class OntologyActionController {
 
 
     @ApiOperation(value = "启动行为调度")
-    @PostMapping("/scheduling/start/{id}")
-    public RestResult startScheduling(@PathVariable(name = "id") Long id) {
+    @PostMapping("/scheduling/start/{type}/{id}")
+    public RestResult startScheduling(@PathVariable(name = "type") ActionSchedulingTypeEnum type, @PathVariable(name = "id") Long id) {
         return RestResult.success();
     }
 
 
     @ApiOperation(value = "暂停行为调度")
-    @PostMapping("/scheduling/stop/{id}")
-    public RestResult stopScheduling(@PathVariable(name = "id") Long id) {
+    @PostMapping("/scheduling/stop/{type}/{id}")
+    public RestResult stopScheduling(@PathVariable(name = "type") ActionSchedulingTypeEnum type, @PathVariable(name = "id") Long id) {
         return RestResult.success();
     }
 

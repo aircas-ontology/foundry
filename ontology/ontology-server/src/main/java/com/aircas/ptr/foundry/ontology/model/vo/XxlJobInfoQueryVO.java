@@ -9,18 +9,23 @@ import lombok.experimental.Accessors;
 
 import java.util.List;
 
+/**
+ * @author LiuYue
+ * @date 2026/4/21
+ * @description
+ */
 @Data
 @Builder
 @Accessors(chain = true)
 @NoArgsConstructor
 @AllArgsConstructor
-public class XxlJobExecutorQueryVO {
+public class XxlJobInfoQueryVO {
 
     private Integer recordsFiltered;
 
     private Integer recordsTotal;
 
-    private List<ExecutorData> data;
+    private List<XxlJobInfoQueryVO.JobInfo> data;
 
 
     @Data
@@ -29,12 +34,12 @@ public class XxlJobExecutorQueryVO {
     @NoArgsConstructor
     @AllArgsConstructor
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public static class ExecutorData {
+    public static class JobInfo {
 
         private Integer id;
 
-        private String appname;
+        private String jobDesc;
 
-        private String title;
+        private Integer jobGroup;
     }
 }

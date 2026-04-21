@@ -12,28 +12,26 @@ import lombok.experimental.Accessors;
 @AllArgsConstructor
 @NoArgsConstructor
 @Accessors(chain = true)
-public class XxlJobCreateParam {
+public class XxlJobUpdateParam {
 
     private String jobGroup;
     private String jobDesc = "";
     private String author = "admin";
-    private String alarmEmail = "";
+    //private String alarmEmail = "";
     private String scheduleType = "CRON";
     private String scheduleConf = "";
     private String cronGen_display = "";
     private String schedule_conf_CRON = "";
-    private String schedule_conf_FIX_RATE = "";
-    private String schedule_conf_FIX_DELAY = "";
-    private String glueType = "BEAN";
+    //private String schedule_conf_FIX_RATE = "";
+    //private String schedule_conf_FIX_DELAY = "";
     private String executorHandler = "";
     private String executorParam = "";
     private String executorRouteStrategy = "FIRST";
-    private String childJobId = "";
+    //private String childJobId = "";
     private String misfireStrategy = "DO_NOTHING";
     private String executorBlockStrategy = "SERIAL_EXECUTION";
     private String executorTimeout = "0";
     private String executorFailRetryCount = "0";
-    private String glueRemark = "GLUE代码初始化";
-    private String glueSource = "";
+    private String id;
 
 }

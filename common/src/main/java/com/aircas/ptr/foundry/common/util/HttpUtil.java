@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import lombok.var;
 import okhttp3.*;
 import org.apache.commons.collections4.MapUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.MDC;
 
 import java.util.List;
@@ -33,7 +34,7 @@ public class HttpUtil {
     }
 
 
-    public static <T> T postFormData(String url, Map<String, String> params, Map<String, String> formData, TypeReference<T> responseType) {
+    public static <T> T postFormData(String url, Map<String, String> params, Map<String, String> formData, String cookie, TypeReference<T> responseType) {
         HttpUrl.Builder urlBuilder = HttpUrl.parse(url).newBuilder();
         if (MapUtils.isNotEmpty(params)) {
             params.entrySet().forEach(entry -> urlBuilder.addQueryParameter(entry.getKey(), entry.getValue()));
@@ -50,6 +51,10 @@ public class HttpUtil {
                 .header(LoggingFilter.LOG_ID_HEADER, MDC.get(LoggingFilter.LOG_ID_KEY) == null ? IdGenerator.generateLogId() : MDC.get(LoggingFilter.LOG_ID_KEY))
                 .post(formBodyBuilder.build())
                 .url(urlBuilder.build());
+
+        if (StringUtils.isNotEmpty(cookie)) {
+            requestBuilder.addHeader("Cookie", cookie);
+        }
 
         Request request = requestBuilder.build();
 
@@ -81,7 +86,6 @@ public class HttpUtil {
                 .url(urlBuilder.build());
 
         Request request = requestBuilder.build();
-
         return executeRequest(request, responseType);
     }
 

@@ -1,15 +1,15 @@
 package com.aircas.ptr.foundry.ontology.model.po;
 
+import com.aircas.ptr.foundry.ontology.model.enums.ScheduleStatus;
 import com.baomidou.mybatisplus.annotation.*;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
 
-import javax.persistence.Column;
 import javax.persistence.Entity;
-import javax.persistence.Id;
 import java.util.Date;
 
 import static com.aircas.ptr.foundry.common.constant.DateFormat.DATE_FORMAT_DEFAULT;
@@ -25,6 +25,7 @@ import static com.aircas.ptr.foundry.common.constant.DateFormat.DATE_FORMAT_DEFA
 @NoArgsConstructor
 @AllArgsConstructor
 @Data
+@Accessors(chain = true)
 @Entity
 @TableName(value = "action_handle_task")
 public class ActionHandleTask {
@@ -40,7 +41,7 @@ public class ActionHandleTask {
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private Date updateTime;
 
-    private Integer status;
+    private ScheduleStatus status;
 
     private Long actionId;
 
@@ -53,5 +54,7 @@ public class ActionHandleTask {
     private String name;
 
     private String description;
+
+    private String remark;
 
 }

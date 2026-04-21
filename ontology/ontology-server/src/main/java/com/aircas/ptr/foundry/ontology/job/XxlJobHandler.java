@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.ontology.job;
 
 import com.aircas.ptr.foundry.ontology.model.common.Constants;
+import com.aircas.ptr.foundry.ontology.model.enums.ActionSchedulingTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.TaskStatusEnum;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyActionExecuteParam;
 import com.aircas.ptr.foundry.ontology.model.po.ActionHandleLog;
@@ -47,7 +48,8 @@ public class XxlJobHandler {
         var handleTask = actionHandleTaskMapper.selectOne(new LambdaQueryWrapper<ActionHandleTask>().eq(ActionHandleTask::getActionId, action.getId()));
         //插入执行日志
         var handleLog = ActionHandleLog.builder()
-                .actionHandleTaskId(handleTask.getId())
+                .actionHandleId(handleTask.getId())
+                .type(ActionSchedulingTypeEnum.TASK)
                 .requestParam(jobParam)
                 .triggerTime(new Date())
                 .taskStatus(TaskStatusEnum.PENDING)

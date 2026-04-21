@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.po;
 
+import com.aircas.ptr.foundry.ontology.model.enums.ScheduleStatus;
 import com.baomidou.mybatisplus.annotation.*;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.AllArgsConstructor;
@@ -38,7 +39,7 @@ public class ActionHandleRule {
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private Date updateTime;
 
-    private Integer status;
+    private ScheduleStatus status;
 
     private Long actionId;
 

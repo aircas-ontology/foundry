@@ -26,6 +26,5 @@ public class ActionHandleRuleBO extends ActionHandleRule {
         Date now = new Date();
         setCreateTime(now);
         setUpdateTime(now);
-        setStatus(ENABLE.getValue());
     }
 }

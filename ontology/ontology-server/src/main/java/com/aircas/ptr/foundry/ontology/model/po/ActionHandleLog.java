@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.po;
 
+import com.aircas.ptr.foundry.ontology.model.enums.ActionSchedulingTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.TaskStatusEnum;
 import com.baomidou.mybatisplus.annotation.*;
 import lombok.Builder;
@@ -19,9 +20,9 @@ public class ActionHandleLog {
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    private Long actionHandleTaskId;
+    private Long actionHandleId;
 
-    private Long actionHandleRuleId;
+    private ActionSchedulingTypeEnum type;
 
     private String requestParam;
 
