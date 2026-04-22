@@ -20,7 +20,7 @@ public class XxlJobConfig {
     private XxlJobProperties xxlJobProperties;
 
 
-    @Bean
+    //@Bean
     public XxlJobSpringExecutor xxlJobExecutor() {
         log.info(">>>>>>>>>>> xxl-job config init.");
         XxlJobSpringExecutor xxlJobSpringExecutor = new XxlJobSpringExecutor();
