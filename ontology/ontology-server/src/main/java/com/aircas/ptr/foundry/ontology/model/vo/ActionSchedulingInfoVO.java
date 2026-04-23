@@ -28,6 +28,10 @@ public class ActionSchedulingInfoVO {
     @ApiModelProperty(name = "actionApi", value = "行为id", dataType = "java.lang.String", example = "abcdef", required = true)
     private String actionApi;
 
+    @ApiModelProperty(name = "actionName", value = "行为名称", dataType = "java.lang.String", example = "舰船轨迹预测", required = true)
+    private String actionName;
+
+
     @ApiModelProperty(name = "schedulingName", value = "行为调度name", required = true, example = "name")
     private String schedulingName;
 

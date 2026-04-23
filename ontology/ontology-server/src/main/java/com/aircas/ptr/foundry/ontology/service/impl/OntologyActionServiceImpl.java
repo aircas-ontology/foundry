@@ -436,6 +436,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             var ontology = ontologyMetaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, action.getOntologyUniqueIdentifier()));
             return ActionSchedulingDetailVO.builder()
                     .actionApi(action.getApi())
+                    .actionName(action.getDisplayName())
                     .ontologyName(ontology.getDisplayName())
                     .schedulingName(handleTask.getName())
                     .id(handleTask.getId())
@@ -475,6 +476,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             var ontologyMeta = ontologyMap.get(action.getOntologyUniqueIdentifier());
             return ActionSchedulingInfoVO.builder()
                     .actionApi(action.getApi())
+                    .actionName(action.getDisplayName())
                     .ontologyName(ontologyMeta.getDisplayName())
                     .schedulingName(v.getName())
                     .id(v.getId())
