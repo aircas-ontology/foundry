@@ -755,20 +755,129 @@ public class EntityServiceImpl implements EntityService {
                     actionContext.getLinkToOntologyUniqueIdentifier(),
                     actionContext.getLinkEntityPrimaryKey(),
                     actionContext.getLink().getOntologyLinkUniqIdentifier());
-            if (relation != null) {
-                FunctionResultVO resultVO = jsonMapper.readValue(jsonString, new TypeReference<FunctionResultVO>() {
-                });
-                //返回结果有可见窗口，直接更新relation startTime/endTime
-                if (resultVO.getStartTime() != null && resultVO.getEndTime() != null) {
-                    relationRepository.updateRelation(resultVO.getStartTime(), resultVO.getEndTime(), resultVO.getTimeWindows(), Status.ENABLE, relation.getId());
-                } else {
-                    //无可见窗口时，解析spel表达式,更新relation enable
-                    Boolean expResult = evaluateJsonCondition(jsonString, actionContext.getLink().getOntologyLinkFunctionParamExpression());
-                    relationRepository.updateRelation(null, null, resultVO.getTimeWindows(), expResult ? Status.ENABLE : Status.DELETE, relation.getId());
-                }
+
+            if (relation == null) {
+                var link = linkGroupMapper.selectOne(new LambdaQueryWrapper<OntologyLinkGroup>().eq(OntologyLinkGroup::getUniqueIdentifier, actionContext.getLink().getOntologyLinkUniqIdentifier()));
+
+                var fromNode = nodeRepository.findByOntologyUniqIdentifierAndPrimaryKey(link.getOntologyUniqueIdentifierFrom(), actionContext.getEntityActionExecuteParam().getEntityPrimaryKey());
+                var toNode = nodeRepository.findByOntologyUniqIdentifierAndPrimaryKey(link.getOntologyUniqueIdentifierTo(), actionContext.getLinkEntityPrimaryKey());
+
+                relation = EntityRelation.builder()
+                        .ontologyLinkId(link.getUniqueIdentifier())
+                        .from(fromNode)
+                        .to(toNode)
+                        .status(Status.DELETE)
+                        .timeWindows(Lists.newArrayList())
+                        .createTime(new Date())
+                        .updateTime(new Date())
+                        .type(link.getType())
+                        .name(link.getName())
+                        .build();
+                relationRepository.save(relation);
             }
+            FunctionResultVO resultVO = jsonMapper.readValue(jsonString, new TypeReference<FunctionResultVO>() {
+            });
+            //返回结果有可见窗口，直接更新relation startTime/endTime
+            if (resultVO.getStartTime() != null && resultVO.getEndTime() != null) {
+                relationRepository.updateRelation(resultVO.getStartTime(), resultVO.getEndTime(), resultVO.getTimeWindows(), Status.ENABLE, relation.getId());
+            } else {
+                //无可见窗口时，解析spel表达式,更新relation enable
+                Boolean expResult = evaluateJsonCondition(jsonString, actionContext.getLink().getOntologyLinkFunctionParamExpression());
+                relationRepository.updateRelation(null, null, resultVO.getTimeWindows(), expResult ? Status.ENABLE : Status.DELETE, relation.getId());
+            }
+
         }
     }
+
+    /**
+     * 新增实体节点和实体关系：适用于实体增量同步场景
+     *
+     * @param ontologyUniqueIdentifier 本体id
+     * @param entityPropertyMap        实体属性
+     */
+    @Override
+    public void completeEntityNodeAndRelations(String ontologyUniqueIdentifier, Map<String, Object> entityPropertyMap) {
+        //创建实体节点
+        var primaryProperty = propertyMapper.selectOne(new LambdaQueryWrapper<OntologyProperty>()
+                .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier)
+                .eq(OntologyProperty::getIsPrimaryKey, 1));
+
+        var titleProperty = propertyMapper.selectOne(new LambdaQueryWrapper<OntologyProperty>()
+                .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier)
+                .eq(OntologyProperty::getIsTitleKey, 1));
+
+        var titleColumn = "";
+        if (titleProperty != null
+                && primaryProperty != null
+                && StringUtils.equals(titleProperty.getDatasourceId(), primaryProperty.getDatasourceId())) {
+            titleColumn = titleProperty.getDatasourceColumnName();
+        }
+
+        //未绑定主键数据源
+        if (primaryProperty == null || StringUtils.isEmpty(primaryProperty.getDatasourceId())) {
+            return;
+        }
+
+        var entityPrimaryKeyValue = entityPropertyMap.get(primaryProperty.getDatasourceColumnName());
+        var node = nodeRepository.findByOntologyUniqIdentifierAndPrimaryKey(ontologyUniqueIdentifier, entityPrimaryKeyValue);
+        //已存在的实体节点不再创建关系
+        if (node != null) {
+            return;
+        }
+        var newEntityNode = EntityNode.builder()
+                .ontologyUniqIdentifier(ontologyUniqueIdentifier)
+                .primaryKey(entityPrimaryKeyValue)
+                .tableName(primaryProperty.getDatasourceId())
+                .displayName(StringUtils.isEmpty(titleColumn) ? entityPrimaryKeyValue.toString() : entityPropertyMap.get(titleColumn).toString())
+                .build();
+        nodeRepository.save(newEntityNode);
+
+        //创建实体关系
+        var links = linkGroupMapper.selectList(new LambdaQueryWrapper<OntologyLinkGroup>()
+                .eq(OntologyLinkGroup::getOntologyUniqueIdentifierFrom, ontologyUniqueIdentifier)
+                .or().eq(OntologyLinkGroup::getOntologyUniqueIdentifierFrom, ontologyUniqueIdentifier));
+
+
+        var relations = new ArrayList<EntityRelation>();
+
+        links.forEach(link -> {
+            if (link.getOntologyUniqueIdentifierFrom().equals(ontologyUniqueIdentifier)) {
+                var targetOntology = link.getOntologyUniqueIdentifierTo();
+                var nodes = nodeRepository.findByOntologyUniqIdentifier(targetOntology);
+                nodes.forEach(n -> relations.add(EntityRelation.builder()
+                        .ontologyLinkId(link.getUniqueIdentifier())
+                        .from(newEntityNode)
+                        .to(n)
+                        .status(Status.DELETE)
+                        .timeWindows(Lists.newArrayList())
+                        .createTime(new Date())
+                        .updateTime(new Date())
+                        .type(link.getType())
+                        .name(link.getName())
+                        .build()));
+            } else {
+                var fromOntology = link.getOntologyUniqueIdentifierFrom();
+                var nodes = nodeRepository.findByOntologyUniqIdentifier(fromOntology);
+                nodes.forEach(n -> relations.add(EntityRelation.builder()
+                        .ontologyLinkId(link.getUniqueIdentifier())
+                        .from(n)
+                        .to(newEntityNode)
+                        .status(Status.DELETE)
+                        .timeWindows(Lists.newArrayList())
+                        .createTime(new Date())
+                        .updateTime(new Date())
+                        .type(link.getType())
+                        .name(link.getName())
+                        .build()));
+            }
+        });
+
+        if (CollectionUtils.isNotEmpty(relations)) {
+            relationRepository.batchSave(relations);
+        }
+
+    }
+
 
     private Boolean evaluateJsonCondition(String jsonStr, String conditionExpr) {
         try {

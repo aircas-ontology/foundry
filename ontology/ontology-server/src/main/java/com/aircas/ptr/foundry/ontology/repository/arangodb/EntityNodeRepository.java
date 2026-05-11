@@ -19,6 +19,10 @@ public interface EntityNodeRepository extends ArangoRepository<EntityNode, Strin
             "    RETURN n")
     EntityNode findOneByOntologyUniqIdentifier(@Param("ontologyUniqIdentifier") String ontologyUniqIdentifier);
 
+
+    EntityNode findByOntologyUniqIdentifierAndPrimaryKey(String ontologyUniqIdentifier,
+                                                         Object primaryKey);
+
     List<EntityNode> findByTableName(String tableName);
 
     List<EntityNode> findByOntologyUniqIdentifier(String ontologyUniqIdentifier);

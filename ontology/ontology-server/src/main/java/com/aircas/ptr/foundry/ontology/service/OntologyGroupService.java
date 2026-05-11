@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.ontology.service;
 
 import com.aircas.ptr.foundry.ontology.model.param.OntologyGroupCreateParam;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyGroupUpdatedParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyGroup;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyGroupInfoVO;
 import com.baomidou.mybatisplus.extension.service.IService;
@@ -22,4 +23,7 @@ public interface OntologyGroupService extends IService<OntologyGroup> {
 
     List<OntologyGroupInfoVO> searchByKeyword(String keyword);
 
+    void updateGroup(OntologyGroupUpdatedParam param);
+
+    OntologyGroupInfoVO getGroupById(String groupId);
 }

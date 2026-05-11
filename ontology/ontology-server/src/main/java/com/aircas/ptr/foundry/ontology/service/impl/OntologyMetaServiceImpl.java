@@ -74,6 +74,10 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
     private EntityService entityService;
 
 
+    @Resource
+    private OntologyMetaServiceImpl proxyService;
+
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
@@ -299,18 +303,24 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         ).collect(Collectors.toList());
     }
 
-    @Transactional
     @SneakyThrows
     @Override
     public void importOntologies(MultipartFile file) {
         InputStream inputStream = file.getInputStream();
         List<OntologyCreateDTO> ontologyList = objectMapper.readValue(inputStream, new TypeReference<List<OntologyCreateDTO>>() {
         });
-        ontologyList.forEach(dto -> importOntology(dto));
+        ontologyList.forEach(dto -> {
+            try {
+                proxyService.importOntology(dto);
+            } catch (Exception e) {
+                log.error("本体 {} 导入失败", dto.getMetadata().getDisplayName(), e);
+            }
+        });
     }
 
 
-    private void importOntology(OntologyCreateDTO dto) {
+    @Transactional(value = "mainTransactionManager")
+    public void importOntology(OntologyCreateDTO dto) {
         var metaData = dto.getMetadata();
         PreconditionUtils.checkNotNull(metaData, "ontology meta data is null");
         var groups = groupService.list().stream().filter(g -> metaData.getGroupNames().contains(g.getGroupName())).collect(Collectors.toList());
@@ -339,6 +349,8 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                             .isPrimaryKey(p.getIsPrimaryKey())
                             .isTitleKey(p.getIsTitleKey())
                             .ontologyIdentifier(meta.getUniqueIdentifier())
+                            .primaryCategory(p.getPrimaryCategory())
+                            .secondaryCategory(p.getSecondaryCategory())
                             .build())
                     .collect(Collectors.toList());
             ontologyPropertyService.batchCreateProperties(ontologyPropertyCreateParams);
@@ -452,16 +464,6 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
     }
 
 
-    private void buildTree(OntologyMetaNodeVO parent, Map<String, OntologyMetaNodeVO> metaMap) {
-        metaMap.values().forEach(child -> {
-            if (StringUtils.equals(child.getParentUniqueIdentifier(), parent.getUniqueIdentifier())) {
-                parent.getChildNodes().add(child);
-                buildTree(child, metaMap);
-            }
-        });
-    }
-
-
     @Override
     public List<OntologyGroupMetaVO> getByGroupId(String groupId, OntologyOrderByEnum orderBy, QuerySortEnum sort) {
         List<OntologyGroup> groups = Lists.newArrayList();
@@ -488,5 +490,14 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                     .metaVOS(metaInfoVOList)
                     .build();
         }).collect(Collectors.toList());
+    }
+
+    private void buildTree(OntologyMetaNodeVO parent, Map<String, OntologyMetaNodeVO> metaMap) {
+        metaMap.values().forEach(child -> {
+            if (StringUtils.equals(child.getParentUniqueIdentifier(), parent.getUniqueIdentifier())) {
+                parent.getChildNodes().add(child);
+                buildTree(child, metaMap);
+            }
+        });
     }
 }

@@ -3,6 +3,7 @@ package com.aircas.ptr.foundry.ontology.controller;
 import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.controller.validator.GroupIdVerify;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyGroupCreateParam;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyGroupUpdatedParam;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyGroupInfoVO;
 import com.aircas.ptr.foundry.ontology.service.OntologyGroupService;
 import io.swagger.annotations.Api;
@@ -37,6 +38,13 @@ public class OntologyGroupController {
         return RestResult.success();
     }
 
+    @PutMapping("")
+    @ApiOperation(value = "编辑本体分组")
+    public RestResult updateGroup(@RequestBody @Valid OntologyGroupUpdatedParam param) {
+        ontologyGroupService.updateGroup(param);
+        return RestResult.success();
+    }
+
     @DeleteMapping("/{groupId}")
     @ApiOperation(value = "删除本体分组")
     public RestResult deleteGroupById(@PathVariable(required = true, name = "groupId") @GroupIdVerify String groupId) {
@@ -49,6 +57,12 @@ public class OntologyGroupController {
     @ApiOperation("关键字检索本体分组")
     public RestResult<List<OntologyGroupInfoVO>> searchOntologyGroups(@RequestParam(required = false, name = "keyword") String keyword) {
         return RestResult.ofData(ontologyGroupService.searchByKeyword(keyword));
+    }
+
+    @GetMapping
+    @ApiOperation("根据groupId查询分组")
+    public RestResult<OntologyGroupInfoVO> getGroupById(@RequestParam(required = true, name = "groupId") String groupId) {
+        return RestResult.ofData(ontologyGroupService.getGroupById(groupId));
     }
 
 

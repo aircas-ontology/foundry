@@ -5,14 +5,15 @@ import io.swagger.annotations.ApiModelProperty;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.Setter;
+import lombok.experimental.SuperBuilder;
 
 import javax.validation.constraints.NotBlank;
-import javax.validation.constraints.NotNull;
 
 @Getter
 @Setter
+@SuperBuilder
 @AllArgsConstructor
-@ApiModel(description = "本体分组参数")
+@ApiModel(description = "创建本体分组")
 public class OntologyGroupCreateParam {
 
     @ApiModelProperty(name = "groupName", value = "分组名称", required = true, example = "远海远域")

@@ -1,10 +1,11 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
 import com.aircas.ptr.foundry.common.base.ResultCode;
-import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.common.util.IdGenerator;
+import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyGroupCreateParam;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyGroupUpdatedParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyGroup;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyGroupInfoVO;
@@ -61,10 +62,32 @@ public class OntologyGroupServiceImpl extends ServiceImpl<OntologyGroupMapper, O
         var groupName = StringUtils.isEmpty(keyword) ? "" : keyword;
         var list = list(new LambdaQueryWrapper<OntologyGroup>().like(OntologyGroup::getGroupName, groupName));
         return list.stream().map(v -> OntologyGroupInfoVO.builder()
-                .groupId(v.getGroupId())
-                .groupName(v.getGroupName())
-                .icon(v.getIcon())
-                .build())
+                        .groupId(v.getGroupId())
+                        .groupName(v.getGroupName())
+                        .icon(v.getIcon())
+                        .build())
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    public void updateGroup(OntologyGroupUpdatedParam param) {
+        var group = getOne(new LambdaQueryWrapper<OntologyGroup>().eq(OntologyGroup::getGroupId, param.getGroupId()));
+        group.setGroupName(param.getGroupName())
+                .setDescription(param.getDescription())
+                .setIcon(param.getIconUrl());
+        updateById(group);
+    }
+
+    @Override
+    public OntologyGroupInfoVO getGroupById(String groupId) {
+        var group = getOne(new LambdaQueryWrapper<OntologyGroup>().eq(OntologyGroup::getGroupId, groupId));
+        if (group == null) {
+            return null;
+        }
+        return OntologyGroupInfoVO.builder()
+                .groupId(group.getGroupId())
+                .groupName(group.getGroupName())
+                .icon(group.getIcon())
+                .build();
     }
 }

@@ -9,6 +9,7 @@ import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * @interfaceName: EntityService
@@ -48,4 +49,6 @@ public interface EntityService {
     EntityNode findOneByOntologyUniqIdentifier(String ontologyIdentifier);
 
     void updateEntityPropertyAndRelation(String jsonString, ActionContextInfoDTO actionContext);
+
+    void completeEntityNodeAndRelations(String ontologyUniqueIdentifier, Map<String,Object> entityPropertyMap);
 }

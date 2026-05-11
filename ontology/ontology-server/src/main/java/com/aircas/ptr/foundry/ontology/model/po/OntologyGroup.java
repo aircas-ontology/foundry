@@ -5,6 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.experimental.Accessors;
 
 import java.io.Serializable;
 import java.util.Date;
@@ -17,6 +18,7 @@ import java.util.Date;
 @Builder
 @Data
 @TableName("ontology_group")
+@Accessors(chain = true)
 @NoArgsConstructor
 @AllArgsConstructor
 public class OntologyGroup implements Serializable {
