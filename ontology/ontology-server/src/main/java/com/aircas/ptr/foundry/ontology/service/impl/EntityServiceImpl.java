@@ -332,24 +332,26 @@ public class EntityServiceImpl implements EntityService {
                         15
                 );
 
-                var otherColumns = otherData.get(0).keySet().stream().collect(Collectors.toList());
-                var otherPropertyMap = propsMap.get(entry.getKey()).stream().collect(Collectors.toMap(v -> v.getDatasourceColumnName(), v -> v));
-                var detail = otherColumns.stream().<EntityPropertyDetailVO>map(col -> {
-                    var p = otherPropertyMap.get(col);
-                    var values = otherData.stream().map(v -> v.get(col)).collect(Collectors.toList());
+                if (CollectionUtils.isNotEmpty(otherData)) {
+                    var otherColumns = otherData.get(0).keySet().stream().collect(Collectors.toList());
+                    var otherPropertyMap = propsMap.get(entry.getKey()).stream().collect(Collectors.toMap(v -> v.getDatasourceColumnName(), v -> v));
+                    var detail = otherColumns.stream().<EntityPropertyDetailVO>map(col -> {
+                        var p = otherPropertyMap.get(col);
+                        var values = otherData.stream().map(v -> v.get(col)).collect(Collectors.toList());
 
-                    return EntityPropertyDetailVO.builder()
-                            .tag(p.getTag())
-                            .propertyDisplayName(p.getDisplayName())
-                            .propertyUniqIdentifier(p.getUniqueIdentifier())
-                            .propertyApiName(p.getApiName())
-                            .propertyValues(values)
-                            .primaryCategory(p.getPrimaryCategory().getName())
-                            .secondaryCategory(p.getSecondaryCategory())
-                            .entityPrimaryKey(entityPrimaryKey)
-                            .build();
-                }).collect(Collectors.toList());
-                res.addAll(detail);
+                        return EntityPropertyDetailVO.builder()
+                                .tag(p.getTag())
+                                .propertyDisplayName(p.getDisplayName())
+                                .propertyUniqIdentifier(p.getUniqueIdentifier())
+                                .propertyApiName(p.getApiName())
+                                .propertyValues(values)
+                                .primaryCategory(p.getPrimaryCategory().getName())
+                                .secondaryCategory(p.getSecondaryCategory())
+                                .entityPrimaryKey(entityPrimaryKey)
+                                .build();
+                    }).collect(Collectors.toList());
+                    res.addAll(detail);
+                }
             }
         });
         return res;

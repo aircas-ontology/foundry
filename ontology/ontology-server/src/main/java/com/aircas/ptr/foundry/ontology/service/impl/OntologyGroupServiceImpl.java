@@ -64,6 +64,7 @@ public class OntologyGroupServiceImpl extends ServiceImpl<OntologyGroupMapper, O
         return list.stream().map(v -> OntologyGroupInfoVO.builder()
                         .groupId(v.getGroupId())
                         .groupName(v.getGroupName())
+                        .description(v.getDescription())
                         .icon(v.getIcon())
                         .build())
                 .collect(Collectors.toList());
@@ -87,6 +88,7 @@ public class OntologyGroupServiceImpl extends ServiceImpl<OntologyGroupMapper, O
         return OntologyGroupInfoVO.builder()
                 .groupId(group.getGroupId())
                 .groupName(group.getGroupName())
+                .description(group.getDescription())
                 .icon(group.getIcon())
                 .build();
     }

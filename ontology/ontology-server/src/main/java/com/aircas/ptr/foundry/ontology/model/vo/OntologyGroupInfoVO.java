@@ -23,6 +23,9 @@ public class OntologyGroupInfoVO {
      @ApiModelProperty(value = "分组名称", example = "远海远域")
      private String groupName;
 
+     @ApiModelProperty(value = "分组描述", example = "远海远域")
+     private String description;
+
      @ApiModelProperty(value = "分组id", example = "fdsafdsfaf")
      private String groupId;
 
