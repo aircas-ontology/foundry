@@ -880,6 +880,19 @@ public class EntityServiceImpl implements EntityService {
 
     }
 
+    @Override
+    public void deleteEntityNodeAndRelations(String ontologyUniqueIdentifier, Object entityPrimaryKey) {
+        var relations = relationRepository.queryAllRelationsByEntities(ontologyUniqueIdentifier, Lists.newArrayList(entityPrimaryKey));
+        if (CollectionUtils.isNotEmpty(relations)) {
+            relationRepository.deleteByIds(relations.stream().map(EntityRelation::getId).collect(Collectors.toList()));
+        }
+
+        var node = nodeRepository.findByOntologyUniqIdentifierAndPrimaryKey(ontologyUniqueIdentifier, entityPrimaryKey);
+        if (node != null) {
+            nodeRepository.delete(node);
+        }
+    }
+
 
     private Boolean evaluateJsonCondition(String jsonStr, String conditionExpr) {
         try {

@@ -51,4 +51,6 @@ public interface EntityService {
     void updateEntityPropertyAndRelation(String jsonString, ActionContextInfoDTO actionContext);
 
     void completeEntityNodeAndRelations(String ontologyUniqueIdentifier, Map<String,Object> entityPropertyMap);
+
+    void deleteEntityNodeAndRelations(String ontologyUniqueIdentifier, Object entityPrimaryKey);
 }

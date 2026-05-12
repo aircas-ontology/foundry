@@ -91,19 +91,33 @@ public class OntologyEntityController {
         return RestResult.success();
     }
 
-    @ApiOperation(value = "创建实体节点")
+    @ApiOperation(value = "创建本体下所有实体节点")
     @PostMapping("/node")
     public RestResult createEntityNodes(@RequestBody @Valid OntologyIdentifierParam param) {
         entityService.createEntityNodes(param.getOntologyIdentifier());
         return RestResult.success();
     }
 
-    @ApiOperation(value = "创建实体节点关系")
+    @ApiOperation(value = "根据本体关系id创建所有实体节点关系")
     @PostMapping("/relation/{linkUniqIdentifier}")
     public RestResult createEntityRelations(@PathVariable String linkUniqIdentifier) {
         entityService.createEntityRelations(linkUniqIdentifier);
         return RestResult.success();
     }
 
+
+    @ApiOperation(value = "补全单个实体节点和关系")
+    @PostMapping("/completeNodeAndRelations")
+    public RestResult completeEntityNodeAndRelations(@RequestBody @Valid EntityNodeAndRelationsCompleteParam param) {
+        entityService.completeEntityNodeAndRelations(param.getOntologyUniqueIdentifier(), param.getEntityPropertyMap());
+        return RestResult.success();
+    }
+
+    @ApiOperation(value = "删除单个实体节点和关系")
+    @DeleteMapping("/deleteNodeAndRelations")
+    public RestResult deleteEntityNodeAndRelations(@RequestBody @Valid EntityNodeAndRelationsDeleteParam param) {
+        entityService.deleteEntityNodeAndRelations(param.getOntologyUniqueIdentifier(), param.getEntityPrimaryKey());
+        return RestResult.success();
+    }
 
 }
