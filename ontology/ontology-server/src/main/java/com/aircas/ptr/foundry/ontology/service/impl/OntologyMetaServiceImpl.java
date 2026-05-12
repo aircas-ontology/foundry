@@ -305,17 +305,20 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
 
     @SneakyThrows
     @Override
-    public void importOntologies(MultipartFile file) {
+    public List<String> importOntologies(MultipartFile file) {
         InputStream inputStream = file.getInputStream();
         List<OntologyCreateDTO> ontologyList = objectMapper.readValue(inputStream, new TypeReference<List<OntologyCreateDTO>>() {
         });
+        List<String> failedOntology = Lists.newArrayList();
         ontologyList.forEach(dto -> {
             try {
                 proxyService.importOntology(dto);
             } catch (Exception e) {
                 log.error("本体 {} 导入失败", dto.getMetadata().getDisplayName(), e);
+                failedOntology.add(dto.getMetadata().getDisplayName());
             }
         });
+        return failedOntology;
     }
 
 

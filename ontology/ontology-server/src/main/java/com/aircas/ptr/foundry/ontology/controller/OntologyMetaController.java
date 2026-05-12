@@ -1,9 +1,10 @@
 package com.aircas.ptr.foundry.ontology.controller;
 
 import com.aircas.ptr.foundry.common.base.RestResult;
-import com.aircas.ptr.foundry.ontology.model.enums.QuerySortEnum;
-import com.aircas.ptr.foundry.ontology.model.enums.OntologyOrderByEnum;
+import com.aircas.ptr.foundry.common.base.ResultCode;
 import com.aircas.ptr.foundry.ontology.controller.validator.OntologyIdVerify;
+import com.aircas.ptr.foundry.ontology.model.enums.OntologyOrderByEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.QuerySortEnum;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyMetaCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.vo.IdentifierVO;
@@ -14,6 +15,8 @@ import com.aircas.ptr.foundry.ontology.service.OntologyMetaService;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
+import lombok.var;
+import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -36,8 +39,8 @@ public class OntologyMetaController {
     @PostMapping("/import")
     @ApiOperation(value = "本体批量导入创建")
     public RestResult importOntologies(@RequestParam(required = true, name = "file") MultipartFile file) {
-        ontologyMetaService.importOntologies(file);
-        return RestResult.success();
+        var failedOntology = ontologyMetaService.importOntologies(file);
+        return CollectionUtils.isNotEmpty(failedOntology) ? new RestResult(ResultCode.ERROR, "本体批量导入失败", failedOntology) : RestResult.success();
     }
 
 

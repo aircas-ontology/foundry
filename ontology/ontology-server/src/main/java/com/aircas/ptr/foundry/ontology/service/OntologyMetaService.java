@@ -36,5 +36,5 @@ public interface OntologyMetaService extends IService<OntologyMeta> {
     List<OntologyMetaNodeVO> getOntologyTreeByByGroupId(String groupId);
 
 
-    void importOntologies(MultipartFile file);
+    List<String> importOntologies(MultipartFile file);
 }
