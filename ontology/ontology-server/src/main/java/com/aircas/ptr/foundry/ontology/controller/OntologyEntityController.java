@@ -26,7 +26,7 @@ public class OntologyEntityController {
     private EntityService entityService;
 
 
-    @ApiOperation(value = "根据实体列表查询")
+    @ApiOperation(value = "根据多个本体下多个实体id查询实体基本属性")
     @PostMapping("/query")
     public RestResult<List<EntityIdsQueryVO>> getByEntityIds(@RequestBody @Valid List<EntityIdsQueryParam> params) {
         return RestResult.ofData(entityService.getByEntityIds(params));
@@ -60,7 +60,6 @@ public class OntologyEntityController {
     @ApiOperation(value = "根据主键查询实体所有属性详情")
     public RestResult<List<EntityPropertyDetailVO>> getEntityDetail(@RequestBody @Valid EntityQueryParam param) {
         return RestResult.ofData(entityService.getEntityDetail(param.getOntologyUniqueIdentifier(), param.getEntityPrimaryKey()));
-
     }
 
     @PostMapping("/link")

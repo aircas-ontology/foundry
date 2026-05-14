@@ -115,6 +115,26 @@
         WHERE "${primaryKeyColumn}" = #{primaryKeyValue}
     </select>
 
+    <select id="queryByPrimaryKeyList" resultType="java.util.HashMap">
+        SELECT
+        <if test="columnNames != null and columnNames.size() > 0">
+            <foreach item="column" collection="columnNames" separator=",">
+                "${column}"
+            </foreach>
+        </if>
+        <if test="columnNames == null or columnNames.size() == 0">
+            *
+        </if>
+        FROM ${tableName}
+        <if test="primaryKeyValueList != null and primaryKeyValueList.size() > 0">
+            WHERE "${primaryKeyColumn}" IN
+            <foreach collection="primaryKeyValueList" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+    </select>
+
+
     <update id="updateObject">
         UPDATE ${tableName}
         SET

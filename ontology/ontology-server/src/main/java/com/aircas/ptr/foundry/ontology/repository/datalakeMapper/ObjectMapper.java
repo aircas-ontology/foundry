@@ -1,6 +1,5 @@
 package com.aircas.ptr.foundry.ontology.repository.datalakeMapper;
 
-import com.aircas.ptr.foundry.ontology.model.po.DirectoryItem;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.google.common.collect.Lists;
 import lombok.var;
@@ -122,6 +121,20 @@ public interface ObjectMapper extends BaseMapper<Object> {
         var records = queryByPrimaryKey(tableName, columnNames, primaryKeyColumn, primaryKeyValue);
         return populate(records, tableName, columnNames);
     }
+
+
+    default List<Map<String, Object>> queryDataByPrimaryKeyList(@Param("tableName") String tableName,
+                                                                @Param("columnNames") List<String> columnNames,
+                                                                @Param("primaryKeyColumn") String primaryKeyColumn,
+                                                                @Param("primaryKeyValueList") List<Object> primaryKeyValueList) {
+        var records = queryByPrimaryKeyList(tableName, columnNames, primaryKeyColumn, primaryKeyValueList);
+        return populate(records, tableName, columnNames);
+    }
+
+    List<Map<String, Object>> queryByPrimaryKeyList(@Param("tableName") String tableName,
+                                                    @Param("columnNames") List<String> columnNames,
+                                                    @Param("primaryKeyColumn") String primaryKeyColumn,
+                                                    @Param("primaryKeyValueList") List<Object> primaryKeyValueList);
 
 
     void updateObject(String tableName, Map<String, Object> columnMap, String primaryKeyColumn, Object primaryKeyValue);
