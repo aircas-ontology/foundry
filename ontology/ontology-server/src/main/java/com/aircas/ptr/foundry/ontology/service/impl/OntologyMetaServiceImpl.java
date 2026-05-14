@@ -131,6 +131,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                         .tag(v.getTag())
                         .primaryCategory(v.getPrimaryCategory())
                         .secondaryCategory(v.getSecondaryCategory())
+                        .defaultValue(v.getDefaultValue())
                         .build())
                 .collect(Collectors.toList());
         ontologyPropertyService.saveBatch(childProps);
@@ -354,6 +355,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                             .ontologyIdentifier(meta.getUniqueIdentifier())
                             .primaryCategory(p.getPrimaryCategory())
                             .secondaryCategory(p.getSecondaryCategory())
+                            .defaultValue(p.getDefaultValue())
                             .build())
                     .collect(Collectors.toList());
             ontologyPropertyService.batchCreateProperties(ontologyPropertyCreateParams);

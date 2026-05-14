@@ -58,4 +58,7 @@ public class OntologyPropertyUpdateParam extends IdentifierParam {
     @ApiModelProperty(name = "type", value = "属性的自定义标签", example = "载荷基本信息")
     private String tag;
 
+    @ApiModelProperty(name = "defaultValue", value = "属性默认值", example = "123")
+    private String defaultValue;
+
 }

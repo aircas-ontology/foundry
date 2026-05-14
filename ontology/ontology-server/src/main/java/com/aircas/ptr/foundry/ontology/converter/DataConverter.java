@@ -71,6 +71,7 @@ public class DataConverter {
                 .visibility(VisibilityEnum.NORMAL.getValue())
                 .primaryCategory(param.getPrimaryCategory())
                 .secondaryCategory(param.getSecondaryCategory())
+                .defaultValue(param.getDefaultValue())
                 .build();
         if (datasource != null) {
             prop.setDatasourceId(datasource.getDatasourceId())
@@ -94,6 +95,7 @@ public class DataConverter {
                 .tag(p.getTag())
                 .uniqueIdentifier(p.getUniqueIdentifier())
                 .ontologyUniqueIdentifier(p.getOntologyUniqueIdentifier())
+                .defaultValue(p.getDefaultValue())
                 .build();
     }
 
@@ -108,6 +110,7 @@ public class DataConverter {
                 .tag(p.getTag())
                 .uniqueIdentifier(p.getUniqueIdentifier())
                 .ontologyUniqueIdentifier(p.getOntologyUniqueIdentifier())
+                .defaultValue(p.getDefaultValue())
                 .build();
     }
 

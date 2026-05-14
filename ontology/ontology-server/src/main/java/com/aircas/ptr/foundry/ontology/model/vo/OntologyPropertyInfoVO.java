@@ -58,4 +58,10 @@ public class OntologyPropertyInfoVO {
 
     @ApiModelProperty(name = "secondaryCategory", value = "属性二级分类")
     private String secondaryCategory;
+
+    /**
+     * 属性默认值
+     */
+    @ApiModelProperty(name = "defaultValue", value = "属性默认值")
+    private String defaultValue;
 }

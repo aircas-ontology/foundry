@@ -1,7 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.dto;
 
 
-import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
