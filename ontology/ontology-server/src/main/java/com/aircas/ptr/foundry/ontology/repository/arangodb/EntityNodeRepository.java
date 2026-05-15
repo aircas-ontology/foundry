@@ -5,6 +5,7 @@ import com.arangodb.springframework.annotation.Query;
 import com.arangodb.springframework.repository.ArangoRepository;
 import com.google.common.collect.Lists;
 import lombok.var;
+import org.apache.ibatis.annotations.Delete;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
@@ -36,10 +37,17 @@ public interface EntityNodeRepository extends ArangoRepository<EntityNode, Strin
     }
 
 
-
     @Query("FOR n IN node " +
             "    FILTER n.ontologyUniqIdentifier == @ontologyUniqIdentifier " +
             "    UPDATE n WITH { displayName: TO_STRING(n.primaryKey) } IN node")
     void updateDisplayNameEqualPrimaryKey(@Param("ontologyUniqIdentifier") String ontologyUniqIdentifier);
+
+
+
+
+    @Query("FOR n IN node " +
+            "    FILTER n.ontologyUniqIdentifier == @ontologyUniqIdentifier " +
+            "    remove n")
+    void deleteByOntologyUniqIdentifier(@Param("ontologyUniqIdentifier") String ontologyUniqIdentifier);
 
 }

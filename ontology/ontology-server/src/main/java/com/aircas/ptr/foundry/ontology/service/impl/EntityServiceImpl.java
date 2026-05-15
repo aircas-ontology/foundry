@@ -1,7 +1,9 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
+import com.aircas.ptr.foundry.common.base.ResultCode;
 import com.aircas.ptr.foundry.common.constant.FunctionParamTypeEnum;
 import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
+import com.aircas.ptr.foundry.common.util.DateUtils;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.ontology.converter.DataConverter;
 import com.aircas.ptr.foundry.ontology.model.common.VisibilityWindow;
@@ -11,10 +13,7 @@ import com.aircas.ptr.foundry.ontology.model.dto.ActionContextInfoDTO;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamCategoryEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import com.aircas.ptr.foundry.ontology.model.param.*;
-import com.aircas.ptr.foundry.ontology.model.po.FunctionExecuteResult;
-import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup;
-import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
-import com.aircas.ptr.foundry.ontology.model.po.TableFieldMapping;
+import com.aircas.ptr.foundry.ontology.model.po.*;
 import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.aircas.ptr.foundry.ontology.repository.arangodb.EntityNodeRepository;
 import com.aircas.ptr.foundry.ontology.repository.arangodb.EntityRelationRepository;
@@ -23,6 +22,7 @@ import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.TableFieldMappi
 import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.TableMetadataMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.FunctionExecuteResultMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyLinkGroupMapper;
+import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyMetaMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyPropertyMapper;
 import com.aircas.ptr.foundry.ontology.service.EntityService;
 import com.aircas.ptr.foundry.ontology.service.FunctionService;
@@ -67,6 +67,9 @@ import java.util.stream.Stream;
 @Slf4j
 @Service
 public class EntityServiceImpl implements EntityService {
+
+    @Resource
+    private OntologyMetaMapper metaMapper;
 
     @Resource
     private OntologyLinkGroupMapper linkGroupMapper;
@@ -891,6 +894,114 @@ public class EntityServiceImpl implements EntityService {
         if (node != null) {
             nodeRepository.delete(node);
         }
+    }
+
+    @Transactional(value = "datalakeTransactionManager")
+    @Override
+    public void generateEntities(EntityGenerateParam param) {
+        var ontologyMeta = metaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, param.getOntologyIdentifier()));
+        PreconditionUtils.checkArgument(ontologyMeta.getCanGenerateEntity(), "该本体不能生成实体对象", ResultCode.NO_PERMISSION, HttpStatus.FORBIDDEN);
+
+        var properties = propertyMapper.selectList(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, param.getOntologyIdentifier()));
+        var pk = properties.stream().filter(v -> v.getIsPrimaryKey().equals(1)).findFirst();
+        // 主键不存在或者未绑定主数据源
+        if (!pk.isPresent()) {
+            return;
+        }
+        var pkProp = pk.get();
+        if (StringUtils.isEmpty(pkProp.getDatasourceId()) || StringUtils.isEmpty(pkProp.getDatasourceColumnName())) {
+            return;
+        }
+        //删除已有实体
+        deleteExistEntities(pkProp);
+        // 生成新的实体数据
+        // 插入实体主属性表
+        var allPropMap = properties.stream().collect(Collectors.toMap(v -> v.getApiName(), v -> v));
+        var propertyValueMap = param.getPropertyValues().stream().collect(Collectors.toMap(v -> v.getPropertyApiName(), v -> v.getPropertyValue()));
+        var pkProperties = properties.stream().filter(p -> StringUtils.equals(p.getDatasourceId(), pkProp.getDatasourceId())
+                        && !StringUtils.equals(p.getDatasourceColumnName(), pkProp.getDatasourceColumnName()))
+                .collect(Collectors.toList());
+
+        var columnValueMap = pkProperties.stream()
+                .collect(Collectors.toMap(
+                        p -> p.getDatasourceColumnName(),
+                        p -> convert2DataType(propertyValueMap.get(p.getApiName()), allPropMap.get(p.getApiName()).getPropertyType())
+                ));
+
+        List<Map<String, Object>> columnValues = new ArrayList<>();
+        for (int i = 0; i < param.getCount(); i++) {
+            // 使用 new HashMap<>(map) 实现浅复制，避免引用同一对象
+            columnValues.add(new HashMap<>(columnValueMap));
+        }
+
+        var generateIds = objectMapper.batchInsertObjectReturnKey(pkProp.getDatasourceId(), columnValues, pkProp.getDatasourceColumnName());
+        // 插入关联属性表
+        var tableFieldMappings = tableFieldMappingMapper.selectList(new LambdaQueryWrapper<TableFieldMapping>().eq(TableFieldMapping::getSourceTableName, pkProp.getDatasourceId()));
+        tableFieldMappings.stream().forEach(
+                tableFieldMapping -> {
+                    var targetTableName = tableFieldMapping.getTargetTableName();
+                    var props = properties.stream().filter(p -> StringUtils.equals(p.getDatasourceId(), targetTableName)).collect(Collectors.toList());
+                    if (CollectionUtils.isNotEmpty(props)) {
+                        var valueMap = props.stream()
+                                .collect(Collectors.toMap(
+                                        p -> p.getDatasourceColumnName(),
+                                        p -> convert2DataType(propertyValueMap.get(p.getApiName()), allPropMap.get(p.getApiName()).getPropertyType()))
+                                );
+
+                        List<Map<String, Object>> values = new ArrayList<>();
+                        for (int i = 0; i < param.getCount(); i++) {
+                            // 使用 new HashMap<>(map) 实现浅复制，避免引用同一对象
+                            valueMap.put(tableFieldMapping.getTargetColumnName(), generateIds.get(i));
+                            values.add(new HashMap<>(columnValueMap));
+                        }
+                        objectMapper.batchInsertObject(tableFieldMapping.getTargetTableName(), values);
+                    }
+                }
+        );
+        // 补全实体节点和关系
+        for (int i = 0; i < param.getCount(); i++) {
+            var pkValue = generateIds.get(i);
+            var entityPropertyMap = columnValues.get(i);
+            entityPropertyMap.put(pkProp.getDatasourceColumnName(), pkValue);
+            completeEntityNodeAndRelations(param.getOntologyIdentifier(), entityPropertyMap);
+        }
+    }
+
+    private Object convert2DataType(Object inputDataValue, OntologyDataTypeEnum targetDataType) {
+        if (targetDataType.equals(OntologyDataTypeEnum.Timestamp)) {
+            return DateUtils.fromString2Timestamp(inputDataValue.toString(), "yyyy-MM-dd HH:mm:ss");
+        }
+
+        if (targetDataType.equals(OntologyDataTypeEnum.Date)) {
+            return DateUtils.fromString2Date(inputDataValue.toString(), "yyyy-MM-dd");
+        }
+        return inputDataValue;
+    }
+
+
+    private void deleteExistEntities(OntologyProperty pkProp) {
+        /* 删除本体下已有实体
+         *   1 删除属性，包括关联属性信息
+         *   2 删除实体节点
+         *   3 删除关系
+         */
+
+        var entityData = objectMapper.queryDataByPrimaryKeyList(pkProp.getDatasourceId(), Lists.newArrayList(pkProp.getDatasourceColumnName()), pkProp.getDatasourceColumnName(), null);
+        //无实体数据
+        if (CollectionUtils.isEmpty(entityData)) {
+            return;
+        }
+        //删除实体主表
+        objectMapper.deleteByTableName(pkProp.getDatasourceId());
+        //删除实体属性关联表
+        var tableFieldMappings = tableFieldMappingMapper.selectList(new LambdaQueryWrapper<TableFieldMapping>()
+                .eq(TableFieldMapping::getSourceColumnName, pkProp.getDatasourceColumnName())
+                .eq(TableFieldMapping::getSourceTableName, pkProp.getDatasourceId()));
+        tableFieldMappings.stream().forEach(tableFieldMapping -> objectMapper.deleteByTableName(tableFieldMapping.getTargetTableName()));
+
+        //删除实体关系和节点
+        relationRepository.deleteRelationAndNodeByOntologyUniqueIdentifier(pkProp.getOntologyUniqueIdentifier());
+
     }
 
 

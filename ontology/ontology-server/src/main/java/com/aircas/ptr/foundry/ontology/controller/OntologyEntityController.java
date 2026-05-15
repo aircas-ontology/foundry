@@ -119,4 +119,13 @@ public class OntologyEntityController {
         return RestResult.success();
     }
 
+
+    @ApiOperation(value = "初始化生成实体数据")
+    @PostMapping("/generate")
+    public RestResult generateEntities(@RequestBody @Valid EntityGenerateParam param) {
+        entityService.generateEntities(param);
+        return RestResult.success();
+    }
+
+
 }

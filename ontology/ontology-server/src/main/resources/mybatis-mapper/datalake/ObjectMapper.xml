@@ -57,7 +57,7 @@
         FROM ${tableName}
         <where>
             <if test="filterColumnName != null and filterColumnName != ''">
-                 "${filterColumnName}" = #{filterColumnValue}
+                "${filterColumnName}" = #{filterColumnValue}
             </if>
             <if test="hasDeletedField">
                 AND "is_deleted" = 0
@@ -81,7 +81,6 @@
     </select>
 
 
-
     <select id="queryJoinTableData" resultType="java.util.HashMap">
         SELECT
         <if test="joinTableColumnNames != null and joinTableColumnNames.size() > 0">
@@ -92,7 +91,7 @@
         <if test="joinTableColumnNames == null or joinTableColumnNames.size() == 0">
             t.*
         </if>
-        FROM  ${joinTableName} t
+        FROM ${joinTableName} t
         WHERE t."${joinTableKey}" = #{primaryKeyValue}
         ORDER BY t."${joinTableOrderBy}" DESC
         <if test="count != null">
@@ -159,6 +158,50 @@
         </foreach>
         )
     </insert>
+
+
+    <select id="batchInsertObjectReturnKey" resultType="java.lang.Object">
+        INSERT INTO ${tableName}
+        (
+        <foreach collection="columnValues[0].keys" item="column" separator=",">
+            "${column}"
+        </foreach>
+        )
+        VALUES
+        <foreach collection="columnValues" item="columnMap" separator=",">
+            (
+            <foreach collection="columnMap.values()" item="value" separator=",">
+                #{value}
+            </foreach>
+            )
+        </foreach>
+        RETURNING ${primaryKey};
+    </select>
+
+
+    <select id="batchInsertObject" resultType="java.lang.Object">
+        INSERT INTO ${tableName}
+        (
+        <foreach collection="columnValues[0].keys" item="column" separator=",">
+            "${column}"
+        </foreach>
+        )
+        VALUES
+        <foreach collection="columnValues" item="columnMap" separator=",">
+            (
+            <foreach collection="columnMap.values()" item="value" separator=",">
+                #{value}
+            </foreach>
+            )
+        </foreach>
+    </select>
+
+
+
+
+    <delete id="deleteByTableName" parameterType="java.lang.String">
+        DELETE FROM ${tableName}
+    </delete>
 
 
 </mapper>

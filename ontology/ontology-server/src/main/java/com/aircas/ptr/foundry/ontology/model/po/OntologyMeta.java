@@ -95,4 +95,9 @@ public class OntologyMeta implements Serializable {
      */
     private String parentUniqueIdentifier;
 
+    /**
+     * 能否主动生成实体对象
+     */
+    private Boolean canGenerateEntity;
+
 }

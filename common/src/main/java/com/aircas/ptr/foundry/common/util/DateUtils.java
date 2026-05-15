@@ -8,6 +8,7 @@ import org.springframework.util.Assert;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -138,20 +139,21 @@ public class DateUtils {
      * @return
      */
     public static Date fromString2Date(String dateString, String pattern) {
-
-        // 定义日期时间格式
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern(pattern);
 
-        // 解析字符串为 LocalDateTime
-        LocalDateTime ldt = LocalDateTime.parse(dateString, formatter);
+        // 先解析为 LocalDate
+        LocalDate localDate = LocalDate.parse(dateString, formatter);
 
-        // 将 LocalDateTime 转换为 Date
-        Date date = Date.from(ldt.atZone(ZoneId.of("UTC")).toInstant());
-        return date;
+        // 转为 LocalDateTime（默认时间为 00:00:00）
+        LocalDateTime ldt = localDate.atStartOfDay(); // 等价于 localDate.atTime(0, 0, 0)
+
+        // 转为 java.util.Date
+        return Date.from(ldt.atZone(ZoneId.of("UTC")).toInstant());
     }
 
+
     public static void main(String[] args) {
-        var res = fromString2Date("2024-01-01T01:25:08.059","yyyy-MM-dd'T'HH:mm:ss.SSS");
+        var res = fromString2Date("2024-01-01T01:25:08.059", "yyyy-MM-dd'T'HH:mm:ss.SSS");
         System.out.println(res);
     }
 

@@ -142,5 +142,13 @@ public interface ObjectMapper extends BaseMapper<Object> {
 
     void insertObject(String tableName, Map<String, Object> columnMap);
 
+    List<Object> batchInsertObjectReturnKey(@Param("tableName") String tableName,
+                                            @Param("columnValues") List<Map<String, Object>> columnValues,
+                                            @Param("primaryKey") String primaryKey);
 
+
+    void batchInsertObject(@Param("tableName") String tableName,
+                           @Param("columnValues") List<Map<String, Object>> columnValues);
+
+    void deleteByTableName(@Param("tableName") String tableName);
 }
