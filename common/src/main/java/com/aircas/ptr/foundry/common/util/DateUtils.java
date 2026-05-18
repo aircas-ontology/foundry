@@ -1,10 +1,12 @@
 package com.aircas.ptr.foundry.common.util;
 
 import lombok.var;
+import org.apache.commons.lang3.StringUtils;
 import org.joda.time.DateTime;
 import org.joda.time.format.DateTimeFormat;
 import org.springframework.util.Assert;
 
+import java.sql.Timestamp;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -169,6 +171,23 @@ public class DateUtils {
         Assert.hasLength(dateString);
         DateTime dt = DateTime.parse(dateString, DateTimeFormat.forPattern(pattern));
         return dt.getMillis();
+    }
+
+
+    public static Timestamp convertToTimestamp(String inputDataValue, String pattern) {
+        if (StringUtils.isEmpty(inputDataValue)) {
+            return null;
+        }
+
+        try {
+            LocalDateTime dateTime = LocalDateTime.parse(
+                    inputDataValue.trim(),
+                    DateTimeFormatter.ofPattern(pattern)
+            );
+            return Timestamp.valueOf(dateTime);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Cannot parse as timestamp: " + inputDataValue, e);
+        }
     }
 
     /**

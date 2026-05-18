@@ -59,13 +59,13 @@ public interface EntityRelationRepository extends ArangoRepository<EntityRelatio
             "                   RETURN edge ")
     List<EntityRelation> queryAllRelationsByOntology(@Param("ontologyUniqueIdentifier") String ontologyUniqueIdentifier);
 
-    @Query("  FOR n IN node" +
-            "        FILTER n.ontologyUniqIdentifier == @ontologyUniqueIdentifier" +
-            "        LET nodeId = n._id" +
-            "        FOR edge IN relation" +
-            "            FILTER edge._from == nodeId OR edge._to == nodeId" +
-            "            REMOVE edge IN relation" +
-            "        REMOVE n IN node ")
+    @Query("FOR n IN node" +
+            "    FILTER n.ontologyUniqIdentifier == @ontologyUniqueIdentifier" +
+            "    LET nodeId = n._id" +
+            "    FOR edge IN relation" +
+            "        FILTER edge._from == nodeId OR edge._to == nodeId" +
+            "        REMOVE edge IN relation" +
+            "    REMOVE n IN node OPTIONS { ignoreErrors: true }")
     void deleteRelationAndNodeByOntologyUniqueIdentifier(@Param("ontologyUniqueIdentifier") String ontologyUniqueIdentifier);
 
 

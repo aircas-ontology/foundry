@@ -55,6 +55,8 @@ import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static com.aircas.ptr.foundry.ontology.converter.DataConverter.convert2DataType;
+
 /**
  * todo 添加事务
  *
@@ -922,11 +924,18 @@ public class EntityServiceImpl implements EntityService {
                         && !StringUtils.equals(p.getDatasourceColumnName(), pkProp.getDatasourceColumnName()))
                 .collect(Collectors.toList());
 
-        var columnValueMap = pkProperties.stream()
-                .collect(Collectors.toMap(
-                        p -> p.getDatasourceColumnName(),
-                        p -> convert2DataType(propertyValueMap.get(p.getApiName()), allPropMap.get(p.getApiName()).getPropertyType())
-                ));
+        HashMap<String, Object> columnValueMap = pkProperties.stream()
+                .collect(HashMap::new,
+                        (map, p) -> {
+                            String key = p.getDatasourceColumnName();
+                            Object value = convert2DataType(
+                                    propertyValueMap.get(p.getApiName()),
+                                    allPropMap.get(p.getApiName()).getPropertyType()
+                            );
+                            map.put(key, value); // 允许 null value
+                        },
+                        Map::putAll
+                );
 
         List<Map<String, Object>> columnValues = new ArrayList<>();
         for (int i = 0; i < param.getCount(); i++) {
@@ -942,17 +951,25 @@ public class EntityServiceImpl implements EntityService {
                     var targetTableName = tableFieldMapping.getTargetTableName();
                     var props = properties.stream().filter(p -> StringUtils.equals(p.getDatasourceId(), targetTableName)).collect(Collectors.toList());
                     if (CollectionUtils.isNotEmpty(props)) {
-                        var valueMap = props.stream()
-                                .collect(Collectors.toMap(
-                                        p -> p.getDatasourceColumnName(),
-                                        p -> convert2DataType(propertyValueMap.get(p.getApiName()), allPropMap.get(p.getApiName()).getPropertyType()))
+
+                        HashMap<String, Object> valueMap = props.stream()
+                                .collect(HashMap::new,
+                                        (map, p) -> {
+                                            String key = p.getDatasourceColumnName();
+                                            Object value = convert2DataType(
+                                                    propertyValueMap.get(p.getApiName()),
+                                                    allPropMap.get(p.getApiName()).getPropertyType()
+                                            );
+                                            map.put(key, value); // 允许 null value
+                                        },
+                                        Map::putAll
                                 );
 
                         List<Map<String, Object>> values = new ArrayList<>();
                         for (int i = 0; i < param.getCount(); i++) {
                             // 使用 new HashMap<>(map) 实现浅复制，避免引用同一对象
                             valueMap.put(tableFieldMapping.getTargetColumnName(), generateIds.get(i));
-                            values.add(new HashMap<>(columnValueMap));
+                            values.add(new HashMap<>(valueMap));
                         }
                         objectMapper.batchInsertObject(tableFieldMapping.getTargetTableName(), values);
                     }
@@ -967,16 +984,7 @@ public class EntityServiceImpl implements EntityService {
         }
     }
 
-    private Object convert2DataType(Object inputDataValue, OntologyDataTypeEnum targetDataType) {
-        if (targetDataType.equals(OntologyDataTypeEnum.Timestamp)) {
-            return DateUtils.fromString2Timestamp(inputDataValue.toString(), "yyyy-MM-dd HH:mm:ss");
-        }
 
-        if (targetDataType.equals(OntologyDataTypeEnum.Date)) {
-            return DateUtils.fromString2Date(inputDataValue.toString(), "yyyy-MM-dd");
-        }
-        return inputDataValue;
-    }
 
 
     private void deleteExistEntities(OntologyProperty pkProp) {
