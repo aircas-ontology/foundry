@@ -1,8 +1,11 @@
 package com.aircas.ptr.foundry.ontology.config;
 
 
+import com.aircas.ptr.foundry.ontology.repository.handler.OnInsertUpdateHandler;
 import com.alibaba.druid.spring.boot.autoconfigure.DruidDataSourceBuilder;
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
+import com.baomidou.mybatisplus.core.config.GlobalConfig;
+import com.baomidou.mybatisplus.extension.plugins.PaginationInterceptor;
 import com.baomidou.mybatisplus.extension.spring.MybatisSqlSessionFactoryBean;
 import org.apache.ibatis.logging.nologging.NoLoggingImpl;
 import org.apache.ibatis.logging.stdout.StdOutImpl;
@@ -46,6 +49,14 @@ public class DatalakeDataSourceConfiguration {
         configuration.setLogImpl(NoLoggingImpl.class);
         configuration.setMapUnderscoreToCamelCase(true);
         sessionFactoryBean.setConfiguration(configuration);
+
+        GlobalConfig globalConfig = new GlobalConfig();
+        globalConfig.setMetaObjectHandler(new OnInsertUpdateHandler());
+        sessionFactoryBean.setGlobalConfig(globalConfig);
+
+        // 添加分页拦截器
+        PaginationInterceptor paginationInterceptor = new PaginationInterceptor();
+        sessionFactoryBean.setPlugins(paginationInterceptor);
 
         return sessionFactoryBean.getObject();
     }

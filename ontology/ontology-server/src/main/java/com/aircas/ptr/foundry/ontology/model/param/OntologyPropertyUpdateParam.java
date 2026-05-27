@@ -13,6 +13,7 @@ import lombok.experimental.SuperBuilder;
 
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
+import javax.validation.constraints.Pattern;
 
 @Data
 @AllArgsConstructor
@@ -60,5 +61,10 @@ public class OntologyPropertyUpdateParam extends IdentifierParam {
 
     @ApiModelProperty(name = "defaultValue", value = "属性默认值", example = "123")
     private String defaultValue;
+
+    @ApiModelProperty(name = "storageGroup", value = "属性存储分组", example = "123")
+    @Pattern(regexp = "^[a-zA-Z_$][a-zA-Z0-9_$]{0,62}$", message = "存储分组格式不合法")
+    @NotBlank(message = "storageGroup is empty")
+    private String storageGroup;
 
 }

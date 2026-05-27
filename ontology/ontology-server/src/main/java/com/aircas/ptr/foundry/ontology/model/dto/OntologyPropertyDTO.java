@@ -51,4 +51,8 @@ public class OntologyPropertyDTO {
 
     @ApiModelProperty(name = "defaultValue", value = "属性的默认值", example = "30")
     private String defaultValue;
+
+
+    @ApiModelProperty(name = "storageGroup", value = "属性存储分组", example = "123")
+    private String storageGroup;
 }

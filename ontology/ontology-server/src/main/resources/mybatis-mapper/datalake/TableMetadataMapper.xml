@@ -14,14 +14,14 @@
     </resultMap>
 
     <select id="queryColumnMetadata" parameterType="java.lang.String" resultMap="BaseResultMap">
-        SELECT
-            a.attname                                AS column_name,
-            col_description(a.attrelid, a.attnum)    AS description,
-            pg_catalog.format_type(a.atttypid, null) AS type,
-            CASE
-                WHEN pg_index.indkey::text LIKE '%' || a.attnum::text || '%' THEN true
+        SELECT a.attname                                AS column_name,
+               col_description(a.attrelid, a.attnum)    AS description,
+               pg_catalog.format_type(a.atttypid, null) AS type,
+               CASE
+                   WHEN pg_index.indkey::text LIKE '%' || a.attnum::text || '%' THEN true
                 ELSE false
-            END AS is_primary_key
+        END
+        AS is_primary_key
         FROM
             pg_class c
         JOIN
@@ -34,9 +34,13 @@
             c.relkind = 'r'
             AND a.attnum > 0
             AND a.atttypid != 0
-            AND c.relname = #{tableName}
-        ORDER BY
-            a.attnum;
+            AND c.relname =
+        #{tableName}
+        ORDER
+        BY
+        a
+        .
+        attnum;
     </select>
 
     <select id="listTables" resultMap="TableResultMap">
@@ -50,21 +54,83 @@
 
     <!-- 检查表中是否存在某个列 -->
     <select id="isColumnExist" resultType="boolean">
-        SELECT EXISTS (
-            SELECT 1
-            FROM information_schema.columns
-            WHERE table_name = #{tableName}
-              AND column_name = #{columnName}
-              AND table_schema = 'public'
-        )
+        SELECT EXISTS(
+                       SELECT 1
+                       FROM information_schema.columns
+                       WHERE table_name = #{tableName}
+                         AND column_name = #{columnName}
+                         AND table_schema = 'public'
+                   )
     </select>
 
 
     <select id="queryPrimaryKeyColumnName" resultType="string">
         select a.attname AS cloumn_name
-        from pg_index i join pg_attribute a on a.attrelid=i.indrelid and a.attnum=any(i.indkey)
-        where i.indrelid='${tableName}'::regclass and i.indisprimary
+        from pg_index i
+                 join pg_attribute a on a.attrelid = i.indrelid and a.attnum = any (i.indkey)
+        where i.indrelid = '${tableName}'::regclass and i.indisprimary
     </select>
+
+
+    <select id="isTableExist" resultType="boolean">
+        SELECT EXISTS(
+                       SELECT 1
+                       FROM information_schema.tables
+                       WHERE table_schema = 'public'
+                         AND table_name = #{tableName}
+                   )
+    </select>
+
+
+    <insert id="createTable">
+        <!-- Create table: id SERIAL PRIMARY KEY + filtered columns -->
+        CREATE TABLE "${table.tableName}" (
+        id SERIAL PRIMARY KEY,
+        <foreach collection="columns" item="col" separator=",">
+            <if test="col.columnName != null and col.columnName.toLowerCase() != 'id'">
+                 "${col.columnName}" ${col.type}
+            </if>
+        </foreach>
+        );
+        <!-- Add comments -->
+        COMMENT ON TABLE "${table.tableName}" IS '${table.description}';
+        <foreach collection="columns" item="col" separator=";">
+            <if test="col.description != null and col.description.trim().length() > 0">
+                COMMENT ON COLUMN "${table.tableName}"."${col.columnName}" IS '${col.description}'
+            </if>
+        </foreach>
+    </insert>
+
+
+    <update id="addColumns">
+        <foreach collection="columns" item="col" separator=";">
+            ALTER TABLE "${tableName}"
+            ADD COLUMN IF NOT EXISTS "${col.columnName}" ${col.type}
+        </foreach>
+        ;
+        <!-- Add comments -->
+        <foreach collection="columns" item="col" separator=";">
+            <if test="col.description != null and col.description.trim().length() > 0">
+                COMMENT ON COLUMN "${tableName}"."${col.columnName}" IS '${col.description}'
+            </if>
+        </foreach>
+    </update>
+
+    <update id="dropColumns">
+        <if test="columns != null and !columns.isEmpty()">
+            ALTER TABLE "${tableName}"
+            DROP COLUMN IF EXISTS
+            <foreach collection="columns" item="col" separator=", ">
+                "${col}"
+            </foreach>
+        </if>
+    </update>
+
+
+    <update id="dropTable">
+        DROP TABLE IF EXISTS "${tableName}"
+    </update>
+
 
 </mapper>
 

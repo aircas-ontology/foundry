@@ -36,4 +36,14 @@ public class TableMetadataServiceImpl implements TableMetadataService {
                 .collect(Collectors.toList());
     }
 
+    @Override
+    public void dropDataSource(String dataSourceId) {
+        tableMetadataMapper.dropTable(dataSourceId);
+    }
+
+    @Override
+    public void dropColumns(String dataSourceId, List<String> columns) {
+        tableMetadataMapper.dropColumns(dataSourceId, columns);
+    }
+
 }

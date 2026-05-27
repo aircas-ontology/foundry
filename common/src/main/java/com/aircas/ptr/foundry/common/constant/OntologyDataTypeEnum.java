@@ -85,6 +85,7 @@ public enum OntologyDataTypeEnum {
 
     private static final Map<OntologyDataTypeEnum, String> TYPE_2_PG = new HashMap<OntologyDataTypeEnum, String>() {{
         put(OntologyDataTypeEnum.Bool, "bool");
+        put(OntologyDataTypeEnum.Short, "int2");
         put(OntologyDataTypeEnum.Int, "int4");
         put(OntologyDataTypeEnum.Long, "int8");
         put(OntologyDataTypeEnum.Float, "float4");
@@ -163,8 +164,8 @@ public enum OntologyDataTypeEnum {
      *
      * @return PostgreSQL数据类型字符串
      */
-    public String transfer2Pg() {
-        String pgType = TYPE_2_PG.get(this);
+    public static String transfer2Pg(OntologyDataTypeEnum dataTypeEnum) {
+        String pgType = TYPE_2_PG.get(dataTypeEnum);
         assert (pgType != null);
         return pgType;
     }

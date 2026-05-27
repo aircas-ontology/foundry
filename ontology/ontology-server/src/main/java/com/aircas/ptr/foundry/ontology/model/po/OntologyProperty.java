@@ -127,6 +127,12 @@ public class OntologyProperty implements Serializable {
      */
     private String defaultValue;
 
+    /**
+     * 属性存储分组
+     */
+    private String storageGroup;
+
+
 
     private static final long serialVersionUID = 1L;
 

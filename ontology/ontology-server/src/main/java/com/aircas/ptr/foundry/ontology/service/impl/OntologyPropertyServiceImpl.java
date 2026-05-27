@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
+import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.ontology.converter.DataConverter;
@@ -7,15 +8,15 @@ import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyVisibilityUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.param.PropertyDatasourceParam;
-import com.aircas.ptr.foundry.ontology.model.po.OntologyActionMappingIn;
-import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup;
-import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
+import com.aircas.ptr.foundry.ontology.model.po.*;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyDetailVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyVisibilityVO;
+import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.TableFieldMappingMapper;
 import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.TableMetadataMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyActionMappingInMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyLinkGroupMapper;
+import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyMetaMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyPropertyMapper;
 import com.aircas.ptr.foundry.ontology.service.EntityService;
 import com.aircas.ptr.foundry.ontology.service.OntologyPropertyService;
@@ -42,11 +43,15 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
 
     private final TableMetadataMapper tableMetadataMapper;
 
+    private final TableFieldMappingMapper tableFieldMappingMapper;
+
     private final EntityService entityService;
 
     private final OntologyLinkGroupMapper linkMapper;
 
     private final OntologyActionMappingInMapper mappingInMapper;
+
+    private final OntologyMetaMapper metaMapper;
 
 
     @Override
@@ -300,6 +305,102 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
             v.setVisibility(visibility);
         });
         updateBatchById(properties);
+    }
+
+    //todo 发送mq消息给数据组织层构建管道
+    @Transactional(transactionManager = "datalakeTransactionManager")
+    @Override
+    public void autoBindDatasource(String ontologyIdentifier) {
+        var ontology = metaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, ontologyIdentifier));
+        // 校验本体属性是否存在
+        var props = list(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyIdentifier));
+        if (CollectionUtils.isEmpty(props)) {
+            log.warn("本体{}没有属性", ontologyIdentifier);
+            return;
+        }
+        String pkColumnName = "id";
+        // 校验本体主键id是否存在
+        var pk = props.stream().filter(v -> v.getIsPrimaryKey() == 1).findFirst();
+        if (!pk.isPresent() || !StringUtils.equals(pk.get().getApiName(), pkColumnName)) {
+            throw new BusinessException("本体" + ontologyIdentifier + "没有id主键属性");
+        }
+        // 检查属性数据源
+        var notBindProps = props.stream()
+                .filter(p -> StringUtils.isEmpty(p.getDatasourceId()) && StringUtils.isEmpty(p.getDatasourceColumnName()))
+                .collect(Collectors.toList());
+        if (CollectionUtils.isEmpty(notBindProps)) {
+            log.warn("本体{}所有属性已关联数据源", ontologyIdentifier);
+            return;
+        }
+        // 处理未绑定数据源的属性
+        var notBindPropsMap = notBindProps.stream().collect(Collectors.groupingBy(v -> v.getStorageGroup()));
+        var mainDS = ontology.getApiName();
+        notBindPropsMap.forEach((ds, list) -> {
+            //主属性表
+            if (ds.equals("main")) {
+                //检查表名是否存在：不存在创建新表，存在添加列
+                var exist = tableMetadataMapper.isTableExist(mainDS);
+                var columns = list.stream().map(p -> TableColumnDesc.builder()
+                        .columnName(p.getApiName())
+                        .type(OntologyDataTypeEnum.transfer2Pg(p.getPropertyType()))
+                        .description(p.getDisplayName())
+                        .build()).collect(Collectors.toList());
+                if (!exist) {
+                    //创建新表
+                    var table = TableDesc.builder()
+                            .description(ontology.getDisplayName())
+                            .tableName(mainDS)
+                            .build();
+                    tableMetadataMapper.createTable(table, columns);
+                } else {
+                    //创建列
+                    tableMetadataMapper.addColumns(mainDS, columns);
+                }
+                //更新数据源属性
+                list.forEach(p -> p.setDatasourceId(mainDS).setDatasourceColumnName(p.getApiName()));
+            }
+            // 其他属性关联表
+            else {
+                //检查表名是否存在：不存在创建新表，存在添加列
+                var exist = tableMetadataMapper.isTableExist(ds);
+                var columns = list.stream().map(p -> TableColumnDesc.builder()
+                        .columnName(p.getApiName())
+                        .type(OntologyDataTypeEnum.transfer2Pg(p.getPropertyType()))
+                        .description(p.getDisplayName())
+                        .build()).collect(Collectors.toList());
+                if (!exist) {
+                    //增加和主属性关联列
+                    var relatedColumn = mainDS + "_" + pkColumnName;
+                    columns.add(TableColumnDesc.builder()
+                            .columnName(relatedColumn)
+                            .type("int4")
+                            .description(ontology.getDisplayName() + "主键id")
+                            .build());
+                    //创建新表
+                    var table = TableDesc.builder()
+                            .description(ontology.getDisplayName() + list.get(0).getSecondaryCategory())
+                            .tableName(ds)
+                            .build();
+                    tableMetadataMapper.createTable(table, columns);
+                    //插入属性表关联关系
+                    tableFieldMappingMapper.insert(TableFieldMapping.builder()
+                            .sourceTableName(mainDS)
+                            .sourceColumnName(pkColumnName)
+                            .targetTableName(ds)
+                            .targetColumnName(relatedColumn)
+
+                            .build());
+                } else {
+                    //创建列
+                    tableMetadataMapper.addColumns(ds, columns);
+                }
+                //更新数据源属性
+                list.forEach(p -> p.setDatasourceId(ds).setDatasourceColumnName(p.getApiName()));
+            }
+        });
+        //批量更新本体属性数据源
+        var bindDsProps = notBindPropsMap.values().stream().flatMap(List::stream).collect(Collectors.toList());
+        updateBatchById(bindDsProps);
     }
 
 

@@ -90,7 +90,6 @@ xxl:
       addresses: ${xxl.job.baseUrl}
       addJobUrl:  ${xxl.job.baseUrl}/jobinfo/add
       queryJobExecutorUrl: ${xxl.job.baseUrl}/jobgroup/pageList
-
       queryJobInfoUrl: ${xxl.job.baseUrl}/jobinfo/pageList
       updateJobUrl: ${xxl.job.baseUrl}/jobinfo/update
       removeJobUrl: ${xxl.job.baseUrl}/jobinfo/remove

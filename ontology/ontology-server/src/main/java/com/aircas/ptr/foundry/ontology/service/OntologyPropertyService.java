@@ -34,4 +34,6 @@ public interface OntologyPropertyService extends IService<OntologyProperty> {
     List<OntologyPropertyVisibilityVO> getPropertyVisibility(String ontologyUniqueIdentifier);
 
     void updatePropertyVisibility(OntologyPropertyVisibilityUpdateParam param);
+
+    void autoBindDatasource(String ontologyIdentifier);
 }

@@ -9,6 +9,9 @@ import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
 
+import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.Pattern;
+
 @Data
 @SuperBuilder
 @NoArgsConstructor
@@ -64,4 +67,10 @@ public class OntologyPropertyInfoVO {
      */
     @ApiModelProperty(name = "defaultValue", value = "属性默认值")
     private String defaultValue;
+
+    /**
+     * 属性存储分组
+     */
+    @ApiModelProperty(name = "storageGroup", value = "属性存储分组", example = "123")
+    private String storageGroup;
 }

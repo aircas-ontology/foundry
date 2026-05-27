@@ -66,4 +66,9 @@ public class OntologyPropertyCreateParam extends OntologyIdentifierParam {
 
     @ApiModelProperty(name = "defaultValue", value = "属性默认值", example = "123")
     private String defaultValue;
+
+    @ApiModelProperty(name = "storageGroup", value = "属性存储分组", example = "123")
+    @Pattern(regexp = "^[a-zA-Z_$][a-zA-Z0-9_$]{0,62}$", message = "存储分组格式不合法")
+    @NotBlank(message = "storageGroup is empty")
+    private String storageGroup;
 }

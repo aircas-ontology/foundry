@@ -3,10 +3,7 @@ package com.aircas.ptr.foundry.ontology.controller;
 import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.controller.validator.OntologyIdVerify;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyPropertyPrimaryCategoryEnum;
-import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyBatchCreateParam;
-import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyCreateParam;
-import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyUpdateParam;
-import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyVisibilityUpdateParam;
+import com.aircas.ptr.foundry.ontology.model.param.*;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyDetailVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyPrimaryCategoryVO;
@@ -118,7 +115,7 @@ public class OntologyPropertyController {
     }
 
 
-    @GetMapping("/primaryCategory")
+    @GetMapping("/primary_category")
     @ApiOperation(value = "属性一级分类列表")
     public RestResult<List<OntologyPropertyPrimaryCategoryVO>> listPropertyPrimaryCategory() {
         var list = Arrays.stream(OntologyPropertyPrimaryCategoryEnum.values())
@@ -130,5 +127,18 @@ public class OntologyPropertyController {
                 .collect(Collectors.toList());
         return RestResult.ofData(list);
     }
+
+
+    @PostMapping("/auto_bind_datasource")
+    @ApiOperation(value = "属性自动关联数据源")
+    public RestResult autoBindDatasource(@RequestBody @Valid OntologyIdentifierParam param) {
+        ontologyPropertyService.autoBindDatasource(param.getOntologyIdentifier());
+        return RestResult.success();
+    }
+
+
+
+
+
 
 }

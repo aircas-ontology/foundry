@@ -13,4 +13,8 @@ public interface TableMetadataService {
     List<TableColumnDescVO> getColumns(String datasourceId);
 
     List<DatasourceTableVO> listTables();
+
+    void dropDataSource(String dataSourceId);
+
+    void dropColumns(String dataSourceId, List<String> columns);
 }

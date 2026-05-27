@@ -356,6 +356,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                             .primaryCategory(p.getPrimaryCategory())
                             .secondaryCategory(p.getSecondaryCategory())
                             .defaultValue(p.getDefaultValue())
+                            .storageGroup(p.getStorageGroup())
                             .build())
                     .collect(Collectors.toList());
             ontologyPropertyService.batchCreateProperties(ontologyPropertyCreateParams);
