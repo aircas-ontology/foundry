@@ -45,8 +45,8 @@ public class MainDataSourceConfiguration {
 
         MybatisConfiguration configuration = new MybatisConfiguration();
         configuration.setMapUnderscoreToCamelCase(true);
-        configuration.setLogImpl(StdOutImpl.class);
-        //configuration.setLogImpl(NoLoggingImpl.class);
+        //configuration.setLogImpl(StdOutImpl.class);
+        configuration.setLogImpl(NoLoggingImpl.class);
         sessionFactoryBean.setConfiguration(configuration);
 
         GlobalConfig globalConfig = new GlobalConfig();

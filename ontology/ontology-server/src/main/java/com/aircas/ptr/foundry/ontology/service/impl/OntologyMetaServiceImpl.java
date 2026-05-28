@@ -356,11 +356,13 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                             .primaryCategory(p.getPrimaryCategory())
                             .secondaryCategory(p.getSecondaryCategory())
                             .defaultValue(p.getDefaultValue())
-                            .storageGroup(p.getStorageGroup())
+                            .storageGroup(StringUtils.isEmpty(p.getStorageGroup()) ? "main" : p.getStorageGroup())
                             .build())
                     .collect(Collectors.toList());
             ontologyPropertyService.batchCreateProperties(ontologyPropertyCreateParams);
         }
+        //自动建实体表以及关联属性数据源
+        ontologyPropertyService.autoBindDatasource(meta.getUniqueIdentifier());
         //保存关系
         var relations = dto.getRelations();
         Map<Integer, String> relationMap = Maps.newHashMap();

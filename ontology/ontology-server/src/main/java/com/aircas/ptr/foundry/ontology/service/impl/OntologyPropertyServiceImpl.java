@@ -403,6 +403,24 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         updateBatchById(bindDsProps);
     }
 
+    @Override
+    public List<String> getStorageGroup(String ontologyUniqueIdentifier) {
+        var props = list(new LambdaQueryWrapper<OntologyProperty>()
+                .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier));
+
+        var groups = props.stream()
+                .map(OntologyProperty::getStorageGroup)
+                .collect(Collectors.toSet());
+
+        var main = "main";
+        List<String> result = Lists.newArrayList(main);
+        groups.stream()
+                .filter(group -> !main.equals(group))
+                .sorted()
+                .forEach(result::add);
+        return result;
+    }
+
 
     private void checkPrimaryKey(List<OntologyProperty> properties, PropertyDatasourceParam datasource) {
         var existPrimaryKey = properties.stream().filter(v -> v.getIsPrimaryKey() == 1).findFirst();

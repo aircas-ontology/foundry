@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.*;
 import javax.validation.Valid;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Api(tags = "属性")
@@ -137,8 +138,14 @@ public class OntologyPropertyController {
     }
 
 
-
-
+    @GetMapping("/storage_group")
+    @ApiOperation(value = "获得属性存储分组")
+    public RestResult<List<String>> getStorageGroup(@RequestParam(required = true, name = "ontologyUniqueIdentifier")
+                                                   @ApiParam(value = "本体uniqueIdentifier", required = true)
+                                                   @OntologyIdVerify String ontologyUniqueIdentifier) {
+        var res = ontologyPropertyService.getStorageGroup(ontologyUniqueIdentifier);
+        return RestResult.ofData(res);
+    }
 
 
 }
