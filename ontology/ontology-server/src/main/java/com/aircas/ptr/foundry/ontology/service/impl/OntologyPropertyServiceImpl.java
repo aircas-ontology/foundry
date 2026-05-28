@@ -86,7 +86,8 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                 .setPropertyType(param.getDataType())
                 .setIsTitleKey(param.getIsTitleKey() ? 1 : 0)
                 .setIsPrimaryKey(param.getIsPrimaryKey() ? 1 : 0)
-                .setDefaultValue(param.getDefaultValue()));
+                .setDefaultValue(param.getDefaultValue())
+                .setStorageGroup(param.getStorageGroup()));
         //update arangodb node
         buildEntityNodes(originalProperty.getOntologyUniqueIdentifier());
     }
@@ -142,7 +143,8 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                     .setDescription(p.getDescription())
                     .setDisplayName(p.getDisplayName())
                     .setDatasourceId(p.getDatasource() != null ? p.getDatasource().getDatasourceId() : "")
-                    .setDatasourceColumnName(p.getDatasource() != null ? p.getDatasource().getDatasourceColumnName() : "");
+                    .setDatasourceColumnName(p.getDatasource() != null ? p.getDatasource().getDatasourceColumnName() : "")
+                    .setStorageGroup(p.getStorageGroup());
         }
         //batch update
         updateBatchById(updateProperties);
