@@ -336,7 +336,8 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         }
         // 处理未绑定数据源的属性
         var notBindPropsMap = notBindProps.stream().collect(Collectors.groupingBy(v -> v.getStorageGroup()));
-        var mainDS = ontology.getApiName();
+        var pkDS = pk.get().getDatasourceId();
+        var mainDS = StringUtils.isEmpty(pkDS) ? ontology.getApiName() : pkDS;
         notBindPropsMap.forEach((ds, list) -> {
             //主属性表
             if (ds.equals("main")) {
