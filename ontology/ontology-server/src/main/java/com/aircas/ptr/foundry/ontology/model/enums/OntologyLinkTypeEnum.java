@@ -8,7 +8,10 @@ import lombok.Getter;
 public enum OntologyLinkTypeEnum {
 
     COMPOSITION(1, "组合关系"),
-    OTHER(2, "其他关系"),
+    RECONNAISSANCE(2, "侦察关系"),
+    STRIKE(3, "打击关系"),
+    COORDINATION(4, "协同关系"),
+    OTHER(5, "其他关系"),
     ;
 
     private final Integer value;

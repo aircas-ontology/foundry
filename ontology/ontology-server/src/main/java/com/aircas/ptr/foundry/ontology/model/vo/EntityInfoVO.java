@@ -18,6 +18,12 @@ import java.util.List;
 @ApiModel(value = "实体信息数据")
 public class EntityInfoVO {
 
+    @ApiModelProperty(name = "ontologyUniqueIdentifier",value = "本体id")
+    private Object ontologyUniqueIdentifier;
+
+    @ApiModelProperty(name = "ontologyName",value = "本体名称")
+    private String ontologyName;
+
     @ApiModelProperty(name = "primaryKey",value = "实体主键id")
     private Object primaryKey;
 

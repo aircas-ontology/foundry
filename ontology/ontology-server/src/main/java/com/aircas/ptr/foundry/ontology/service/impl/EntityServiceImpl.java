@@ -3,7 +3,6 @@ package com.aircas.ptr.foundry.ontology.service.impl;
 import com.aircas.ptr.foundry.common.base.ResultCode;
 import com.aircas.ptr.foundry.common.constant.FunctionParamTypeEnum;
 import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
-import com.aircas.ptr.foundry.common.util.DateUtils;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.ontology.converter.DataConverter;
 import com.aircas.ptr.foundry.ontology.model.common.VisibilityWindow;
@@ -370,6 +369,7 @@ public class EntityServiceImpl implements EntityService {
                                           Integer pageNum,
                                           Integer pageSize,
                                           Boolean needFilterVisibility) {
+        var ontologyMeta = metaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, ontologyUniqueIdentifier));
         Page<EntityInfoVO> result = new Page<EntityInfoVO>().setSize(pageSize).setCurrent(pageNum);
         var props = propertyMapper.selectList(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier));
         if (CollectionUtils.isEmpty(props)) {
@@ -436,6 +436,8 @@ public class EntityServiceImpl implements EntityService {
                     .properties(entityProps)
                     .displayName(StringUtils.isEmpty(title) ? entityPK.toString() : title)
                     .primaryKey(entityPK)
+                    .ontologyUniqueIdentifier(ontologyUniqueIdentifier)
+                    .ontologyName(ontologyMeta.getDisplayName())
                     .build();
         }).collect(Collectors.toList());
 
