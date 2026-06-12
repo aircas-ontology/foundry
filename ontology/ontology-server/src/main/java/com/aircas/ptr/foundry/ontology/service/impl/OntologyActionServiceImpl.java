@@ -366,7 +366,11 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                         handleTask.getRemark(),
                         param.getName(),
                         param.getTask().getTaskCronExpression(),
-                        OntologyActionExecuteParam.builder().actionApi(param.getActionApi()).ontologyUniqueIdentifier(param.getOntologyIdentifier()).build());
+                        XxlJobActionExecuteParam.builder()
+                                .scheduleId(param.getId())
+                                .actionApi(param.getActionApi())
+                                .ontologyUniqueIdentifier(param.getOntologyIdentifier())
+                                .build());
             } catch (Exception e) {
                 log.error("updateJobInfo failed", e);
                 throw new BusinessException("远程调用xxl-job更新jobinfo失败");
