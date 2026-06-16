@@ -39,8 +39,18 @@ spring:
       timeout:
         connect: 5000
         request: 10000
+  rabbitmq:
+    host: 192.168.9.11
+    port: 5672
+    username: admin
+    password: admin
+    virtual-host: /
 
 
+rabbitmq:
+  exchange: entity.schema.exchange
+  queue: entity.schema.queue
+  routing-key: entity.schema
 
 
 #eureka:

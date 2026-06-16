@@ -41,7 +41,7 @@ public class EntityDatasourceColumnDTO {
     /**
      * 列数据类型
      */
-    private PostgresDataTypeEnum datasourceColumnType;
+    private String datasourceColumnType;
 
     /**
      * 列描述
