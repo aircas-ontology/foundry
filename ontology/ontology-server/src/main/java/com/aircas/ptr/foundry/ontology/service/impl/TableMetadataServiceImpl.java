@@ -1,10 +1,20 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
+import com.aircas.ptr.foundry.ontology.model.dto.EntityDatasourceColumnDTO;
+import com.aircas.ptr.foundry.ontology.model.dto.EntityDatasourceDTO;
+import com.aircas.ptr.foundry.ontology.model.dto.EntityDatasourceSchemaChangeEventDTO;
+import com.aircas.ptr.foundry.ontology.model.enums.DatasourceEventTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.vo.DatasourceTableVO;
 import com.aircas.ptr.foundry.ontology.model.vo.TableColumnDescVO;
+import com.aircas.ptr.foundry.ontology.mq.producer.RabbitMQProducer;
 import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.TableMetadataMapper;
 import com.aircas.ptr.foundry.ontology.service.TableMetadataService;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.collect.Lists;
 import lombok.RequiredArgsConstructor;
+import lombok.SneakyThrows;
+import lombok.var;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
@@ -17,6 +27,16 @@ public class TableMetadataServiceImpl implements TableMetadataService {
 
     @Resource
     private TableMetadataMapper tableMetadataMapper;
+
+
+    @Resource
+    private RabbitMQProducer rmqProducer;
+
+
+    @Value("${rabbitmq.routing-key}")
+    private String routingKey;
+
+    private ObjectMapper jsonMapper = new ObjectMapper();
 
     @Override
     public List<TableColumnDescVO> getColumns(String datasourceId) {
@@ -37,13 +57,30 @@ public class TableMetadataServiceImpl implements TableMetadataService {
     }
 
     @Override
+    @SneakyThrows
     public void dropDataSource(String dataSourceId) {
         tableMetadataMapper.dropTable(dataSourceId);
+        var event = EntityDatasourceSchemaChangeEventDTO.builder()
+                .datasource(Lists.newArrayList(EntityDatasourceDTO.builder()
+                        .tableName(dataSourceId)
+                        .build()))
+                .type(DatasourceEventTypeEnum.DROP_TABLE)
+                .build();
+        rmqProducer.sendMessage(routingKey, jsonMapper.writeValueAsString(event));
     }
 
     @Override
+    @SneakyThrows
     public void dropColumns(String dataSourceId, List<String> columns) {
         tableMetadataMapper.dropColumns(dataSourceId, columns);
+        var event = EntityDatasourceSchemaChangeEventDTO.builder()
+                .datasource(Lists.newArrayList(EntityDatasourceDTO.builder()
+                        .tableName(dataSourceId)
+                        .columns(columns.stream().map(v -> EntityDatasourceColumnDTO.builder().columnName(v).build()).collect(Collectors.toList()))
+                        .build()))
+                .type(DatasourceEventTypeEnum.DELETE_COLUMN)
+                .build();
+        rmqProducer.sendMessage(routingKey, jsonMapper.writeValueAsString(event));
     }
 
 }
