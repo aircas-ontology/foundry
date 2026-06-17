@@ -125,3 +125,6 @@ license:
   subject: aircas
 
 
+rag:
+  knowledge-url: http://192.168.9.13:1124/chat/ask
+  build-url: http://192.168.9.13:1124/ontology/build
