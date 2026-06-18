@@ -19,7 +19,7 @@ import java.util.List;
 public class EntityDatasourceDTO {
 
     /**
-     * 表结构
+     * 表结构 格式：db.schema.table
      */
     private String tableName;
 

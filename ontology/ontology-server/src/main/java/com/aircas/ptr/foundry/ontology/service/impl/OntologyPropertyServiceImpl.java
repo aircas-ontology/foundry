@@ -493,7 +493,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         }
 
         var datasourceDTO = EntityDatasourceDTO.builder()
-                .tableName(tableName)
+                .tableName("entity_datasource.public." + tableName)
                 .isMainDatasource(isMainTable)
                 .columns(columnDTOList)
                 .build();

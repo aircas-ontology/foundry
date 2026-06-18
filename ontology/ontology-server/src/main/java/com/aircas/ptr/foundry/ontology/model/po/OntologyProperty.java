@@ -32,7 +32,7 @@ public class OntologyProperty implements Serializable {
 
 
     /**
-     * 主键自增
+     * uniq id
      */
     private String uniqueIdentifier;
 
@@ -132,6 +132,15 @@ public class OntologyProperty implements Serializable {
      */
     private String storageGroup;
 
+    /**
+     * schema
+     */
+    private String datasourceSchema;
+
+    /**
+     * 数据库
+     */
+    private String datasourceDb;
 
 
     private static final long serialVersionUID = 1L;
