@@ -278,35 +278,36 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 0,
                 hasDeletedField);
         //执行每个实体的行为
-        var infoDTO = entityService.initActionContextInfoDTO(EntityActionExecuteParam.builder()
-                .ontologyUniqueIdentifier(param.getOntologyUniqueIdentifier())
-                .actionApi(param.getActionApi())
-                .build());
         //获取行为关联关系下的本体的所有实体详情
-        List<List<EntityPropertyDetailVO>> linkedEntities = entityService.getLinkedEntities(infoDTO);
-
+        List<List<EntityPropertyDetailVO>> linkedEntities = entityService.getLinkedEntities(contextInfoDTO);
         //执行日志
         List<String> logMsg = Lists.newArrayList();
-        records.stream().forEach(record -> {
-            var entityPrimaryKey = record.get(primaryProperty.getDatasourceColumnName());
-            var entityActionExecuteParam = EntityActionExecuteParam.builder()
-                    .actionApi(param.getActionApi())
-                    .entityPrimaryKey(entityPrimaryKey)
-                    .ontologyUniqueIdentifier(param.getOntologyUniqueIdentifier())
-                    .build();
-            try {
-                entityService.executeEntityAction(entityActionExecuteParam, infoDTO, linkedEntities);
-                var msg = "执行行为" + param.getActionApi() + "成功, OntologyUniqueIdentifier:" + param.getOntologyUniqueIdentifier() + ", entityPrimaryKey:" + entityPrimaryKey;
-                logMsg.add(msg);
-                log.info(msg);
-                XxlJobHelper.log(msg);
-            } catch (Exception e) {
-                var errMsg = "执行行为" + param.getActionApi() + "失败, OntologyUniqueIdentifier:" + param.getOntologyUniqueIdentifier() + ", entityPrimaryKey:" + entityPrimaryKey;
-                log.error(errMsg, e);
-                XxlJobHelper.log(errMsg);
-                logMsg.add(errMsg);
+        var shardTotal = param.getShardTotal();
+        var shardIndex = param.getShardIndex();
+        for (int i = 0; i < records.size(); i++) {
+            if ((shardIndex == null || shardIndex == null)
+                    || (i % shardTotal == shardIndex)) {
+                var record = records.get(i);
+                var entityPrimaryKey = record.get(primaryProperty.getDatasourceColumnName());
+                var entityActionExecuteParam = EntityActionExecuteParam.builder()
+                        .actionApi(param.getActionApi())
+                        .entityPrimaryKey(entityPrimaryKey)
+                        .ontologyUniqueIdentifier(param.getOntologyUniqueIdentifier())
+                        .build();
+                try {
+                    entityService.executeEntityAction(entityActionExecuteParam, contextInfoDTO, linkedEntities);
+                    var msg = "执行行为" + param.getActionApi() + "成功, OntologyUniqueIdentifier:" + param.getOntologyUniqueIdentifier() + ", entityPrimaryKey:" + entityPrimaryKey;
+                    logMsg.add(msg);
+                    log.info(msg);
+                    XxlJobHelper.log(msg);
+                } catch (Exception e) {
+                    var errMsg = "执行行为" + param.getActionApi() + "失败, OntologyUniqueIdentifier:" + param.getOntologyUniqueIdentifier() + ", entityPrimaryKey:" + entityPrimaryKey;
+                    log.error(errMsg, e);
+                    XxlJobHelper.log(errMsg);
+                    logMsg.add(errMsg);
+                }
             }
-        });
+        }
         return jsonMapper.writeValueAsString(logMsg);
     }
 

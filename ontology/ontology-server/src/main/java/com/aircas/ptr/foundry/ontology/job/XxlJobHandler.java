@@ -38,8 +38,11 @@ public class XxlJobHandler {
 
     @XxlJob(Constants.ACTION_EXECUTE_JOB_NAME)
     public void executeOntologyActionJobHandler() throws Exception {
+        var shardIndex = XxlJobHelper.getShardIndex();
+        var shardTotal = XxlJobHelper.getShardTotal();
+
         String jobParam = XxlJobHelper.getJobParam();
-        log.info("收到执行任务请求，参数：" + jobParam);
+        log.info("收到执行任务请求，参数：{}, shardTotal:{}, shardIndex:{}", jobParam, shardTotal, shardIndex);
         ActionHandleLog handleLog = null;
 
         //执行行为
@@ -54,8 +57,7 @@ public class XxlJobHandler {
                     .taskStatus(TaskStatusEnum.PENDING)
                     .build();
             actionHandleLogMapper.insert(handleLog);
-
-            var msg = actionService.executeAction(executeParam);
+            var msg = actionService.executeAction(executeParam.setShardIndex(shardIndex).setShardTotal(shardTotal));
             handleLog.setMsg(msg).setCompleteTime(new Date()).setTaskStatus(TaskStatusEnum.COMPLETED);
             actionHandleLogMapper.updateById(handleLog);
             log.info("任务执行成功" + jobParam);
