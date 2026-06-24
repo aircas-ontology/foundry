@@ -24,11 +24,6 @@
         </dependency>
         <dependency>
             <groupId>com.aircas.ptr</groupId>
-            <artifactId>ontology-common</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.aircas.ptr</groupId>
             <artifactId>license-generator</artifactId>
             <version>${project.version}</version>
         </dependency>
