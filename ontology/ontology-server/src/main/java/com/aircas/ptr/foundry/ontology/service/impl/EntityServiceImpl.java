@@ -1004,12 +1004,10 @@ public class EntityServiceImpl implements EntityService {
         });
         //主属性数据源表
         var mainDs = pkProp.getDatasourceId();
-
         // 2. 收集所有表的关联映射
         Map<String, TableFieldMapping> tableMappingMap = new HashMap<>();
         var tableFieldMappings = tableFieldMappingMapper.selectList(new LambdaQueryWrapper<TableFieldMapping>().eq(TableFieldMapping::getSourceTableName, mainDs));
         tableFieldMappings.forEach(mapping -> tableMappingMap.put(mapping.getTargetTableName(), mapping));
-
         // 3. 构建 SELECT 部分
         var selectBuilder = new StringBuilder();
         List<String> selectColumnList = Lists.newArrayList();
@@ -1043,7 +1041,6 @@ public class EntityServiceImpl implements EntityService {
             selectBuilder.append(" AS ").append(wrapWithDoubleQuotes(selectColumn));
             selectColumnList.add(selectColumn);
         }
-
         // 4. 构建 FROM 和 LEFT JOIN
         var fromBuilder = new StringBuilder();
         fromBuilder.append(wrapWithDoubleQuotes(mainDs));
@@ -1084,7 +1081,6 @@ public class EntityServiceImpl implements EntityService {
                     .append(wrapWithDoubleQuotes(dsId)).append(".").append(wrapWithDoubleQuotes(mapping.getTargetColumnName()));
             joinedTables.add(dsId);
         }
-
         // 5. 构建 WHERE 部分
         var whereBuilder = new StringBuilder();
         if (param.getFilters() != null && CollectionUtils.isNotEmpty(param.getFilters().getChildren())) {
@@ -1093,7 +1089,6 @@ public class EntityServiceImpl implements EntityService {
                 whereBuilder.append(" WHERE ").append(whereClause);
             }
         }
-
         // 6. 构建 GROUP BY
         var groupByBuilder = new StringBuilder();
         if (CollectionUtils.isNotEmpty(param.getGroupBy())) {
@@ -1110,7 +1105,6 @@ public class EntityServiceImpl implements EntityService {
                 first = false;
             }
         }
-
         // 7. 构建 ORDER BY
         var orderByBuilder = new StringBuilder();
         if (CollectionUtils.isNotEmpty(param.getOrderBy())) {
@@ -1127,7 +1121,6 @@ public class EntityServiceImpl implements EntityService {
                 first = false;
             }
         }
-
         // 8. 组装SQL并执行
         var pageSize = param.getPageSize();
         var offset = (param.getPageNum() - 1) * pageSize;
@@ -1139,11 +1132,9 @@ public class EntityServiceImpl implements EntityService {
         if (total == null || total == 0) {
             return new Page<>(param.getPageNum(), pageSize, 0);
         }
-
         // 数据SQL
         var dataSql = baseSql + " LIMIT " + pageSize + " OFFSET " + offset;
         var resultMaps = objectMapper.queryBySql(dataSql);
-
         // 9. 转换结果
         List<List<EntityPropertyGenericQueryVO>> resultVOs = Lists.newArrayList();
         for (var row : resultMaps) {
