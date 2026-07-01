@@ -197,11 +197,18 @@
     </select>
 
 
-
-
     <delete id="deleteByTableName" parameterType="java.lang.String">
         DELETE FROM "${tableName}"
     </delete>
+
+
+    <select id="queryBySql" resultType="java.util.HashMap">
+        ${sql}
+    </select>
+
+    <select id="queryCountBySql" resultType="java.lang.Integer">
+        ${sql}
+    </select>
 
 
 </mapper>

@@ -45,8 +45,8 @@ public class DatalakeDataSourceConfiguration {
         sessionFactoryBean.setMapperLocations(new PathMatchingResourcePatternResolver().getResources(resourcePath));
 
         MybatisConfiguration configuration = new MybatisConfiguration();
-        //configuration.setLogImpl(StdOutImpl.class);
-        configuration.setLogImpl(NoLoggingImpl.class);
+        configuration.setLogImpl(StdOutImpl.class);
+        //configuration.setLogImpl(NoLoggingImpl.class);
         configuration.setMapUnderscoreToCamelCase(true);
         sessionFactoryBean.setConfiguration(configuration);
 

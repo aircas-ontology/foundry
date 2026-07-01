@@ -2,10 +2,7 @@ package com.aircas.ptr.foundry.ontology.service;
 
 import com.aircas.ptr.foundry.ontology.model.document.EntityNode;
 import com.aircas.ptr.foundry.ontology.model.dto.ActionContextInfoDTO;
-import com.aircas.ptr.foundry.ontology.model.param.EntityActionExecuteParam;
-import com.aircas.ptr.foundry.ontology.model.param.EntityGenerateParam;
-import com.aircas.ptr.foundry.ontology.model.param.EntityIdsQueryParam;
-import com.aircas.ptr.foundry.ontology.model.param.EntityUpdateParam;
+import com.aircas.ptr.foundry.ontology.model.param.*;
 import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 
@@ -56,4 +53,6 @@ public interface EntityService {
     void deleteEntityNodeAndRelations(String ontologyUniqueIdentifier, Object entityPrimaryKey);
 
     void generateEntities(EntityGenerateParam param);
+
+    Page<List<EntityPropertyGenericQueryVO>> genericQuery(EntityPropertyGenericQueryParam param);
 }

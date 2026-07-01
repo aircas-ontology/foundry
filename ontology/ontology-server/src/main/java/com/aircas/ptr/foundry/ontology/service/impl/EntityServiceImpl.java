@@ -9,7 +9,9 @@ import com.aircas.ptr.foundry.ontology.model.common.VisibilityWindow;
 import com.aircas.ptr.foundry.ontology.model.document.EntityNode;
 import com.aircas.ptr.foundry.ontology.model.document.EntityRelation;
 import com.aircas.ptr.foundry.ontology.model.dto.ActionContextInfoDTO;
+import com.aircas.ptr.foundry.ontology.model.enums.FilterNodeTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamCategoryEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.QueryOpEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import com.aircas.ptr.foundry.ontology.model.param.*;
 import com.aircas.ptr.foundry.ontology.model.po.*;
@@ -31,6 +33,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 import com.jayway.jsonpath.Configuration;
 import com.jayway.jsonpath.JsonPath;
 import com.jayway.jsonpath.Option;
@@ -953,7 +956,6 @@ public class EntityServiceImpl implements EntityService {
                     var targetTableName = tableFieldMapping.getTargetTableName();
                     var props = properties.stream().filter(p -> StringUtils.equals(p.getDatasourceId(), targetTableName)).collect(Collectors.toList());
                     if (CollectionUtils.isNotEmpty(props)) {
-
                         HashMap<String, Object> valueMap = props.stream()
                                 .collect(HashMap::new,
                                         (map, p) -> {
@@ -987,6 +989,330 @@ public class EntityServiceImpl implements EntityService {
     }
 
 
+    @Override
+    public Page<List<EntityPropertyGenericQueryVO>> genericQuery(EntityPropertyGenericQueryParam param) {
+        // 1. 校验查询属性是否存在或者是否关联了数据源
+        var props = propertyMapper.selectList(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, param.getOntologyIdentifier()));
+        // 查询主键是否存在且关联了数据源
+        var pkProp = props.stream().filter(p -> p.getIsPrimaryKey() == 1).findFirst().orElse(null);
+        PreconditionUtils.checkArgument(pkProp != null && StringUtils.isNotEmpty(pkProp.getDatasourceId()), "主键属性不存在或未关联数据源", HttpStatus.BAD_REQUEST);
+        // 校验返回属性是否存在或者是否关联了数据源
+        var propMap = props.stream().collect(Collectors.toMap(OntologyProperty::getApiName, v -> v));
+        param.getSelectProperties().forEach(p -> {
+            var findProp = propMap.get(p.getPropertyApiName());
+            PreconditionUtils.checkArgument(findProp != null && StringUtils.isNotEmpty(findProp.getDatasourceId()), "属性" + p.getPropertyApiName() + "不存在或未关联数据源", HttpStatus.BAD_REQUEST);
+        });
+        //主属性数据源表
+        var mainDs = pkProp.getDatasourceId();
+
+        // 2. 收集所有表的关联映射
+        Map<String, TableFieldMapping> tableMappingMap = new HashMap<>();
+        var tableFieldMappings = tableFieldMappingMapper.selectList(new LambdaQueryWrapper<TableFieldMapping>().eq(TableFieldMapping::getSourceTableName, mainDs));
+        tableFieldMappings.forEach(mapping -> tableMappingMap.put(mapping.getTargetTableName(), mapping));
+
+        // 3. 构建 SELECT 部分
+        var selectBuilder = new StringBuilder();
+        List<String> selectColumnList = Lists.newArrayList();
+        Map<String, OntologySelectPropertyParam> selectParamMap = Maps.newLinkedHashMap();
+        for (OntologySelectPropertyParam selectProp : param.getSelectProperties()) {
+            if (selectBuilder.length() > 0) {
+                selectBuilder.append(",");
+            }
+            var prop = propMap.get(selectProp.getPropertyApiName());
+            var aliasKey = StringUtils.isNotEmpty(selectProp.getAlias()) ? selectProp.getAlias() : selectProp.getPropertyApiName();
+            selectParamMap.put(aliasKey, selectProp);
+            var columnRef = wrapWithDoubleQuotes(prop.getDatasourceId()) + "." + wrapWithDoubleQuotes(prop.getDatasourceColumnName());
+
+            if (selectProp.getAggFunc() != null) {
+                switch (selectProp.getAggFunc()) {
+                    case COUNT:
+                    case SUM:
+                    case AVG:
+                    case MAX:
+                    case MIN:
+                    case DISTINCT:
+                        selectBuilder.append(selectProp.getAggFunc().getValue()).append("(").append(columnRef).append(")");
+                        break;
+                    default:
+                        selectBuilder.append(columnRef);
+                }
+            } else {
+                selectBuilder.append(columnRef);
+            }
+            var selectColumn = StringUtils.isNotEmpty(selectProp.getAlias()) ? selectProp.getAlias() : selectProp.getPropertyApiName();
+            selectBuilder.append(" AS ").append(wrapWithDoubleQuotes(selectColumn));
+            selectColumnList.add(selectColumn);
+        }
+
+        // 4. 构建 FROM 和 LEFT JOIN
+        var fromBuilder = new StringBuilder();
+        fromBuilder.append(wrapWithDoubleQuotes(mainDs));
+        var joinedTables = Sets.newHashSet();
+        joinedTables.add(mainDs);
+        // 收集所有涉及的属性API名称
+        Set<String> allPropApiNames = new LinkedHashSet<>();
+        // select属性
+        for (var selectProp : param.getSelectProperties()) {
+            allPropApiNames.add(selectProp.getPropertyApiName());
+        }
+        // 过滤条件属性
+        allPropApiNames.addAll(collectFilterPropertyApiNames(param.getFilters()));
+        // 分组属性
+        if (CollectionUtils.isNotEmpty(param.getGroupBy())) {
+            allPropApiNames.addAll(param.getGroupBy());
+        }
+        // 排序属性
+        if (CollectionUtils.isNotEmpty(param.getOrderBy())) {
+            for (OrderByParam orderBy : param.getOrderBy()) {
+                allPropApiNames.add(orderBy.getPropertyApiName());
+            }
+        }
+        // 统一添加LEFT JOIN
+        for (var apiName : allPropApiNames) {
+            var prop = propMap.get(apiName);
+            if (prop == null || StringUtils.isEmpty(prop.getDatasourceId())) {
+                continue;
+            }
+            var dsId = prop.getDatasourceId();
+            if (joinedTables.contains(dsId)) {
+                continue;
+            }
+            var mapping = tableMappingMap.get(dsId);
+            PreconditionUtils.checkArgument(mapping != null, "未找到数据源表 " + dsId + " 与主表 " + mainDs + " 的关联关系", HttpStatus.BAD_REQUEST);
+            fromBuilder.append(" LEFT JOIN ").append(wrapWithDoubleQuotes(dsId))
+                    .append(" ON ").append(wrapWithDoubleQuotes(mainDs)).append(".").append(wrapWithDoubleQuotes(mapping.getSourceColumnName())).append(" = ")
+                    .append(wrapWithDoubleQuotes(dsId)).append(".").append(wrapWithDoubleQuotes(mapping.getTargetColumnName()));
+            joinedTables.add(dsId);
+        }
+
+        // 5. 构建 WHERE 部分
+        var whereBuilder = new StringBuilder();
+        if (param.getFilters() != null && CollectionUtils.isNotEmpty(param.getFilters().getChildren())) {
+            var whereClause = buildWhereClause(param.getFilters(), propMap);
+            if (StringUtils.isNotEmpty(whereClause)) {
+                whereBuilder.append(" WHERE ").append(whereClause);
+            }
+        }
+
+        // 6. 构建 GROUP BY
+        var groupByBuilder = new StringBuilder();
+        if (CollectionUtils.isNotEmpty(param.getGroupBy())) {
+            groupByBuilder.append(" GROUP BY ");
+            var first = true;
+            for (var groupByProp : param.getGroupBy()) {
+                if (!first) {
+                    groupByBuilder.append(",");
+                }
+                var prop = propMap.get(groupByProp);
+                PreconditionUtils.checkArgument(prop != null && StringUtils.isNotEmpty(prop.getDatasourceId()),
+                        "分组属性" + groupByProp + "不存在或未关联数据源", HttpStatus.BAD_REQUEST);
+                groupByBuilder.append(wrapWithDoubleQuotes(prop.getDatasourceId())).append(".").append(wrapWithDoubleQuotes(prop.getDatasourceColumnName()));
+                first = false;
+            }
+        }
+
+        // 7. 构建 ORDER BY
+        var orderByBuilder = new StringBuilder();
+        if (CollectionUtils.isNotEmpty(param.getOrderBy())) {
+            orderByBuilder.append(" ORDER BY ");
+            var first = true;
+            for (var orderBy : param.getOrderBy()) {
+                if (!first) {
+                    orderByBuilder.append(",");
+                }
+                var prop = propMap.get(orderBy.getPropertyApiName());
+                PreconditionUtils.checkArgument(prop != null && StringUtils.isNotEmpty(prop.getDatasourceId()),
+                        "排序属性" + orderBy.getPropertyApiName() + "不存在或未关联数据源", HttpStatus.BAD_REQUEST);
+                orderByBuilder.append(wrapWithDoubleQuotes(prop.getDatasourceId())).append(".").append(wrapWithDoubleQuotes(prop.getDatasourceColumnName())).append(orderBy.getSort().name());
+                first = false;
+            }
+        }
+
+        // 8. 组装SQL并执行
+        var pageSize = param.getPageSize();
+        var offset = (param.getPageNum() - 1) * pageSize;
+        // base SQL
+        var baseSql = "SELECT " + selectBuilder + " FROM " + fromBuilder + whereBuilder + groupByBuilder + orderByBuilder;
+        // 计数SQL
+        var countSql = "SELECT COUNT(*) FROM (" + baseSql + ") AS t";
+        var total = objectMapper.queryCountBySql(countSql);
+        if (total == null || total == 0) {
+            return new Page<>(param.getPageNum(), pageSize, 0);
+        }
+
+        // 数据SQL
+        var dataSql = baseSql + " LIMIT " + pageSize + " OFFSET " + offset;
+        var resultMaps = objectMapper.queryBySql(dataSql);
+
+        // 9. 转换结果
+        List<List<EntityPropertyGenericQueryVO>> resultVOs = Lists.newArrayList();
+        for (var row : resultMaps) {
+            List<EntityPropertyGenericQueryVO> voList = new ArrayList<>();
+            for (var column : selectColumnList) {
+                var selectProp = selectParamMap.get(column);
+                if (selectProp == null) {
+                    continue;
+                }
+                var prop = propMap.get(selectProp.getPropertyApiName());
+                voList.add(EntityPropertyGenericQueryVO.builder()
+                        .propertyApiName(selectProp.getPropertyApiName())
+                        .propertyDisplayName(prop != null ? prop.getDisplayName() : selectProp.getPropertyApiName())
+                        .aggFunc(selectProp.getAggFunc())
+                        .alias(selectProp.getAlias())
+                        .value(row.get(column))
+                        .build());
+            }
+            resultVOs.add(voList);
+        }
+        Page<List<EntityPropertyGenericQueryVO>> page = new Page<>(param.getPageNum(), pageSize, total);
+        page.setRecords(resultVOs);
+        return page;
+    }
+
+    private static String wrapWithDoubleQuotes(String str) {
+        return StringUtils.wrap(str, "\"");
+    }
+
+    private String buildWhereClause(FilterGroupParam group, Map<String, OntologyProperty> propMap) {
+        if (CollectionUtils.isEmpty(group.getChildren())) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        String logic = group.getLogic() != null ? group.getLogic().name() : "AND";
+        boolean firstGroup = true;
+        for (FilterNodeParam node : group.getChildren()) {
+            if (!firstGroup) {
+                sb.append(" ").append(logic).append(" ");
+            }
+            if (node.getType() == FilterNodeTypeEnum.FILTER && node.getFilter() != null) {
+                String filterClause = buildFilterClause(node.getFilter(), propMap);
+                if (StringUtils.isNotEmpty(filterClause)) {
+                    sb.append(filterClause);
+                }
+            } else if (node.getType() == FilterNodeTypeEnum.GROUP && node.getGroup() != null) {
+                String subGroup = buildWhereClause(node.getGroup(), propMap);
+                if (StringUtils.isNotEmpty(subGroup)) {
+                    sb.append("(").append(subGroup).append(")");
+                }
+            }
+            firstGroup = false;
+        }
+        return sb.toString();
+    }
+
+    private Set<String> collectFilterPropertyApiNames(FilterGroupParam group) {
+        Set<String> result = Sets.newHashSet();
+        if (group == null || CollectionUtils.isEmpty(group.getChildren())) {
+            return result;
+        }
+        for (FilterNodeParam node : group.getChildren()) {
+            if (node.getType() == FilterNodeTypeEnum.FILTER && node.getFilter() != null) {
+                result.add(node.getFilter().getPropertyApiName());
+            } else if (node.getType() == FilterNodeTypeEnum.GROUP && node.getGroup() != null) {
+                result.addAll(collectFilterPropertyApiNames(node.getGroup()));
+            }
+        }
+        return result;
+    }
+
+    private String buildFilterClause(PropertyFilterParam filter, Map<String, OntologyProperty> propMap) {
+        OntologyProperty prop = propMap.get(filter.getPropertyApiName());
+        PreconditionUtils.checkArgument(prop != null && StringUtils.isNotEmpty(prop.getDatasourceId()),
+                "过滤属性" + filter.getPropertyApiName() + "不存在或未关联数据源", HttpStatus.BAD_REQUEST);
+
+        String columnRef = wrapWithDoubleQuotes(prop.getDatasourceId()) + "." + wrapWithDoubleQuotes(prop.getDatasourceColumnName());
+        QueryOpEnum op = filter.getOp() != null ? filter.getOp() : QueryOpEnum.EQ;
+
+        switch (op) {
+            case EQ:
+                return columnRef + " = " + formatSqlValue(filter.getValue(), prop.getPropertyType());
+            case NE:
+                return columnRef + " != " + formatSqlValue(filter.getValue(), prop.getPropertyType());
+            case LIKE:
+                return columnRef + " LIKE " + formatSqlValue("%" + filter.getValue() + "%", OntologyDataTypeEnum.String);
+            case LIKE_LEFT:
+                return columnRef + " LIKE " + formatSqlValue("%" + filter.getValue(), OntologyDataTypeEnum.String);
+            case LIKE_RIGHT:
+                return columnRef + " LIKE " + formatSqlValue(filter.getValue() + "%", OntologyDataTypeEnum.String);
+            case IN:
+                if (CollectionUtils.isEmpty(filter.getValues())) {
+                    return "1=0";
+                }
+                StringBuilder inSb = new StringBuilder(columnRef).append(" IN (");
+                for (int i = 0; i < filter.getValues().size(); i++) {
+                    if (i > 0) {
+                        inSb.append(",");
+                    }
+                    inSb.append(formatSqlValue(filter.getValues().get(i), prop.getPropertyType()));
+                }
+                inSb.append(")");
+                return inSb.toString();
+            case NOT_IN:
+                if (CollectionUtils.isEmpty(filter.getValues())) {
+                    return "1=1";
+                }
+                StringBuilder notInSb = new StringBuilder(columnRef).append(" NOT IN (");
+                for (int i = 0; i < filter.getValues().size(); i++) {
+                    if (i > 0) {
+                        notInSb.append(",");
+                    }
+                    notInSb.append(formatSqlValue(filter.getValues().get(i), prop.getPropertyType()));
+                }
+                notInSb.append(")");
+                return notInSb.toString();
+            case BETWEEN:
+                PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(filter.getValues()) && filter.getValues().size() >= 2,
+                        "BETWEEN 需要提供两个值", HttpStatus.BAD_REQUEST);
+                return columnRef + " BETWEEN " + formatSqlValue(filter.getValues().get(0), prop.getPropertyType())
+                        + " AND " + formatSqlValue(filter.getValues().get(1), prop.getPropertyType());
+            case NOT_BETWEEN:
+                PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(filter.getValues()) && filter.getValues().size() >= 2,
+                        "NOT BETWEEN 需要提供两个值", HttpStatus.BAD_REQUEST);
+                return columnRef + " NOT BETWEEN " + formatSqlValue(filter.getValues().get(0), prop.getPropertyType())
+                        + " AND " + formatSqlValue(filter.getValues().get(1), prop.getPropertyType());
+            case GT:
+                return columnRef + " > " + formatSqlValue(filter.getValue(), prop.getPropertyType());
+            case GE:
+                return columnRef + " >= " + formatSqlValue(filter.getValue(), prop.getPropertyType());
+            case LT:
+                return columnRef + " < " + formatSqlValue(filter.getValue(), prop.getPropertyType());
+            case LE:
+                return columnRef + " <= " + formatSqlValue(filter.getValue(), prop.getPropertyType());
+            case IS_NULL:
+                return columnRef + " IS NULL";
+            case IS_NOT_NULL:
+                return columnRef + " IS NOT NULL";
+            case APPLY:
+                String template = filter.getValue() != null ? filter.getValue().toString() : "";
+                String applySql = template.replace("{0}", columnRef);
+                if (CollectionUtils.isNotEmpty(filter.getValues())) {
+                    for (int i = 0; i < filter.getValues().size(); i++) {
+                        String placeholder = "{" + (i + 1) + "}";
+                        if (applySql.contains(placeholder)) {
+                            applySql = applySql.replace(placeholder, formatSqlValue(filter.getValues().get(i), OntologyDataTypeEnum.String));
+                        }
+                    }
+                }
+                return applySql;
+            default:
+                return "";
+        }
+    }
+
+    private String formatSqlValue(Object value, OntologyDataTypeEnum type) {
+        if (value == null) {
+            return "NULL";
+        }
+        if (type == OntologyDataTypeEnum.Float || type == OntologyDataTypeEnum.Double
+                || type == OntologyDataTypeEnum.Long || type == OntologyDataTypeEnum.Int) {
+            return String.valueOf(value);
+        }
+        if (type == OntologyDataTypeEnum.Bool) {
+            return Boolean.TRUE.equals(value) ? "TRUE" : "FALSE";
+        }
+        String escaped = value.toString().replace("'", "''");
+        return StringUtils.wrap(escaped, "'");
+    }
 
 
     private void deleteExistEntities(OntologyProperty pkProp) {
@@ -1034,3 +1360,4 @@ public class EntityServiceImpl implements EntityService {
 
 
 }
+

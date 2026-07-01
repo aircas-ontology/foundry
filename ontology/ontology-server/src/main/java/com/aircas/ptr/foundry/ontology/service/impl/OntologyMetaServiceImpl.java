@@ -31,6 +31,7 @@ import lombok.val;
 import lombok.var;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -73,12 +74,15 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
     @Resource
     private EntityService entityService;
 
+    @Resource
+    private OntologyLemmaService lemmaService;
 
     @Resource
     private OntologyMetaServiceImpl proxyService;
 
 
     private final ObjectMapper objectMapper = new ObjectMapper();
+
 
     @Override
     @Transactional(value = "mainTransactionManager")
@@ -239,10 +243,12 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         linkService.remove(new LambdaQueryWrapper<OntologyLinkGroup>()
                 .eq(OntologyLinkGroup::getOntologyUniqueIdentifierFrom, ontologyIdentifier).or()
                 .eq(OntologyLinkGroup::getOntologyUniqueIdentifierTo, ontologyIdentifier));
-        //删除行为，参数，规则，任务 todo 停止本体下定时调度任务
+        //删除行为，参数，规则，任务
         actionService.removeByOntologyIdentifier(ontologyIdentifier);
         //删除所有实体表、节点和边
         entityService.deleteNodesAndRelationsByOntologyId(meta.getApiName());
+        //删除百科信息
+        lemmaService.remove(new LambdaQueryWrapper<OntologyLemma>().eq(OntologyLemma::getOntologyUniqueIdentifier, ontologyIdentifier));
     }
 
 

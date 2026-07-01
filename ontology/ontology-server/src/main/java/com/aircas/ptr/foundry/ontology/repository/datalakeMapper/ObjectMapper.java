@@ -151,4 +151,9 @@ public interface ObjectMapper extends BaseMapper<Object> {
                            @Param("columnValues") List<Map<String, Object>> columnValues);
 
     void deleteByTableName(@Param("tableName") String tableName);
+
+    List<Map<String, Object>> queryBySql(@Param("sql") String sql);
+
+    Integer queryCountBySql(@Param("sql") String sql);
+
 }

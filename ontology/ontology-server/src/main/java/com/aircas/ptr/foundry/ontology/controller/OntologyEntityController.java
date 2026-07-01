@@ -9,6 +9,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
+import lombok.var;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -125,6 +126,13 @@ public class OntologyEntityController {
     public RestResult generateEntities(@RequestBody @Valid EntityGenerateParam param) {
         entityService.generateEntities(param);
         return RestResult.success();
+    }
+
+    @ApiOperation(value = "实体属性通用查询")
+    @PostMapping("/generic_query")
+    public RestResult<Page<List<EntityPropertyGenericQueryVO>>> genericQuery(@RequestBody @Valid EntityPropertyGenericQueryParam param) {
+        var res = entityService.genericQuery(param);
+        return RestResult.ofData(res);
     }
 
 
