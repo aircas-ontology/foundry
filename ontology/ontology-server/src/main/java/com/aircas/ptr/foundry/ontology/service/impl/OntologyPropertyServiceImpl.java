@@ -76,6 +76,9 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         var uniqIdentifier = param.getUniqueIdentifier();
         var originalProperty = getOne(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getUniqueIdentifier, uniqIdentifier));
         PreconditionUtils.checkArgument(originalProperty != null, "属性不存在", HttpStatus.BAD_REQUEST);
+        //get ontology apiName
+        var apiName = metaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, originalProperty.getOntologyUniqueIdentifier())).getApiName();
+        PreconditionUtils.checkArgument(!StringUtils.equals(apiName, param.getStorageGroup()), "属性存储分组名称不能和本体apiName相同", HttpStatus.BAD_REQUEST);
 
         var otherProps = list(new LambdaQueryWrapper<OntologyProperty>()
                 .eq(OntologyProperty::getOntologyUniqueIdentifier, originalProperty.getOntologyUniqueIdentifier()))
@@ -120,6 +123,8 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         PreconditionUtils.checkArgument(updateUniqIds.size() == updateProperties.size(), "属性不存在", HttpStatus.BAD_REQUEST);
         ///主键，标题健，数据源校验
         var ontologyId = updateProperties.get(0).getOntologyUniqueIdentifier();
+        //get ontology apiName
+        var apiName = metaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, ontologyId)).getApiName();
         var otherProps = list(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyId).notIn(OntologyProperty::getUniqueIdentifier, updateUniqIds));
         var datasourceSet = Sets.newHashSet();
         var hasTitleKey = false;
@@ -127,6 +132,8 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         var updatePropMap = updateProperties.stream().collect(Collectors.toMap(v -> v.getUniqueIdentifier(), v -> v));
 
         for (OntologyPropertyUpdateParam p : params) {
+            //check storage group
+            PreconditionUtils.checkArgument(!StringUtils.equals(apiName, p.getStorageGroup()), "属性存储分组名称不能和本体apiName相同", HttpStatus.BAD_REQUEST);
             //check datasource columnName conflict
             if (p.getDatasource() != null) {
                 var datasource = p.getDatasource();
@@ -175,6 +182,9 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         }
         //参数校验
         var ontologyId = params.get(0).getOntologyIdentifier();
+        //get ontology apiName
+        var apiName = metaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, ontologyId)).getApiName();
+
         var properties = list(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyId));
 
         var apiNameSet = Sets.newHashSet();
@@ -184,6 +194,8 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         List<OntologyProperty> propertyList = Lists.newArrayList();
 
         for (var p : params) {
+            // check storage group
+            PreconditionUtils.checkArgument(!StringUtils.equals(apiName, p.getStorageGroup()), "属性存储分组名称不能和本体apiName相同", HttpStatus.BAD_REQUEST);
             //check api name conflict
             if (apiNameSet.contains(p.getApiName())) {
                 throw new BusinessException("属性apiName冲突：" + p.getApiName(), HttpStatus.BAD_REQUEST);
@@ -241,6 +253,10 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         //参数校验
         var ontologyId = param.getOntologyIdentifier();
         var properties = list(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyId));
+        //get ontology apiName
+        var apiName = metaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, ontologyId)).getApiName();
+        // check storage group
+        PreconditionUtils.checkArgument(!StringUtils.equals(apiName, param.getStorageGroup()), "属性存储分组名称不能和本体apiName相同", HttpStatus.BAD_REQUEST);
         //check apiName
         checkApiName(properties, param.getApiName());
         //check columnName
@@ -328,6 +344,10 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
      * 1 属性自动关联数据源
      * 2 发送mq消息给数据层构建数据管道
      *
+     * 说明：1 只针对未关联数据源的属性
+     *      2 实体表列的数据只做增量更新，删除属性不会同步删除实体表的列，需要人工确认后通过后门接口删除
+     *      3 修改数据源表的列的数据类型：先解绑属性已有数据源，再修改属性类型，最后重新绑定数据源（若已有实体数据可能会报错）
+     *
      * @param ontologyIdentifier
      */
     @Transactional(transactionManager = "datalakeTransactionManager")
@@ -341,10 +361,13 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
             return;
         }
         String pkColumnName = "id";
-        // 校验本体主键id是否存在
+        String mainStorageGroup = "main";
+        // 校验本体主键id是否存在且属于主存储分组
         var pk = props.stream().filter(v -> v.getIsPrimaryKey() == 1).findFirst();
-        if (!pk.isPresent() || !StringUtils.equals(pk.get().getApiName(), pkColumnName)) {
-            throw new BusinessException("本体" + ontologyIdentifier + "没有id主键属性");
+        if (!pk.isPresent()
+                || !StringUtils.equals(pk.get().getApiName(), pkColumnName)
+                || !StringUtils.equals(pk.get().getStorageGroup(), mainStorageGroup)) {
+            throw new BusinessException("本体" + ontologyIdentifier + "没有id主键属性或id不属于主存储分组");
         }
         // 检查属性数据源
         var notBindProps = props.stream()
@@ -358,9 +381,10 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         var notBindPropsMap = notBindProps.stream().collect(Collectors.groupingBy(v -> v.getStorageGroup()));
         var pkDS = pk.get().getDatasourceId();
         var mainDS = StringUtils.isEmpty(pkDS) ? ontology.getApiName() : pkDS;
+
         notBindPropsMap.forEach((ds, list) -> {
             //主属性表
-            if (ds.equals("main")) {
+            if (ds.equals(mainStorageGroup)) {
                 //检查表名是否存在：不存在创建新表，存在添加列
                 var exist = tableMetadataMapper.isTableExist(mainDS);
                 var columns = list.stream().map(p -> TableColumnDesc.builder()

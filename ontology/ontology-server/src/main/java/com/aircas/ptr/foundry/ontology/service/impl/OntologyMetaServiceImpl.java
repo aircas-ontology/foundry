@@ -31,7 +31,6 @@ import lombok.val;
 import lombok.var;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -107,6 +106,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
     }
 
 
+    //继承创建：继承目标本体属性、关系、行为；不继承实体数据源、行为调度
     private void createOntologyByInherit(OntologyMetaCreateParam ontologyCreateParam, OntologyMeta meta) {
         var childIdentifier = meta.getUniqueIdentifier();
         var parentIdentifier = ontologyCreateParam.getParentOntologyUniqueIdentifier();
@@ -123,8 +123,6 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         var childProps = parentProperties.stream().map(v -> OntologyProperty.builder()
                         .ontologyUniqueIdentifier(childIdentifier)
                         .apiName(v.getApiName())
-                        .datasourceColumnName(v.getDatasourceColumnName())
-                        .datasourceId(v.getDatasourceId())
                         .description(v.getDescription())
                         .displayName(v.getDisplayName())
                         .isPrimaryKey(v.getIsPrimaryKey())
@@ -136,9 +134,12 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                         .primaryCategory(v.getPrimaryCategory())
                         .secondaryCategory(v.getSecondaryCategory())
                         .defaultValue(v.getDefaultValue())
+                        .storageGroup("main".equals(v.getStorageGroup()) ? "main" : meta.getApiName() + "_" + v.getStorageGroup())
                         .build())
                 .collect(Collectors.toList());
         ontologyPropertyService.saveBatch(childProps);
+        // 属性自动关联数据源
+        ontologyPropertyService.autoBindDatasource(childIdentifier);
         // 创建关系
         Map<String, String> parentChildLinkMap = Maps.newHashMap();
         var parentLinks = linkService.list(new LambdaUpdateWrapper<OntologyLinkGroup>()
@@ -201,18 +202,6 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         actionMappingInService.saveBatch(mappingIns);
         actionLinkService.saveBatch(actionLinks);
 
-        // 创建实体节点和实体关系
-        var primaryKey = parentProperties.stream().filter(v -> v.getIsPrimaryKey() == 1).findFirst();
-        var titleKey = parentProperties.stream().filter(v -> v.getIsTitleKey() == 1).findFirst();
-        if (primaryKey.isPresent() && StringUtils.isNotEmpty(primaryKey.get().getDatasourceColumnName())) {
-            //标题健需要和主键为同一个数据源
-            var titleColumn = "";
-            if (titleKey != null && StringUtils.equals(titleKey.get().getDatasourceId(), primaryKey.get().getDatasourceId())) {
-                titleColumn = titleKey.get().getDatasourceColumnName();
-            }
-            entityService.syncNodes(meta.getUniqueIdentifier(), primaryKey.get().getDatasourceId(), primaryKey.get().getDatasourceColumnName(), titleColumn);
-            childLinks.stream().forEach(link -> entityService.createEntityRelations(link.getUniqueIdentifier()));
-        }
     }
 
 
@@ -245,7 +234,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 .eq(OntologyLinkGroup::getOntologyUniqueIdentifierTo, ontologyIdentifier));
         //删除行为，参数，规则，任务
         actionService.removeByOntologyIdentifier(ontologyIdentifier);
-        //删除所有实体表、节点和边
+        //删除所有实体节点和边, 保留实体表
         entityService.deleteNodesAndRelationsByOntologyId(meta.getApiName());
         //删除百科信息
         lemmaService.remove(new LambdaQueryWrapper<OntologyLemma>().eq(OntologyLemma::getOntologyUniqueIdentifier, ontologyIdentifier));
@@ -362,7 +351,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                             .primaryCategory(p.getPrimaryCategory())
                             .secondaryCategory(p.getSecondaryCategory())
                             .defaultValue(p.getDefaultValue())
-                            .storageGroup(StringUtils.isEmpty(p.getStorageGroup()) ? "main" : p.getStorageGroup())
+                            .storageGroup(p.getStorageGroup())
                             .build())
                     .collect(Collectors.toList());
             ontologyPropertyService.batchCreateProperties(ontologyPropertyCreateParams);

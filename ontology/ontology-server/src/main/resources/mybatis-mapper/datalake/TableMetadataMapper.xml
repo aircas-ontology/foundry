@@ -68,7 +68,7 @@
         select a.attname AS cloumn_name
         from pg_index i
                  join pg_attribute a on a.attrelid = i.indrelid and a.attnum = any (i.indkey)
-        where i.indrelid = '${tableName}'::regclass and i.indisprimary
+        where i.indrelid = '"${tableName}"'::regclass and i.indisprimary
     </select>
 
 
@@ -104,10 +104,15 @@
 
     <update id="addColumns">
         <foreach collection="columns" item="col" separator=";">
-            ALTER TABLE "${tableName}"
-            ADD COLUMN IF NOT EXISTS "${col.columnName}" ${col.type}
+            DO $$
+            BEGIN
+                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = '${tableName}' AND column_name = '${col.columnName}' AND table_schema = 'public') THEN
+                    EXECUTE 'ALTER TABLE "${tableName}" ALTER COLUMN "${col.columnName}" TYPE ${col.type} USING "${col.columnName}"::${col.type}';
+                ELSE
+                    EXECUTE 'ALTER TABLE "${tableName}" ADD COLUMN "${col.columnName}" ${col.type}';
+                END IF;
+            END $$;
         </foreach>
-        ;
         <!-- Add comments -->
         <foreach collection="columns" item="col" separator=";">
             <if test="col.description != null and col.description.trim().length() > 0">
@@ -115,6 +120,8 @@
             </if>
         </foreach>
     </update>
+
+    
 
     <update id="dropColumns">
         <if test="columns != null and !columns.isEmpty()">
@@ -133,4 +140,3 @@
 
 
 </mapper>
-
