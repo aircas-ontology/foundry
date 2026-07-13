@@ -336,7 +336,7 @@ public class EntityServiceImpl implements EntityService {
                         columns,
                         tableMapping.getTargetColumnName(),
                         orderBy,
-                        15
+                        10
                 );
 
                 if (CollectionUtils.isNotEmpty(otherData)) {
@@ -362,6 +362,107 @@ public class EntityServiceImpl implements EntityService {
             }
         });
         return res;
+    }
+
+    @Override
+    public EntityPropertyRowDetailVO getEntityPropertyRowDetail(String ontologyUniqueIdentifier, Object entityPrimaryKey) {
+
+        List<EntityPropertyRowDetailVO.PropertyGroup> propertyGroups = Lists.newArrayList();
+
+        var props = propertyMapper.selectList(new LambdaQueryWrapper<OntologyProperty>()
+                        .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier))
+                .stream()
+                .filter(v -> StringUtils.isNotEmpty(v.getDatasourceColumnName()))
+                .collect(Collectors.toList());
+
+        var primaryKeyProp = props.stream().filter(v -> v.getIsPrimaryKey() == 1).findFirst();
+        if (!primaryKeyProp.isPresent() || StringUtils.isEmpty(primaryKeyProp.get().getDatasourceColumnName())) {
+            return EntityPropertyRowDetailVO.builder()
+                    .ontologyUniqueIdentifier(ontologyUniqueIdentifier)
+                    .entityPrimaryKey(entityPrimaryKey)
+                    .build();
+        }
+        var propsMap = props.stream().collect(Collectors.groupingBy(v -> v.getDatasourceId()));
+        //查询主属性表对应的实体数据
+        var pk = primaryKeyProp.get();
+        var pkColumns = propsMap.get(pk.getDatasourceId()).stream().map(v -> v.getDatasourceColumnName()).collect(Collectors.toList());
+        var primaryData = objectMapper.queryDataByPrimaryKey(pk.getDatasourceId(), pkColumns, pk.getDatasourceColumnName(), entityPrimaryKey);
+        var propertyMap = propsMap.get(pk.getDatasourceId()).stream().collect(Collectors.toMap(v -> v.getDatasourceColumnName(), v -> v));
+        var propertyInfoList = primaryData.get(0).entrySet().stream().<EntityPropertyRowDetailVO.PropertyInfo>map(entry -> {
+            var colName = entry.getKey();
+            var colValue = entry.getValue();
+            var p = propertyMap.get(colName);
+            return EntityPropertyRowDetailVO.PropertyInfo.builder()
+                    .tag(p.getTag())
+                    .primaryCategory(p.getPrimaryCategory().getName())
+                    .secondaryCategory(p.getSecondaryCategory())
+                    .propertyDisplayName(p.getDisplayName())
+                    .propertyValue(colValue)
+                    .propertyUniqIdentifier(p.getUniqueIdentifier())
+                    .propertyApiName(p.getApiName())
+                    .build();
+        }).collect(Collectors.toList());
+        List<List<EntityPropertyRowDetailVO.PropertyInfo>> group = Lists.newArrayList();
+        group.add(propertyInfoList);
+        propertyGroups.add(EntityPropertyRowDetailVO.PropertyGroup.builder()
+                .storageGroup(pk.getStorageGroup())
+                .props(group)
+                .build());
+
+        //查询关联属性表对应的实体数据
+        propsMap.entrySet().forEach(entry -> {
+            if (!entry.getKey().equals(pk.getDatasourceId())) {
+                //查询关联表的实体数据
+                var tableMapping = tableFieldMappingMapper.selectOne(new LambdaQueryWrapper<TableFieldMapping>()
+                        .eq(TableFieldMapping::getSourceTableName, pk.getDatasourceId())
+                        .eq(TableFieldMapping::getTargetTableName, entry.getKey()));
+                if (tableMapping == null) {
+                    return;
+                }
+                var orderBy = tableMetadataMapper.queryPrimaryKeyColumnName(entry.getKey());
+                var columns = entry.getValue().stream().map(v -> v.getDatasourceColumnName()).collect(Collectors.toList());
+                var otherData = objectMapper.queryByJoinTable(
+                        entityPrimaryKey,
+                        tableMapping.getTargetTableName(),
+                        columns,
+                        tableMapping.getTargetColumnName(),
+                        orderBy,
+                        100
+                );
+
+                if (CollectionUtils.isNotEmpty(otherData)) {
+                    List<List<EntityPropertyRowDetailVO.PropertyInfo>> otherPropGroup = Lists.newArrayList();
+                    var otherPropertyMap = propsMap.get(entry.getKey()).stream().collect(Collectors.toMap(v -> v.getDatasourceColumnName(), v -> v));
+                    for (var row : otherData) {
+                        List<EntityPropertyRowDetailVO.PropertyInfo> propertyInfos = Lists.newArrayList();
+                        for (var col : row.keySet()) {
+                            var p = otherPropertyMap.get(col);
+                            var info = EntityPropertyRowDetailVO.PropertyInfo.builder()
+                                    .tag(p.getTag())
+                                    .propertyDisplayName(p.getDisplayName())
+                                    .propertyUniqIdentifier(p.getUniqueIdentifier())
+                                    .propertyApiName(p.getApiName())
+                                    .propertyValue(row.get(col))
+                                    .primaryCategory(p.getPrimaryCategory().getName())
+                                    .secondaryCategory(p.getSecondaryCategory())
+                                    .build();
+                            propertyInfos.add(info);
+                        }
+                        otherPropGroup.add(propertyInfos);
+                    }
+                    propertyGroups.add(EntityPropertyRowDetailVO.PropertyGroup.builder()
+                            .storageGroup(entry.getValue().get(0).getStorageGroup())
+                            .props(otherPropGroup)
+                            .build());
+                }
+            }
+        });
+
+        return EntityPropertyRowDetailVO.builder()
+                .ontologyUniqueIdentifier(ontologyUniqueIdentifier)
+                .entityPrimaryKey(entityPrimaryKey)
+                .propertyGroups(propertyGroups)
+                .build();
     }
 
 
@@ -1159,6 +1260,7 @@ public class EntityServiceImpl implements EntityService {
         page.setRecords(resultVOs);
         return page;
     }
+
 
     private static String wrapWithDoubleQuotes(String str) {
         return StringUtils.wrap(str, "\"");

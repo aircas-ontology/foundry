@@ -27,14 +27,14 @@ public class OntologyEntityController {
     private EntityService entityService;
 
 
-    @ApiOperation(value = "根据多个本体下多个实体id查询实体基本属性")
+    @ApiOperation(value = "根据多个本体下多个实体id查询实体主属性信息")
     @PostMapping("/query")
     public RestResult<List<EntityIdsQueryVO>> getByEntityIds(@RequestBody @Valid List<EntityIdsQueryParam> params) {
         return RestResult.ofData(entityService.getByEntityIds(params));
     }
 
 
-    @ApiOperation(value = "实体分页查询", notes = "分页查询本体下实体信息列表")
+    @ApiOperation(value = "实体分页查询", notes = "分页查询本体下实体主属性信息列表")
     @GetMapping("/list")
     public RestResult<Page<EntityInfoVO>> getEntities(
             @RequestParam(required = true, name = "ontologyUniqueIdentifier") @ApiParam(value = "本体id", required = true) @OntologyIdVerify String ontologyUniqueIdentifier,
@@ -44,7 +44,7 @@ public class OntologyEntityController {
     }
 
 
-    @ApiOperation(value = "实体搜索", notes = "实体根据属性值进行搜索")
+    @ApiOperation(value = "实体搜索", notes = "实体根据主属性值进行等值搜索")
     @PostMapping("/search")
     public RestResult<Page<EntityInfoVO>> searchEntities(@RequestBody @Valid EntitySearchParam param) {
         return RestResult.ofData(entityService.getEntities(
@@ -58,9 +58,15 @@ public class OntologyEntityController {
 
 
     @PostMapping("/detail")
-    @ApiOperation(value = "根据主键查询实体所有属性详情")
+    @ApiOperation(value = "根据实体id查询所有属性（按列返回，动态属性默认id倒序展示前10条）")
     public RestResult<List<EntityPropertyDetailVO>> getEntityDetail(@RequestBody @Valid EntityQueryParam param) {
         return RestResult.ofData(entityService.getEntityDetail(param.getOntologyUniqueIdentifier(), param.getEntityPrimaryKey()));
+    }
+
+    @PostMapping("/row_detail")
+    @ApiOperation(value = "根据实体id查询所有属性（按行返回，动态属性默认id倒序展示前100条）")
+    public RestResult<EntityPropertyRowDetailVO> getEntityPropertyRowDetail(@RequestBody @Valid EntityQueryParam param) {
+        return RestResult.ofData(entityService.getEntityPropertyRowDetail(param.getOntologyUniqueIdentifier(), param.getEntityPrimaryKey()));
     }
 
     @PostMapping("/link")

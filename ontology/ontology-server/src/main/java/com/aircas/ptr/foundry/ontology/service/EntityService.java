@@ -55,4 +55,6 @@ public interface EntityService {
     void generateEntities(EntityGenerateParam param);
 
     Page<List<EntityPropertyGenericQueryVO>> genericQuery(EntityPropertyGenericQueryParam param);
+
+    EntityPropertyRowDetailVO getEntityPropertyRowDetail(String ontologyUniqueIdentifier, Object entityPrimaryKey);
 }

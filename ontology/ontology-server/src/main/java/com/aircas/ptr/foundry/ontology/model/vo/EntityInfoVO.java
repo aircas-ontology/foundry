@@ -19,7 +19,7 @@ import java.util.List;
 public class EntityInfoVO {
 
     @ApiModelProperty(name = "ontologyUniqueIdentifier",value = "本体id")
-    private Object ontologyUniqueIdentifier;
+    private String ontologyUniqueIdentifier;
 
     @ApiModelProperty(name = "ontologyName",value = "本体名称")
     private String ontologyName;
