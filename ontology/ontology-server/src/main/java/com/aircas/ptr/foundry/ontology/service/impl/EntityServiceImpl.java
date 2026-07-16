@@ -9,10 +9,7 @@ import com.aircas.ptr.foundry.ontology.model.common.VisibilityWindow;
 import com.aircas.ptr.foundry.ontology.model.document.EntityNode;
 import com.aircas.ptr.foundry.ontology.model.document.EntityRelation;
 import com.aircas.ptr.foundry.ontology.model.dto.ActionContextInfoDTO;
-import com.aircas.ptr.foundry.ontology.model.enums.FilterNodeTypeEnum;
-import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamCategoryEnum;
-import com.aircas.ptr.foundry.ontology.model.enums.QueryOpEnum;
-import com.aircas.ptr.foundry.ontology.model.enums.Status;
+import com.aircas.ptr.foundry.ontology.model.enums.*;
 import com.aircas.ptr.foundry.ontology.model.param.*;
 import com.aircas.ptr.foundry.ontology.model.po.*;
 import com.aircas.ptr.foundry.ontology.model.vo.*;
@@ -336,7 +333,8 @@ public class EntityServiceImpl implements EntityService {
                         columns,
                         tableMapping.getTargetColumnName(),
                         orderBy,
-                        10
+                        10,
+                        QuerySortEnum.DESC.getValue()
                 );
 
                 if (CollectionUtils.isNotEmpty(otherData)) {
@@ -365,12 +363,12 @@ public class EntityServiceImpl implements EntityService {
     }
 
     @Override
-    public EntityPropertyRowDetailVO getEntityPropertyRowDetail(String ontologyUniqueIdentifier, Object entityPrimaryKey) {
+    public EntityPropertyRowDetailVO getEntityPropertyRowDetail(EntityPropertyRowQueryParam param) {
 
         List<EntityPropertyRowDetailVO.PropertyGroup> propertyGroups = Lists.newArrayList();
 
         var props = propertyMapper.selectList(new LambdaQueryWrapper<OntologyProperty>()
-                        .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier))
+                        .eq(OntologyProperty::getOntologyUniqueIdentifier, param.getOntologyUniqueIdentifier()))
                 .stream()
                 .filter(v -> StringUtils.isNotEmpty(v.getDatasourceColumnName()))
                 .collect(Collectors.toList());
@@ -378,15 +376,15 @@ public class EntityServiceImpl implements EntityService {
         var primaryKeyProp = props.stream().filter(v -> v.getIsPrimaryKey() == 1).findFirst();
         if (!primaryKeyProp.isPresent() || StringUtils.isEmpty(primaryKeyProp.get().getDatasourceColumnName())) {
             return EntityPropertyRowDetailVO.builder()
-                    .ontologyUniqueIdentifier(ontologyUniqueIdentifier)
-                    .entityPrimaryKey(entityPrimaryKey)
+                    .ontologyUniqueIdentifier(param.getOntologyUniqueIdentifier())
+                    .entityPrimaryKey(param.getEntityPrimaryKey())
                     .build();
         }
         var propsMap = props.stream().collect(Collectors.groupingBy(v -> v.getDatasourceId()));
         //查询主属性表对应的实体数据
         var pk = primaryKeyProp.get();
         var pkColumns = propsMap.get(pk.getDatasourceId()).stream().map(v -> v.getDatasourceColumnName()).collect(Collectors.toList());
-        var primaryData = objectMapper.queryDataByPrimaryKey(pk.getDatasourceId(), pkColumns, pk.getDatasourceColumnName(), entityPrimaryKey);
+        var primaryData = objectMapper.queryDataByPrimaryKey(pk.getDatasourceId(), pkColumns, pk.getDatasourceColumnName(), param.getEntityPrimaryKey());
         var propertyMap = propsMap.get(pk.getDatasourceId()).stream().collect(Collectors.toMap(v -> v.getDatasourceColumnName(), v -> v));
         var propertyInfoList = primaryData.get(0).entrySet().stream().<EntityPropertyRowDetailVO.PropertyInfo>map(entry -> {
             var colName = entry.getKey();
@@ -422,12 +420,13 @@ public class EntityServiceImpl implements EntityService {
                 var orderBy = tableMetadataMapper.queryPrimaryKeyColumnName(entry.getKey());
                 var columns = entry.getValue().stream().map(v -> v.getDatasourceColumnName()).collect(Collectors.toList());
                 var otherData = objectMapper.queryByJoinTable(
-                        entityPrimaryKey,
+                        param.getEntityPrimaryKey(),
                         tableMapping.getTargetTableName(),
                         columns,
                         tableMapping.getTargetColumnName(),
                         orderBy,
-                        100
+                        100,
+                        param.getSort().getValue()
                 );
 
                 if (CollectionUtils.isNotEmpty(otherData)) {
@@ -459,8 +458,8 @@ public class EntityServiceImpl implements EntityService {
         });
 
         return EntityPropertyRowDetailVO.builder()
-                .ontologyUniqueIdentifier(ontologyUniqueIdentifier)
-                .entityPrimaryKey(entityPrimaryKey)
+                .ontologyUniqueIdentifier(param.getOntologyUniqueIdentifier())
+                .entityPrimaryKey(param.getEntityPrimaryKey())
                 .propertyGroups(propertyGroups)
                 .build();
     }

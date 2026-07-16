@@ -93,7 +93,7 @@
         </if>
         FROM ${joinTableName} t
         WHERE t."${joinTableKey}" = #{primaryKeyValue}
-        ORDER BY t."${joinTableOrderBy}" DESC
+        ORDER BY t."${joinTableOrderBy}" ${sort}
         <if test="count != null">
             LIMIT ${count}
         </if>

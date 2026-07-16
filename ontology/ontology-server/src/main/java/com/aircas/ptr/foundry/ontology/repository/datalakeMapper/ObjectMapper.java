@@ -96,15 +96,17 @@ public interface ObjectMapper extends BaseMapper<Object> {
                                                  @Param("joinTableColumnNames") List<String> joinTableColumnNames,
                                                  @Param("joinTableKey") String joinTableKey,
                                                  @Param("joinTableOrderBy") String joinTableOrderBy,
-                                                 @Param("count") Integer count);
+                                                 @Param("count") Integer count,
+                                                 @Param("sort") String sort);
 
     default List<Map<String, Object>> queryByJoinTable(@Param("primaryKeyValue") Object primaryKeyValue,
                                                        @Param("joinTableName") String joinTableName,
                                                        @Param("joinTableColumnNames") List<String> joinTableColumnNames,
                                                        @Param("joinTableKey") String joinTableKey,
                                                        @Param("joinTableOrderBy") String joinTableOrderBy,
-                                                       @Param("count") Integer count) {
-        var records = queryJoinTableData(primaryKeyValue, joinTableName, joinTableColumnNames, joinTableKey, joinTableOrderBy, count);
+                                                       @Param("count") Integer count,
+                                                       @Param("sort") String sort) {
+        var records = queryJoinTableData(primaryKeyValue, joinTableName, joinTableColumnNames, joinTableKey, joinTableOrderBy, count, sort);
         return populate(records, joinTableName, joinTableColumnNames);
     }
 

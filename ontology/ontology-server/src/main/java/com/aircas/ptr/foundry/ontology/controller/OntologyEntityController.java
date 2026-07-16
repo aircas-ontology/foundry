@@ -64,9 +64,9 @@ public class OntologyEntityController {
     }
 
     @PostMapping("/row_detail")
-    @ApiOperation(value = "根据实体id查询所有属性（按行返回，动态属性默认id倒序展示前100条）")
-    public RestResult<EntityPropertyRowDetailVO> getEntityPropertyRowDetail(@RequestBody @Valid EntityQueryParam param) {
-        return RestResult.ofData(entityService.getEntityPropertyRowDetail(param.getOntologyUniqueIdentifier(), param.getEntityPrimaryKey()));
+    @ApiOperation(value = "根据实体id查询所有属性（按行返回，每类动态属性默认展示前100条）")
+    public RestResult<EntityPropertyRowDetailVO> getEntityPropertyRowDetail(@RequestBody @Valid EntityPropertyRowQueryParam param) {
+        return RestResult.ofData(entityService.getEntityPropertyRowDetail(param));
     }
 
     @PostMapping("/link")
