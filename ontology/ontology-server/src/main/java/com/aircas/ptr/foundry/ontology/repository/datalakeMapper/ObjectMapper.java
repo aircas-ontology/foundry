@@ -111,17 +111,17 @@ public interface ObjectMapper extends BaseMapper<Object> {
     }
 
 
-    List<Map<String, Object>> queryByPrimaryKey(@Param("tableName") String tableName,
-                                                @Param("columnNames") List<String> columnNames,
-                                                @Param("primaryKeyColumn") String primaryKeyColumn,
-                                                @Param("primaryKeyValue") Object primaryKeyValue);
+    Map<String, Object> queryByPrimaryKey(@Param("tableName") String tableName,
+                                          @Param("columnNames") List<String> columnNames,
+                                          @Param("primaryKeyColumn") String primaryKeyColumn,
+                                          @Param("primaryKeyValue") Object primaryKeyValue);
 
-    default List<Map<String, Object>> queryDataByPrimaryKey(@Param("tableName") String tableName,
-                                                            @Param("columnNames") List<String> columnNames,
-                                                            @Param("primaryKeyColumn") String primaryKeyColumn,
-                                                            @Param("primaryKeyValue") Object primaryKeyValue) {
+    default Map<String, Object> queryDataByPrimaryKey(@Param("tableName") String tableName,
+                                                      @Param("columnNames") List<String> columnNames,
+                                                      @Param("primaryKeyColumn") String primaryKeyColumn,
+                                                      @Param("primaryKeyValue") Object primaryKeyValue) {
         var records = queryByPrimaryKey(tableName, columnNames, primaryKeyColumn, primaryKeyValue);
-        return populate(records, tableName, columnNames);
+        return populate(Lists.newArrayList(records), tableName, columnNames).get(0);
     }
 
 
@@ -153,6 +153,16 @@ public interface ObjectMapper extends BaseMapper<Object> {
                            @Param("columnValues") List<Map<String, Object>> columnValues);
 
     void deleteByTableName(@Param("tableName") String tableName);
+
+
+    void deleteByTableNameAndColumn(@Param("tableName") String tableName,
+                                    @Param("columnName") String columnName,
+                                    @Param("columnValue") Object columnValue);
+
+    void deleteByTableNameAndColumns(@Param("tableName") String tableName,
+                                     @Param("columnName") String columnName,
+                                     @Param("columnValues") List<Object> columnValues);
+
 
     List<Map<String, Object>> queryBySql(@Param("sql") String sql);
 

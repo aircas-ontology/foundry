@@ -20,6 +20,11 @@ import java.util.List;
 @Accessors(chain = true)
 public class EntityDatasourceSchemaChangeEventDTO {
 
+    /**
+     * 本体唯一标识
+     */
+    private String ontologyUniqueIdentifier;
+
 
     /**
      * 事件类型

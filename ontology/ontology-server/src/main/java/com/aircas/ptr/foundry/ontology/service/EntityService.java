@@ -57,4 +57,12 @@ public interface EntityService {
     Page<List<EntityPropertyGenericQueryVO>> genericQuery(EntityPropertyGenericQueryParam param);
 
     EntityPropertyRowDetailVO getEntityPropertyRowDetail(EntityPropertyRowQueryParam param);
+
+    List<Object> createEntities(EntityCreateParam params);
+
+    void insertEntityProperty(EntityPropertyInsertParam param);
+
+    void updateEntityProperty(EntityPropertyUpdateParam param);
+
+    void deleteEntityProperty(EntityPropertyDeleteParam param);
 }

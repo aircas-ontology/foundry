@@ -1,47 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyActionMapper">
-    <resultMap id="BaseResultMap" type="com.aircas.ptr.foundry.ontology.model.po.OntologyAction">
-        <!-- @mbg.generated: generated automatically, do not modify! -->
-        <result column="api" jdbcType="VARCHAR" property="api"/>
-        <result column="function_api" jdbcType="VARCHAR" property="functionApi"/>
-        <result column="ontology_unique_identifier" jdbcType="VARCHAR" property="ontologyUniqueIdentifier"/>
-        <result column="description" jdbcType="VARCHAR" property="description"/>
-        <result column="id" jdbcType="BIGINT" property="id"/>
-        <result column="create_time" jdbcType="TIMESTAMP" property="createTime"/>
-        <result column="update_time" jdbcType="TIMESTAMP" property="updateTime"/>
-        <result column="display_name" jdbcType="VARCHAR" property="displayName"/>
-        <result column="status" jdbcType="BIGINT" property="status"/>
-    </resultMap>
-    <sql id="Base_Column_List">
-        <!-- @mbg.generated: generated automatically, do not modify! -->
-        api, function_api, ontology_unique_identifier, description, id, create_time, update_time, display_name,
-        status,handle_type
-    </sql>
 
-    <select id="selectByApi" resultMap="BaseResultMap">
-        <!-- @mbg.generated: generated automatically, do not modify! -->
-        select
-        <include refid="Base_Column_List"/>
-        from ontology_action
-        where api = #{api,jdbcType=VARCHAR}
-    </select>
-
-    <select id="selectByFunctionApi" resultMap="BaseResultMap">
-        <!-- @mbg.generated: generated automatically, do not modify! -->
-        select
-        <include refid="Base_Column_List"/>
-        from ontology_action
-        where functionApi = #{functionApi,jdbcType=VARCHAR}
-    </select>
-
-    <select id="selectByOntologyIdentifier" resultMap="BaseResultMap">
-        <!-- @mbg.generated: generated automatically, do not modify! -->
-        select
-        <include refid="Base_Column_List"/>
-        from ontology_action
-        where ontology_unique_identifier = #{ontologyUniqueIdentifier,jdbcType=VARCHAR}
-    </select>
 
 
 

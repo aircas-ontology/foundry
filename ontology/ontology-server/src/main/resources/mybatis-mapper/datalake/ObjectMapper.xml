@@ -198,7 +198,24 @@
 
 
     <delete id="deleteByTableName" parameterType="java.lang.String">
+        DELETE
+        FROM "${tableName}"
+    </delete>
+
+
+    <delete id="deleteByTableNameAndColumn">
+        DELETE
+        FROM "${tableName}"
+        WHERE "${columnName}" = #{columnValue}
+    </delete>
+
+
+    <delete id="deleteByTableNameAndColumns">
         DELETE FROM "${tableName}"
+        WHERE "${columnName}" IN
+        <foreach item="item" index="index" collection="columnValues" open="(" separator="," close=")">
+            #{item}
+        </foreach>
     </delete>
 
 

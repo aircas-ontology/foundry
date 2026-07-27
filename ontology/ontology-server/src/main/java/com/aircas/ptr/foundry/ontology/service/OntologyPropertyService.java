@@ -38,4 +38,6 @@ public interface OntologyPropertyService extends IService<OntologyProperty> {
     void autoBindDatasource(String ontologyIdentifier);
 
     List<String> getStorageGroup(String ontologyUniqueIdentifier);
+
+    void notifyBuildPipeline(String ontologyIdentifier);
 }

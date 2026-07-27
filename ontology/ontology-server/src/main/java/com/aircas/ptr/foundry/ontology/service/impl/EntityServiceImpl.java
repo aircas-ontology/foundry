@@ -299,7 +299,7 @@ public class EntityServiceImpl implements EntityService {
         var pkColumns = propsMap.get(pk.getDatasourceId()).stream().map(v -> v.getDatasourceColumnName()).collect(Collectors.toList());
         var primaryData = objectMapper.queryDataByPrimaryKey(pk.getDatasourceId(), pkColumns, pk.getDatasourceColumnName(), entityPrimaryKey);
         var propertyMap = propsMap.get(pk.getDatasourceId()).stream().collect(Collectors.toMap(v -> v.getDatasourceColumnName(), v -> v));
-        var details = primaryData.get(0).entrySet().stream().<EntityPropertyDetailVO>map(entry -> {
+        var details = primaryData.entrySet().stream().<EntityPropertyDetailVO>map(entry -> {
             var colName = entry.getKey();
             var colValue = entry.getValue();
             var p = propertyMap.get(colName);
@@ -386,7 +386,7 @@ public class EntityServiceImpl implements EntityService {
         var pkColumns = propsMap.get(pk.getDatasourceId()).stream().map(v -> v.getDatasourceColumnName()).collect(Collectors.toList());
         var primaryData = objectMapper.queryDataByPrimaryKey(pk.getDatasourceId(), pkColumns, pk.getDatasourceColumnName(), param.getEntityPrimaryKey());
         var propertyMap = propsMap.get(pk.getDatasourceId()).stream().collect(Collectors.toMap(v -> v.getDatasourceColumnName(), v -> v));
-        var propertyInfoList = primaryData.get(0).entrySet().stream().<EntityPropertyRowDetailVO.PropertyInfo>map(entry -> {
+        var propertyInfoList = primaryData.entrySet().stream().<EntityPropertyRowDetailVO.PropertyInfo>map(entry -> {
             var colName = entry.getKey();
             var colValue = entry.getValue();
             var p = propertyMap.get(colName);
@@ -400,11 +400,12 @@ public class EntityServiceImpl implements EntityService {
                     .propertyApiName(p.getApiName())
                     .build();
         }).collect(Collectors.toList());
-        List<List<EntityPropertyRowDetailVO.PropertyInfo>> group = Lists.newArrayList();
-        group.add(propertyInfoList);
         propertyGroups.add(EntityPropertyRowDetailVO.PropertyGroup.builder()
                 .storageGroup(pk.getStorageGroup())
-                .props(group)
+                .groupDataList(Lists.newArrayList(EntityPropertyRowDetailVO.PropertyGroupData.builder()
+                        .dataPrimaryKey(param.getEntityPrimaryKey())
+                        .props(propertyInfoList)
+                        .build()))
                 .build());
 
         //查询关联属性表对应的实体数据
@@ -419,6 +420,7 @@ public class EntityServiceImpl implements EntityService {
                 }
                 var orderBy = tableMetadataMapper.queryPrimaryKeyColumnName(entry.getKey());
                 var columns = entry.getValue().stream().map(v -> v.getDatasourceColumnName()).collect(Collectors.toList());
+                columns.add(orderBy);
                 var otherData = objectMapper.queryByJoinTable(
                         param.getEntityPrimaryKey(),
                         tableMapping.getTargetTableName(),
@@ -430,11 +432,17 @@ public class EntityServiceImpl implements EntityService {
                 );
 
                 if (CollectionUtils.isNotEmpty(otherData)) {
-                    List<List<EntityPropertyRowDetailVO.PropertyInfo>> otherPropGroup = Lists.newArrayList();
+                    List<EntityPropertyRowDetailVO.PropertyGroupData> groupDataList = Lists.newArrayList();
                     var otherPropertyMap = propsMap.get(entry.getKey()).stream().collect(Collectors.toMap(v -> v.getDatasourceColumnName(), v -> v));
                     for (var row : otherData) {
+                        EntityPropertyRowDetailVO.PropertyGroupData groupData = new EntityPropertyRowDetailVO.PropertyGroupData();
                         List<EntityPropertyRowDetailVO.PropertyInfo> propertyInfos = Lists.newArrayList();
                         for (var col : row.keySet()) {
+                            if (col.equals(orderBy)) {
+                                var dataPk = row.get(col);
+                                groupData.setDataPrimaryKey(dataPk);
+                                continue;
+                            }
                             var p = otherPropertyMap.get(col);
                             var info = EntityPropertyRowDetailVO.PropertyInfo.builder()
                                     .tag(p.getTag())
@@ -447,11 +455,12 @@ public class EntityServiceImpl implements EntityService {
                                     .build();
                             propertyInfos.add(info);
                         }
-                        otherPropGroup.add(propertyInfos);
+                        groupData.setProps(propertyInfos);
+                        groupDataList.add(groupData);
                     }
                     propertyGroups.add(EntityPropertyRowDetailVO.PropertyGroup.builder()
                             .storageGroup(entry.getValue().get(0).getStorageGroup())
-                            .props(otherPropGroup)
+                            .groupDataList(groupDataList)
                             .build());
                 }
             }
@@ -462,6 +471,196 @@ public class EntityServiceImpl implements EntityService {
                 .entityPrimaryKey(param.getEntityPrimaryKey())
                 .propertyGroups(propertyGroups)
                 .build();
+    }
+
+    @Transactional(transactionManager = "datalakeTransactionManager")
+    @Override
+    public List<Object> createEntities(EntityCreateParam param) {
+        var ontologyIdentifier = param.getOntologyIdentifier();
+        var ontologyProperties = propertyMapper.selectList(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyIdentifier));
+        var optionalPkProperty = ontologyProperties.stream().filter(p -> p.getIsPrimaryKey() == 1).findFirst();
+        PreconditionUtils.checkArgument(optionalPkProperty.isPresent() && StringUtils.isNotEmpty(optionalPkProperty.get().getDatasourceId()), "主键不存在或未绑定数据源", HttpStatus.BAD_REQUEST);
+        var pk = optionalPkProperty.get();
+        var tableFieldMappings = tableFieldMappingMapper.selectList(new LambdaQueryWrapper<TableFieldMapping>().eq(TableFieldMapping::getSourceTableName, pk.getDatasourceId()));
+
+        var ontologyPropertyMap = ontologyProperties.stream().collect(Collectors.toMap(v -> v.getApiName(), v -> v));
+        List<Object> entityPrimaryKeys = Lists.newArrayList();
+        //插入实体
+        param.getEntityList().forEach(entity -> {
+            var entityGroupProperties = entity.getEntityProperties();
+            var mainStorage = entityGroupProperties.stream().filter(v -> v.getStorageGroup().equals("main")).findFirst().get();
+            //插入实体主属性
+            var mainProps = mainStorage.getProps().get(0);
+            var columnValues = mainProps.stream().collect(Collectors.toMap(v -> {
+                        var columnName = ontologyPropertyMap.get(v.getPropertyApiName()).getDatasourceColumnName();
+                        PreconditionUtils.checkArgument(StringUtils.isNotEmpty(columnName), v.getPropertyApiName() + "未关联数据源");
+                        return columnName;
+                    },
+                    v -> v.getPropertyValue()));
+            var entityPK = objectMapper.batchInsertObjectReturnKey(pk.getDatasourceId(), Lists.newArrayList(columnValues), pk.getDatasourceColumnName()).get(0);
+            entityPrimaryKeys.add(entityPK);
+            //插入实体关联属性
+            var entityProperties = entityGroupProperties.stream().filter(v -> !v.getStorageGroup().equals("main")).collect(Collectors.toList());
+            entityProperties.stream().forEach(entityProperty -> {
+                var storageGroup = entityProperty.getStorageGroup();
+                var ontologyPropertyList = ontologyProperties.stream().filter(v -> StringUtils.equals(storageGroup, v.getStorageGroup()) && StringUtils.isNotEmpty(v.getDatasourceId()))
+                        .collect(Collectors.toList());
+                PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(ontologyPropertyList), "存储分组" + storageGroup + "未绑定数据源");
+                var ds = ontologyPropertyList.get(0).getDatasourceId();
+                var tableFieldMapping = tableFieldMappings.stream().filter(v -> v.getTargetTableName().equals(ds)).findFirst().get();
+
+                List<Map<String, Object>> otherPropertyColumnValues = Lists.newArrayList();
+
+                entityProperty.getProps().forEach(props -> {
+                    Map<String, Object> columnsMap = new HashMap<>();
+                    ontologyPropertyList.forEach(prop -> columnsMap.put(prop.getDatasourceColumnName(), null));
+                    props.stream().forEach(v -> {
+                        var columnName = ontologyPropertyMap.get(v.getPropertyApiName()).getDatasourceColumnName();
+                        PreconditionUtils.checkArgument(StringUtils.isNotEmpty(columnName), v.getPropertyApiName() + "未关联数据源");
+                        columnsMap.put(columnName, v.getPropertyValue());
+                    });
+                    columnsMap.put(tableFieldMapping.getTargetColumnName(), entityPK);
+                    otherPropertyColumnValues.add(columnsMap);
+                });
+                objectMapper.batchInsertObject(ds, otherPropertyColumnValues);
+            });
+        });
+        //todo 创建实体节点和关系
+        return entityPrimaryKeys;
+    }
+
+    @Transactional(transactionManager = "datalakeTransactionManager")
+    @Override
+    public void insertEntityProperty(EntityPropertyInsertParam param) {
+
+        var ontologyIdentifier = param.getOntologyIdentifier();
+        var ontologyProperties = propertyMapper.selectList(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyIdentifier));
+        var optionalPkProperty = ontologyProperties.stream().filter(p -> p.getIsPrimaryKey() == 1).findFirst();
+        PreconditionUtils.checkArgument(optionalPkProperty.isPresent() && StringUtils.isNotEmpty(optionalPkProperty.get().getDatasourceId()), "主键不存在或未绑定数据源", HttpStatus.BAD_REQUEST);
+        var pk = optionalPkProperty.get();
+        //校验实体id是否存在
+        var pkData = objectMapper.queryByPrimaryKey(pk.getDatasourceId(), Lists.newArrayList(pk.getDatasourceColumnName()), pk.getDatasourceColumnName(), param.getEntityPrimaryKey());
+        PreconditionUtils.checkArgument(MapUtils.isNotEmpty(pkData), "实体" + param.getEntityPrimaryKey() + "不存在");
+
+        var tableFieldMappings = tableFieldMappingMapper.selectList(new LambdaQueryWrapper<TableFieldMapping>().eq(TableFieldMapping::getSourceTableName, pk.getDatasourceId()));
+        var ontologyPropertyMap = ontologyProperties.stream().collect(Collectors.toMap(v -> v.getApiName(), v -> v));
+
+        //插入实体关联属性
+        var entityProperties = param.getEntityProperties().stream()
+                .filter(v -> !v.getStorageGroup().equals("main"))
+                .collect(Collectors.toList());
+
+        entityProperties.stream().forEach(entityProperty -> {
+            var storageGroup = entityProperty.getStorageGroup();
+            var ontologyPropertyList = ontologyProperties.stream().filter(v -> StringUtils.equals(storageGroup, v.getStorageGroup()) && StringUtils.isNotEmpty(v.getDatasourceId()))
+                    .collect(Collectors.toList());
+            PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(ontologyPropertyList), "存储分组" + storageGroup + "未绑定数据源");
+            var ds = ontologyPropertyList.get(0).getDatasourceId();
+            var tableFieldMapping = tableFieldMappings.stream().filter(v -> v.getTargetTableName().equals(ds)).findFirst().get();
+
+            List<Map<String, Object>> otherPropertyColumnValues = Lists.newArrayList();
+
+            entityProperty.getProps().forEach(props -> {
+                Map<String, Object> columnsMap = new HashMap<>();
+                ontologyPropertyList.forEach(prop -> columnsMap.put(prop.getDatasourceColumnName(), null));
+                props.stream().forEach(v -> {
+                    var columnName = ontologyPropertyMap.get(v.getPropertyApiName()).getDatasourceColumnName();
+                    PreconditionUtils.checkArgument(StringUtils.isNotEmpty(columnName), v.getPropertyApiName() + "未关联数据源");
+                    columnsMap.put(columnName, v.getPropertyValue());
+                });
+                columnsMap.put(tableFieldMapping.getTargetColumnName(), param.getEntityPrimaryKey());
+                otherPropertyColumnValues.add(columnsMap);
+            });
+            objectMapper.batchInsertObject(ds, otherPropertyColumnValues);
+        });
+
+    }
+
+    @Transactional(transactionManager = "datalakeTransactionManager")
+    @Override
+    public void updateEntityProperty(EntityPropertyUpdateParam param) {
+        //获取本体、属性、主键信息
+        var ontologyIdentifier = param.getOntologyIdentifier();
+        var ontologyProperties = propertyMapper.selectList(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyIdentifier));
+        var optionalPkProperty = ontologyProperties.stream().filter(p -> p.getIsPrimaryKey() == 1).findFirst();
+        PreconditionUtils.checkArgument(optionalPkProperty.isPresent() && StringUtils.isNotEmpty(optionalPkProperty.get().getDatasourceId()), "主键不存在或未绑定数据源", HttpStatus.BAD_REQUEST);
+        var pk = optionalPkProperty.get();
+        //校验实体id是否存在
+        var pkData = objectMapper.queryByPrimaryKey(pk.getDatasourceId(), Lists.newArrayList(pk.getDatasourceColumnName()), pk.getDatasourceColumnName(), param.getEntityPrimaryKey());
+        PreconditionUtils.checkArgument(MapUtils.isNotEmpty(pkData), "实体" + param.getEntityPrimaryKey() + "不存在");
+        var ontologyPropertyMap = ontologyProperties.stream().collect(Collectors.toMap(v -> v.getApiName(), v -> v));
+        // 校验存储分组
+        var storageGroup = param.getStorageGroup();
+        var ontologyPropertyList = ontologyProperties.stream().filter(v -> StringUtils.equals(storageGroup, v.getStorageGroup()) && StringUtils.isNotEmpty(v.getDatasourceId()))
+                .collect(Collectors.toList());
+        PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(ontologyPropertyList), "存储分组" + storageGroup + "未绑定数据源");
+        var ds = ontologyPropertyList.get(0).getDatasourceId();
+        var primaryKeyColumnName = tableMetadataMapper.queryPrimaryKeyColumnName(ds);
+        // 校验dataPrimaryKey
+        if (storageGroup.equals("main")) {
+            PreconditionUtils.checkArgument(Objects.equals(param.getEntityPrimaryKey(), param.getDataPrimaryKey()), "属性数据主键和实体主键不一致");
+        } else {
+            var tableFieldMapping = tableFieldMappingMapper.selectOne(new LambdaQueryWrapper<TableFieldMapping>()
+                    .eq(TableFieldMapping::getSourceTableName, pk.getDatasourceId()).eq(TableFieldMapping::getTargetTableName, ds));
+            var existDataMap = objectMapper.queryByPrimaryKey(ds, Lists.newArrayList(), primaryKeyColumnName, param.getDataPrimaryKey());
+            if (MapUtils.isEmpty(existDataMap)) {
+                return;
+            }
+            PreconditionUtils.checkArgument(existDataMap.get(tableFieldMapping.getTargetColumnName()).equals(param.getEntityPrimaryKey()), "无权限修改其他实体的属性数据", HttpStatus.FORBIDDEN);
+        }
+
+        //生成属性更新map
+        Map<String, Object> columnsMap = new HashMap<>();
+        param.getProps().stream().forEach(v -> {
+            PreconditionUtils.checkArgument(!v.getPropertyApiName().equals(pk.getApiName()), "属性主键不能修改");
+            var columnName = ontologyPropertyMap.get(v.getPropertyApiName()).getDatasourceColumnName();
+            PreconditionUtils.checkArgument(StringUtils.isNotEmpty(columnName), v.getPropertyApiName() + "未关联数据源");
+            columnsMap.put(columnName, v.getPropertyValue());
+        });
+        objectMapper.updateObject(ds, columnsMap, primaryKeyColumnName, param.getDataPrimaryKey());
+    }
+
+    @Transactional(transactionManager = "datalakeTransactionManager")
+    @Override
+    public void deleteEntityProperty(EntityPropertyDeleteParam param) {
+        //获取本体、属性、主键信息
+        var ontologyIdentifier = param.getOntologyIdentifier();
+        var ontologyProperties = propertyMapper.selectList(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyIdentifier));
+        var optionalPkProperty = ontologyProperties.stream().filter(p -> p.getIsPrimaryKey() == 1).findFirst();
+        PreconditionUtils.checkArgument(optionalPkProperty.isPresent() && StringUtils.isNotEmpty(optionalPkProperty.get().getDatasourceId()), "主键不存在或未绑定数据源", HttpStatus.BAD_REQUEST);
+        var pk = optionalPkProperty.get();
+        //校验实体id是否存在
+        var pkData = objectMapper.queryByPrimaryKey(pk.getDatasourceId(), Lists.newArrayList(pk.getDatasourceColumnName()), pk.getDatasourceColumnName(), param.getEntityPrimaryKey());
+        PreconditionUtils.checkArgument(MapUtils.isNotEmpty(pkData), "实体" + param.getEntityPrimaryKey() + "不存在");
+        // 校验存储分组
+        var storageGroup = param.getStorageGroup();
+        var ontologyPropertyList = ontologyProperties.stream().filter(v -> StringUtils.equals(storageGroup, v.getStorageGroup()) && StringUtils.isNotEmpty(v.getDatasourceId()))
+                .collect(Collectors.toList());
+        PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(ontologyPropertyList), "存储分组" + storageGroup + "未绑定数据源");
+        var ds = ontologyPropertyList.get(0).getDatasourceId();
+        var primaryKeyColumnName = tableMetadataMapper.queryPrimaryKeyColumnName(ds);
+        // 校验dataPrimaryKey
+        if (storageGroup.equals("main")) {
+            PreconditionUtils.checkArgument(Objects.equals(param.getEntityPrimaryKey(), param.getDataPrimaryKey()), "属性数据主键和实体主键不一致");
+            //删除实体和所有关联属性
+            objectMapper.deleteByTableNameAndColumn(ds, primaryKeyColumnName, param.getDataPrimaryKey());
+            var tableFieldMappingList = tableFieldMappingMapper.selectList(new LambdaQueryWrapper<TableFieldMapping>().eq(TableFieldMapping::getSourceTableName, ds));
+            tableFieldMappingList.forEach(
+                    tableFieldMapping -> objectMapper.deleteByTableNameAndColumn(tableFieldMapping.getTargetTableName(), tableFieldMapping.getTargetColumnName(), param.getDataPrimaryKey())
+            );
+            //todo 删除实体节点和关系
+
+        } else {
+            var tableFieldMapping = tableFieldMappingMapper.selectOne(new LambdaQueryWrapper<TableFieldMapping>()
+                    .eq(TableFieldMapping::getSourceTableName, pk.getDatasourceId()).eq(TableFieldMapping::getTargetTableName, ds));
+            var existDataMap = objectMapper.queryByPrimaryKey(ds, Lists.newArrayList(), primaryKeyColumnName, param.getDataPrimaryKey());
+            if (MapUtils.isEmpty(existDataMap)) {
+                return;
+            }
+            PreconditionUtils.checkArgument(existDataMap.get(tableFieldMapping.getTargetColumnName()).equals(param.getEntityPrimaryKey()), "无权限删除其他实体的属性数据", HttpStatus.FORBIDDEN);
+            //删除单个属性
+            objectMapper.deleteByTableNameAndColumn(ds, primaryKeyColumnName, param.getDataPrimaryKey());
+        }
     }
 
 

@@ -90,10 +90,34 @@ public class OntologyEntityController {
     }
 
 
-    @ApiOperation(value = "实体属性更新")
-    @PutMapping("/update")
-    public RestResult updateProperty(@RequestBody @Valid EntityUpdateParam param) {
-        entityService.updateProperty(param);
+    @ApiOperation(value = "批量新增实体，返回实体主键列表")
+    @PostMapping("/create")
+    public RestResult<List<Object>> createEntities(@RequestBody @Valid EntityCreateParam param) {
+        List<Object> ids = entityService.createEntities(param);
+        return RestResult.ofData(ids);
+    }
+
+
+    @ApiOperation(value = "批量插入实体属性")
+    @PostMapping("/insert_property")
+    public RestResult insertEntityProperty(@RequestBody @Valid EntityPropertyInsertParam param) {
+        entityService.insertEntityProperty(param);
+        return RestResult.success();
+    }
+
+
+    @ApiOperation(value = "更新实体属性")
+    @PutMapping("/update_property")
+    public RestResult updateEntityProperty(@RequestBody @Valid EntityPropertyUpdateParam param) {
+        entityService.updateEntityProperty(param);
+        return RestResult.success();
+    }
+
+
+    @ApiOperation(value = "删除实体或已有属性")
+    @DeleteMapping("/delete")
+    public RestResult deleteEntityProperty(@RequestBody @Valid EntityPropertyDeleteParam param) {
+        entityService.deleteEntityProperty(param);
         return RestResult.success();
     }
 

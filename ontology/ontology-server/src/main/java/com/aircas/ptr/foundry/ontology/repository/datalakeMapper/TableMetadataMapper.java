@@ -26,6 +26,7 @@ public interface TableMetadataMapper {
 
     void createTable(@Param("table") TableDesc table, @Param("columns") List<TableColumnDesc> columns);
 
+    void createIndex(@Param("tableName") String tableName, @Param("columnName") String columnName);
 
     void addColumns(@Param("tableName") String tableName, @Param("columns") List<TableColumnDesc> columns);
 

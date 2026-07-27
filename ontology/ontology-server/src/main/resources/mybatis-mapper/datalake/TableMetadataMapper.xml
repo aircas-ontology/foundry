@@ -139,4 +139,10 @@
     </update>
 
 
+    <update id="createIndex">
+        CREATE INDEX IF NOT EXISTS ${tableName}_${columnName}_idx
+            ON "${tableName}" ("${columnName}")
+    </update>
+
+
 </mapper>

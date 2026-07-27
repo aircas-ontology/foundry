@@ -340,13 +340,84 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         updateBatchById(properties);
     }
 
+
+    /**
+     * 针对在途本体实体表数据通知数据组织层构建数据管道
+     *
+     * @param ontologyIdentifier
+     */
+    @Override
+    public void notifyBuildPipeline(String ontologyIdentifier) {
+
+        // 校验本体属性是否存在
+        var props = list(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyIdentifier));
+        if (CollectionUtils.isEmpty(props)) {
+            log.warn("本体{}没有属性", ontologyIdentifier);
+            return;
+        }
+        String pkColumnName = "id";
+        String mainStorageGroup = "main";
+        // 校验本体主键id是否存在且属于主存储分组
+        var pk = props.stream().filter(v -> v.getIsPrimaryKey() == 1).findFirst();
+        if (!pk.isPresent()
+                || !StringUtils.equals(pk.get().getApiName(), pkColumnName)
+                || !StringUtils.equals(pk.get().getStorageGroup(), mainStorageGroup)) {
+            throw new BusinessException("本体" + ontologyIdentifier + "没有id主键属性或id不属于主存储分组");
+        }
+        // 检查属性数据源
+        var alreadyBindProps = props.stream()
+                .filter(p -> StringUtils.isNotEmpty(p.getDatasourceId()) && StringUtils.isNotEmpty(p.getDatasourceColumnName()))
+                .collect(Collectors.toList());
+        if (CollectionUtils.isEmpty(alreadyBindProps)) {
+            log.warn("本体{}所有属性都没有关联数据源", ontologyIdentifier);
+            return;
+        }
+        // 处理已绑定数据源的属性
+        var alreadyBindPropsMap = alreadyBindProps.stream().collect(Collectors.groupingBy(v -> v.getDatasourceId()));
+        var pkDS = pk.get().getDatasourceId();
+
+        alreadyBindPropsMap.forEach((ds, list) -> {
+            //主属性表
+            if (ds.equals(pkDS)) {
+                var columns = list.stream().map(p -> TableColumnDesc.builder()
+                        .columnName(p.getDatasourceColumnName())
+                        .type(OntologyDataTypeEnum.transfer2Pg(p.getPropertyType()))
+                        .description(p.getDisplayName())
+                        .isPrimaryKey(p.getApiName().equals(pkColumnName))
+                        .build()).collect(Collectors.toList());
+                //发送mq消息给数据组织层构建管道
+                notifyEntityTableSchemaChange(ontologyIdentifier, pkDS, true, columns, null, null, DatasourceEventTypeEnum.CREATE_TABLE);
+            }
+            // 其他属性关联表
+            else {
+                var columns = list.stream().map(p -> TableColumnDesc.builder()
+                        .columnName(p.getDatasourceColumnName())
+                        .type(OntologyDataTypeEnum.transfer2Pg(p.getPropertyType()))
+                        .description(p.getDisplayName())
+                        .isPrimaryKey(p.getApiName().equals(pkColumnName))
+                        .build()).collect(Collectors.toList());
+                //增加和主属性关联列
+                var mapping = tableFieldMappingMapper.selectOne(new LambdaQueryWrapper<TableFieldMapping>().eq(TableFieldMapping::getSourceTableName, pkDS).eq(TableFieldMapping::getTargetTableName, ds));
+                columns.add(TableColumnDesc.builder()
+                        .columnName(mapping.getTargetColumnName())
+                        .type("int4")
+                        .isPrimaryKey(false)
+                        .build());
+                //发送mq消息给数据组织层构建管道
+                notifyEntityTableSchemaChange(ontologyIdentifier, ds, false, columns, mapping.getSourceColumnName(), mapping.getTargetColumnName(), DatasourceEventTypeEnum.CREATE_TABLE);
+            }
+        });
+
+
+    }
+
     /**
      * 1 属性自动关联数据源
      * 2 发送mq消息给数据层构建数据管道
-     *
+     * <p>
      * 说明：1 只针对未关联数据源的属性
-     *      2 实体表列的数据只做增量更新，删除属性不会同步删除实体表的列，需要人工确认后通过后门接口删除
-     *      3 修改数据源表的列的数据类型：先解绑属性已有数据源，再修改属性类型，最后重新绑定数据源（若已有实体数据可能会报错）
+     * 2 实体表列的数据只做增量更新，删除属性不会同步删除实体表的列，需要人工确认后通过后门接口删除
+     * 3 修改数据源表的列的数据类型：先解绑属性已有数据源，再修改属性类型，最后重新绑定数据源（若已有实体数据可能会报错）
      *
      * @param ontologyIdentifier
      */
@@ -401,12 +472,12 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                             .build();
                     tableMetadataMapper.createTable(table, columns);
                     //发送mq消息给数据组织层构建管道
-                    notifyEntityTableSchemaChange(mainDS, true, columns, null, null, DatasourceEventTypeEnum.CREATE_TABLE);
+                    notifyEntityTableSchemaChange(ontologyIdentifier, mainDS, true, columns, null, null, DatasourceEventTypeEnum.CREATE_TABLE);
                 } else {
                     //创建列
                     tableMetadataMapper.addColumns(mainDS, columns);
                     //发送mq消息给数据组织层构建管道
-                    notifyEntityTableSchemaChange(mainDS, true, columns, null, null, DatasourceEventTypeEnum.ADD_COLUMN);
+                    notifyEntityTableSchemaChange(ontologyIdentifier, mainDS, true, columns, null, null, DatasourceEventTypeEnum.ADD_COLUMN);
                 }
                 //更新数据源属性
                 list.forEach(p -> p.setDatasourceId(mainDS).setDatasourceColumnName(p.getApiName()));
@@ -436,6 +507,8 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                             .tableName(ds)
                             .build();
                     tableMetadataMapper.createTable(table, columns);
+                    //创建关联舰的索引
+                    tableMetadataMapper.createIndex(table.getTableName(), relatedColumn);
                     //插入属性表关联关系
                     tableFieldMappingMapper.insert(TableFieldMapping.builder()
                             .sourceTableName(mainDS)
@@ -444,12 +517,12 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                             .targetColumnName(relatedColumn)
                             .build());
                     //发送mq消息给数据组织层构建管道
-                    notifyEntityTableSchemaChange(ds, false, columns, pkColumnName, relatedColumn, DatasourceEventTypeEnum.CREATE_TABLE);
+                    notifyEntityTableSchemaChange(ontologyIdentifier, ds, false, columns, pkColumnName, relatedColumn, DatasourceEventTypeEnum.CREATE_TABLE);
                 } else {
                     //创建列
                     tableMetadataMapper.addColumns(ds, columns);
                     //发送mq消息给数据组织层构建管道
-                    notifyEntityTableSchemaChange(ds, false, columns, pkColumnName, relatedColumn, DatasourceEventTypeEnum.ADD_COLUMN);
+                    notifyEntityTableSchemaChange(ontologyIdentifier, ds, false, columns, pkColumnName, relatedColumn, DatasourceEventTypeEnum.ADD_COLUMN);
                 }
                 //更新数据源属性
                 list.forEach(p -> p.setDatasourceId(ds).setDatasourceColumnName(p.getApiName()));
@@ -479,6 +552,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         return result;
     }
 
+
     /**
      * 先只考虑这两种case
      * CREATE_TABLE(1, "创建实体属性表（主表或关联表）"),
@@ -489,7 +563,8 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
      * @param eventType
      */
     @SneakyThrows
-    private void notifyEntityTableSchemaChange(String tableName,
+    private void notifyEntityTableSchemaChange(String ontologyUniqueIdentifier,
+                                               String tableName,
                                                Boolean isMainTable,
                                                List<TableColumnDesc> columns,
                                                String associatedColumnName,
@@ -506,7 +581,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                         .build())
                 .collect(Collectors.toList());
 
-        if (DatasourceEventTypeEnum.CREATE_TABLE.equals(eventType)) {
+        if (DatasourceEventTypeEnum.CREATE_TABLE.equals(eventType) && !columnDTOList.stream().anyMatch(v -> v.getIsPrimaryKey())) {
             columnDTOList.add(EntityDatasourceColumnDTO.builder()
                     .isAssociateKey(false)
                     .isPrimaryKey(true)
@@ -523,6 +598,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                 .build();
 
         var changeEventDTO = EntityDatasourceSchemaChangeEventDTO.builder()
+                .ontologyUniqueIdentifier(ontologyUniqueIdentifier)
                 .type(eventType)
                 .datasource(Lists.newArrayList(datasourceDTO))
                 .build();

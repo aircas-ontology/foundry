@@ -138,6 +138,14 @@ public class OntologyPropertyController {
     }
 
 
+    @PostMapping("/notify_build_pipeline")
+    @ApiOperation(value = "通知数据层构建数据管道")
+    public RestResult notifyBuildPipeline(@RequestBody @Valid OntologyIdentifierParam param) {
+        ontologyPropertyService.notifyBuildPipeline(param.getOntologyIdentifier());
+        return RestResult.success();
+    }
+
+
     @GetMapping("/storage_group")
     @ApiOperation(value = "获得属性存储分组")
     public RestResult<List<String>> getStorageGroup(@RequestParam(required = true, name = "ontologyUniqueIdentifier")

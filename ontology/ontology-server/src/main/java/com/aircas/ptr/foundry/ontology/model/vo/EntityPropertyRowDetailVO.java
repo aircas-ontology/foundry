@@ -40,8 +40,25 @@ public class EntityPropertyRowDetailVO {
         @ApiModelProperty(name = "storageGroup", value = "属性存储分组名称", example = "main")
         private String storageGroup;
 
+        @ApiModelProperty(name = "groupData", value = "属性存储分组数据列表")
+        private List<PropertyGroupData> groupDataList;
+
+    }
+
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @SuperBuilder
+    @Accessors(chain = true)
+    @ApiModel(value = "属性存储分组数据")
+    public static class PropertyGroupData {
+
+        @ApiModelProperty(name = "dataPrimaryKey", value = "数据主键", example = "1")
+        private Object dataPrimaryKey;
+
         @ApiModelProperty(name = "props", value = "属性信息")
-        private List<List<PropertyInfo>> props;
+        private List<PropertyInfo> props;
 
     }
 
