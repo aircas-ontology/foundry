@@ -492,12 +492,12 @@ public class EntityServiceImpl implements EntityService {
             //插入实体主属性
             var mainProps = mainStorage.getProps().get(0);
             var columnValues = mainProps.stream().collect(Collectors.toMap(v -> {
-                        var columnName = ontologyPropertyMap.get(v.getPropertyApiName()).getDatasourceColumnName();
+                        String columnName = ontologyPropertyMap.get(v.getPropertyApiName()).getDatasourceColumnName();
                         PreconditionUtils.checkArgument(StringUtils.isNotEmpty(columnName), v.getPropertyApiName() + "未关联数据源");
                         return columnName;
                     },
                     v -> v.getPropertyValue()));
-            var entityPK = objectMapper.batchInsertObjectReturnKey(pk.getDatasourceId(), Lists.newArrayList(columnValues), pk.getDatasourceColumnName()).get(0);
+            Object entityPK = objectMapper.batchInsertObjectReturnKey(pk.getDatasourceId(), Lists.newArrayList(columnValues), pk.getDatasourceColumnName()).get(0);
             entityPrimaryKeys.add(entityPK);
             //插入实体关联属性
             var entityProperties = entityGroupProperties.stream().filter(v -> !v.getStorageGroup().equals("main")).collect(Collectors.toList());
