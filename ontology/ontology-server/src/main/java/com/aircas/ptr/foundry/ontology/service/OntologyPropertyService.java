@@ -3,6 +3,7 @@ package com.aircas.ptr.foundry.ontology.service;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyVisibilityUpdateParam;
+import com.aircas.ptr.foundry.ontology.model.param.PropertyCategoryCreateParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyDetailVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyInfoVO;
@@ -40,4 +41,6 @@ public interface OntologyPropertyService extends IService<OntologyProperty> {
     List<String> getStorageGroup(String ontologyUniqueIdentifier);
 
     void notifyBuildPipeline(String ontologyIdentifier);
+
+    void createCategory(PropertyCategoryCreateParam param);
 }

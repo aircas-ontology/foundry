@@ -3,6 +3,7 @@ package com.aircas.ptr.foundry.ontology.model.po;
 import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyPropertyPrimaryCategoryEnum;
 import com.baomidou.mybatisplus.annotation.*;
+import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -11,6 +12,7 @@ import lombok.experimental.Accessors;
 
 import java.io.Serializable;
 import java.util.Date;
+import java.util.Map;
 
 /**
  * ontology_property
@@ -22,7 +24,7 @@ import java.util.Date;
 @Accessors(chain = true)
 @NoArgsConstructor
 @AllArgsConstructor
-@TableName("ontology_property")
+@TableName(value = "ontology_property", autoResultMap = true)
 public class OntologyProperty implements Serializable {
     /**
      * 主键自增
@@ -141,6 +143,19 @@ public class OntologyProperty implements Serializable {
      * 数据库
      */
     private String datasourceDb;
+
+
+    /**
+     * 属性分类id
+     */
+    private Integer propertyCategoryId;
+
+
+    /**
+     * 属性元数据，JSONB格式
+     */
+    @TableField(typeHandler = JacksonTypeHandler.class)
+    private Map<String, Object> metadata;
 
 
     private static final long serialVersionUID = 1L;

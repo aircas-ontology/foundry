@@ -8,10 +8,7 @@ import com.aircas.ptr.foundry.ontology.model.dto.EntityDatasourceColumnDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.EntityDatasourceDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.EntityDatasourceSchemaChangeEventDTO;
 import com.aircas.ptr.foundry.ontology.model.enums.DatasourceEventTypeEnum;
-import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyCreateParam;
-import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyUpdateParam;
-import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyVisibilityUpdateParam;
-import com.aircas.ptr.foundry.ontology.model.param.PropertyDatasourceParam;
+import com.aircas.ptr.foundry.ontology.model.param.*;
 import com.aircas.ptr.foundry.ontology.model.po.*;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyDetailVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyInfoVO;
@@ -19,10 +16,7 @@ import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyVisibilityVO;
 import com.aircas.ptr.foundry.ontology.mq.producer.RabbitMQProducer;
 import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.TableFieldMappingMapper;
 import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.TableMetadataMapper;
-import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyActionMappingInMapper;
-import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyLinkGroupMapper;
-import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyMetaMapper;
-import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyPropertyMapper;
+import com.aircas.ptr.foundry.ontology.repository.mainMapper.*;
 import com.aircas.ptr.foundry.ontology.service.EntityService;
 import com.aircas.ptr.foundry.ontology.service.OntologyPropertyService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -35,13 +29,16 @@ import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import lombok.var;
 import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.collections4.MapUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayDeque;
 import java.util.List;
+import java.util.Queue;
 import java.util.stream.Collectors;
 
 @Service
@@ -60,6 +57,11 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
     private final OntologyActionMappingInMapper mappingInMapper;
 
     private final OntologyMetaMapper metaMapper;
+
+    private final PropertyCategoryMapper propertyCategoryMapper;
+
+    private final PropertyMetadataSchemaMapper propertyMetadataSchemaMapper;
+
 
     private final RabbitMQProducer producer;
 
@@ -408,6 +410,47 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
             }
         });
 
+
+    }
+
+    @Transactional(transactionManager = "mainTransactionManager")
+    @Override
+    public void createCategory(PropertyCategoryCreateParam param) {
+        var existCategory = propertyCategoryMapper.selectList(new LambdaQueryWrapper<PropertyCategory>().eq(PropertyCategory::getOntologyUniqueIdentifier, param.getOntologyIdentifier()));
+        var existCategoryMap = existCategory.stream().collect(Collectors.toMap(v -> v.getId(), v -> v));
+        //校验parentId
+        var parentId = param.getParentId();
+        if ((parentId.equals(0) && MapUtils.isEmpty(existCategoryMap)) ||
+                (!parentId.equals(0) && existCategoryMap.containsKey(parentId))) {
+
+            var rootNode = PropertyCategoryCreateParam.CategoryNode.builder()
+                    .parentId(parentId)
+                    .children(param.getChildren())
+                    .name(param.getName())
+                    .build();
+
+            //广度优先遍历
+            Queue<PropertyCategoryCreateParam.CategoryNode> queue = new ArrayDeque<>();
+            queue.add(rootNode);
+
+            while (!queue.isEmpty()) {
+                var node = queue.poll();
+                var parentCategory = PropertyCategory.builder()
+                        .ontologyUniqueIdentifier(param.getOntologyIdentifier())
+                        .name(node.getName())
+                        .parentId(node.getParentId())
+                        .path(node.getName())
+                        .build();
+                propertyCategoryMapper.insert(parentCategory);
+                var generateId = parentCategory.getId();
+                for (var child : node.getChildren()) {
+                    queue.add(child.setParentId(generateId));
+                }
+            }
+
+        } else {
+            throw new BusinessException("无效的parentId：" + parentId, HttpStatus.BAD_REQUEST);
+        }
 
     }
 
