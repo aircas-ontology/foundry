@@ -71,4 +71,7 @@ public class OntologyPropertyCreateParam extends OntologyIdentifierParam {
     @Pattern(regexp = "^[a-zA-Z_$][a-zA-Z0-9_$]{0,62}$", message = "存储分组格式不合法")
     @NotBlank(message = "storageGroup is empty")
     private String storageGroup;
+
+    @ApiModelProperty(name = "categoryId", value = "属性分类id", example = "10")
+    private Integer categoryId;
 }

@@ -37,6 +37,12 @@ public class PreconditionUtils {
         }
     }
 
+    public static void checkNotNull(Object object, String message, HttpStatus httpStatus) {
+        if (object == null) {
+            throw new BusinessException(message, httpStatus);
+        }
+    }
+
     public static void checkNotEmpty(String string, String message) {
         if (StringUtils.isEmpty(string)) {
             throw new BusinessException(message);

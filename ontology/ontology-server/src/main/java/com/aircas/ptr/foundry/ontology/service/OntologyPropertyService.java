@@ -1,13 +1,11 @@
 package com.aircas.ptr.foundry.ontology.service;
 
-import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyCreateParam;
-import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyUpdateParam;
-import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyVisibilityUpdateParam;
-import com.aircas.ptr.foundry.ontology.model.param.PropertyCategoryCreateParam;
+import com.aircas.ptr.foundry.ontology.model.param.*;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyDetailVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyVisibilityVO;
+import com.aircas.ptr.foundry.ontology.model.vo.PropertyCategoryVO;
 import com.baomidou.mybatisplus.extension.service.IService;
 
 import java.util.List;
@@ -43,4 +41,10 @@ public interface OntologyPropertyService extends IService<OntologyProperty> {
     void notifyBuildPipeline(String ontologyIdentifier);
 
     void createCategory(PropertyCategoryCreateParam param);
+
+    PropertyCategoryVO getCategory(String ontologyUniqueIdentifier);
+
+    void deleteCategory(PropertyCategoryDeleteParam param);
+
+    void updateCategory(PropertyCategoryUpdateParam param);
 }

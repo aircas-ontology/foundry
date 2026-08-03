@@ -73,4 +73,10 @@ public class OntologyPropertyInfoVO {
      */
     @ApiModelProperty(name = "storageGroup", value = "属性存储分组", example = "123")
     private String storageGroup;
+
+    /**
+     * 属性分类id
+     */
+    @ApiModelProperty(name = "categoryId", value = "属性分类id", example = "10")
+    private Integer categoryId;
 }

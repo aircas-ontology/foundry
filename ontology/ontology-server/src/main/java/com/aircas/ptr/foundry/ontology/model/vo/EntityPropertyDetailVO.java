@@ -42,4 +42,7 @@ public class EntityPropertyDetailVO  {
     @ApiModelProperty(name = "primaryKey", value = "主键", example = "1")
     private Object entityPrimaryKey;
 
+    @ApiModelProperty(name = "categoryId", value = "属性分类id", example = "10")
+    private Integer categoryId;
+
 }

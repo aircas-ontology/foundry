@@ -91,6 +91,9 @@ public class EntityPropertyRowDetailVO {
         @ApiModelProperty(name = "propertyValues", value = "属性值", example = "1")
         private Object propertyValue;
 
+        @ApiModelProperty(name = "categoryId", value = "属性分类id", example = "10")
+        private Integer categoryId;
+
 
     }
 

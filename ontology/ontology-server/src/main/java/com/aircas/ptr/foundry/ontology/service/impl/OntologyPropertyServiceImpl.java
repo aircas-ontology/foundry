@@ -13,12 +13,14 @@ import com.aircas.ptr.foundry.ontology.model.po.*;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyDetailVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyVisibilityVO;
+import com.aircas.ptr.foundry.ontology.model.vo.PropertyCategoryVO;
 import com.aircas.ptr.foundry.ontology.mq.producer.RabbitMQProducer;
 import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.TableFieldMappingMapper;
 import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.TableMetadataMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.*;
 import com.aircas.ptr.foundry.ontology.service.EntityService;
 import com.aircas.ptr.foundry.ontology.service.OntologyPropertyService;
+import com.aircas.ptr.foundry.ontology.service.PropertyCategoryService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -36,9 +38,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayDeque;
 import java.util.List;
-import java.util.Queue;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -58,10 +59,9 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
 
     private final OntologyMetaMapper metaMapper;
 
-    private final PropertyCategoryMapper propertyCategoryMapper;
+    private final PropertyCategoryService propertyCategoryService;
 
     private final PropertyMetadataSchemaMapper propertyMetadataSchemaMapper;
-
 
     private final RabbitMQProducer producer;
 
@@ -95,6 +95,14 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         if (param.getIsPrimaryKey()) {
             checkPrimaryKey(otherProps, param.getDatasource());
         }
+        //check categoryId
+        if (param.getCategoryId() != null) {
+            var category = propertyCategoryService.getOne(new LambdaQueryWrapper<PropertyCategory>()
+                    .eq(PropertyCategory::getId, param.getCategoryId())
+                    .eq(PropertyCategory::getOntologyUniqueIdentifier, originalProperty.getOntologyUniqueIdentifier()));
+            PreconditionUtils.checkNotNull(category, "无效的属性分类id", HttpStatus.BAD_REQUEST);
+        }
+
         //update property
         updateById(originalProperty.setDatasourceColumnName(param.getDatasource() != null ? param.getDatasource().getDatasourceColumnName() : null)
                 .setDatasourceId(param.getDatasource() != null ? param.getDatasource().getDatasourceId() : null)
@@ -107,7 +115,8 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                 .setIsTitleKey(param.getIsTitleKey() ? 1 : 0)
                 .setIsPrimaryKey(param.getIsPrimaryKey() ? 1 : 0)
                 .setDefaultValue(param.getDefaultValue())
-                .setStorageGroup(param.getStorageGroup()));
+                .setStorageGroup(param.getStorageGroup())
+                .setPropertyCategoryId(param.getCategoryId()));
         //update arangodb node
         buildEntityNodes(originalProperty.getOntologyUniqueIdentifier());
     }
@@ -133,6 +142,11 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         var hasPrimaryKey = false;
         var updatePropMap = updateProperties.stream().collect(Collectors.toMap(v -> v.getUniqueIdentifier(), v -> v));
 
+        //get all categoryIds
+        var categoryIds = propertyCategoryService.list(new LambdaQueryWrapper<PropertyCategory>()
+                        .eq(PropertyCategory::getOntologyUniqueIdentifier, ontologyId))
+                .stream().map(PropertyCategory::getId).collect(Collectors.toSet());
+
         for (OntologyPropertyUpdateParam p : params) {
             //check storage group
             PreconditionUtils.checkArgument(!StringUtils.equals(apiName, p.getStorageGroup()), "属性存储分组名称不能和本体apiName相同", HttpStatus.BAD_REQUEST);
@@ -156,6 +170,11 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                 hasPrimaryKey = true;
                 checkPrimaryKey(otherProps, p.getDatasource());
             }
+            //check categoryId
+            if (p.getCategoryId() != null) {
+                PreconditionUtils.checkArgument(categoryIds.contains(p.getCategoryId()), "无效的分类id", HttpStatus.BAD_REQUEST);
+            }
+
             var prop = updatePropMap.get(p.getUniqueIdentifier());
             prop.setPropertyType(p.getDataType())
                     .setPrimaryCategory(p.getPrimaryCategory())
@@ -168,7 +187,8 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                     .setDisplayName(p.getDisplayName())
                     .setDatasourceId(p.getDatasource() != null ? p.getDatasource().getDatasourceId() : "")
                     .setDatasourceColumnName(p.getDatasource() != null ? p.getDatasource().getDatasourceColumnName() : "")
-                    .setStorageGroup(p.getStorageGroup());
+                    .setStorageGroup(p.getStorageGroup())
+                    .setPropertyCategoryId(p.getCategoryId());
         }
         //batch update
         updateBatchById(updateProperties);
@@ -194,6 +214,11 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         var hasTitleKey = false;
         var hasPrimaryKey = false;
         List<OntologyProperty> propertyList = Lists.newArrayList();
+
+        //get all categoryIds
+        var categoryIds = propertyCategoryService.list(new LambdaQueryWrapper<PropertyCategory>()
+                        .eq(PropertyCategory::getOntologyUniqueIdentifier, ontologyId))
+                .stream().map(PropertyCategory::getId).collect(Collectors.toSet());
 
         for (var p : params) {
             // check storage group
@@ -226,6 +251,10 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                 PreconditionUtils.checkArgument(!hasPrimaryKey, "属性存在多个主键", HttpStatus.BAD_REQUEST);
                 hasPrimaryKey = true;
                 checkPrimaryKey(properties, p.getDatasource());
+            }
+            //check categoryId
+            if (p.getCategoryId() != null) {
+                PreconditionUtils.checkArgument(categoryIds.contains(p.getCategoryId()), "无效的分类id", HttpStatus.BAD_REQUEST);
             }
             propertyList.add(DataConverter.convert(p));
         }
@@ -271,9 +300,16 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         if (param.getIsPrimaryKey()) {
             checkPrimaryKey(properties, param.getDatasource());
         }
+        //check categoryId
+        if (param.getCategoryId() != null) {
+            var category = propertyCategoryService.getOne(new LambdaQueryWrapper<PropertyCategory>()
+                    .eq(PropertyCategory::getId, param.getCategoryId())
+                    .eq(PropertyCategory::getOntologyUniqueIdentifier, param.getOntologyIdentifier()));
+            PreconditionUtils.checkNotNull(category, "无效的属性分类id", HttpStatus.BAD_REQUEST);
+        }
         //create property
         save(DataConverter.convert(param));
-        //create arango node by primary key
+        //create arangodb node by primary key
         buildEntityNodes(param.getOntologyIdentifier());
     }
 
@@ -290,7 +326,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
     @Override
     public List<OntologyPropertyInfoVO> getPropertyInfoByOntologyId(String ontologyUniqueIdentifier) {
         var props = list(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier));
-        return props.stream().map(v -> DataConverter.convertToPropertyInfoVO(v)).collect(Collectors.toList());
+        return props.stream().map(DataConverter::convertToPropertyInfoVO).collect(Collectors.toList());
     }
 
 
@@ -304,7 +340,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
     @Override
     public List<OntologyPropertyDetailVO> getPropertiesDetailById(List<String> uniqueIdentifiers) {
         var prop = list(new LambdaQueryWrapper<OntologyProperty>().in(OntologyProperty::getUniqueIdentifier, uniqueIdentifiers));
-        return prop.stream().map(v -> DataConverter.convert(v)).collect(Collectors.toList());
+        return prop.stream().map(DataConverter::convert).collect(Collectors.toList());
     }
 
     @Override
@@ -416,43 +452,128 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
     @Transactional(transactionManager = "mainTransactionManager")
     @Override
     public void createCategory(PropertyCategoryCreateParam param) {
-        var existCategory = propertyCategoryMapper.selectList(new LambdaQueryWrapper<PropertyCategory>().eq(PropertyCategory::getOntologyUniqueIdentifier, param.getOntologyIdentifier()));
-        var existCategoryMap = existCategory.stream().collect(Collectors.toMap(v -> v.getId(), v -> v));
+        var existCategory = propertyCategoryService.list(new LambdaQueryWrapper<PropertyCategory>().eq(PropertyCategory::getOntologyUniqueIdentifier, param.getOntologyIdentifier()));
+        var existCategoryMap = existCategory.stream().collect(Collectors.toMap(PropertyCategory::getId, v -> v));
+
         //校验parentId
         var parentId = param.getParentId();
-        if ((parentId.equals(0) && MapUtils.isEmpty(existCategoryMap)) ||
-                (!parentId.equals(0) && existCategoryMap.containsKey(parentId))) {
-
-            var rootNode = PropertyCategoryCreateParam.CategoryNode.builder()
-                    .parentId(parentId)
-                    .children(param.getChildren())
-                    .name(param.getName())
-                    .build();
-
-            //广度优先遍历
-            Queue<PropertyCategoryCreateParam.CategoryNode> queue = new ArrayDeque<>();
-            queue.add(rootNode);
-
-            while (!queue.isEmpty()) {
-                var node = queue.poll();
-                var parentCategory = PropertyCategory.builder()
-                        .ontologyUniqueIdentifier(param.getOntologyIdentifier())
-                        .name(node.getName())
-                        .parentId(node.getParentId())
-                        .path(node.getName())
-                        .build();
-                propertyCategoryMapper.insert(parentCategory);
-                var generateId = parentCategory.getId();
-                for (var child : node.getChildren()) {
-                    queue.add(child.setParentId(generateId));
-                }
-            }
-
-        } else {
+        if (!((parentId.equals(0) && MapUtils.isEmpty(existCategoryMap))
+                || (!parentId.equals(0) && existCategoryMap.containsKey(parentId)))) {
             throw new BusinessException("无效的parentId：" + parentId, HttpStatus.BAD_REQUEST);
         }
 
+        var parentPath = parentId.equals(0) ? "" : existCategoryMap.get(parentId).getPath() + "/";
+
+        var rootNode = PropertyCategoryCreateParam.CategoryNode.builder()
+                .parentId(parentId)
+                .children(param.getChildren())
+                .name(param.getName())
+                .path(parentPath + param.getName())
+                .build();
+
+        // 按层级 BFS，每层批量插入
+        List<PropertyCategoryCreateParam.CategoryNode> currentLevel = Lists.newArrayList(rootNode);
+
+        while (CollectionUtils.isNotEmpty(currentLevel)) {
+            List<PropertyCategory> batchList = Lists.newArrayList();
+            List<PropertyCategoryCreateParam.CategoryNode> nextLevel = Lists.newArrayList();
+            for (var node : currentLevel) {
+                var category = PropertyCategory.builder()
+                        .ontologyUniqueIdentifier(param.getOntologyIdentifier())
+                        .name(node.getName())
+                        .parentId(node.getParentId())
+                        .path(node.getPath())
+                        .build();
+                batchList.add(category);
+            }
+            // 当前层级批量插入
+            propertyCategoryService.saveBatch(batchList);
+            // 拿到自增 ID 后，构建下一层节点
+            for (int i = 0; i < currentLevel.size(); i++) {
+                var node = currentLevel.get(i);
+                var generatedId = batchList.get(i).getId();
+                if (CollectionUtils.isNotEmpty(node.getChildren())) {
+                    for (var child : node.getChildren()) {
+                        var childNode = PropertyCategoryCreateParam.CategoryNode.builder()
+                                .parentId(generatedId)
+                                .path(node.getPath() + "/" + child.getName())
+                                .name(child.getName())
+                                .children(child.getChildren())
+                                .build();
+                        nextLevel.add(childNode);
+                    }
+                }
+            }
+            currentLevel = nextLevel;
+        }
     }
+
+    @Override
+    public PropertyCategoryVO getCategory(String ontologyUniqueIdentifier) {
+        var categories = propertyCategoryService.list(
+                new LambdaQueryWrapper<PropertyCategory>()
+                        .eq(PropertyCategory::getOntologyUniqueIdentifier, ontologyUniqueIdentifier));
+        if (CollectionUtils.isEmpty(categories)) {
+            return null;
+        }
+        var categoryMap = categories.stream().collect(Collectors.groupingBy(PropertyCategory::getParentId));
+        var roots = categoryMap.get(0);
+        if (CollectionUtils.isEmpty(roots)) {
+            return null;
+        }
+        return buildCategoryVO(roots.get(0), categoryMap);
+    }
+
+    @Transactional(transactionManager = "mainTransactionManager")
+    @Override
+    public void deleteCategory(PropertyCategoryDeleteParam param) {
+        var parentCategory = propertyCategoryService.getOne(new LambdaQueryWrapper<PropertyCategory>()
+                .eq(PropertyCategory::getOntologyUniqueIdentifier, param.getOntologyIdentifier())
+                .eq(PropertyCategory::getId, param.getCategoryId()));
+        PreconditionUtils.checkArgument(parentCategory != null, "分类节点" + param.getCategoryId() + "不存在", HttpStatus.BAD_REQUEST);
+
+        // 查询所有关联节点（节点树）
+        var allCategories = propertyCategoryService.list(new LambdaQueryWrapper<PropertyCategory>()
+                .eq(PropertyCategory::getOntologyUniqueIdentifier, param.getOntologyIdentifier())
+                .likeRight(PropertyCategory::getPath, parentCategory.getPath()));
+        if (CollectionUtils.isNotEmpty(allCategories)) {
+            var categoryIds = allCategories.stream().map(PropertyCategory::getId).collect(Collectors.toList());
+            var props = list(new LambdaQueryWrapper<OntologyProperty>()
+                    .eq(OntologyProperty::getOntologyUniqueIdentifier, param.getOntologyIdentifier())
+                    .in(OntologyProperty::getPropertyCategoryId, categoryIds));
+            PreconditionUtils.checkArgument(CollectionUtils.isEmpty(props), "该分类节点下有关联的属性，不能删除", HttpStatus.FORBIDDEN);
+            propertyCategoryService.removeByIds(categoryIds);
+        }
+
+    }
+
+    @Transactional(transactionManager = "mainTransactionManager")
+    @Override
+    public void updateCategory(PropertyCategoryUpdateParam param) {
+        var parentCategory = propertyCategoryService.getOne(new LambdaQueryWrapper<PropertyCategory>()
+                .eq(PropertyCategory::getOntologyUniqueIdentifier, param.getOntologyIdentifier())
+                .eq(PropertyCategory::getId, param.getCategoryId()));
+        PreconditionUtils.checkArgument(parentCategory != null, "分类节点" + param.getCategoryId() + "不存在", HttpStatus.BAD_REQUEST);
+        // 查询所有关联节点（节点树）
+        var allCategories = propertyCategoryService.list(new LambdaQueryWrapper<PropertyCategory>()
+                .eq(PropertyCategory::getOntologyUniqueIdentifier, param.getOntologyIdentifier())
+                .likeRight(PropertyCategory::getPath, parentCategory.getPath()));
+        if (CollectionUtils.isNotEmpty(allCategories)) {
+            var paths = parentCategory.getPath().split("/");
+            paths[paths.length - 1] = param.getName();
+            var newPath = String.join("/", paths);
+            allCategories.forEach(category -> {
+                if (category.getId().equals(param.getCategoryId())) {
+                    category.setName(param.getName());
+                }
+                //更新节点new path
+                var updatedPath = category.getPath().replace(parentCategory.getPath(), newPath);
+                category.setPath(updatedPath);
+            });
+            propertyCategoryService.updateBatchById(allCategories);
+        }
+    }
+
 
     /**
      * 1 属性自动关联数据源
@@ -593,6 +714,20 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                 .sorted()
                 .forEach(result::add);
         return result;
+    }
+
+
+    private PropertyCategoryVO buildCategoryVO(PropertyCategory category, Map<Integer, List<PropertyCategory>> categoryMap) {
+        var vo = new PropertyCategoryVO()
+                .setCategoryId(category.getId())
+                .setName(category.getName());
+        var children = categoryMap.get(category.getId());
+        if (CollectionUtils.isNotEmpty(children)) {
+            vo.setChildren(children.stream()
+                    .map(child -> buildCategoryVO(child, categoryMap))
+                    .collect(Collectors.toList()));
+        }
+        return vo;
     }
 
 

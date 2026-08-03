@@ -67,4 +67,7 @@ public class OntologyPropertyUpdateParam extends IdentifierParam {
     @NotBlank(message = "storageGroup is empty")
     private String storageGroup;
 
+    @ApiModelProperty(name = "categoryId", value = "属性分类id", example = "10")
+    private Integer categoryId;
+
 }

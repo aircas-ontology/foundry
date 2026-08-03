@@ -4,10 +4,7 @@ import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.controller.validator.OntologyIdVerify;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyPropertyPrimaryCategoryEnum;
 import com.aircas.ptr.foundry.ontology.model.param.*;
-import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyDetailVO;
-import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyInfoVO;
-import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyPrimaryCategoryVO;
-import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyVisibilityVO;
+import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.aircas.ptr.foundry.ontology.service.OntologyPropertyService;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
@@ -156,11 +153,34 @@ public class OntologyPropertyController {
 
 
     @PostMapping("/category")
-    @ApiOperation(value = "创建属性分类体系")
+    @ApiOperation(value = "创建属性分类树")
     public RestResult createCategory(@RequestBody @Valid PropertyCategoryCreateParam param) {
         ontologyPropertyService.createCategory(param);
         return RestResult.success();
     }
 
+    @PutMapping("/category")
+    @ApiOperation(value = "修改属性分类名称")
+    public RestResult updateCategory(@RequestBody @Valid PropertyCategoryUpdateParam param) {
+        ontologyPropertyService.updateCategory(param);
+        return RestResult.success();
+    }
 
+
+    @DeleteMapping("/category")
+    @ApiOperation(value = "删除属性分类树")
+    public RestResult deleteCategory(@RequestBody @Valid PropertyCategoryDeleteParam param) {
+        ontologyPropertyService.deleteCategory(param);
+        return RestResult.success();
+    }
+
+
+    @GetMapping("/category")
+    @ApiOperation(value = "查询属性分类体系树")
+    public RestResult<PropertyCategoryVO> getCategory(@RequestParam(required = true, name = "ontologyUniqueIdentifier")
+                                  @ApiParam(value = "本体uniqueIdentifier", required = true)
+                                  @OntologyIdVerify String ontologyUniqueIdentifier) {
+        var res = ontologyPropertyService.getCategory(ontologyUniqueIdentifier);
+        return RestResult.ofData(res);
+    }
 }

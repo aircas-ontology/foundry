@@ -3,17 +3,12 @@ package com.aircas.ptr.foundry.ontology.model.dto;
 
 import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyPropertyPrimaryCategoryEnum;
-import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyCreateParam;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
-
-import javax.validation.constraints.NotBlank;
-import javax.validation.constraints.NotNull;
-import javax.validation.constraints.Pattern;
 
 @Builder
 @AllArgsConstructor
@@ -52,7 +47,9 @@ public class OntologyPropertyDTO {
     @ApiModelProperty(name = "defaultValue", value = "属性的默认值", example = "30")
     private String defaultValue;
 
-
     @ApiModelProperty(name = "storageGroup", value = "属性存储分组", example = "123")
     private String storageGroup;
+
+    @ApiModelProperty(name = "categoryPath", value = "属性分类完整路径", example = "平台/载荷/光学载荷")
+    private String categoryPath;
 }

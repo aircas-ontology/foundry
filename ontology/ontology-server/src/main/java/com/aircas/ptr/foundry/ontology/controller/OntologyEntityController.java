@@ -34,7 +34,7 @@ public class OntologyEntityController {
     }
 
 
-    @ApiOperation(value = "实体分页查询", notes = "分页查询本体下实体主属性信息列表")
+    @ApiOperation(value = "实体分页查询（只返回实体主属性信息列表）", notes = "分页查询本体下实体主属性信息列表")
     @GetMapping("/list")
     public RestResult<Page<EntityInfoVO>> getEntities(
             @RequestParam(required = true, name = "ontologyUniqueIdentifier") @ApiParam(value = "本体id", required = true) @OntologyIdVerify String ontologyUniqueIdentifier,
@@ -44,7 +44,7 @@ public class OntologyEntityController {
     }
 
 
-    @ApiOperation(value = "实体搜索", notes = "实体根据主属性值进行等值搜索")
+    @ApiOperation(value = "实体搜索（只返回实体主属性信息列表）", notes = "实体根据主属性值进行等值搜索")
     @PostMapping("/search")
     public RestResult<Page<EntityInfoVO>> searchEntities(@RequestBody @Valid EntitySearchParam param) {
         return RestResult.ofData(entityService.getEntities(

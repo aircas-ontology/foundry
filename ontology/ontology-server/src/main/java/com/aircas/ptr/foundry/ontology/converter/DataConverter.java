@@ -74,6 +74,7 @@ public class DataConverter {
                 .secondaryCategory(param.getSecondaryCategory())
                 .defaultValue(param.getDefaultValue())
                 .storageGroup(param.getStorageGroup())
+                .propertyCategoryId(param.getCategoryId())
                 .build();
         if (datasource != null) {
             prop.setDatasourceId(datasource.getDatasourceId())
@@ -99,6 +100,7 @@ public class DataConverter {
                 .ontologyUniqueIdentifier(p.getOntologyUniqueIdentifier())
                 .defaultValue(p.getDefaultValue())
                 .storageGroup(p.getStorageGroup())
+                .categoryId(p.getPropertyCategoryId())
                 .build();
     }
 
@@ -115,6 +117,7 @@ public class DataConverter {
                 .ontologyUniqueIdentifier(p.getOntologyUniqueIdentifier())
                 .defaultValue(p.getDefaultValue())
                 .storageGroup(p.getStorageGroup())
+                .categoryId(p.getPropertyCategoryId())
                 .build();
     }
 

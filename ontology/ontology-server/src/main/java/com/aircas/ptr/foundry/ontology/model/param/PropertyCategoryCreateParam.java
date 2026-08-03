@@ -43,8 +43,11 @@ public class PropertyCategoryCreateParam extends OntologyIdentifierParam {
     @ApiModel(description = "属性分类节点")
     public static class CategoryNode {
 
-        @ApiModelProperty(name = "parentId", value = "父节点id，为0表示当前节点为根节点(新创建属性体系)", example = "0")
+        @ApiModelProperty(hidden = true)
         private Integer parentId;
+
+        @ApiModelProperty(hidden = true)
+        private String path;
 
         @ApiModelProperty(name = "name", value = "属性分类名称", example = "平台属性")
         @NotBlank(message = "name is empty")

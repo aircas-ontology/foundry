@@ -77,6 +77,9 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
     private OntologyLemmaService lemmaService;
 
     @Resource
+    private PropertyCategoryService propertyCategoryService;
+
+    @Resource
     private OntologyMetaServiceImpl proxyService;
 
 
@@ -118,6 +121,33 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 .setParentUniqueIdentifier(parentIdentifier)
                 .setStatus(parentOntology.getStatus());
         this.save(meta);
+        //创建属性分类
+        var parentCategories = propertyCategoryService.list(new LambdaQueryWrapper<PropertyCategory>()
+                .eq(PropertyCategory::getOntologyUniqueIdentifier, parentIdentifier));
+        Map<Integer, Integer> oldToNewCategoryIdMap = Maps.newHashMap();
+        if (CollectionUtils.isNotEmpty(parentCategories)) {
+            var parentCategoryByParentId = parentCategories.stream().collect(Collectors.groupingBy(PropertyCategory::getParentId));
+            var rootCategory = parentCategoryByParentId.get(0).get(0);
+            var rootNode = buildCategoryTree(rootCategory, parentCategoryByParentId);
+            var createParam = PropertyCategoryCreateParam.builder()
+                    .parentId(0)
+                    .name(rootNode.getName())
+                    .children(rootNode.getChildren())
+                    .ontologyIdentifier(childIdentifier)
+                    .build();
+            ontologyPropertyService.createCategory(createParam);
+
+            var childCategories = propertyCategoryService.list(new LambdaQueryWrapper<PropertyCategory>()
+                    .eq(PropertyCategory::getOntologyUniqueIdentifier, childIdentifier));
+            var childCategoryByPath = childCategories.stream().collect(Collectors.toMap(PropertyCategory::getPath, PropertyCategory::getId));
+            for (var parentCategory : parentCategories) {
+                var newId = childCategoryByPath.get(parentCategory.getPath());
+                if (newId != null) {
+                    oldToNewCategoryIdMap.put(parentCategory.getId(), newId);
+                }
+            }
+
+        }
         // 创建属性
         var parentProperties = ontologyPropertyService.list(new LambdaUpdateWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyCreateParam.getParentOntologyUniqueIdentifier()));
         var childProps = parentProperties.stream().map(v -> OntologyProperty.builder()
@@ -135,6 +165,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                         .secondaryCategory(v.getSecondaryCategory())
                         .defaultValue(v.getDefaultValue())
                         .storageGroup("main".equals(v.getStorageGroup()) ? "main" : meta.getApiName() + "_" + v.getStorageGroup())
+                        .propertyCategoryId(v.getPropertyCategoryId() != null ? oldToNewCategoryIdMap.get(v.getPropertyCategoryId()) : null)
                         .build())
                 .collect(Collectors.toList());
         ontologyPropertyService.saveBatch(childProps);
@@ -218,6 +249,20 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         }
     }
 
+    private PropertyCategoryCreateParam.CategoryNode buildCategoryTree(PropertyCategory category, Map<Integer, List<PropertyCategory>> categoryByParentId) {
+        var children = categoryByParentId.get(category.getId());
+        List<PropertyCategoryCreateParam.CategoryNode> childNodes = null;
+        if (CollectionUtils.isNotEmpty(children)) {
+            childNodes = children.stream()
+                    .map(child -> buildCategoryTree(child, categoryByParentId))
+                    .collect(Collectors.toList());
+        }
+        return PropertyCategoryCreateParam.CategoryNode.builder()
+                .name(category.getName())
+                .children(childNodes)
+                .build();
+    }
+
 
     @Override
     @Transactional(value = "mainTransactionManager")
@@ -226,6 +271,8 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         PreconditionUtils.checkArgument(meta != null, "ontology not exist:" + ontologyIdentifier, ResultCode.PARAM_ERROR, HttpStatus.BAD_REQUEST);
         //删除本体元数据
         this.remove(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, ontologyIdentifier));
+        //删除属性分类
+        propertyCategoryService.remove(new LambdaQueryWrapper<PropertyCategory>().eq(PropertyCategory::getOntologyUniqueIdentifier, ontologyIdentifier));
         //删除属性
         ontologyPropertyService.remove(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyIdentifier));
         //删除关系
@@ -336,9 +383,19 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 .uniqueIdentifier(IdGenerator.generateUUID())
                 .build();
         save(meta);
+        //保存属性分类
+        var propertyCategoryCreateParam = dto.getPropertyCategory();
+        if (propertyCategoryCreateParam != null) {
+            propertyCategoryCreateParam.setParentId(0)
+                    .setOntologyIdentifier(meta.getUniqueIdentifier());
+            ontologyPropertyService.createCategory(propertyCategoryCreateParam);
+        }
         //保存属性
         var props = dto.getProperties();
         if (CollectionUtils.isNotEmpty(props)) {
+            var categoryMap = propertyCategoryService.list(new LambdaQueryWrapper<PropertyCategory>()
+                            .eq(PropertyCategory::getOntologyUniqueIdentifier, meta.getUniqueIdentifier()))
+                    .stream().collect(Collectors.toMap(PropertyCategory::getPath, PropertyCategory::getId));
             var ontologyPropertyCreateParams = props.stream().<OntologyPropertyCreateParam>map(p -> OntologyPropertyCreateParam.builder()
                             .apiName(p.getApiName())
                             .tag(p.getTag())
@@ -352,6 +409,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                             .secondaryCategory(p.getSecondaryCategory())
                             .defaultValue(p.getDefaultValue())
                             .storageGroup(p.getStorageGroup())
+                            .categoryId(StringUtils.isEmpty(p.getCategoryPath()) ? null : categoryMap.get(p.getCategoryPath()))
                             .build())
                     .collect(Collectors.toList());
             ontologyPropertyService.batchCreateProperties(ontologyPropertyCreateParams);
