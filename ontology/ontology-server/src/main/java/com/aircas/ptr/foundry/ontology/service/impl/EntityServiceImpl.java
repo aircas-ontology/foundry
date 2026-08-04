@@ -354,6 +354,7 @@ public class EntityServiceImpl implements EntityService {
                                 .secondaryCategory(p.getSecondaryCategory())
                                 .entityPrimaryKey(entityPrimaryKey)
                                 .categoryId(p.getPropertyCategoryId())
+                                .metadata(p.getMetadata())
                                 .build();
                     }).collect(Collectors.toList());
                     res.addAll(detail);
@@ -400,6 +401,7 @@ public class EntityServiceImpl implements EntityService {
                     .propertyUniqIdentifier(p.getUniqueIdentifier())
                     .propertyApiName(p.getApiName())
                     .categoryId(p.getPropertyCategoryId())
+                    .metadata(p.getMetadata())
                     .build();
         }).collect(Collectors.toList());
         propertyGroups.add(EntityPropertyRowDetailVO.PropertyGroup.builder()
@@ -454,6 +456,8 @@ public class EntityServiceImpl implements EntityService {
                                     .propertyValue(row.get(col))
                                     .primaryCategory(p.getPrimaryCategory().getName())
                                     .secondaryCategory(p.getSecondaryCategory())
+                                    .categoryId(p.getPropertyCategoryId())
+                                    .metadata(p.getMetadata())
                                     .build();
                             propertyInfos.add(info);
                         }

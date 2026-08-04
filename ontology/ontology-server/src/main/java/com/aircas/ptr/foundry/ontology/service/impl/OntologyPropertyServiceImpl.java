@@ -10,20 +10,23 @@ import com.aircas.ptr.foundry.ontology.model.dto.EntityDatasourceSchemaChangeEve
 import com.aircas.ptr.foundry.ontology.model.enums.DatasourceEventTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.param.*;
 import com.aircas.ptr.foundry.ontology.model.po.*;
-import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyDetailVO;
-import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyInfoVO;
-import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyVisibilityVO;
-import com.aircas.ptr.foundry.ontology.model.vo.PropertyCategoryVO;
+import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.aircas.ptr.foundry.ontology.mq.producer.RabbitMQProducer;
 import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.TableFieldMappingMapper;
 import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.TableMetadataMapper;
-import com.aircas.ptr.foundry.ontology.repository.mainMapper.*;
+import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyActionMappingInMapper;
+import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyLinkGroupMapper;
+import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyMetaMapper;
+import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyPropertyMapper;
 import com.aircas.ptr.foundry.ontology.service.EntityService;
 import com.aircas.ptr.foundry.ontology.service.OntologyPropertyService;
 import com.aircas.ptr.foundry.ontology.service.PropertyCategoryService;
+import com.aircas.ptr.foundry.ontology.service.PropertyMetadataSchemaService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.github.jsonldjava.shaded.com.google.common.collect.Sets;
 import com.google.common.collect.Lists;
 import lombok.RequiredArgsConstructor;
@@ -40,6 +43,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -61,7 +65,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
 
     private final PropertyCategoryService propertyCategoryService;
 
-    private final PropertyMetadataSchemaMapper propertyMetadataSchemaMapper;
+    private final PropertyMetadataSchemaService propertyMetadataSchemaService;
 
     private final RabbitMQProducer producer;
 
@@ -102,7 +106,13 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                     .eq(PropertyCategory::getOntologyUniqueIdentifier, originalProperty.getOntologyUniqueIdentifier()));
             PreconditionUtils.checkNotNull(category, "无效的属性分类id", HttpStatus.BAD_REQUEST);
         }
-
+        //check metadata schema 和元数据schema格式是否一致
+        var schema = getMetadataSchema(originalProperty.getOntologyUniqueIdentifier());
+        var metadata = param.getMetadata();
+        if (metadata != null) {
+            PreconditionUtils.checkNotNull(schema, "当前本体未定义元数据schema，不能设置元数据", HttpStatus.BAD_REQUEST);
+            validateMetadataAgainstSchema(metadata, schema, "");
+        }
         //update property
         updateById(originalProperty.setDatasourceColumnName(param.getDatasource() != null ? param.getDatasource().getDatasourceColumnName() : null)
                 .setDatasourceId(param.getDatasource() != null ? param.getDatasource().getDatasourceId() : null)
@@ -116,7 +126,8 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                 .setIsPrimaryKey(param.getIsPrimaryKey() ? 1 : 0)
                 .setDefaultValue(param.getDefaultValue())
                 .setStorageGroup(param.getStorageGroup())
-                .setPropertyCategoryId(param.getCategoryId()));
+                .setPropertyCategoryId(param.getCategoryId())
+                .setMetadata(param.getMetadata()));
         //update arangodb node
         buildEntityNodes(originalProperty.getOntologyUniqueIdentifier());
     }
@@ -141,7 +152,8 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         var hasTitleKey = false;
         var hasPrimaryKey = false;
         var updatePropMap = updateProperties.stream().collect(Collectors.toMap(v -> v.getUniqueIdentifier(), v -> v));
-
+        //获取属性元数据schema
+        var schema = getMetadataSchema(ontologyId);
         //get all categoryIds
         var categoryIds = propertyCategoryService.list(new LambdaQueryWrapper<PropertyCategory>()
                         .eq(PropertyCategory::getOntologyUniqueIdentifier, ontologyId))
@@ -174,7 +186,12 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
             if (p.getCategoryId() != null) {
                 PreconditionUtils.checkArgument(categoryIds.contains(p.getCategoryId()), "无效的分类id", HttpStatus.BAD_REQUEST);
             }
-
+            //check metadata schema 和元数据schema格式是否一致
+            var metadata = p.getMetadata();
+            if (metadata != null) {
+                PreconditionUtils.checkNotNull(schema, "当前本体未定义元数据schema，不能设置元数据", HttpStatus.BAD_REQUEST);
+                validateMetadataAgainstSchema(metadata, schema, "");
+            }
             var prop = updatePropMap.get(p.getUniqueIdentifier());
             prop.setPropertyType(p.getDataType())
                     .setPrimaryCategory(p.getPrimaryCategory())
@@ -188,7 +205,8 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                     .setDatasourceId(p.getDatasource() != null ? p.getDatasource().getDatasourceId() : "")
                     .setDatasourceColumnName(p.getDatasource() != null ? p.getDatasource().getDatasourceColumnName() : "")
                     .setStorageGroup(p.getStorageGroup())
-                    .setPropertyCategoryId(p.getCategoryId());
+                    .setPropertyCategoryId(p.getCategoryId())
+                    .setMetadata(p.getMetadata());
         }
         //batch update
         updateBatchById(updateProperties);
@@ -214,6 +232,8 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         var hasTitleKey = false;
         var hasPrimaryKey = false;
         List<OntologyProperty> propertyList = Lists.newArrayList();
+
+        var schema = getMetadataSchema(ontologyId);
 
         //get all categoryIds
         var categoryIds = propertyCategoryService.list(new LambdaQueryWrapper<PropertyCategory>()
@@ -255,6 +275,12 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
             //check categoryId
             if (p.getCategoryId() != null) {
                 PreconditionUtils.checkArgument(categoryIds.contains(p.getCategoryId()), "无效的分类id", HttpStatus.BAD_REQUEST);
+            }
+            //check metadata schema 和元数据schema格式是否一致
+            var metadata = p.getMetadata();
+            if (metadata != null) {
+                PreconditionUtils.checkNotNull(schema, "当前本体未定义元数据schema，不能设置元数据", HttpStatus.BAD_REQUEST);
+                validateMetadataAgainstSchema(metadata, schema, "");
             }
             propertyList.add(DataConverter.convert(p));
         }
@@ -306,6 +332,13 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                     .eq(PropertyCategory::getId, param.getCategoryId())
                     .eq(PropertyCategory::getOntologyUniqueIdentifier, param.getOntologyIdentifier()));
             PreconditionUtils.checkNotNull(category, "无效的属性分类id", HttpStatus.BAD_REQUEST);
+        }
+        //check metadata schema 和元数据schema格式是否一致
+        var schema = getMetadataSchema(param.getOntologyIdentifier());
+        var metadata = param.getMetadata();
+        if (metadata != null) {
+            PreconditionUtils.checkNotNull(schema, "当前本体未定义元数据schema，不能设置元数据", HttpStatus.BAD_REQUEST);
+            validateMetadataAgainstSchema(metadata, schema, "");
         }
         //create property
         save(DataConverter.convert(param));
@@ -547,6 +580,11 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
 
     }
 
+    /**
+     * 只修改节点名称
+     *
+     * @param param
+     */
     @Transactional(transactionManager = "mainTransactionManager")
     @Override
     public void updateCategory(PropertyCategoryUpdateParam param) {
@@ -572,6 +610,195 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
             });
             propertyCategoryService.updateBatchById(allCategories);
         }
+    }
+
+    @Transactional(transactionManager = "mainTransactionManager")
+    @Override
+    public void createMetadataSchema(PropertyMetadataSchemaCreateParam param) {
+        //校验是否存在已赋值的属性
+        var props = list(new LambdaQueryWrapper<OntologyProperty>()
+                .eq(OntologyProperty::getOntologyUniqueIdentifier, param.getOntologyIdentifier())
+                .isNotNull(OntologyProperty::getMetadata));
+        PreconditionUtils.checkArgument(CollectionUtils.isEmpty(props), "元数据schema下有已赋值的属性，不能创建", HttpStatus.FORBIDDEN);
+
+        var existMetadata = propertyMetadataSchemaService.list(new LambdaQueryWrapper<PropertyMetadataSchema>()
+                .eq(PropertyMetadataSchema::getOntologyUniqueIdentifier, param.getOntologyIdentifier()));
+        var existMetadataMap = existMetadata.stream().collect(Collectors.toMap(PropertyMetadataSchema::getId, v -> v));
+        //校验parentId
+        var parentId = param.getParentId();
+        if (!((parentId.equals(0) && MapUtils.isEmpty(existMetadataMap))
+                || (!parentId.equals(0) && existMetadataMap.containsKey(parentId)))) {
+            throw new BusinessException("无效的parentId：" + parentId, HttpStatus.BAD_REQUEST);
+        }
+        var parentPath = parentId.equals(0) ? "" : existMetadataMap.get(parentId).getPath() + "/";
+        var rootNode = PropertyMetadataSchemaCreateParam.MetadataSchemaNode.builder()
+                .parentId(parentId)
+                .children(param.getChildren())
+                .name(param.getName())
+                .path(parentPath + param.getName())
+                .enumValues(param.getEnumValues())
+                .build();
+
+        // 按层级 BFS，每层批量插入
+        List<PropertyMetadataSchemaCreateParam.MetadataSchemaNode> currentLevel = Lists.newArrayList(rootNode);
+
+        while (CollectionUtils.isNotEmpty(currentLevel)) {
+            List<PropertyMetadataSchema> batchList = Lists.newArrayList();
+            List<PropertyMetadataSchemaCreateParam.MetadataSchemaNode> nextLevel = Lists.newArrayList();
+            for (var node : currentLevel) {
+                var schema = PropertyMetadataSchema.builder()
+                        .ontologyUniqueIdentifier(param.getOntologyIdentifier())
+                        .name(node.getName())
+                        .parentId(node.getParentId())
+                        .path(node.getPath())
+                        .enumValues(CollectionUtils.isNotEmpty(node.getEnumValues()) ?
+                                String.join(",", node.getEnumValues()) : null)
+                        .build();
+                batchList.add(schema);
+            }
+            // 当前层级批量插入
+            propertyMetadataSchemaService.saveBatch(batchList);
+            // 拿到自增 ID 后，构建下一层节点
+            for (int i = 0; i < currentLevel.size(); i++) {
+                var node = currentLevel.get(i);
+                var generatedId = batchList.get(i).getId();
+                if (CollectionUtils.isNotEmpty(node.getChildren())) {
+                    for (var child : node.getChildren()) {
+                        var childNode = PropertyMetadataSchemaCreateParam.MetadataSchemaNode.builder()
+                                .parentId(generatedId)
+                                .path(node.getPath() + "/" + child.getName())
+                                .name(child.getName())
+                                .children(child.getChildren())
+                                .enumValues(child.getEnumValues())
+                                .build();
+                        nextLevel.add(childNode);
+                    }
+                }
+            }
+            currentLevel = nextLevel;
+        }
+    }
+
+    /**
+     * 只修改名称和枚举值列表
+     *
+     * @param param
+     */
+    @Transactional(transactionManager = "mainTransactionManager")
+    @Override
+    public void updateMetadataSchema(PropertyMetadataSchemaUpdateParam param) {
+        //校验是否存在已赋值的属性
+        var props = list(new LambdaQueryWrapper<OntologyProperty>()
+                .eq(OntologyProperty::getOntologyUniqueIdentifier, param.getOntologyIdentifier())
+                .isNotNull(OntologyProperty::getMetadata));
+        PreconditionUtils.checkArgument(CollectionUtils.isEmpty(props), "元数据schema下有已赋值的属性，不能修改", HttpStatus.FORBIDDEN);
+
+        var parentSchema = propertyMetadataSchemaService.getOne(new LambdaQueryWrapper<PropertyMetadataSchema>()
+                .eq(PropertyMetadataSchema::getOntologyUniqueIdentifier, param.getOntologyIdentifier())
+                .eq(PropertyMetadataSchema::getId, param.getMetadataSchemaId()));
+        PreconditionUtils.checkArgument(parentSchema != null, "元数据节点" + param.getMetadataSchemaId() + "不存在", HttpStatus.BAD_REQUEST);
+        // 查询所有关联元数据
+        var allSchemas = propertyMetadataSchemaService.list(new LambdaQueryWrapper<PropertyMetadataSchema>()
+                .eq(PropertyMetadataSchema::getOntologyUniqueIdentifier, param.getOntologyIdentifier())
+                .likeRight(PropertyMetadataSchema::getPath, parentSchema.getPath()));
+        if (CollectionUtils.isNotEmpty(allSchemas)) {
+            var paths = parentSchema.getPath().split("/");
+            paths[paths.length - 1] = param.getName();
+            var newPath = String.join("/", paths);
+            allSchemas.forEach(schema -> {
+                if (schema.getId().equals(param.getMetadataSchemaId())) {
+                    schema.setName(param.getName())
+                            .setEnumValues(CollectionUtils.isNotEmpty(param.getEnumValues()) ? String.join(",", param.getEnumValues()) : null);
+                }
+                //更新节点new path
+                var updatedPath = schema.getPath().replace(parentSchema.getPath(), newPath);
+                schema.setPath(updatedPath);
+            });
+            propertyMetadataSchemaService.updateBatchById(allSchemas);
+        }
+    }
+
+
+    @Transactional(transactionManager = "mainTransactionManager")
+    @Override
+    public void deleteMetadataSchema(PropertyMetadataSchemaDeleteParam param) {
+
+        var parentMetadata = propertyMetadataSchemaService.getOne(new LambdaQueryWrapper<PropertyMetadataSchema>()
+                .eq(PropertyMetadataSchema::getOntologyUniqueIdentifier, param.getOntologyIdentifier())
+                .eq(PropertyMetadataSchema::getId, param.getMetadataSchemaId()));
+        PreconditionUtils.checkArgument(parentMetadata != null, "无效的metadata schema节点" + param.getMetadataSchemaId() + "不存在", HttpStatus.BAD_REQUEST);
+
+        // 查询所有关联节点（节点树）
+        var allMetadata = propertyMetadataSchemaService.list(new LambdaQueryWrapper<PropertyMetadataSchema>()
+                .eq(PropertyMetadataSchema::getOntologyUniqueIdentifier, param.getOntologyIdentifier())
+                .likeRight(PropertyMetadataSchema::getPath, parentMetadata.getPath()));
+        if (CollectionUtils.isNotEmpty(allMetadata)) {
+            var ids = allMetadata.stream().map(PropertyMetadataSchema::getId).collect(Collectors.toList());
+            var props = list(new LambdaQueryWrapper<OntologyProperty>()
+                    .eq(OntologyProperty::getOntologyUniqueIdentifier, param.getOntologyIdentifier())
+                    .isNotNull(OntologyProperty::getMetadata));
+            PreconditionUtils.checkArgument(CollectionUtils.isEmpty(props), "元数据schema下有已赋值的属性，不能删除", HttpStatus.FORBIDDEN);
+            propertyMetadataSchemaService.removeByIds(ids);
+        }
+    }
+
+    @Override
+    public JsonNode getMetadataSchema(String ontologyUniqueIdentifier) {
+        var schemas = propertyMetadataSchemaService.list(new LambdaQueryWrapper<PropertyMetadataSchema>()
+                .eq(PropertyMetadataSchema::getOntologyUniqueIdentifier, ontologyUniqueIdentifier));
+
+        if (CollectionUtils.isEmpty(schemas)) {
+            return null;
+        }
+
+        Set<String> allPaths = schemas.stream()
+                .map(PropertyMetadataSchema::getPath)
+                .filter(StringUtils::isNotEmpty)
+                .collect(Collectors.toSet());
+
+        ObjectNode root = jsonMapper.createObjectNode();
+
+        for (var schema : schemas) {
+            String path = schema.getPath();
+            if (StringUtils.isEmpty(path)) {
+                continue;
+            }
+            String[] parts = path.split("/");
+            ObjectNode current = root;
+            for (int i = 0; i < parts.length; i++) {
+                String part = parts[i];
+                boolean isLast = (i == parts.length - 1);
+                boolean isLeaf = isLast && allPaths.stream().noneMatch(p -> p.startsWith(path + "/"));
+
+                if (isLeaf) {
+                    String enumValues = schema.getEnumValues();
+                    current.put(part, StringUtils.isEmpty(enumValues) ? "" : enumValues);
+                } else {
+                    if (!current.has(part)) {
+                        current.set(part, jsonMapper.createObjectNode());
+                    }
+                    current = (ObjectNode) current.get(part);
+                }
+            }
+        }
+
+        return root;
+    }
+
+    @Override
+    public PropertyMetadataSchemaVO getMetadataSchemaTree(String ontologyUniqueIdentifier) {
+        var schemas = propertyMetadataSchemaService.list(
+                new LambdaQueryWrapper<PropertyMetadataSchema>()
+                        .eq(PropertyMetadataSchema::getOntologyUniqueIdentifier, ontologyUniqueIdentifier));
+        if (CollectionUtils.isEmpty(schemas)) {
+            return null;
+        }
+        var schemaMap = schemas.stream().collect(Collectors.groupingBy(PropertyMetadataSchema::getParentId));
+        var roots = schemaMap.get(0);
+        if (CollectionUtils.isEmpty(roots)) {
+            return null;
+        }
+        return buildSchemaVO(roots.get(0), schemaMap);
     }
 
 
@@ -716,6 +943,20 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         return result;
     }
 
+    private PropertyMetadataSchemaVO buildSchemaVO(PropertyMetadataSchema schema, Map<Integer, List<PropertyMetadataSchema>> schemaMap) {
+        var vo = new PropertyMetadataSchemaVO()
+                .setEnumValues(StringUtils.isEmpty(schema.getEnumValues()) ?
+                        null : Lists.newArrayList(StringUtils.split(schema.getEnumValues(), ",")))
+                .setSchemaId(schema.getId())
+                .setName(schema.getName());
+        var children = schemaMap.get(schema.getId());
+        if (CollectionUtils.isNotEmpty(children)) {
+            vo.setChildren(children.stream()
+                    .map(child -> buildSchemaVO(child, schemaMap))
+                    .collect(Collectors.toList()));
+        }
+        return vo;
+    }
 
     private PropertyCategoryVO buildCategoryVO(PropertyCategory category, Map<Integer, List<PropertyCategory>> categoryMap) {
         var vo = new PropertyCategoryVO()
@@ -873,5 +1114,25 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         links.stream().forEach(link -> entityService.createEntityRelations(link.getUniqueIdentifier()));
     }
 
+    private void validateMetadataAgainstSchema(JsonNode metadata, JsonNode schema, String path) {
+        if (metadata.isObject()) {
+            PreconditionUtils.checkArgument(schema.isObject(),
+                    "元数据schema不匹配，期望对象类型，路径：" + path, HttpStatus.BAD_REQUEST);
+            var metadataObj = (ObjectNode) metadata;
+            var schemaObj = (ObjectNode) schema;
+            var fieldNames = metadataObj.fieldNames();
+            while (fieldNames.hasNext()) {
+                var fieldName = fieldNames.next();
+                var childPath = path.isEmpty() ? fieldName : path + "/" + fieldName;
+                PreconditionUtils.checkArgument(schemaObj.has(fieldName),
+                        "元数据字段不在schema中：" + childPath, HttpStatus.BAD_REQUEST);
+                var childMetadata = metadataObj.get(fieldName);
+                var childSchema = schemaObj.get(fieldName);
+                if (childMetadata.isObject()) {
+                    validateMetadataAgainstSchema(childMetadata, childSchema, childPath);
+                }
+            }
+        }
+    }
 
 }

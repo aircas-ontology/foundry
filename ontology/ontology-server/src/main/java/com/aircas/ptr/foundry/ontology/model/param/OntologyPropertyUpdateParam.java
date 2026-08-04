@@ -3,6 +3,7 @@ package com.aircas.ptr.foundry.ontology.model.param;
 import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import com.aircas.ptr.foundry.ontology.controller.validator.DatasourceVerify;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyPropertyPrimaryCategoryEnum;
+import com.fasterxml.jackson.databind.JsonNode;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.AllArgsConstructor;
@@ -69,5 +70,8 @@ public class OntologyPropertyUpdateParam extends IdentifierParam {
 
     @ApiModelProperty(name = "categoryId", value = "属性分类id", example = "10")
     private Integer categoryId;
+
+    @ApiModelProperty(name = "metadata", value = "属性元数据")
+    private JsonNode metadata;
 
 }

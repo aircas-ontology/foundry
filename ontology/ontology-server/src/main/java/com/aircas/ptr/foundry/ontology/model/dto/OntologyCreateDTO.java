@@ -2,6 +2,8 @@ package com.aircas.ptr.foundry.ontology.model.dto;
 
 
 import com.aircas.ptr.foundry.ontology.model.param.PropertyCategoryCreateParam;
+import com.aircas.ptr.foundry.ontology.model.param.PropertyMetadataSchemaCreateParam;
+import com.aircas.ptr.foundry.ontology.model.param.PropertyMetadataSchemaUpdateParam;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -20,6 +22,8 @@ public class OntologyCreateDTO {
     private OntologyMetaDataDTO metadata;
 
     private PropertyCategoryCreateParam propertyCategory;
+
+    private PropertyMetadataSchemaCreateParam propertySchema;
 
     private List<OntologyPropertyDTO> properties;
 

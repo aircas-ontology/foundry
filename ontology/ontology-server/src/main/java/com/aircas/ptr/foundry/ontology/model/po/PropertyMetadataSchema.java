@@ -38,10 +38,6 @@ public class PropertyMetadataSchema {
      */
     private Integer parentId;
 
-    /**
-     * 是否为叶子节点，叶子节点才赋值
-     */
-    private Boolean isLeaf;
 
     /**
      * 为叶子结点时的枚举值列表，/分割符

@@ -57,7 +57,6 @@ public class DataConverter {
 
     public static OntologyProperty convert(OntologyPropertyCreateParam param) {
         var datasource = param.getDatasource();
-
         var prop = OntologyProperty.builder()
                 .uniqueIdentifier(IdGenerator.generateUUID())
                 .tag(param.getTag())
@@ -75,6 +74,7 @@ public class DataConverter {
                 .defaultValue(param.getDefaultValue())
                 .storageGroup(param.getStorageGroup())
                 .propertyCategoryId(param.getCategoryId())
+                .metadata(param.getMetadata())
                 .build();
         if (datasource != null) {
             prop.setDatasourceId(datasource.getDatasourceId())
@@ -101,6 +101,7 @@ public class DataConverter {
                 .defaultValue(p.getDefaultValue())
                 .storageGroup(p.getStorageGroup())
                 .categoryId(p.getPropertyCategoryId())
+                .metadata(p.getMetadata())
                 .build();
     }
 
@@ -118,6 +119,7 @@ public class DataConverter {
                 .defaultValue(p.getDefaultValue())
                 .storageGroup(p.getStorageGroup())
                 .categoryId(p.getPropertyCategoryId())
+                .metadata(p.getMetadata())
                 .build();
     }
 

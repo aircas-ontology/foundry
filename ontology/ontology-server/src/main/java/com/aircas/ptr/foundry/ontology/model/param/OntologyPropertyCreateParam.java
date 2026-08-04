@@ -4,6 +4,7 @@ import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import com.aircas.ptr.foundry.ontology.controller.validator.DatasourceVerify;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyPropertyPrimaryCategoryEnum;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyPrimaryCategoryVO;
+import com.fasterxml.jackson.databind.JsonNode;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.AllArgsConstructor;
@@ -74,4 +75,8 @@ public class OntologyPropertyCreateParam extends OntologyIdentifierParam {
 
     @ApiModelProperty(name = "categoryId", value = "属性分类id", example = "10")
     private Integer categoryId;
+
+    @ApiModelProperty(name = "metadata", value = "元数据，json格式")
+    private JsonNode metadata;
+
 }

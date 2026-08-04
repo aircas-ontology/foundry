@@ -2,12 +2,12 @@ package com.aircas.ptr.foundry.ontology.service;
 
 import com.aircas.ptr.foundry.ontology.model.param.*;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
-import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyDetailVO;
-import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyInfoVO;
-import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyVisibilityVO;
-import com.aircas.ptr.foundry.ontology.model.vo.PropertyCategoryVO;
+import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.fasterxml.jackson.databind.JsonNode;
+import org.springframework.transaction.annotation.Transactional;
 
+import javax.validation.Valid;
 import java.util.List;
 
 public interface OntologyPropertyService extends IService<OntologyProperty> {
@@ -47,4 +47,14 @@ public interface OntologyPropertyService extends IService<OntologyProperty> {
     void deleteCategory(PropertyCategoryDeleteParam param);
 
     void updateCategory(PropertyCategoryUpdateParam param);
+
+    void createMetadataSchema(PropertyMetadataSchemaCreateParam param);
+
+    void updateMetadataSchema(PropertyMetadataSchemaUpdateParam param);
+
+    void deleteMetadataSchema(PropertyMetadataSchemaDeleteParam param);
+
+    JsonNode getMetadataSchema(String ontologyUniqueIdentifier);
+
+    PropertyMetadataSchemaVO getMetadataSchemaTree(String ontologyUniqueIdentifier);
 }

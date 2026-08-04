@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.vo;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.AllArgsConstructor;
@@ -44,5 +45,8 @@ public class EntityPropertyDetailVO  {
 
     @ApiModelProperty(name = "categoryId", value = "属性分类id", example = "10")
     private Integer categoryId;
+
+    @ApiModelProperty(name = "metadata", value = "属性元数据")
+    private JsonNode metadata;
 
 }

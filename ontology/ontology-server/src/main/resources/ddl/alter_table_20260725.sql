@@ -42,7 +42,6 @@ CREATE TABLE "ontology"."property_metadata_schema" (
    "ontology_unique_identifier" varchar(255) COLLATE "pg_catalog"."default" NOT NULL,
    "path" text COLLATE "pg_catalog"."default",
    "parent_id" int4 NOT NULL DEFAULT 0,
-   "is_leaf" bool,
    "enum_values" text COLLATE "pg_catalog"."default",
    "name" varchar(255) COLLATE "pg_catalog"."default",
    CONSTRAINT "property_metadata_schema_pkey" PRIMARY KEY ("id"),
@@ -60,8 +59,6 @@ COMMENT ON COLUMN "ontology"."property_metadata_schema"."ontology_unique_identif
 COMMENT ON COLUMN "ontology"."property_metadata_schema"."path" IS '元数据完整path，/分割符';
 
 COMMENT ON COLUMN "ontology"."property_metadata_schema"."parent_id" IS '父元数据id，根节点为0';
-
-COMMENT ON COLUMN "ontology"."property_metadata_schema"."is_leaf" IS '是否为叶子节点，叶子节点才赋值';
 
 COMMENT ON COLUMN "ontology"."property_metadata_schema"."enum_values" IS '为叶子结点时的枚举值列表，/分割符';
 

@@ -6,6 +6,7 @@ import com.aircas.ptr.foundry.ontology.model.enums.OntologyPropertyPrimaryCatego
 import com.aircas.ptr.foundry.ontology.model.param.*;
 import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.aircas.ptr.foundry.ontology.service.OntologyPropertyService;
+import com.fasterxml.jackson.databind.JsonNode;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
@@ -178,9 +179,49 @@ public class OntologyPropertyController {
     @GetMapping("/category")
     @ApiOperation(value = "查询属性分类体系树")
     public RestResult<PropertyCategoryVO> getCategory(@RequestParam(required = true, name = "ontologyUniqueIdentifier")
-                                  @ApiParam(value = "本体uniqueIdentifier", required = true)
-                                  @OntologyIdVerify String ontologyUniqueIdentifier) {
+                                                      @ApiParam(value = "本体uniqueIdentifier", required = true)
+                                                      @OntologyIdVerify String ontologyUniqueIdentifier) {
         var res = ontologyPropertyService.getCategory(ontologyUniqueIdentifier);
+        return RestResult.ofData(res);
+    }
+
+    @PostMapping("/metadata_schema")
+    @ApiOperation(value = "创建属性元数据schema")
+    public RestResult createMetadataSchema(@RequestBody @Valid PropertyMetadataSchemaCreateParam param) {
+        ontologyPropertyService.createMetadataSchema(param);
+        return RestResult.success();
+    }
+
+    @PutMapping("/metadata_schema")
+    @ApiOperation(value = "修改属性元数据schema")
+    public RestResult updateMetadataSchema(@RequestBody @Valid PropertyMetadataSchemaUpdateParam param) {
+        ontologyPropertyService.updateMetadataSchema(param);
+        return RestResult.success();
+    }
+
+    @DeleteMapping("/metadata_schema")
+    @ApiOperation(value = "删除属性元数据schema")
+    public RestResult deleteMetadataSchema(@RequestBody @Valid PropertyMetadataSchemaDeleteParam param) {
+        ontologyPropertyService.deleteMetadataSchema(param);
+        return RestResult.success();
+    }
+
+
+    @GetMapping("/metadata_schema")
+    @ApiOperation(value = "查询属性元数据schema")
+    public RestResult<JsonNode> getMetadataSchema(@RequestParam(required = true, name = "ontologyUniqueIdentifier")
+                                                  @ApiParam(value = "本体uniqueIdentifier", required = true)
+                                                  @OntologyIdVerify String ontologyUniqueIdentifier) {
+        var res = ontologyPropertyService.getMetadataSchema(ontologyUniqueIdentifier);
+        return RestResult.ofData(res);
+    }
+
+    @GetMapping("/metadata_schema/tree")
+    @ApiOperation(value = "查询属性元数据schema树")
+    public RestResult<PropertyMetadataSchemaVO> getMetadataSchemaTree(@RequestParam(required = true, name = "ontologyUniqueIdentifier")
+                                                                      @ApiParam(value = "本体uniqueIdentifier", required = true)
+                                                                      @OntologyIdVerify String ontologyUniqueIdentifier) {
+        var res = ontologyPropertyService.getMetadataSchemaTree(ontologyUniqueIdentifier);
         return RestResult.ofData(res);
     }
 }

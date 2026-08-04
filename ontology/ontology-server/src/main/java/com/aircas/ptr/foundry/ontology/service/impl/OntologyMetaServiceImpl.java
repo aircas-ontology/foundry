@@ -80,6 +80,9 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
     private PropertyCategoryService propertyCategoryService;
 
     @Resource
+    private PropertyMetadataSchemaService propertyMetadataSchemaService;
+
+    @Resource
     private OntologyMetaServiceImpl proxyService;
 
 
@@ -136,7 +139,6 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                     .ontologyIdentifier(childIdentifier)
                     .build();
             ontologyPropertyService.createCategory(createParam);
-
             var childCategories = propertyCategoryService.list(new LambdaQueryWrapper<PropertyCategory>()
                     .eq(PropertyCategory::getOntologyUniqueIdentifier, childIdentifier));
             var childCategoryByPath = childCategories.stream().collect(Collectors.toMap(PropertyCategory::getPath, PropertyCategory::getId));
@@ -146,7 +148,22 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                     oldToNewCategoryIdMap.put(parentCategory.getId(), newId);
                 }
             }
-
+        }
+        //创建属性元数据
+        var parentMetadataSchemas = propertyMetadataSchemaService.list(new LambdaQueryWrapper<PropertyMetadataSchema>()
+                .eq(PropertyMetadataSchema::getOntologyUniqueIdentifier, parentIdentifier));
+        if (CollectionUtils.isNotEmpty(parentMetadataSchemas)) {
+            var parentSchemaByParentId = parentMetadataSchemas.stream().collect(Collectors.groupingBy(PropertyMetadataSchema::getParentId));
+            var rootSchema = parentSchemaByParentId.get(0).get(0);
+            var rootNode = buildMetadataSchemaTree(rootSchema, parentSchemaByParentId);
+            var createSchemaParam = PropertyMetadataSchemaCreateParam.builder()
+                    .parentId(0)
+                    .name(rootNode.getName())
+                    .enumValues(rootNode.getEnumValues())
+                    .children(rootNode.getChildren())
+                    .ontologyIdentifier(childIdentifier)
+                    .build();
+            ontologyPropertyService.createMetadataSchema(createSchemaParam);
         }
         // 创建属性
         var parentProperties = ontologyPropertyService.list(new LambdaUpdateWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyCreateParam.getParentOntologyUniqueIdentifier()));
@@ -166,6 +183,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                         .defaultValue(v.getDefaultValue())
                         .storageGroup("main".equals(v.getStorageGroup()) ? "main" : meta.getApiName() + "_" + v.getStorageGroup())
                         .propertyCategoryId(v.getPropertyCategoryId() != null ? oldToNewCategoryIdMap.get(v.getPropertyCategoryId()) : null)
+                        .metadata(v.getMetadata())
                         .build())
                 .collect(Collectors.toList());
         ontologyPropertyService.saveBatch(childProps);
@@ -263,6 +281,22 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 .build();
     }
 
+    private PropertyMetadataSchemaCreateParam.MetadataSchemaNode buildMetadataSchemaTree(PropertyMetadataSchema schema, Map<Integer, List<PropertyMetadataSchema>> schemaByParentId) {
+        var children = schemaByParentId.get(schema.getId());
+        List<PropertyMetadataSchemaCreateParam.MetadataSchemaNode> childNodes = null;
+        if (CollectionUtils.isNotEmpty(children)) {
+            childNodes = children.stream()
+                    .map(child -> buildMetadataSchemaTree(child, schemaByParentId))
+                    .collect(Collectors.toList());
+        }
+        return PropertyMetadataSchemaCreateParam.MetadataSchemaNode.builder()
+                .name(schema.getName())
+                .children(childNodes)
+                .enumValues(StringUtils.isNotEmpty(schema.getEnumValues()) ?
+                        Lists.newArrayList(schema.getEnumValues().split(",")) : null)
+                .build();
+    }
+
 
     @Override
     @Transactional(value = "mainTransactionManager")
@@ -273,6 +307,8 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         this.remove(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, ontologyIdentifier));
         //删除属性分类
         propertyCategoryService.remove(new LambdaQueryWrapper<PropertyCategory>().eq(PropertyCategory::getOntologyUniqueIdentifier, ontologyIdentifier));
+        //删除属性元数据
+        propertyMetadataSchemaService.remove(new LambdaQueryWrapper<PropertyMetadataSchema>().eq(PropertyMetadataSchema::getOntologyUniqueIdentifier, ontologyIdentifier));
         //删除属性
         ontologyPropertyService.remove(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyIdentifier));
         //删除关系
@@ -390,6 +426,13 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                     .setOntologyIdentifier(meta.getUniqueIdentifier());
             ontologyPropertyService.createCategory(propertyCategoryCreateParam);
         }
+        //保存属性元数据
+        var propertySchemaCreateParam = dto.getPropertySchema();
+        if (propertySchemaCreateParam != null) {
+            propertySchemaCreateParam.setParentId(0)
+                    .setOntologyIdentifier(meta.getUniqueIdentifier());
+            ontologyPropertyService.createMetadataSchema(propertySchemaCreateParam);
+        }
         //保存属性
         var props = dto.getProperties();
         if (CollectionUtils.isNotEmpty(props)) {
@@ -410,6 +453,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                             .defaultValue(p.getDefaultValue())
                             .storageGroup(p.getStorageGroup())
                             .categoryId(StringUtils.isEmpty(p.getCategoryPath()) ? null : categoryMap.get(p.getCategoryPath()))
+                            .metadata(p.getMetadata())
                             .build())
                     .collect(Collectors.toList());
             ontologyPropertyService.batchCreateProperties(ontologyPropertyCreateParams);

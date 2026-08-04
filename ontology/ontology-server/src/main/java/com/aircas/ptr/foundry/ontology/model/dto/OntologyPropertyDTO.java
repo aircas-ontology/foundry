@@ -3,6 +3,7 @@ package com.aircas.ptr.foundry.ontology.model.dto;
 
 import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyPropertyPrimaryCategoryEnum;
+import com.fasterxml.jackson.databind.JsonNode;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -52,4 +53,7 @@ public class OntologyPropertyDTO {
 
     @ApiModelProperty(name = "categoryPath", value = "属性分类完整路径", example = "平台/载荷/光学载荷")
     private String categoryPath;
+
+    @ApiModelProperty(name = "metadata", value = "属性元数据")
+    private JsonNode metadata;
 }
