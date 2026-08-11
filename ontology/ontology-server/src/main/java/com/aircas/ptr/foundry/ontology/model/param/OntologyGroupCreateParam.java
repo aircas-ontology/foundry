@@ -16,7 +16,7 @@ import javax.validation.constraints.NotBlank;
 @AllArgsConstructor
 @NoArgsConstructor
 @ApiModel(description = "创建本体分组")
-public class OntologyGroupCreateParam {
+public class OntologyGroupCreateParam extends OntologySpaceIdParam {
 
     @ApiModelProperty(name = "groupName", value = "分组名称", required = true, example = "远海远域")
     @NotBlank(message = "groupName is empty")

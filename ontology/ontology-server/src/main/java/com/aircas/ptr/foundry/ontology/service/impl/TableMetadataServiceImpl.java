@@ -83,4 +83,10 @@ public class TableMetadataServiceImpl implements TableMetadataService {
         rmqProducer.sendMessage(routingKey, jsonMapper.writeValueAsString(event));
     }
 
+    @Override
+    @SneakyThrows
+    public void createSchema(String schemaName) {
+        tableMetadataMapper.createSchema(schemaName);
+    }
+
 }

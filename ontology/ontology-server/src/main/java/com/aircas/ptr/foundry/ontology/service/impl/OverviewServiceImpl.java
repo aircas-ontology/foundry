@@ -42,10 +42,15 @@ public class OverviewServiceImpl implements OverviewService {
     @Resource
     private OntologyGroupMapper groupMapper;
 
+
+    @Resource
+    private OntologySpaceMapper spaceMapper;
+
     @Override
     public OverviewCountVO getCount() {
 
         return OverviewCountVO.builder()
+                .spaceCount(spaceMapper.selectCount(new QueryWrapper<>()))
                 .actionCount(ontologyActionMapper.selectCount(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getStatus, Status.ENABLE.getValue())))
                 .linkCount(ontologyLinkGroupMapper.selectCount(new LambdaQueryWrapper<OntologyLinkGroup>().eq(OntologyLinkGroup::getStatus, Status.ENABLE.getValue())))
                 .propertyCount(propertyMapper.selectCount(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getStatus, Status.ENABLE.getValue())))

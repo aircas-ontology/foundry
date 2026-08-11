@@ -44,6 +44,7 @@ public class OntologyGroupServiceImpl extends ServiceImpl<OntologyGroupMapper, O
                 .icon(param.getIconUrl())
                 .status(Status.ENABLE.getValue())
                 .description(param.getDescription())
+                .ontologySpaceId(param.getSpaceId())
                 .build());
     }
 
@@ -90,6 +91,8 @@ public class OntologyGroupServiceImpl extends ServiceImpl<OntologyGroupMapper, O
                 .groupName(group.getGroupName())
                 .description(group.getDescription())
                 .icon(group.getIcon())
+                .spaceId(group.getOntologySpaceId())
                 .build();
     }
 }
+

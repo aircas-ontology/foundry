@@ -93,4 +93,14 @@ public class OntologyMeta implements Serializable {
      */
     private Boolean canGenerateEntity;
 
+    /**
+     * 本体空间id
+     */
+    private Integer ontologySpaceId;
+
+    /**
+     * 本体分类id
+     */
+    private Integer ontologyCategoryId;
+
 }

@@ -61,5 +61,7 @@ public class OntologyGroup implements Serializable {
 
     private String description;
 
+    private Integer ontologySpaceId;
+
     private static final long serialVersionUID = 1L;
 }

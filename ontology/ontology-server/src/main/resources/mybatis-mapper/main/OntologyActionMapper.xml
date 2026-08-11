@@ -4,5 +4,12 @@
 
 
 
+    <select id="countGroupByOntology" resultType="com.aircas.ptr.foundry.ontology.model.view.OntologyStatisticsCountView">
+        SELECT ontology_unique_identifier AS ontologyUniqueIdentifier,
+               COUNT(*) AS cnt
+        FROM ontology_action
+        GROUP BY ontology_unique_identifier
+    </select>
+
 
 </mapper>

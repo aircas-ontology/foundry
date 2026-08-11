@@ -35,5 +35,6 @@ public interface TableMetadataMapper {
 
     void dropTable(@Param("tableName") String tableName);
 
+    void createSchema(@Param("schemaName") String schemaName);
 
 }

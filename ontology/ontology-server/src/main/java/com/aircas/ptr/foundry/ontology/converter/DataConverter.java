@@ -135,6 +135,9 @@ public class DataConverter {
                 .icon(ontologyMeta.getIcon())
                 .metaGroupId(StringUtils.isEmpty(ontologyMeta.getMetaGroupId()) ? Sets.newHashSet() : Arrays.stream(ontologyMeta.getMetaGroupId().split(",")).collect(Collectors.toSet()))
                 .displayName(ontologyMeta.getDisplayName())
+                .spaceId(ontologyMeta.getOntologySpaceId())
+                .ontologyCategoryId(ontologyMeta.getOntologyCategoryId())
+                .parentOntologyUniqueIdentifier(ontologyMeta.getParentUniqueIdentifier())
                 .build();
     }
 

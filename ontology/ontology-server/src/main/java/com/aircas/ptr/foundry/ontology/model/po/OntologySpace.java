@@ -1,6 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.po;
 
-import com.aircas.ptr.foundry.ontology.model.enums.OntologyLinkTypeEnum;
+
 import com.baomidou.mybatisplus.annotation.*;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.AllArgsConstructor;
@@ -9,39 +9,44 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 
-import java.io.Serializable;
 import java.util.Date;
 
 import static com.aircas.ptr.foundry.common.constant.DateFormat.DATE_FORMAT_DEFAULT;
 
-
 @Data
 @Builder
+@Accessors(chain = true)
 @NoArgsConstructor
 @AllArgsConstructor
-@Accessors(chain = true)
-@TableName("ontology_link_group")
-public class OntologyLinkGroup implements Serializable {
+@TableName(value = "ontology_space")
+public class OntologySpace {
+
+
     /**
      * 主键自增
      */
     @TableId(type = IdType.AUTO)
-    private Long id;
+    private Integer id;
+
 
     /**
-     * link的unique identifier
+     * 名称
      */
-    private String uniqueIdentifier;
+    private String displayName;
 
     /**
-     * link的名称
+     * 图标
      */
-    private String name;
+    private String icon;
 
     /**
-     * 软删除状态位，1有效，0无效
+     * apiName
      */
-    private Integer status;
+    private String apiName;
+
+
+    private String description;
+
 
     /**
      * 记录创建时间
@@ -56,25 +61,4 @@ public class OntologyLinkGroup implements Serializable {
     @JsonFormat(pattern = DATE_FORMAT_DEFAULT, timezone = "GMT+8")
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private Date updateTime;
-
-    /**
-     * 开始本体unique identifier
-     */
-    private String ontologyUniqueIdentifierFrom;
-
-    /**
-     * 结束本体unique identifier
-     */
-    private String ontologyUniqueIdentifierTo;
-
-    /**
-     * 关系类型
-     */
-    private OntologyLinkTypeEnum type;
-
-    /**
-     * 本体空间id
-     */
-    private Integer ontologySpaceId;
-
 }

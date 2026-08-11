@@ -37,8 +37,20 @@ public class PreconditionUtils {
         }
     }
 
+    public static void checkIsNull(Object object, String message) {
+        if (object != null) {
+            throw new BusinessException(message);
+        }
+    }
+
     public static void checkNotNull(Object object, String message, HttpStatus httpStatus) {
         if (object == null) {
+            throw new BusinessException(message, httpStatus);
+        }
+    }
+
+    public static void checkIsNull(Object object, String message, HttpStatus httpStatus) {
+        if (object != null) {
             throw new BusinessException(message, httpStatus);
         }
     }

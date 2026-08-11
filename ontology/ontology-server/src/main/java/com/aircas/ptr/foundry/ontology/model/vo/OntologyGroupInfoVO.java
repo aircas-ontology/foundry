@@ -32,4 +32,7 @@ public class OntologyGroupInfoVO {
      @ApiModelProperty(value = "分组icon url", example = "icon")
      private String icon;
 
+     @ApiModelProperty(name = "spaceId", value = "本体空间id")
+     private Integer spaceId;
+
 }

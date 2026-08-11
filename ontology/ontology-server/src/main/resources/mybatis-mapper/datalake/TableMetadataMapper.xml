@@ -144,5 +144,8 @@
             ON "${tableName}" ("${columnName}")
     </update>
 
+    <update id="createSchema">
+        CREATE SCHEMA IF NOT EXISTS "${schemaName}"
+    </update>
 
 </mapper>

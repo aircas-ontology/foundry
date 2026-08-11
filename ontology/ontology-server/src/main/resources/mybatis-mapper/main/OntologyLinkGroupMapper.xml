@@ -2,4 +2,12 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyLinkGroupMapper">
 
+
+    <select id="countGroupByOntologySpace" resultType="com.aircas.ptr.foundry.ontology.model.view.SpaceStatisticsCountView">
+        SELECT ontology_space_id AS ontologySpaceId,
+               COUNT(*) AS cnt
+        FROM ontology_link_group
+        GROUP BY ontology_space_id
+    </select>
+
 </mapper>

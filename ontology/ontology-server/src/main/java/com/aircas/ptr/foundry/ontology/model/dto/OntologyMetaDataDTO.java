@@ -17,6 +17,7 @@ import java.util.Set;
 public class OntologyMetaDataDTO {
 
     private String apiName;
+    private String ontologySpaceName;
     private String description;
     private String displayName;
     private Set<String> groupNames;

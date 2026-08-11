@@ -87,5 +87,18 @@ public class OntologyMetaInfoVO {
     @ApiModelProperty(name = "metaGroupId", value = "分组")
     private Set<String> metaGroupId;
 
+    @ApiModelProperty(name = "spaceId", value = "本体空间id")
+    private Integer spaceId;
+
+    @ApiModelProperty(name = "ontologyCategoryId", value = "本体分类id")
+    private Integer ontologyCategoryId;
+
+    @ApiModelProperty(name = "parentOntologyUniqueIdentifier", value = "父本体id")
+    private String parentOntologyUniqueIdentifier;
+
+    @ApiModelProperty(name = "parentOntologyDisplayName", value = "父本体名称")
+    private String parentOntologyDisplayName;
+
+
 }
 

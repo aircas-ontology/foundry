@@ -18,6 +18,12 @@ public class OverviewCountVO {
     /**
      * 本体数量统计
      */
+    @ApiModelProperty(notes = "本体空间统计")
+    private Integer spaceCount;
+
+    /**
+     * 本体数量统计
+     */
     @ApiModelProperty(notes = "本体数量统计")
     private Integer ontologyCount;
 
