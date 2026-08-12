@@ -17,7 +17,7 @@ import javax.annotation.Resource;
 import javax.validation.Valid;
 import java.util.List;
 
-@Api(tags = "实体")
+@Api(tags = "实体管理")
 @RestController
 @Validated
 @RequestMapping("/entity")

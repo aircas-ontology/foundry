@@ -4,11 +4,6 @@ import com.aircas.ptr.foundry.common.base.ResultCode;
 import lombok.Data;
 import org.springframework.http.HttpStatus;
 
-/**
- * @author dongjunchuan
- * @description 自定义重复插入数据库的异常类
- * @since 2023/12/18 17:42
- */
 
 @Data
 public class BusinessException extends RuntimeException {

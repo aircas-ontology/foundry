@@ -168,4 +168,6 @@ public interface ObjectMapper extends BaseMapper<Object> {
 
     Integer queryCountBySql(@Param("sql") String sql);
 
+    Integer count(@Param("schemaName") String schemaName,
+                  @Param("tableName") String tableName);
 }

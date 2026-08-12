@@ -497,7 +497,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
 
         var parentPath = parentId.equals(0) ? "" : existCategoryMap.get(parentId).getPath() + "/";
 
-        var rootNode = PropertyCategoryCreateParam.CategoryNode.builder()
+        var rootNode = CategoryNode.builder()
                 .parentId(parentId)
                 .children(param.getChildren())
                 .name(param.getName())
@@ -505,11 +505,11 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                 .build();
 
         // 按层级 BFS，每层批量插入
-        List<PropertyCategoryCreateParam.CategoryNode> currentLevel = Lists.newArrayList(rootNode);
+        List<CategoryNode> currentLevel = Lists.newArrayList(rootNode);
 
         while (CollectionUtils.isNotEmpty(currentLevel)) {
             List<PropertyCategory> batchList = Lists.newArrayList();
-            List<PropertyCategoryCreateParam.CategoryNode> nextLevel = Lists.newArrayList();
+            List<CategoryNode> nextLevel = Lists.newArrayList();
             for (var node : currentLevel) {
                 var category = PropertyCategory.builder()
                         .ontologyUniqueIdentifier(param.getOntologyIdentifier())
@@ -527,7 +527,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                 var generatedId = batchList.get(i).getId();
                 if (CollectionUtils.isNotEmpty(node.getChildren())) {
                     for (var child : node.getChildren()) {
-                        var childNode = PropertyCategoryCreateParam.CategoryNode.builder()
+                        var childNode = CategoryNode.builder()
                                 .parentId(generatedId)
                                 .path(node.getPath() + "/" + child.getName())
                                 .name(child.getName())

@@ -4,7 +4,6 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 
 /**
- * @author dongjunchuan
  * @description 可见性，1正常、2隐藏、3突出显示
  * @since 2023/12/18 9:50
  */

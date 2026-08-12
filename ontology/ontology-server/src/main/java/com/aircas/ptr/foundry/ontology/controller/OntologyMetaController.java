@@ -26,7 +26,7 @@ import javax.validation.Valid;
 import java.util.List;
 
 
-@Api(tags = "本体元数据")
+@Api(tags = "本体对象管理")
 @RestController
 @RequestMapping("/meta")
 @Validated
@@ -44,7 +44,7 @@ public class OntologyMetaController {
     }
 
 
-    @PostMapping("")
+    @PostMapping
     @ApiOperation(value = "创建本体")
     public RestResult<IdentifierVO> createOntology(@RequestBody @Valid OntologyMetaCreateParam ontologyCreateParam) {
         String uniqIdentifier = ontologyMetaService.createOntology(ontologyCreateParam);
@@ -59,7 +59,7 @@ public class OntologyMetaController {
         return RestResult.success();
     }
 
-    @PutMapping("")
+    @PutMapping
     @ApiOperation(value = "修改本体元数据")
     public RestResult updateMeta(@RequestBody @Valid OntologyUpdateParam updateParam) {
         ontologyMetaService.updateMeta(updateParam);
@@ -67,7 +67,7 @@ public class OntologyMetaController {
     }
 
 
-    @GetMapping("")
+    @GetMapping
     @ApiOperation(value = "根据unique identifier查询一个本体元数据")
     public RestResult<OntologyMetaInfoVO> getMetaByUniqueIdentifier(@RequestParam(name = "uniqueIdentifier", required = true) @ApiParam(name = "uniqueIdentifier", value = "本体unique identifer", required = true) @OntologyIdVerify String uniqueIdentifier) {
         return RestResult.ofData(ontologyMetaService.getMetaByUniqueIdentifier(uniqueIdentifier));

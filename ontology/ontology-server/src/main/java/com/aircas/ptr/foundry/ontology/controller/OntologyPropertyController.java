@@ -20,7 +20,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
-@Api(tags = "属性")
+@Api(tags = "本体属性管理")
 @RestController
 @RequestMapping("/property")
 @RequiredArgsConstructor

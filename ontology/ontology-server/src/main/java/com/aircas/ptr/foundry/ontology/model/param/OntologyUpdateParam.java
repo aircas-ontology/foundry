@@ -49,5 +49,9 @@ public class OntologyUpdateParam extends OntologyIdentifierParam {
     @NotEmpty(message = "groupIds is empty")
     private List<String> groupIds;
 
+
+    @ApiModelProperty(name = "categoryId", value = "分类id", example = "1")
+    private Integer categoryId;
+
 }
 

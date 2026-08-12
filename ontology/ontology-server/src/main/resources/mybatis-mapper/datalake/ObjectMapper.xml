@@ -227,6 +227,9 @@
         ${sql}
     </select>
 
+    <select id="count" resultType="java.lang.Integer">
+        SELECT count(*)
+        FROM "${schemaName}"."${tableName}"
+    </select>
 
 </mapper>
-

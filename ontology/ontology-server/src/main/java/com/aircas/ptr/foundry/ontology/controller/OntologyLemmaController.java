@@ -20,7 +20,7 @@ import javax.annotation.Resource;
 import javax.validation.Valid;
 import java.util.List;
 
-@Api(tags = "本体词条")
+@Api(tags = "本体百科词条")
 @RestController
 @Validated
 @RequestMapping("/lemma")

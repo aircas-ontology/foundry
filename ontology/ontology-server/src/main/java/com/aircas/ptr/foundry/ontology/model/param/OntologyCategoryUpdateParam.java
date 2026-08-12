@@ -1,6 +1,5 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
-import com.aircas.ptr.foundry.ontology.controller.validator.SpaceIdVerify;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.AllArgsConstructor;
@@ -9,18 +8,18 @@ import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
 
-import javax.validation.constraints.NotNull;
+import javax.validation.constraints.NotBlank;
+
 
 @Data
 @SuperBuilder
 @Accessors(chain = true)
 @NoArgsConstructor
 @AllArgsConstructor
-@ApiModel(description = "本体空间id Param")
-public class OntologySpaceIdParam {
+@ApiModel(description = "分类更新请求")
+public class OntologyCategoryUpdateParam extends OntologyCategoryDeleteParam {
 
-    @ApiModelProperty(name = "spaceId", value = "本体空间id", example = "1", required = true)
-    @NotNull(message = "spaceId is empty")
-    @SpaceIdVerify
-    private Integer spaceId;
+    @ApiModelProperty(name = "name", value = "属性分类名称", example = "平台")
+    @NotBlank(message = "name is empty")
+    private String name;
 }

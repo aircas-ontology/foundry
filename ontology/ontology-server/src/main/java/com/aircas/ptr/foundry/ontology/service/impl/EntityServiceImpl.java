@@ -669,6 +669,11 @@ public class EntityServiceImpl implements EntityService {
         }
     }
 
+    @Override
+    public Integer countEntity(String datasourceSchema, String datasourceId) {
+        return objectMapper.count(datasourceSchema, datasourceId);
+    }
+
 
     @Override
     public Page<EntityInfoVO> getEntities(String ontologyUniqueIdentifier,

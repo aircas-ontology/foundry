@@ -20,7 +20,7 @@ import javax.annotation.Resource;
 import javax.validation.Valid;
 
 
-@Api(tags = "行为")
+@Api(tags = "本体行为")
 @RestController
 @RequestMapping("/action")
 public class OntologyActionController {

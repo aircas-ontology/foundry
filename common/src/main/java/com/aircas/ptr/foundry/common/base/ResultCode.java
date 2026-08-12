@@ -1,7 +1,6 @@
 package com.aircas.ptr.foundry.common.base;
 
 /**
- * @author dongjunchuan
  * @ClassName: ResultCode
  * @Description: 返回的状态码
  * @date

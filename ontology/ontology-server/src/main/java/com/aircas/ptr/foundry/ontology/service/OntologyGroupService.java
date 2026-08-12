@@ -8,11 +8,7 @@ import com.baomidou.mybatisplus.extension.service.IService;
 
 import java.util.List;
 
-/**
- * @author dongjunchuan
- * @description
- * @since 2023/12/15 11:02
- */
+
 
 
 public interface OntologyGroupService extends IService<OntologyGroup> {
@@ -26,4 +22,6 @@ public interface OntologyGroupService extends IService<OntologyGroup> {
     void updateGroup(OntologyGroupUpdatedParam param);
 
     OntologyGroupInfoVO getGroupById(String groupId);
+
+    List<OntologyGroupInfoVO> getGroupBySpaceId(Integer spaceId);
 }

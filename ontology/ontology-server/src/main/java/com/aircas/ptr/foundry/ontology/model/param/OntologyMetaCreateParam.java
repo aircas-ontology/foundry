@@ -12,6 +12,7 @@ import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
 
 import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.NotNull;
 import java.util.Set;
 
 @Data
@@ -44,6 +45,9 @@ public class OntologyMetaCreateParam extends OntologySpaceIdParam {
 
     @ApiModelProperty(name = "parentOntologyUniqueIdentifier", value = "继承的本体id", example = "8039c5f9-5579-4ee4-ba94-b2f25f785dd6")
     private String parentOntologyUniqueIdentifier;
+
+    @ApiModelProperty(name = "categoryId", value = "分类id", example = "1")
+    private Integer categoryId;
 
 
 }

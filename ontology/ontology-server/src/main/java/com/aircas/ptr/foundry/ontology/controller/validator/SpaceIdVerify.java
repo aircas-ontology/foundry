@@ -11,7 +11,7 @@ import java.lang.annotation.Target;
 @Target({ElementType.TYPE, ElementType.FIELD, ElementType.PARAMETER})
 @Retention(RetentionPolicy.RUNTIME)
 public @interface SpaceIdVerify {
-    String message() default "空间不存在";
+    String message() default "无效的本体空间";
 
     Class<?>[] groups() default {};
 

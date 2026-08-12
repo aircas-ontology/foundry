@@ -20,7 +20,7 @@ import javax.annotation.Resource;
 import javax.validation.Valid;
 
 
-@Api(tags = "函数")
+@Api(tags = "函数算子管理")
 @RestController
 @RequestMapping("/function")
 public class OntologyFunctionController {

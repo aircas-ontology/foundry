@@ -13,11 +13,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
-/**
- * @author dongjunchuan
- * @description
- * @since 2023/12/11 16:15
- */
+
 
 public interface OntologyMetaService extends IService<OntologyMeta> {
 

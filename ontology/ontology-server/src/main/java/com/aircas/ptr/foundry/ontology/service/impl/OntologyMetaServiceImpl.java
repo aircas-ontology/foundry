@@ -122,9 +122,9 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 .build();
         //自主创建
         if (StringUtils.isEmpty(ontologyCreateParam.getParentOntologyUniqueIdentifier())) {
-            meta.setMetaGroupId(CollectionUtils.isNotEmpty(groupIds)
-                    ? String.join(",", groupIds) : null);
-            this.save(meta);
+            meta.setMetaGroupId(CollectionUtils.isNotEmpty(groupIds) ? String.join(",", groupIds) : null)
+                    .setOntologyCategoryId(ontologyCreateParam.getCategoryId());
+            save(meta);
         }//继承创建
         else {
             createOntologyByInherit(ontologyCreateParam, meta);
@@ -138,13 +138,15 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         var childIdentifier = meta.getUniqueIdentifier();
         var parentIdentifier = ontologyCreateParam.getParentOntologyUniqueIdentifier();
         //校验父本体
-        var parentOntology = this.getOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, parentIdentifier).eq(OntologyMeta::getStatus, Status.ENABLE.getValue()));
+        var parentOntology = getOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, parentIdentifier).eq(OntologyMeta::getStatus, Status.ENABLE.getValue()));
         PreconditionUtils.checkArgument(parentOntology != null, "父本体不存在", ResultCode.PARAM_ERROR, HttpStatus.BAD_REQUEST);
         //创建子本体元数据
         meta.setMetaGroupId(parentOntology.getMetaGroupId())
                 .setParentUniqueIdentifier(parentIdentifier)
-                .setStatus(parentOntology.getStatus());
-        this.save(meta);
+                .setStatus(parentOntology.getStatus())
+                .setDescription(parentOntology.getDescription())
+                .setOntologyCategoryId(parentOntology.getOntologyCategoryId());
+        save(meta);
         //创建属性分类
         var parentCategories = propertyCategoryService.list(new LambdaQueryWrapper<PropertyCategory>()
                 .eq(PropertyCategory::getOntologyUniqueIdentifier, parentIdentifier));
@@ -288,15 +290,15 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         }
     }
 
-    private PropertyCategoryCreateParam.CategoryNode buildCategoryTree(PropertyCategory category, Map<Integer, List<PropertyCategory>> categoryByParentId) {
+    private CategoryNode buildCategoryTree(PropertyCategory category, Map<Integer, List<PropertyCategory>> categoryByParentId) {
         var children = categoryByParentId.get(category.getId());
-        List<PropertyCategoryCreateParam.CategoryNode> childNodes = null;
+        List<CategoryNode> childNodes = null;
         if (CollectionUtils.isNotEmpty(children)) {
             childNodes = children.stream()
                     .map(child -> buildCategoryTree(child, categoryByParentId))
                     .collect(Collectors.toList());
         }
-        return PropertyCategoryCreateParam.CategoryNode.builder()
+        return CategoryNode.builder()
                 .name(category.getName())
                 .children(childNodes)
                 .build();
@@ -354,7 +356,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 .set(OntologyMeta::getDescription, updateParam.getDescription())
                 .set(OntologyMeta::getDisplayName, updateParam.getDisplayName())
                 .set(OntologyMeta::getLatestQueryTime, new Date())
-                .set(OntologyMeta::getUpdateTime, new Date());
+                .set(OntologyMeta::getOntologyCategoryId, updateParam.getCategoryId());
         update(null, updateWrapper);
     }
 
@@ -369,7 +371,33 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                     .eq(OntologyMeta::getUniqueIdentifier, metaInfoVO.getParentOntologyUniqueIdentifier()));
             metaInfoVO.setParentOntologyDisplayName(parentMeta != null ? parentMeta.getDisplayName() : null);
         }
+        buildMetaInfoStatistic(metaInfoVO);
         return metaInfoVO;
+    }
+
+    public void buildMetaInfoStatistic(OntologyMetaInfoVO metaInfoVO) {
+        var propCnt = ontologyPropertyService.count(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, metaInfoVO.getUniqueIdentifier()));
+        var actionCnt = actionService.count(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getOntologyUniqueIdentifier, metaInfoVO.getUniqueIdentifier()));
+        var linkCnt = linkService.count(new LambdaQueryWrapper<OntologyLinkGroup>()
+                .eq(OntologyLinkGroup::getOntologyUniqueIdentifierFrom, metaInfoVO.getUniqueIdentifier())
+                .or().eq(OntologyLinkGroup::getOntologyUniqueIdentifierTo, metaInfoVO.getUniqueIdentifier()));
+
+        var pk = ontologyPropertyService.getOne(new LambdaQueryWrapper<OntologyProperty>()
+                .eq(OntologyProperty::getIsPrimaryKey, 1)
+                .eq(OntologyProperty::getOntologyUniqueIdentifier, metaInfoVO.getUniqueIdentifier()));
+
+        var entityCnt = 0;
+        if (pk != null
+                && StringUtils.isNotEmpty(pk.getDatasourceId())
+                && StringUtils.isNotEmpty(pk.getDatasourceSchema())) {
+
+            entityCnt = entityService.countEntity(pk.getDatasourceSchema(), pk.getDatasourceId());
+        }
+
+        metaInfoVO.setActionCount(actionCnt)
+                .setEntityCount(entityCnt)
+                .setPropertyCount(propCnt)
+                .setRelationCount(linkCnt);
     }
 
 
@@ -654,4 +682,6 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
             }
         });
     }
+
+
 }

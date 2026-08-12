@@ -24,11 +24,6 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.stream.Collectors;
 
-/**
- * @author dongjunchuan
- * @description
- * @since 2023/12/15 11:04
- */
 
 @Service
 public class OntologyGroupServiceImpl extends ServiceImpl<OntologyGroupMapper, OntologyGroup> implements OntologyGroupService {
@@ -67,6 +62,7 @@ public class OntologyGroupServiceImpl extends ServiceImpl<OntologyGroupMapper, O
                         .groupName(v.getGroupName())
                         .description(v.getDescription())
                         .icon(v.getIcon())
+                        .spaceId(v.getOntologySpaceId())
                         .build())
                 .collect(Collectors.toList());
     }
@@ -93,6 +89,19 @@ public class OntologyGroupServiceImpl extends ServiceImpl<OntologyGroupMapper, O
                 .icon(group.getIcon())
                 .spaceId(group.getOntologySpaceId())
                 .build();
+    }
+
+    @Override
+    public List<OntologyGroupInfoVO> getGroupBySpaceId(Integer spaceId) {
+        var list = list(new LambdaQueryWrapper<OntologyGroup>().like(OntologyGroup::getOntologySpaceId, spaceId));
+        return list.stream().map(v -> OntologyGroupInfoVO.builder()
+                        .groupId(v.getGroupId())
+                        .groupName(v.getGroupName())
+                        .description(v.getDescription())
+                        .icon(v.getIcon())
+                        .spaceId(v.getOntologySpaceId())
+                        .build())
+                .collect(Collectors.toList());
     }
 }
 

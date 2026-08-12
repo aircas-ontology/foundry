@@ -15,13 +15,9 @@ import javax.annotation.Resource;
 import javax.validation.Valid;
 import java.util.List;
 
-/**
- * @author dongjunchuan
- * @description
- * @since 2023/12/15 11:00
- */
 
-@Api(tags = "分组")
+
+@Api(tags = "本体分组管理")
 @RestController
 @Validated
 @RequestMapping("/group")
@@ -65,5 +61,11 @@ public class OntologyGroupController {
         return RestResult.ofData(ontologyGroupService.getGroupById(groupId));
     }
 
+
+    @GetMapping("/space")
+    @ApiOperation("根据空间id查询分组")
+    public RestResult<List<OntologyGroupInfoVO>> getGroupBySpaceId(@RequestParam(required = true, name = "spaceId") Integer spaceId) {
+        return RestResult.ofData(ontologyGroupService.getGroupBySpaceId(spaceId));
+    }
 
 }

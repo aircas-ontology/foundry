@@ -9,11 +9,6 @@ import com.baomidou.mybatisplus.extension.service.IService;
 
 import java.util.List;
 
-/**
- * @author dongjunchuan
- * @description
- * @since 2023/12/15 11:03
- */
 
 
 public interface OntologyLinkGroupService extends IService<OntologyLinkGroup> {

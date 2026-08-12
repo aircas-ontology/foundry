@@ -65,4 +65,6 @@ public interface EntityService {
     void updateEntityProperty(EntityPropertyUpdateParam param);
 
     void deleteEntityProperty(EntityPropertyDeleteParam param);
+
+    Integer countEntity(String datasourceSchema, String datasourceId);
 }

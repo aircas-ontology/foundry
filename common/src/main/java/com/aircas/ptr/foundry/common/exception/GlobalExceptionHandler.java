@@ -19,7 +19,6 @@ import javax.validation.ConstraintViolationException;
 import java.util.stream.Collectors;
 
 /**
- * @author dongjunchuan
  * @description 全局异常处理器，用于捕获并处理自定义的异常
  * @since 2023/12/18 17:44
  */

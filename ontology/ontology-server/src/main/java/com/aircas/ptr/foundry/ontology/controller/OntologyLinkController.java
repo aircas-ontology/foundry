@@ -16,13 +16,9 @@ import org.springframework.web.bind.annotation.*;
 import javax.annotation.Resource;
 import java.util.List;
 
-/**
- * @author dongjunchuan
- * @description
- * @since 2023/12/15 11:00
- */
 
-@Api(tags = "本体关系")
+
+@Api(tags = "本体关系管理")
 @RestController
 @Validated
 @RequestMapping("/link")

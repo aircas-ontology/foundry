@@ -14,11 +14,7 @@ import java.util.Set;
 
 import static com.aircas.ptr.foundry.common.constant.DateFormat.DATE_FORMAT_DEFAULT;
 
-/**
- * @author dongjunchuan
- * @description
- * @since 2023/12/11 16:10
- */
+
 
 @Data
 @Builder
@@ -99,6 +95,16 @@ public class OntologyMetaInfoVO {
     @ApiModelProperty(name = "parentOntologyDisplayName", value = "父本体名称")
     private String parentOntologyDisplayName;
 
+    @ApiModelProperty(name = "entityCount", value = "实例数量")
+    private Integer entityCount;
 
+    @ApiModelProperty(name = "relationCount", value = "关系数量")
+    private Integer relationCount;
+
+    @ApiModelProperty(name = "propertyCount", value = "属性数量")
+    private Integer propertyCount;
+
+    @ApiModelProperty(name = "actionCount", value = "行为数量")
+    private Integer actionCount;
 }
 
