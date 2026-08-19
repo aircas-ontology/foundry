@@ -16,7 +16,7 @@
         <foreach item="value" index="key" collection="columnNames" separator=", ">
             "${key}" AS "${value}"
         </foreach>
-        FROM "${tableName}"
+        FROM "${schemaName}"."${tableName}"
         <if test="orderBy != null and orderBy != ''">
             ORDER BY "${orderBy}" DESC
         </if>
@@ -24,7 +24,7 @@
 
     <select id="queryPrimaryKeyValue" resultType="java.util.List">
         SELECT "${primaryKeyColumnName}"
-        FROM "${tableName}"
+        FROM "${schemaName}"."${tableName}"
     </select>
 
     <select id="queryPrimaryKeyAndTitleKeyValue" resultType="java.util.HashMap">
@@ -33,14 +33,14 @@
         <if test="titleKeyColumnName != null and titleKeyColumnName != ''">
             , "${titleKeyColumnName}"
         </if>
-        FROM "${tableName}"
+        FROM "${schemaName}"."${tableName}"
     </select>
 
     <!-- 获取列名 -->
     <select id="queryColumnNames" resultType="string">
         SELECT COLUMN_NAME
         FROM INFORMATION_SCHEMA.COLUMNS
-        WHERE TABLE_SCHEMA = 'public'
+        WHERE TABLE_SCHEMA = #{schemaName}
           AND TABLE_NAME = #{tableName}
     </select>
 
@@ -54,7 +54,7 @@
         <if test="columnNames == null or columnNames.size() == 0">
             *
         </if>
-        FROM "${tableName}"
+        FROM "${schemaName}"."${tableName}"
         <where>
             <if test="filterColumnName != null and filterColumnName != ''">
                 "${filterColumnName}" = #{filterColumnValue}
@@ -69,7 +69,7 @@
 
     <select id="queryCount" resultType="java.lang.Integer">
         SELECT count(*)
-        FROM "${tableName}"
+        FROM "${schemaName}"."${tableName}"
         <where>
             <if test="filterColumnName != null and filterColumnName != ''">
                 "${filterColumnName}" = #{filterColumnValue}
@@ -91,7 +91,7 @@
         <if test="joinTableColumnNames == null or joinTableColumnNames.size() == 0">
             t.*
         </if>
-        FROM ${joinTableName} t
+        FROM "${schemaName}"."${joinTableName}" t
         WHERE t."${joinTableKey}" = #{primaryKeyValue}
         ORDER BY t."${joinTableOrderBy}" ${sort}
         <if test="count != null">
@@ -110,7 +110,7 @@
         <if test="columnNames == null or columnNames.size() == 0">
             *
         </if>
-        FROM "${tableName}"
+        FROM "${schemaName}"."${tableName}"
         WHERE "${primaryKeyColumn}" = #{primaryKeyValue}
     </select>
 
@@ -124,7 +124,7 @@
         <if test="columnNames == null or columnNames.size() == 0">
             *
         </if>
-        FROM "${tableName}"
+        FROM "${schemaName}"."${tableName}"
         <if test="primaryKeyValueList != null and primaryKeyValueList.size() > 0">
             WHERE "${primaryKeyColumn}" IN
             <foreach collection="primaryKeyValueList" item="item" open="(" separator="," close=")">
@@ -135,7 +135,7 @@
 
 
     <update id="updateObject">
-        UPDATE "${tableName}"
+        UPDATE "${schemaName}"."${tableName}"
         SET
         <foreach collection="columnMap" index="key" item="value" separator=",">
             "${key}" = #{value}
@@ -145,7 +145,7 @@
 
 
     <insert id="insertObject">
-        INSERT INTO "${tableName}"
+        INSERT INTO "${schemaName}"."${tableName}"
         (
         <foreach collection="columnMap.keys" item="column" separator=",">
             "${column}"
@@ -161,7 +161,7 @@
 
 
     <select id="batchInsertObjectReturnKey" resultType="java.lang.Object">
-        INSERT INTO "${tableName}"
+        INSERT INTO "${schemaName}"."${tableName}"
         (
         <foreach collection="columnValues[0].keys" item="column" separator=",">
             "${column}"
@@ -180,7 +180,7 @@
 
 
     <select id="batchInsertObject" resultType="java.lang.Object">
-        INSERT INTO "${tableName}"
+        INSERT INTO "${schemaName}"."${tableName}"
         (
         <foreach collection="columnValues[0].keys" item="column" separator=",">
             "${column}"
@@ -199,19 +199,19 @@
 
     <delete id="deleteByTableName" parameterType="java.lang.String">
         DELETE
-        FROM "${tableName}"
+        FROM "${schemaName}"."${tableName}"
     </delete>
 
 
     <delete id="deleteByTableNameAndColumn">
         DELETE
-        FROM "${tableName}"
+        FROM "${schemaName}"."${tableName}"
         WHERE "${columnName}" = #{columnValue}
     </delete>
 
 
     <delete id="deleteByTableNameAndColumns">
-        DELETE FROM "${tableName}"
+        DELETE FROM "${schemaName}"."${tableName}"
         WHERE "${columnName}" IN
         <foreach item="item" index="index" collection="columnValues" open="(" separator="," close=")">
             #{item}

@@ -271,8 +271,9 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             return "";
         }
         //查询本体的实体主键
-        var hasDeletedField = tableMetadataMapper.isColumnExist(primaryProperty.getDatasourceId(), "is_deleted");
+        var hasDeletedField = tableMetadataMapper.isColumnExist(primaryProperty.getDatasourceSchema(), primaryProperty.getDatasourceId(), "is_deleted");
         var records = entityMapper.pageQuery(
+                primaryProperty.getDatasourceSchema(),
                 primaryProperty.getDatasourceId(),
                 Lists.newArrayList(primaryProperty.getDatasourceColumnName()),
                 null,

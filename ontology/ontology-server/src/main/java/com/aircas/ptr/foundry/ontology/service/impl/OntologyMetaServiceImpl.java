@@ -413,9 +413,17 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 ))
                 .stream().map(DataConverter::convert).collect(Collectors.toList());
 
+        if (metaList.isEmpty()) {
+            return Lists.newArrayList();
+        }
+
         var parentOntologyIds = metaList.stream().filter(v -> StringUtils.isNotEmpty(v.getParentOntologyUniqueIdentifier()))
                 .map(OntologyMetaInfoVO::getParentOntologyUniqueIdentifier)
                 .collect(Collectors.toList());
+
+        if (parentOntologyIds.isEmpty()) {
+            return metaList;
+        }
 
         var parentMetaMap = list(new LambdaQueryWrapper<OntologyMeta>().in(OntologyMeta::getUniqueIdentifier, parentOntologyIds))
                 .stream().collect(Collectors.toMap(v -> v.getUniqueIdentifier(), v -> v.getDisplayName()));

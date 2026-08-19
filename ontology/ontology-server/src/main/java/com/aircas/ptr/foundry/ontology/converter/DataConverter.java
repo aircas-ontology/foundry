@@ -78,6 +78,7 @@ public class DataConverter {
                 .build();
         if (datasource != null) {
             prop.setDatasourceId(datasource.getDatasourceId())
+                    .setDatasourceSchema(datasource.getSchemaName())
                     .setDatasourceColumnName(datasource.getDatasourceColumnName());
         }
         return prop;

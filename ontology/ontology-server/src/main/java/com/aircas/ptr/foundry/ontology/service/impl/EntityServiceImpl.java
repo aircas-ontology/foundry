@@ -163,18 +163,14 @@ public class EntityServiceImpl implements EntityService {
     /**
      * 标题健需要和主键为同一个数据源
      *
-     * @param ontologyUniqueIdentifier
-     * @param datasourceId
-     * @param primaryKeyColumnName
-     * @param titleKeyColumnName
      */
     @Override
-    public void syncNodes(String ontologyUniqueIdentifier, String datasourceId, String primaryKeyColumnName, String titleKeyColumnName) {
+    public void syncNodes(String ontologyUniqueIdentifier, String schemaName, String datasourceId, String primaryKeyColumnName, String titleKeyColumnName) {
 
         var existNodes = getByByOntologyUniqIdentifier(ontologyUniqueIdentifier);
         var existNodesMap = existNodes.stream().collect(Collectors.toMap(v -> v.getPrimaryKey(), v -> v));
 
-        List<Map<String, Object>> allRows = objectMapper.queryPrimaryKeyAndTitleKeyValue(datasourceId, primaryKeyColumnName, titleKeyColumnName);
+        List<Map<String, Object>> allRows = objectMapper.queryPrimaryKeyAndTitleKeyValue(schemaName, datasourceId, primaryKeyColumnName, titleKeyColumnName);
         List<EntityNode> nodes = Lists.newArrayList();
 
         allRows.stream().forEach(r -> {
@@ -297,7 +293,7 @@ public class EntityServiceImpl implements EntityService {
         //查询主键表对应的实体数据
         var pk = primaryKeyProp.get();
         var pkColumns = propsMap.get(pk.getDatasourceId()).stream().map(v -> v.getDatasourceColumnName()).collect(Collectors.toList());
-        var primaryData = objectMapper.queryDataByPrimaryKey(pk.getDatasourceId(), pkColumns, pk.getDatasourceColumnName(), entityPrimaryKey);
+        var primaryData = objectMapper.queryDataByPrimaryKey(pk.getDatasourceSchema(), pk.getDatasourceId(), pkColumns, pk.getDatasourceColumnName(), entityPrimaryKey);
         var propertyMap = propsMap.get(pk.getDatasourceId()).stream().collect(Collectors.toMap(v -> v.getDatasourceColumnName(), v -> v));
         var details = primaryData.entrySet().stream().<EntityPropertyDetailVO>map(entry -> {
             var colName = entry.getKey();
@@ -319,15 +315,15 @@ public class EntityServiceImpl implements EntityService {
         propsMap.entrySet().forEach(entry -> {
             if (!entry.getKey().equals(pk.getDatasourceId())) {
                 //查询关联表的实体数据
-                var tableMapping = tableFieldMappingMapper.selectOne(new LambdaQueryWrapper<TableFieldMapping>()
-                        .eq(TableFieldMapping::getSourceTableName, pk.getDatasourceId())
-                        .eq(TableFieldMapping::getTargetTableName, entry.getKey()));
+                var tableMapping = tableFieldMappingMapper.selectBySourceAndTarget(
+                        pk.getDatasourceSchema(), pk.getDatasourceId(), entry.getKey());
                 if (tableMapping == null) {
                     return;
                 }
-                var orderBy = tableMetadataMapper.queryPrimaryKeyColumnName(entry.getKey());
+                var orderBy = tableMetadataMapper.queryPrimaryKeyColumnName(pk.getDatasourceSchema(), entry.getKey());
                 var columns = entry.getValue().stream().map(v -> v.getDatasourceColumnName()).collect(Collectors.toList());
                 var otherData = objectMapper.queryByJoinTable(
+                        pk.getDatasourceSchema(),
                         entityPrimaryKey,
                         tableMapping.getTargetTableName(),
                         columns,
@@ -386,7 +382,7 @@ public class EntityServiceImpl implements EntityService {
         //查询主属性表对应的实体数据
         var pk = primaryKeyProp.get();
         var pkColumns = propsMap.get(pk.getDatasourceId()).stream().map(v -> v.getDatasourceColumnName()).collect(Collectors.toList());
-        var primaryData = objectMapper.queryDataByPrimaryKey(pk.getDatasourceId(), pkColumns, pk.getDatasourceColumnName(), param.getEntityPrimaryKey());
+        var primaryData = objectMapper.queryDataByPrimaryKey(pk.getDatasourceSchema(), pk.getDatasourceId(), pkColumns, pk.getDatasourceColumnName(), param.getEntityPrimaryKey());
         var propertyMap = propsMap.get(pk.getDatasourceId()).stream().collect(Collectors.toMap(v -> v.getDatasourceColumnName(), v -> v));
         var propertyInfoList = primaryData.entrySet().stream().<EntityPropertyRowDetailVO.PropertyInfo>map(entry -> {
             var colName = entry.getKey();
@@ -416,16 +412,16 @@ public class EntityServiceImpl implements EntityService {
         propsMap.entrySet().forEach(entry -> {
             if (!entry.getKey().equals(pk.getDatasourceId())) {
                 //查询关联表的实体数据
-                var tableMapping = tableFieldMappingMapper.selectOne(new LambdaQueryWrapper<TableFieldMapping>()
-                        .eq(TableFieldMapping::getSourceTableName, pk.getDatasourceId())
-                        .eq(TableFieldMapping::getTargetTableName, entry.getKey()));
+                var tableMapping = tableFieldMappingMapper.selectBySourceAndTarget(
+                        pk.getDatasourceSchema(), pk.getDatasourceId(), entry.getKey());
                 if (tableMapping == null) {
                     return;
                 }
-                var orderBy = tableMetadataMapper.queryPrimaryKeyColumnName(entry.getKey());
+                var orderBy = tableMetadataMapper.queryPrimaryKeyColumnName(pk.getDatasourceSchema(), entry.getKey());
                 var columns = entry.getValue().stream().map(v -> v.getDatasourceColumnName()).collect(Collectors.toList());
                 columns.add(orderBy);
                 var otherData = objectMapper.queryByJoinTable(
+                        pk.getDatasourceSchema(),
                         param.getEntityPrimaryKey(),
                         tableMapping.getTargetTableName(),
                         columns,
@@ -487,7 +483,7 @@ public class EntityServiceImpl implements EntityService {
         var optionalPkProperty = ontologyProperties.stream().filter(p -> p.getIsPrimaryKey() == 1).findFirst();
         PreconditionUtils.checkArgument(optionalPkProperty.isPresent() && StringUtils.isNotEmpty(optionalPkProperty.get().getDatasourceId()), "主键不存在或未绑定数据源", HttpStatus.BAD_REQUEST);
         var pk = optionalPkProperty.get();
-        var tableFieldMappings = tableFieldMappingMapper.selectList(new LambdaQueryWrapper<TableFieldMapping>().eq(TableFieldMapping::getSourceTableName, pk.getDatasourceId()));
+        var tableFieldMappings = tableFieldMappingMapper.selectBySourceTable(pk.getDatasourceSchema(), pk.getDatasourceId());
 
         var ontologyPropertyMap = ontologyProperties.stream().collect(Collectors.toMap(v -> v.getApiName(), v -> v));
         List<Object> entityPrimaryKeys = Lists.newArrayList();
@@ -503,7 +499,7 @@ public class EntityServiceImpl implements EntityService {
                         return columnName;
                     },
                     v -> v.getPropertyValue()));
-            Object entityPK = objectMapper.batchInsertObjectReturnKey(pk.getDatasourceId(), Lists.newArrayList(columnValues), pk.getDatasourceColumnName()).get(0);
+            Object entityPK = objectMapper.batchInsertObjectReturnKey(pk.getDatasourceSchema(), pk.getDatasourceId(), Lists.newArrayList(columnValues), pk.getDatasourceColumnName()).get(0);
             entityPrimaryKeys.add(entityPK);
             //插入实体关联属性
             var entityProperties = entityGroupProperties.stream().filter(v -> !v.getStorageGroup().equals("main")).collect(Collectors.toList());
@@ -528,7 +524,7 @@ public class EntityServiceImpl implements EntityService {
                     columnsMap.put(tableFieldMapping.getTargetColumnName(), entityPK);
                     otherPropertyColumnValues.add(columnsMap);
                 });
-                objectMapper.batchInsertObject(ds, otherPropertyColumnValues);
+                objectMapper.batchInsertObject(pk.getDatasourceSchema(), ds, otherPropertyColumnValues);
             });
         });
         //todo 创建实体节点和关系
@@ -545,10 +541,10 @@ public class EntityServiceImpl implements EntityService {
         PreconditionUtils.checkArgument(optionalPkProperty.isPresent() && StringUtils.isNotEmpty(optionalPkProperty.get().getDatasourceId()), "主键不存在或未绑定数据源", HttpStatus.BAD_REQUEST);
         var pk = optionalPkProperty.get();
         //校验实体id是否存在
-        var pkData = objectMapper.queryByPrimaryKey(pk.getDatasourceId(), Lists.newArrayList(pk.getDatasourceColumnName()), pk.getDatasourceColumnName(), param.getEntityPrimaryKey());
+        var pkData = objectMapper.queryByPrimaryKey(pk.getDatasourceSchema(), pk.getDatasourceId(), Lists.newArrayList(pk.getDatasourceColumnName()), pk.getDatasourceColumnName(), param.getEntityPrimaryKey());
         PreconditionUtils.checkArgument(MapUtils.isNotEmpty(pkData), "实体" + param.getEntityPrimaryKey() + "不存在");
 
-        var tableFieldMappings = tableFieldMappingMapper.selectList(new LambdaQueryWrapper<TableFieldMapping>().eq(TableFieldMapping::getSourceTableName, pk.getDatasourceId()));
+        var tableFieldMappings = tableFieldMappingMapper.selectBySourceTable(pk.getDatasourceSchema(), pk.getDatasourceId());
         var ontologyPropertyMap = ontologyProperties.stream().collect(Collectors.toMap(v -> v.getApiName(), v -> v));
 
         //插入实体关联属性
@@ -577,7 +573,7 @@ public class EntityServiceImpl implements EntityService {
                 columnsMap.put(tableFieldMapping.getTargetColumnName(), param.getEntityPrimaryKey());
                 otherPropertyColumnValues.add(columnsMap);
             });
-            objectMapper.batchInsertObject(ds, otherPropertyColumnValues);
+            objectMapper.batchInsertObject(pk.getDatasourceSchema(), ds, otherPropertyColumnValues);
         });
 
     }
@@ -592,7 +588,7 @@ public class EntityServiceImpl implements EntityService {
         PreconditionUtils.checkArgument(optionalPkProperty.isPresent() && StringUtils.isNotEmpty(optionalPkProperty.get().getDatasourceId()), "主键不存在或未绑定数据源", HttpStatus.BAD_REQUEST);
         var pk = optionalPkProperty.get();
         //校验实体id是否存在
-        var pkData = objectMapper.queryByPrimaryKey(pk.getDatasourceId(), Lists.newArrayList(pk.getDatasourceColumnName()), pk.getDatasourceColumnName(), param.getEntityPrimaryKey());
+        var pkData = objectMapper.queryByPrimaryKey(pk.getDatasourceSchema(), pk.getDatasourceId(), Lists.newArrayList(pk.getDatasourceColumnName()), pk.getDatasourceColumnName(), param.getEntityPrimaryKey());
         PreconditionUtils.checkArgument(MapUtils.isNotEmpty(pkData), "实体" + param.getEntityPrimaryKey() + "不存在");
         var ontologyPropertyMap = ontologyProperties.stream().collect(Collectors.toMap(v -> v.getApiName(), v -> v));
         // 校验存储分组
@@ -601,14 +597,14 @@ public class EntityServiceImpl implements EntityService {
                 .collect(Collectors.toList());
         PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(ontologyPropertyList), "存储分组" + storageGroup + "未绑定数据源");
         var ds = ontologyPropertyList.get(0).getDatasourceId();
-        var primaryKeyColumnName = tableMetadataMapper.queryPrimaryKeyColumnName(ds);
+        var primaryKeyColumnName = tableMetadataMapper.queryPrimaryKeyColumnName(pk.getDatasourceSchema(), ds);
         // 校验dataPrimaryKey
         if (storageGroup.equals("main")) {
             PreconditionUtils.checkArgument(Objects.equals(param.getEntityPrimaryKey(), param.getDataPrimaryKey()), "属性数据主键和实体主键不一致");
         } else {
-            var tableFieldMapping = tableFieldMappingMapper.selectOne(new LambdaQueryWrapper<TableFieldMapping>()
-                    .eq(TableFieldMapping::getSourceTableName, pk.getDatasourceId()).eq(TableFieldMapping::getTargetTableName, ds));
-            var existDataMap = objectMapper.queryByPrimaryKey(ds, Lists.newArrayList(), primaryKeyColumnName, param.getDataPrimaryKey());
+            var tableFieldMapping = tableFieldMappingMapper.selectBySourceAndTarget(
+                    pk.getDatasourceSchema(), pk.getDatasourceId(), ds);
+            var existDataMap = objectMapper.queryByPrimaryKey(pk.getDatasourceSchema(), ds, Lists.newArrayList(), primaryKeyColumnName, param.getDataPrimaryKey());
             if (MapUtils.isEmpty(existDataMap)) {
                 return;
             }
@@ -623,7 +619,7 @@ public class EntityServiceImpl implements EntityService {
             PreconditionUtils.checkArgument(StringUtils.isNotEmpty(columnName), v.getPropertyApiName() + "未关联数据源");
             columnsMap.put(columnName, v.getPropertyValue());
         });
-        objectMapper.updateObject(ds, columnsMap, primaryKeyColumnName, param.getDataPrimaryKey());
+        objectMapper.updateObject(pk.getDatasourceSchema(), ds, columnsMap, primaryKeyColumnName, param.getDataPrimaryKey());
     }
 
     @Transactional(transactionManager = "datalakeTransactionManager")
@@ -636,7 +632,7 @@ public class EntityServiceImpl implements EntityService {
         PreconditionUtils.checkArgument(optionalPkProperty.isPresent() && StringUtils.isNotEmpty(optionalPkProperty.get().getDatasourceId()), "主键不存在或未绑定数据源", HttpStatus.BAD_REQUEST);
         var pk = optionalPkProperty.get();
         //校验实体id是否存在
-        var pkData = objectMapper.queryByPrimaryKey(pk.getDatasourceId(), Lists.newArrayList(pk.getDatasourceColumnName()), pk.getDatasourceColumnName(), param.getEntityPrimaryKey());
+        var pkData = objectMapper.queryByPrimaryKey(pk.getDatasourceSchema(), pk.getDatasourceId(), Lists.newArrayList(pk.getDatasourceColumnName()), pk.getDatasourceColumnName(), param.getEntityPrimaryKey());
         PreconditionUtils.checkArgument(MapUtils.isNotEmpty(pkData), "实体" + param.getEntityPrimaryKey() + "不存在");
         // 校验存储分组
         var storageGroup = param.getStorageGroup();
@@ -644,28 +640,32 @@ public class EntityServiceImpl implements EntityService {
                 .collect(Collectors.toList());
         PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(ontologyPropertyList), "存储分组" + storageGroup + "未绑定数据源");
         var ds = ontologyPropertyList.get(0).getDatasourceId();
-        var primaryKeyColumnName = tableMetadataMapper.queryPrimaryKeyColumnName(ds);
+        var primaryKeyColumnName = tableMetadataMapper.queryPrimaryKeyColumnName(pk.getDatasourceSchema(), ds);
         // 校验dataPrimaryKey
         if (storageGroup.equals("main")) {
             PreconditionUtils.checkArgument(Objects.equals(param.getEntityPrimaryKey(), param.getDataPrimaryKey()), "属性数据主键和实体主键不一致");
             //删除实体和所有关联属性
-            objectMapper.deleteByTableNameAndColumn(ds, primaryKeyColumnName, param.getDataPrimaryKey());
-            var tableFieldMappingList = tableFieldMappingMapper.selectList(new LambdaQueryWrapper<TableFieldMapping>().eq(TableFieldMapping::getSourceTableName, ds));
+            objectMapper.deleteByTableNameAndColumn(pk.getDatasourceSchema(), ds, primaryKeyColumnName, param.getDataPrimaryKey());
+            var tableFieldMappingList = tableFieldMappingMapper.selectBySourceTable(pk.getDatasourceSchema(), ds);
             tableFieldMappingList.forEach(
-                    tableFieldMapping -> objectMapper.deleteByTableNameAndColumn(tableFieldMapping.getTargetTableName(), tableFieldMapping.getTargetColumnName(), param.getDataPrimaryKey())
+                    tableFieldMapping -> objectMapper.deleteByTableNameAndColumn(
+                            pk.getDatasourceSchema(),
+                            tableFieldMapping.getTargetTableName(),
+                            tableFieldMapping.getTargetColumnName(),
+                            param.getDataPrimaryKey())
             );
             //todo 删除实体节点和关系
 
         } else {
-            var tableFieldMapping = tableFieldMappingMapper.selectOne(new LambdaQueryWrapper<TableFieldMapping>()
-                    .eq(TableFieldMapping::getSourceTableName, pk.getDatasourceId()).eq(TableFieldMapping::getTargetTableName, ds));
-            var existDataMap = objectMapper.queryByPrimaryKey(ds, Lists.newArrayList(), primaryKeyColumnName, param.getDataPrimaryKey());
+            var tableFieldMapping = tableFieldMappingMapper.selectBySourceAndTarget(
+                    pk.getDatasourceSchema(), pk.getDatasourceId(), ds);
+            var existDataMap = objectMapper.queryByPrimaryKey(pk.getDatasourceSchema(), ds, Lists.newArrayList(), primaryKeyColumnName, param.getDataPrimaryKey());
             if (MapUtils.isEmpty(existDataMap)) {
                 return;
             }
             PreconditionUtils.checkArgument(existDataMap.get(tableFieldMapping.getTargetColumnName()).equals(param.getEntityPrimaryKey()), "无权限删除其他实体的属性数据", HttpStatus.FORBIDDEN);
             //删除单个属性
-            objectMapper.deleteByTableNameAndColumn(ds, primaryKeyColumnName, param.getDataPrimaryKey());
+            objectMapper.deleteByTableNameAndColumn(pk.getDatasourceSchema(), ds, primaryKeyColumnName, param.getDataPrimaryKey());
         }
     }
 
@@ -694,6 +694,7 @@ public class EntityServiceImpl implements EntityService {
             return result;
         }
         var primaryDatasource = primaryProperty.getDatasourceId();
+        var schemaName = primaryProperty.getDatasourceSchema();
         Map<String, OntologyProperty> primaryPropMap;
         if (needFilterVisibility) {
             primaryPropMap = props.stream().filter(v -> StringUtils.equals(v.getDatasourceId(), primaryDatasource) && v.getVisibility() == 1)
@@ -713,8 +714,9 @@ public class EntityServiceImpl implements EntityService {
             propertyValue = OntologyDataTypeEnum.convert(propertyType, propertyValue);
         }
         //分页查询实体数据
-        var hasDeletedField = tableMetadataMapper.isColumnExist(primaryDatasource, "is_deleted");
+        var hasDeletedField = tableMetadataMapper.isColumnExist(schemaName, primaryDatasource, "is_deleted");
         var records = objectMapper.pageQuery(
+                schemaName,
                 primaryDatasource,
                 primaryPropMap.values().stream().map(v -> v.getDatasourceColumnName()).collect(Collectors.toList()),
                 columnName,
@@ -723,7 +725,7 @@ public class EntityServiceImpl implements EntityService {
                 (pageNum - 1) * pageSize,
                 hasDeletedField
         );
-        var total = objectMapper.queryCount(primaryDatasource, columnName, propertyValue, hasDeletedField);
+        var total = objectMapper.queryCount(schemaName, primaryDatasource, columnName, propertyValue, hasDeletedField);
 
         var entityRecords = records.stream().map(r -> {
             var entityPK = r.entrySet().stream()
@@ -927,9 +929,9 @@ public class EntityServiceImpl implements EntityService {
     @Override
     @Transactional(transactionManager = "datalakeTransactionManager")
     public void updateProperty(EntityUpdateParam param) {
-        var primaryKeyColumnName = tableMetadataMapper.queryPrimaryKeyColumnName(param.getDatasourceId());
+        var primaryKeyColumnName = tableMetadataMapper.queryPrimaryKeyColumnName(param.getSchemaName(), param.getDatasourceId());
         var columnMap = param.getColumnUpdates().stream().collect(Collectors.toMap(v -> v.getDatasourceColumnName(), v -> v.getColumnValue()));
-        objectMapper.updateObject(param.getDatasourceId(), columnMap, primaryKeyColumnName, param.getPrimaryKeyValue());
+        objectMapper.updateObject(param.getSchemaName(), param.getDatasourceId(), columnMap, primaryKeyColumnName, param.getPrimaryKeyValue());
     }
 
     @Override
@@ -950,7 +952,7 @@ public class EntityServiceImpl implements EntityService {
         }
 
         if (primaryProperty != null && StringUtils.isNotEmpty(primaryProperty.getDatasourceId())) {
-            syncNodes(ontologyIdentifier, primaryProperty.getDatasourceId(), primaryProperty.getDatasourceColumnName(), titleColumn);
+            syncNodes(ontologyIdentifier, primaryProperty.getDatasourceSchema(), primaryProperty.getDatasourceId(), primaryProperty.getDatasourceColumnName(), titleColumn);
         }
     }
 
@@ -1060,12 +1062,13 @@ public class EntityServiceImpl implements EntityService {
         }
         //其他数据源数据insert
         if (MapUtils.isNotEmpty(insertMap)) {
+            var pkProp = actionContext.getOntologyProperties().stream().filter(v -> v.getIsPrimaryKey() == 1).findFirst().get();
             insertMap.entrySet().forEach(entry -> {
                 //查询关联建，补全columns
                 var tableName = entry.getKey();
-                var mapping = tableFieldMappingMapper.selectOne(new LambdaQueryWrapper<TableFieldMapping>().eq(TableFieldMapping::getTargetTableName, tableName));
+                var mapping = tableFieldMappingMapper.selectByTargetTable(pkProp.getDatasourceSchema(), tableName);
                 entry.getValue().put(mapping.getTargetColumnName(), actionContext.getEntityActionExecuteParam().getEntityPrimaryKey());
-                objectMapper.insertObject(tableName, entry.getValue());
+                objectMapper.insertObject(pkProp.getDatasourceSchema(), tableName, entry.getValue());
             });
         }
 
@@ -1258,9 +1261,9 @@ public class EntityServiceImpl implements EntityService {
             columnValues.add(new HashMap<>(columnValueMap));
         }
 
-        var generateIds = objectMapper.batchInsertObjectReturnKey(pkProp.getDatasourceId(), columnValues, pkProp.getDatasourceColumnName());
+        var generateIds = objectMapper.batchInsertObjectReturnKey(pkProp.getDatasourceSchema(), pkProp.getDatasourceId(), columnValues, pkProp.getDatasourceColumnName());
         // 插入关联属性表
-        var tableFieldMappings = tableFieldMappingMapper.selectList(new LambdaQueryWrapper<TableFieldMapping>().eq(TableFieldMapping::getSourceTableName, pkProp.getDatasourceId()));
+        var tableFieldMappings = tableFieldMappingMapper.selectBySourceTable(pkProp.getDatasourceSchema(), pkProp.getDatasourceId());
         tableFieldMappings.stream().forEach(
                 tableFieldMapping -> {
                     var targetTableName = tableFieldMapping.getTargetTableName();
@@ -1285,7 +1288,7 @@ public class EntityServiceImpl implements EntityService {
                             valueMap.put(tableFieldMapping.getTargetColumnName(), generateIds.get(i));
                             values.add(new HashMap<>(valueMap));
                         }
-                        objectMapper.batchInsertObject(tableFieldMapping.getTargetTableName(), values);
+                        objectMapper.batchInsertObject(pkProp.getDatasourceSchema(), tableFieldMapping.getTargetTableName(), values);
                     }
                 }
         );
@@ -1316,7 +1319,7 @@ public class EntityServiceImpl implements EntityService {
         var mainDs = pkProp.getDatasourceId();
         // 2. 收集所有表的关联映射
         Map<String, TableFieldMapping> tableMappingMap = new HashMap<>();
-        var tableFieldMappings = tableFieldMappingMapper.selectList(new LambdaQueryWrapper<TableFieldMapping>().eq(TableFieldMapping::getSourceTableName, mainDs));
+        var tableFieldMappings = tableFieldMappingMapper.selectBySourceTable(pkProp.getDatasourceSchema(), mainDs);
         tableFieldMappings.forEach(mapping -> tableMappingMap.put(mapping.getTargetTableName(), mapping));
         // 3. 构建 SELECT 部分
         var selectBuilder = new StringBuilder();
@@ -1329,7 +1332,7 @@ public class EntityServiceImpl implements EntityService {
             var prop = propMap.get(selectProp.getPropertyApiName());
             var aliasKey = StringUtils.isNotEmpty(selectProp.getAlias()) ? selectProp.getAlias() : selectProp.getPropertyApiName();
             selectParamMap.put(aliasKey, selectProp);
-            var columnRef = wrapWithDoubleQuotes(prop.getDatasourceId()) + "." + wrapWithDoubleQuotes(prop.getDatasourceColumnName());
+            var columnRef = wrapColumnRef(prop.getDatasourceSchema(), prop.getDatasourceId(), prop.getDatasourceColumnName());
 
             if (selectProp.getAggFunc() != null) {
                 switch (selectProp.getAggFunc()) {
@@ -1353,7 +1356,7 @@ public class EntityServiceImpl implements EntityService {
         }
         // 4. 构建 FROM 和 LEFT JOIN
         var fromBuilder = new StringBuilder();
-        fromBuilder.append(wrapWithDoubleQuotes(mainDs));
+        fromBuilder.append(wrapTableRef(pkProp.getDatasourceSchema(), mainDs));
         var joinedTables = Sets.newHashSet();
         joinedTables.add(mainDs);
         // 收集所有涉及的属性API名称
@@ -1386,9 +1389,9 @@ public class EntityServiceImpl implements EntityService {
             }
             var mapping = tableMappingMap.get(dsId);
             PreconditionUtils.checkArgument(mapping != null, "未找到数据源表 " + dsId + " 与主表 " + mainDs + " 的关联关系", HttpStatus.BAD_REQUEST);
-            fromBuilder.append(" LEFT JOIN ").append(wrapWithDoubleQuotes(dsId))
-                    .append(" ON ").append(wrapWithDoubleQuotes(mainDs)).append(".").append(wrapWithDoubleQuotes(mapping.getSourceColumnName())).append(" = ")
-                    .append(wrapWithDoubleQuotes(dsId)).append(".").append(wrapWithDoubleQuotes(mapping.getTargetColumnName()));
+            fromBuilder.append(" LEFT JOIN ").append(wrapTableRef(prop.getDatasourceSchema(), dsId))
+                    .append(" ON ").append(wrapColumnRef(pkProp.getDatasourceSchema(), mainDs, mapping.getSourceColumnName())).append(" = ")
+                    .append(wrapColumnRef(prop.getDatasourceSchema(), dsId, mapping.getTargetColumnName()));
             joinedTables.add(dsId);
         }
         // 5. 构建 WHERE 部分
@@ -1411,7 +1414,7 @@ public class EntityServiceImpl implements EntityService {
                 var prop = propMap.get(groupByProp);
                 PreconditionUtils.checkArgument(prop != null && StringUtils.isNotEmpty(prop.getDatasourceId()),
                         "分组属性" + groupByProp + "不存在或未关联数据源", HttpStatus.BAD_REQUEST);
-                groupByBuilder.append(wrapWithDoubleQuotes(prop.getDatasourceId())).append(".").append(wrapWithDoubleQuotes(prop.getDatasourceColumnName()));
+                groupByBuilder.append(wrapColumnRef(prop.getDatasourceSchema(), prop.getDatasourceId(), prop.getDatasourceColumnName()));
                 first = false;
             }
         }
@@ -1427,7 +1430,7 @@ public class EntityServiceImpl implements EntityService {
                 var prop = propMap.get(orderBy.getPropertyApiName());
                 PreconditionUtils.checkArgument(prop != null && StringUtils.isNotEmpty(prop.getDatasourceId()),
                         "排序属性" + orderBy.getPropertyApiName() + "不存在或未关联数据源", HttpStatus.BAD_REQUEST);
-                orderByBuilder.append(wrapWithDoubleQuotes(prop.getDatasourceId())).append(".").append(wrapWithDoubleQuotes(prop.getDatasourceColumnName())).append(orderBy.getSort().name());
+                orderByBuilder.append(wrapColumnRef(prop.getDatasourceSchema(), prop.getDatasourceId(), prop.getDatasourceColumnName())).append(" ").append(orderBy.getSort().name());
                 first = false;
             }
         }
@@ -1473,6 +1476,14 @@ public class EntityServiceImpl implements EntityService {
 
     private static String wrapWithDoubleQuotes(String str) {
         return StringUtils.wrap(str, "\"");
+    }
+
+    private static String wrapTableRef(String schema, String tableName) {
+        return wrapWithDoubleQuotes(schema) + "." + wrapWithDoubleQuotes(tableName);
+    }
+
+    private static String wrapColumnRef(String schema, String tableName, String columnName) {
+        return wrapTableRef(schema, tableName) + "." + wrapWithDoubleQuotes(columnName);
     }
 
     private String buildWhereClause(FilterGroupParam group, Map<String, OntologyProperty> propMap) {
@@ -1522,7 +1533,7 @@ public class EntityServiceImpl implements EntityService {
         PreconditionUtils.checkArgument(prop != null && StringUtils.isNotEmpty(prop.getDatasourceId()),
                 "过滤属性" + filter.getPropertyApiName() + "不存在或未关联数据源", HttpStatus.BAD_REQUEST);
 
-        String columnRef = wrapWithDoubleQuotes(prop.getDatasourceId()) + "." + wrapWithDoubleQuotes(prop.getDatasourceColumnName());
+        String columnRef = wrapColumnRef(prop.getDatasourceSchema(), prop.getDatasourceId(), prop.getDatasourceColumnName());
         QueryOpEnum op = filter.getOp() != null ? filter.getOp() : QueryOpEnum.EQ;
 
         switch (op) {
@@ -1624,18 +1635,17 @@ public class EntityServiceImpl implements EntityService {
          *   3 删除关系
          */
 
-        var entityData = objectMapper.queryDataByPrimaryKeyList(pkProp.getDatasourceId(), Lists.newArrayList(pkProp.getDatasourceColumnName()), pkProp.getDatasourceColumnName(), null);
+        var entityData = objectMapper.queryDataByPrimaryKeyList(pkProp.getDatasourceSchema(), pkProp.getDatasourceId(), Lists.newArrayList(pkProp.getDatasourceColumnName()), pkProp.getDatasourceColumnName(), null);
         //无实体数据
         if (CollectionUtils.isEmpty(entityData)) {
             return;
         }
         //删除实体主表
-        objectMapper.deleteByTableName(pkProp.getDatasourceId());
+        objectMapper.deleteByTableName(pkProp.getDatasourceSchema(), pkProp.getDatasourceId());
         //删除实体属性关联表
-        var tableFieldMappings = tableFieldMappingMapper.selectList(new LambdaQueryWrapper<TableFieldMapping>()
-                .eq(TableFieldMapping::getSourceColumnName, pkProp.getDatasourceColumnName())
-                .eq(TableFieldMapping::getSourceTableName, pkProp.getDatasourceId()));
-        tableFieldMappings.stream().forEach(tableFieldMapping -> objectMapper.deleteByTableName(tableFieldMapping.getTargetTableName()));
+        var tableFieldMappings = tableFieldMappingMapper.selectBySourceTableAndColumn(
+                pkProp.getDatasourceSchema(), pkProp.getDatasourceId(), pkProp.getDatasourceColumnName());
+        tableFieldMappings.stream().forEach(tableFieldMapping -> objectMapper.deleteByTableName(pkProp.getDatasourceSchema(), tableFieldMapping.getTargetTableName()));
 
         //删除实体关系和节点
         relationRepository.deleteRelationAndNodeByOntologyUniqueIdentifier(pkProp.getOntologyUniqueIdentifier());

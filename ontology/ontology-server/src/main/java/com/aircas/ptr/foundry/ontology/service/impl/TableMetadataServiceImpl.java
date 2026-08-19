@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
+import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.ontology.model.dto.EntityDatasourceColumnDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.EntityDatasourceDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.EntityDatasourceSchemaChangeEventDTO;
@@ -8,13 +9,16 @@ import com.aircas.ptr.foundry.ontology.model.vo.DatasourceTableVO;
 import com.aircas.ptr.foundry.ontology.model.vo.TableColumnDescVO;
 import com.aircas.ptr.foundry.ontology.mq.producer.RabbitMQProducer;
 import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.TableMetadataMapper;
+import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologySpaceMapper;
 import com.aircas.ptr.foundry.ontology.service.TableMetadataService;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Lists;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.var;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
@@ -30,6 +34,10 @@ public class TableMetadataServiceImpl implements TableMetadataService {
 
 
     @Resource
+    private OntologySpaceMapper spaceMapper;
+
+
+    @Resource
     private RabbitMQProducer rmqProducer;
 
 
@@ -39,8 +47,12 @@ public class TableMetadataServiceImpl implements TableMetadataService {
     private ObjectMapper jsonMapper = new ObjectMapper();
 
     @Override
-    public List<TableColumnDescVO> getColumns(String datasourceId) {
-        return tableMetadataMapper.queryColumnMetadata(datasourceId).stream().map(v ->
+    public List<TableColumnDescVO> getColumns(Integer spaceId, String datasourceId) {
+
+        var ontologySpace = spaceMapper.selectById(spaceId);
+        PreconditionUtils.checkNotNull(ontologySpace, "无效的本体空间id", HttpStatus.BAD_REQUEST);
+
+        return tableMetadataMapper.queryColumnMetadata(ontologySpace.getApiName(), datasourceId).stream().map(v ->
                 TableColumnDescVO.builder()
                         .columnName(v.getColumnName())
                         .description(v.getDescription())
@@ -50,16 +62,38 @@ public class TableMetadataServiceImpl implements TableMetadataService {
         ).collect(Collectors.toList());
     }
 
+
     @Override
-    public List<DatasourceTableVO> listTables() {
-        return tableMetadataMapper.listTables().stream().map(v -> DatasourceTableVO.builder().description(v.getDescription()).tableName(v.getTableName()).build())
+    public Page<DatasourceTableVO> getTables(Integer spaceId,
+                                             String keyword,
+                                             Integer pageNum,
+                                             Integer pageSize) {
+
+        var ontologySpace = spaceMapper.selectById(spaceId);
+        PreconditionUtils.checkNotNull(ontologySpace, "无效的本体空间id", HttpStatus.BAD_REQUEST);
+
+        var schemaName = ontologySpace.getApiName();
+        var total = tableMetadataMapper.countTables(schemaName, keyword);
+        var page = new Page<DatasourceTableVO>(pageNum, pageSize, total);
+        if (total == 0) {
+            return page;
+        }
+        var offset = (pageNum - 1) * pageSize;
+        var records = tableMetadataMapper.listTablesPage(schemaName, keyword, pageSize, offset).stream()
+                .map(v -> DatasourceTableVO.builder()
+                        .schemaName(schemaName)
+                        .description(v.getDescription())
+                        .tableName(v.getTableName())
+                        .build())
                 .collect(Collectors.toList());
+        page.setRecords(records);
+        return page;
     }
 
     @Override
     @SneakyThrows
-    public void dropDataSource(String dataSourceId) {
-        tableMetadataMapper.dropTable(dataSourceId);
+    public void dropDataSource(String schemaName, String dataSourceId) {
+        tableMetadataMapper.dropTable(schemaName, dataSourceId);
         var event = EntityDatasourceSchemaChangeEventDTO.builder()
                 .datasource(Lists.newArrayList(EntityDatasourceDTO.builder()
                         .tableName(dataSourceId)
@@ -71,8 +105,8 @@ public class TableMetadataServiceImpl implements TableMetadataService {
 
     @Override
     @SneakyThrows
-    public void dropColumns(String dataSourceId, List<String> columns) {
-        tableMetadataMapper.dropColumns(dataSourceId, columns);
+    public void dropColumns(String schemaName, String dataSourceId, List<String> columns) {
+        tableMetadataMapper.dropColumns(schemaName, dataSourceId, columns);
         var event = EntityDatasourceSchemaChangeEventDTO.builder()
                 .datasource(Lists.newArrayList(EntityDatasourceDTO.builder()
                         .tableName(dataSourceId)
@@ -87,6 +121,11 @@ public class TableMetadataServiceImpl implements TableMetadataService {
     @SneakyThrows
     public void createSchema(String schemaName) {
         tableMetadataMapper.createSchema(schemaName);
+    }
+
+    @Override
+    public void initSpaceSchema(String schemaName) {
+        tableMetadataMapper.initSpaceSchema(schemaName);
     }
 
 }

@@ -20,7 +20,7 @@ public interface EntityService {
 
     void createEntityRelations(String linkUniqueIdentifier);
 
-    void syncNodes(String ontologyUniqueIdentifier, String datasourceId, String primaryKeyColumnName, String titleKeyColumnName);
+    void syncNodes(String ontologyUniqueIdentifier, String schemaName, String datasourceId, String primaryKeyColumnName, String titleKeyColumnName);
 
     void deleteRelationsByLinkId(String linkId);
 

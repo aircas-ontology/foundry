@@ -14,10 +14,7 @@ import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.aircas.ptr.foundry.ontology.mq.producer.RabbitMQProducer;
 import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.TableFieldMappingMapper;
 import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.TableMetadataMapper;
-import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyActionMappingInMapper;
-import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyLinkGroupMapper;
-import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyMetaMapper;
-import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyPropertyMapper;
+import com.aircas.ptr.foundry.ontology.repository.mainMapper.*;
 import com.aircas.ptr.foundry.ontology.service.EntityService;
 import com.aircas.ptr.foundry.ontology.service.OntologyPropertyService;
 import com.aircas.ptr.foundry.ontology.service.PropertyCategoryService;
@@ -62,6 +59,8 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
     private final OntologyActionMappingInMapper mappingInMapper;
 
     private final OntologyMetaMapper metaMapper;
+
+    private final OntologySpaceMapper spaceMapper;
 
     private final PropertyCategoryService propertyCategoryService;
 
@@ -349,8 +348,10 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
 
     @Override
     public List<OntologyPropertyDetailVO> getPropertyDetailByOntologyId(String ontologyUniqueIdentifier) {
+        //get schema name
+        var schemaName = resolveSchemaName(ontologyUniqueIdentifier);
         var props = list(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier));
-        var tableMap = tableMetadataMapper.listTables().stream().collect(Collectors.toMap(v -> v.getTableName(), v -> v.getDescription() != null ? v.getDescription() : ""));
+        var tableMap = tableMetadataMapper.listTables(schemaName).stream().collect(Collectors.toMap(v -> v.getTableName(), v -> v.getDescription() != null ? v.getDescription() : ""));
 
         return props.stream().map(v -> DataConverter.convert(v).setDatasourceDescription(tableMap.get(v.getDatasourceId())))
                 .collect(Collectors.toList());
@@ -419,7 +420,8 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
      */
     @Override
     public void notifyBuildPipeline(String ontologyIdentifier) {
-
+        // 获取schemeName
+        var schemaName = resolveSchemaName(ontologyIdentifier);
         // 校验本体属性是否存在
         var props = list(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyIdentifier));
         if (CollectionUtils.isEmpty(props)) {
@@ -457,7 +459,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                         .isPrimaryKey(p.getApiName().equals(pkColumnName))
                         .build()).collect(Collectors.toList());
                 //发送mq消息给数据组织层构建管道
-                notifyEntityTableSchemaChange(ontologyIdentifier, pkDS, true, columns, null, null, DatasourceEventTypeEnum.CREATE_TABLE);
+                notifyEntityTableSchemaChange(ontologyIdentifier, schemaName, pkDS, true, columns, null, null, DatasourceEventTypeEnum.CREATE_TABLE);
             }
             // 其他属性关联表
             else {
@@ -468,14 +470,14 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                         .isPrimaryKey(p.getApiName().equals(pkColumnName))
                         .build()).collect(Collectors.toList());
                 //增加和主属性关联列
-                var mapping = tableFieldMappingMapper.selectOne(new LambdaQueryWrapper<TableFieldMapping>().eq(TableFieldMapping::getSourceTableName, pkDS).eq(TableFieldMapping::getTargetTableName, ds));
+                var mapping = tableFieldMappingMapper.selectBySourceAndTarget(schemaName, pkDS, ds);
                 columns.add(TableColumnDesc.builder()
                         .columnName(mapping.getTargetColumnName())
                         .type("int4")
                         .isPrimaryKey(false)
                         .build());
                 //发送mq消息给数据组织层构建管道
-                notifyEntityTableSchemaChange(ontologyIdentifier, ds, false, columns, mapping.getSourceColumnName(), mapping.getTargetColumnName(), DatasourceEventTypeEnum.CREATE_TABLE);
+                notifyEntityTableSchemaChange(ontologyIdentifier, schemaName, ds, false, columns, mapping.getSourceColumnName(), mapping.getTargetColumnName(), DatasourceEventTypeEnum.CREATE_TABLE);
             }
         });
 
@@ -816,6 +818,8 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
     @Override
     public void autoBindDatasource(String ontologyIdentifier) {
         var ontology = metaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, ontologyIdentifier));
+        // 获取schemaName
+        var schemaName = resolveSchemaName(ontologyIdentifier);
         // 校验本体属性是否存在
         var props = list(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyIdentifier));
         if (CollectionUtils.isEmpty(props)) {
@@ -848,7 +852,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
             //主属性表
             if (ds.equals(mainStorageGroup)) {
                 //检查表名是否存在：不存在创建新表，存在添加列
-                var exist = tableMetadataMapper.isTableExist(mainDS);
+                var exist = tableMetadataMapper.isTableExist(schemaName, mainDS);
                 var columns = list.stream().map(p -> TableColumnDesc.builder()
                         .columnName(p.getApiName())
                         .type(OntologyDataTypeEnum.transfer2Pg(p.getPropertyType()))
@@ -861,14 +865,14 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                             .description(ontology.getDisplayName())
                             .tableName(mainDS)
                             .build();
-                    tableMetadataMapper.createTable(table, columns);
+                    tableMetadataMapper.createTable(schemaName, table, columns);
                     //发送mq消息给数据组织层构建管道
-                    notifyEntityTableSchemaChange(ontologyIdentifier, mainDS, true, columns, null, null, DatasourceEventTypeEnum.CREATE_TABLE);
+                    notifyEntityTableSchemaChange(ontologyIdentifier, schemaName, mainDS, true, columns, null, null, DatasourceEventTypeEnum.CREATE_TABLE);
                 } else {
                     //创建列
-                    tableMetadataMapper.addColumns(mainDS, columns);
+                    tableMetadataMapper.addColumns(schemaName, mainDS, columns);
                     //发送mq消息给数据组织层构建管道
-                    notifyEntityTableSchemaChange(ontologyIdentifier, mainDS, true, columns, null, null, DatasourceEventTypeEnum.ADD_COLUMN);
+                    notifyEntityTableSchemaChange(ontologyIdentifier, schemaName, mainDS, true, columns, null, null, DatasourceEventTypeEnum.ADD_COLUMN);
                 }
                 //更新数据源属性
                 list.forEach(p -> p.setDatasourceId(mainDS).setDatasourceColumnName(p.getApiName()));
@@ -876,7 +880,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
             // 其他属性关联表
             else {
                 //检查表名是否存在：不存在创建新表，存在添加列
-                var exist = tableMetadataMapper.isTableExist(ds);
+                var exist = tableMetadataMapper.isTableExist(schemaName, ds);
                 var columns = list.stream().map(p -> TableColumnDesc.builder()
                         .columnName(p.getApiName())
                         .type(OntologyDataTypeEnum.transfer2Pg(p.getPropertyType()))
@@ -897,23 +901,23 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                             .description(ontology.getDisplayName() + list.get(0).getSecondaryCategory())
                             .tableName(ds)
                             .build();
-                    tableMetadataMapper.createTable(table, columns);
+                    tableMetadataMapper.createTable(schemaName, table, columns);
                     //创建关联舰的索引
-                    tableMetadataMapper.createIndex(table.getTableName(), relatedColumn);
+                    tableMetadataMapper.createIndex(schemaName, table.getTableName(), relatedColumn);
                     //插入属性表关联关系
-                    tableFieldMappingMapper.insert(TableFieldMapping.builder()
+                    tableFieldMappingMapper.insertMapping(schemaName, TableFieldMapping.builder()
                             .sourceTableName(mainDS)
                             .sourceColumnName(pkColumnName)
                             .targetTableName(ds)
                             .targetColumnName(relatedColumn)
                             .build());
                     //发送mq消息给数据组织层构建管道
-                    notifyEntityTableSchemaChange(ontologyIdentifier, ds, false, columns, pkColumnName, relatedColumn, DatasourceEventTypeEnum.CREATE_TABLE);
+                    notifyEntityTableSchemaChange(ontologyIdentifier, schemaName, ds, false, columns, pkColumnName, relatedColumn, DatasourceEventTypeEnum.CREATE_TABLE);
                 } else {
                     //创建列
-                    tableMetadataMapper.addColumns(ds, columns);
+                    tableMetadataMapper.addColumns(schemaName, ds, columns);
                     //发送mq消息给数据组织层构建管道
-                    notifyEntityTableSchemaChange(ontologyIdentifier, ds, false, columns, pkColumnName, relatedColumn, DatasourceEventTypeEnum.ADD_COLUMN);
+                    notifyEntityTableSchemaChange(ontologyIdentifier, schemaName, ds, false, columns, pkColumnName, relatedColumn, DatasourceEventTypeEnum.ADD_COLUMN);
                 }
                 //更新数据源属性
                 list.forEach(p -> p.setDatasourceId(ds).setDatasourceColumnName(p.getApiName()));
@@ -983,6 +987,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
      */
     @SneakyThrows
     private void notifyEntityTableSchemaChange(String ontologyUniqueIdentifier,
+                                               String schemaName,
                                                String tableName,
                                                Boolean isMainTable,
                                                List<TableColumnDesc> columns,
@@ -1011,7 +1016,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         }
 
         var datasourceDTO = EntityDatasourceDTO.builder()
-                .tableName("entity_datasource.public." + tableName)
+                .tableName("entity_datasource." + schemaName + "." + tableName)
                 .isMainDatasource(isMainTable)
                 .columns(columnDTOList)
                 .build();
@@ -1030,9 +1035,10 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         var existPrimaryKey = properties.stream().filter(v -> v.getIsPrimaryKey() == 1).findFirst();
         PreconditionUtils.checkArgument(!existPrimaryKey.isPresent(), "属性主键已存在", HttpStatus.BAD_REQUEST);
         if (datasource != null) {
+            var schemaName = datasource.getSchemaName();
             var ds = datasource.getDatasourceId();
             var pk = datasource.getDatasourceColumnName();
-            var pkCol = tableMetadataMapper.queryPrimaryKeyColumnName(ds);
+            var pkCol = tableMetadataMapper.queryPrimaryKeyColumnName(schemaName, ds);
             PreconditionUtils.checkArgument(pkCol.equals(pk), "属性主键不是数据源主键", HttpStatus.BAD_REQUEST);
         }
     }
@@ -1080,7 +1086,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         //新增主键数据源
         else if (primaryProperty != null && anyNode == null) {
             if (StringUtils.isNotEmpty(primaryProperty.getDatasourceId())) {
-                entityService.syncNodes(ontologyIdentifier, primaryProperty.getDatasourceId(), primaryProperty.getDatasourceColumnName(), titleColumn);
+                entityService.syncNodes(ontologyIdentifier, primaryProperty.getDatasourceSchema(), primaryProperty.getDatasourceId(), primaryProperty.getDatasourceColumnName(), titleColumn);
                 createRelationsByLink(ontologyIdentifier);
             }
         }
@@ -1092,12 +1098,12 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                 //主键数据源发生了变更
                 if (!primaryProperty.getDatasourceId().equals(anyNode.getTableName())) {
                     entityService.deleteNodesAndRelationsByOntologyId(ontologyIdentifier);
-                    entityService.syncNodes(ontologyIdentifier, primaryProperty.getDatasourceId(), primaryProperty.getDatasourceColumnName(), titleColumn);
+                    entityService.syncNodes(ontologyIdentifier, primaryProperty.getDatasourceSchema(), primaryProperty.getDatasourceId(), primaryProperty.getDatasourceColumnName(), titleColumn);
                     createRelationsByLink(ontologyIdentifier);
                 }
                 //更新titleKey
                 else {
-                    entityService.syncNodes(ontologyIdentifier, primaryProperty.getDatasourceId(), primaryProperty.getDatasourceColumnName(), titleColumn);
+                    entityService.syncNodes(ontologyIdentifier, primaryProperty.getDatasourceSchema(), primaryProperty.getDatasourceId(), primaryProperty.getDatasourceColumnName(), titleColumn);
                 }
             }
             //主键数据源取消设置
@@ -1133,6 +1139,18 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                 }
             }
         }
+    }
+
+    private String resolveSchemaName(String ontologyUniqueIdentifier) {
+        var meta = metaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>()
+                .eq(OntologyMeta::getUniqueIdentifier, ontologyUniqueIdentifier));
+        PreconditionUtils.checkNotNull(meta, "本体不存在", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkNotNull(meta.getOntologySpaceId(), "本体未关联空间", HttpStatus.BAD_REQUEST);
+        var space = spaceMapper.selectById(meta.getOntologySpaceId());
+        PreconditionUtils.checkNotNull(space, "本体空间不存在", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(StringUtils.isNotEmpty(space.getApiName()),
+                "本体空间apiName为空", HttpStatus.BAD_REQUEST);
+        return space.getApiName();
     }
 
 }

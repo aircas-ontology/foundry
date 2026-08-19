@@ -14,6 +14,9 @@ import lombok.NoArgsConstructor;
 @ApiModel(description = "数据源VO")
 public class DatasourceTableVO {
 
+    @ApiModelProperty(value = "schemaName", example = "public")
+    private String schemaName;
+
     @ApiModelProperty(value = "数据源标识", example = "xtmb")
     private String tableName;
 

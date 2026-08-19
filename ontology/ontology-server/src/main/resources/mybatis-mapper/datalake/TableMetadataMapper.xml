@@ -13,7 +13,7 @@
         <result column="description" jdbcType="VARCHAR" property="description"/>
     </resultMap>
 
-    <select id="queryColumnMetadata" parameterType="java.lang.String" resultMap="BaseResultMap">
+    <select id="queryColumnMetadata" resultMap="BaseResultMap">
         SELECT a.attname                                AS column_name,
                col_description(a.attrelid, a.attnum)    AS description,
                pg_catalog.format_type(a.atttypid, null) AS type,
@@ -34,21 +34,38 @@
             c.relkind = 'r'
             AND a.attnum > 0
             AND a.atttypid != 0
-            AND c.relname =
-        #{tableName}
+            AND n.nspname = #{schemaName}
+            AND c.relname = #{tableName}
         ORDER
         BY
-        a
-        .
-        attnum;
+        a.attnum;
     </select>
+
+    <sql id="tableListFromWhere">
+        FROM pg_class
+        WHERE relkind = 'r'
+          AND relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = #{schemaName})
+        <if test="keyword != null and keyword != ''">
+            AND obj_description(relfilenode, 'pg_class') ILIKE CONCAT('%', #{keyword}, '%')
+        </if>
+    </sql>
 
     <select id="listTables" resultMap="TableResultMap">
         SELECT relname AS table_name, obj_description(relfilenode, 'pg_class') AS description
-        from pg_class
-        WHERE relkind = 'r'
-          and relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'public')
+        <include refid="tableListFromWhere"/>
         ORDER BY table_name
+    </select>
+
+    <select id="listTablesPage" resultMap="TableResultMap">
+        SELECT relname AS table_name, obj_description(relfilenode, 'pg_class') AS description
+        <include refid="tableListFromWhere"/>
+        ORDER BY table_name
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countTables" resultType="java.lang.Integer">
+        SELECT count(*)
+        <include refid="tableListFromWhere"/>
     </select>
 
 
@@ -59,7 +76,7 @@
                        FROM information_schema.columns
                        WHERE table_name = #{tableName}
                          AND column_name = #{columnName}
-                         AND table_schema = 'public'
+                         AND table_schema = #{schemaName}
                    )
     </select>
 
@@ -68,7 +85,7 @@
         select a.attname AS cloumn_name
         from pg_index i
                  join pg_attribute a on a.attrelid = i.indrelid and a.attnum = any (i.indkey)
-        where i.indrelid = '"${tableName}"'::regclass and i.indisprimary
+        where i.indrelid = '"${schemaName}"."${tableName}"'::regclass and i.indisprimary
     </select>
 
 
@@ -76,7 +93,7 @@
         SELECT EXISTS(
                        SELECT 1
                        FROM information_schema.tables
-                       WHERE table_schema = 'public'
+                       WHERE table_schema = #{schemaName}
                          AND table_name = #{tableName}
                    )
     </select>
@@ -84,7 +101,7 @@
 
     <insert id="createTable">
         <!-- Create table: id SERIAL PRIMARY KEY + filtered columns -->
-        CREATE TABLE "${table.tableName}" (
+        CREATE TABLE IF NOT EXISTS "${schemaName}"."${table.tableName}" (
         id SERIAL PRIMARY KEY,
         <foreach collection="columns" item="col" separator=",">
             <if test="col.columnName != null and col.columnName.toLowerCase() != 'id'">
@@ -93,10 +110,10 @@
         </foreach>
         );
         <!-- Add comments -->
-        COMMENT ON TABLE "${table.tableName}" IS '${table.description}';
+        COMMENT ON TABLE "${schemaName}"."${table.tableName}" IS '${table.description}';
         <foreach collection="columns" item="col" separator=";">
             <if test="col.description != null and col.description.trim().length() > 0">
-                COMMENT ON COLUMN "${table.tableName}"."${col.columnName}" IS '${col.description}'
+                COMMENT ON COLUMN "${schemaName}"."${table.tableName}"."${col.columnName}" IS '${col.description}'
             </if>
         </foreach>
     </insert>
@@ -106,17 +123,17 @@
         <foreach collection="columns" item="col" separator=";">
             DO $$
             BEGIN
-                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = '${tableName}' AND column_name = '${col.columnName}' AND table_schema = 'public') THEN
-                    EXECUTE 'ALTER TABLE "${tableName}" ALTER COLUMN "${col.columnName}" TYPE ${col.type} USING "${col.columnName}"::${col.type}';
+                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = '${tableName}' AND column_name = '${col.columnName}' AND table_schema = '${schemaName}') THEN
+                    EXECUTE 'ALTER TABLE "${schemaName}"."${tableName}" ALTER COLUMN "${col.columnName}" TYPE ${col.type} USING "${col.columnName}"::${col.type}';
                 ELSE
-                    EXECUTE 'ALTER TABLE "${tableName}" ADD COLUMN "${col.columnName}" ${col.type}';
+                    EXECUTE 'ALTER TABLE "${schemaName}"."${tableName}" ADD COLUMN "${col.columnName}" ${col.type}';
                 END IF;
             END $$;
         </foreach>
         <!-- Add comments -->
         <foreach collection="columns" item="col" separator=";">
             <if test="col.description != null and col.description.trim().length() > 0">
-                COMMENT ON COLUMN "${tableName}"."${col.columnName}" IS '${col.description}'
+                COMMENT ON COLUMN "${schemaName}"."${tableName}"."${col.columnName}" IS '${col.description}'
             </if>
         </foreach>
     </update>
@@ -125,7 +142,7 @@
 
     <update id="dropColumns">
         <if test="columns != null and !columns.isEmpty()">
-            ALTER TABLE "${tableName}"
+            ALTER TABLE "${schemaName}"."${tableName}"
             DROP COLUMN IF EXISTS
             <foreach collection="columns" item="col" separator=", ">
                 "${col}"
@@ -135,17 +152,40 @@
 
 
     <update id="dropTable">
-        DROP TABLE IF EXISTS "${tableName}"
+        DROP TABLE IF EXISTS "${schemaName}"."${tableName}"
     </update>
 
 
     <update id="createIndex">
         CREATE INDEX IF NOT EXISTS ${tableName}_${columnName}_idx
-            ON "${tableName}" ("${columnName}")
+            ON "${schemaName}"."${tableName}" ("${columnName}")
     </update>
 
     <update id="createSchema">
         CREATE SCHEMA IF NOT EXISTS "${schemaName}"
+    </update>
+
+    <update id="initSpaceSchema">
+        CREATE SCHEMA IF NOT EXISTS "${schemaName}";
+
+        CREATE TABLE IF NOT EXISTS "${schemaName}"."table_field_mapping" (
+            id SERIAL PRIMARY KEY,
+            source_table_name  varchar(255)                                                         not null,
+            source_column_name varchar(255)                                                         not null,
+            target_table_name  varchar(255)                                                         not null,
+            target_column_name varchar(255)                                                         not null,
+            create_time        timestamp(6) default CURRENT_TIMESTAMP,
+            constraint table_field_mapping_uk_source_target_table
+                unique (source_table_name, target_table_name)
+        );
+
+        COMMENT ON TABLE "${schemaName}"."table_field_mapping" IS '主属性表和关联属性表主外建映射';
+        COMMENT ON COLUMN "${schemaName}"."table_field_mapping".source_table_name IS '主属性表名';
+        COMMENT ON COLUMN "${schemaName}"."table_field_mapping".source_column_name IS '主属性表被关联列';
+        COMMENT ON COLUMN "${schemaName}"."table_field_mapping".target_table_name IS '关联属性表名';
+        COMMENT ON COLUMN "${schemaName}"."table_field_mapping".target_column_name IS '关联属性表关联列名';
+        COMMENT ON COLUMN "${schemaName}"."table_field_mapping".create_time IS '创建时间';
+
     </update>
 
 </mapper>

@@ -22,13 +22,18 @@ public class DatasourceValidator implements ConstraintValidator<DatasourceVerify
         if (value == null) {
             return true;
         }
+        var schemaName = value.getSchemaName();
         var dsId = value.getDatasourceId();
         var columnName = value.getDatasourceColumnName();
-        if (StringUtils.isEmpty(dsId) && StringUtils.isEmpty(columnName)) {
+        if (StringUtils.isEmpty(dsId)
+                && StringUtils.isEmpty(schemaName)
+                && StringUtils.isEmpty(columnName)) {
             return true;
         }
-        if (StringUtils.isNotEmpty(dsId) && StringUtils.isNotEmpty(columnName)) {
-            return tableMetadataMapper.isColumnExist(dsId, columnName);
+        if (StringUtils.isNotEmpty(dsId)
+                && StringUtils.isNotEmpty(schemaName)
+                && StringUtils.isNotEmpty(columnName)) {
+            return tableMetadataMapper.isColumnExist(schemaName, dsId, columnName);
         } else {
             return false;
         }

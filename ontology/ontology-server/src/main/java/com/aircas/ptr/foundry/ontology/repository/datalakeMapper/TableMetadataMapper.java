@@ -11,30 +11,38 @@ import java.util.List;
 @Mapper
 public interface TableMetadataMapper {
 
-    List<TableColumnDesc> queryColumnMetadata(@Param("tableName") String tableName);
+    List<TableColumnDesc> queryColumnMetadata(@Param("schemaName") String schemaName, @Param("tableName") String tableName);
 
-    List<DatasourceTable> listTables();
+    List<DatasourceTable> listTables(@Param("schemaName") String schemaName);
 
-    Boolean isColumnExist(@Param("tableName") String tableName, @Param("columnName") String columnName);
+    List<DatasourceTable> listTablesPage(@Param("schemaName") String schemaName,
+                                         @Param("keyword") String keyword,
+                                         @Param("limit") Integer limit,
+                                         @Param("offset") Integer offset);
 
+    Integer countTables(@Param("schemaName") String schemaName, @Param("keyword") String keyword);
 
-    Boolean isTableExist(@Param("tableName") String tableName);
-
-
-    String queryPrimaryKeyColumnName(@Param("tableName") String tableName);
-
-
-    void createTable(@Param("table") TableDesc table, @Param("columns") List<TableColumnDesc> columns);
-
-    void createIndex(@Param("tableName") String tableName, @Param("columnName") String columnName);
-
-    void addColumns(@Param("tableName") String tableName, @Param("columns") List<TableColumnDesc> columns);
+    Boolean isColumnExist(@Param("schemaName") String schemaName,@Param("tableName") String tableName, @Param("columnName") String columnName);
 
 
-    void dropColumns(@Param("tableName") String tableName, @Param("columns") List<String> columns);
+    Boolean isTableExist(@Param("schemaName") String schemaName, @Param("tableName") String tableName);
 
-    void dropTable(@Param("tableName") String tableName);
+
+    String queryPrimaryKeyColumnName(@Param("schemaName") String schemaName, @Param("tableName") String tableName);
+
+
+    void createTable(@Param("schemaName") String schemaName,@Param("table") TableDesc table, @Param("columns") List<TableColumnDesc> columns);
+
+    void createIndex(@Param("schemaName") String schemaName, @Param("tableName") String tableName, @Param("columnName") String columnName);
+
+    void addColumns(@Param("schemaName") String schemaName, @Param("tableName") String tableName, @Param("columns") List<TableColumnDesc> columns);
+
+    void dropColumns(@Param("schemaName") String schemaName, @Param("tableName") String tableName, @Param("columns") List<String> columns);
+
+    void dropTable(@Param("schemaName") String schemaName, @Param("tableName") String tableName);
 
     void createSchema(@Param("schemaName") String schemaName);
+
+    void initSpaceSchema(@Param("schemaName") String schemaName);
 
 }

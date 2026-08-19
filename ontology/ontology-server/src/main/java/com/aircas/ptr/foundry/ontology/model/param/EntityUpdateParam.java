@@ -20,6 +20,9 @@ import java.util.List;
 @NoArgsConstructor
 public class EntityUpdateParam {
 
+    @NotBlank(message = "schemaName is empty")
+    private String schemaName;
+
     @NotBlank(message = "datasourceId is empty")
     private String datasourceId;
 

@@ -9,7 +9,6 @@ import com.aircas.ptr.foundry.ontology.model.po.OntologySpace;
 import com.aircas.ptr.foundry.ontology.model.view.OntologyStatisticsCountView;
 import com.aircas.ptr.foundry.ontology.model.view.SpaceStatisticsCountView;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologySpaceVO;
-import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.TableMetadataMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.*;
 import com.aircas.ptr.foundry.ontology.service.OntologySpaceService;
 import com.aircas.ptr.foundry.ontology.service.TableMetadataService;
@@ -49,7 +48,7 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
     private final TableMetadataService tableMetadataService;
 
 
-    @Transactional(transactionManager = "mainTransactionManager")
+    @Transactional(transactionManager = "chainedTransactionManager")
     @Override
     public Integer createSpace(OntologySpaceCreateParam param) {
         //check param
@@ -65,8 +64,8 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                 .apiName(param.getApiName())
                 .build();
         spaceMapper.insert(ontologySpace);
-        //create schema if not exist
-        tableMetadataService.createSchema(param.getApiName());
+        //create new schema &  table_filed_mapping table
+        tableMetadataService.initSpaceSchema(param.getApiName());
         return ontologySpace.getId();
     }
 
@@ -138,6 +137,7 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
 
     /**
      * 当空间本体数量为0时才可删除，删除本体空间不会删除db下的schema
+     *
      * @param spaceId
      */
     @Transactional(transactionManager = "mainTransactionManager")
