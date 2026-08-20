@@ -14,13 +14,13 @@ import java.util.Date;
 @Accessors(chain = true)
 @NoArgsConstructor
 @AllArgsConstructor
-@TableName("user")
+@TableName("users")
 public class User {
 
     @TableId(type = IdType.AUTO)
     private Integer id;
 
-    private String userName;
+    private String username;
 
     private String password;
 

@@ -20,7 +20,7 @@ public enum ResultCode {
 
     PARAM_ERROR(400, "参数异常"),
 
-    UNAUTHORIZED(401, "未认证"),
+    UNAUTHORIZED(401, "未登陆或token无效"),
 
     DUPLICATION(409, "参数冲突"),
 

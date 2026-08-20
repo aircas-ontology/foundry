@@ -59,6 +59,10 @@ ontology:
     enable: true
 
 
+jwt:
+  secret: ontology-jwt-secret-key-2026
+  access-token-expire-days: 7
+  refresh-token-expire-days: 30
 
 
 minio:

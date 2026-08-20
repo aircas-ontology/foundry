@@ -2,6 +2,8 @@ package com.aircas.ptr.foundry.ontology.controller;
 
 
 import com.aircas.ptr.foundry.common.base.RestResult;
+import com.aircas.ptr.foundry.ontology.model.common.Constants;
+import com.aircas.ptr.foundry.ontology.model.dto.JwtDTO;
 import com.aircas.ptr.foundry.ontology.model.param.UserCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.UserLoginParam;
 import com.aircas.ptr.foundry.ontology.service.UserService;
@@ -15,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import javax.servlet.http.HttpServletResponse;
 import javax.validation.Valid;
 
 @Api(tags = "用户接口")
@@ -29,8 +32,9 @@ public class UserController {
 
     @PostMapping("/login")
     @ApiOperation(value = "登陆")
-    public RestResult userLogin(@RequestBody @Valid UserLoginParam param) {
+    public RestResult userLogin(@RequestBody @Valid UserLoginParam param, HttpServletResponse response) {
         var token = userService.login(param);
+        writeTokenHeaders(response, token);
         return RestResult.success();
     }
 
@@ -40,6 +44,11 @@ public class UserController {
     public RestResult userCreate(@RequestBody @Valid UserCreateParam param) {
         userService.create(param);
         return RestResult.success();
+    }
+
+    private void writeTokenHeaders(HttpServletResponse response, JwtDTO token) {
+        response.setHeader(Constants.ACCESS_TOKEN_HEADER, token.getAccessToken());
+        response.setHeader(Constants.REFRESH_TOKEN_HEADER, token.getRefreshToken());
     }
 
 }

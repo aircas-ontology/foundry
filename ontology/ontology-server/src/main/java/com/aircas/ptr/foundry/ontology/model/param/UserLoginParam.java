@@ -16,11 +16,11 @@ import javax.validation.constraints.NotBlank;
 @SuperBuilder
 public class UserLoginParam {
 
-    @ApiModelProperty(name = "userName", value = "用户名", example = "admin")
-    @NotBlank(message = "userName is empty")
-    private String userName;
+    @ApiModelProperty(name = "username", value = "用户名", example = "admin")
+    @NotBlank(message = "username is empty")
+    private String username;
 
-    @ApiModelProperty(name = "password", value = "密码", example = "123456")
+    @ApiModelProperty(name = "password", value = "密码", example = "a123456")
     @NotBlank(message = "password is empty")
     private String password;
 }

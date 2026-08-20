@@ -741,7 +741,7 @@ comment on column user_workshop.create_time is '创建时间';
 
 comment on column user_workshop.update_time is '更新时间';
 
-create table if not exists "user"
+create table if not exists users
 (
     id          serial
     primary key,
@@ -753,19 +753,19 @@ create table if not exists "user"
     update_time timestamp(6) default CURRENT_TIMESTAMP
     );
 
-comment on table "user" is '用户表';
+comment on table users is '用户表';
 
-comment on column "user".id is '主键ID，自增';
+comment on column users.id is '主键ID，自增';
 
-comment on column "user".username is '用户名（唯一）';
+comment on column users.username is '用户名（唯一）';
 
-comment on column "user".password is '加密存储的登录密码';
+comment on column users.password is '加密存储的登录密码';
 
-comment on column "user".picture is '用户头像URL';
+comment on column users.picture is '用户头像URL';
 
-comment on column "user".create_time is '创建时间';
+comment on column users.create_time is '创建时间';
 
-comment on column "user".update_time is '更新时间';
+comment on column users.update_time is '更新时间';
 
 create table if not exists ontology_space
 (

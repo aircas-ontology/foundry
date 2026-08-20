@@ -77,7 +77,7 @@ comment on column ontology.ontology_link_group.ontology_space_id is '本体空�
     /**
         用户表
      */
-CREATE TABLE IF NOT EXISTS ontology.user (
+CREATE TABLE IF NOT EXISTS ontology.users (
        id          SERIAL PRIMARY KEY,
        username    VARCHAR(100) NOT NULL UNIQUE,
        password    VARCHAR(256) NOT NULL,          -- 加密存储的密码
@@ -86,13 +86,13 @@ CREATE TABLE IF NOT EXISTS ontology.user (
        update_time timestamp(6) DEFAULT CURRENT_TIMESTAMP
 );
 
-COMMENT ON TABLE ontology.user IS '用户表';
-COMMENT ON COLUMN ontology.user.id IS '主键ID，自增';
-COMMENT ON COLUMN ontology.user.username IS '用户名（唯一）';
-COMMENT ON COLUMN ontology.user.password IS '加密存储的登录密码';
-COMMENT ON COLUMN ontology.user.picture IS '用户头像URL';
-COMMENT ON COLUMN ontology.user.create_time IS '创建时间';
-COMMENT ON COLUMN ontology.user.update_time IS '更新时间';
+COMMENT ON TABLE ontology.users IS '用户表';
+COMMENT ON COLUMN ontology.users.id IS '主键ID，自增';
+COMMENT ON COLUMN ontology.users.username IS '用户名（唯一）';
+COMMENT ON COLUMN ontology.users.password IS '加密存储的登录密码';
+COMMENT ON COLUMN ontology.users.picture IS '用户头像URL';
+COMMENT ON COLUMN ontology.users.create_time IS '创建时间';
+COMMENT ON COLUMN ontology.users.update_time IS '更新时间';
 
 /**
         本体分类表
