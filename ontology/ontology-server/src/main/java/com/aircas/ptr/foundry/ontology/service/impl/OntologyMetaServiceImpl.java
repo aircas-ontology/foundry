@@ -83,6 +83,9 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
     private PropertyCategoryService propertyCategoryService;
 
     @Resource
+    private OntologyCategoryService categoryService;
+
+    @Resource
     private PropertyMetadataSchemaService propertyMetadataSchemaService;
 
     @Resource
@@ -478,15 +481,28 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
 
     @Transactional(value = "mainTransactionManager")
     public void importOntology(OntologyCreateDTO dto) {
+
         var metaData = dto.getMetadata();
         PreconditionUtils.checkNotNull(metaData, "ontology meta data is null");
-        var groups = groupService.list().stream().filter(g -> metaData.getGroupNames().contains(g.getGroupName())).collect(Collectors.toList());
-        PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(groups), "invalid group names:" + metaData.getGroupNames());
-        var metaGroups = groups.stream().map(OntologyGroup::getGroupId).collect(Collectors.joining(","));
         //保存基本信息
         var space = spaceService.getOne(new LambdaQueryWrapper<OntologySpace>()
                 .eq(OntologySpace::getDisplayName, metaData.getOntologySpaceName()));
         PreconditionUtils.checkNotNull(space, "invalid ontology space name:" + dto.getMetadata().getOntologySpaceName());
+
+        //空间分组
+        var groups = groupService.list(new LambdaQueryWrapper<OntologyGroup>()
+                        .eq(OntologyGroup::getOntologySpaceId, space.getId()))
+                .stream().filter(g -> metaData.getGroupNames().contains(g.getGroupName())).collect(Collectors.toList());
+
+        var metaGroups = "";
+        if (CollectionUtils.isNotEmpty(groups)) {
+            metaGroups = groups.stream().map(OntologyGroup::getGroupId).collect(Collectors.joining(","));
+        }
+
+        //获取本体分类体系
+        var ontologyCategoryMap = categoryService.list(new LambdaQueryWrapper<OntologyCategory>()
+                        .eq(OntologyCategory::getOntologySpaceId, space.getId()))
+                .stream().collect(Collectors.toMap(OntologyCategory::getPath, OntologyCategory::getId));
 
         var meta = OntologyMeta.builder()
                 .apiName(metaData.getApiName())
@@ -496,6 +512,8 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 .metaGroupId(metaGroups)
                 .uniqueIdentifier(IdGenerator.generateUUID())
                 .ontologySpaceId(space.getId())
+                .ontologyCategoryId(StringUtils.isEmpty(metaData.getCategoryPath()) ?
+                        null : ontologyCategoryMap.get(metaData.getCategoryPath()))
                 .build();
         save(meta);
         //保存属性分类

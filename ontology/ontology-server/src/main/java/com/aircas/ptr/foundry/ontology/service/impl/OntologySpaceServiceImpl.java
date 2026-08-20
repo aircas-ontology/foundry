@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
+import com.aircas.ptr.foundry.ontology.model.dto.OntologySpaceCreateDTO;
 import com.aircas.ptr.foundry.ontology.model.param.OntologySpaceCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologySpaceUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyCategory;
@@ -10,19 +11,26 @@ import com.aircas.ptr.foundry.ontology.model.view.OntologyStatisticsCountView;
 import com.aircas.ptr.foundry.ontology.model.view.SpaceStatisticsCountView;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologySpaceVO;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.*;
+import com.aircas.ptr.foundry.ontology.service.OntologyCategoryService;
 import com.aircas.ptr.foundry.ontology.service.OntologySpaceService;
 import com.aircas.ptr.foundry.ontology.service.TableMetadataService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Lists;
 import lombok.RequiredArgsConstructor;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import lombok.var;
 import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import javax.annotation.Resource;
+import java.io.InputStream;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -45,7 +53,16 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
 
     private final OntologyCategoryMapper categoryMapper;
 
+    private final OntologyCategoryService categoryService;
+
     private final TableMetadataService tableMetadataService;
+
+    private final OntologyMetaServiceImpl ontologyMetaService;
+
+    private final ObjectMapper jsonMapper = new ObjectMapper();
+
+    @Resource
+    private OntologySpaceServiceImpl proxy;
 
 
     @Transactional(transactionManager = "chainedTransactionManager")
@@ -152,6 +169,45 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
         categoryMapper.delete(new LambdaQueryWrapper<OntologyCategory>().eq(OntologyCategory::getOntologySpaceId, spaceId));
         //delete space
         removeById(spaceId);
+    }
+
+    @Transactional(transactionManager = "mainTransactionManager")
+    @Override
+    @SneakyThrows
+    public List<String> importOntologySpace(MultipartFile file) {
+        InputStream inputStream = file.getInputStream();
+        var spaceCreateDTO = jsonMapper.readValue(inputStream, new TypeReference<OntologySpaceCreateDTO>() {
+        });
+        //create ontology space
+        var ontologySpace = spaceCreateDTO.getOntologySpace();
+        if (ontologySpace == null) {
+            return Lists.newArrayList();
+        }
+        var spaceId = proxy.createSpace(OntologySpaceCreateParam.builder()
+                .apiName(ontologySpace.getApiName())
+                .description(ontologySpace.getDescription())
+                .displayName(ontologySpace.getDisplayName())
+                .build());
+        //create ontology category
+        var category = spaceCreateDTO.getOntologyCategory();
+        if (category != null) {
+            category.setParentId(0);
+            category.setSpaceId(spaceId);
+            categoryService.createCategory(category);
+        }
+        //import ontologies
+        List<String> failedOntology = Lists.newArrayList();
+        if (CollectionUtils.isNotEmpty(spaceCreateDTO.getOntologies())) {
+            spaceCreateDTO.getOntologies().forEach(dto -> {
+                try {
+                    ontologyMetaService.importOntology(dto);
+                } catch (Exception e) {
+                    log.error("本体 {} 导入失败", dto.getMetadata().getDisplayName(), e);
+                    failedOntology.add(dto.getMetadata().getDisplayName());
+                }
+            });
+        }
+        return failedOntology;
     }
 
 
