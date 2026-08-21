@@ -396,7 +396,15 @@ public class SchemaHandleUtil {
         if (Objects.nonNull(value)) {
             Class clazz = getClassByTypeExpression(className);
             if (clazz == List.class) {
-                return MAPPER.readValue(value.toString(), new TypeReference<List<?>>() {
+                // Request body 已反序列化为 List 时直接使用；勿用 List.toString()（无引号，不是合法 JSON）
+                if (value instanceof List) {
+                    return value;
+                }
+                if (value instanceof String) {
+                    return MAPPER.readValue((String) value, new TypeReference<List<?>>() {
+                    });
+                }
+                return MAPPER.convertValue(value, new TypeReference<List<?>>() {
                 });
             }
             String valueStr = value.toString();

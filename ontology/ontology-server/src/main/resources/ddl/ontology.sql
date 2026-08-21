@@ -1,3 +1,10 @@
+-- 切换到 postgres 库（仅 psql 有效；其他客户端请手动选择 postgres 后再执行）
+\c postgres
+
+CREATE SCHEMA IF NOT EXISTS ontology;
+
+SET search_path TO ontology;
+
 create sequence action_handle_commit_flash_memory_id_seq;
 
 create sequence action_handle_rule_id_seq;
