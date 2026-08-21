@@ -115,6 +115,8 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         functionParamService.remove(new LambdaQueryWrapper<FunctionParamPO>().eq(FunctionParamPO::getFunctionId, function.getId()));
         //删除函数记录
         removeById(function.getId());
+        //失效编译缓存，释放旧 Class / ClassLoader
+        groovyService.invalidateCompiledClass(api);
     }
 
 
@@ -234,7 +236,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         //参数取值
         Map<String, Object> funParamMap = CollectionUtils.isEmpty(param.getParameters()) ?
                 new HashMap<>() : param.getParameters().stream().collect(HashMap::new, (m, p) -> m.put(p.getParamName(), p.getParamValue()), HashMap::putAll);
-        var resultJsonStr = groovyService.executeGroovy(function.getCode(), funParamMap, executeInputParams);
+        var resultJsonStr = groovyService.executeGroovy(param.getFunctionApi(), function.getCode(), funParamMap, executeInputParams);
         var result = objectMapper.readValue(resultJsonStr, new TypeReference<FunctionResultVO>() {
         });
         if (result != null && StringUtils.isNotEmpty(result.getTaskId())) {
@@ -249,23 +251,6 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     }
 
 
-    private void deleteFunctionGroovy(String functionApi) {
-        try {
-            //删除groovy文件
-            // 构建文件路径
-            File rootDir = new File(ROOT_PATH);
-            File file = new File(rootDir, functionApi + ".groovy");
-
-            // 检查文件是否存在
-            if (file.exists()) {
-                // 删除文件
-                FileUtils.forceDelete(file);
-            }
-        } catch (Exception e) {
-            log.error("delete function file failed:", e);
-            throw new BusinessException("write function to file failed:" + functionApi);
-        }
-    }
 
     /***
      * 解析groovy代码，获取参数列表及返回值，批量入库
@@ -294,29 +279,6 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         }
     }
 
-    private void writeCodeToFile(String functionApi, String code) {
 
-        try {
-            // 构建文件路径
-            var rootDir = new File(ROOT_PATH);
-            var file = new File(rootDir, functionApi + ".groovy");
-
-            // 检查根目录是否存在，如果不存在则创建
-            if (!rootDir.exists()) {
-                FileUtils.forceMkdir(rootDir);
-            }
-
-            // 检查文件是否已存在
-            if (file.exists()) {
-                throw new IOException("File already exists: " + file.getAbsolutePath());
-            }
-
-            // 创建并写入文件
-            FileUtils.writeStringToFile(file, code, "UTF-8");
-        } catch (Exception e) {
-            log.error("write function to file failed:", e);
-            throw new BusinessException("write function to file failed:" + functionApi);
-        }
-    }
 
 }

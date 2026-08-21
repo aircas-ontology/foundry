@@ -70,7 +70,7 @@ public class OntologyActionController {
     }
 
     @ApiOperation(value = "执行本体单个行为")
-    @GetMapping("/execute")
+    @PostMapping("/execute")
     public RestResult executeAction(@RequestBody @Valid OntologyActionExecuteParam param) {
         ontologyActionService.executeAction(param);
         return RestResult.success();

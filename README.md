@@ -1,6 +1,6 @@
 # Foundry
 
-Foundry 是中国科学院空天信息创新研究院（AIRCAS）的本体（Ontology）平台后端，负责本体建模、实体数据、行为编排、函数运行时与许可证管理。项目采用 Maven 多模块结构，核心服务基于 Spring Boot 构建，使用 PostgreSQL + ArangoDB 混合存储。
+Foundry 是本体（Ontology）平台后端，负责本体建模、实体数据、行为编排、函数运行时与许可证管理。项目采用 Maven 多模块结构，核心服务基于 Spring Boot 构建，使用 PostgreSQL + ArangoDB 混合存储。
 
 当前版本：`0.0.1-SNAPSHOT`  
 坐标：`com.aircas.ptr:foundry`
