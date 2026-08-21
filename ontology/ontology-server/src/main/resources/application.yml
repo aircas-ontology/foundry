@@ -116,3 +116,10 @@ license:
 rag:
   knowledge-url: http://192.168.9.13:1124/chat/ask
   build-url: http://192.168.9.13:1124/ontology/build
+
+threadpool:
+  core-pool-size: 10
+  max-pool-size: 20
+  queue-capacity: 100
+  keep-alive-seconds: 60
+  thread-name-prefix: ontology-thread-
