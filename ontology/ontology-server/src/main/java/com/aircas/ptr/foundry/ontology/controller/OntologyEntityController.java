@@ -137,16 +137,23 @@ public class OntologyEntityController {
 
 
     @ApiOperation(value = "补全单个实体节点和关系")
-    @PostMapping("/completeNodeAndRelations")
+    @PostMapping("/complete_node_and_relations")
     public RestResult completeEntityNodeAndRelations(@RequestBody @Valid EntityNodeAndRelationsCompleteParam param) {
         entityService.completeEntityNodeAndRelations(param.getOntologyUniqueIdentifier(), param.getEntityPropertyMap());
         return RestResult.success();
     }
 
     @ApiOperation(value = "删除单个实体节点和关系")
-    @DeleteMapping("/deleteNodeAndRelations")
+    @DeleteMapping("/delete_node_and_relations")
     public RestResult deleteEntityNodeAndRelations(@RequestBody @Valid EntityNodeAndRelationsDeleteParam param) {
         entityService.deleteEntityNodeAndRelations(param.getOntologyUniqueIdentifier(), param.getEntityPrimaryKey());
+        return RestResult.success();
+    }
+
+    @ApiOperation(value = "更新实体关系")
+    @PutMapping("/update_relation")
+    public RestResult updateEntityRelation(@RequestBody @Valid EntityRelationUpdateParam param) {
+        entityService.updateEntityRelation(param);
         return RestResult.success();
     }
 

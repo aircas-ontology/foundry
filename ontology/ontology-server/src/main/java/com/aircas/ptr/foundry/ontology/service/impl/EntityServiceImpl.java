@@ -674,6 +674,48 @@ public class EntityServiceImpl implements EntityService {
         return objectMapper.count(datasourceSchema, datasourceId);
     }
 
+    @Override
+    public void updateEntityRelation(EntityRelationUpdateParam param) {
+        var linkId = param.getLinkUniqIdentifier();
+        var link = linkGroupMapper.selectOne(new LambdaQueryWrapper<OntologyLinkGroup>().eq(OntologyLinkGroup::getUniqueIdentifier, linkId));
+        PreconditionUtils.checkNotNull(link, "invalid link uniqIdentifier", HttpStatus.BAD_REQUEST);
+        var relation = relationRepository.queryRelationByFromNodeAndToNode(
+                link.getOntologyUniqueIdentifierFrom(),
+                param.getEntityPrimaryKeyFrom(),
+                link.getOntologyUniqueIdentifierTo(),
+                param.getEntityPrimaryKeyTo(),
+                linkId);
+
+        //更新实体关系（已存在）
+        if (relation != null) {
+            var visibilityWindows = param.getVisibilityWindows();
+            Date startTime = null, endTime = null;
+            if (CollectionUtils.isNotEmpty(visibilityWindows)) {
+                startTime = visibilityWindows.get(0).getStartTime();
+                endTime = visibilityWindows.get(0).getEndTime();
+            }
+            relationRepository.updateRelation(startTime, endTime, visibilityWindows, param.getStatus(), relation.getId());
+        }
+        //插入新的实体关系（实体节点已存在）
+        else {
+            var fromNode = nodeRepository.findByOntologyUniqIdentifierAndPrimaryKey(link.getOntologyUniqueIdentifierFrom(), param.getEntityPrimaryKeyFrom());
+            var toNode = nodeRepository.findByOntologyUniqIdentifierAndPrimaryKey(link.getOntologyUniqueIdentifierTo(), param.getEntityPrimaryKeyTo());
+            PreconditionUtils.checkArgument(fromNode != null && toNode != null, "实体节点不存在");
+            relation = EntityRelation.builder()
+                    .ontologyLinkId(link.getUniqueIdentifier())
+                    .from(fromNode)
+                    .to(toNode)
+                    .status(param.getStatus())
+                    .timeWindows(param.getVisibilityWindows())
+                    .createTime(new Date())
+                    .updateTime(new Date())
+                    .type(link.getType())
+                    .name(link.getName())
+                    .build();
+            relationRepository.save(relation);
+        }
+    }
+
 
     @Override
     public Page<EntityInfoVO> getEntities(String ontologyUniqueIdentifier,
