@@ -38,7 +38,7 @@ COMMENT ON TABLE "ontology"."property_category" IS '属性分类表';
 
 
 CREATE TABLE "ontology"."property_metadata_schema" (
-   "id" int4 NOT NULL DEFAULT nextval('"ontology".property_metadata_schema_id_seq'::regclass),
+   "id" serial,
    "ontology_unique_identifier" varchar(255) COLLATE "pg_catalog"."default" NOT NULL,
    "path" text COLLATE "pg_catalog"."default",
    "parent_id" int4 NOT NULL DEFAULT 0,
@@ -49,8 +49,6 @@ CREATE TABLE "ontology"."property_metadata_schema" (
 )
 ;
 
-ALTER TABLE "ontology"."property_metadata_schema"
-    OWNER TO "iecas";
 
 COMMENT ON COLUMN "ontology"."property_metadata_schema"."id" IS '主键id';
 
