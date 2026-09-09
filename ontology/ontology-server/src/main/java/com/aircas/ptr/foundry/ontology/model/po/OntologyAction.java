@@ -63,5 +63,11 @@ public class OntologyAction {
 
     private String icon;
 
+    /**
+     * 本体空间id
+     */
+    private Integer ontologySpaceId;
+
+
     private static final long serialVersionUID = 1L;
 }

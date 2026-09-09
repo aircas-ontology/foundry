@@ -51,4 +51,9 @@ public class ActionHandleRule {
 
     private Integer ruleConnectType;
 
+    /**
+     * 本体空间id
+     */
+    private Integer ontologySpaceId;
+
 }

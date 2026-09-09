@@ -87,4 +87,9 @@ public class Function {
      * 涉及的本体
      */
     private String objectTypes;
+
+    /**
+     * 本体空间id
+     */
+    private Integer ontologySpaceId;
 }
