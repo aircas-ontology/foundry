@@ -17,6 +17,14 @@
     </properties>
 
     <dependencies>
+
+        <!-- Spring Kafka -->
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
+            <version>2.5.7.RELEASE</version>
+        </dependency>
+
         <dependency>
             <groupId>com.aircas.ptr</groupId>
             <artifactId>common</artifactId>

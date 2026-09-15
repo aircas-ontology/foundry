@@ -5,9 +5,11 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
 import org.springframework.context.ApplicationContext;
+import org.springframework.kafka.annotation.EnableKafka;
 import tk.mybatis.mapper.autoconfigure.MapperAutoConfiguration;
 
 @SpringBootApplication(scanBasePackages = "com.aircas.ptr.foundry", exclude = {DataSourceAutoConfiguration.class, DruidDataSourceAutoConfigure.class, MapperAutoConfiguration.class})
+@EnableKafka
 public class OntologyServerApplication {
 
     public static ApplicationContext context;

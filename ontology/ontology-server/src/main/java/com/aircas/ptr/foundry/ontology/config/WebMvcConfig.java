@@ -26,7 +26,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
                         "/v2/api-docs/**",
                         "/webjars/**",
                         "/error",
-                        "/ontology/favicon.ico"
+                        "/favicon.ico"
                 );
     }
 }
