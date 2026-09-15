@@ -10,9 +10,10 @@ Foundry 是本体（Ontology）平台后端，负责本体建模、实体数据�
 ```
 foundry                          # 父工程（packaging: pom）
 ├── common                       # 公共库：统一返回、异常、工具类、跨域与日志
-└── ontology                     # 本体业务聚合模块
-    ├── ontology-server          # 核心微服务（可运行 JAR：ontology.jar）
-    └── license-generator        # 许可证生成与校验
+├── ontology                     # 本体业务聚合模块
+│   ├── ontology-server          # 核心微服务（可运行 JAR：ontology.jar）
+│   └── license-generator        # 许可证生成与校验
+└── deploy                       # 依赖中间件 Docker Compose 部署
 ```
 
 | 模块 | 说明 | 文档 |
@@ -127,12 +128,36 @@ ontology-server 覆盖本体从建模到运行的完整链路：
 - RabbitMQ 3.x
 - MinIO
 - XXL-Job Admin（行为调度需要）
-
-GeoTools 依赖需要 OSGeo 仓库（已在 `common/pom.xml` 中配置）：
+- Docker / Docker Compose（本地依赖服务）
 
 ```
-https://repo.osgeo.org/repository/release/
+
+## 依赖服务部署
+
+中间件通过 Docker Compose 部署，**详细步骤与初始化说明见 [`deploy/`](deploy/) 目录**，此处仅作概要。
+
+| 服务 | 目录 | 默认端口 | 用途 |
+|------|------|----------|------|
+| PostgreSQL（Citus） | [deploy/pg](deploy/pg) | `35432` | 主库 `ontology` + 数据湖 `entity_datasource` |
+| ArangoDB | [deploy/arangodb](deploy/arangodb) | `8529` | 图库 `entity`（`node` / `relation`） |
+| RabbitMQ | [deploy/rabbitmq](deploy/rabbitmq) | `5672` / `15672` | Schema 变更通知 |
+| MinIO | [deploy/minio](deploy/minio) | `16337` / `16338` | 对象存储（bucket: `ptr`） |
+| XXL-Job | [deploy/xxl-job](deploy/xxl-job) | `18888` | 行为调度（含独立 MySQL） |
+
+各服务在对应子目录启动：
+
+```bash
+cd deploy/<service> && docker-compose up -d
 ```
+
+启动后还需完成数据初始化（详见各子目录 README）：
+
+1. **PostgreSQL**：执行 `ontology/ontology-server/src/main/resources/ddl/ontology.sql`
+2. **ArangoDB**：创建库 `entity` 及集合 `node`、`relation`（见 [deploy/arangodb/README.md](deploy/arangodb/README.md)）
+3. **MinIO**：创建 bucket `ptr`，Access Policy 设为 public
+4. **XXL-Job**：先启动并初始化 MySQL（`tables_xxl_job.sql`），再启动 Admin
+
+账号、端口默认值与 `application.yml` 对齐；生产环境请修改密码并避免直接暴露管理端口。
 
 ## 构建
 
@@ -161,8 +186,8 @@ mvn clean package -pl ontology/license-generator -am -DskipTests
 
 ### ontology-server
 
-1. 准备 PostgreSQL、ArangoDB、RabbitMQ、MinIO（以及按需的 XXL-Job）。
-2. 执行 `ontology/ontology-server/src/main/resources/ddl/ontology.sql` 初始化主库。
+1. 按上文 [依赖服务部署](#依赖服务部署) 启动并初始化中间件（详见 [`deploy/`](deploy/)）。
+2. 执行 `ontology/ontology-server/src/main/resources/ddl/ontology.sql` 初始化主库（若尚未执行）。
 3. 按环境修改 `ontology/ontology-server/src/main/resources/application.yml`（数据源、消息队列、对象存储、调度中心等）。
 4. 启动：
 
@@ -243,6 +268,8 @@ java -jar ontology/license-generator/target/license-generator-0.0.1-SNAPSHOT-exe
 完整接口以启动后的 Knife4j 文档为准。
 
 ## 开发约定
+
+完整规约见 [CODING_CONVENTIONS.md](CODING_CONVENTIONS.md)。要点：
 
 - 统一响应体：`com.aircas.ptr.foundry.common.base.RestResult`
 - 业务异常：`BusinessException` + `ResultCode`

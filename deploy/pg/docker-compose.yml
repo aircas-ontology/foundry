@@ -1,0 +1,19 @@
+version: '3'
+services:
+  postgres:
+    container_name: ontology-pg
+    restart: always
+    # 使用 Citus 官方 pg14 镜像（10.2.1 是目前可核验的 pg14 tag 示例）
+    image: citusdata/citus:10.2.1-pg14
+    ports:
+      - "35432:5432"
+    volumes:
+      - ./data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=iecas
+      - POSTGRES_PASSWORD=iecas123
+      # 确保 Citus 扩展被预加载
+      - MUST_PRELOAD_CITUS=true
+    command: ["postgres", "-c", "shared_preload_libraries=citus"]
+
+

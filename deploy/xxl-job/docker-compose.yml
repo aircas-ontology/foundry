@@ -1,0 +1,16 @@
+
+version: '3.8'
+
+services:
+  app:
+    restart: always
+    image: bitnami/java:1.8
+    container_name: ontology-xxljob
+    ports:
+      - "18888:18888"  # 挂载主机的8080端口到容器的8080端口
+    volumes:
+      - ./xxl-job-admin-2.3.0.jar:/app.jar  # 挂载Spring Boot应用的JAR包
+      - ./application.properties:/application.properties  # 挂载应用配置文件
+      - ./data:/data  # 挂载日志文件目录
+    command: java -Dspring.config.location=file:/application.properties -jar /app.jar
+

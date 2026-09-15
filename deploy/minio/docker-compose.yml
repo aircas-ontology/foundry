@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  minio:
+    restart: always
+    image: minio:2022-06-25T155016Z
+    container_name: ontology-minio
+    command: server /data --console-address ':9001' --address ':9000' --compat
+    ports:
+      - "16337:9000"
+      - "16338:9001"
+    environment:
+      - MINIO_ACCESS_KEY=root
+      - MINIO_SECRET_KEY=iecas123
+      - MINIO_BROWSER_TIME_SKEW_WARNING=24h
+      - TZ=UTC
+    volumes:
+      - ./data:/data
+   #   - /etc/localtime:/etc/localtime:ro
+  #    - /etc/timezone:/etc/timezone:ro
+    healthcheck:
+      test: ["CMD", "bash", "-c", "cat < /dev/null > /dev/tcp/127.0.0.1/9000"]
+      interval: 5s
+      timeout: 60s
+      retries: 120
+
