@@ -84,13 +84,13 @@ create table if not exists action_handle_rule
     status            varchar(16),
     create_time       timestamp(6),
     update_time       timestamp(6),
-    action_id         bigint,
     rules             text,
     rule_connect_type smallint,
     name              varchar(255),
     description       varchar(255),
     id                bigint default nextval('ontology.action_handle_rule_id_seq1'::regclass) not null
-    primary key
+    primary key,
+    ontology_space_id integer
     );
 
 comment on column action_handle_rule.status is '状态: START/STOP';
@@ -98,8 +98,6 @@ comment on column action_handle_rule.status is '状态: START/STOP';
 comment on column action_handle_rule.create_time is '创建时间';
 
 comment on column action_handle_rule.update_time is '修改时间';
-
-comment on column action_handle_rule.action_id is '行为id';
 
 comment on column action_handle_rule.rules is '判断规则，结构如下：
 [{
@@ -116,20 +114,22 @@ comment on column action_handle_rule.name is '名称';
 
 comment on column action_handle_rule.description is '描述';
 
+comment on column action_handle_rule.ontology_space_id is '本体空间id';
+
 alter sequence action_handle_rule_id_seq1 owned by action_handle_rule.id;
 
 create table if not exists action_handle_task
 (
-    status      varchar(16),
-    create_time timestamp(6),
-    update_time timestamp(6),
-    action_id   bigint,
-    cron        varchar(255),
-    name        varchar(255),
-    description varchar(255),
-    id          bigint default nextval('ontology.action_handle_task_id_seq1'::regclass) not null
+    status            varchar(16),
+    create_time       timestamp(6),
+    update_time       timestamp(6),
+    cron              varchar(255),
+    name              varchar(255),
+    description       varchar(255),
+    id                bigint default nextval('ontology.action_handle_task_id_seq1'::regclass) not null
     primary key,
-    remark      varchar(255)
+    remark            varchar(255),
+    ontology_space_id integer
     );
 
 comment on table action_handle_task is '行为定时任务';
@@ -139,8 +139,6 @@ comment on column action_handle_task.status is '任务状态：START、STOP';
 comment on column action_handle_task.create_time is '创建时间';
 
 comment on column action_handle_task.update_time is '修改时间';
-
-comment on column action_handle_task.action_id is '行为id';
 
 comment on column action_handle_task.cron is '任务cron表达式';
 
@@ -152,25 +150,28 @@ comment on column action_handle_task.id is '主键';
 
 comment on column action_handle_task.remark is '备注信息';
 
+comment on column action_handle_task.ontology_space_id is '本体空间id';
+
 alter sequence action_handle_task_id_seq1 owned by action_handle_task.id;
 
 create table if not exists function
 (
-    api            varchar(255)                                                          not null
+    api               varchar(255)                                                          not null
     constraint uk_function_api
     unique,
-    description    varchar(25500),
-    status         smallint                                                              not null,
-    id             bigint default nextval('ontology.ontology_function_id_seq'::regclass) not null
+    description       varchar(25500),
+    status            smallint                                                              not null,
+    id                bigint default nextval('ontology.ontology_function_id_seq'::regclass) not null
     primary key,
-    object_types   varchar(2550),
-    update_time    timestamp(6),
-    create_time    timestamp(6),
-    type           varchar(255),
-    reference_name varchar(512),
-    code           text,
-    display_name   varchar(255),
-    model          varchar(255)
+    object_types      varchar(2550),
+    update_time       timestamp(6),
+    create_time       timestamp(6),
+    type              varchar(255),
+    reference_name    varchar(512),
+    code              text,
+    display_name      varchar(255),
+    model             varchar(255),
+    ontology_space_id integer
     );
 
 comment on table function is '函数';
@@ -196,6 +197,8 @@ comment on column function.code is '函数代码';
 comment on column function.display_name is '函数展示名称';
 
 comment on column function.model is '函数模型';
+
+comment on column function.ontology_space_id is '本体空间id';
 
 create table if not exists function_execute_result
 (
@@ -277,7 +280,8 @@ create table if not exists ontology_action
     display_name               varchar(50) default ''::character varying                                not null,
     status                     smallint    default 1,
     handle_type                smallint    default 1,
-    icon                       varchar(255)
+    icon                       varchar(255),
+    ontology_space_id          integer
     );
 
 comment on table ontology_action is '本体行为';
@@ -305,6 +309,8 @@ comment on column ontology_action.handle_type is '动作执行类型；
 2：规则';
 
 comment on column ontology_action.icon is '行为icon url';
+
+comment on column ontology_action.ontology_space_id is '本体空间id';
 
 create table if not exists ontology_action_link
 (
@@ -751,8 +757,10 @@ comment on column user_workshop.update_time is '更新时间';
 create table if not exists users
 (
     id          serial
+    constraint user_pkey
     primary key,
     username    varchar(100) not null
+    constraint user_username_key
     unique,
     password    varchar(256) not null,
     picture     varchar(1024),
