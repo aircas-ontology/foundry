@@ -1,3 +1,9 @@
+create database entity_datasource;
+comment on database entity_datasource is '实体数据';
+
+create database postgres;
+comment on database postgres is '本体schema';
+
 -- 切换到 postgres 库（仅 psql 有效；其他客户端请手动选择 postgres 后再执行）
 \c postgres
 
