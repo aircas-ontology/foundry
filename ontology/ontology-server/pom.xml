@@ -115,14 +115,7 @@
             <version>${mybatis-plus.version}</version>
         </dependency>
 
-        <!-- ArangoDB 核心依赖 (7.x 适配 spring-data 4.4.0) -->
-        <dependency>
-            <groupId>com.arangodb</groupId>
-            <artifactId>arangodb-java-driver</artifactId>
-            <version>7.0.0</version>
-        </dependency>
-
-        <!-- ArangoDB Spring Data (适配 Spring Data 3.x) -->
+        <!-- ArangoDB Spring Data (适配 Spring Data 3.x, 会自动引入兼容的 driver 版本) -->
         <dependency>
             <groupId>com.arangodb</groupId>
             <artifactId>arangodb-spring-data</artifactId>

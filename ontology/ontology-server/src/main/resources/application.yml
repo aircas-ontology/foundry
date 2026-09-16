@@ -8,6 +8,8 @@ spring:
     default-property-inclusion: non_null
   application:
     name: ontology
+  main:
+    allow-circular-references: true
   servlet:
     multipart:
       max-file-size: 500MB

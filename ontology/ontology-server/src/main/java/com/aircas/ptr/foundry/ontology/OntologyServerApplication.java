@@ -3,11 +3,18 @@ package com.aircas.ptr.foundry.ontology;
 import com.alibaba.druid.spring.boot3.autoconfigure.DruidDataSourceAutoConfigure;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.autoconfigure.elasticsearch.ElasticsearchClientAutoConfiguration;
+import org.springframework.boot.autoconfigure.elasticsearch.ElasticsearchRestClientAutoConfiguration;
 import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
 import org.springframework.context.ApplicationContext;
 import org.springframework.kafka.annotation.EnableKafka;
 
-@SpringBootApplication(scanBasePackages = "com.aircas.ptr.foundry", exclude = {DataSourceAutoConfiguration.class, DruidDataSourceAutoConfigure.class})
+@SpringBootApplication(scanBasePackages = "com.aircas.ptr.foundry", exclude = {
+        DataSourceAutoConfiguration.class,
+        DruidDataSourceAutoConfigure.class,
+        ElasticsearchRestClientAutoConfiguration.class,
+        ElasticsearchClientAutoConfiguration.class
+})
 @EnableKafka
 public class OntologyServerApplication {
 

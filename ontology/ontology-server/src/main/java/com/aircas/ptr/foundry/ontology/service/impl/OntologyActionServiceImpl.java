@@ -23,6 +23,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.collections4.MapUtils;
 import org.apache.commons.lang.StringUtils;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -67,6 +68,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     @Resource
     private OntologyActionMappingInService ontologyActionMappingInService;
 
+    @Lazy
     @Resource
     private OntologyPropertyService ontologyPropertyService;
 
@@ -77,6 +79,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     private ActionHandleTaskService actionHandleTaskService;
 
 
+    @Lazy
     @Resource
     private EntityServiceImpl entityService;
 
