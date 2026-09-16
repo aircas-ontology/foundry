@@ -1,9 +1,7 @@
 package com.aircas.ptr.foundry.common.filter;
 
 import com.aircas.ptr.foundry.common.util.IdGenerator;
-import com.google.common.collect.Sets;
 import lombok.extern.slf4j.Slf4j;
-import lombok.var;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.MDC;
 import org.springframework.core.annotation.Order;
@@ -11,10 +9,10 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.util.ContentCachingResponseWrapper;
 
-import javax.servlet.FilterChain;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Set;
@@ -27,11 +25,10 @@ public class LoggingFilter extends OncePerRequestFilter {
     public static final String LOG_ID_HEADER = "X-Request-ID";
     public static final String LOG_ID_KEY = "logId";
 
-    private static final Set<String> SWAGGER_IGNORE_PATH = Sets.newHashSet(
+    private static final Set<String> SWAGGER_IGNORE_PATH = Set.of(
             "/webjars",
             "/swagger-ui",
             "/swagger-resources",
-            "/v2/api-docs",
             "/v3/api-docs",
             "/doc.html"
     );

@@ -1,14 +1,13 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
-import io.swagger.annotations.ApiModel;
-import io.swagger.annotations.ApiModelProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
 
-import javax.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotBlank;
 
 
 @Data
@@ -16,10 +15,10 @@ import javax.validation.constraints.NotBlank;
 @Accessors(chain = true)
 @NoArgsConstructor
 @AllArgsConstructor
-@ApiModel(description = "分类更新请求")
+@Schema(description = "分类更新请求")
 public class OntologyCategoryUpdateParam extends OntologyCategoryDeleteParam {
 
-    @ApiModelProperty(name = "name", value = "属性分类名称", example = "平台")
+    @Schema(name = "name", description = "属性分类名称", example = "平台")
     @NotBlank(message = "name is empty")
     private String name;
 }

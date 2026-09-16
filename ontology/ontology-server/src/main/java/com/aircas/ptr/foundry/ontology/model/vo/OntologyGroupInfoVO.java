@@ -1,7 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.vo;
 
-import io.swagger.annotations.ApiModel;
-import io.swagger.annotations.ApiModelProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -13,22 +12,22 @@ import lombok.NoArgsConstructor;
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@ApiModel(description = "本体分组VO")
+@Schema(description = "本体分组VO")
 public class OntologyGroupInfoVO {
 
-     @ApiModelProperty(value = "分组名称", example = "远海远域")
+     @Schema(description = "分组名称", example = "远海远域")
      private String groupName;
 
-     @ApiModelProperty(value = "分组描述", example = "远海远域")
+     @Schema(description = "分组描述", example = "远海远域")
      private String description;
 
-     @ApiModelProperty(value = "分组id", example = "fdsafdsfaf")
+     @Schema(description = "分组id", example = "fdsafdsfaf")
      private String groupId;
 
-     @ApiModelProperty(value = "分组icon url", example = "icon")
+     @Schema(description = "分组icon url", example = "icon")
      private String icon;
 
-     @ApiModelProperty(name = "spaceId", value = "本体空间id")
+     @Schema(name = "spaceId", description = "本体空间id")
      private Integer spaceId;
 
 }

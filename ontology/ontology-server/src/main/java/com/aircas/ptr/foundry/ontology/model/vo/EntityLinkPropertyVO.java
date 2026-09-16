@@ -3,8 +3,7 @@ package com.aircas.ptr.foundry.ontology.model.vo;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyLinkTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import com.aircas.ptr.foundry.ontology.model.common.VisibilityWindow;
-import io.swagger.annotations.ApiModel;
-import io.swagger.annotations.ApiModelProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -20,55 +19,55 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 @Accessors(chain = true)
-@ApiModel(value = "实体关系属性VO")
+@Schema(description = "实体关系属性VO")
 public class EntityLinkPropertyVO {
 
 
     /**
      * link的名称
      */
-    @ApiModelProperty(name = "linkName", value = "关系名称")
+    @Schema(name = "linkName", description = "关系名称")
     private String linkName;
 
-    @ApiModelProperty(name = "linkType", value = "关系类型")
+    @Schema(name = "linkType", description = "关系类型")
     private OntologyLinkTypeEnum linkType;
 
-    @ApiModelProperty(name = "ontologyFrom", value = "本体开始id")
+    @Schema(name = "ontologyFrom", description = "本体开始id")
     private String ontologyFrom;
 
-    @ApiModelProperty(name = "ontologyTo", value = "本体结束id")
+    @Schema(name = "ontologyTo", description = "本体结束id")
     private String ontologyTo;
 
-    @ApiModelProperty(name = "entityPrimaryKeyFrom", value = "开始实体主键值")
+    @Schema(name = "entityPrimaryKeyFrom", description = "开始实体主键值")
     private Object entityPrimaryKeyFrom;
 
-    @ApiModelProperty(name = "entityPrimaryKeyTo", value = "结束实体主键值")
+    @Schema(name = "entityPrimaryKeyTo", description = "结束实体主键值")
     private Object entityPrimaryKeyTo;
 
-    @ApiModelProperty(name = "entityNodeFrom", value = "开始实体标识")
+    @Schema(name = "entityNodeFrom", description = "开始实体标识")
     private String entityNodeFrom;
 
-    @ApiModelProperty(name = "displayNameFrom", value = "开始实体展示名称")
+    @Schema(name = "displayNameFrom", description = "开始实体展示名称")
     private String displayNameFrom;
 
-    @ApiModelProperty(name = "entityNodeTo", value = "结束实体标识")
+    @Schema(name = "entityNodeTo", description = "结束实体标识")
     private String entityNodeTo;
 
-    @ApiModelProperty(name = "displayNameTo", value = "结束实体展示名称")
+    @Schema(name = "displayNameTo", description = "结束实体展示名称")
     private String displayNameTo;
 
-    @ApiModelProperty(name = "startTime", value = "最近可见窗口开始时间")
+    @Schema(name = "startTime", description = "最近可见窗口开始时间")
     private Date startTime;
 
-    @ApiModelProperty(name = "endTime", value = "最近可见窗口结束时间")
+    @Schema(name = "endTime", description = "最近可见窗口结束时间")
     private Date endTime;
 
 
-    @ApiModelProperty(name = "visibilityWindows", value = "可见窗口列表")
+    @Schema(name = "visibilityWindows", description = "可见窗口列表")
     private List<VisibilityWindow> visibilityWindows;
 
 
-    @ApiModelProperty(name = "status", value = "关系状态")
+    @Schema(name = "status", description = "关系状态")
     private Status status;
 
 }

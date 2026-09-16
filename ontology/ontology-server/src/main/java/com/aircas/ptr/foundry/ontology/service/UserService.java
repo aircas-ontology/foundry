@@ -6,7 +6,7 @@ import com.aircas.ptr.foundry.ontology.model.param.UserLoginParam;
 import com.aircas.ptr.foundry.ontology.model.po.User;
 import com.baomidou.mybatisplus.extension.service.IService;
 
-import javax.validation.Valid;
+import jakarta.validation.Valid;
 
 public interface UserService extends IService<User> {
 

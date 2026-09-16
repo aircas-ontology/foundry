@@ -12,21 +12,20 @@ import com.aircas.ptr.foundry.ontology.model.vo.OntologyGroupMetaVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaNodeVO;
 import com.aircas.ptr.foundry.ontology.service.OntologyMetaService;
-import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
-import io.swagger.annotations.ApiParam;
-import lombok.var;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import javax.annotation.Resource;
-import javax.validation.Valid;
+import jakarta.annotation.Resource;
+import jakarta.validation.Valid;
 import java.util.List;
 
 
-@Api(tags = "本体对象管理")
+@Tag(name = "本体对象管理")
 @RestController
 @RequestMapping("/meta")
 @Validated
@@ -37,7 +36,7 @@ public class OntologyMetaController {
 
 
     @PostMapping("/import")
-    @ApiOperation(value = "本体批量导入创建")
+    @Operation(summary = "本体批量导入创建")
     public RestResult importOntologies(@RequestParam(required = true, name = "file") MultipartFile file) {
         var failedOntology = ontologyMetaService.importOntologies(file);
         return CollectionUtils.isNotEmpty(failedOntology) ? new RestResult(ResultCode.ERROR, "本体批量导入失败", failedOntology) : RestResult.success();
@@ -45,7 +44,7 @@ public class OntologyMetaController {
 
 
     @PostMapping
-    @ApiOperation(value = "创建本体")
+    @Operation(summary = "创建本体")
     public RestResult<IdentifierVO> createOntology(@RequestBody @Valid OntologyMetaCreateParam ontologyCreateParam) {
         String uniqIdentifier = ontologyMetaService.createOntology(ontologyCreateParam);
         return RestResult.ofData(IdentifierVO.builder().uniqueIdentifier(uniqIdentifier).build());
@@ -53,14 +52,14 @@ public class OntologyMetaController {
 
 
     @DeleteMapping("/{ontologyIdentifier}")
-    @ApiOperation(value = "删除本体")
+    @Operation(summary = "删除本体")
     public RestResult deleteOntology(@PathVariable(required = true, name = "ontologyIdentifier") @OntologyIdVerify String ontologyIdentifier) {
         ontologyMetaService.deleteOntology(ontologyIdentifier);
         return RestResult.success();
     }
 
     @PutMapping
-    @ApiOperation(value = "修改本体元数据")
+    @Operation(summary = "修改本体元数据")
     public RestResult updateMeta(@RequestBody @Valid OntologyUpdateParam updateParam) {
         ontologyMetaService.updateMeta(updateParam);
         return RestResult.success();
@@ -68,30 +67,30 @@ public class OntologyMetaController {
 
 
     @GetMapping
-    @ApiOperation(value = "根据unique identifier查询一个本体元数据")
-    public RestResult<OntologyMetaInfoVO> getMetaByUniqueIdentifier(@RequestParam(name = "uniqueIdentifier", required = true) @ApiParam(name = "uniqueIdentifier", value = "本体unique identifer", required = true) @OntologyIdVerify String uniqueIdentifier) {
+    @Operation(summary = "根据unique identifier查询一个本体元数据")
+    public RestResult<OntologyMetaInfoVO> getMetaByUniqueIdentifier(@RequestParam(name = "uniqueIdentifier", required = true) @Parameter(description = "本体unique identifer") @OntologyIdVerify String uniqueIdentifier) {
         return RestResult.ofData(ontologyMetaService.getMetaByUniqueIdentifier(uniqueIdentifier));
     }
 
 
     @GetMapping("/search")
-    @ApiOperation(value = "搜索本体", notes = "通过关键字匹配本体，包括本体名称、本体描述")
-    public RestResult<List<OntologyMetaInfoVO>> searchByKeyword(@RequestParam(name = "keyword", required = false) @ApiParam(name = "keyword", value = "搜索关键词", required = false) String keyword) {
+    @Operation(summary = "搜索本体")
+    public RestResult<List<OntologyMetaInfoVO>> searchByKeyword(@RequestParam(name = "keyword", required = false) @Parameter(description = "搜索关键词") String keyword) {
         return RestResult.ofData(ontologyMetaService.searchByKeyword(keyword));
     }
 
     @GetMapping("/group")
-    @ApiOperation(value = "根据groupId查询组内本体")
-    public RestResult<List<OntologyGroupMetaVO>> getByGroupId(@RequestParam(name = "groupId", required = false) @ApiParam(name = "groupId", value = "groupId", required = false) String groupId,
-                                                              @RequestParam(name = "orderBy", required = false) @ApiParam(name = "orderBy", value = "orderBy", required = false) OntologyOrderByEnum orderBy,
-                                                              @RequestParam(name = "sort", required = false) @ApiParam(name = "sort", value = "sort", required = false) QuerySortEnum sort) {
+    @Operation(summary = "根据groupId查询组内本体")
+    public RestResult<List<OntologyGroupMetaVO>> getByGroupId(@RequestParam(name = "groupId", required = false) @Parameter(description = "groupId") String groupId,
+                                                              @RequestParam(name = "orderBy", required = false) @Parameter(description = "orderBy") OntologyOrderByEnum orderBy,
+                                                              @RequestParam(name = "sort", required = false) @Parameter(description = "sort") QuerySortEnum sort) {
         return RestResult.ofData(ontologyMetaService.getByGroupId(groupId, orderBy, sort));
     }
 
 
     @GetMapping("/group/tree")
-    @ApiOperation(value = "根据groupId查询组内本体树")
-    public RestResult<List<OntologyMetaNodeVO>> getOntologyTreeByByGroupId(@RequestParam(name = "groupId", required = false) @ApiParam(name = "groupId", value = "groupId", required = false) String groupId) {
+    @Operation(summary = "根据groupId查询组内本体树")
+    public RestResult<List<OntologyMetaNodeVO>> getOntologyTreeByByGroupId(@RequestParam(name = "groupId", required = false) @Parameter(description = "groupId") String groupId) {
         return RestResult.ofData(ontologyMetaService.getOntologyTreeByByGroupId(groupId));
     }
 

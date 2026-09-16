@@ -28,7 +28,6 @@ import com.google.common.collect.Maps;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import lombok.val;
-import lombok.var;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.http.HttpStatus;
@@ -36,7 +35,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Date;
@@ -397,10 +396,10 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
             entityCnt = entityService.countEntity(pk.getDatasourceSchema(), pk.getDatasourceId());
         }
 
-        metaInfoVO.setActionCount(actionCnt)
-                .setEntityCount(entityCnt)
-                .setPropertyCount(propCnt)
-                .setRelationCount(linkCnt);
+        metaInfoVO.setActionCount(Math.toIntExact(actionCnt))
+                .setEntityCount(Math.toIntExact(entityCnt))
+                .setPropertyCount(Math.toIntExact(propCnt))
+                .setRelationCount(Math.toIntExact(linkCnt));
     }
 
 

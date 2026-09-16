@@ -1,7 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.vo;
 
-import io.swagger.annotations.ApiModel;
-import io.swagger.annotations.ApiModelProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -14,18 +13,18 @@ import lombok.experimental.Accessors;
 @Accessors(chain = true)
 @NoArgsConstructor
 @AllArgsConstructor
-@ApiModel(value = "表描述信息VO")
+@Schema(description = "表描述信息VO")
 public class TableColumnDescVO {
 
-    @ApiModelProperty(name = "columnName",value = "列名")
+    @Schema(name = "columnName",description = "列名")
     private String columnName;
 
-    @ApiModelProperty(name = "description",value = "列描述信息")
+    @Schema(name = "description",description = "列描述信息")
     private String description;
 
-    @ApiModelProperty(name = "type",value = "列数据类型")
+    @Schema(name = "type",description = "列数据类型")
     private String type;
 
-    @ApiModelProperty(name = "isPrimaryKey",value = "是否为主键")
+    @Schema(name = "isPrimaryKey",description = "是否为主键")
     private Boolean isPrimaryKey;
 }

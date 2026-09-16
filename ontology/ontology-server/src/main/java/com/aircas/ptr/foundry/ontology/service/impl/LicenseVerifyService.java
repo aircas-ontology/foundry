@@ -4,7 +4,6 @@ import com.aircas.ptr.foundry.license.param.LicenseCreatorParam;
 import com.aircas.ptr.foundry.license.service.LicenseService;
 import com.aircas.ptr.foundry.license.util.NetworkUtil;
 import lombok.extern.slf4j.Slf4j;
-import lombok.var;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;

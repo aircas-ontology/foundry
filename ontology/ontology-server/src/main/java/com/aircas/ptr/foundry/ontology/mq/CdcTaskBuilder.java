@@ -4,8 +4,8 @@ import com.aircas.ptr.foundry.ontology.service.CdcTaskService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import javax.annotation.PostConstruct;
-import javax.annotation.Resource;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.Resource;
 
 /**
  * 项目启动时自动初始化 CDC 任务

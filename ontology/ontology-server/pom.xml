@@ -11,18 +11,17 @@
     </parent>
 
     <properties>
-        <java.version>1.8</java.version>
+        <java.version>17</java.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     </properties>
 
     <dependencies>
 
-        <!-- Spring Kafka -->
+        <!-- Spring Kafka (version managed by Spring Boot) -->
         <dependency>
             <groupId>org.springframework.kafka</groupId>
             <artifactId>spring-kafka</artifactId>
-            <version>2.5.7.RELEASE</version>
         </dependency>
 
         <dependency>
@@ -42,24 +41,20 @@
         </dependency>
 
 
-        <!--swagger-->
+        <!--Knife4j OpenAPI3 Jakarta-->
         <dependency>
             <groupId>com.github.xiaoymin</groupId>
-            <artifactId>knife4j-spring-boot-starter</artifactId>
+            <artifactId>knife4j-openapi3-jakarta-spring-boot-starter</artifactId>
         </dependency>
-        <!--json-->
+        <!--fastjson2-->
         <dependency>
-            <groupId>com.alibaba</groupId>
-            <artifactId>fastjson</artifactId>
+            <groupId>com.alibaba.fastjson2</groupId>
+            <artifactId>fastjson2</artifactId>
         </dependency>
-        <!--orm-->
+        <!--MyBatis-Plus Spring Boot 3-->
         <dependency>
-            <groupId>org.mybatis.spring.boot</groupId>
-            <artifactId>mybatis-spring-boot-starter</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>tk.mybatis</groupId>
-            <artifactId>mapper-spring-boot-starter</artifactId>
+            <groupId>com.baomidou</groupId>
+            <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
         </dependency>
         <dependency>
             <groupId>org.postgresql</groupId>
@@ -83,14 +78,20 @@
             <groupId>net.sourceforge.owlapi</groupId>
             <artifactId>owlapi-distribution</artifactId>
         </dependency>
+        <!-- Spring Boot Starter Validation -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
-        <!-- druid-datasource -->
+        <!-- Jakarta Persistence API (MyBatis-Plus 实体类需要) -->
+        <dependency>
+            <groupId>jakarta.persistence</groupId>
+            <artifactId>jakarta.persistence-api</artifactId>
+        </dependency>
+        <!-- Druid Spring Boot 3 -->
         <dependency>
             <groupId>com.alibaba</groupId>
-            <artifactId>druid-spring-boot-starter</artifactId>
+            <artifactId>druid-spring-boot-3-starter</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -110,21 +111,22 @@
         </dependency>
         <dependency>
             <groupId>com.baomidou</groupId>
-            <artifactId>mybatis-plus-boot-starter</artifactId>
+            <artifactId>mybatis-plus-jsqlparser</artifactId>
+            <version>${mybatis-plus.version}</version>
         </dependency>
 
-        <!-- ArangoDB 核心依赖 -->
+        <!-- ArangoDB 核心依赖 (7.x 适配 spring-data 4.4.0) -->
         <dependency>
             <groupId>com.arangodb</groupId>
             <artifactId>arangodb-java-driver</artifactId>
-            <version>6.12.3</version>
+            <version>7.0.0</version>
         </dependency>
 
-        <!-- ArangoDB Spring Data -->
+        <!-- ArangoDB Spring Data (适配 Spring Data 3.x) -->
         <dependency>
             <groupId>com.arangodb</groupId>
             <artifactId>arangodb-spring-data</artifactId>
-            <version>3.6.0</version>
+            <version>4.4.0</version>
         </dependency>
 
         <dependency>
@@ -141,7 +143,7 @@
         <dependency>
             <groupId>com.squareup.okhttp3</groupId>
             <artifactId>okhttp</artifactId>
-            <version>4.9.2</version>
+            <version>4.12.0</version>
         </dependency>
 
         <dependency>
@@ -179,22 +181,40 @@
             <artifactId>xxl-job-core</artifactId>
             <version>2.3.0</version>
         </dependency>
-        <dependency>
-            <groupId>org.postgresql</groupId>
-            <artifactId>postgresql</artifactId>
-            <version>42.2.27</version>
-        </dependency>
 
-        <!-- JWT -->
+        <!-- JWT (jjwt 0.12.x 拆分为三个模块) -->
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
-            <artifactId>jjwt</artifactId>
-            <version>0.9.1</version>
+            <artifactId>jjwt-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <scope>runtime</scope>
         </dependency>
         <!-- BCrypt password hashing -->
         <dependency>
             <groupId>org.springframework.security</groupId>
             <artifactId>spring-security-crypto</artifactId>
+        </dependency>
+
+        <!-- Spring AI Alibaba DashScope -->
+        <dependency>
+            <groupId>com.alibaba.cloud.ai</groupId>
+            <artifactId>spring-ai-alibaba-starter-dashscope</artifactId>
+            <version>${spring-ai-alibaba.version}</version>
+        </dependency>
+
+        <!-- Guava -->
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+            <version>33.2.1-jre</version>
         </dependency>
 
     </dependencies>
@@ -208,29 +228,12 @@
                 <configuration>
                     <executable>true</executable>
                     <mainClass>com.aircas.ptr.foundry.ontology.OntologyServerApplication</mainClass>
+                    <jvmArguments>--add-opens java.base/java.lang=ALL-UNNAMED</jvmArguments>
                 </configuration>
                 <executions>
                     <execution>
                         <goals>
                             <goal>repackage</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <groupId>net.roseboy</groupId>
-                <artifactId>classfinal-maven-plugin</artifactId>
-                <version>1.2.1</version>
-                <configuration>
-                    <password>iecas`12</password>
-                    <packages>com.aircas.ptr.foundry</packages>
-                    <!--<cfgfiles>*.yml,*.xml,*.properties</cfgfiles>-->
-                </configuration>
-                <executions>
-                    <execution>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>classFinal</goal>
                         </goals>
                     </execution>
                 </executions>

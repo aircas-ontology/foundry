@@ -1,6 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.common;
 
-import io.swagger.annotations.ApiModelProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.*;
 
 import java.util.Date;
@@ -12,10 +12,10 @@ import java.util.Date;
 @ToString
 public class VisibilityWindow {
 
-    @ApiModelProperty(name = "startTime",value = "未来最近可见窗口开始时间",example = "1769585745344")
+    @Schema(name = "startTime",description = "未来最近可见窗口开始时间",example = "1769585745344")
     private Date startTime;
 
-    @ApiModelProperty(name = "endTime",value = "未来最近可见窗口结束时间",example = "1769585745344")
+    @Schema(name = "endTime",description = "未来最近可见窗口结束时间",example = "1769585745344")
     private Date endTime;
 
 }

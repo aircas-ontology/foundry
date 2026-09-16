@@ -12,6 +12,13 @@ spring:
     multipart:
       max-file-size: 500MB
       max-request-size: 1024MB
+  ai:
+    dashscope:
+      api-key: ${DASHSCOPE_API_KEY:sk-placeholder}
+      chat:
+        options:
+          model: qwen-max
+          temperature: 0.7
   datasource:
     main:
       driver-class-name: org.postgresql.Driver
@@ -72,6 +79,17 @@ rabbitmq:
 ontology:
   swagger:
     enable: true
+
+# Knife4j / SpringDoc OpenAPI 3 配置
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    path: /swagger-ui.html
 
 
 jwt:

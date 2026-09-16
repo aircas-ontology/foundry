@@ -1,25 +1,24 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
-import io.swagger.annotations.ApiModel;
-import io.swagger.annotations.ApiModelProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
 
-import javax.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotBlank;
 
 @Data
 @SuperBuilder
 @Accessors(chain = true)
 @NoArgsConstructor
 @AllArgsConstructor
-@ApiModel(description = "id Param")
+@Schema(description = "id Param")
 public class IdentifierParam {
 
 
     @NotBlank(message = "uniqueIdentifier is empty")
-    @ApiModelProperty(name = "uniqueIdentifier", value = "uniqIdentifier", dataType = "java.lang.String", example = "abcdef")
+    @Schema(name = "uniqueIdentifier", description = "uniqIdentifier", example = "abcdef")
     private String uniqueIdentifier;
 }

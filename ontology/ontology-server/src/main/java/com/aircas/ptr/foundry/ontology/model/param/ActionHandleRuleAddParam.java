@@ -1,8 +1,7 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
 import com.aircas.ptr.foundry.ontology.model.enums.ActionHandleRuleAddConditionEnum;
-import io.swagger.annotations.ApiModel;
-import io.swagger.annotations.ApiModelProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -17,16 +16,16 @@ import lombok.NoArgsConstructor;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-@ApiModel(description = "行为执行规则添加参数")
+@Schema(description = "行为执行规则添加参数")
 public class ActionHandleRuleAddParam {
 
-    @ApiModelProperty(value = "字段名", required = true, example = "longitude")
+    @Schema(description = "字段名", required = true, example = "longitude")
     private String columnName;
 
-    @ApiModelProperty(value = "字段值", required = true, example = "0.0")
+    @Schema(description = "字段值", required = true, example = "0.0")
     private String columnValue;
 
-    @ApiModelProperty(value = "字段判断类型", required = true, example = "EQ")
+    @Schema(description = "字段判断类型", required = true, example = "EQ")
     private ActionHandleRuleAddConditionEnum condition;
 
     public String rule() {

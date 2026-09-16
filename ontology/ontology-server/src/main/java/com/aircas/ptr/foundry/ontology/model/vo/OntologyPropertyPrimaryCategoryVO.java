@@ -1,7 +1,7 @@
 package com.aircas.ptr.foundry.ontology.model.vo;
 
 
-import io.swagger.annotations.ApiModel;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -13,7 +13,7 @@ import lombok.experimental.SuperBuilder;
 @NoArgsConstructor
 @AllArgsConstructor
 @Accessors(chain = true)
-@ApiModel(description = "本体属性可见性VO")
+@Schema(description = "本体属性可见性VO")
 public class OntologyPropertyPrimaryCategoryVO {
 
     private String key;

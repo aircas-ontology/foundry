@@ -1,8 +1,7 @@
 package com.aircas.ptr.foundry.ontology.model.vo;
 
 import com.aircas.ptr.foundry.ontology.model.enums.TaskStatusEnum;
-import io.swagger.annotations.ApiModel;
-import io.swagger.annotations.ApiModelProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -21,21 +20,21 @@ import java.util.Date;
 @Accessors(chain = true)
 @NoArgsConstructor
 @AllArgsConstructor
-@ApiModel(value = "调度结果查询VO")
+@Schema(description = "调度结果查询VO")
 public class SchedulingResultVO {
 
-    @ApiModelProperty(name = "msg",value = "日志消息")
+    @Schema(name = "msg",description = "日志消息")
     private String msg;
 
-    @ApiModelProperty(name = "triggerTime",value = "触发时间")
+    @Schema(name = "triggerTime",description = "触发时间")
     private Date triggerTime;
 
-    @ApiModelProperty(name = "requestParam",value = "请求参数")
+    @Schema(name = "requestParam",description = "请求参数")
     private String requestParam;
 
-    @ApiModelProperty(name = "completeTime",value = "完成时间")
+    @Schema(name = "completeTime",description = "完成时间")
     private Date completeTime;
 
-    @ApiModelProperty(name = "taskStatus",value = "执行状态")
+    @Schema(name = "taskStatus",description = "执行状态")
     private TaskStatusEnum taskStatus;
 }

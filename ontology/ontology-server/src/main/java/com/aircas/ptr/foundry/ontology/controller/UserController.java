@@ -7,20 +7,19 @@ import com.aircas.ptr.foundry.ontology.model.dto.JwtDTO;
 import com.aircas.ptr.foundry.ontology.model.param.UserCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.UserLoginParam;
 import com.aircas.ptr.foundry.ontology.service.UserService;
-import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
-import lombok.var;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import javax.servlet.http.HttpServletResponse;
-import javax.validation.Valid;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.Valid;
 
-@Api(tags = "用户接口")
+@Tag(name = "用户接口")
 @RestController
 @RequestMapping("/user")
 @RequiredArgsConstructor
@@ -31,7 +30,7 @@ public class UserController {
 
 
     @PostMapping("/login")
-    @ApiOperation(value = "登陆")
+    @Operation(summary = "登陆")
     public RestResult userLogin(@RequestBody @Valid UserLoginParam param, HttpServletResponse response) {
         var token = userService.login(param);
         writeTokenHeaders(response, token);
@@ -40,7 +39,7 @@ public class UserController {
 
 
     @PostMapping("/create")
-    @ApiOperation(value = "用户注册")
+    @Operation(summary = "用户注册")
     public RestResult userCreate(@RequestBody @Valid UserCreateParam param) {
         userService.create(param);
         return RestResult.success();

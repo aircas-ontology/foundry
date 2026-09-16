@@ -8,16 +8,16 @@ import com.aircas.ptr.foundry.ontology.model.param.OntologyCategoryDeleteParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyCategoryUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyCategoryVO;
 import com.aircas.ptr.foundry.ontology.service.OntologyCategoryService;
-import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
-import io.swagger.annotations.ApiParam;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
-import javax.validation.Valid;
+import jakarta.validation.Valid;
 
-@Api(tags = "本体分类体系管理")
+@Tag(name = "本体分类体系管理")
 @RestController
 @Validated
 @RequiredArgsConstructor
@@ -28,14 +28,14 @@ public class OntologyCategoryController {
 
 
     @PostMapping
-    @ApiOperation(value = "创建本体分类体系树")
+    @Operation(summary = "创建本体分类体系树")
     public RestResult createCategory(@RequestBody @Valid OntologyCategoryCreateParam param) {
         ontologyCategoryService.createCategory(param);
         return RestResult.success();
     }
 
     @PutMapping
-    @ApiOperation(value = "修改本体分类名称")
+    @Operation(summary = "修改本体分类名称")
     public RestResult updateCategory(@RequestBody @Valid OntologyCategoryUpdateParam param) {
         ontologyCategoryService.updateCategory(param);
         return RestResult.success();
@@ -43,7 +43,7 @@ public class OntologyCategoryController {
 
 
     @DeleteMapping
-    @ApiOperation(value = "删除本体分类树")
+    @Operation(summary = "删除本体分类树")
     public RestResult deleteCategory(@RequestBody @Valid OntologyCategoryDeleteParam param) {
         ontologyCategoryService.deleteCategory(param);
         return RestResult.success();
@@ -51,9 +51,9 @@ public class OntologyCategoryController {
 
 
     @GetMapping("/tree")
-    @ApiOperation(value = "查询本体分类体系树")
+    @Operation(summary = "查询本体分类体系树")
     public RestResult<OntologyCategoryVO> getCategoryTree(@RequestParam(required = true, name = "spaceId")
-                                                          @ApiParam(value = "本体空间id", required = true)
+                                                          @Parameter(description = "本体空间id")
                                                           @SpaceIdVerify Integer spaceId) {
         OntologyCategoryVO res = ontologyCategoryService.getCategoryTree(spaceId);
         return RestResult.ofData(res);

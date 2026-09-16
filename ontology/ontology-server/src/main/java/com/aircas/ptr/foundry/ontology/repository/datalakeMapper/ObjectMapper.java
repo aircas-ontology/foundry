@@ -2,7 +2,6 @@ package com.aircas.ptr.foundry.ontology.repository.datalakeMapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.google.common.collect.Lists;
-import lombok.var;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;

@@ -1,23 +1,22 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
 
-import io.swagger.annotations.ApiModel;
-import io.swagger.annotations.ApiModelProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 
-import javax.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotNull;
 
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
 @SuperBuilder
-@ApiModel(description = "行为调度编辑请求")
+@Schema(description = "行为调度编辑请求")
 public class ActionSchedulingUpdateParam extends ActionSchedulingCreateParam {
 
-    @ApiModelProperty(name = "id", value = "行为调度id", required = true, example = "123")
+    @Schema(name = "id", description = "行为调度id", required = true, example = "123")
     @NotNull(message = "id is null")
     private Long id;
 

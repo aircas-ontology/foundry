@@ -4,7 +4,7 @@ package com.aircas.ptr.foundry.ontology.model.dto;
 import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyPropertyPrimaryCategoryEnum;
 import com.fasterxml.jackson.databind.JsonNode;
-import io.swagger.annotations.ApiModelProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -18,42 +18,42 @@ import lombok.experimental.Accessors;
 @Accessors(chain = true)
 public class OntologyPropertyDTO {
 
-    @ApiModelProperty(name = "dataType", value = "数据类型", required = true, example = "Bool")
+    @Schema(name = "dataType", description = "数据类型", required = true, example = "Bool")
     private OntologyDataTypeEnum dataType;
 
-    @ApiModelProperty(name = "description", value = "列描述", required = true, example = "名称")
+    @Schema(name = "description", description = "列描述", required = true, example = "名称")
     private String description;
 
-    @ApiModelProperty(name = "displayName", value = "属性展示名称", dataType = "java.lang.String", example = "飞机", required = true)
+    @Schema(name = "displayName", description = "属性展示名称", example = "飞机", required = true)
     private String displayName;
 
-    @ApiModelProperty(name = "apiName", value = "在代码里用的属性名称，格式：^[a-zA-Z_$][a-zA-Z0-9_$]{0,62}$", required = true, example = "name")
+    @Schema(name = "apiName", description = "在代码里用的属性名称，格式：^[a-zA-Z_$][a-zA-Z0-9_$]{0,62}$", required = true, example = "name")
     private String apiName;
 
-    @ApiModelProperty(name = "isPrimaryKey", value = "是否为主键", required = true, example = "true")
+    @Schema(name = "isPrimaryKey", description = "是否为主键", required = true, example = "true")
     private Boolean isPrimaryKey;
 
-    @ApiModelProperty(name = "isTitleKey", value = "是否为名称键", required = true, example = "true")
+    @Schema(name = "isTitleKey", description = "是否为名称键", required = true, example = "true")
     private Boolean isTitleKey;
 
-    @ApiModelProperty(name = "primaryCategory", value = "属性一级分类", example = "DESIGN_MANUFACTURING")
+    @Schema(name = "primaryCategory", description = "属性一级分类", example = "DESIGN_MANUFACTURING")
     private OntologyPropertyPrimaryCategoryEnum primaryCategory;
 
-    @ApiModelProperty(name = "secondaryCategory", value = "属性二级分类", example = "载荷")
+    @Schema(name = "secondaryCategory", description = "属性二级分类", example = "载荷")
     private String secondaryCategory;
 
-    @ApiModelProperty(name = "type", value = "属性的自定义标签", example = "载荷基本信息")
+    @Schema(name = "type", description = "属性的自定义标签", example = "载荷基本信息")
     private String tag;
 
-    @ApiModelProperty(name = "defaultValue", value = "属性的默认值", example = "30")
+    @Schema(name = "defaultValue", description = "属性的默认值", example = "30")
     private String defaultValue;
 
-    @ApiModelProperty(name = "storageGroup", value = "属性存储分组", example = "123")
+    @Schema(name = "storageGroup", description = "属性存储分组", example = "123")
     private String storageGroup;
 
-    @ApiModelProperty(name = "categoryPath", value = "属性分类完整路径", example = "平台/载荷/光学载荷")
+    @Schema(name = "categoryPath", description = "属性分类完整路径", example = "平台/载荷/光学载荷")
     private String categoryPath;
 
-    @ApiModelProperty(name = "metadata", value = "属性元数据")
+    @Schema(name = "metadata", description = "属性元数据")
     private JsonNode metadata;
 }

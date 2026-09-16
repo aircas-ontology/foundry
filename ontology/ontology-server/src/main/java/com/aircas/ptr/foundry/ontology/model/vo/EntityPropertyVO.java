@@ -1,7 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.vo;
 
-import io.swagger.annotations.ApiModel;
-import io.swagger.annotations.ApiModelProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -13,20 +12,20 @@ import lombok.experimental.Accessors;
 @AllArgsConstructor
 @Builder
 @Accessors(chain = true)
-@ApiModel(value = "实体属性值VO")
+@Schema(description = "实体属性值VO")
 public class EntityPropertyVO {
 
 
 
-    @ApiModelProperty(name = "propertyApiName", value = "属性api名称", example = "名称")
+    @Schema(name = "propertyApiName", description = "属性api名称", example = "名称")
     private String propertyApiName;
 
 
-    @ApiModelProperty(name = "propertyName", value = "属性名称", example = "名称")
+    @Schema(name = "propertyName", description = "属性名称", example = "名称")
     private String propertyDisplayName;
 
 
-    @ApiModelProperty(name = "propertyValue", value = "属性值", example = "123")
+    @Schema(name = "propertyValue", description = "属性值", example = "123")
     private Object propertyValue;
 
 }

@@ -1,7 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.vo;
 
-import io.swagger.annotations.ApiModel;
-import io.swagger.annotations.ApiModelProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -15,19 +14,19 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Accessors(chain = true)
-@ApiModel(description = "本体属性元数据VO")
+@Schema(description = "本体属性元数据VO")
 public class PropertyMetadataSchemaVO {
 
-    @ApiModelProperty(name = "schemaId", value = "schemaId", example = "1")
+    @Schema(name = "schemaId", description = "schemaId", example = "1")
     private Integer schemaId;
 
-    @ApiModelProperty(name = "name", value = "名称", example = "等级")
+    @Schema(name = "name", description = "名称", example = "等级")
     private String name;
 
-    @ApiModelProperty(name = "enumValues", value = "可用枚举值")
+    @Schema(name = "enumValues", description = "可用枚举值")
     private List<String> enumValues;
 
-    @ApiModelProperty(name = "children", value = "子节点")
+    @Schema(name = "children", description = "子节点")
     private List<PropertyMetadataSchemaVO> children;
 
 }
