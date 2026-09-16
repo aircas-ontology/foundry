@@ -16,18 +16,18 @@ spring:
     main:
       driver-class-name: org.postgresql.Driver
       #url: jdbc:postgresql://${PG_DB_HOST}:${PG_DB_PORT}/${PG_DB_NAME}?currentSchema=ontology
-      url: jdbc:postgresql://127.0.0.1:35432/postgres?currentSchema=ontology&rewriteBatchedStatements=true&TimeZone=UTC
-      username: iecas
-      password: iecas123
+      url: jdbc:postgresql://172.16.18.58:35432/postgres?currentSchema=ontology&rewriteBatchedStatements=true&TimeZone=UTC
+      username: postgres
+      password: 123456
       validation-query: SELECT 1
       test-on-borrow: true
     datalake:
       driver-class-name: org.postgresql.Driver
-      url: jdbc:postgresql://127.0.0.1:35432/entity_datasource
-      username: iecas
-      password: iecas123
+      url: jdbc:postgresql://172.16.18.58:35432/entity_datasource
+      username: postgres
+      password: 123456
     arangodb:
-      host: 127.0.0.1
+      host: 172.16.18.62
       port: 8529
       database: entity
       collections: node,relation
@@ -40,13 +40,13 @@ spring:
         connect: 5000
         request: 10000
   rabbitmq:
-    host: 127.0.0.1
+    host: 172.16.18.62
     port: 5672
     username: admin
-    password: admin
+    password: C7O5O4AC2NAFQp9dTvwL
     virtual-host: /
   kafka:
-    bootstrap-servers: 127.0.0.1:39092,127.0.0.1:39102,127.0.0.1:39094
+    bootstrap-servers: 172.16.18.62:39092
     consumer:
       group-id: cdc-monitor-group
       auto-offset-reset: earliest
@@ -81,9 +81,9 @@ jwt:
 
 
 minio:
-  endpoint: http://127.0.0.1:16337
-  accessKey: root
-  secretKey: iecas123
+  endpoint: http://172.16.18.58:9000
+  accessKey: minioadmin
+  secretKey: minioadmin
   bucketName: ptr
 
 
@@ -98,7 +98,7 @@ orekit:
 
 xxl:
   job:
-    baseUrl: http://127.0.0.1:18888/xxl-job-admin
+    baseUrl: http://172.16.18.58:18888/xxl-job-admin
     admin:
       addresses: ${xxl.job.baseUrl}
       addJobUrl:  ${xxl.job.baseUrl}/jobinfo/add
