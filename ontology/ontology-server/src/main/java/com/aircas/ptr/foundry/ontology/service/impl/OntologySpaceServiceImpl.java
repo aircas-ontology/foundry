@@ -146,6 +146,8 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                             .actionCount(actionCnt)
                             .propertyCount(propertyCnt)
                             .linkCount(linkCnt)
+                            .createTime(space.getCreateTime())
+                            .updateTime(space.getUpdateTime())
                             .build();
                 })
                 .collect(Collectors.toList());

@@ -1,12 +1,17 @@
 package com.aircas.ptr.foundry.ontology.model.vo;
 
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
+
+import java.util.Date;
+
+import static com.aircas.ptr.foundry.common.constant.DateFormat.DATE_FORMAT_DEFAULT;
 
 @Data
 @SuperBuilder
@@ -50,4 +55,11 @@ public class OntologySpaceVO {
      */
     @Schema(description = "本体关系统计")
     private Integer linkCount;
+    @JsonFormat(pattern = DATE_FORMAT_DEFAULT, timezone = "GMT+8")
+    @Schema(description = "创建时间")
+    private Date createTime;
+
+    @JsonFormat(pattern = DATE_FORMAT_DEFAULT, timezone = "GMT+8")
+    @Schema(description = "修改时间")
+    private Date updateTime;
 }
