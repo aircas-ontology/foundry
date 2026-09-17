@@ -42,15 +42,16 @@ public class ChainedTransactionManager implements PlatformTransactionManager {
         ChainedTransactionStatus chainedStatus = (ChainedTransactionStatus) status;
         List<TransactionStatus> statuses = chainedStatus.getStatuses();
 
-        // 按正序提交所有事务
-        for (int i = 0; i < statuses.size(); i++) {
+        // 逆序提交：先提交"未激活"共享 TransactionSynchronizationManager 同步的事务管理器，
+        // 会清空共享同步状态，导致后续提交抛 "Tran        // 最后再提交激活了同步的那个（通常是首个，即 main）。否则首个提交后其 cleanupAfterCompletionsaction synchronization is not active"。
+        for (int i = statuses.size() - 1; i >= 0; i--) {
             TransactionStatus ts = statuses.get(i);
             try {
                 transactionManagers.get(i).commit(ts);
             } catch (TransactionException e) {
-                log.error("提交第{}个事务管理器失败，开始回滚剩余事务", i, e);
-                // 提交失败，回滚剩余未提交的事务
-                for (int j = i + 1; j < statuses.size(); j++) {
+                log.error("提交第{}个事务管理器失败，开始回滚尚未提交的事务", i, e);
+                // 仅回滚本轮尚未提交（索引 < i）的事务；已提交部分受限于链式语义无法回滚
+                for (int j = i - 1; j >= 0; j--) {
                     try {
                         transactionManagers.get(j).rollback(statuses.get(j));
                     } catch (TransactionException rollbackEx) {
