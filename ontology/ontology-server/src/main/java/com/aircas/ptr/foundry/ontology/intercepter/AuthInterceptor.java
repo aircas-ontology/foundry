@@ -28,6 +28,10 @@ public class AuthInterceptor implements HandlerInterceptor {
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
+        // 放行 CORS 预检，避免 OPTIONS 被拦截导致前端报跨域
+        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
+            return true;
+        }
 
         String accessToken = request.getHeader(Constants.ACCESS_TOKEN_HEADER);
         if (!jwtUtil.validateAccessToken(accessToken)) {
