@@ -71,15 +71,6 @@ public class EntityPropertyRowDetailVO {
     @ApiModel(value = "属性信息")
     public static class PropertyInfo {
 
-        @ApiModelProperty(name = "primaryCategory", value = "属性一级分类", example = "设计制造")
-        private String primaryCategory;
-
-        @ApiModelProperty(name = "secondaryCategory", value = "属性二级分类", example = "基本属性")
-        private String secondaryCategory;
-
-        @ApiModelProperty(name = "tag", value = "属性标签", example = "基本属性")
-        private String tag;
-
         @ApiModelProperty(name = "propertyUniqIdentifier", value = "属性唯一标识", example = "123")
         private String propertyUniqIdentifier;
 

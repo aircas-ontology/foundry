@@ -1,6 +1,5 @@
 package com.aircas.ptr.foundry.ontology.model.vo;
 
-import com.aircas.ptr.foundry.ontology.model.enums.OntologyPropertyPrimaryCategoryEnum;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
@@ -9,9 +8,6 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
-
-import javax.validation.constraints.NotBlank;
-import javax.validation.constraints.Pattern;
 
 @Data
 @SuperBuilder
@@ -49,19 +45,6 @@ public class OntologyPropertyInfoVO {
 
     @ApiModelProperty(name = "ontologyUniqueIdentifier", value = "123")
     private String ontologyUniqueIdentifier;
-
-    /**
-     * 属性标签
-     */
-    @ApiModelProperty(name = "tag", value = "属性标签")
-    private String tag;
-
-
-    @ApiModelProperty(name = "primaryCategory", value = "属性一级分类")
-    private String primaryCategory;
-
-    @ApiModelProperty(name = "secondaryCategory", value = "属性二级分类")
-    private String secondaryCategory;
 
     /**
      * 属性默认值

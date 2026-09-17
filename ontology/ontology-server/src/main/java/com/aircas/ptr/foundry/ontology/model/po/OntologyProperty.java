@@ -1,7 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.po;
 
 import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
-import com.aircas.ptr.foundry.ontology.model.enums.OntologyPropertyPrimaryCategoryEnum;
 import com.baomidou.mybatisplus.annotation.*;
 import com.aircas.ptr.foundry.ontology.repository.handler.JsonbTypeHandler;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -13,7 +12,6 @@ import lombok.experimental.Accessors;
 
 import java.io.Serializable;
 import java.util.Date;
-import java.util.Map;
 
 /**
  * ontology_property
@@ -102,23 +100,6 @@ public class OntologyProperty implements Serializable {
      * 数据源ID
      */
     private String datasourceId;
-
-    /**
-     * 属性标签
-     */
-    private String tag;
-
-    /**
-     * 属性一级分类
-     */
-    private OntologyPropertyPrimaryCategoryEnum primaryCategory;
-
-
-    /**
-     * 属性二级分类
-     */
-    private String secondaryCategory;
-
 
     /**
      * 属性在实体中可见性

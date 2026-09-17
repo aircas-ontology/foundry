@@ -117,9 +117,6 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                 .setDatasourceId(param.getDatasource() != null ? param.getDatasource().getDatasourceId() : null)
                 .setDescription(param.getDescription())
                 .setDisplayName(param.getDisplayName())
-                .setPrimaryCategory(param.getPrimaryCategory())
-                .setSecondaryCategory(param.getSecondaryCategory())
-                .setTag(param.getTag())
                 .setPropertyType(param.getDataType())
                 .setIsTitleKey(param.getIsTitleKey() ? 1 : 0)
                 .setIsPrimaryKey(param.getIsPrimaryKey() ? 1 : 0)
@@ -193,12 +190,9 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
             }
             var prop = updatePropMap.get(p.getUniqueIdentifier());
             prop.setPropertyType(p.getDataType())
-                    .setPrimaryCategory(p.getPrimaryCategory())
-                    .setSecondaryCategory(p.getSecondaryCategory())
                     .setDefaultValue(p.getDefaultValue())
                     .setIsTitleKey(p.getIsTitleKey() ? 1 : 0)
                     .setIsPrimaryKey(p.getIsPrimaryKey() ? 1 : 0)
-                    .setTag(p.getTag())
                     .setDescription(p.getDescription())
                     .setDisplayName(p.getDisplayName())
                     .setDatasourceId(p.getDatasource() != null ? p.getDatasource().getDatasourceId() : "")
@@ -567,10 +561,12 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                 .eq(PropertyCategory::getId, param.getCategoryId()));
         PreconditionUtils.checkArgument(parentCategory != null, "分类节点" + param.getCategoryId() + "不存在", HttpStatus.BAD_REQUEST);
 
-        // 查询所有关联节点（节点树）
+        // 查询所有关联节点（节点树）：精确匹配父节点自身，或以 "parentPath/" 为前缀的子孙节点
         var allCategories = propertyCategoryService.list(new LambdaQueryWrapper<PropertyCategory>()
                 .eq(PropertyCategory::getOntologyUniqueIdentifier, param.getOntologyIdentifier())
-                .likeRight(PropertyCategory::getPath, parentCategory.getPath()));
+                .and(w -> w.eq(PropertyCategory::getPath, parentCategory.getPath())
+                        .or()
+                        .likeRight(PropertyCategory::getPath, parentCategory.getPath() + "/")));
         if (CollectionUtils.isNotEmpty(allCategories)) {
             var categoryIds = allCategories.stream().map(PropertyCategory::getId).collect(Collectors.toList());
             var props = list(new LambdaQueryWrapper<OntologyProperty>()
@@ -594,10 +590,12 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                 .eq(PropertyCategory::getOntologyUniqueIdentifier, param.getOntologyIdentifier())
                 .eq(PropertyCategory::getId, param.getCategoryId()));
         PreconditionUtils.checkArgument(parentCategory != null, "分类节点" + param.getCategoryId() + "不存在", HttpStatus.BAD_REQUEST);
-        // 查询所有关联节点（节点树）
+        // 查询所有关联节点（节点树）：精确匹配父节点自身，或以 "parentPath/" 为前缀的子孙节点
         var allCategories = propertyCategoryService.list(new LambdaQueryWrapper<PropertyCategory>()
                 .eq(PropertyCategory::getOntologyUniqueIdentifier, param.getOntologyIdentifier())
-                .likeRight(PropertyCategory::getPath, parentCategory.getPath()));
+                .and(w -> w.eq(PropertyCategory::getPath, parentCategory.getPath())
+                        .or()
+                        .likeRight(PropertyCategory::getPath, parentCategory.getPath() + "/")));
         if (CollectionUtils.isNotEmpty(allCategories)) {
             var paths = parentCategory.getPath().split("/");
             paths[paths.length - 1] = param.getName();
@@ -605,10 +603,11 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
             allCategories.forEach(category -> {
                 if (category.getId().equals(param.getCategoryId())) {
                     category.setName(param.getName());
+                    category.setPath(newPath);
+                } else {
+                    var updatedPath = newPath + category.getPath().substring(parentCategory.getPath().length());
+                    category.setPath(updatedPath);
                 }
-                //更新节点new path
-                var updatedPath = category.getPath().replace(parentCategory.getPath(), newPath);
-                category.setPath(updatedPath);
             });
             propertyCategoryService.updateBatchById(allCategories);
         }
@@ -699,10 +698,12 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                 .eq(PropertyMetadataSchema::getOntologyUniqueIdentifier, param.getOntologyIdentifier())
                 .eq(PropertyMetadataSchema::getId, param.getMetadataSchemaId()));
         PreconditionUtils.checkArgument(parentSchema != null, "元数据节点" + param.getMetadataSchemaId() + "不存在", HttpStatus.BAD_REQUEST);
-        // 查询所有关联元数据
+        // 查询所有关联元数据：精确匹配父节点自身，或以 "parentPath/" 为前缀的子孙节点
         var allSchemas = propertyMetadataSchemaService.list(new LambdaQueryWrapper<PropertyMetadataSchema>()
                 .eq(PropertyMetadataSchema::getOntologyUniqueIdentifier, param.getOntologyIdentifier())
-                .likeRight(PropertyMetadataSchema::getPath, parentSchema.getPath()));
+                .and(w -> w.eq(PropertyMetadataSchema::getPath, parentSchema.getPath())
+                        .or()
+                        .likeRight(PropertyMetadataSchema::getPath, parentSchema.getPath() + "/")));
         if (CollectionUtils.isNotEmpty(allSchemas)) {
             var paths = parentSchema.getPath().split("/");
             paths[paths.length - 1] = param.getName();
@@ -711,10 +712,11 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                 if (schema.getId().equals(param.getMetadataSchemaId())) {
                     schema.setName(param.getName())
                             .setEnumValues(CollectionUtils.isNotEmpty(param.getEnumValues()) ? String.join(",", param.getEnumValues()) : null);
+                    schema.setPath(newPath);
+                } else {
+                    var updatedPath = newPath + schema.getPath().substring(parentSchema.getPath().length());
+                    schema.setPath(updatedPath);
                 }
-                //更新节点new path
-                var updatedPath = schema.getPath().replace(parentSchema.getPath(), newPath);
-                schema.setPath(updatedPath);
             });
             propertyMetadataSchemaService.updateBatchById(allSchemas);
         }
@@ -730,10 +732,12 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                 .eq(PropertyMetadataSchema::getId, param.getMetadataSchemaId()));
         PreconditionUtils.checkArgument(parentMetadata != null, "无效的metadata schema节点" + param.getMetadataSchemaId() + "不存在", HttpStatus.BAD_REQUEST);
 
-        // 查询所有关联节点（节点树）
+        // 查询所有关联节点（节点树）：精确匹配父节点自身，或以 "parentPath/" 为前缀的子孙节点
         var allMetadata = propertyMetadataSchemaService.list(new LambdaQueryWrapper<PropertyMetadataSchema>()
                 .eq(PropertyMetadataSchema::getOntologyUniqueIdentifier, param.getOntologyIdentifier())
-                .likeRight(PropertyMetadataSchema::getPath, parentMetadata.getPath()));
+                .and(w -> w.eq(PropertyMetadataSchema::getPath, parentMetadata.getPath())
+                        .or()
+                        .likeRight(PropertyMetadataSchema::getPath, parentMetadata.getPath() + "/")));
         if (CollectionUtils.isNotEmpty(allMetadata)) {
             var ids = allMetadata.stream().map(PropertyMetadataSchema::getId).collect(Collectors.toList());
             var props = list(new LambdaQueryWrapper<OntologyProperty>()
@@ -898,7 +902,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                             .build());
                     //创建新表
                     var table = TableDesc.builder()
-                            .description(ontology.getDisplayName() + list.get(0).getSecondaryCategory())
+                            .description(ontology.getDisplayName() + "_" + ds)
                             .tableName(ds)
                             .build();
                     tableMetadataMapper.createTable(schemaName, table, columns);

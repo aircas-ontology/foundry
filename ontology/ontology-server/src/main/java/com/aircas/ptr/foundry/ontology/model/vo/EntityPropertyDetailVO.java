@@ -19,15 +19,6 @@ import java.util.List;
 @ApiModel(value = "实体属性详情VO")
 public class EntityPropertyDetailVO  {
 
-    @ApiModelProperty(name = "primaryCategory", value = "属性一级分类", example = "基本属性")
-    private String primaryCategory;
-
-    @ApiModelProperty(name = "secondaryCategory", value = "属性二级分类", example = "基本属性")
-    private String secondaryCategory;
-
-    @ApiModelProperty(name = "tag", value = "属性标签", example = "基本属性")
-    private String tag;
-
     @ApiModelProperty(name = "propertyUniqIdentifier", value = "属性名称", example = "名称")
     private String propertyUniqIdentifier;
 
