@@ -111,7 +111,7 @@ public class DatasourceMetadataServiceImpl implements DatasourceMetadataService 
                 }
             }
         } catch (SQLException e) {
-            log.error("listTables failed, datasourceId={}, schema={}", conn.getId(), schema, e);
+            log.error("查询表列表失败，datasourceId={}, schema={}", conn.getId(), schema, e);
             throw new BusinessException("查询数据源表列表失败: " + e.getMessage(), HttpStatus.BAD_GATEWAY);
         }
         return result;
@@ -137,7 +137,7 @@ public class DatasourceMetadataServiceImpl implements DatasourceMetadataService 
                 }
             }
         } catch (SQLException e) {
-            log.error("listColumns failed, datasourceId={}, schema={}, table={}",
+            log.error("查询表字段失败，datasourceId={}, schema={}, table={}",
                     conn.getId(), schema, tableName, e);
             throw new BusinessException("查询表字段失败: " + e.getMessage(), HttpStatus.BAD_GATEWAY);
         }
@@ -164,7 +164,7 @@ public class DatasourceMetadataServiceImpl implements DatasourceMetadataService 
                 }
             }
         } catch (SQLException e) {
-            log.error("listForeignKeys failed, datasourceId={}, schema={}", conn.getId(), schema, e);
+            log.error("查询外键关系失败，datasourceId={}, schema={}", conn.getId(), schema, e);
             throw new BusinessException("查询外键关系失败: " + e.getMessage(), HttpStatus.BAD_GATEWAY);
         }
         return result;
@@ -175,7 +175,7 @@ public class DatasourceMetadataServiceImpl implements DatasourceMetadataService 
         try (Connection c = openConnection(conn)) {
             return c.isValid(LOGIN_TIMEOUT_SECONDS);
         } catch (SQLException e) {
-            log.warn("testConnection failed, datasourceId={}, name={}, err={}",
+            log.warn("测试连接失败，datasourceId={}, name={}, err={}",
                     conn.getId(), conn.getName(), e.getMessage());
             return false;
         }

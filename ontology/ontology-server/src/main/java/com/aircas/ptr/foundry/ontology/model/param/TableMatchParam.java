@@ -23,12 +23,12 @@ public class TableMatchParam {
 
     @Schema(name = "userInput", description = "用户自然语言描述", required = true,
             example = "构建一个卫星本体对象")
-    @NotBlank(message = "userInput is empty")
-    @Size(max = 500, message = "userInput too long, max 500 chars")
+    @NotBlank(message = "用户输入不能为空")
+    @Size(max = 500, message = "用户输入过长，最多 500 字符")
     private String userInput;
 
     @Schema(name = "datasourceId", description = "数据源连接id（datasource_connection.id）",
             required = true, example = "1")
-    @NotNull(message = "datasourceId is null")
+    @NotNull(message = "数据源id不能为空")
     private Integer datasourceId;
 }

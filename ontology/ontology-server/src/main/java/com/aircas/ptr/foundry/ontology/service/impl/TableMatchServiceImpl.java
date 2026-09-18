@@ -90,7 +90,7 @@ public class TableMatchServiceImpl implements TableMatchService {
                     "数据源 " + conn.getName() + " 的 schema [" + schema + "] 下没有任何表",
                     HttpStatus.BAD_REQUEST);
         }
-        log.info("tableMatch: datasource={}, schema={}, tableCount={}",
+        log.info("表匹配：数据源={}, schema={}, 表数={}",
                 conn.getName(), schema, allTables.size());
 
         // 3. 让 LLM 挑主表
@@ -162,7 +162,7 @@ public class TableMatchServiceImpl implements TableMatchService {
 
     private LlmTableSelectionDTO selectMainTableByLlm(String userInput, List<TableMetaDTO> tables) {
         String userPrompt = buildUserPrompt(userInput, tables);
-        log.debug("tableMatch prompt: {}", userPrompt);
+        log.debug("表匹配 prompt：{}", userPrompt);
 
         String raw;
         try {
@@ -172,10 +172,10 @@ public class TableMatchServiceImpl implements TableMatchService {
                     .call()
                     .content();
         } catch (Exception e) {
-            log.error("call LLM failed", e);
+            log.error("表匹配：调用大模型失败", e);
             throw new BusinessException("调用大模型失败: " + e.getMessage(), HttpStatus.SERVICE_UNAVAILABLE);
         }
-        log.info("tableMatch LLM raw response: {}", raw);
+        log.info("表匹配：大模型原始响应：{}", raw);
         return parseLlmResponse(raw, tables);
     }
 
@@ -211,7 +211,7 @@ public class TableMatchServiceImpl implements TableMatchService {
                     return dto;
                 }
             } catch (Exception ignore) {
-                log.warn("strict JSON parse failed, fallback to regex. raw={}", raw);
+                log.warn("表匹配：严格 JSON 解析失败，回退到正则提取。raw={}", raw);
             }
         }
         // 正则兜底
