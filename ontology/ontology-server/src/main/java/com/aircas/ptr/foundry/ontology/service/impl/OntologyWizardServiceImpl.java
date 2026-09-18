@@ -23,7 +23,9 @@ import com.aircas.ptr.foundry.ontology.model.po.OntologyCategory;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkCategory;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.model.vo.WizardFinalizeResultVO;
+import com.aircas.ptr.foundry.ontology.model.vo.WizardPropertiesResultVO;
 import com.aircas.ptr.foundry.ontology.model.vo.WizardRelationVO;
+import com.aircas.ptr.foundry.ontology.model.vo.WizardRelationsResultVO;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.DatasourceConnectionMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyLinkCategoryMapper;
 import com.aircas.ptr.foundry.ontology.service.DatasourceMetadataService;
@@ -131,10 +133,10 @@ public class OntologyWizardServiceImpl implements OntologyWizardService {
 
             2. field 应尽量对应数据源里已存在的列名（区分大小写），若无对应列则返回 null。
             3. name 是简洁的中文属性名，summary 是 30 字以内的属性摘要。
-            4. reasoning 是 50 字以内的构建依据。
-            5. 只输出与本对象直接相关的核心属性（建议 5~20 条），不要罗列数据源里所有列。
+            4. 只输出与本对象直接相关的核心属性（建议 5~20 条），不要罗列数据源里所有列。
+            5. reasoning 是整体构建依据（200 字以内，放在 JSON 顶层，不要写进每个属性对象里）：先点明这批属性主要源自哪张（些）数据源表，用“表名（表注释）”格式，例如 hms_target（海玛斯目标信息表）；再简述字段选取思路。
             6. 输出必须是单一 JSON 对象，不要 markdown 代码块。
-               结构固定为：{"properties":[{"name":"","summary":"","field":"","type":"","reasoning":""}]}
+               结构固定为：{"reasoning":"","properties":[{"name":"","summary":"","field":"","type":""}]}
             """;
 
     private static final String SYS_PROMPT_BUILD_RELATIONS = """
@@ -145,10 +147,12 @@ public class OntologyWizardServiceImpl implements OntologyWizardService {
             3. type 必须是以下枚举之一：""" + ALLOWED_RELATION_TYPES + """
 
             4. name 是简短的关系名称（如"装备宙斯盾系统"），description 是 50 字以内的关系说明。
-            5. reasoning 是 50 字以内的构建依据。
-            6. 与所有候选都无关系时返回空数组：{"relations":[]}
+            5. reasoning 是整体构建依据（150 字以内，放在 JSON 顶层，不要写进每个关系对象里），按以下顺序组织：
+               - 数据源参考（第一位）：沿用【新对象】构建依据中的数据源表，严格用"表名（表注释）"格式，如 hms_target（海玛斯目标信息表）；若新对象依据中无对应表，则写"数据源无直接对应表，依据对象定义与已有对象清单判定"。
+               - 关系判定：概述新对象与哪些已有对象存在何种关系及依据。
+            6. 与所有候选都无关系时，relations 返回空数组，reasoning 仍需说明原因：{"reasoning":"...","relations":[]}
             7. 输出必须是单一 JSON 对象，不要 markdown 代码块。
-               结构固定为：{"relations":[{"name":"","targetApiName":"","type":"","description":"","reasoning":""}]}
+               结构固定为：{"reasoning":"","relations":[{"name":"","targetApiName":"","type":"","description":""}]}
             """;
 
     // ------------------------------------------------------------------
@@ -322,7 +326,7 @@ public class OntologyWizardServiceImpl implements OntologyWizardService {
     // ==================================================================
 
     @Override
-    public List<WizardPropertyDTO> buildProperties(WizardBuildPropertiesParam param) {
+    public WizardPropertiesResultVO buildProperties(WizardBuildPropertiesParam param) {
         PreconditionUtils.checkNotNull(param.getObjectSpec(),
                 "objectSpec 不能为空", HttpStatus.BAD_REQUEST);
 
@@ -342,7 +346,12 @@ public class OntologyWizardServiceImpl implements OntologyWizardService {
 
         // 规范化每条属性：type 必须在枚举内，否则回退到 String
         properties.forEach(this::normalizeProperty);
-        return properties;
+
+        // reasoning 提到外层，属性对象内不再保留
+        return WizardPropertiesResultVO.builder()
+                .reasoning(parsed.getReasoning())
+                .properties(properties)
+                .build();
     }
 
     private String buildPropertiesPrompt(WizardBuildPropertiesParam param,
@@ -406,7 +415,7 @@ public class OntologyWizardServiceImpl implements OntologyWizardService {
     // ==================================================================
 
     @Override
-    public List<WizardRelationVO> buildRelations(WizardBuildRelationsParam param) {
+    public WizardRelationsResultVO buildRelations(WizardBuildRelationsParam param) {
         PreconditionUtils.checkNotNull(param.getObjectSpec(),
                 "objectSpec 不能为空", HttpStatus.BAD_REQUEST);
 
@@ -424,9 +433,12 @@ public class OntologyWizardServiceImpl implements OntologyWizardService {
         log.info("向导-构建关系：spaceId={}, 新对象标识={}, 候选对象数={}",
                 param.getSpaceId(), newApiName, candidates.size());
 
-        // 空间下没有已有本体 → 直接返回空，不调 LLM
+        // 空间下没有已有本体 → 直接返回空关系，不调 LLM
         if (CollectionUtils.isEmpty(candidates)) {
-            return Collections.emptyList();
+            return WizardRelationsResultVO.builder()
+                    .reasoning("当前本体空间下没有可关联的已有对象，故不产生任何关系。")
+                    .relations(Collections.emptyList())
+                    .build();
         }
 
         String prompt = buildRelationsPrompt(param, candidates);
@@ -435,7 +447,11 @@ public class OntologyWizardServiceImpl implements OntologyWizardService {
         List<LlmWizardRelationDTO> llmRelations = parsed.getRelations() == null
                 ? Collections.emptyList() : parsed.getRelations();
 
-        return enrichRelations(llmRelations, candidates, param.getObjectSpec());
+        // reasoning 提到外层，关系对象内不再保留
+        return WizardRelationsResultVO.builder()
+                .reasoning(parsed.getReasoning())
+                .relations(enrichRelations(llmRelations, candidates, param.getObjectSpec()))
+                .build();
     }
 
     private String buildRelationsPrompt(WizardBuildRelationsParam param, List<OntologyMeta> candidates) {
@@ -517,7 +533,6 @@ public class OntologyWizardServiceImpl implements OntologyWizardService {
                     .type(type)
                     .typeName(type.getName())
                     .description(item.getDescription())
-                    .reasoning(item.getReasoning())
                     .build());
         }
         return result;

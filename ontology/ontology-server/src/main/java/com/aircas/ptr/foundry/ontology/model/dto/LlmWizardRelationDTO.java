@@ -36,9 +36,4 @@ public class LlmWizardRelationDTO {
      * 关系说明
      */
     private String description;
-
-    /**
-     * 构建依据
-     */
-    private String reasoning;
 }

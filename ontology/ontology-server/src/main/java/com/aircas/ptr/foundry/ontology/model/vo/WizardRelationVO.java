@@ -50,7 +50,4 @@ public class WizardRelationVO {
 
     @Schema(name = "description", description = "关系说明")
     private String description;
-
-    @Schema(name = "reasoning", description = "构建依据（前端只读）")
-    private String reasoning;
 }

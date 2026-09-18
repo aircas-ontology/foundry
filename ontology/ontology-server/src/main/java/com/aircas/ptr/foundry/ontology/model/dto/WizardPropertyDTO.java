@@ -35,7 +35,4 @@ public class WizardPropertyDTO {
 
     @Schema(name = "type", description = "属性类型，来自 OntologyDataTypeEnum", example = "String")
     private String type;
-
-    @Schema(name = "reasoning", description = "构建依据（前端只读，回传时保留原值）")
-    private String reasoning;
 }

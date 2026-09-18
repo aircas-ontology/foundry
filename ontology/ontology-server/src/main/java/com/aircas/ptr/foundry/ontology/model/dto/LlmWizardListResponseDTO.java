@@ -20,6 +20,11 @@ import java.util.List;
 public class LlmWizardListResponseDTO {
 
     /**
+     * 步骤 4 LLM 返回的整体构建依据（提到外层，不内嵌到每个属性）
+     */
+    private String reasoning;
+
+    /**
      * 步骤 4 LLM 返回的属性列表
      */
     private List<WizardPropertyDTO> properties;

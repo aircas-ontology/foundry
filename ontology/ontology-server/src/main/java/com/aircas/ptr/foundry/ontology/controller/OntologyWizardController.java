@@ -2,13 +2,13 @@ package com.aircas.ptr.foundry.ontology.controller;
 
 import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.model.dto.WizardObjectSpecDTO;
-import com.aircas.ptr.foundry.ontology.model.dto.WizardPropertyDTO;
 import com.aircas.ptr.foundry.ontology.model.param.WizardBuildObjectParam;
 import com.aircas.ptr.foundry.ontology.model.param.WizardBuildPropertiesParam;
 import com.aircas.ptr.foundry.ontology.model.param.WizardBuildRelationsParam;
 import com.aircas.ptr.foundry.ontology.model.param.WizardFinalizeParam;
 import com.aircas.ptr.foundry.ontology.model.vo.WizardFinalizeResultVO;
-import com.aircas.ptr.foundry.ontology.model.vo.WizardRelationVO;
+import com.aircas.ptr.foundry.ontology.model.vo.WizardPropertiesResultVO;
+import com.aircas.ptr.foundry.ontology.model.vo.WizardRelationsResultVO;
 import com.aircas.ptr.foundry.ontology.service.OntologyWizardService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -19,8 +19,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.List;
 
 /**
  * 本体构建向导接口
@@ -51,15 +49,15 @@ public class OntologyWizardController {
     }
 
     @PostMapping("/build-properties")
-    @Operation(summary = "步骤4-构建本体属性（返回名称/摘要/字段/类型/构建依据）")
-    public RestResult<List<WizardPropertyDTO>> buildProperties(
+    @Operation(summary = "步骤4-构建本体属性（外层返回整体构建依据 reasoning + 属性列表 properties）")
+    public RestResult<WizardPropertiesResultVO> buildProperties(
             @RequestBody @Valid WizardBuildPropertiesParam param) {
         return RestResult.ofData(ontologyWizardService.buildProperties(param));
     }
 
     @PostMapping("/build-relations")
-    @Operation(summary = "步骤5-构建本体关系（返回关系名/源/目标/类型/说明/构建依据）")
-    public RestResult<List<WizardRelationVO>> buildRelations(
+    @Operation(summary = "步骤5-构建本体关系（外层返回整体构建依据 reasoning + 关系列表 relations）")
+    public RestResult<WizardRelationsResultVO> buildRelations(
             @RequestBody @Valid WizardBuildRelationsParam param) {
         return RestResult.ofData(ontologyWizardService.buildRelations(param));
     }

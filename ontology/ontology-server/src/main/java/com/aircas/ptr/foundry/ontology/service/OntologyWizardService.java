@@ -1,15 +1,13 @@
 package com.aircas.ptr.foundry.ontology.service;
 
 import com.aircas.ptr.foundry.ontology.model.dto.WizardObjectSpecDTO;
-import com.aircas.ptr.foundry.ontology.model.dto.WizardPropertyDTO;
 import com.aircas.ptr.foundry.ontology.model.param.WizardBuildObjectParam;
 import com.aircas.ptr.foundry.ontology.model.param.WizardBuildPropertiesParam;
 import com.aircas.ptr.foundry.ontology.model.param.WizardBuildRelationsParam;
 import com.aircas.ptr.foundry.ontology.model.param.WizardFinalizeParam;
 import com.aircas.ptr.foundry.ontology.model.vo.WizardFinalizeResultVO;
-import com.aircas.ptr.foundry.ontology.model.vo.WizardRelationVO;
-
-import java.util.List;
+import com.aircas.ptr.foundry.ontology.model.vo.WizardPropertiesResultVO;
+import com.aircas.ptr.foundry.ontology.model.vo.WizardRelationsResultVO;
 
 /**
  * 本体构建向导服务
@@ -33,14 +31,14 @@ public interface OntologyWizardService {
     WizardObjectSpecDTO buildObject(WizardBuildObjectParam param);
 
     /**
-     * 步骤 4：构建本体属性列表
+     * 步骤 4：构建本体属性列表（外层带整体构建依据 reasoning）
      */
-    List<WizardPropertyDTO> buildProperties(WizardBuildPropertiesParam param);
+    WizardPropertiesResultVO buildProperties(WizardBuildPropertiesParam param);
 
     /**
-     * 步骤 5：构建本体关系列表（新对象总是 source，同空间已有对象是 target）
+     * 步骤 5：构建本体关系列表（外层带整体构建依据 reasoning；新对象总是 source，同空间已有对象是 target）
      */
-    List<WizardRelationVO> buildRelations(WizardBuildRelationsParam param);
+    WizardRelationsResultVO buildRelations(WizardBuildRelationsParam param);
 
     /**
      * 落库：将步骤 3/4/5 的产出一次性持久化
