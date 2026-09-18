@@ -2,7 +2,6 @@ package com.aircas.ptr.foundry.ontology.controller;
 
 import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.controller.validator.OntologyIdVerify;
-import com.aircas.ptr.foundry.ontology.model.enums.OntologyPropertyPrimaryCategoryEnum;
 import com.aircas.ptr.foundry.ontology.model.param.*;
 import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.aircas.ptr.foundry.ontology.service.OntologyPropertyService;
@@ -109,20 +108,6 @@ public class OntologyPropertyController {
                                                                                 @OntologyIdVerify String ontologyUniqueIdentifier) {
         var res = ontologyPropertyService.getPropertyVisibility(ontologyUniqueIdentifier);
         return RestResult.ofData(res);
-    }
-
-
-    @GetMapping("/primary_category")
-    @Operation(summary = "属性一级分类列表")
-    public RestResult<List<OntologyPropertyPrimaryCategoryVO>> listPropertyPrimaryCategory() {
-        var list = Arrays.stream(OntologyPropertyPrimaryCategoryEnum.values())
-                .<OntologyPropertyPrimaryCategoryVO>map(v -> OntologyPropertyPrimaryCategoryVO.builder()
-                        .displayName(v.getName())
-                        .key(v.toString())
-                        .value(v.getValue())
-                        .build())
-                .collect(Collectors.toList());
-        return RestResult.ofData(list);
     }
 
 

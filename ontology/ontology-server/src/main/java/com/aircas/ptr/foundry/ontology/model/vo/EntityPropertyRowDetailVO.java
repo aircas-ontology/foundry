@@ -70,15 +70,6 @@ public class EntityPropertyRowDetailVO {
     @Schema(description = "属性信息")
     public static class PropertyInfo {
 
-        @Schema(name = "primaryCategory", description = "属性一级分类", example = "设计制造")
-        private String primaryCategory;
-
-        @Schema(name = "secondaryCategory", description = "属性二级分类", example = "基本属性")
-        private String secondaryCategory;
-
-        @Schema(name = "tag", description = "属性标签", example = "基本属性")
-        private String tag;
-
         @Schema(name = "propertyUniqIdentifier", description = "属性唯一标识", example = "123")
         private String propertyUniqIdentifier;
 

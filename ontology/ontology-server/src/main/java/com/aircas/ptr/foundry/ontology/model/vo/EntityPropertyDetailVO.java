@@ -18,15 +18,6 @@ import java.util.List;
 @Schema(description = "实体属性详情VO")
 public class EntityPropertyDetailVO  {
 
-    @Schema(name = "primaryCategory", description = "属性一级分类", example = "基本属性")
-    private String primaryCategory;
-
-    @Schema(name = "secondaryCategory", description = "属性二级分类", example = "基本属性")
-    private String secondaryCategory;
-
-    @Schema(name = "tag", description = "属性标签", example = "基本属性")
-    private String tag;
-
     @Schema(name = "propertyUniqIdentifier", description = "属性名称", example = "名称")
     private String propertyUniqIdentifier;
 

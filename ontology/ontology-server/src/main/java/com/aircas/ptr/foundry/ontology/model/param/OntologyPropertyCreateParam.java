@@ -2,8 +2,6 @@ package com.aircas.ptr.foundry.ontology.model.param;
 
 import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import com.aircas.ptr.foundry.ontology.controller.validator.DatasourceVerify;
-import com.aircas.ptr.foundry.ontology.model.enums.OntologyPropertyPrimaryCategoryEnum;
-import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyPrimaryCategoryVO;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
@@ -53,13 +51,6 @@ public class OntologyPropertyCreateParam extends OntologyIdentifierParam {
     @NotNull(message = "isTitleKey is empty")
     private Boolean isTitleKey;
 
-    @Schema(name = "primaryCategory", description = "属性一级分类", example = "DESIGN_MANUFACTURING")
-    @NotNull(message = "primaryCategory is null")
-    private OntologyPropertyPrimaryCategoryEnum primaryCategory;
-
-    @Schema(name = "secondaryCategory", description = "属性二级分类", example = "载荷")
-    @NotBlank(message = "secondaryCategory is empty")
-    private String secondaryCategory;
 
     @Schema(name = "type", description = "属性的自定义标签", example = "载荷基本信息")
     private String tag;

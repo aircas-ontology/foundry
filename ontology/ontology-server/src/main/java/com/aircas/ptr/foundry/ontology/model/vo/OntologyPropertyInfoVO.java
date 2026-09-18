@@ -1,6 +1,5 @@
 package com.aircas.ptr.foundry.ontology.model.vo;
 
-import com.aircas.ptr.foundry.ontology.model.enums.OntologyPropertyPrimaryCategoryEnum;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
@@ -48,19 +47,6 @@ public class OntologyPropertyInfoVO {
 
     @Schema(name = "ontologyUniqueIdentifier", description = "123")
     private String ontologyUniqueIdentifier;
-
-    /**
-     * 属性标签
-     */
-    @Schema(name = "tag", description = "属性标签")
-    private String tag;
-
-
-    @Schema(name = "primaryCategory", description = "属性一级分类")
-    private String primaryCategory;
-
-    @Schema(name = "secondaryCategory", description = "属性二级分类")
-    private String secondaryCategory;
 
     /**
      * 属性默认值

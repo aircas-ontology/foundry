@@ -2,7 +2,6 @@ package com.aircas.ptr.foundry.ontology.model.dto;
 
 
 import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
-import com.aircas.ptr.foundry.ontology.model.enums.OntologyPropertyPrimaryCategoryEnum;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
@@ -35,12 +34,6 @@ public class OntologyPropertyDTO {
 
     @Schema(name = "isTitleKey", description = "是否为名称键", required = true, example = "true")
     private Boolean isTitleKey;
-
-    @Schema(name = "primaryCategory", description = "属性一级分类", example = "DESIGN_MANUFACTURING")
-    private OntologyPropertyPrimaryCategoryEnum primaryCategory;
-
-    @Schema(name = "secondaryCategory", description = "属性二级分类", example = "载荷")
-    private String secondaryCategory;
 
     @Schema(name = "type", description = "属性的自定义标签", example = "载荷基本信息")
     private String tag;

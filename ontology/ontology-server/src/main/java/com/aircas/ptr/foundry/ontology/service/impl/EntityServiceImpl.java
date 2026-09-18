@@ -301,9 +301,6 @@ public class EntityServiceImpl implements EntityService {
             var colValue = entry.getValue();
             var p = propertyMap.get(colName);
             return EntityPropertyDetailVO.builder()
-                    .tag(p.getTag())
-                    .primaryCategory(p.getPrimaryCategory().getName())
-                    .secondaryCategory(p.getSecondaryCategory())
                     .propertyDisplayName(p.getDisplayName())
                     .propertyValues(Lists.newArrayList(colValue))
                     .propertyUniqIdentifier(p.getUniqueIdentifier())
@@ -342,13 +339,10 @@ public class EntityServiceImpl implements EntityService {
                         var values = otherData.stream().map(v -> v.get(col)).collect(Collectors.toList());
 
                         return EntityPropertyDetailVO.builder()
-                                .tag(p.getTag())
                                 .propertyDisplayName(p.getDisplayName())
                                 .propertyUniqIdentifier(p.getUniqueIdentifier())
                                 .propertyApiName(p.getApiName())
                                 .propertyValues(values)
-                                .primaryCategory(p.getPrimaryCategory().getName())
-                                .secondaryCategory(p.getSecondaryCategory())
                                 .entityPrimaryKey(entityPrimaryKey)
                                 .categoryId(p.getPropertyCategoryId())
                                 .metadata(p.getMetadata())
@@ -390,9 +384,6 @@ public class EntityServiceImpl implements EntityService {
             var colValue = entry.getValue();
             var p = propertyMap.get(colName);
             return EntityPropertyRowDetailVO.PropertyInfo.builder()
-                    .tag(p.getTag())
-                    .primaryCategory(p.getPrimaryCategory().getName())
-                    .secondaryCategory(p.getSecondaryCategory())
                     .propertyDisplayName(p.getDisplayName())
                     .propertyValue(colValue)
                     .propertyUniqIdentifier(p.getUniqueIdentifier())
@@ -446,13 +437,10 @@ public class EntityServiceImpl implements EntityService {
                             }
                             var p = otherPropertyMap.get(col);
                             var info = EntityPropertyRowDetailVO.PropertyInfo.builder()
-                                    .tag(p.getTag())
                                     .propertyDisplayName(p.getDisplayName())
                                     .propertyUniqIdentifier(p.getUniqueIdentifier())
                                     .propertyApiName(p.getApiName())
                                     .propertyValue(row.get(col))
-                                    .primaryCategory(p.getPrimaryCategory().getName())
-                                    .secondaryCategory(p.getSecondaryCategory())
                                     .categoryId(p.getPropertyCategoryId())
                                     .metadata(p.getMetadata())
                                     .build();

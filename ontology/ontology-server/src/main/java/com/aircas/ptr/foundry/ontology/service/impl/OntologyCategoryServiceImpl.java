@@ -105,10 +105,12 @@ public class OntologyCategoryServiceImpl extends ServiceImpl<OntologyCategoryMap
                 .eq(OntologyCategory::getOntologySpaceId, param.getSpaceId())
                 .eq(OntologyCategory::getId, param.getCategoryId()));
         PreconditionUtils.checkArgument(parentCategory != null, "本体分类节点" + param.getCategoryId() + "不存在", HttpStatus.BAD_REQUEST);
-        // 查询所有关联节点（节点树）
+        // 查询所有关联节点（节点树）：精确匹配父节点自身，或以 "parentPath/" 为前缀的子孙节点
         var allCategories = list(new LambdaQueryWrapper<OntologyCategory>()
                 .eq(OntologyCategory::getOntologySpaceId, param.getSpaceId())
-                .likeRight(OntologyCategory::getPath, parentCategory.getPath()));
+                .and(w -> w.eq(OntologyCategory::getPath, parentCategory.getPath())
+                        .or()
+                        .likeRight(OntologyCategory::getPath, parentCategory.getPath() + "/")));
         if (CollectionUtils.isNotEmpty(allCategories)) {
             var paths = parentCategory.getPath().split("/");
             paths[paths.length - 1] = param.getName();
@@ -116,10 +118,12 @@ public class OntologyCategoryServiceImpl extends ServiceImpl<OntologyCategoryMap
             allCategories.forEach(category -> {
                 if (category.getId().equals(param.getCategoryId())) {
                     category.setName(param.getName());
+                    category.setPath(newPath);
+                } else {
+                    // 使用前缀替换，避免 String.replace() 替换所有匹配项
+                    var updatedPath = newPath + category.getPath().substring(parentCategory.getPath().length());
+                    category.setPath(updatedPath);
                 }
-                //更新节点new path
-                var updatedPath = category.getPath().replace(parentCategory.getPath(), newPath);
-                category.setPath(updatedPath);
             });
             updateBatchById(allCategories);
         }
@@ -134,10 +138,12 @@ public class OntologyCategoryServiceImpl extends ServiceImpl<OntologyCategoryMap
                 .eq(OntologyCategory::getId, param.getCategoryId()));
         PreconditionUtils.checkArgument(parentCategory != null, "本体分类节点" + param.getCategoryId() + "不存在", HttpStatus.BAD_REQUEST);
 
-        // 查询所有关联节点（节点树）
+        // 查询所有关联节点（节点树）：精确匹配父节点自身，或以 "parentPath/" 为前缀的子孙节点
         var allCategories = list(new LambdaQueryWrapper<OntologyCategory>()
                 .eq(OntologyCategory::getOntologySpaceId, param.getSpaceId())
-                .likeRight(OntologyCategory::getPath, parentCategory.getPath()));
+                .and(w -> w.eq(OntologyCategory::getPath, parentCategory.getPath())
+                        .or()
+                        .likeRight(OntologyCategory::getPath, parentCategory.getPath() + "/")));
         if (CollectionUtils.isNotEmpty(allCategories)) {
             var categoryIds = allCategories.stream().map(OntologyCategory::getId).collect(Collectors.toList());
             var props = ontologyMetaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>()
