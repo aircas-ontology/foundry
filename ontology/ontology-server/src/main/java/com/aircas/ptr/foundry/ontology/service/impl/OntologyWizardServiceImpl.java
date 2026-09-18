@@ -4,6 +4,7 @@ import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.ontology.model.dto.ColumnMetaDTO;
+import com.aircas.ptr.foundry.ontology.model.dto.LlmObjectDefinitionDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.LlmWizardListResponseDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.LlmWizardRelationDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.TableMetaDTO;
@@ -89,13 +90,36 @@ public class OntologyWizardServiceImpl implements OntologyWizardService {
     // System prompts
     // ------------------------------------------------------------------
 
+    /**
+     * 阶段一：仅凭大模型内置知识，独立确认“这个对象是什么”，不看分类清单与数据源，
+     * 避免归类被表名/分类名望文生义地带偏。
+     */
+    private static final String SYS_PROMPT_OBJECT_DEFINITION = """
+            你是领域知识专家。用户会给出一个对象的名称或描述，你需要仅凭自身知识客观说明“这个东西是什么”。
+            严格遵守：
+            1. 只依据你的内置知识判断；本步骤不提供任何分类清单或数据库表，也不要去猜测它们。
+            2. domain（领域/类型）：用简洁词组概括对象所属领域，形如“陆战装备-机动火箭炮”“海军舰艇-驱逐舰”“航天-遥感卫星”；无法确定时填“未知”。
+            3. definition（基本定义）：80 字以内，客观说明该对象的本质、用途与关键特征。
+            4. aliases（别名）：常见中文名、英文名或缩写，没有则返回空数组 []。
+            5. 若名称含糊或存在多种可能，在 definition 中指出最可能的一种并说明不确定性。
+            6. 输出必须是单一 JSON 对象，不要 markdown 代码块，不要多余文字。
+               结构固定为：{"domain":"","definition":"","aliases":[]}
+            """;
+
     private static final String SYS_PROMPT_BUILD_OBJECT = """
-            你是本体建模专家。任务是根据用户描述、可选分类清单和数据源表清单，构建一个本体对象规格。
+            你是本体建模专家。任务是根据【对象基本定义】、用户描述、可选分类清单和数据源表清单，构建一个本体对象规格。
             严格遵守：
             1. apiName 必须是英文小写下划线格式（如 arleigh_burke_destroyer），不能包含空格或中文。
-            2. categoryId 只能从【可选分类清单】中的 id 里选，若无合适分类返回 null。
-            3. name 是简洁的中文显示名，description 是 100 字以内的中文描述。
-            4. reasoning 是 100 字以内的构建依据，说明你为什么这样命名和归类。
+            2. name 是简洁的中文显示名，description 是 100 字以内的中文描述。
+            3. 归类（categoryId）必须以【对象基本定义】中已确认的领域为准，再匹配分类，宁缺毋滥：
+               - 只能从【可选分类清单】的 id 中选择，禁止臆造清单外的 id。
+               - 【对象基本定义】已给出该对象的真实领域/类型，归类必须与之一致（例如定义为“陆战装备-机动火箭炮”就绝不能归入舰船/水面舰艇类）；数据源表名仅作参考，不得据此推翻定义中的领域判断。
+               - 仅当某分类与对象领域语义明确一致时才选它；若清单中没有语义明确匹配的分类，必须返回 null，禁止强行归入“看似沾边”的分类。
+            4. reasoning（构建依据，200 字以内）必须按以下顺序组织，且“数据源参考”必须放在最前面：
+               - 数据源参考（第一位，必须写明）：主要参考了【数据源表清单】中的哪张（些）表，严格用“表名（表注释）”格式，例如 hms_target（海玛斯目标信息表）；若数据源无明确对应表，则写“数据源无直接对应表，依据对象定义构建”。
+               - 对象领域：一句话点明它属于什么领域（来自【对象基本定义】）。
+               - 归类理由：为何选该分类，或为何返回 null。
+               参考写法：“数据源参考 hms_target（海玛斯目标信息表）；该对象属陆战装备-机动火箭炮领域；分类清单无匹配的陆战类目，故 categoryId 返回 null。”
             5. 输出必须是单一 JSON 对象，不要 markdown 代码块，不要多余文字。
                结构固定为：{"name":"","apiName":"","description":"","categoryId":null,"reasoning":""}
             """;
@@ -146,6 +170,14 @@ public class OntologyWizardServiceImpl implements OntologyWizardService {
 
     @Override
     public WizardObjectSpecDTO buildObject(WizardBuildObjectParam param) {
+        // 阶段一：仅凭用户描述，让大模型独立给出“这是什么”的基本定义（不看分类/数据源，避免被带偏）
+        String defRaw = callLlm(SYS_PROMPT_OBJECT_DEFINITION,
+                buildDefinitionPrompt(param.getUserInput()), "buildObject-定义");
+        LlmObjectDefinitionDTO definition = parseObjectDefinition(defRaw);
+        log.info("向导-构建对象阶段一：对象领域={}, 定义={}",
+                definition == null ? "(无)" : definition.getDomain(),
+                definition == null ? "(无)" : definition.getDefinition());
+
         // 加载候选分类
         List<OntologyCategory> categories = ontologyCategoryService.list(
                 new LambdaQueryWrapper<OntologyCategory>()
@@ -154,8 +186,9 @@ public class OntologyWizardServiceImpl implements OntologyWizardService {
         DatasourceConnection conn = loadEnabledConnection(param.getDatasourceId());
         List<TableMetaDTO> tables = safeListTables(conn);
 
-        String prompt = buildObjectPrompt(param.getUserInput(), categories, tables);
-        log.info("向导-构建对象：spaceId={}, 分类数={}, 表数={}",
+        // 阶段二：结合阶段一定义 + 分类清单 + 数据源表清单，产出最终对象规格
+        String prompt = buildObjectPrompt(param.getUserInput(), definition, categories, tables);
+        log.info("向导-构建对象阶段二：spaceId={}, 分类数={}, 表数={}",
                 param.getSpaceId(), categories.size(), tables.size());
 
         String raw = callLlm(SYS_PROMPT_BUILD_OBJECT, prompt, "buildObject");
@@ -166,11 +199,46 @@ public class OntologyWizardServiceImpl implements OntologyWizardService {
         return spec;
     }
 
+    private String buildDefinitionPrompt(String userInput) {
+        return "【对象名称/描述】\n" + userInput
+                + "\n\n请仅凭你的知识说明这个对象是什么，按规定 JSON 格式返回。";
+    }
+
+    /**
+     * 解析阶段一的对象定义；解析失败时降级为 null（阶段二会提示模型自行判断领域），保证向导流程不中断。
+     */
+    private LlmObjectDefinitionDTO parseObjectDefinition(String raw) {
+        String json = extractJsonBlock(raw);
+        if (json == null) {
+            log.warn("向导-构建对象阶段一：无法从大模型响应提取 JSON，将跳过定义。raw={}", raw);
+            return null;
+        }
+        try {
+            return OBJECT_MAPPER.readValue(json, LlmObjectDefinitionDTO.class);
+        } catch (Exception e) {
+            log.warn("向导-构建对象阶段一：解析定义失败，将跳过定义。raw={}", raw, e);
+            return null;
+        }
+    }
+
     private String buildObjectPrompt(String userInput,
+                                     LlmObjectDefinitionDTO definition,
                                      List<OntologyCategory> categories,
                                      List<TableMetaDTO> tables) {
         StringBuilder sb = new StringBuilder();
         sb.append("【用户描述】\n").append(userInput).append("\n\n");
+
+        sb.append("【对象基本定义】（阶段一已独立确认的领域认知，归类时必须以此为准）\n");
+        if (definition == null) {
+            sb.append("(未获取到定义，请自行判断对象所属领域后再归类)\n");
+        } else {
+            sb.append("领域/类型: ").append(StringUtils.defaultIfBlank(definition.getDomain(), "(未知)")).append('\n');
+            sb.append("基本定义: ").append(StringUtils.defaultIfBlank(definition.getDefinition(), "(无)")).append('\n');
+            if (CollectionUtils.isNotEmpty(definition.getAliases())) {
+                sb.append("别名/英文: ").append(String.join("、", definition.getAliases())).append('\n');
+            }
+        }
+        sb.append('\n');
 
         sb.append("【可选分类清单】（格式：id | 路径 | 名称）\n");
         if (CollectionUtils.isEmpty(categories)) {
@@ -186,7 +254,7 @@ public class OntologyWizardServiceImpl implements OntologyWizardService {
         }
         sb.append('\n');
 
-        sb.append("【数据源表清单】（供参考实体粒度，格式：表名 - 表注释）\n");
+        sb.append("【数据源表清单】（判断对象领域与构建依据的重要参考，格式：表名 - 表注释）\n");
         if (CollectionUtils.isEmpty(tables)) {
             sb.append("(数据源无表或连接失败)\n");
         } else {
