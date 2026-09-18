@@ -17,7 +17,7 @@ public class CdcTaskBuilder {
 
     @Resource
     private CdcTaskService cdcTaskService;
-
+    @PostConstruct
     public void run() {
         log.info("=============== 开始初始化 CDC 任务 ===============");
 
