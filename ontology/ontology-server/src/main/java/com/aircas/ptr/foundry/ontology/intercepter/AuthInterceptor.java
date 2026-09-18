@@ -28,6 +28,13 @@ public class AuthInterceptor implements HandlerInterceptor {
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
+
+        response.setHeader("Access-Control-Allow-Origin", "*");
+        response.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+        response.setHeader("Access-Control-Allow-Headers", "Content-Type," + Constants.ACCESS_TOKEN_HEADER);
+        response.setHeader("Access-Control-Max-Age", "3600");
+
+
         // 放行 CORS 预检，避免 OPTIONS 被拦截导致前端报跨域
         if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
             return true;
