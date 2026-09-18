@@ -18,7 +18,7 @@ import java.util.*;
  */
 @Slf4j
 @Service
-public class CdcTaskServiceImpl implements CdcTaskInitService {
+public class CdcTaskInitServiceImpl implements CdcTaskInitService {
 
     @Value("${cdc.connect.rest.url:http://172.16.18.62:8083}")
     private String connectRestUrl;
@@ -41,8 +41,8 @@ public class CdcTaskServiceImpl implements CdcTaskInitService {
     private  String tableOntologyLinkGroup;
 
     private static final String TASK_1_NAME = "entity-datasource-cdc";
-    private static final String TASK_2_NAME = "ontology-space-cdc";
-    private static final String TASK_3_NAME = "ontology-meta-cdc";
+    private static final String TASK_2_NAME = "ontology-meta-cdc";
+    private static final String TASK_3_NAME = "ontology-space-cdc";
     private static final String TASK_4_NAME="ontology-property-cdc";
     private static final String TASK_5_NAME="ontology-link-group-cdc";
 
@@ -99,7 +99,7 @@ public class CdcTaskServiceImpl implements CdcTaskInitService {
             ConnectorDTO res = createConnector(TASK_4_NAME, ontologyPropertyTaskConfig);
             log.info("创建连接器 {} 成功,{}", TASK_4_NAME, JSONObject.toJSONString(res));
         }else {
-            updateConnector(TASK_4_NAME, ontologySpaceTaskConfig);
+            updateConnector(TASK_4_NAME, ontologyPropertyTaskConfig);
         }
         Map<String,Object> ontologyLinkGroupTaskConfig = createOntologyTaskConfig(tableOntologyLinkGroup);
         if (!connectorSet.contains(TASK_5_NAME)){
@@ -133,7 +133,7 @@ public class CdcTaskServiceImpl implements CdcTaskInitService {
         config.put("topic.prefix", "entity_datasource_server");
         config.put("plugin.name", "pgoutput");
         config.put("publication.name", "entity_datasource_publication");
-        config.put("publication.autocreate.mode", "filtered");
+        config.put("publication.autocreate.mode", "all_tables");
         config.put("include.schema.changes", "true");
         config.put("snapshot.mode", "initial");
         config.put("slot.name", "entity_datasource_slot");

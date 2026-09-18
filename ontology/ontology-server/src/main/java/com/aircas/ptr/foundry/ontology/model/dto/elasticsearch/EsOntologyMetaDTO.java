@@ -10,7 +10,7 @@ import java.time.LocalDateTime;
 
 @Data
 @Document(indexName = "ontology_meta", createIndex = false)
-public class OntologyMetaDTO {
+public class EsOntologyMetaDTO {
 
     /** 主键，对应 long id */
     @Id
