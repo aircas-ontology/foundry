@@ -71,5 +71,11 @@ public class OntologyLinkController {
         return RestResult.ofData(result);
     }
 
+    @GetMapping("/by_category")
+    @Operation(summary = "根据关系分类id查询关系列表")
+    public RestResult<List<OntologyLinkInfoVO>> getByCategoryId(@RequestParam(name = "categoryId", required = false) @Parameter(description = "关系分类id，不传则查询全部关系") Integer categoryId) {
+        return RestResult.ofData(ontologyLinkGroupService.getByCategoryId(categoryId));
+    }
+
 
 }

@@ -208,4 +208,10 @@ public class OntologyPropertyController {
         var res = ontologyPropertyService.getMetadataSchemaTree(ontologyUniqueIdentifier);
         return RestResult.ofData(res);
     }
+
+    @GetMapping("/by_category")
+    @Operation(summary = "根据categoryId查询属性列表")
+    public RestResult<List<OntologyPropertyInfoVO>> getByCategoryId(@RequestParam(name = "categoryId", required = false) @Parameter(description = "属性分类id，不传则查询全部属性") Integer categoryId) {
+        return RestResult.ofData(ontologyPropertyService.getByCategoryId(categoryId));
+    }
 }

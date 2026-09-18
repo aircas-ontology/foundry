@@ -2,8 +2,10 @@ package com.aircas.ptr.foundry.ontology.controller;
 
 import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.common.base.ResultCode;
+import com.aircas.ptr.foundry.ontology.model.param.OntologySpaceCanvasCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologySpaceCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologySpaceUpdateParam;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologySpaceCanvasCreateVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologySpaceVO;
 import com.aircas.ptr.foundry.ontology.service.OntologySpaceService;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -41,6 +43,13 @@ public class OntologySpaceController {
     public RestResult<Integer> createSpace(@RequestBody @Valid OntologySpaceCreateParam param) {
         var id = ontologySpaceService.createSpace(param);
         return RestResult.ofData(id);
+    }
+
+    @PostMapping("/canvas")
+    @Operation(summary = "画布一键建空间：创建空间并批量创建对象、属性、关系")
+    public RestResult<OntologySpaceCanvasCreateVO> createSpaceWithCanvasContent(@RequestBody @Valid OntologySpaceCanvasCreateParam param) {
+        var res = ontologySpaceService.createSpaceWithCanvasContent(param);
+        return RestResult.ofData(res);
     }
 
     @PutMapping

@@ -437,6 +437,21 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
     }
 
     @Override
+    public List<OntologyMetaInfoVO> getByCategoryId(Integer categoryId) {
+        log.info("[getByCategoryId] received categoryId={}", categoryId);
+        var queryWrapper = new LambdaQueryWrapper<OntologyMeta>()
+                .eq(OntologyMeta::getStatus, Status.ENABLE.getValue());
+        if (categoryId != null) {
+            queryWrapper.eq(OntologyMeta::getOntologyCategoryId, categoryId);
+        }
+        var metaList = list(queryWrapper);
+        log.info("[getByCategoryId] categoryId={}, matched size={}", categoryId, metaList.size());
+        return metaList.stream()
+                .map(DataConverter::convert)
+                .collect(Collectors.toList());
+    }
+
+    @Override
     public List<OntologyMetaNodeVO> getOntologyTreeByByGroupId(String groupId) {
         LambdaQueryWrapper<OntologyMeta> queryWrapper;
         if (StringUtils.isEmpty(groupId)) {
