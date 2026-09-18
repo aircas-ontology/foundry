@@ -120,11 +120,16 @@ public class CdcTaskServiceImpl implements CdcTaskService {
         config.put("table.include.list", tableName);
         config.put("schema.include.list", "ontology");
         config.put("plugin.name", "pgoutput");
-        config.put("publication.name", "ontology_space_publication");
+        if(Objects.equals(tableName, tableOntologyMeta)){
+            config.put("publication.name", "ontology_meta_publication");
+            config.put("slot.name", "ontology_meta_slot");
+        }else if(Objects.equals(tableName, tableOntologySpace)){
+            config.put("publication.name", "ontology_space_publication");
+            config.put("slot.name", "ontology_space_slot");
+        }
         config.put("publication.autocreate.mode", "filtered");
         config.put("include.schema.changes", "true");
         config.put("snapshot.mode", "initial");
-        config.put("slot.name", "ontology_space_slot");
         config.put("key.converter", "org.apache.kafka.connect.json.JsonConverter");
         config.put("value.converter", "org.apache.kafka.connect.json.JsonConverter");
         config.put("key.converter.schemas.enable", "false");
