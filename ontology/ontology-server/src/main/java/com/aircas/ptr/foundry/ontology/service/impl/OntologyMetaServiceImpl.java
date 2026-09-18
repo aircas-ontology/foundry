@@ -230,6 +230,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                         .ontologyUniqueIdentifierTo(v.getOntologyUniqueIdentifierTo().equals(parentIdentifier) ? childIdentifier : v.getOntologyUniqueIdentifierTo())
                         .status(v.getStatus())
                         .uniqueIdentifier(childLinkId)
+                        .ontologySpaceId(v.getOntologySpaceId())
                         .build();
                 return link;
             }).collect(Collectors.toList());
@@ -592,6 +593,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                         .type(r.getType())
                         .ontologyUniqueIdentifierFrom(fromMeta.getUniqueIdentifier())
                         .ontologyUniqueIdentifierTo(toMeta.getUniqueIdentifier())
+                        .ontologySpaceId(space.getId())
                         .build());
             }
             linkService.saveBatch(links);

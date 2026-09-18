@@ -4,6 +4,7 @@ import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyLinkDirectionEnum;
 import com.aircas.ptr.foundry.ontology.controller.validator.OntologyIdVerify;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyLinkCreateParam;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkGraphVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaInfoVO;
 import com.aircas.ptr.foundry.ontology.service.OntologyLinkGroupService;
@@ -75,6 +76,14 @@ public class OntologyLinkController {
     @Operation(summary = "根据关系分类id查询关系列表")
     public RestResult<List<OntologyLinkInfoVO>> getByCategoryId(@RequestParam(name = "categoryId", required = false) @Parameter(description = "关系分类id，不传则查询全部关系") Integer categoryId) {
         return RestResult.ofData(ontologyLinkGroupService.getByCategoryId(categoryId));
+    }
+
+    @GetMapping("/graph")
+    @Operation(summary = "查询关系图数据(本体-关系-本体)，需传空间id；传本体对象id则以该对象为中心返回其关系，不传则返回本空间全部关系图")
+    public RestResult<OntologyLinkGraphVO> getLinkGraph(@RequestParam(name = "spaceId") @Parameter(description = "本体空间id") Integer spaceId,
+                                                        @RequestParam(required = false, name = "ontologyUniqueIdentifier")
+                                                        @Parameter(description = "本体对象uniqueIdentifier，不传则返回本空间全部关系图") String ontologyUniqueIdentifier) {
+        return RestResult.ofData(ontologyLinkGroupService.getLinkGraph(spaceId, ontologyUniqueIdentifier));
     }
 
 
