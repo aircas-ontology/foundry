@@ -25,14 +25,14 @@ spring:
     main:
       driver-class-name: org.postgresql.Driver
       #url: jdbc:postgresql://${PG_DB_HOST}:${PG_DB_PORT}/${PG_DB_NAME}?currentSchema=ontology
-      url: jdbc:postgresql://172.16.18.58:35432/postgres?currentSchema=ontology&rewriteBatchedStatements=true&TimeZone=UTC
+      url: jdbc:postgresql://172.16.18.62:35432/postgres?currentSchema=ontology&rewriteBatchedStatements=true&TimeZone=UTC
       username: postgres
       password: 123456
       validation-query: SELECT 1
       test-on-borrow: true
     datalake:
       driver-class-name: org.postgresql.Driver
-      url: jdbc:postgresql://172.16.18.58:35432/entity_datasource
+      url: jdbc:postgresql://172.16.18.62:35432/entity_datasource
       username: postgres
       password: 123456
     arangodb:
@@ -65,10 +65,22 @@ spring:
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
+  elasticsearch:
+    uris: http://172.16.18.62:9200
+    connection-timeout: 5s
+    socket-timeout: 30s
+
+  data:
+    elasticsearch:
+      repositories:
+        enabled: true
 
 cdc:
-  ontology-meta: ontology_server.ontology.ontology_meta
-  ontology-space: ontology_server.ontology.ontology_space
+  ontology-topic-prefix: ontology_server
+  ontology-meta: ontology.ontology_meta
+  ontology-space: ontology.ontology_space
+  ontology-property: ontology.ontology_property
+  ontology-link-group: ontology.ontology_link_group
   entity-datasource-prefix: entity_datasource_server
 
 rabbitmq:

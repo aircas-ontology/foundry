@@ -73,9 +73,18 @@
             <version>${javassist.version}</version>
             <scope>compile</scope>
         </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-elasticsearch</artifactId>
+        </dependency>
     </dependencies>
     <dependencyManagement>
         <dependencies>
+            <dependency>
+                <groupId>jakarta.json</groupId>
+                <artifactId>jakarta.json-api</artifactId>
+                <version>2.1.3</version>
+            </dependency>
             <!-- Spring AI BOM -->
             <dependency>
                 <groupId>org.springframework.ai</groupId>
@@ -92,6 +101,21 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
             <dependency>
                 <groupId>org.locationtech.jts</groupId>

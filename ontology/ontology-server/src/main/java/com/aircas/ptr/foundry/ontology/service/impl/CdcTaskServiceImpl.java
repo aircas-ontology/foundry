@@ -2,9 +2,10 @@ package com.aircas.ptr.foundry.ontology.service.impl;
 
 import com.aircas.ptr.foundry.common.util.HttpUtil;
 import com.aircas.ptr.foundry.ontology.model.dto.ConnectorDTO;
-import com.aircas.ptr.foundry.ontology.service.CdcTaskService;
-import com.alibaba.fastjson.JSONObject;
+import com.aircas.ptr.foundry.ontology.service.CdcTaskInitService;
+import com.alibaba.fastjson2.JSONObject;
 import com.fasterxml.jackson.core.type.TypeReference;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -17,19 +18,48 @@ import java.util.*;
  */
 @Slf4j
 @Service
-public class CdcTaskServiceImpl implements CdcTaskService {
+public class CdcTaskServiceImpl implements CdcTaskInitService {
 
-    @Value("${cdc.connect.rest.url:http://192.168.9.11:18083}")
+    @Value("${cdc.connect.rest.url:http://172.16.18.62:8083}")
     private String connectRestUrl;
+    @Value("${spring.datasource.main.username}")
+    private String databaseUserName;
+    @Value("${spring.datasource.main.password}")
+    private String databasePassword;
+    @Value("${cdc.ontology-topic-prefix}")
+    private String ontologyTopicPrefix;
 
-    private static String tableOntologyMeta = "ontology.ontology_meta";
 
-    private static String tableOntologySpace = "ontology.ontology_space";
+    @Value("${cdc.ontology-meta}")
+    private String tableOntologyMeta;
 
+    @Value("${cdc.ontology-space}")
+    private  String tableOntologySpace;
+    @Value("${cdc.ontology-property}")
+    private  String tableOntologyProperty;
+    @Value("${cdc.ontology-link-group}")
+    private  String tableOntologyLinkGroup;
 
     private static final String TASK_1_NAME = "entity-datasource-cdc";
     private static final String TASK_2_NAME = "ontology-space-cdc";
     private static final String TASK_3_NAME = "ontology-meta-cdc";
+    private static final String TASK_4_NAME="ontology-property-cdc";
+    private static final String TASK_5_NAME="ontology-link-group-cdc";
+
+
+    private final Map<String,String> publicationNameConfig=new HashMap<>();
+    private final Map<String,String> slotNameConfig=new HashMap<>();
+    @PostConstruct
+    private void init(){
+        this.publicationNameConfig.put(tableOntologyMeta,"ontology_meta_publication");
+        this.publicationNameConfig.put(tableOntologySpace,"ontology_space_publication");
+        this.publicationNameConfig.put(tableOntologyProperty,"ontology_property_publication");
+        this.publicationNameConfig.put(tableOntologyLinkGroup,"ontology_link_group_publication");
+        this.slotNameConfig.put(tableOntologyMeta,"ontology_meta_slot");
+        this.slotNameConfig.put(tableOntologySpace,"ontology_space_slot");
+        this.slotNameConfig.put(tableOntologyProperty,"ontology_property_slot");
+        this.slotNameConfig.put(tableOntologyLinkGroup,"ontology_link_group_slot");
+    }
 
     /**
      * 初始化所有 CDC 任务
@@ -62,7 +92,21 @@ public class CdcTaskServiceImpl implements CdcTaskService {
             ConnectorDTO res = createConnector(TASK_3_NAME, ontologySpaceTaskConfig);
             log.info("创建连接器 {} 成功,{}", TASK_3_NAME, JSONObject.toJSONString(res));
         } else {
-            updateConnector(TASK_3_NAME, ontologyMetaTaskConfig);
+            updateConnector(TASK_3_NAME, ontologySpaceTaskConfig);
+        }
+        Map<String,Object> ontologyPropertyTaskConfig = createOntologyTaskConfig(tableOntologyProperty);
+        if(!connectorSet.contains(TASK_4_NAME)){
+            ConnectorDTO res = createConnector(TASK_4_NAME, ontologyPropertyTaskConfig);
+            log.info("创建连接器 {} 成功,{}", TASK_4_NAME, JSONObject.toJSONString(res));
+        }else {
+            updateConnector(TASK_4_NAME, ontologySpaceTaskConfig);
+        }
+        Map<String,Object> ontologyLinkGroupTaskConfig = createOntologyTaskConfig(tableOntologyLinkGroup);
+        if (!connectorSet.contains(TASK_5_NAME)){
+            ConnectorDTO res = createConnector(TASK_5_NAME, ontologyLinkGroupTaskConfig);
+            log.info("创建连接器 {} 成功,{}", TASK_5_NAME, JSONObject.toJSONString(res));
+        }else {
+            updateConnector(TASK_5_NAME,ontologyLinkGroupTaskConfig);
         }
 
         log.info("========== CDC 任务初始化完成 ==========");
@@ -80,10 +124,10 @@ public class CdcTaskServiceImpl implements CdcTaskService {
         // 构建连接器配置
         Map<String, Object> config = new HashMap<>();
         config.put("connector.class", "io.debezium.connector.postgresql.PostgresConnector");
-        config.put("database.hostname", "192.168.9.11");
-        config.put("database.port", "45432");
-        config.put("database.user", "iecas");
-        config.put("database.password", "iecas123");
+        config.put("database.hostname", "172.16.18.62");
+        config.put("database.port", "35432");
+        config.put("database.user", databaseUserName);
+        config.put("database.password", databasePassword);
         config.put("database.dbname", "entity_datasource");
         config.put("database.server.name", "entity_datasource_server");
         config.put("topic.prefix", "entity_datasource_server");
@@ -111,22 +155,17 @@ public class CdcTaskServiceImpl implements CdcTaskService {
         // 构建连接器配置
         Map<String, Object> config = new HashMap<>();
         config.put("connector.class", "io.debezium.connector.postgresql.PostgresConnector");
-        config.put("database.hostname", "192.168.9.11");
-        config.put("database.port", "45432");
-        config.put("database.user", "iecas");
-        config.put("database.password", "iecas123");
+        config.put("database.hostname", "172.16.18.62");
+        config.put("database.port", "35432");
+        config.put("database.user", databaseUserName);
+        config.put("database.password",databasePassword);
         config.put("database.dbname", "postgres");
-        config.put("topic.prefix", "ontology_server");
+        config.put("topic.prefix", ontologyTopicPrefix);
         config.put("table.include.list", tableName);
         config.put("schema.include.list", "ontology");
         config.put("plugin.name", "pgoutput");
-        if(Objects.equals(tableName, tableOntologyMeta)){
-            config.put("publication.name", "ontology_meta_publication");
-            config.put("slot.name", "ontology_meta_slot");
-        }else if(Objects.equals(tableName, tableOntologySpace)){
-            config.put("publication.name", "ontology_space_publication");
-            config.put("slot.name", "ontology_space_slot");
-        }
+        config.put("publication.name", publicationNameConfig.get(tableName));
+        config.put("slot.name", slotNameConfig.get(tableName));
         config.put("publication.autocreate.mode", "filtered");
         config.put("include.schema.changes", "true");
         config.put("snapshot.mode", "initial");
@@ -179,8 +218,8 @@ public class CdcTaskServiceImpl implements CdcTaskService {
         connectorDTO.setName(connectorName);
         TypeReference<ConnectorDTO> typeRef = new TypeReference<ConnectorDTO>() {
         };
-        ConnectorDTO response = HttpUtil.putJson(url, null, JSONObject.toJSONString(connectorDTO), typeRef);
-        log.info("成功更新 CDC 连接器: {}, 响应数据: {}", connectorName, response);
+        ConnectorDTO result = HttpUtil.putJson(url, null, JSONObject.toJSONString(config), typeRef);
+        log.info("成功更新 CDC 连接器: {}, 响应数据: {}", connectorName, JSONObject.toJSONString(result));
     }
 
     /**
