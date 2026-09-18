@@ -12,6 +12,7 @@ import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaInfoVO;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyActionLinkMapper;
+import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyLinkCategoryMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyLinkGroupMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyMetaMapper;
 import com.aircas.ptr.foundry.ontology.service.EntityService;
@@ -44,11 +45,19 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
     private OntologyMetaMapper ontologyMetaMapper;
 
     @Resource
+    private OntologyLinkCategoryMapper ontologyLinkCategoryMapper;
+
+    @Resource
     private EntityService entityService;
 
     @Override
     @Transactional(value = "mainTransactionManager")
     public void createLink(OntologyLinkCreateParam linkCreateParam) {
+        // 校验关系分类必填且存在
+        var categoryId = linkCreateParam.getCategoryId();
+        PreconditionUtils.checkArgument(categoryId != null, "categoryId is empty", HttpStatus.BAD_REQUEST);
+        var category = ontologyLinkCategoryMapper.selectById(categoryId);
+        PreconditionUtils.checkArgument(category != null, "关系分类不存在：" + categoryId, HttpStatus.BAD_REQUEST);
 
         var link = OntologyLinkGroup.builder()
                 .uniqueIdentifier(IdGenerator.generateUUID())
@@ -57,6 +66,7 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
                 .ontologyUniqueIdentifierTo(linkCreateParam.getOntologyUniqueIdentifierTo())
                 .name(linkCreateParam.getName())
                 .type(linkCreateParam.getType())
+                .categoryId(linkCreateParam.getCategoryId())
                 .build();
         //创建本体间关系
         save(link);

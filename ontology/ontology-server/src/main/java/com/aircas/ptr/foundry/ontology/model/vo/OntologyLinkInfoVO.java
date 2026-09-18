@@ -65,6 +65,12 @@ public class OntologyLinkInfoVO {
     @Schema(name = "type", description = "关系类型")
     private OntologyLinkTypeEnum type;
 
+    /**
+     * 关系分类id（ontology_link_category.id），为空表示未分类
+     */
+    @Schema(name = "categoryId", description = "关系分类id（ontology_link_category.id）")
+    private Integer categoryId;
+
 }
 
 

@@ -50,6 +50,7 @@ public class DataConverter {
                 .ontologyNameFrom(from.getDisplayName())
                 .ontologyNameTo(to.getDisplayName())
                 .type(link.getType())
+                .categoryId(link.getCategoryId())
                 .build();
     }
 

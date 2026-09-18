@@ -49,4 +49,11 @@ public class OntologyLinkCreateParam {
     @NotNull(message = "type is empty")
     private OntologyLinkTypeEnum type;
 
+    /**
+     * 关系分类id（ontology_link_category.id），关系必须归属到关系分类树，必填
+     */
+    @Schema(name = "categoryId", required = true, description = "关系分类id（ontology_link_category.id），必填", example = "1")
+    @NotNull(message = "categoryId is empty")
+    private Integer categoryId;
+
 }
