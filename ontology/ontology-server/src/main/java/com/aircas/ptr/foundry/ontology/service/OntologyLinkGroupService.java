@@ -23,6 +23,8 @@ public interface OntologyLinkGroupService extends IService<OntologyLinkGroup> {
 
     List<OntologyLinkInfoVO> getLinksByOntologyUniqueIdentifier(String ontologyUniqueIdentifier, OntologyLinkDirectionEnum direction);
 
+    List<OntologyLinkInfoVO> getByCategoryId(Integer categoryId);
+
     void deleteLinkByLinkUniqueIdentifier(String linkUniqIdentifier);
 
 }

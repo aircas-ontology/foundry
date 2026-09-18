@@ -79,6 +79,12 @@ public class OntologyMetaController {
         return RestResult.ofData(ontologyMetaService.searchByKeyword(keyword));
     }
 
+    @GetMapping("/category")
+    @Operation(summary = "根据categoryId查询本体对象列表")
+    public RestResult<List<OntologyMetaInfoVO>> getByCategoryId(@RequestParam(name = "categoryId", required = false) @Parameter(description = "分类id，不传则查询全部本体") Integer categoryId) {
+        return RestResult.ofData(ontologyMetaService.getByCategoryId(categoryId));
+    }
+
     @GetMapping("/group")
     @Operation(summary = "根据groupId查询组内本体")
     public RestResult<List<OntologyGroupMetaVO>> getByGroupId(@RequestParam(name = "groupId", required = false) @Parameter(description = "groupId") String groupId,

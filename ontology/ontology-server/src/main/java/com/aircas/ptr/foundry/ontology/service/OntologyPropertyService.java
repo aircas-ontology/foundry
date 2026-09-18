@@ -26,6 +26,8 @@ public interface OntologyPropertyService extends IService<OntologyProperty> {
 
     List<OntologyPropertyInfoVO> getPropertyInfoByOntologyId(String ontologyUniqueIdentifier);
 
+    List<OntologyPropertyInfoVO> getByCategoryId(Integer categoryId);
+
     OntologyPropertyDetailVO getPropertyDetailById(String uniqueIdentifier);
 
     List<OntologyPropertyDetailVO> getPropertiesDetailById(List<String> uniqueIdentifiers);

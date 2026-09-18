@@ -356,6 +356,20 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         return props.stream().map(DataConverter::convertToPropertyInfoVO).collect(Collectors.toList());
     }
 
+    @Override
+    public List<OntologyPropertyInfoVO> getByCategoryId(Integer categoryId) {
+        log.info("[getByCategoryId] received categoryId={}", categoryId);
+        var queryWrapper = new LambdaQueryWrapper<OntologyProperty>();
+        if (categoryId != null) {
+            queryWrapper.eq(OntologyProperty::getPropertyCategoryId, categoryId);
+        }
+        var propList = list(queryWrapper);
+        log.info("[getByCategoryId] categoryId={}, matched size={}", categoryId, propList.size());
+        return propList.stream()
+                .map(DataConverter::convertToPropertyInfoVO)
+                .collect(Collectors.toList());
+    }
+
 
     @Override
     public OntologyPropertyDetailVO getPropertyDetailById(String uniqueIdentifier) {

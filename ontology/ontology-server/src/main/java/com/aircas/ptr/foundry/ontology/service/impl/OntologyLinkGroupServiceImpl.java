@@ -124,6 +124,21 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
     }
 
     @Override
+    public List<OntologyLinkInfoVO> getByCategoryId(Integer categoryId) {
+        log.info("[getByCategoryId] received categoryId={}", categoryId);
+        var queryWrapper = new LambdaQueryWrapper<OntologyLinkGroup>()
+                .eq(OntologyLinkGroup::getStatus, Status.ENABLE.getValue());
+        if (categoryId != null) {
+            queryWrapper.eq(OntologyLinkGroup::getCategoryId, categoryId);
+        }
+        var links = list(queryWrapper);
+        if (CollectionUtils.isEmpty(links)) {
+            return Lists.newArrayList();
+        }
+        return buildLinkInfo(links);
+    }
+
+    @Override
     public List<OntologyLinkInfoVO> getLinksByOntologyUniqueIdentifier(String ontologyUniqueIdentifier, OntologyLinkDirectionEnum direction) {
         List<OntologyLinkGroup> links = Lists.newArrayList();
         switch (direction) {
