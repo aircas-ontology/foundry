@@ -6,7 +6,8 @@ import org.springframework.context.annotation.Configuration;
 
 /**
  * Spring AI 配置类
- * 配置 ChatClient 用于与通义千问模型交互
+ * 配置 ChatClient 用于与阿里云百炼（Model Studio）上的大模型交互，
+ * 当前默认模型为 qwen-flash（见 application.yml: spring.ai.dashscope.chat.options.model）。
  */
 @Configuration
 public class AiConfig {

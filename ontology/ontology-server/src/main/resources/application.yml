@@ -15,11 +15,12 @@ spring:
       max-file-size: 500MB
       max-request-size: 1024MB
   ai:
+    # 阿里云百炼（Model Studio）——底层服务名仍为 DashScope，starter 配置前缀固定为 spring.ai.dashscope
     dashscope:
-      api-key: ${DASHSCOPE_API_KEY:sk-placeholder}
+      api-key: ${BAILIAN_API_KEY:${DASHSCOPE_API_KEY:sk-ws-H.PIDLPDI.EGFh.MEUCIB1IsVBLMhDGAMbLQYdDVbHhnmdzPbSUH9hIMupCuDXhAiEA5ekb_vjErVUIUHpgnP_pcI94gMjNEMAOVs3cPmnXlHg}}
       chat:
         options:
-          model: qwen-max
+          model: qwen-flash
           temperature: 0.7
   datasource:
     main:
