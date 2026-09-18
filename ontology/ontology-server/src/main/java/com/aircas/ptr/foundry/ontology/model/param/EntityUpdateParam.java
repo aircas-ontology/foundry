@@ -1,18 +1,18 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
-import io.swagger.annotations.ApiModel;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
 
-import javax.validation.constraints.NotBlank;
-import javax.validation.constraints.NotEmpty;
-import javax.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
 import java.util.List;
 
-@ApiModel(description = "实体字段更新请求")
+@Schema(description = "实体字段更新请求")
 @Data
 @SuperBuilder
 @Accessors(chain = true)

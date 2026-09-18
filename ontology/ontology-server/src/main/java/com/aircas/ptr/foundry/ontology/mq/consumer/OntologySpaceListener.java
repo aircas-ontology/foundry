@@ -1,6 +1,6 @@
 package com.aircas.ptr.foundry.ontology.mq.consumer;
 import com.aircas.ptr.foundry.ontology.model.dto.CDCEventDTO;
-import com.alibaba.fastjson.JSONObject;
+import com.alibaba.fastjson2.JSONObject;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;

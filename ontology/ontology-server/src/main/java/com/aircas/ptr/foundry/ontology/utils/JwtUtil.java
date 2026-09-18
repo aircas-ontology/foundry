@@ -6,12 +6,14 @@ import com.aircas.ptr.foundry.ontology.model.dto.JwtDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.UserContextDTO;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.security.Keys;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Component;
 
+import javax.crypto.SecretKey;
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -67,20 +69,28 @@ public class JwtUtil {
         claims.put(CLAIM_USER_ID, userContext.getUserId());
         claims.put(CLAIM_USER_NAME, userContext.getUsername());
         claims.put(CLAIM_TOKEN_TYPE, tokenType);
+        SecretKey key = getSigningKey();
         return Jwts.builder()
-                .setClaims(claims)
-                .setSubject(userContext.getUsername())
-                .setIssuedAt(now)
-                .setExpiration(expireAt)
-                .signWith(SignatureAlgorithm.HS256, jwtProperties.getSecret())
+                .claims(claims)
+                .subject(userContext.getUsername())
+                .issuedAt(now)
+                .expiration(expireAt)
+                .signWith(key, Jwts.SIG.HS256)
                 .compact();
     }
 
     private Claims parseClaims(String rawToken) {
+        SecretKey key = getSigningKey();
         return Jwts.parser()
-                .setSigningKey(jwtProperties.getSecret())
-                .parseClaimsJws(rawToken)
-                .getBody();
+                .verifyWith(key)
+                .build()
+                .parseSignedClaims(rawToken)
+                .getPayload();
+    }
+
+    private SecretKey getSigningKey() {
+        byte[] keyBytes = jwtProperties.getSecret().getBytes(StandardCharsets.UTF_8);
+        return Keys.hmacShaKeyFor(keyBytes);
     }
 
     private String withBearer(String rawToken) {

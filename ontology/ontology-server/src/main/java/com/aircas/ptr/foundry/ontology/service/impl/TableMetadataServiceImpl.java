@@ -16,12 +16,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Lists;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
-import lombok.var;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 import java.util.List;
 import java.util.stream.Collectors;
 

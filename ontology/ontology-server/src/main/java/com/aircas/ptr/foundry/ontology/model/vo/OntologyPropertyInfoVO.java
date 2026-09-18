@@ -1,69 +1,71 @@
 package com.aircas.ptr.foundry.ontology.model.vo;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import io.swagger.annotations.ApiModel;
-import io.swagger.annotations.ApiModelProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
 
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
+
 @Data
 @SuperBuilder
 @NoArgsConstructor
 @AllArgsConstructor
 @Accessors(chain = true)
-@ApiModel(description = "本体属性基本信息")
+@Schema(description = "本体属性基本信息")
 public class OntologyPropertyInfoVO {
 
 
-    @ApiModelProperty(name = "displayName", value = "属性名称", example = "名称")
+    @Schema(name = "displayName", description = "属性名称", example = "名称")
     private String displayName;
 
-    @ApiModelProperty(name = "description", value = "属性描述", example = "描述")
+    @Schema(name = "description", description = "属性描述", example = "描述")
     private String description;
 
     /**
      * 是否为主键，1是0否
      */
-    @ApiModelProperty(name = "isPrimaryKey", value = "是否为主键")
+    @Schema(name = "isPrimaryKey", description = "是否为主键")
     private Boolean isPrimaryKey;
 
     /**
      * 是否为名称键，将该属性作为本体的显示名称，1是0否
      */
-    @ApiModelProperty(name = "isTitleKey", value = "是否为名称键")
+    @Schema(name = "isTitleKey", description = "是否为名称键")
     private Boolean isTitleKey;
 
     /**
      * 唯一标示
      */
-    @ApiModelProperty(name = "uniqueIdentifier", value = "abcd")
+    @Schema(name = "uniqueIdentifier", description = "abcd")
     private String uniqueIdentifier;
 
 
-    @ApiModelProperty(name = "ontologyUniqueIdentifier", value = "123")
+    @Schema(name = "ontologyUniqueIdentifier", description = "123")
     private String ontologyUniqueIdentifier;
 
     /**
      * 属性默认值
      */
-    @ApiModelProperty(name = "defaultValue", value = "属性默认值")
+    @Schema(name = "defaultValue", description = "属性默认值")
     private String defaultValue;
 
     /**
      * 属性存储分组
      */
-    @ApiModelProperty(name = "storageGroup", value = "属性存储分组", example = "123")
+    @Schema(name = "storageGroup", description = "属性存储分组", example = "123")
     private String storageGroup;
 
     /**
      * 属性分类id
      */
-    @ApiModelProperty(name = "categoryId", value = "属性分类id", example = "10")
+    @Schema(name = "categoryId", description = "属性分类id", example = "10")
     private Integer categoryId;
 
-    @ApiModelProperty(name = "metadata", value = "属性元数据")
+    @Schema(name = "metadata", description = "属性元数据")
     private JsonNode metadata;
 }

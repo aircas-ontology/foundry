@@ -3,8 +3,7 @@ package com.aircas.ptr.foundry.ontology.model.vo;
 
 import com.aircas.ptr.foundry.ontology.model.enums.ActionSchedulingTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.ScheduleStatus;
-import io.swagger.annotations.ApiModel;
-import io.swagger.annotations.ApiModelProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -16,36 +15,36 @@ import lombok.experimental.SuperBuilder;
 @NoArgsConstructor
 @SuperBuilder
 @Accessors(chain = true)
-@ApiModel(description = "行为调度VO")
+@Schema(description = "行为调度VO")
 public class ActionSchedulingInfoVO {
 
-    @ApiModelProperty(name = "ontologyName", value = "本体名称", example = "名称")
+    @Schema(name = "ontologyName", description = "本体名称", example = "名称")
     private String ontologyName;
 
-    @ApiModelProperty(name = "ontologyIdentifier", value = "本体id", dataType = "java.lang.String", example = "abcdef", required = true)
+    @Schema(name = "ontologyIdentifier", description = "本体id", example = "abcdef", required = true)
     private String ontologyIdentifier;
 
-    @ApiModelProperty(name = "actionApi", value = "行为id", dataType = "java.lang.String", example = "abcdef", required = true)
+    @Schema(name = "actionApi", description = "行为id", example = "abcdef", required = true)
     private String actionApi;
 
-    @ApiModelProperty(name = "actionName", value = "行为名称", dataType = "java.lang.String", example = "舰船轨迹预测", required = true)
+    @Schema(name = "actionName", description = "行为名称", example = "舰船轨迹预测", required = true)
     private String actionName;
 
 
-    @ApiModelProperty(name = "schedulingName", value = "行为调度name", required = true, example = "name")
+    @Schema(name = "schedulingName", description = "行为调度name", required = true, example = "name")
     private String schedulingName;
 
-    @ApiModelProperty(name = "description", value = "行为调度描述", required = true, example = "description")
+    @Schema(name = "description", description = "行为调度描述", required = true, example = "description")
     private String description;
 
-    @ApiModelProperty(name = "id", value = "行为调度id", required = true, example = "123")
+    @Schema(name = "id", description = "行为调度id", required = true, example = "123")
     private Long id;
 
-    @ApiModelProperty(name = "type", value = "行为调度类型：TASK（定时）、RULE（规则）", required = true, example = "123")
+    @Schema(name = "type", description = "行为调度类型：TASK（定时）、RULE（规则）", required = true, example = "123")
     private ActionSchedulingTypeEnum type;
 
 
-    @ApiModelProperty(name = "status", value = "行为调度状态 START、STOP", required = true, example = "1")
+    @Schema(name = "status", description = "行为调度状态 START、STOP", required = true, example = "1")
     private ScheduleStatus status;
 
 }

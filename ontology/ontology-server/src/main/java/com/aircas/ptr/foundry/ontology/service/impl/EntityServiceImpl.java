@@ -36,7 +36,6 @@ import com.jayway.jsonpath.JsonPath;
 import com.jayway.jsonpath.Option;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import lombok.var;
 import org.apache.commons.collections.MapUtils;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -45,11 +44,12 @@ import org.springframework.expression.Expression;
 import org.springframework.expression.ExpressionParser;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
 import org.springframework.expression.spel.support.StandardEvaluationContext;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -78,6 +78,7 @@ public class EntityServiceImpl implements EntityService {
     @Resource
     private FunctionService functionService;
 
+    @Lazy
     @Resource
     private OntologyActionService actionService;
 

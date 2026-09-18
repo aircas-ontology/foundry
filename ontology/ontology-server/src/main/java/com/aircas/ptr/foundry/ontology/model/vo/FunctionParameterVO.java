@@ -2,8 +2,7 @@ package com.aircas.ptr.foundry.ontology.model.vo;
 
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamCategoryEnum;
 import com.aircas.ptr.foundry.common.constant.FunctionParamTypeEnum;
-import io.swagger.annotations.ApiModel;
-import io.swagger.annotations.ApiModelProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -15,27 +14,27 @@ import lombok.experimental.Accessors;
 @Accessors(chain = true)
 @NoArgsConstructor
 @AllArgsConstructor
-@ApiModel(value = "函数信息")
+@Schema(description = "函数信息")
 public class FunctionParameterVO {
 
-    @ApiModelProperty(name = "paramId",value = "参数id")
+    @Schema(name = "paramId",description = "参数id")
     private Long paramId;
 
-    @ApiModelProperty(name = "paramName",value = "参数名称")
+    @Schema(name = "paramName",description = "参数名称")
     private String paramName;
 
-    @ApiModelProperty(name = "paramType",value = "参数类型")
+    @Schema(name = "paramType",description = "参数类型")
     private FunctionParamTypeEnum paramType;
 
-    @ApiModelProperty(name = "category",value = "参数输入输出类别")
+    @Schema(name = "category",description = "参数输入输出类别")
     private FunctionParamCategoryEnum category;
 
-    @ApiModelProperty(name = "paramOrder",value = "参数顺序")
+    @Schema(name = "paramOrder",description = "参数顺序")
     private Integer paramOrder;
 
-    @ApiModelProperty(name = "paramOrder",value = "参数schema")
+    @Schema(name = "paramOrder",description = "参数schema")
     private String paramSchema;
 
-    @ApiModelProperty(name = "description",value = "参数描述")
+    @Schema(name = "description",description = "参数描述")
     private String description;
 }

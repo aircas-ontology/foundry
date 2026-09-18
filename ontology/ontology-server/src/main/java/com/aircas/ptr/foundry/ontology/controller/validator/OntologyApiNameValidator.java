@@ -3,13 +3,12 @@ package com.aircas.ptr.foundry.ontology.controller.validator;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyMetaMapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
-import lombok.var;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Component;
 
-import javax.annotation.Resource;
-import javax.validation.ConstraintValidator;
-import javax.validation.ConstraintValidatorContext;
+import jakarta.annotation.Resource;
+import jakarta.validation.ConstraintValidator;
+import jakarta.validation.ConstraintValidatorContext;
 import java.util.Objects;
 import java.util.regex.Pattern;
 

@@ -1,8 +1,7 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
 import com.aircas.ptr.foundry.ontology.controller.validator.GroupIdVerify;
-import io.swagger.annotations.ApiModel;
-import io.swagger.annotations.ApiModelProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
 
@@ -10,10 +9,10 @@ import lombok.experimental.SuperBuilder;
 @AllArgsConstructor
 @NoArgsConstructor
 @SuperBuilder
-@ApiModel(description = "更新本体分组")
+@Schema(description = "更新本体分组")
 public class OntologyGroupUpdatedParam extends OntologyGroupCreateParam {
 
     @GroupIdVerify
-    @ApiModelProperty(name = "groupId", value = "分组id", required = true)
+    @Schema(name = "groupId", description = "分组id", required = true)
     private String groupId;
 }

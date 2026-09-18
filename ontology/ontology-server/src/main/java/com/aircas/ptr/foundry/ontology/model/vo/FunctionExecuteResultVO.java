@@ -2,7 +2,7 @@ package com.aircas.ptr.foundry.ontology.model.vo;
 
 
 import com.aircas.ptr.foundry.ontology.model.enums.TaskStatusEnum;
-import io.swagger.annotations.ApiModel;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
@@ -10,7 +10,7 @@ import lombok.experimental.SuperBuilder;
 @Data
 @SuperBuilder
 @Accessors(chain = true)
-@ApiModel(value = "函数基本信息VO")
+@Schema(description = "函数基本信息VO")
 public class FunctionExecuteResultVO {
 
 

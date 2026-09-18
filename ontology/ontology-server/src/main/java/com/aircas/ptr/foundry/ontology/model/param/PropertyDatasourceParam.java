@@ -1,8 +1,7 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
 
-import io.swagger.annotations.ApiModel;
-import io.swagger.annotations.ApiModelProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -14,16 +13,16 @@ import lombok.experimental.SuperBuilder;
 @NoArgsConstructor
 @SuperBuilder
 @Accessors(chain = true)
-@ApiModel(description = "属性数据源请求")
+@Schema(description = "属性数据源请求")
 public class PropertyDatasourceParam {
 
-    @ApiModelProperty(name = "schemaName", value = "schema名称", required = true, example = "public")
+    @Schema(name = "schemaName", description = "schema名称", required = true, example = "public")
     private String schemaName;
 
-    @ApiModelProperty(name = "datasourceId", value = "数据源表名", required = true, example = "xtmb")
+    @Schema(name = "datasourceId", description = "数据源表名", required = true, example = "xtmb")
     private String datasourceId;
 
-    @ApiModelProperty(name = "datasourceColumnName", value = "数据源列名", required = true, example = "id")
+    @Schema(name = "datasourceColumnName", description = "数据源列名", required = true, example = "id")
     private String datasourceColumnName;
 
 

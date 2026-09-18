@@ -8,7 +8,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 
-import javax.persistence.Entity;
+import jakarta.persistence.Entity;
 import java.util.Date;
 
 

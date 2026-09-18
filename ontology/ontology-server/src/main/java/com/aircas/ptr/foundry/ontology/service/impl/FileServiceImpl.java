@@ -8,13 +8,12 @@ import io.minio.PutObjectArgs;
 import io.minio.http.Method;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import lombok.var;
 import net.coobird.thumbnailator.Thumbnails;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;

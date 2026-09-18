@@ -32,15 +32,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import lombok.var;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 import java.io.File;
 import java.io.IOException;
 import java.util.Date;
@@ -68,6 +68,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     @Resource
     private GroovyService groovyService;
 
+    @Lazy
     @Resource
     private EntityServiceImpl entityService;
 

@@ -1,24 +1,23 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
 import com.aircas.ptr.foundry.ontology.controller.validator.OntologyIdVerify;
-import io.swagger.annotations.ApiModel;
-import io.swagger.annotations.ApiModelProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 
-import javax.validation.constraints.NotBlank;
-import javax.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 
 @Data
 @SuperBuilder
 @AllArgsConstructor
 @NoArgsConstructor
-@ApiModel(description = "实体查询请求")
+@Schema(description = "实体查询请求")
 public class EntitySearchParam {
 
-    @ApiModelProperty(name = "ontologyUniqueIdentifier", value = "本体id", example = "123")
+    @Schema(name = "ontologyUniqueIdentifier", description = "本体id", example = "123")
     @OntologyIdVerify
     private String ontologyUniqueIdentifier;
 
@@ -26,10 +25,10 @@ public class EntitySearchParam {
 
     private Object propertyValue;
 
-    @ApiModelProperty(name = "pageNum")
+    @Schema(name = "pageNum")
     private Integer pageNum = 1;
 
-    @ApiModelProperty(name = "pageSize")
+    @Schema(name = "pageSize")
     private Integer pageSize = 10;
 
 

@@ -7,7 +7,7 @@ import com.baomidou.mybatisplus.extension.service.IService;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.transaction.annotation.Transactional;
 
-import javax.validation.Valid;
+import jakarta.validation.Valid;
 import java.util.List;
 
 public interface OntologyPropertyService extends IService<OntologyProperty> {
@@ -25,6 +25,8 @@ public interface OntologyPropertyService extends IService<OntologyProperty> {
     List<OntologyPropertyDetailVO> getPropertyDetailByOntologyId(String ontologyUniqueIdentifier);
 
     List<OntologyPropertyInfoVO> getPropertyInfoByOntologyId(String ontologyUniqueIdentifier);
+
+    List<OntologyPropertyInfoVO> getByCategoryId(Integer categoryId);
 
     OntologyPropertyDetailVO getPropertyDetailById(String uniqueIdentifier);
 

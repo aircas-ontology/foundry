@@ -7,7 +7,6 @@ import com.aircas.ptr.foundry.ontology.model.document.EntityRelation;
 import com.arangodb.springframework.annotation.Query;
 import com.arangodb.springframework.repository.ArangoRepository;
 import com.google.common.collect.Lists;
-import lombok.var;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 

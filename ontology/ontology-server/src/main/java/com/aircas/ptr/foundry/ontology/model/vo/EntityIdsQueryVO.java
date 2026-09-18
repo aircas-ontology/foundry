@@ -1,8 +1,7 @@
 package com.aircas.ptr.foundry.ontology.model.vo;
 
 
-import io.swagger.annotations.ApiModel;
-import io.swagger.annotations.ApiModelProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -16,12 +15,12 @@ import java.util.List;
 @NoArgsConstructor
 @Builder
 @Accessors(chain = true)
-@ApiModel(value = "实体id查询结果")
+@Schema(description = "实体id查询结果")
 public class EntityIdsQueryVO {
 
-    @ApiModelProperty(name = "ontologyUniqueIdentifier", value = "本体唯一标识", example = "abcd")
+    @Schema(name = "ontologyUniqueIdentifier", description = "本体唯一标识", example = "abcd")
     private String ontologyUniqueIdentifier;
 
-    @ApiModelProperty(name = "entityList", value = "实体属性信息列表")
+    @Schema(name = "entityList", description = "实体属性信息列表")
     private List<EntityInfoVO> entityList;
 }

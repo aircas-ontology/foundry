@@ -1,12 +1,11 @@
 package com.aircas.ptr.foundry.ontology.controller.validator;
 
 import com.aircas.ptr.foundry.ontology.model.param.OntologyDataSourceColumnParam;
-import lombok.var;
 import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.stereotype.Component;
 
-import javax.validation.ConstraintValidator;
-import javax.validation.ConstraintValidatorContext;
+import jakarta.validation.ConstraintValidator;
+import jakarta.validation.ConstraintValidatorContext;
 import java.util.List;
 
 @Component

@@ -2,8 +2,7 @@ package com.aircas.ptr.foundry.ontology.model.vo;
 
 import com.aircas.ptr.foundry.ontology.model.enums.ActionRuleConnectType;
 import com.aircas.ptr.foundry.ontology.model.param.ActionHandleRuleAddParam;
-import io.swagger.annotations.ApiModel;
-import io.swagger.annotations.ApiModelProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -17,13 +16,13 @@ import java.util.List;
 @AllArgsConstructor
 @SuperBuilder
 @Accessors(chain = true)
-@ApiModel(value = "行为规则信息VO")
+@Schema(description = "行为规则信息VO")
 public class ActionHandleRuleVO {
 
-    @ApiModelProperty(name = "rules", value = "行为规则执行，规则list", example = "[{\"columnName\":\"longitude\",\"columnValue\":\"20.0\",\"condition\":\"CH\"}]")
+    @Schema(name = "rules", description = "行为规则执行，规则list", example = "[{\"columnName\":\"longitude\",\"columnValue\":\"20.0\",\"condition\":\"CH\"}]")
     private List<ActionHandleRuleAddParam> rules;
 
-    @ApiModelProperty(name = "ruleConnectType", value = "行为规则拼接类型", example = "AND")
+    @Schema(name = "ruleConnectType", description = "行为规则拼接类型", example = "AND")
     private ActionRuleConnectType ruleConnectType;
 
 

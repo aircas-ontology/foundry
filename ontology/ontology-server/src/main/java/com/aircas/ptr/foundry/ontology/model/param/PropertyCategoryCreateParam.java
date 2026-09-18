@@ -1,17 +1,16 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
 
-import io.swagger.annotations.ApiModel;
-import io.swagger.annotations.ApiModelProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
 
-import javax.validation.Valid;
-import javax.validation.constraints.NotBlank;
-import javax.validation.constraints.NotNull;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import java.util.List;
 
 @Data
@@ -19,18 +18,18 @@ import java.util.List;
 @NoArgsConstructor
 @SuperBuilder
 @Accessors(chain = true)
-@ApiModel(description = "属性分类体系创建")
+@Schema(description = "属性分类体系创建")
 public class PropertyCategoryCreateParam extends OntologyIdentifierParam {
 
-    @ApiModelProperty(name = "parentId", value = "父节点id，为0表示当前节点为根节点(新创建属性体系)", example = "0")
+    @Schema(name = "parentId", description = "父节点id，为0表示当前节点为根节点(新创建属性体系)", example = "0")
     @NotNull(message = "parentId is null")
     private Integer parentId;
 
-    @ApiModelProperty(name = "name", value = "属性分类名称", example = "平台属性")
+    @Schema(name = "name", description = "属性分类名称", example = "平台属性")
     @NotBlank(message = "name is empty")
     private String name;
 
-    @ApiModelProperty(name = "children", value = "子节点")
+    @Schema(name = "children", description = "子节点")
     @Valid
     private List<CategoryNode> children;
 

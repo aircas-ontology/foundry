@@ -20,15 +20,15 @@ import com.google.common.collect.Lists;
 import com.xxl.job.core.context.XxlJobHelper;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import lombok.var;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.collections4.MapUtils;
 import org.apache.commons.lang.StringUtils;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -68,6 +68,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     @Resource
     private OntologyActionMappingInService ontologyActionMappingInService;
 
+    @Lazy
     @Resource
     private OntologyPropertyService ontologyPropertyService;
 
@@ -78,6 +79,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     private ActionHandleTaskService actionHandleTaskService;
 
 
+    @Lazy
     @Resource
     private EntityServiceImpl entityService;
 

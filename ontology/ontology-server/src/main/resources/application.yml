@@ -8,26 +8,38 @@ spring:
     default-property-inclusion: non_null
   application:
     name: ontology
+  main:
+    allow-circular-references: true
   servlet:
     multipart:
       max-file-size: 500MB
       max-request-size: 1024MB
+  ai:
+    # 阿里云百炼（Model Studio）——底层服务名仍为 DashScope，starter 配置前缀固定为 spring.ai.dashscope
+    dashscope:
+      # 密钥不写入仓库，通过环境变量 BAILIAN_API_KEY 或 DASHSCOPE_API_KEY 注入；
+      # 默认占位值仅用于保证应用能正常启动（未注入真实密钥时不可调用大模型）
+      api-key: ${BAILIAN_API_KEY:${DASHSCOPE_API_KEY:please-set-your-dashscope-api-key}}
+      chat:
+        options:
+          model: qwen-flash
+          temperature: 0.7
   datasource:
     main:
       driver-class-name: org.postgresql.Driver
       #url: jdbc:postgresql://${PG_DB_HOST}:${PG_DB_PORT}/${PG_DB_NAME}?currentSchema=ontology
-      url: jdbc:postgresql://127.0.0.1:35432/postgres?currentSchema=ontology&rewriteBatchedStatements=true&TimeZone=UTC
-      username: iecas
-      password: iecas123
+      url: jdbc:postgresql://172.16.18.58:35432/postgres?currentSchema=ontology&rewriteBatchedStatements=true&TimeZone=UTC
+      username: postgres
+      password: 123456
       validation-query: SELECT 1
       test-on-borrow: true
     datalake:
       driver-class-name: org.postgresql.Driver
-      url: jdbc:postgresql://127.0.0.1:35432/entity_datasource
-      username: iecas
-      password: iecas123
+      url: jdbc:postgresql://172.16.18.58:35432/entity_datasource
+      username: postgres
+      password: 123456
     arangodb:
-      host: 127.0.0.1
+      host: 172.16.18.62
       port: 8529
       database: entity
       collections: node,relation
@@ -40,13 +52,13 @@ spring:
         connect: 5000
         request: 10000
   rabbitmq:
-    host: 127.0.0.1
+    host: 172.16.18.62
     port: 5672
     username: admin
-    password: admin
+    password: C7O5O4AC2NAFQp9dTvwL
     virtual-host: /
   kafka:
-    bootstrap-servers: 127.0.0.1:39092,127.0.0.1:39102,127.0.0.1:39094
+    bootstrap-servers: 172.16.18.62:39092
     consumer:
       group-id: cdc-monitor-group
       auto-offset-reset: earliest
@@ -73,17 +85,30 @@ ontology:
   swagger:
     enable: true
 
+# Knife4j / SpringDoc OpenAPI 3 配置
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    path: /swagger-ui.html
+
 
 jwt:
-  secret: ontology-jwt-secret-key-2026
+  # HS256 要求密钥 ≥ 256 bits（32 字节），当前 64 字节兼容 HS256/HS384/HS512，预防未来切换算法报错
+  # 生产环境建议通过环境变量 JWT_SECRET 注入随机密钥，避免写死在仓库
+  secret: ${JWT_SECRET:ontology-jwt-secret-key-2026-foundry-aircas-ptr-hs256-random-v1a}
   access-token-expire-days: 7
   refresh-token-expire-days: 30
 
 
 minio:
-  endpoint: http://127.0.0.1:16337
-  accessKey: root
-  secretKey: iecas123
+  endpoint: http://172.16.18.58:9000
+  accessKey: minioadmin
+  secretKey: minioadmin
   bucketName: ptr
 
 
@@ -98,7 +123,7 @@ orekit:
 
 xxl:
   job:
-    baseUrl: http://127.0.0.1:18888/xxl-job-admin
+    baseUrl: http://172.16.18.58:18888/xxl-job-admin
     admin:
       addresses: ${xxl.job.baseUrl}
       addJobUrl:  ${xxl.job.baseUrl}/jobinfo/add

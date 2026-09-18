@@ -1,7 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.vo;
 
-import io.swagger.annotations.ApiModel;
-import io.swagger.annotations.ApiModelProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -13,10 +12,10 @@ import lombok.experimental.Accessors;
 @Accessors(chain = true)
 @NoArgsConstructor
 @AllArgsConstructor
-@ApiModel(description = "本体标识")
+@Schema(description = "本体标识")
 public class IdentifierVO {
 
 
-    @ApiModelProperty(name = "uniqueIdentifier", value = "本体Identifier", dataType = "java.lang.String", example = "abcdef")
+    @Schema(name = "uniqueIdentifier", description = "本体Identifier", example = "abcdef")
     private String uniqueIdentifier;
 }

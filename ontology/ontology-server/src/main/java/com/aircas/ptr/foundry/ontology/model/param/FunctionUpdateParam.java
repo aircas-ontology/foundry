@@ -2,45 +2,44 @@ package com.aircas.ptr.foundry.ontology.model.param;
 
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionModelEnum;
 import com.aircas.ptr.foundry.ontology.controller.validator.FunctionApiVerify;
-import io.swagger.annotations.ApiModel;
-import io.swagger.annotations.ApiModelProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
 
-import javax.validation.constraints.NotBlank;
-import javax.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 
 @Data
 @SuperBuilder
 @Accessors(chain = true)
 @AllArgsConstructor
 @NoArgsConstructor
-@ApiModel(description = "函数更新请求")
+@Schema(description = "函数更新请求")
 public class FunctionUpdateParam {
 
 
-    @ApiModelProperty(name = "functionApi", value = "函数api", required = true)
+    @Schema(name = "functionApi", description = "函数api", required = true)
     @NotBlank(message = "functionApi is empty")
     @FunctionApiVerify
     private String functionApi;
 
-    @ApiModelProperty(name = "description", value = "描述")
+    @Schema(name = "description", description = "描述")
     private String description;
 
-    @ApiModelProperty(name = "displayName", value = "函数名称")
+    @Schema(name = "displayName", description = "函数名称")
     @NotBlank(message = "displayName is empty")
     private String displayName;
 
-    @ApiModelProperty(name = "code", value = "自定义函数：函数代码")
+    @Schema(name = "code", description = "自定义函数：函数代码")
     private String code;
 
-    @ApiModelProperty(name = "referenceName", value = "外部函数：函数全限定名")
+    @Schema(name = "referenceName", description = "外部函数：函数全限定名")
     private String referenceName;
 
-    @ApiModelProperty(name = "type", value = "函数模型")
+    @Schema(name = "type", description = "函数模型")
     @NotNull(message = "model is null")
     private FunctionModelEnum model;
 }

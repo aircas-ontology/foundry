@@ -20,10 +20,10 @@ public class WebMvcConfig implements WebMvcConfigurer {
                         "/function/callback",
                         "/user/login",
                         "/user/create",
+                        "/ai/**",
                         "/doc.html",
-                        "/swagger-resources/**",
-                        "/v2/api-docs",
-                        "/v2/api-docs/**",
+                        "/swagger-ui/**",
+                        "/v3/api-docs/**",
                         "/webjars/**",
                         "/error",
                         "/favicon.ico"

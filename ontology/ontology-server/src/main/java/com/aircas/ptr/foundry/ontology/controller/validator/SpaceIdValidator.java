@@ -1,12 +1,11 @@
 package com.aircas.ptr.foundry.ontology.controller.validator;
 
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologySpaceMapper;
-import lombok.var;
 import org.springframework.stereotype.Component;
 
-import javax.annotation.Resource;
-import javax.validation.ConstraintValidator;
-import javax.validation.ConstraintValidatorContext;
+import jakarta.annotation.Resource;
+import jakarta.validation.ConstraintValidator;
+import jakarta.validation.ConstraintValidatorContext;
 
 @Component
 public class SpaceIdValidator implements ConstraintValidator<SpaceIdVerify, Integer> {

@@ -12,7 +12,6 @@ import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
 import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.google.common.collect.Sets;
-import lombok.var;
 import org.apache.commons.lang3.StringUtils;
 
 import java.util.Arrays;
@@ -51,6 +50,7 @@ public class DataConverter {
                 .ontologyNameFrom(from.getDisplayName())
                 .ontologyNameTo(to.getDisplayName())
                 .type(link.getType())
+                .categoryId(link.getCategoryId())
                 .build();
     }
 
