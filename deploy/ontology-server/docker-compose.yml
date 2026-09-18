@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  app:
+    restart: always
+    image: bitnami/java:1.8
+    container_name: ontology-backend
+    network_mode: "host"
+    #ports:
+    #   - "38002:38002"
+    volumes:
+      - ./ontology-encrypted.jar:/app/app.jar  # 挂载Spring Boot应用的JAR包
+      - ./application_ptr.yml:/app/application.yml  # 挂载应用配置文件
+      - ./logs:/app/logs  # 挂载日志文件目录
+      - ./orekit-data:/app/orekit-data
+      - ./license.lic:/app/license.lic
+    command: java -javaagent:/app/app.jar='-pwd iecas`12'  -Dspring.config.location=file:/app/application.yml -jar /app/app.jar
+
+
