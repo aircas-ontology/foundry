@@ -1,75 +1,19 @@
-# ============================================================
-# ontology-server 部署 compose（jar 外挂方式）
-# ------------------------------------------------------------
-# 适用场景：服务器上建一个目录，把本文件和打包好的 jar 放在一起，
-#          直接 `docker-compose up -d` 即可运行，更新时只需替换 jar 重启。
-#
-# 部署步骤：
-#   1. 在服务器上新建目录，例如 /opt/ontology
-#   2. 把本 docker-compose.yml 和打包好的 jar（命名为 ontology.jar）放入该目录
-#   3. 启动：  docker-compose up -d
-#   4. 查看日志： docker-compose logs -f ontology-server
-#   5. 停止：  docker-compose down
-#   6. 更新：  替换 ontology.jar 后执行 docker-compose up -d --force-recreate
-#
-# 应用端口：37002，context-path：/ontology
-#   Swagger/Knife4j 文档： http://<服务器IP>:37002/ontology/doc.html
-#
-# 外部依赖（容器内必须能访问，否则启动会连不上依赖而失败）：
-#   - ArangoDB   172.16.18.62:8529
-#   - MinIO      172.16.18.58:9000
-#   - PostgreSQL 172.16.18.58:35432
-#   - RabbitMQ   127.0.0.1:5672
-#   - Kafka      127.0.0.1:39092 / 39102 / 39094
-#   - XXL-JOB    admin 127.0.0.1:18888（可选，不用定时任务可不装）
-#   以上地址来自 application.yml；若依赖与应用部署在同一台宿主机且监听 127.0.0.1，
-#   容器内访问 127.0.0.1 指向容器自身而非宿主机，此时请改用下面的 host 网络模式，
-#   或把 application.yml 中对应 host 改为宿主机在 Docker 网桥的地址
-#   （Linux 通常为 172.17.0.1，或 mac/win 用 host.docker.internal）。
-# ============================================================
+version: '3.8'
 
 services:
-  ontology-server:
-    # 使用 JDK 17 运行环境（pom 已声明 java.version=17，jjwt 升级到 0.12.x，
-    # 不再依赖 JAXB；运行前请用 JDK 17 重新构建 jar，避免用旧 JDK8 包跑在 17 上）
-    # 镜像用 eclipse-temurin:17-jre：daocloud 镜像源代理该仓库（实测可拉），
-    # 注意 bellsoft/liberica-runtime-container 不在其白名单（拉取 403），故不用 Liberica。
-    # 如需非 temurin，可试 amazoncorretto:17（daocloud 同样返回 401，大概率可拉）。
-    image: eclipse-temurin:17-jre
-    container_name: ontology-server
-    restart: unless-stopped
-
-    # 端口映射：宿主机 37002 -> 容器 37002
-    ports:
-      - "37002:37002"
-
+  app:
+    restart: always
+    image: bitnami/java:1.8
+    container_name: ontology-backend
+    network_mode: "host"
+    #ports:
+    #   - "38002:38002"
     volumes:
-      # jar 外挂：把宿主机当前目录下的 ontology.jar 挂进容器（只读）
-      # 若你的 jar 文件名不同，改这里左边的路径即可
-      - ./ontology.jar:/app/app.jar:ro
-      # 日志外挂：应用日志落盘到宿主机 ./logs，方便排查
-      - ./logs:/app/logs
-      # Orekit 数据目录外挂：从现有 jar 里抽取出来的 orekit-data 挂进容器
-      # （服务器无源码时，用 `unzip -o ontology.jar 'BOOT-INF/classes/orekit-data/*'`
-      #  抽到 ./orekit-data 即可，无需重传/重建 jar），再用 OREKIT_DATA_PATH 覆盖路径。
-      - ./orekit-data:/app/orekit-data:ro
+      - ./ontology-encrypted.jar:/app/app.jar  # 挂载Spring Boot应用的JAR包
+      - ./application_ptr.yml:/app/application.yml  # 挂载应用配置文件
+      - ./logs:/app/logs  # 挂载日志文件目录
+      - ./orekit-data:/app/orekit-data
+      - ./license.lic:/app/license.lic
+    command: java -javaagent:/app/app.jar='-pwd iecas`12'  -Dspring.config.location=file:/app/application.yml -jar /app/app.jar
 
-    environment:
-      - TZ=Asia/Shanghai
-      # 覆盖 application.yml 里的 orekit.data.path（Spring 环境变量优先级高于 yml，
-      # @Value 能读到）。这样旧 jar 也能用 DirectoryCrawler 直接读挂载进来的目录。
-      - OREKIT_DATA_PATH=/app/orekit-data
 
-    command:
-      - "java"
-      - "-jar"
-      - "/app/app.jar"
-      # 按需调整 JVM 堆内存（取消注释并修改）
-      # - "-Xms512m"
-      # - "-Xmx1g"
-
-    # ---- 可选：依赖与应用同机且监听 127.0.0.1 时的写法 ----
-    # 使用 host 网络后，容器直接共享宿主机网络命名空间，
-    # 容器内访问 127.0.0.1 即宿主机本机，上面的 ports 映射会被忽略（容器直接占用宿主机 37002）。
-    # 前提：依赖服务（ArangoDB/MinIO/PG 等）在宿主机上可达。
-    # network_mode: "host"
