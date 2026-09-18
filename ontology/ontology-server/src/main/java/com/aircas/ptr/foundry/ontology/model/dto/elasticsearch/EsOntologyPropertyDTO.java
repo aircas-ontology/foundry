@@ -10,7 +10,7 @@ import java.time.LocalDateTime;
 
 @Data
 @Document(indexName = "ontology_property", createIndex = false)
-public class OntologyPropertyDTO {
+public class EsOntologyPropertyDTO {
 
     /** 主键，对应 long id */
     @Id

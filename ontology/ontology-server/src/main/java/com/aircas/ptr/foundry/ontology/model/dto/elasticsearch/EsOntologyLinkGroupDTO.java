@@ -9,34 +9,40 @@ import org.springframework.data.elasticsearch.annotations.FieldType;
 import java.time.LocalDateTime;
 
 @Data
-@Document(indexName = "ontology_space", createIndex = false)
-public class OntologySpaceDTO {
+@Document(indexName = "ontology_link_group", createIndex = false)
+public class EsOntologyLinkGroupDTO {
 
-    /** 主键，对应 long id */
     @Id
     private Long id;
 
-    /** api_name：keyword */
-    @Field(name = "api_name", type = FieldType.Keyword)
-    private String apiName;
-
-    /** description：text */
-    @Field(name = "description", type = FieldType.Text)
-    private String description;
-
-    /** display_name：text + keyword 子字段 */
-    @Field(name = "display_name", type = FieldType.Text)
-    private String displayName;
-
-    /** create_time：date，自定义多格式 */
     @Field(name = "create_time", type = FieldType.Date,
             format = {},
             pattern = "yyyy-MM-dd HH:mm:ss||yyyy-MM-dd'T'HH:mm:ss.SSSZ||epoch_millis")
     private LocalDateTime createTime;
 
-    /** update_time：date，自定义多格式 */
     @Field(name = "update_time", type = FieldType.Date,
             format = {},
             pattern = "yyyy-MM-dd HH:mm:ss||yyyy-MM-dd'T'HH:mm:ss.SSSZ||epoch_millis")
     private LocalDateTime updateTime;
+
+    @Field(name = "name", type = FieldType.Text)
+    private String name;
+
+    @Field(name = "ontology_space_id", type = FieldType.Long)
+    private Long ontologySpaceId;
+
+    @Field(name = "ontology_unique_identifier_from", type = FieldType.Keyword)
+    private String ontologyUniqueIdentifierFrom;
+
+    @Field(name = "ontology_unique_identifier_to", type = FieldType.Keyword)
+    private String ontologyUniqueIdentifierTo;
+
+    @Field(name = "status", type = FieldType.Byte)
+    private Integer status;
+
+    @Field(name = "type", type = FieldType.Keyword)
+    private String type;
+
+    @Field(name = "unique_identifier", type = FieldType.Keyword)
+    private String uniqueIdentifier;
 }
