@@ -50,6 +50,7 @@ public class ArangoConfig implements ArangoConfiguration {
                 .password(password)
                 .maxConnections(maxConnections)
                 .timeout(connectTimeout)
+                .connectionTtl(requestTimeout)
                 .keepAliveInterval(1000);
     }
 

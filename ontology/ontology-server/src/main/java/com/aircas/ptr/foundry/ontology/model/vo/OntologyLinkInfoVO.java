@@ -1,6 +1,5 @@
 package com.aircas.ptr.foundry.ontology.model.vo;
 
-import com.aircas.ptr.foundry.ontology.model.enums.OntologyLinkTypeEnum;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 import lombok.Data;
@@ -61,9 +60,6 @@ public class OntologyLinkInfoVO {
      */
     @Schema(name = "ontologyIconTO", description = "开始本体icon")
     private String ontologyIconTO;
-
-    @Schema(name = "type", description = "关系类型")
-    private OntologyLinkTypeEnum type;
 
     /**
      * 关系分类id（ontology_link_category.id），为空表示未分类

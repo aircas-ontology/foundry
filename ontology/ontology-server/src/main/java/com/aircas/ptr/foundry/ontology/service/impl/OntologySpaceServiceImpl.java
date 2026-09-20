@@ -12,7 +12,6 @@ import com.aircas.ptr.foundry.ontology.model.param.OntologySpaceCanvasCreatePara
 import com.aircas.ptr.foundry.ontology.model.param.OntologySpaceCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologySpaceUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyCategory;
-import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkCategory;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.model.po.OntologySpace;
 import com.aircas.ptr.foundry.ontology.model.view.OntologyStatisticsCountView;
@@ -120,16 +119,13 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
         // create ontologies & properties, record apiName/displayName -> uniqueIdentifier for link resolution
         Map<String, String> uidByApiName = new HashMap<>();
         Map<String, String> uidByDisplayName = new HashMap<>();
-        List<OntologySpaceCanvasCreateVO.OntologyItem> ontologyItems = Lists.newArrayList();
         if (CollectionUtils.isNotEmpty(param.getOntologies())) {
             for (var canvasOntology : param.getOntologies()) {
                 var metaParam = new OntologyMetaCreateParam()
                         .setDisplayName(canvasOntology.getDisplayName())
                         .setApiName(canvasOntology.getApiName())
                         .setDescription(canvasOntology.getDescription())
-                        .setIconUrl(canvasOntology.getIconUrl())
-                        .setCategoryId(canvasOntology.getCategoryId())
-                        .setGroupIds(canvasOntology.getGroupIds());
+                        .setIconUrl(canvasOntology.getIconUrl());
                 metaParam.setSpaceId(spaceId);
                 var uniqueIdentifier = ontologyMetaService.createOntology(metaParam);
                 uidByApiName.put(canvasOntology.getApiName(), uniqueIdentifier);
@@ -140,40 +136,26 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                         ontologyPropertyService.createProperty(buildPropertyCreateParam(uniqueIdentifier, canvasProperty));
                     }
                 }
-                ontologyItems.add(OntologySpaceCanvasCreateVO.OntologyItem.builder()
-                        .apiName(canvasOntology.getApiName())
-                        .displayName(canvasOntology.getDisplayName())
-                        .uniqueIdentifier(uniqueIdentifier)
-                        .build());
             }
         }
 
-        // create links; links without categoryId go to a lazily created default category of this space
+        // create links; canvas no longer carries any categoryId, links are created without a category
         if (CollectionUtils.isNotEmpty(param.getLinks())) {
-            Integer defaultCategoryId = null;
             for (var canvasLink : param.getLinks()) {
                 var fromUid = resolveOntologyUid(canvasLink.getFromOntologyApiName(), uidByApiName, uidByDisplayName);
                 var toUid = resolveOntologyUid(canvasLink.getToOntologyApiName(), uidByApiName, uidByDisplayName);
-                var categoryId = canvasLink.getCategoryId();
-                if (categoryId == null) {
-                    if (defaultCategoryId == null) {
-                        defaultCategoryId = createDefaultLinkCategory(spaceId);
-                    }
-                    categoryId = defaultCategoryId;
-                }
                 var linkParam = new OntologyLinkCreateParam()
                         .setName(canvasLink.getName())
                         .setOntologyUniqueIdentifierFrom(fromUid)
                         .setOntologyUniqueIdentifierTo(toUid)
-                        .setType(resolveLinkType(canvasLink.getType()))
-                        .setCategoryId(categoryId);
+                        .setType(OntologyLinkTypeEnum.OTHER)
+                        .setSpaceId(spaceId);
                 ontologyLinkGroupService.createLink(linkParam);
             }
         }
 
         return OntologySpaceCanvasCreateVO.builder()
                 .spaceId(spaceId)
-                .ontologies(ontologyItems)
                 .build();
     }
 
@@ -187,7 +169,6 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                 .setIsPrimaryKey(Boolean.TRUE.equals(canvasProperty.getIsPrimaryKey()))
                 .setIsTitleKey(Boolean.TRUE.equals(canvasProperty.getIsTitleKey()))
                 .setDefaultValue(canvasProperty.getDefaultValue())
-                .setCategoryId(canvasProperty.getCategoryId())
                 // required by createProperty, canvas has no such input, use default storage group
                 .setStorageGroup("main");
         propertyParam.setOntologyIdentifier(ontologyUniqueIdentifier);
@@ -205,17 +186,6 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
         }
     }
 
-    private OntologyLinkTypeEnum resolveLinkType(String type) {
-        if (StringUtils.isBlank(type)) {
-            return OntologyLinkTypeEnum.OTHER;
-        }
-        try {
-            return OntologyLinkTypeEnum.valueOf(type.trim().toUpperCase());
-        } catch (IllegalArgumentException e) {
-            throw new BusinessException("不支持的关系类型：" + type, HttpStatus.BAD_REQUEST);
-        }
-    }
-
     private String resolveOntologyUid(String apiNameOrDisplayName, Map<String, String> uidByApiName, Map<String, String> uidByDisplayName) {
         var uid = uidByApiName.get(apiNameOrDisplayName);
         if (uid == null) {
@@ -223,17 +193,6 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
         }
         PreconditionUtils.checkArgument(uid != null, "画布中不存在对象：" + apiNameOrDisplayName, HttpStatus.BAD_REQUEST);
         return uid;
-    }
-
-    private Integer createDefaultLinkCategory(Integer spaceId) {
-        var category = OntologyLinkCategory.builder()
-                .ontologySpaceId(spaceId)
-                .name("默认分类")
-                .parentId(0)
-                .path("默认分类")
-                .build();
-        ontologyLinkCategoryMapper.insert(category);
-        return category.getId();
     }
 
     @Transactional(transactionManager = "mainTransactionManager")

@@ -10,7 +10,6 @@ import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 
 import java.util.List;
-import java.util.Set;
 
 @Schema(description = "画布一键建空间请求：创建空间并批量创建对象、属性、关系")
 @Data
@@ -64,12 +63,6 @@ public class OntologySpaceCanvasCreateParam {
         @Schema(name = "iconUrl", description = "本体图标url")
         private String iconUrl;
 
-        @Schema(name = "categoryId", description = "本体分类id")
-        private Integer categoryId;
-
-        @Schema(name = "groupIds", description = "分组ids")
-        private Set<String> groupIds;
-
         @Schema(name = "properties", description = "本体属性列表")
         @Valid
         private List<CanvasProperty> properties;
@@ -105,9 +98,6 @@ public class OntologySpaceCanvasCreateParam {
 
         @Schema(name = "defaultValue", description = "属性默认值")
         private String defaultValue;
-
-        @Schema(name = "categoryId", description = "属性分类id")
-        private Integer categoryId;
     }
 
     @Schema(description = "画布本体关系")
@@ -134,11 +124,5 @@ public class OntologySpaceCanvasCreateParam {
         @Schema(name = "toOntologyApiName", description = "目标对象api名称（也兼容传对象显示名称）", required = true, example = "country")
         @NotBlank(message = "toOntologyApiName is empty")
         private String toOntologyApiName;
-
-        @Schema(name = "type", description = "关系类型（OntologyLinkTypeEnum名称），不传默认OTHER", example = "OTHER")
-        private String type;
-
-        @Schema(name = "categoryId", description = "关系分类id，不传则挂到本空间自动创建的默认分类")
-        private Integer categoryId;
     }
 }

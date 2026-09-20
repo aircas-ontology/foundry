@@ -50,10 +50,16 @@ public class OntologyLinkCreateParam {
     private OntologyLinkTypeEnum type;
 
     /**
-     * 关系分类id（ontology_link_category.id），关系必须归属到关系分类树，必填
+     * 关系分类id（ontology_link_category.id），选填；不传则不归属任何分类
      */
-    @Schema(name = "categoryId", required = true, description = "关系分类id（ontology_link_category.id），必填", example = "1")
-    @NotNull(message = "categoryId is empty")
+    @Schema(name = "categoryId", required = false, description = "关系分类id（ontology_link_category.id），选填", example = "1")
     private Integer categoryId;
+
+    /**
+     * 关系所属空间id（ontology_space.id），由调用方直接传入，不再反查本体归属
+     */
+    @Schema(name = "spaceId", required = true, description = "关系所属空间id（ontology_space.id）", example = "1")
+    @NotNull(message = "spaceId is empty")
+    private Integer spaceId;
 
 }

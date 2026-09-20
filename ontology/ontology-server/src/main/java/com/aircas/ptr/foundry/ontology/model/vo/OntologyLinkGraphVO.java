@@ -1,6 +1,5 @@
 package com.aircas.ptr.foundry.ontology.model.vo;
 
-import com.aircas.ptr.foundry.ontology.model.enums.OntologyLinkTypeEnum;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -61,9 +60,6 @@ public class OntologyLinkGraphVO {
 
         @Schema(name = "name", description = "关系名称")
         private String name;
-
-        @Schema(name = "type", description = "关系类型")
-        private OntologyLinkTypeEnum type;
 
         @Schema(name = "from", description = "起始本体uniqueIdentifier")
         private String from;

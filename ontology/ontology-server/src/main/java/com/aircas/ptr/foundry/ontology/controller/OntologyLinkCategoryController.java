@@ -21,7 +21,7 @@ import jakarta.validation.Valid;
 @RestController
 @Validated
 @RequiredArgsConstructor
-@RequestMapping("/link-category")
+@RequestMapping("/link_category")
 public class OntologyLinkCategoryController {
 
     private final OntologyLinkCategoryService ontologyLinkCategoryService;
