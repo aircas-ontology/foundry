@@ -26,7 +26,9 @@ public class WebMvcConfig implements WebMvcConfigurer {
                         "/v3/api-docs/**",
                         "/webjars/**",
                         "/error",
-                        "/favicon.ico"
+                        "/favicon.ico",
+                        // TODO 前端联调临时放开鉴权，上线前移除
+                        "/search/global"
                 );
     }
 }

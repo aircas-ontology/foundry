@@ -76,6 +76,9 @@ spring:
         enabled: true
 
 cdc:
+  connect:
+      rest:
+        url: http://172:16:18:62:8083
   ontology-topic-prefix: ontology_server
   ontology-meta: ontology.ontology_meta
   ontology-space: ontology.ontology_space
