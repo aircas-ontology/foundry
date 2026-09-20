@@ -24,11 +24,23 @@ public class PropertyCdcJobServiceImpl implements PropertyCdcJobService {
 
     @Override
     public boolean handleUpdateCdc(OntologyProperty before, OntologyProperty after) {
-        return false;
+        if (after == null || after.getId() == null) {
+            return false;
+        }
+        // 属性文档按主键 id upsert；属性定义变更不影响实例文档内容，无需级联回刷
+        EsOntologyPropertyDTO esOntologyPropertyDTO = OntologyPropertyConverter.convert(after);
+        ontologyPropertyRepository.save(esOntologyPropertyDTO);
+        log.info("update data success :{}", JSONObject.toJSONString(esOntologyPropertyDTO));
+        return true;
     }
 
     @Override
     public boolean handleDeleteCdc(OntologyProperty before) {
-        return false;
+        if (before == null || before.getId() == null) {
+            return false;
+        }
+        ontologyPropertyRepository.deleteById(before.getId());
+        log.info("delete data success, property id:{}", before.getId());
+        return true;
     }
 }

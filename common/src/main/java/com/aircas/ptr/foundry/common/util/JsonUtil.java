@@ -3,6 +3,7 @@ package com.aircas.ptr.foundry.common.util;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
+import com.alibaba.fastjson2.JSONReader;
 import com.alibaba.fastjson2.TypeReference;
 import com.alibaba.fastjson2.util.ParameterizedTypeImpl;
 
@@ -38,6 +39,16 @@ public final class JsonUtil {
             return null;
         }
         return JSON.parseObject(json, typeRef);
+    }
+
+    /**
+     * 反序列化为泛型类型，并指定读取特性（如 SupportSmartMatch 用于 snake_case→camelCase 映射）
+     */
+    public static <T> T parseObject(String json, TypeReference<T> typeRef, JSONReader.Feature... features) {
+        if (json == null || json.isBlank()) {
+            return null;
+        }
+        return JSON.parseObject(json, typeRef.getType(), features);
     }
 
     /**
@@ -112,6 +123,16 @@ public final class JsonUtil {
             return null;
         }
         return jsonObject.to(typeRef);
+    }
+
+    /**
+     * JSONObject 转泛型对象（支持 JSONReader.Feature）
+     */
+    public static <T> T toObject(JSONObject jsonObject, TypeReference<T> typeRef, JSONReader.Feature feature) {
+        if (jsonObject == null) {
+            return null;
+        }
+        return jsonObject.to(typeRef, feature);
     }
 
     // ==================== 动态构造泛型 ====================
