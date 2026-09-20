@@ -196,13 +196,6 @@
             <artifactId>spring-security-crypto</artifactId>
         </dependency>
 
-        <!-- Spring AI Alibaba 百炼（Model Studio）Starter，底层服务名仍为 DashScope -->
-        <dependency>
-            <groupId>com.alibaba.cloud.ai</groupId>
-            <artifactId>spring-ai-alibaba-starter-dashscope</artifactId>
-            <version>${spring-ai-alibaba.version}</version>
-        </dependency>
-
         <!-- Guava -->
         <dependency>
             <groupId>com.google.guava</groupId>
