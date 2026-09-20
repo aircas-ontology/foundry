@@ -35,6 +35,13 @@
             <version>${project.version}</version>
         </dependency>
 
+        <!-- Agent 工具契约：实现其工具接口，将本体原子操作以 REST 暴露给 agent-server -->
+        <dependency>
+            <groupId>com.aircas.ptr</groupId>
+            <artifactId>agent-tools-api</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-amqp</artifactId>
