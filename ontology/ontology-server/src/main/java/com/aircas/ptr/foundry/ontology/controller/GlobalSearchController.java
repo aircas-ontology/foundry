@@ -27,10 +27,10 @@ public class GlobalSearchController {
     /**
      * 全局检索：输入查询内容，同时检索五个本体索引
      * （ontology_space / ontology_meta / ontology_property / ontology_instance / ontology_link_group），
-     * 匹配文档所有字段，按相关性得分降序返回命中文档 id 列表。
+     * 匹配文档所有字段，按相关性得分降序返回命中项（名称/类型/描述/空间 id/对象 id/实例 id/属性 id）。
      */
     @PostMapping("/global")
-    @Operation(summary = "全局检索（跨五个本体索引，按相关性排序返回 id 列表）")
+    @Operation(summary = "全局检索（跨五个本体索引，按相关性排序返回名称/类型/描述及各业务 id）")
     public RestResult<List<GlobalSearchHitVO>> globalSearch(@RequestBody @Validated GlobalSearchParam param) {
         return RestResult.ofData(globalSearchService.search(param));
     }
