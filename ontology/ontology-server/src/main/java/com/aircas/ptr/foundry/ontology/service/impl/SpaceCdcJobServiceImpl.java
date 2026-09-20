@@ -1,4 +1,4 @@
-package com.aircas.ptr.foundry.ontology.service.impl;
+ package com.aircas.ptr.foundry.ontology.service.impl;
 
 import com.aircas.ptr.foundry.ontology.converter.OntologySpaceConverter;
 import com.aircas.ptr.foundry.ontology.model.dto.elasticsearch.EsOntologyInstanceDTO;

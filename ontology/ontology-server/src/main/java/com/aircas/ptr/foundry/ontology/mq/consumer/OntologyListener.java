@@ -3,9 +3,11 @@ import com.aircas.ptr.foundry.common.util.JsonUtil;
 import com.alibaba.fastjson2.JSONReader;
 import com.alibaba.fastjson2.TypeReference;
 import com.aircas.ptr.foundry.ontology.model.dto.cdc.DebeziumEnvelopeDTO;
+import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
 import com.aircas.ptr.foundry.ontology.model.po.OntologySpace;
+import com.aircas.ptr.foundry.ontology.service.LinkGroupCdcJobService;
 import com.aircas.ptr.foundry.ontology.service.MetaCdcJobService;
 import com.aircas.ptr.foundry.ontology.service.PropertyCdcJobService;
 import com.aircas.ptr.foundry.ontology.service.SpaceCdcJobService;
@@ -26,6 +28,8 @@ public class OntologyListener {
     SpaceCdcJobService spaceCdcJobService;
     @Autowired
     PropertyCdcJobService propertyCdcJobService;
+    @Autowired
+    LinkGroupCdcJobService linkGroupCdcJobService;
 
 
     @KafkaListener(topics = "${cdc.ontology-topic-prefix}.${cdc.ontology-meta}", groupId = "${cdc.consumer-group:cdc-monitor-group}")
@@ -80,5 +84,15 @@ public class OntologyListener {
         log.info("Partition: {}", record.partition());
         log.info("Offset: {}", record.offset());
         log.info("topic:{}",record.topic());
+        DebeziumEnvelopeDTO<OntologyLinkGroup> ontologyLinkGroupDebeziumEnvelopeDTO = JsonUtil.parseObject(record.value(), new TypeReference<>() {
+        }, JSONReader.Feature.SupportSmartMatch);
+        // op=r 为 Debezium 快照读（initial snapshot），语义等同新增文档
+        if(Objects.equals(ontologyLinkGroupDebeziumEnvelopeDTO.getOp(), "c") || Objects.equals(ontologyLinkGroupDebeziumEnvelopeDTO.getOp(), "r")){
+            linkGroupCdcJobService.handleCreateCdc(ontologyLinkGroupDebeziumEnvelopeDTO.getAfter());
+        }else if(Objects.equals(ontologyLinkGroupDebeziumEnvelopeDTO.getOp(), "u")){
+            linkGroupCdcJobService.handleUpdateCdc(ontologyLinkGroupDebeziumEnvelopeDTO.getBefore(),ontologyLinkGroupDebeziumEnvelopeDTO.getAfter());
+        }else if(Objects.equals(ontologyLinkGroupDebeziumEnvelopeDTO.getOp(), "d")){
+            linkGroupCdcJobService.handleDeleteCdc(ontologyLinkGroupDebeziumEnvelopeDTO.getBefore());
+        }
     }
 }
