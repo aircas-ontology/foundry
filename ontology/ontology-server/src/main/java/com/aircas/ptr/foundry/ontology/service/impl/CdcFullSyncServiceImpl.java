@@ -40,6 +40,7 @@ import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
 import org.springframework.data.elasticsearch.core.IndexOperations;
 import org.springframework.data.elasticsearch.core.query.DeleteQuery;
 import org.springframework.data.elasticsearch.repository.ElasticsearchRepository;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 
@@ -52,7 +53,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -110,7 +110,8 @@ public class CdcFullSyncServiceImpl implements CdcFullSyncService {
     @Override
     public CdcFullSyncResultVO fullSync(CdcFullSyncParam param) {
         if (!running.compareAndSet(false, true)) {
-            throw new BusinessException("全量同步正在进行中，请稍后再试", ResultCode.DUPLICATION);
+            throw new BusinessException("全量同步正在进行中，请稍后再试",
+                    ResultCode.DUPLICATION, HttpStatus.CONFLICT);
         }
         try {
             CdcFullSyncParam options = param == null ? new CdcFullSyncParam() : param;
