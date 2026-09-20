@@ -69,5 +69,11 @@ public class OntologyLinkGraphVO {
 
         @Schema(name = "categoryId", description = "关系分类id")
         private Integer categoryId;
+
+        @Schema(name = "apiName", description = "关系api名称")
+        private String apiName;
+
+        @Schema(name = "comment", description = "关系备注/描述")
+        private String comment;
     }
 }

@@ -5,18 +5,25 @@ import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.ontology.model.dto.OntologySpaceCreateDTO;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyLinkTypeEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyLinkCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyMetaCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologySpaceCanvasCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologySpaceCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologySpaceUpdateParam;
+import com.aircas.ptr.foundry.ontology.model.po.ActionHandleRule;
+import com.aircas.ptr.foundry.ontology.model.po.ActionHandleTask;
+import com.aircas.ptr.foundry.ontology.model.po.Function;
+import com.aircas.ptr.foundry.ontology.model.po.OntologyAction;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyCategory;
+import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.model.po.OntologySpace;
 import com.aircas.ptr.foundry.ontology.model.view.OntologyStatisticsCountView;
 import com.aircas.ptr.foundry.ontology.model.view.SpaceStatisticsCountView;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologySpaceCanvasCreateVO;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologySpaceStatisticVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologySpaceVO;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.*;
 import com.aircas.ptr.foundry.ontology.service.OntologyCategoryService;
@@ -60,6 +67,12 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
     private final OntologyPropertyMapper propertyMapper;
 
     private final OntologyLinkGroupMapper linkMapper;
+
+    private final FunctionMapper functionMapper;
+
+    private final ActionHandleRuleMapper ruleMapper;
+
+    private final ActionHandleTaskMapper taskMapper;
 
     private final OntologySpaceMapper spaceMapper;
 
@@ -261,6 +274,44 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                 .collect(Collectors.toList());
 
         return res;
+    }
+
+    @Override
+    public OntologySpaceStatisticVO getStatistic(Integer spaceId) {
+        //check space
+        var space = spaceMapper.selectById(spaceId);
+        PreconditionUtils.checkNotNull(space, "空间id不存在", HttpStatus.BAD_REQUEST);
+
+        // 对象（本体）数量
+        var ontologyCount = metaMapper.selectCount(new LambdaQueryWrapper<OntologyMeta>()
+                .eq(OntologyMeta::getOntologySpaceId, spaceId)
+                .eq(OntologyMeta::getStatus, Status.ENABLE.getValue()));
+        // 关系数量
+        var linkCount = linkMapper.selectCount(new LambdaQueryWrapper<OntologyLinkGroup>()
+                .eq(OntologyLinkGroup::getOntologySpaceId, spaceId)
+                .eq(OntologyLinkGroup::getStatus, Status.ENABLE.getValue()));
+        // 函数算子数量
+        var functionCount = functionMapper.selectCount(new LambdaQueryWrapper<Function>()
+                .eq(Function::getOntologySpaceId, spaceId)
+                .eq(Function::getStatus, Status.ENABLE.getValue()));
+        // 行为数量
+        var actionCount = actionMapper.selectCount(new LambdaQueryWrapper<OntologyAction>()
+                .eq(OntologyAction::getOntologySpaceId, spaceId)
+                .eq(OntologyAction::getStatus, Status.ENABLE.getValue()));
+        // 行为调度数量（调度规则 + 调度任务）
+        var actionSchedulingCount = ruleMapper.selectCount(new LambdaQueryWrapper<ActionHandleRule>()
+                .eq(ActionHandleRule::getOntologySpaceId, spaceId))
+                + taskMapper.selectCount(new LambdaQueryWrapper<ActionHandleTask>()
+                .eq(ActionHandleTask::getOntologySpaceId, spaceId));
+
+        return OntologySpaceStatisticVO.builder()
+                .spaceId(spaceId)
+                .ontologyCount(Math.toIntExact(ontologyCount))
+                .linkCount(Math.toIntExact(linkCount))
+                .functionCount(Math.toIntExact(functionCount))
+                .actionCount(Math.toIntExact(actionCount))
+                .actionSchedulingCount(Math.toIntExact(actionSchedulingCount))
+                .build();
     }
 
     /**

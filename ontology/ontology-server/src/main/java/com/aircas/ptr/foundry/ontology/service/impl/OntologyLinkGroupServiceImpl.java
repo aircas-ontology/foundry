@@ -6,6 +6,7 @@ import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyLinkDirectionEnum;
 import com.aircas.ptr.foundry.ontology.converter.DataConverter;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyLinkCreateParam;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyLinkUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyActionLink;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
@@ -65,6 +66,9 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
         var spaceId = linkCreateParam.getSpaceId();
         PreconditionUtils.checkArgument(spaceId != null, "spaceId is empty", HttpStatus.BAD_REQUEST);
 
+        // apiName 创建时必填
+        PreconditionUtils.checkArgument(StringUtils.isNotBlank(linkCreateParam.getApiName()), "apiName is empty", HttpStatus.BAD_REQUEST);
+
         var link = OntologyLinkGroup.builder()
                 .uniqueIdentifier(IdGenerator.generateUUID())
                 .status(Status.ENABLE.getValue())
@@ -74,11 +78,32 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
                 .type(linkCreateParam.getType())
                 .categoryId(linkCreateParam.getCategoryId())
                 .ontologySpaceId(spaceId)
+                .apiName(linkCreateParam.getApiName())
+                .comment(linkCreateParam.getComment())
                 .build();
         //创建本体间关系
         save(link);
         //创建实体间关系
         entityService.createEntityRelations(link.getUniqueIdentifier());
+    }
+
+    @Override
+    @Transactional(value = "mainTransactionManager")
+    public void updateLink(OntologyLinkUpdateParam param) {
+        var link = getOne(new LambdaQueryWrapper<OntologyLinkGroup>()
+                .eq(OntologyLinkGroup::getUniqueIdentifier, param.getUniqueIdentifier()));
+        PreconditionUtils.checkArgument(link != null, "关系不存在：" + param.getUniqueIdentifier(), HttpStatus.BAD_REQUEST);
+        if (StringUtils.isNotBlank(param.getName())) {
+            link.setName(param.getName());
+        }
+        if (StringUtils.isNotBlank(param.getApiName())) {
+            link.setApiName(param.getApiName());
+        }
+        // comment 允许置空，故用 != null 判断
+        if (param.getComment() != null) {
+            link.setComment(param.getComment());
+        }
+        updateById(link);
     }
 
     @Override
@@ -199,6 +224,8 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
                         .from(l.getOntologyUniqueIdentifierFrom())
                         .to(l.getOntologyUniqueIdentifierTo())
                         .categoryId(l.getCategoryId())
+                        .apiName(l.getApiName())
+                        .comment(l.getComment())
                         .build())
                 .collect(Collectors.toList());
 

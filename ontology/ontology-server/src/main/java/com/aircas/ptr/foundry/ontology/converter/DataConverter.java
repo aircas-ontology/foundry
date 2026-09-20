@@ -50,6 +50,8 @@ public class DataConverter {
                 .ontologyNameFrom(from.getDisplayName())
                 .ontologyNameTo(to.getDisplayName())
                 .categoryId(link.getCategoryId())
+                .apiName(link.getApiName())
+                .comment(link.getComment())
                 .build();
     }
 
@@ -111,6 +113,8 @@ public class DataConverter {
                 .storageGroup(p.getStorageGroup())
                 .categoryId(p.getPropertyCategoryId())
                 .metadata(p.getMetadata())
+                .propertyType(p.getPropertyType())
+                .apiName(p.getApiName())
                 .build();
     }
 

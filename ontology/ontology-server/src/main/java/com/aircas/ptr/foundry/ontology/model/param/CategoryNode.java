@@ -28,6 +28,9 @@ public class CategoryNode {
     @NotBlank(message = "name is empty")
     private String name;
 
+    @Schema(name = "color", description = "分类颜色（可选，前端展示）", example = "#FF0000")
+    private String color;
+
     @Schema(name = "children", description = "子节点")
     private List<CategoryNode> children;
 

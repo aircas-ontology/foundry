@@ -67,6 +67,18 @@ public class OntologyLinkInfoVO {
     @Schema(name = "categoryId", description = "关系分类id（ontology_link_category.id）")
     private Integer categoryId;
 
+    /**
+     * 关系在代码中使用的api名称
+     */
+    @Schema(name = "apiName", description = "关系api名称")
+    private String apiName;
+
+    /**
+     * 关系备注/描述
+     */
+    @Schema(name = "comment", description = "关系备注/描述")
+    private String comment;
+
 }
 
 
