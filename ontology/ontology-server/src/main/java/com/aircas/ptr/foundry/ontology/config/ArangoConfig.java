@@ -51,6 +51,7 @@ public class ArangoConfig implements ArangoConfiguration {
                 .maxConnections(maxConnections)
                 .timeout(connectTimeout)
                 .connectionTtl(requestTimeout)
+                .protocol(com.arangodb.Protocol.HTTP_JSON)
                 .keepAliveInterval(1000);
     }
 

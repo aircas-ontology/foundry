@@ -210,7 +210,7 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
         var propertyParam = new OntologyPropertyCreateParam()
                 .setDisplayName(canvasProperty.getDisplayName())
                 .setApiName(canvasProperty.getApiName())
-                .setDataType(resolveDataType(canvasProperty.getDataType()))
+                .setDataType(canvasProperty.getDataType())
                 .setDescription(canvasProperty.getDescription())
                 .setIsPrimaryKey(Boolean.TRUE.equals(canvasProperty.getIsPrimaryKey()))
                 .setIsTitleKey(Boolean.TRUE.equals(canvasProperty.getIsTitleKey()))
@@ -221,16 +221,7 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
         return propertyParam;
     }
 
-    private OntologyDataTypeEnum resolveDataType(String dataType) {
-        if (StringUtils.isBlank(dataType)) {
-            return OntologyDataTypeEnum.String;
-        }
-        try {
-            return OntologyDataTypeEnum.valueOf(dataType.trim());
-        } catch (IllegalArgumentException e) {
-            throw new BusinessException("不支持的数据类型：" + dataType, HttpStatus.BAD_REQUEST);
-        }
-    }
+
 
     private String resolveOntologyUid(String apiNameOrDisplayName, Map<String, String> uidByApiName, Map<String, String> uidByDisplayName) {
         var uid = uidByApiName.get(apiNameOrDisplayName);
