@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
+import com.aircas.ptr.foundry.common.util.IdGenerator;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import com.aircas.ptr.foundry.common.exception.BusinessException;
@@ -11,7 +12,9 @@ import com.aircas.ptr.foundry.ontology.model.param.OntologyMetaCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologySpaceCanvasCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologySpaceCreateParam;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyCategoryCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologySpaceUpdateParam;
+import com.aircas.ptr.foundry.ontology.model.po.OntologyCategory;
 import com.aircas.ptr.foundry.ontology.model.po.ActionHandleRule;
 import com.aircas.ptr.foundry.ontology.model.po.ActionHandleTask;
 import com.aircas.ptr.foundry.ontology.model.po.Function;
@@ -129,6 +132,30 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                 .setApiName(param.getApiName());
         var spaceId = createSpace(spaceParam);
 
+        // create (or reuse) a default root category for the space; every canvas ontology is bound to it
+        var existingRoot = categoryService.getOne(new LambdaQueryWrapper<OntologyCategory>()
+                .eq(OntologyCategory::getOntologySpaceId, spaceId)
+                .eq(OntologyCategory::getParentId, 0)
+                .last("limit 1"));
+        Integer defaultCategoryId;
+        if (existingRoot != null) {
+            defaultCategoryId = existingRoot.getId();
+        } else {
+            var categoryParam = new OntologyCategoryCreateParam()
+                    .setParentId(0)
+                    .setName("根节点");
+            categoryParam.setSpaceId(spaceId);
+            categoryService.createCategory(categoryParam);
+            var created = categoryService.getOne(new LambdaQueryWrapper<OntologyCategory>()
+                    .eq(OntologyCategory::getOntologySpaceId, spaceId)
+                    .eq(OntologyCategory::getParentId, 0)
+
+                    .orderByDesc(OntologyCategory::getId)
+                    .last("limit 1"));
+            PreconditionUtils.checkNotNull(created, "创建本体分类失败", HttpStatus.INTERNAL_SERVER_ERROR);
+            defaultCategoryId = created.getId();
+        }
+
         // create ontologies & properties, record apiName/displayName -> uniqueIdentifier for link resolution
         Map<String, String> uidByApiName = new HashMap<>();
         Map<String, String> uidByDisplayName = new HashMap<>();
@@ -138,7 +165,8 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                         .setDisplayName(canvasOntology.getDisplayName())
                         .setApiName(canvasOntology.getApiName())
                         .setDescription(canvasOntology.getDescription())
-                        .setIconUrl(canvasOntology.getIconUrl());
+                        .setIconUrl(canvasOntology.getIconUrl())
+                        .setCategoryId(defaultCategoryId);
                 metaParam.setSpaceId(spaceId);
                 var uniqueIdentifier = ontologyMetaService.createOntology(metaParam);
                 uidByApiName.put(canvasOntology.getApiName(), uniqueIdentifier);
@@ -157,8 +185,13 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
             for (var canvasLink : param.getLinks()) {
                 var fromUid = resolveOntologyUid(canvasLink.getFromOntologyApiName(), uidByApiName, uidByDisplayName);
                 var toUid = resolveOntologyUid(canvasLink.getToOntologyApiName(), uidByApiName, uidByDisplayName);
+                // apiName is required by createLink; pass through the canvas value, fall back to a generated one
+                var linkApiName = StringUtils.isNotBlank(canvasLink.getApiName())
+                        ? canvasLink.getApiName()
+                        : ("relation_" + IdGenerator.generateUUID());
                 var linkParam = new OntologyLinkCreateParam()
                         .setName(canvasLink.getName())
+                        .setApiName(linkApiName)
                         .setOntologyUniqueIdentifierFrom(fromUid)
                         .setOntologyUniqueIdentifierTo(toUid)
                         .setType(OntologyLinkTypeEnum.OTHER)
