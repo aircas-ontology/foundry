@@ -1,0 +1,2 @@
+com.aircas.ptr:foundry:pom:0.0.1-SNAPSHOT
+\- org.javassist:javassist:jar:3.30.2-GA:compile

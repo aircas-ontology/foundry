@@ -1,0 +1,47 @@
+server:
+  port: 37003
+  servlet:
+    context-path: /agent
+
+spring:
+  application:
+    name: agent
+  jackson:
+    default-property-inclusion: non_null
+  ai:
+    # DeepSeek（OpenAI 兼容接口）——Spring AI OpenAI starter 配置前缀为 spring.ai.openai
+    openai:
+      # 密钥/地址/模型均可通过环境变量 LLM_API_KEY / LLM_BASE_URL / LLM_MODEL 覆盖，默认取下方值
+      api-key: ${LLM_API_KEY:sk-a1f5e5c06e874af98afb073ad738185d}
+      base-url: ${LLM_BASE_URL:https://api.deepseek.com}
+      chat:
+        # DeepSeek OpenAI 兼容端点为 {base-url}/chat/completions（官方当前路径，不含 /v1；Spring AI 默认 /v1/chat/completions 亦向后兼容）
+        completions-path: /chat/completions
+        options:
+          model: ${LLM_MODEL:deepseek-v4-flash}
+          temperature: 0.7
+    # MCP Client：连接 ontology-server 的 MCP Server，启动时握手 + tools/list 动态发现工具（SSE 传输）
+    mcp:
+      client:
+        name: agent-mcp-client
+        type: SYNC
+        toolcallback:
+          enabled: true
+        sse:
+          connections:
+            ontology:
+              # ontology-server 基础地址（含 context-path /ontology）
+              url: ${ONTOLOGY_BASE_URL:http://127.0.0.1:37002/ontology}
+              # 服务级信任令牌经查询参数携带，须与 ontology-server 的 mcp.service-token 一致
+              sse-endpoint: /sse?token=${MCP_SERVICE_TOKEN:foundry-mcp-internal-token-2026}
+
+# Knife4j / SpringDoc OpenAPI 3 配置
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    path: /swagger-ui.html
