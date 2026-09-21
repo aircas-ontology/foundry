@@ -18,7 +18,7 @@ import static com.aircas.ptr.foundry.common.constant.DateFormat.DATE_FORMAT_DEFA
 
 /**
  * 数据源连接配置
- * 对应 entity_datasource.public.datasource_connection 表（datalake 数据源，默认 public schema），
+ * 对应 entity_datasource.db_connection.datasource_connection 表（datalake 数据源，db_connection schema），
  * 保存外部数据源的连接信息，运行时可依据此表动态构建 DataSource 并连接。
  */
 @Data
@@ -26,7 +26,7 @@ import static com.aircas.ptr.foundry.common.constant.DateFormat.DATE_FORMAT_DEFA
 @AllArgsConstructor
 @NoArgsConstructor
 @Accessors(chain = true)
-@TableName(value = "datasource_connection")
+@TableName(value = "db_connection.datasource_connection")
 public class DatasourceConnection {
 
     /**
@@ -36,7 +36,7 @@ public class DatasourceConnection {
     private Integer id;
 
     /**
-     * 数据源名称，全局唯一
+     * 数据源名称（允许重复）
      */
     private String name;
 

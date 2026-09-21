@@ -28,7 +28,7 @@
     <select id="searchByKeyword" resultMap="BaseResultMap">
         SELECT
         <include refid="Base_Column_List"/>
-        FROM public.datasource_connection
+        FROM db_connection.datasource_connection
         WHERE status = 1
         <if test="keyword != null and keyword != ''">
             AND (name LIKE CONCAT('%', #{keyword}, '%') OR db_type LIKE CONCAT('%', #{keyword}, '%'))

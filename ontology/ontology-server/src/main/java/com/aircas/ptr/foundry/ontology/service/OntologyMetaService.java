@@ -29,6 +29,17 @@ public interface OntologyMetaService extends IService<OntologyMeta> {
 
     List<OntologyMetaInfoVO> searchByKeyword(String keyword);
 
+    /**
+     * 列出指定本体空间下已存在的本体元数据（仅含启用中 status=1 的记录）。
+     *
+     * <p>供 Agent 在「功能四 对象关系推导」中拉取同空间的已有对象作为候选目标，
+     * 与 {@link #searchByKeyword(String)} 的区别在于本方法按 spaceId 硬隔离，不接受关键字。</p>
+     *
+     * @param spaceId 本体空间 id（ontology_space 主键）
+     * @return 空间内已存在的本体列表，无则返回空集合
+     */
+    List<OntologyMetaInfoVO> listBySpaceId(Integer spaceId);
+
     List<OntologyMetaInfoVO> getByCategoryId(Integer categoryId);
 
     List<OntologyMetaNodeVO> getOntologyTreeByByGroupId(String groupId);

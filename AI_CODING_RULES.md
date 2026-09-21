@@ -189,8 +189,9 @@ return RestResult.ofData(vo);
 
 1. **所有 SQL 必须写在 MyBatis XML 映射文件中**（`resources/mybatis-mapper/{main|datalake}/*.xml`），**禁止在 Java 代码里编写 SQL**。
 2. **禁止注解式 SQL**：Mapper 接口上不得出现 `@Select`、`@Insert`、`@Update`、`@Delete`、`@SelectProvider`、`@Results` 等 MyBatis SQL 注解。
-3. **禁止用 `QueryWrapper` / `LambdaQueryWrapper` / `UpdateWrapper` 在 Java 中拼接业务查询**；Mapper 接口只声明方法签名，查询条件、多表联查、动态 SQL 一律由 XML 的 `<select>` / `<insert>` / `<update>` / `<delete>` 承载。
-   - 例外：MyBatis-Plus `BaseMapper` 内置的通用单表 CRUD（`selectById`、`insert`、`updateById` 等）属框架实现、非手写 SQL，可继续使用；一旦出现**自定义条件 / 多表联查 / 动态 SQL**，必须落到 XML。
+3. **单表简单条件查询允许用 `QueryWrapper` / `LambdaQueryWrapper`**（等值 `eq`、`in`、`like`、排序、分页等，不含 SQL 字符串、不联表）；但**多表联查、动态 SQL、分组统计、复杂子查询**必须落到 XML 的 `<select>` / `<insert>` / `<update>` / `<delete>`，Mapper 接口只声明方法签名。
+   - 说明：MyBatis-Plus `BaseMapper` 内置 CRUD（`selectById`、`insert`、`updateById` 等）与 `LambdaQueryWrapper` 单表条件查询均属类型安全、非手写 SQL，可继续使用。
+   - 红线（不因放宽而松动）：Java 里**不得出现 SQL 字符串**（§4.1-1）、不得用 `@Select` 等注解式 SQL（§4.1-2）；写操作不要用 `UpdateWrapper` 拼接，更新一律走 XML 或 `updateById`。
 4. Mapper 方法多参数用 `@Param("xxx")` 显式命名，XML 内以 `#{xxx}` 引用。
 5. XML `namespace` 必须等于 Mapper 接口全限定名；`resultType` / `resultMap` 指向 PO 或 VO，**禁止用 `Map` 承接结果集**。
 6. **多数据源对应关系**：主库（`postgres?currentSchema=ontology`）的 SQL 放 `mybatis-mapper/main/`、Mapper 接口放 `repository.mainMapper`；数据湖库（`entity_datasource`，默认 `public` schema）的 SQL 放 `mybatis-mapper/datalake/`、Mapper 接口放 `repository.datalakeMapper`。二者不可混放。
@@ -202,12 +203,14 @@ return RestResult.ofData(vo);
 @Select("SELECT * FROM datasource_connection WHERE status = 1 AND name LIKE #{kw}")
 List<DatasourceConnection> search(String kw);
 
-// ❌ 错误：Java 中用 Wrapper 拼业务查询
+// ✅ 允许：单表简单条件查询用 LambdaQueryWrapper（类型安全、无 SQL 字符串、不联表）
 LambdaQueryWrapper<DatasourceConnection> w = new LambdaQueryWrapper<>();
 w.eq(DatasourceConnection::getStatus, 1).like(DatasourceConnection::getName, kw);
 return baseMapper.selectList(w);
 
-// ✅ 正确：Mapper 只声明方法签名
+// ❌ 错误：多表联查 / 动态 SQL / 分组统计用 Wrapper 硬拼，应落 XML
+
+// ✅ 正确：复杂查询 Mapper 只声明方法签名，SQL 落 XML
 List<DatasourceConnection> searchByKeyword(@Param("keyword") String keyword);
 ```
 
@@ -215,7 +218,7 @@ List<DatasourceConnection> searchByKeyword(@Param("keyword") String keyword);
 <!-- ✅ 正确：SQL 落在 mybatis-mapper/datalake/DatasourceConnectionMapper.xml -->
 <select id="searchByKeyword" resultType="com.aircas.ptr.foundry.ontology.model.po.DatasourceConnection">
     SELECT id, name, db_type, host, port, db_name, schema_name, description, status, create_time, update_time
-    FROM public.datasource_connection
+    FROM db_connection.datasource_connection
     WHERE status = 1
     <if test="keyword != null and keyword != ''">
         AND (name LIKE CONCAT('%', #{keyword}, '%') OR db_type LIKE CONCAT('%', #{keyword}, '%'))
@@ -279,7 +282,7 @@ private static final Integer statusEnabled = 1; // 常量未用全大写
 - [ ] `PO → VO`、`DTO → VO` 转换发生在 `service.impl` 内部，Controller 不含转换代码。
 - [ ] VO 类位于 `model.vo` 包，命名为 `{Domain}{Purpose}VO`，字段带 `@ApiModelProperty`。
 - [ ] 所有 SQL 写在 MyBatis XML（`mybatis-mapper/{main|datalake}/*.xml`），Java 中无 `@Select/@Insert/@Update/@Delete` 注解 SQL。
-- [ ] 未用 `QueryWrapper`/`LambdaQueryWrapper` 在 Java 拼业务查询；自定义条件/联查/动态 SQL 均在 XML。
+- [ ] 单表简单条件查询可用 `LambdaQueryWrapper`；多表联查/动态 SQL/分组统计落 XML；Java 里无 SQL 字符串、无注解式 SQL。
 - [ ] Mapper 多参数用 `@Param` 命名；XML `namespace` 与接口全限定名一致，`resultType` 指向 PO/VO 而非 `Map`。
 - [ ] 主库 SQL 在 `main/` + `mainMapper` 包；数据湖 SQL 在 `datalake/` + `datalakeMapper` 包，未混放。
 - [ ] 类/接口/枚举/record 名用大驼峰 PascalCase；方法/变量/字段（含 record 组件、Query/Body 字段）用小驼峰 camelCase。
@@ -350,6 +353,6 @@ public class OntologyRelationDiscoveryController {
 
 ---
 
-**规则版本**：v1.4（新增 §5 命名规范：Java 标识符遵循驼峰命名法，类大驼峰/方法字段小驼峰/常量全大写，URL 路径与 DB 列名仍为 snake_case；原 §5~§7 顺延为 §6~§8）
+**规则版本**：v1.5（放宽 §4.1-3：允许 `LambdaQueryWrapper` 做单表简单条件查询；多表联查/动态 SQL/统计仍须落 XML；SQL 字符串与注解式 SQL 仍全面禁止。v1.4：新增 §5 命名规范——Java 标识符驼峰、URL 路径与 DB 列名 snake_case）
 **维护位置**：`AI_CODING_RULES.md`（仓库根目录）
 **变更要求**：调整本文件需同步在 PR 说明中列出影响的 Controller 与前端契约。

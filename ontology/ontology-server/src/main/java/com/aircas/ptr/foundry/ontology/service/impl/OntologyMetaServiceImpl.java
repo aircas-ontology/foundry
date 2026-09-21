@@ -453,6 +453,19 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
     }
 
     @Override
+    public List<OntologyMetaInfoVO> listBySpaceId(Integer spaceId) {
+        if (spaceId == null) {
+            return Lists.newArrayList();
+        }
+        var metaList = list(new LambdaQueryWrapper<OntologyMeta>()
+                .eq(OntologyMeta::getStatus, Status.ENABLE.getValue())
+                .eq(OntologyMeta::getOntologySpaceId, spaceId));
+        return metaList.stream()
+                .map(DataConverter::convert)
+                .collect(Collectors.toList());
+    }
+
+    @Override
     public List<OntologyMetaNodeVO> getOntologyTreeByByGroupId(String groupId) {
         LambdaQueryWrapper<OntologyMeta> queryWrapper;
         if (StringUtils.isEmpty(groupId)) {
