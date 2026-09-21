@@ -21,6 +21,5 @@ public class OntologyLinkCategoryUpdateParam extends OntologyLinkCategoryDeleteP
     @NotBlank(message = "name is empty")
     private String name;
 
-    @Schema(name = "color", description = "分类颜色（可选，不传则不修改）", example = "#FF0000")
-    private String color;
+
 }

@@ -67,7 +67,7 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
         PreconditionUtils.checkArgument(spaceId != null, "spaceId is empty", HttpStatus.BAD_REQUEST);
 
         // apiName 创建时必填
-        PreconditionUtils.checkArgument(StringUtils.isNotBlank(linkCreateParam.getApiName()), "apiName is empty", HttpStatus.BAD_REQUEST);
+    //    PreconditionUtils.checkArgument(StringUtils.isNotBlank(linkCreateParam.getApiName()), "apiName is empty", HttpStatus.BAD_REQUEST);
 
         var link = OntologyLinkGroup.builder()
                 .uniqueIdentifier(IdGenerator.generateUUID())
@@ -79,7 +79,7 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
                 .categoryId(linkCreateParam.getCategoryId())
                 .ontologySpaceId(spaceId)
                 .apiName(linkCreateParam.getApiName())
-                .comment(linkCreateParam.getComment())
+                .description(linkCreateParam.getDescription())
                 .build();
         //创建本体间关系
         save(link);
@@ -96,12 +96,8 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
         if (StringUtils.isNotBlank(param.getName())) {
             link.setName(param.getName());
         }
-        if (StringUtils.isNotBlank(param.getApiName())) {
-            link.setApiName(param.getApiName());
-        }
-        // comment 允许置空，故用 != null 判断
-        if (param.getComment() != null) {
-            link.setComment(param.getComment());
+        if (param.getDescription() != null) {
+            link.setDescription(param.getDescription());
         }
         updateById(link);
     }
@@ -225,7 +221,7 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
                         .to(l.getOntologyUniqueIdentifierTo())
                         .categoryId(l.getCategoryId())
                         .apiName(l.getApiName())
-                        .comment(l.getComment())
+                        .description(l.getDescription())
                         .build())
                 .collect(Collectors.toList());
 

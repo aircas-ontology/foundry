@@ -21,6 +21,6 @@ public class OntologyLinkUpdateParam extends IdentifierParam {
     @Schema(name = "apiName", required = false, description = "关系在代码中使用的api名称")
     private String apiName;
 
-    @Schema(name = "comment", required = false, description = "关系备注/描述，可置空")
-    private String comment;
+    @Schema(name = "description", required = false, description = "关系备注/描述，可置空")
+    private String description;
 }

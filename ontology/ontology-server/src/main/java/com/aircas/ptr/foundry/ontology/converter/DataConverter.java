@@ -51,7 +51,7 @@ public class DataConverter {
                 .ontologyNameTo(to.getDisplayName())
                 .categoryId(link.getCategoryId())
                 .apiName(link.getApiName())
-                .comment(link.getComment())
+                .description(link.getDescription())
                 .build();
     }
 
@@ -127,7 +127,7 @@ public class DataConverter {
                 .updateTime(ontologyMeta.getUpdateTime())
                 .latestQueryTime(ontologyMeta.getLatestQueryTime())
                 .description(ontologyMeta.getDescription())
-                .icon(StringUtils.defaultString(ontologyMeta.getIcon()))
+                .icon(ontologyMeta.getIcon())
                 .metaGroupId(StringUtils.isEmpty(ontologyMeta.getMetaGroupId()) ? Sets.newHashSet() : Arrays.stream(ontologyMeta.getMetaGroupId().split(",")).collect(Collectors.toSet()))
                 .displayName(ontologyMeta.getDisplayName())
                 .spaceId(ontologyMeta.getOntologySpaceId())

@@ -64,7 +64,6 @@ public class OntologyLinkCategoryServiceImpl extends ServiceImpl<OntologyLinkCat
                 .parentId(parentId)
                 .children(param.getChildren())
                 .name(param.getName())
-                .color(param.getColor())
                 .path(parentPath + param.getName())
                 .build();
 
@@ -80,7 +79,6 @@ public class OntologyLinkCategoryServiceImpl extends ServiceImpl<OntologyLinkCat
                         .name(node.getName())
                         .parentId(node.getParentId())
                         .path(node.getPath())
-                        .color(node.getColor())
                         .build();
                 batchList.add(category);
             }
@@ -96,7 +94,6 @@ public class OntologyLinkCategoryServiceImpl extends ServiceImpl<OntologyLinkCat
                                 .parentId(generatedId)
                                 .path(node.getPath() + "/" + child.getName())
                                 .name(child.getName())
-                                .color(child.getColor())
                                 .children(child.getChildren())
                                 .build();
                         nextLevel.add(childNode);
@@ -128,10 +125,7 @@ public class OntologyLinkCategoryServiceImpl extends ServiceImpl<OntologyLinkCat
             allCategories.forEach(category -> {
                 if (category.getId().equals(param.getCategoryId())) {
                     category.setName(param.getName());
-                    // color 为可选修改：仅在请求传了 color（含空串，用于清空）时才更新
-                    if (param.getColor() != null) {
-                        category.setColor(param.getColor());
-                    }
+
                     category.setPath(newPath);
                 } else {
                     var updatedPath = newPath + category.getPath().substring(parentCategory.getPath().length());
@@ -215,7 +209,6 @@ public class OntologyLinkCategoryServiceImpl extends ServiceImpl<OntologyLinkCat
         var vo = OntologyLinkCategoryVO.builder()
                 .categoryId(category.getId())
                 .name(category.getName())
-                .color(category.getColor())
                 .build();
         var linkList = linkMap.get(category.getId());
 
@@ -234,6 +227,8 @@ public class OntologyLinkCategoryServiceImpl extends ServiceImpl<OntologyLinkCat
                         .ontologyNameTo(to != null ? to.getDisplayName() : null)
                         .ontologyIconFrom(from != null ? from.getIcon() : null)
                         .ontologyIconTO(to != null ? to.getIcon() : null)
+                        .apiName(v.getApiName() == null ? null : v.getApiName())
+                        .description(v.getDescription() == null ? null : v.getDescription())
                         .build();
             }).collect(Collectors.toList());
             vo.setLinks(linkVOList);

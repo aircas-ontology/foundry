@@ -43,10 +43,7 @@ public class OntologyLinkCategory {
      */
     private Integer ontologySpaceId;
 
-    /**
-     * 分类颜色（前端展示用，如 #FF0000）
-     */
-    private String color;
+
 
     /**
      * 记录创建时间

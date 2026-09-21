@@ -76,8 +76,8 @@ public class OntologyLinkInfoVO {
     /**
      * 关系备注/描述
      */
-    @Schema(name = "comment", description = "关系备注/描述")
-    private String comment;
+    @Schema(name = "description", description = "关系备注/描述")
+    private String description;
 
 }
 

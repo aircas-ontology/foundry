@@ -65,8 +65,8 @@ public class OntologyLinkCreateParam {
     /**
      * 关系备注/描述
      */
-    @Schema(name = "comment", required = false, description = "关系备注/描述",example = "comment")
-    private String comment;
+    @Schema(name = "description", required = false, description = "关系备注/描述",example = "comment")
+    private String description;
 
     /**
      * 关系所属空间id（ontology_space.id），由调用方直接传入，不再反查本体归属
