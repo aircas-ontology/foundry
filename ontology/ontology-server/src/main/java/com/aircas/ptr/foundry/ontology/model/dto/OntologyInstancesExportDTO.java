@@ -9,9 +9,9 @@ import lombok.experimental.Accessors;
 import java.util.List;
 
 /**
- * 本体实例数据导出结构，作为导出专有段挂在 {@link OntologyCreateDTO#getInstances()} 上。
+ * 本体实例数据结构，作为 {@link OntologyCreateDTO#getInstances()} 段。
  *
- * <p>导入侧当前不消费该段。</p>
+ * <p>导出时从数据湖物理表装配；导入时若带有该段则回写数据湖（id 由数据库重新生成）。</p>
  */
 @Builder
 @AllArgsConstructor

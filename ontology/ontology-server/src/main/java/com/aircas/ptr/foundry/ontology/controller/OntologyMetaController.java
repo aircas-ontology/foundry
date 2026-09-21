@@ -2,6 +2,7 @@ package com.aircas.ptr.foundry.ontology.controller;
 
 import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.common.base.ResultCode;
+import com.aircas.ptr.foundry.common.util.DownloadUtil;
 import com.aircas.ptr.foundry.ontology.controller.validator.OntologyIdVerify;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyOrderByEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.QuerySortEnum;
@@ -12,7 +13,6 @@ import com.aircas.ptr.foundry.ontology.model.vo.OntologyGroupMetaVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaNodeVO;
 import com.aircas.ptr.foundry.ontology.service.OntologyMetaService;
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.Operation;
@@ -38,7 +38,7 @@ public class OntologyMetaController {
     private OntologyMetaService ontologyMetaService;
 
     @Resource
-    private ObjectMapper objectMapper;
+    private ObjectMapper jacksonObjectMapper;
 
 
     @GetMapping("/export")
@@ -46,14 +46,7 @@ public class OntologyMetaController {
     public void exportOntologies(@RequestParam(name = "spaceId") Integer spaceId,
                                  HttpServletResponse response) throws Exception {
         var dtos = ontologyMetaService.exportOntologies(spaceId);
-        var fileName = "ontologies_" + spaceId + ".json";
-        response.setContentType("application/json;charset=UTF-8");
-        response.setCharacterEncoding("UTF-8");
-        response.setHeader("Content-Disposition", "attachment; filename=\"" + fileName + "\"");
-        objectMapper.copy()
-                .setSerializationInclusion(JsonInclude.Include.NON_NULL)
-                .writeValue(response.getOutputStream(), dtos);
-        response.getOutputStream().flush();
+        DownloadUtil.writeJsonAttachment(response, jacksonObjectMapper, "ontologies_" + spaceId + ".json", dtos);
     }
 
 

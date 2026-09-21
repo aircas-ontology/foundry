@@ -1828,6 +1828,164 @@ public class EntityServiceImpl implements EntityService {
                 .build();
     }
 
+    @Transactional(transactionManager = "datalakeTransactionManager")
+    @Override
+    public void importInstances(String ontologyUniqueIdentifier, OntologyInstancesExportDTO instances) {
+        if (instances == null || CollectionUtils.isEmpty(instances.getNodes())) {
+            return;
+        }
+        var ontologyProperties = propertyMapper.selectList(new LambdaQueryWrapper<OntologyProperty>()
+                .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier));
+        if (CollectionUtils.isEmpty(ontologyProperties)) {
+            log.warn("导入本体 {} 实例数据跳过：本体无属性", ontologyUniqueIdentifier);
+            return;
+        }
+        //主键属性 apiName：物理主键为 id SERIAL，导入时丢弃原值，由数据库重新生成
+        var pkApiName = ontologyProperties.stream()
+                .filter(p -> p.getIsPrimaryKey() != null && p.getIsPrimaryKey() == 1)
+                .map(OntologyProperty::getApiName)
+                .findFirst().orElse(null);
+        //apiName -> 属性（仅取已绑定数据源列的），用于取 storageGroup
+        var propertyMap = ontologyProperties.stream()
+                .filter(p -> StringUtils.isNotEmpty(p.getDatasourceColumnName()))
+                .collect(Collectors.toMap(OntologyProperty::getApiName, v -> v, (a, b) -> a));
+
+        var entities = instances.getNodes().stream()
+                .map(node -> buildEntityFromNode(node, propertyMap, pkApiName))
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+        if (CollectionUtils.isEmpty(entities)) {
+            log.warn("导入本体 {} 实例数据跳过：无有效节点（属性未绑定数据源或缺少主存储分组属性）", ontologyUniqueIdentifier);
+            return;
+        }
+        //复用实体创建逻辑：写数据湖主表 + 关联表（id 由 SERIAL 生成，不建 ArangoDB 节点）
+        createEntities(EntityCreateParam.builder()
+                .ontologyIdentifier(ontologyUniqueIdentifier)
+                .entityList(entities)
+                .build());
+    }
+
+    /**
+     * 将导出节点（扁平 apiName->值）还原为实体创建入参。
+     *
+     * <p>丢弃主键 id（由数据库 SERIAL 重新生成）与未绑定数据源/未知属性；main 组的 null 值一并丢弃
+     * （规避 createEntities 主表插入 Collectors.toMap 对 null 值抛 NPE）。按 storageGroup 分组：
+     * main 组还原为单行，非 main 组按 List 下标还原为一对多多行。</p>
+     *
+     * @return 无可导入的 main 组属性时返回 null（该节点跳过）
+     */
+    private EntityCreateParam.Entity buildEntityFromNode(EntityNodeExportDTO node,
+                                                         Map<String, OntologyProperty> propertyMap,
+                                                         String pkApiName) {
+        var properties = node.getProperties();
+        if (properties == null || properties.isEmpty()) {
+            return null;
+        }
+        //storageGroup -> (apiName -> 值)，丢弃主键、未知/未绑定属性
+        var groupedValues = Maps.<String, Map<String, Object>>newLinkedHashMap();
+        properties.forEach((apiName, value) -> {
+            if (StringUtils.equals(apiName, pkApiName)) {
+                return;
+            }
+            var prop = propertyMap.get(apiName);
+            if (prop == null) {
+                return;
+            }
+            var group = StringUtils.isEmpty(prop.getStorageGroup()) ? "main" : prop.getStorageGroup();
+            groupedValues.computeIfAbsent(group, k -> Maps.newLinkedHashMap()).put(apiName, value);
+        });
+
+        //main 组：单行，跳过 null 值；无有效主存储列则跳过该节点
+        var mainInfos = toPropertyInfos(groupedValues.get("main"), true);
+        if (CollectionUtils.isEmpty(mainInfos)) {
+            log.warn("导入实例节点跳过：无主存储分组(main)有效属性，primaryKey={}", node.getPrimaryKey());
+            return null;
+        }
+        var entityProperties = Lists.<EntityCreateParam.EntityProperty>newArrayList();
+        //main 组单行：显式包一层 List<List<PropertyInfo>>，避开 Guava newArrayList 重载歧义
+        var mainRows = Lists.<List<EntityCreateParam.PropertyInfo>>newArrayList();
+        mainRows.add(mainInfos);
+        entityProperties.add(EntityCreateParam.EntityProperty.builder()
+                .storageGroup("main")
+                .props(mainRows)
+                .build());
+        //非 main 组：一对多按 List 下标还原多行
+        groupedValues.forEach((group, values) -> {
+            if (StringUtils.equals(group, "main")) {
+                return;
+            }
+            entityProperties.add(EntityCreateParam.EntityProperty.builder()
+                    .storageGroup(group)
+                    .props(buildRelatedRows(values))
+                    .build());
+        });
+        return EntityCreateParam.Entity.builder()
+                .entityProperties(entityProperties)
+                .build();
+    }
+
+    /**
+     * 属性值映射转 PropertyInfo 列表。
+     *
+     * @param skipNull 为 true 时跳过 null 值（main 组插入用 Collectors.toMap，null 值会 NPE）
+     */
+    private List<EntityCreateParam.PropertyInfo> toPropertyInfos(Map<String, Object> values, boolean skipNull) {
+        if (values == null || values.isEmpty()) {
+            return Lists.newArrayList();
+        }
+        return values.entrySet().stream()
+                .filter(e -> !(skipNull && e.getValue() == null))
+                .map(e -> EntityCreateParam.PropertyInfo.builder()
+                        .propertyApiName(e.getKey())
+                        .propertyValue(e.getValue())
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 关联表（非 main 存储分组）属性值还原为多行：List 值按下标展开，标量值在各行重复；
+     * 行数取该组内 List 的最大长度（至少 1）。
+     */
+    private List<List<EntityCreateParam.PropertyInfo>> buildRelatedRows(Map<String, Object> values) {
+        //apiName -> 归一化后的值列表
+        var normalized = Maps.<String, List<Object>>newLinkedHashMap();
+        var rowCount = 1;
+        for (var e : values.entrySet()) {
+            var list = new ArrayList<Object>();
+            if (e.getValue() instanceof List) {
+                for (var o : (List<?>) e.getValue()) {
+                    list.add(o);
+                }
+            } else {
+                list.add(e.getValue());
+            }
+            normalized.put(e.getKey(), list);
+            rowCount = Math.max(rowCount, list.size());
+        }
+        var rows = Lists.<List<EntityCreateParam.PropertyInfo>>newArrayList();
+        for (int i = 0; i < rowCount; i++) {
+            var row = Lists.<EntityCreateParam.PropertyInfo>newArrayList();
+            for (var e : normalized.entrySet()) {
+                var list = e.getValue();
+                Object v;
+                if (list.size() > i) {
+                    v = list.get(i);
+                } else if (list.size() == 1) {
+                    //标量在多行间重复
+                    v = list.get(0);
+                } else {
+                    v = null;
+                }
+                row.add(EntityCreateParam.PropertyInfo.builder()
+                        .propertyApiName(e.getKey())
+                        .propertyValue(v)
+                        .build());
+            }
+            rows.add(row);
+        }
+        return rows;
+    }
+
 
 }
 

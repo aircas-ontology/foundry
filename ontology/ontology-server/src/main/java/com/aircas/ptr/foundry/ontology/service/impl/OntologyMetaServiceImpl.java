@@ -705,6 +705,8 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
 
             });
         }
+        //导入实例数据（若传递了 instances）：写数据湖物理表，id 由数据库重新生成；本体未绑定数据源或无实例时静默跳过
+        entityService.importInstances(meta.getUniqueIdentifier(), dto.getInstances());
     }
 
 
