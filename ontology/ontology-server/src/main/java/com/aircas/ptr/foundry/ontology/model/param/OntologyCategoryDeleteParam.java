@@ -1,24 +1,23 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
-import io.swagger.annotations.ApiModel;
-import io.swagger.annotations.ApiModelProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
 
-import javax.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotNull;
 
 @Data
 @SuperBuilder
 @Accessors(chain = true)
 @NoArgsConstructor
 @AllArgsConstructor
-@ApiModel(description = "分类删除请求")
+@Schema(description = "分类删除请求")
 public class OntologyCategoryDeleteParam extends OntologySpaceIdParam {
 
-    @ApiModelProperty(name = "categoryId", value = "分类id", example = "1")
+    @Schema(name = "categoryId", description = "分类id", example = "1")
     @NotNull(message = "categoryId is null")
     private Integer categoryId;
 }

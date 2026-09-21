@@ -1,8 +1,7 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
 import com.aircas.ptr.foundry.ontology.model.enums.QueryOpEnum;
-import io.swagger.annotations.ApiModel;
-import io.swagger.annotations.ApiModelProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -16,15 +15,15 @@ import java.util.List;
 @NoArgsConstructor
 @SuperBuilder
 @Accessors(chain = true)
-@ApiModel(description = "单属性过滤请求")
+@Schema(description = "单属性过滤请求")
 public class PropertyFilterParam {
 
     /** 属性apiName名，如 "id" */
-    @ApiModelProperty(name = "propertyApiName", value = "属性apiName",example = "name")
+    @Schema(name = "propertyApiName", description = "属性apiName",example = "name")
     private String propertyApiName;
 
     /** 操作符，默认 EQ */
-    @ApiModelProperty(name = "op", value = "操作符 ： EQ, NE,\n" +
+    @Schema(name = "op", description = "操作符 ： EQ, NE,\n" +
             "    LIKE, LIKE_LEFT, LIKE_RIGHT,\n" +
             "    IN, NOT_IN,\n" +
             "    BETWEEN, NOT_BETWEEN,\n" +
@@ -33,10 +32,10 @@ public class PropertyFilterParam {
     private QueryOpEnum op = QueryOpEnum.EQ;
 
     /** 单值（EQ/GT/LIKE/... 用） */
-    @ApiModelProperty(name = "value", value = "单值（EQ/GT/LIKE/... 用）",example = "1")
+    @Schema(name = "value", description = "单值（EQ/GT/LIKE/... 用）",example = "1")
     private Object value;
 
     /** 多值（IN/BETWEEN 用，BETWEEN 约定 [lower, upper]） */
-    @ApiModelProperty(name = "values", value = "多值（IN/BETWEEN 用，BETWEEN 约定 [lower, upper]",example = "[10,20]")
+    @Schema(name = "values", description = "多值（IN/BETWEEN 用，BETWEEN 约定 [lower, upper]",example = "[10,20]")
     private List<Object> values;
 }

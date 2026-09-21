@@ -2,13 +2,12 @@ package com.aircas.ptr.foundry.ontology.controller.validator;
 
 import com.aircas.ptr.foundry.ontology.model.param.PropertyDatasourceParam;
 import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.TableMetadataMapper;
-import lombok.var;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Component;
 
-import javax.annotation.Resource;
-import javax.validation.ConstraintValidator;
-import javax.validation.ConstraintValidatorContext;
+import jakarta.annotation.Resource;
+import jakarta.validation.ConstraintValidator;
+import jakarta.validation.ConstraintValidatorContext;
 
 @Component
 public class DatasourceValidator implements ConstraintValidator<DatasourceVerify, PropertyDatasourceParam> {

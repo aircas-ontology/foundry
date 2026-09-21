@@ -4,7 +4,6 @@ import com.aircas.ptr.foundry.license.param.LicenseCheckModel;
 import com.aircas.ptr.foundry.license.param.LicenseCreatorParam;
 import com.aircas.ptr.foundry.license.service.LicenseService;
 import com.aircas.ptr.foundry.license.util.NetworkUtil;
-import lombok.var;
 
 import java.util.Arrays;
 import java.util.Date;

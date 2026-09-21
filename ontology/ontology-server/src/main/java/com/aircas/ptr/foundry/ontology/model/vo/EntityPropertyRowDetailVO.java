@@ -2,8 +2,7 @@ package com.aircas.ptr.foundry.ontology.model.vo;
 
 
 import com.fasterxml.jackson.databind.JsonNode;
-import io.swagger.annotations.ApiModel;
-import io.swagger.annotations.ApiModelProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -17,16 +16,16 @@ import java.util.List;
 @AllArgsConstructor
 @SuperBuilder
 @Accessors(chain = true)
-@ApiModel(value = "实体属性信息VO")
+@Schema(description = "实体属性信息VO")
 public class EntityPropertyRowDetailVO {
 
-    @ApiModelProperty(name = "primaryKey", value = "实体主键", example = "1")
+    @Schema(name = "primaryKey", description = "实体主键", example = "1")
     private Object entityPrimaryKey;
 
-    @ApiModelProperty(name = "ontologyUniqueIdentifier", value = "本体id")
+    @Schema(name = "ontologyUniqueIdentifier", description = "本体id")
     private String ontologyUniqueIdentifier;
 
-    @ApiModelProperty(name = "propertyGroups", value = "属性分组")
+    @Schema(name = "propertyGroups", description = "属性分组")
     private List<PropertyGroup> propertyGroups;
 
 
@@ -35,13 +34,13 @@ public class EntityPropertyRowDetailVO {
     @AllArgsConstructor
     @SuperBuilder
     @Accessors(chain = true)
-    @ApiModel(value = "实体分组")
+    @Schema(description = "实体分组")
     public static class PropertyGroup {
 
-        @ApiModelProperty(name = "storageGroup", value = "属性存储分组名称", example = "main")
+        @Schema(name = "storageGroup", description = "属性存储分组名称", example = "main")
         private String storageGroup;
 
-        @ApiModelProperty(name = "groupData", value = "属性存储分组数据列表")
+        @Schema(name = "groupData", description = "属性存储分组数据列表")
         private List<PropertyGroupData> groupDataList;
 
     }
@@ -52,13 +51,13 @@ public class EntityPropertyRowDetailVO {
     @AllArgsConstructor
     @SuperBuilder
     @Accessors(chain = true)
-    @ApiModel(value = "属性存储分组数据")
+    @Schema(description = "属性存储分组数据")
     public static class PropertyGroupData {
 
-        @ApiModelProperty(name = "dataPrimaryKey", value = "数据主键", example = "1")
+        @Schema(name = "dataPrimaryKey", description = "数据主键", example = "1")
         private Object dataPrimaryKey;
 
-        @ApiModelProperty(name = "props", value = "属性信息")
+        @Schema(name = "props", description = "属性信息")
         private List<PropertyInfo> props;
 
     }
@@ -68,25 +67,25 @@ public class EntityPropertyRowDetailVO {
     @AllArgsConstructor
     @SuperBuilder
     @Accessors(chain = true)
-    @ApiModel(value = "属性信息")
+    @Schema(description = "属性信息")
     public static class PropertyInfo {
 
-        @ApiModelProperty(name = "propertyUniqIdentifier", value = "属性唯一标识", example = "123")
+        @Schema(name = "propertyUniqIdentifier", description = "属性唯一标识", example = "123")
         private String propertyUniqIdentifier;
 
-        @ApiModelProperty(name = "propertyApiName", value = "属性api名称", example = "name")
+        @Schema(name = "propertyApiName", description = "属性api名称", example = "name")
         private String propertyApiName;
 
-        @ApiModelProperty(name = "propertyDisplayName", value = "属性显示名称", example = "名称")
+        @Schema(name = "propertyDisplayName", description = "属性显示名称", example = "名称")
         private String propertyDisplayName;
 
-        @ApiModelProperty(name = "propertyValues", value = "属性值", example = "1")
+        @Schema(name = "propertyValues", description = "属性值", example = "1")
         private Object propertyValue;
 
-        @ApiModelProperty(name = "categoryId", value = "属性分类id", example = "10")
+        @Schema(name = "categoryId", description = "属性分类id", example = "10")
         private Integer categoryId;
 
-        @ApiModelProperty(name = "metadata", value = "属性元数据")
+        @Schema(name = "metadata", description = "属性元数据")
         private JsonNode metadata;
 
 

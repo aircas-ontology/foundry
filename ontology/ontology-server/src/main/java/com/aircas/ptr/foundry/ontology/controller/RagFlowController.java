@@ -9,10 +9,9 @@ import com.aircas.ptr.foundry.ontology.model.param.OntologyBuildQueryParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyKnowledgeQueryParam;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyKnowledgeVO;
 import com.fasterxml.jackson.core.type.TypeReference;
-import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
-import lombok.var;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -20,10 +19,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import javax.validation.Valid;
+import jakarta.validation.Valid;
 import java.util.HashMap;
 
-@Api(tags = "本体rag flow")
+@Tag(name = "本体rag flow")
 @RestController
 @RequestMapping("/rag")
 @RequiredArgsConstructor
@@ -37,7 +36,7 @@ public class RagFlowController {
     private String ontologyBuildUrl;
 
 
-    @ApiOperation(value = "知识库问答")
+    @Operation(summary = "知识库问答")
     @PostMapping("/knowledge")
     public RestResult<OntologyKnowledgeVO> getOntologyKnowledge(@Valid @RequestBody OntologyKnowledgeQueryParam param) throws Exception {
 
@@ -50,7 +49,7 @@ public class RagFlowController {
         return RestResult.ofData(res);
     }
 
-    @ApiOperation(value = "格式化构建本体")
+    @Operation(summary = "格式化构建本体")
     @PostMapping("/build")
     public RestResult<OntologyBuildDTO> buildFormattedOntology(@Valid @RequestBody OntologyBuildQueryParam param) throws Exception {
 

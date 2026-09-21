@@ -1,7 +1,14 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
+import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
+import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.ontology.model.dto.OntologySpaceCreateDTO;
+import com.aircas.ptr.foundry.ontology.model.enums.OntologyLinkTypeEnum;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyLinkCreateParam;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyMetaCreateParam;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyCreateParam;
+import com.aircas.ptr.foundry.ontology.model.param.OntologySpaceCanvasCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologySpaceCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologySpaceUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyCategory;
@@ -9,9 +16,12 @@ import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.model.po.OntologySpace;
 import com.aircas.ptr.foundry.ontology.model.view.OntologyStatisticsCountView;
 import com.aircas.ptr.foundry.ontology.model.view.SpaceStatisticsCountView;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologySpaceCanvasCreateVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologySpaceVO;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.*;
 import com.aircas.ptr.foundry.ontology.service.OntologyCategoryService;
+import com.aircas.ptr.foundry.ontology.service.OntologyLinkGroupService;
+import com.aircas.ptr.foundry.ontology.service.OntologyPropertyService;
 import com.aircas.ptr.foundry.ontology.service.OntologySpaceService;
 import com.aircas.ptr.foundry.ontology.service.TableMetadataService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -22,15 +32,17 @@ import com.google.common.collect.Lists;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import lombok.var;
 import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 import java.io.InputStream;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -59,8 +71,15 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
 
     private final OntologyMetaServiceImpl ontologyMetaService;
 
+    private final OntologyPropertyService ontologyPropertyService;
+
+    private final OntologyLinkGroupService ontologyLinkGroupService;
+
+    private final OntologyLinkCategoryMapper ontologyLinkCategoryMapper;
+
     private final ObjectMapper jsonMapper = new ObjectMapper();
 
+    @Lazy
     @Resource
     private OntologySpaceServiceImpl proxy;
 
@@ -84,6 +103,87 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
         //create new schema &  table_filed_mapping table
         tableMetadataService.initSpaceSchema(param.getApiName());
         return ontologySpace.getId();
+    }
+
+    @Transactional(transactionManager = "chainedTransactionManager", rollbackFor = Exception.class)
+    @Override
+    public OntologySpaceCanvasCreateVO createSpaceWithCanvasContent(OntologySpaceCanvasCreateParam param) {
+        // create space
+        var spaceParam = new OntologySpaceCreateParam()
+                .setIconUrl(param.getIconUrl())
+                .setDisplayName(param.getDisplayName())
+                .setDescription(param.getDescription())
+                .setApiName(param.getApiName());
+        var spaceId = createSpace(spaceParam);
+
+        // create ontologies & properties, record apiName/displayName -> uniqueIdentifier for link resolution
+        Map<String, String> uidByApiName = new HashMap<>();
+        Map<String, String> uidByDisplayName = new HashMap<>();
+        if (CollectionUtils.isNotEmpty(param.getOntologies())) {
+            for (var canvasOntology : param.getOntologies()) {
+                var metaParam = new OntologyMetaCreateParam()
+                        .setDisplayName(canvasOntology.getDisplayName())
+                        .setApiName(canvasOntology.getApiName())
+                        .setDescription(canvasOntology.getDescription())
+                        .setIconUrl(canvasOntology.getIconUrl());
+                metaParam.setSpaceId(spaceId);
+                var uniqueIdentifier = ontologyMetaService.createOntology(metaParam);
+                uidByApiName.put(canvasOntology.getApiName(), uniqueIdentifier);
+                uidByDisplayName.put(canvasOntology.getDisplayName(), uniqueIdentifier);
+
+                if (CollectionUtils.isNotEmpty(canvasOntology.getProperties())) {
+                    for (var canvasProperty : canvasOntology.getProperties()) {
+                        ontologyPropertyService.createProperty(buildPropertyCreateParam(uniqueIdentifier, canvasProperty));
+                    }
+                }
+            }
+        }
+
+        // create links; canvas no longer carries any categoryId, links are created without a category
+        if (CollectionUtils.isNotEmpty(param.getLinks())) {
+            for (var canvasLink : param.getLinks()) {
+                var fromUid = resolveOntologyUid(canvasLink.getFromOntologyApiName(), uidByApiName, uidByDisplayName);
+                var toUid = resolveOntologyUid(canvasLink.getToOntologyApiName(), uidByApiName, uidByDisplayName);
+                var linkParam = new OntologyLinkCreateParam()
+                        .setName(canvasLink.getName())
+                        .setOntologyUniqueIdentifierFrom(fromUid)
+                        .setOntologyUniqueIdentifierTo(toUid)
+                        .setType(OntologyLinkTypeEnum.OTHER)
+                        .setSpaceId(spaceId);
+                ontologyLinkGroupService.createLink(linkParam);
+            }
+        }
+
+        return OntologySpaceCanvasCreateVO.builder()
+                .spaceId(spaceId)
+                .build();
+    }
+
+    private OntologyPropertyCreateParam buildPropertyCreateParam(String ontologyUniqueIdentifier,
+                                                                 OntologySpaceCanvasCreateParam.CanvasProperty canvasProperty) {
+        var propertyParam = new OntologyPropertyCreateParam()
+                .setDisplayName(canvasProperty.getDisplayName())
+                .setApiName(canvasProperty.getApiName())
+                .setDataType(canvasProperty.getDataType())
+                .setDescription(canvasProperty.getDescription())
+                .setIsPrimaryKey(Boolean.TRUE.equals(canvasProperty.getIsPrimaryKey()))
+                .setIsTitleKey(Boolean.TRUE.equals(canvasProperty.getIsTitleKey()))
+                .setDefaultValue(canvasProperty.getDefaultValue())
+                // required by createProperty, canvas has no such input, use default storage group
+                .setStorageGroup("main");
+        propertyParam.setOntologyIdentifier(ontologyUniqueIdentifier);
+        return propertyParam;
+    }
+
+
+
+    private String resolveOntologyUid(String apiNameOrDisplayName, Map<String, String> uidByApiName, Map<String, String> uidByDisplayName) {
+        var uid = uidByApiName.get(apiNameOrDisplayName);
+        if (uid == null) {
+            uid = uidByDisplayName.get(apiNameOrDisplayName);
+        }
+        PreconditionUtils.checkArgument(uid != null, "画布中不存在对象：" + apiNameOrDisplayName, HttpStatus.BAD_REQUEST);
+        return uid;
     }
 
     @Transactional(transactionManager = "mainTransactionManager")
@@ -145,6 +245,8 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                             .actionCount(actionCnt)
                             .propertyCount(propertyCnt)
                             .linkCount(linkCnt)
+                            .createTime(space.getCreateTime())
+                            .updateTime(space.getUpdateTime())
                             .build();
                 })
                 .collect(Collectors.toList());

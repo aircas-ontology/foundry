@@ -1,13 +1,12 @@
 package com.aircas.ptr.foundry.ontology.config;
 
 import com.arangodb.ArangoDB;
-import com.arangodb.ArangoDatabase;
 import com.arangodb.springframework.annotation.EnableArangoRepositories;
 import com.arangodb.springframework.config.ArangoConfiguration;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 
-import javax.annotation.PostConstruct;
+import jakarta.annotation.PostConstruct;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -52,8 +51,8 @@ public class ArangoConfig implements ArangoConfiguration {
                 .maxConnections(maxConnections)
                 .timeout(connectTimeout)
                 .connectionTtl(requestTimeout)
-                .useProtocol(com.arangodb.Protocol.HTTP_JSON) // 使用HTTP协议，更稳定
-                .keepAliveInterval(1000); // 保持连接活跃
+                .protocol(com.arangodb.Protocol.HTTP_JSON)
+                .keepAliveInterval(1000);
     }
 
     @Override

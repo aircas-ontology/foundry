@@ -1,6 +1,5 @@
 package com.aircas.ptr.foundry.common.util;
 
-import lombok.var;
 import org.apache.commons.lang3.StringUtils;
 import org.joda.time.DateTime;
 import org.joda.time.format.DateTimeFormat;
@@ -108,7 +107,7 @@ public class DateUtils {
      */
     public static String format(Date date, String pattern) {
 
-        Assert.notNull(date);
+        Assert.notNull(date, "date must not be null");
         DateFormat dateFormat = getDateFormat(pattern);
         return dateFormat.format(date);
     }
@@ -168,7 +167,7 @@ public class DateUtils {
      */
     public static long fromString2Timestamp(String dateString, String pattern) {
 
-        Assert.hasLength(dateString);
+        Assert.hasLength(dateString, "dateString must not be empty");
         DateTime dt = DateTime.parse(dateString, DateTimeFormat.forPattern(pattern));
         return dt.getMillis();
     }

@@ -1,15 +1,14 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
 import com.aircas.ptr.foundry.ontology.model.enums.ActionRuleConnectType;
-import io.swagger.annotations.ApiModel;
-import io.swagger.annotations.ApiModelProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 
-import javax.validation.constraints.NotEmpty;
-import javax.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
 import java.util.List;
 
 
@@ -17,14 +16,14 @@ import java.util.List;
 @AllArgsConstructor
 @NoArgsConstructor
 @SuperBuilder
-@ApiModel(description = "行为规则请求")
+@Schema(description = "行为规则请求")
 public class ActionHandleRuleParam {
 
-    @ApiModelProperty(name = "rules", required = true, value = "行为规则执行，规则list", example = "[{\"columnName\":\"longitude\",\"columnValue\":\"20.0\",\"condition\":\"CH\"}]")
+    @Schema(name = "rules", required = true, description = "行为规则执行，规则list", example = "[{\"columnName\":\"longitude\",\"columnValue\":\"20.0\",\"condition\":\"CH\"}]")
     @NotEmpty(message = "rules is empty")
     private List<ActionHandleRuleAddParam> rules;
 
-    @ApiModelProperty(name = "ruleConnectType", required = true, value = "行为规则拼接类型", example = "AND")
+    @Schema(name = "ruleConnectType", required = true, description = "行为规则拼接类型", example = "AND")
     @NotNull(message = "ruleConnectType is null")
     private ActionRuleConnectType ruleConnectType;
 }

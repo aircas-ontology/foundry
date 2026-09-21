@@ -29,6 +29,8 @@ public interface OntologyMetaService extends IService<OntologyMeta> {
 
     List<OntologyMetaInfoVO> searchByKeyword(String keyword);
 
+    List<OntologyMetaInfoVO> getByCategoryId(Integer categoryId);
+
     List<OntologyMetaNodeVO> getOntologyTreeByByGroupId(String groupId);
 
 

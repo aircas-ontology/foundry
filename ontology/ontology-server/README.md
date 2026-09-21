@@ -55,8 +55,7 @@ ontology-server/
 │   │   ├── OntologyMetaController.java   # 本体元数据管理
 │   │   ├── OntologyOverviewController.java # 概览统计
 │   │   ├── OntologyPropertyController.java # 属性管理
-│   │   ├── OntologySpaceController.java  # 空间管理
-│   │   └── RagFlowController.java        # RAG 流程
+│   │   └── OntologySpaceController.java  # 空间管理
 │   ├── converter/                        # 数据转换器
 │   ├── exception/                        # 自定义异常
 │   ├── job/                              # XXL-Job 任务处理器

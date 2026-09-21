@@ -1,31 +1,30 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
-import io.swagger.annotations.ApiModel;
-import io.swagger.annotations.ApiModelProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 
-import javax.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotBlank;
 
 @Getter
 @Setter
 @SuperBuilder
 @AllArgsConstructor
 @NoArgsConstructor
-@ApiModel(description = "创建本体分组")
+@Schema(description = "创建本体分组")
 public class OntologyGroupCreateParam extends OntologySpaceIdParam {
 
-    @ApiModelProperty(name = "groupName", value = "分组名称", required = true, example = "远海远域")
+    @Schema(name = "groupName", description = "分组名称", required = true, example = "远海远域")
     @NotBlank(message = "groupName is empty")
     private String groupName;
 
-    @ApiModelProperty(name = "description", value = "分组描述", required = true, example = "用于远海远域场景使用")
+    @Schema(name = "description", description = "分组描述", required = true, example = "用于远海远域场景使用")
     @NotBlank(message = "description is empty")
     private String description;
 
-    @ApiModelProperty(name = "icon", value = "分组图标url", required = false)
+    @Schema(name = "icon", description = "分组图标url", required = false)
     private String iconUrl;
 }

@@ -2,41 +2,40 @@ package com.aircas.ptr.foundry.ontology.model.param;
 
 
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyLemmaTypeEnum;
-import io.swagger.annotations.ApiModel;
-import io.swagger.annotations.ApiModelProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
 
-import javax.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotNull;
 
 @Data
 @SuperBuilder
 @Accessors(chain = true)
 @NoArgsConstructor
 @AllArgsConstructor
-@ApiModel(description = "Ontology Lemma Create Param")
+@Schema(description = "Ontology Lemma Create Param")
 public class OntologyLemmaCreateParam extends OntologyIdentifierParam {
 
-    @ApiModelProperty(name = "title", required = true, value = "标题")
+    @Schema(name = "title", required = true, description = "标题")
     private String title;
 
-    @ApiModelProperty(name = "content", required = true, value = "内容")
+    @Schema(name = "content", required = true, description = "内容")
     private String content;
 
-    @ApiModelProperty(name = "parentId", required = false, value = "父词条id,默认为根目录id=0")
+    @Schema(name = "parentId", required = false, description = "父词条id,默认为根目录id=0")
     private Integer parentId = 0;
 
-    @ApiModelProperty(name = "type", required = true,  value = "词条类型")
+    @Schema(name = "type", required = true,  description = "词条类型")
     @NotNull(message = "type is null")
     private OntologyLemmaTypeEnum type;
 
-    @ApiModelProperty(name = "orderIndex", required = false, value = "目录内展示顺序", example = "1")
+    @Schema(name = "orderIndex", required = false, description = "目录内展示顺序", example = "1")
     @NotNull(message = "orderIndex is null")
     private Integer orderIndex;
 
-    @ApiModelProperty(name = "extraInfo", required = false, value = "其他额外信息")
+    @Schema(name = "extraInfo", required = false, description = "其他额外信息")
     private String extraInfo;
 }

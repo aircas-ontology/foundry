@@ -10,17 +10,17 @@ import com.aircas.ptr.foundry.ontology.model.param.OntologyStatisticLemmaUpdateP
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyLemmaTreeVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyLemmaVO;
 import com.aircas.ptr.foundry.ontology.service.OntologyLemmaService;
-import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
-import io.swagger.annotations.ApiParam;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
-import javax.annotation.Resource;
-import javax.validation.Valid;
+import jakarta.annotation.Resource;
+import jakarta.validation.Valid;
 import java.util.List;
 
-@Api(tags = "本体百科词条")
+@Tag(name = "本体百科词条")
 @RestController
 @Validated
 @RequestMapping("/lemma")
@@ -32,21 +32,21 @@ public class OntologyLemmaController {
 
 
     @PostMapping("")
-    @ApiOperation(value = "创建单个本体词条")
+    @Operation(summary = "创建单个本体词条")
     public RestResult<Integer> createLemma(@RequestBody @Valid OntologyLemmaCreateParam param) {
         Integer id = ontologyLemmaService.createLemma(param);
         return RestResult.ofData(id);
     }
 
     @PutMapping("")
-    @ApiOperation(value = "批量更新本体词条")
+    @Operation(summary = "批量更新本体词条")
     public RestResult batchUpdateLemma(@RequestBody @Valid List<OntologyLemmaUpdateParam> param) {
         ontologyLemmaService.batchUpdateLemma(param);
         return RestResult.success();
     }
 
     @DeleteMapping("/{lemmaId}")
-    @ApiOperation(value = "删除本体词条")
+    @Operation(summary = "删除本体词条")
     public RestResult deleteLemma(@PathVariable(required = true, name = "lemmaId") Integer lemmaId) {
         ontologyLemmaService.deleteLemma(lemmaId);
         return RestResult.success();
@@ -54,9 +54,9 @@ public class OntologyLemmaController {
 
 
     @GetMapping("/ontology")
-    @ApiOperation(value = "查询本体词条")
+    @Operation(summary = "查询本体词条")
     public RestResult<OntologyLemmaTreeVO> queryLemmaByOntologyId(@RequestParam(name = "ontologyUniqueIdentifier", required = true)
-                                                      @ApiParam(name = "ontologyUniqueIdentifier", value = "本体unique identifier", required = true)
+                                                      @Parameter(description = "本体unique identifier")
                                                       @OntologyIdVerify String ontologyUniqueIdentifier) {
         OntologyLemmaTreeVO res = ontologyLemmaService.queryLemmaByOntologyId(ontologyUniqueIdentifier);
         return RestResult.ofData(res);
@@ -64,21 +64,21 @@ public class OntologyLemmaController {
 
 
     @GetMapping("")
-    @ApiOperation(value = "查询词条详情")
-    public RestResult<OntologyLemmaVO> queryLemmaById(@RequestParam(name = "lemmaId", required = true)  @ApiParam(name = "lemmaId", value = "本体词条id", required = true) Integer lemmaId) {
+    @Operation(summary = "查询词条详情")
+    public RestResult<OntologyLemmaVO> queryLemmaById(@RequestParam(name = "lemmaId", required = true)  @Parameter(description = "本体词条id") Integer lemmaId) {
         OntologyLemmaVO res = ontologyLemmaService.queryLemmaById(lemmaId);
         return RestResult.ofData(res);
     }
 
     @PostMapping("/statistic")
-    @ApiOperation(value = "创建本体统计词条(webhook)")
+    @Operation(summary = "创建本体统计词条(webhook)")
     public RestResult<Integer> createStatisticLemma(@RequestBody @Valid OntologyStatisticLemmaCreateParam param) {
         Integer id = ontologyLemmaService.createStatisticLemma(param);
         return RestResult.ofData(id);
     }
 
     @PutMapping("/statistic")
-    @ApiOperation(value = "更新本体统计词条(webhook)")
+    @Operation(summary = "更新本体统计词条(webhook)")
     public RestResult updateStatisticLemma(@RequestBody @Valid OntologyStatisticLemmaUpdateParam param) {
         ontologyLemmaService.updateStatisticLemma(param);
         return RestResult.success();

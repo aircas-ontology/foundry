@@ -1,8 +1,7 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
 
-import io.swagger.annotations.ApiModel;
-import io.swagger.annotations.ApiModelProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -14,11 +13,11 @@ import lombok.experimental.SuperBuilder;
 @NoArgsConstructor
 @SuperBuilder
 @Accessors(chain = true)
-@ApiModel(description = "本体行为执行请求")
+@Schema(description = "本体行为执行请求")
 public class XxlJobActionExecuteParam extends OntologyActionExecuteParam {
 
 
-    @ApiModelProperty(name = "scheduleId", value = "行为id", example = "123")
+    @Schema(name = "scheduleId", description = "行为id", example = "123")
     private Long scheduleId;
 
 

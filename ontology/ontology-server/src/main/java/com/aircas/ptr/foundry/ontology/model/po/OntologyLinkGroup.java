@@ -77,4 +77,9 @@ public class OntologyLinkGroup implements Serializable {
      */
     private Integer ontologySpaceId;
 
+    /**
+     * 关系分类id（ontology_link_category.id），关系可归属到关系分类树
+     */
+    private Integer categoryId;
+
 }

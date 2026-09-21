@@ -1,7 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
-import io.swagger.annotations.ApiModel;
-import io.swagger.annotations.ApiModelProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -13,12 +12,12 @@ import lombok.experimental.Accessors;
 @AllArgsConstructor
 @NoArgsConstructor
 @Accessors(chain = true)
-@ApiModel(description = "参数")
+@Schema(description = "参数")
 public class FunctionParameter {
 
-    @ApiModelProperty(name = "paramName", value = "参数名称")
+    @Schema(name = "paramName", description = "参数名称")
     private String paramName;
 
-    @ApiModelProperty(name = "paramValue", value = "参数值")
+    @Schema(name = "paramValue", description = "参数值")
     private Object paramValue;
 }

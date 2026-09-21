@@ -9,7 +9,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import org.springframework.stereotype.Service;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 
 /**
  * @author wangweigang
@@ -50,14 +50,14 @@ public class OverviewServiceImpl implements OverviewService {
     public OverviewCountVO getCount() {
 
         return OverviewCountVO.builder()
-                .spaceCount(spaceMapper.selectCount(new QueryWrapper<>()))
-                .actionCount(ontologyActionMapper.selectCount(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getStatus, Status.ENABLE.getValue())))
-                .linkCount(ontologyLinkGroupMapper.selectCount(new LambdaQueryWrapper<OntologyLinkGroup>().eq(OntologyLinkGroup::getStatus, Status.ENABLE.getValue())))
-                .propertyCount(propertyMapper.selectCount(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getStatus, Status.ENABLE.getValue())))
-                .groupCount(groupMapper.selectCount(new QueryWrapper<>()))
-                .actionSchedulingCount(ruleMapper.selectCount(new QueryWrapper<>()) + taskMapper.selectCount(new QueryWrapper<>()))
-                .functionCount(functionMapper.selectCount(new LambdaQueryWrapper<Function>().eq(Function::getStatus, Status.ENABLE.getValue())))
-                .ontologyCount(ontologyMetaMapper.selectCount(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getStatus, Status.ENABLE.getValue())))
+                .spaceCount(Math.toIntExact(spaceMapper.selectCount(new QueryWrapper<>())))
+                .actionCount(Math.toIntExact(ontologyActionMapper.selectCount(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getStatus, Status.ENABLE.getValue()))))
+                .linkCount(Math.toIntExact(ontologyLinkGroupMapper.selectCount(new LambdaQueryWrapper<OntologyLinkGroup>().eq(OntologyLinkGroup::getStatus, Status.ENABLE.getValue()))))
+                .propertyCount(Math.toIntExact(propertyMapper.selectCount(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getStatus, Status.ENABLE.getValue()))))
+                .groupCount(Math.toIntExact(groupMapper.selectCount(new QueryWrapper<>())))
+                .actionSchedulingCount(Math.toIntExact(ruleMapper.selectCount(new QueryWrapper<>()) + taskMapper.selectCount(new QueryWrapper<>())))
+                .functionCount(Math.toIntExact(functionMapper.selectCount(new LambdaQueryWrapper<Function>().eq(Function::getStatus, Status.ENABLE.getValue()))))
+                .ontologyCount(Math.toIntExact(ontologyMetaMapper.selectCount(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getStatus, Status.ENABLE.getValue()))))
                 .build();
     }
 }

@@ -6,7 +6,6 @@ import com.aircas.ptr.foundry.license.util.NetworkUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import de.schlichtherle.license.*;
 import lombok.SneakyThrows;
-import lombok.var;
 
 import javax.security.auth.x500.X500Principal;
 import java.io.File;

@@ -3,16 +3,16 @@ package com.aircas.ptr.foundry.ontology.controller;
 import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.service.OverviewService;
 import com.aircas.ptr.foundry.ontology.model.vo.OverviewCountVO;
-import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 
 
-@Api(tags = "概览")
+@Tag(name = "概览")
 @RequestMapping("/overview")
 @RestController
 public class OntologyOverviewController {
@@ -20,7 +20,7 @@ public class OntologyOverviewController {
     @Resource
     private OverviewService overviewService;
 
-    @ApiOperation("获取概览页面统计数据")
+    @Operation(summary = "获取概览页面统计数据")
     @GetMapping("/count")
     public RestResult<OverviewCountVO> getCount(){
         return RestResult.ofData(overviewService.getCount());

@@ -28,15 +28,15 @@ import com.google.common.collect.Maps;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import lombok.val;
-import lombok.var;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Date;
@@ -49,6 +49,7 @@ import java.util.stream.Collectors;
 @Slf4j
 public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, OntologyMeta> implements OntologyMetaService {
 
+    @Lazy
     @Resource
     private OntologySpaceService spaceService;
 
@@ -88,6 +89,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
     @Resource
     private PropertyMetadataSchemaService propertyMetadataSchemaService;
 
+    @Lazy
     @Resource
     private OntologyMetaServiceImpl proxyService;
 
@@ -228,6 +230,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                         .ontologyUniqueIdentifierTo(v.getOntologyUniqueIdentifierTo().equals(parentIdentifier) ? childIdentifier : v.getOntologyUniqueIdentifierTo())
                         .status(v.getStatus())
                         .uniqueIdentifier(childLinkId)
+                        .ontologySpaceId(v.getOntologySpaceId())
                         .build();
                 return link;
             }).collect(Collectors.toList());
@@ -394,10 +397,10 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
             entityCnt = entityService.countEntity(pk.getDatasourceSchema(), pk.getDatasourceId());
         }
 
-        metaInfoVO.setActionCount(actionCnt)
-                .setEntityCount(entityCnt)
-                .setPropertyCount(propCnt)
-                .setRelationCount(linkCnt);
+        metaInfoVO.setActionCount(Math.toIntExact(actionCnt))
+                .setEntityCount(Math.toIntExact(entityCnt))
+                .setPropertyCount(Math.toIntExact(propCnt))
+                .setRelationCount(Math.toIntExact(linkCnt));
     }
 
 
@@ -432,6 +435,21 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 ontologyMeta.setParentOntologyDisplayName(parentMetaMap.get(ontologyMeta.getParentOntologyUniqueIdentifier())));
 
         return metaList;
+    }
+
+    @Override
+    public List<OntologyMetaInfoVO> getByCategoryId(Integer categoryId) {
+        log.info("[getByCategoryId] received categoryId={}", categoryId);
+        var queryWrapper = new LambdaQueryWrapper<OntologyMeta>()
+                .eq(OntologyMeta::getStatus, Status.ENABLE.getValue());
+        if (categoryId != null) {
+            queryWrapper.eq(OntologyMeta::getOntologyCategoryId, categoryId);
+        }
+        var metaList = list(queryWrapper);
+        log.info("[getByCategoryId] categoryId={}, matched size={}", categoryId, metaList.size());
+        return metaList.stream()
+                .map(DataConverter::convert)
+                .collect(Collectors.toList());
     }
 
     @Override
@@ -575,6 +593,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                         .type(r.getType())
                         .ontologyUniqueIdentifierFrom(fromMeta.getUniqueIdentifier())
                         .ontologyUniqueIdentifierTo(toMeta.getUniqueIdentifier())
+                        .ontologySpaceId(space.getId())
                         .build());
             }
             linkService.saveBatch(links);

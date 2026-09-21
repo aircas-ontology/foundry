@@ -29,7 +29,6 @@ import com.google.common.collect.Lists;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import lombok.var;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.collections4.MapUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -355,6 +354,20 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
     public List<OntologyPropertyInfoVO> getPropertyInfoByOntologyId(String ontologyUniqueIdentifier) {
         var props = list(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier));
         return props.stream().map(DataConverter::convertToPropertyInfoVO).collect(Collectors.toList());
+    }
+
+    @Override
+    public List<OntologyPropertyInfoVO> getByCategoryId(Integer categoryId) {
+        log.info("[getByCategoryId] received categoryId={}", categoryId);
+        var queryWrapper = new LambdaQueryWrapper<OntologyProperty>();
+        if (categoryId != null) {
+            queryWrapper.eq(OntologyProperty::getPropertyCategoryId, categoryId);
+        }
+        var propList = list(queryWrapper);
+        log.info("[getByCategoryId] categoryId={}, matched size={}", categoryId, propList.size());
+        return propList.stream()
+                .map(DataConverter::convertToPropertyInfoVO)
+                .collect(Collectors.toList());
     }
 
 

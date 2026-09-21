@@ -2,15 +2,14 @@ package com.aircas.ptr.foundry.ontology.model.param;
 
 
 import com.aircas.ptr.foundry.ontology.controller.validator.PrimaryKeyVerify;
-import io.swagger.annotations.ApiModel;
-import io.swagger.annotations.ApiModelProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
 
-import javax.validation.Valid;
+import jakarta.validation.Valid;
 import java.util.List;
 
 @Data
@@ -18,10 +17,10 @@ import java.util.List;
 @Accessors(chain = true)
 @NoArgsConstructor
 @AllArgsConstructor
-@ApiModel(description = "OntologyDatasourceParam")
+@Schema(description = "OntologyDatasourceParam")
 public class OntologyPrimaryDatasourceParam {
 
-    @ApiModelProperty(name = "columnParamList", value = "列参数", required = true)
+    @Schema(name = "columnParamList", description = "列参数", required = true)
     @PrimaryKeyVerify
     @Valid
     private List<OntologyDataSourceColumnParam> columnParamList;

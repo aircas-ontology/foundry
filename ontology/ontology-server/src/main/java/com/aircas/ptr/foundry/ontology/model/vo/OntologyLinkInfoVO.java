@@ -1,8 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.vo;
 
-import com.aircas.ptr.foundry.ontology.model.enums.OntologyLinkTypeEnum;
-import io.swagger.annotations.ApiModel;
-import io.swagger.annotations.ApiModelProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 import lombok.Data;
 import lombok.experimental.Accessors;
@@ -11,60 +9,63 @@ import lombok.experimental.Accessors;
 @Data
 @Builder
 @Accessors(chain = true)
-@ApiModel(value = "本体关系数据信息")
+@Schema(description = "本体关系数据信息")
 public class OntologyLinkInfoVO {
 
 
     /**
      * link的unique identifier
      */
-    @ApiModelProperty(name = "uniqueIdentifier", value = "link 唯一标识")
+    @Schema(name = "uniqueIdentifier", description = "link 唯一标识")
     private String uniqueIdentifier;
 
     /**
      * link的名称
      */
-    @ApiModelProperty(name = "name", value = "link名称")
+    @Schema(name = "name", description = "link名称")
     private String name;
 
     /**
      * 开始本体unique identifier
      */
-    @ApiModelProperty(name = "ontologyUniqueIdentifierFrom", value = "开始本体unique identifier")
+    @Schema(name = "ontologyUniqueIdentifierFrom", description = "开始本体unique identifier")
     private String ontologyUniqueIdentifierFrom;
 
     /**
      * 开始本体名称
      */
-    @ApiModelProperty(name = "ontologyNameFrom", value = "开始本体名称")
+    @Schema(name = "ontologyNameFrom", description = "开始本体名称")
     private String ontologyNameFrom;
 
     /**
      * 开始本体icon
      */
-    @ApiModelProperty(name = "ontologyIconFrom", value = "开始本体icon")
+    @Schema(name = "ontologyIconFrom", description = "开始本体icon")
     private String ontologyIconFrom;
 
     /**
      * 结束本体id
      */
-    @ApiModelProperty(name = "ontologyUniqueIdentifierTo", value = "结束本体id")
+    @Schema(name = "ontologyUniqueIdentifierTo", description = "结束本体id")
     private String ontologyUniqueIdentifierTo;
 
     /**
      * 结束本体名称
      */
-    @ApiModelProperty(name = "ontologyNameTo", value = "结束本体名称")
+    @Schema(name = "ontologyNameTo", description = "结束本体名称")
     private String ontologyNameTo;
 
     /**
      * 开始本体icon
      */
-    @ApiModelProperty(name = "ontologyIconTO", value = "开始本体icon")
+    @Schema(name = "ontologyIconTO", description = "开始本体icon")
     private String ontologyIconTO;
 
-    @ApiModelProperty(name = "type", value = "关系类型")
-    private OntologyLinkTypeEnum type;
+    /**
+     * 关系分类id（ontology_link_category.id），为空表示未分类
+     */
+    @Schema(name = "categoryId", description = "关系分类id（ontology_link_category.id）")
+    private Integer categoryId;
 
 }
 

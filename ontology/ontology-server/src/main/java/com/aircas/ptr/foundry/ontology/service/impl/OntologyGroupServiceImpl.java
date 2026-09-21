@@ -14,7 +14,6 @@ import com.aircas.ptr.foundry.ontology.service.OntologyGroupService;
 import com.aircas.ptr.foundry.ontology.service.OntologyMetaService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import lombok.var;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
