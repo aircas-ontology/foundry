@@ -32,4 +32,9 @@ public class OntologyCreateDTO {
     private List<OntologyFunctionDTO> functions;
 
     private List<OntologyActionDTO> actions;
+
+    /**
+     * 导出专有段：本体实例数据（全量）。导入侧不消费。
+     */
+    private OntologyInstancesExportDTO instances;
 }

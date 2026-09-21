@@ -2,6 +2,8 @@ package com.aircas.ptr.foundry.ontology.service;
 
 import com.aircas.ptr.foundry.ontology.model.enums.QuerySortEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyOrderByEnum;
+import com.aircas.ptr.foundry.ontology.model.dto.OntologyCreateDTO;
+import com.aircas.ptr.foundry.ontology.model.dto.OntologySpaceExportData;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyMetaCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
@@ -46,4 +48,23 @@ public interface OntologyMetaService extends IService<OntologyMeta> {
 
 
     List<String> importOntologies(MultipartFile file);
+
+    /**
+     * 导出指定本体空间下的全部本体（含 schema 与实例数据），结构对齐导入模板。
+     *
+     * @param spaceId 本体空间 id
+     * @return 本体导出列表，无本体时返回空列表
+     */
+    List<OntologyCreateDTO> exportOntologies(Integer spaceId);
+
+    /**
+     * 一次装配导出指定空间的全部本体与空间级函数。
+     *
+     * <p>供空间导出使用：本体装配与函数收集共享同一次 space/metas 加载与函数详情缓存，
+     * 避免重复查询。函数为空间级资源，按空间内本体 action 引用的 functionApi 去重收集。</p>
+     *
+     * @param spaceId 本体空间 id
+     * @return 本体与函数的导出承载结构，无本体时两者均为空列表
+     */
+    OntologySpaceExportData exportOntologiesWithFunctions(Integer spaceId);
 }

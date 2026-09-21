@@ -12,6 +12,8 @@ import com.aircas.ptr.foundry.ontology.model.vo.OntologyGroupMetaVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaNodeVO;
 import com.aircas.ptr.foundry.ontology.service.OntologyMetaService;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -21,6 +23,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import jakarta.annotation.Resource;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import java.util.List;
 
@@ -33,6 +36,25 @@ public class OntologyMetaController {
 
     @Resource
     private OntologyMetaService ontologyMetaService;
+
+    @Resource
+    private ObjectMapper objectMapper;
+
+
+    @GetMapping("/export")
+    @Operation(summary = "导出本体空间下全部本体（含 schema 与实例数据）")
+    public void exportOntologies(@RequestParam(name = "spaceId") Integer spaceId,
+                                 HttpServletResponse response) throws Exception {
+        var dtos = ontologyMetaService.exportOntologies(spaceId);
+        var fileName = "ontologies_" + spaceId + ".json";
+        response.setContentType("application/json;charset=UTF-8");
+        response.setCharacterEncoding("UTF-8");
+        response.setHeader("Content-Disposition", "attachment; filename=\"" + fileName + "\"");
+        objectMapper.copy()
+                .setSerializationInclusion(JsonInclude.Include.NON_NULL)
+                .writeValue(response.getOutputStream(), dtos);
+        response.getOutputStream().flush();
+    }
 
 
     @PostMapping("/import")

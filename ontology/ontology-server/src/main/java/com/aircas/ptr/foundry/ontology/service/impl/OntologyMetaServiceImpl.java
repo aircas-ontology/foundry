@@ -7,11 +7,18 @@ import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.common.util.SnowflakeIdUtil;
 import com.aircas.ptr.foundry.ontology.converter.DataConverter;
 import com.aircas.ptr.foundry.ontology.model.dto.OntologyCreateDTO;
+import com.aircas.ptr.foundry.ontology.model.dto.OntologyActionDTO;
+import com.aircas.ptr.foundry.ontology.model.dto.OntologyFunctionDTO;
+import com.aircas.ptr.foundry.ontology.model.dto.OntologyMetaDataDTO;
+import com.aircas.ptr.foundry.ontology.model.dto.OntologyPropertyDTO;
+import com.aircas.ptr.foundry.ontology.model.dto.OntologyRelationDTO;
+import com.aircas.ptr.foundry.ontology.model.dto.OntologySpaceExportData;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyOrderByEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.QuerySortEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import com.aircas.ptr.foundry.ontology.model.param.*;
 import com.aircas.ptr.foundry.ontology.model.po.*;
+import com.aircas.ptr.foundry.ontology.model.vo.FunctionDetailVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyGroupMetaVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaNodeVO;
@@ -39,9 +46,12 @@ import org.springframework.web.multipart.MultipartFile;
 import jakarta.annotation.Resource;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 
@@ -733,6 +743,389 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 buildTree(child, metaMap);
             }
         });
+    }
+
+    @Override
+    public List<OntologyCreateDTO> exportOntologies(Integer spaceId) {
+        var space = getSpaceOrThrow(spaceId);
+        var metas = listEnabledMetas(space);
+        if (CollectionUtils.isEmpty(metas)) {
+            return Lists.newArrayList();
+        }
+        return buildOntologies(space, metas, Maps.newHashMap());
+    }
+
+    @Override
+    public OntologySpaceExportData exportOntologiesWithFunctions(Integer spaceId) {
+        return exportOntologiesWithFunctions(getSpaceOrThrow(spaceId));
+    }
+
+    /**
+     * 空间已加载时的重载：供空间导出复用已查出的 space，避免重复 getById。
+     */
+    public OntologySpaceExportData exportOntologiesWithFunctions(OntologySpace space) {
+        var metas = listEnabledMetas(space);
+        if (CollectionUtils.isEmpty(metas)) {
+            return OntologySpaceExportData.builder()
+                    .ontologies(Lists.newArrayList())
+                    .functions(Lists.newArrayList())
+                    .build();
+        }
+        //共享函数详情缓存：actions 装配与空间级 functions 收集复用，避免同一函数重复查询
+        var fnCache = Maps.<String, FunctionDetailVO>newHashMap();
+        return OntologySpaceExportData.builder()
+                .ontologies(buildOntologies(space, metas, fnCache))
+                .functions(buildFunctions(metas, fnCache))
+                .build();
+    }
+
+    private OntologySpace getSpaceOrThrow(Integer spaceId) {
+        var space = spaceService.getById(spaceId);
+        PreconditionUtils.checkNotNull(space, "本体空间不存在:" + spaceId);
+        return space;
+    }
+
+    private List<OntologyMeta> listEnabledMetas(OntologySpace space) {
+        return list(new LambdaQueryWrapper<OntologyMeta>()
+                .eq(OntologyMeta::getOntologySpaceId, space.getId())
+                .eq(OntologyMeta::getStatus, Status.ENABLE.getValue()));
+    }
+
+    private List<OntologyCreateDTO> buildOntologies(OntologySpace space, List<OntologyMeta> metas,
+                                                    Map<String, FunctionDetailVO> fnCache) {
+        //uid -> displayName（供 relations 端点与 actions 的 ontologyName 回填，对齐导入侧按 displayName 反查的语义）
+        var uidToDisplayName = metas.stream()
+                .collect(Collectors.toMap(OntologyMeta::getUniqueIdentifier, OntologyMeta::getDisplayName, (a, b) -> a));
+        //本体分类 id -> path
+        var ontologyCategoryPathMap = categoryService.list(new LambdaQueryWrapper<OntologyCategory>()
+                        .eq(OntologyCategory::getOntologySpaceId, space.getId()))
+                .stream().collect(Collectors.toMap(OntologyCategory::getId, OntologyCategory::getPath, (a, b) -> a));
+        //分组 groupId -> groupName
+        var groupNameMap = groupService.list(new LambdaQueryWrapper<OntologyGroup>()
+                        .eq(OntologyGroup::getOntologySpaceId, space.getId()))
+                .stream().collect(Collectors.toMap(OntologyGroup::getGroupId, OntologyGroup::getGroupName, (a, b) -> a));
+
+        return metas.stream()
+                .map(meta -> buildExportDTO(meta, space, ontologyCategoryPathMap, groupNameMap, uidToDisplayName, fnCache))
+                .collect(Collectors.toList());
+    }
+
+    private List<OntologyFunctionDTO> buildFunctions(List<OntologyMeta> metas, Map<String, FunctionDetailVO> fnCache) {
+        var uids = metas.stream().map(OntologyMeta::getUniqueIdentifier).collect(Collectors.toList());
+
+        //空间内全部本体 action 引用的 functionApi 去重（createFunction 不写 function.ontologySpaceId，故不能按空间 id 直查）
+        var functionApis = actionService.list(new LambdaQueryWrapper<OntologyAction>()
+                        .in(OntologyAction::getOntologyUniqueIdentifier, uids)
+                        .eq(OntologyAction::getStatus, Status.ENABLE.getValue()))
+                .stream()
+                .map(OntologyAction::getFunctionApi)
+                .filter(StringUtils::isNotEmpty)
+                .distinct()
+                .collect(Collectors.toList());
+        if (CollectionUtils.isEmpty(functionApis)) {
+            return Lists.newArrayList();
+        }
+
+        var functions = Lists.<OntologyFunctionDTO>newArrayList();
+        for (var functionApi : functionApis) {
+            var detail = getFunctionDetailCached(fnCache, functionApi);
+            if (detail == null) {
+                continue;
+            }
+            var inputParams = CollectionUtils.isEmpty(detail.getParams())
+                    ? Lists.<OntologyFunctionDTO.InputParam>newArrayList()
+                    : detail.getParams().stream()
+                        .map(p -> OntologyFunctionDTO.InputParam.builder()
+                                .paramName(p.getParamName())
+                                //paramType 用枚举名，保证回导时 valueOf(toUpperCase) 可解析
+                                .paramType(p.getParamType() == null ? null : p.getParamType().name())
+                                .build())
+                        .collect(Collectors.toList());
+            functions.add(OntologyFunctionDTO.builder()
+                    .displayName(detail.getDisplayName())
+                    .functionApi(detail.getFunctionApi())
+                    .description(detail.getDescription())
+                    .model(detail.getModel())
+                    .type(detail.getType())
+                    .inputParams(inputParams)
+                    .build());
+        }
+        return functions;
+    }
+
+    /**
+     * 带缓存获取函数详情：同一 functionApi 只查一次，获取失败时缓存 null 并记日志。
+     */
+    private FunctionDetailVO getFunctionDetailCached(Map<String, FunctionDetailVO> fnCache, String functionApi) {
+        if (StringUtils.isEmpty(functionApi)) {
+            return null;
+        }
+        if (fnCache.containsKey(functionApi)) {
+            return fnCache.get(functionApi);
+        }
+        FunctionDetailVO detail = null;
+        try {
+            detail = functionService.getFunctionDetailByApi(functionApi);
+        } catch (Exception e) {
+            log.warn("获取函数 {} 详情失败", functionApi, e);
+        }
+        fnCache.put(functionApi, detail);
+        return detail;
+    }
+
+    private OntologyCreateDTO buildExportDTO(OntologyMeta meta, OntologySpace space,
+                                             Map<Integer, String> ontologyCategoryPathMap,
+                                             Map<String, String> groupNameMap,
+                                             Map<String, String> uidToDisplayName,
+                                             Map<String, FunctionDetailVO> fnCache) {
+        var uid = meta.getUniqueIdentifier();
+
+        //metadata
+        Set<String> groupNames = new LinkedHashSet<>();
+        if (StringUtils.isNotEmpty(meta.getMetaGroupId())) {
+            for (String gid : meta.getMetaGroupId().split(",")) {
+                if (StringUtils.isEmpty(gid)) {
+                    continue;
+                }
+                var gname = groupNameMap.get(gid.trim());
+                if (StringUtils.isNotEmpty(gname)) {
+                    groupNames.add(gname);
+                }
+            }
+        }
+        var metadata = OntologyMetaDataDTO.builder()
+                .apiName(meta.getApiName())
+                .displayName(meta.getDisplayName())
+                .description(meta.getDescription())
+                .ontologySpaceName(space.getDisplayName())
+                .groupNames(groupNames)
+                .categoryPath(meta.getOntologyCategoryId() == null ? null : ontologyCategoryPathMap.get(meta.getOntologyCategoryId()))
+                .build();
+
+        //属性分类树
+        var propertyCategories = propertyCategoryService.list(new LambdaQueryWrapper<PropertyCategory>()
+                .eq(PropertyCategory::getOntologyUniqueIdentifier, uid));
+        var propCategoryPathMap = propertyCategories.stream()
+                .collect(Collectors.toMap(PropertyCategory::getId, PropertyCategory::getPath, (a, b) -> a));
+        var propertyCategory = buildPropertyCategoryTree(propertyCategories);
+
+        //属性元数据 schema 树
+        var metadataSchemas = propertyMetadataSchemaService.list(new LambdaQueryWrapper<PropertyMetadataSchema>()
+                .eq(PropertyMetadataSchema::getOntologyUniqueIdentifier, uid));
+        var propertySchema = buildMetadataSchemaTree(metadataSchemas);
+
+        //属性
+        var properties = ontologyPropertyService.list(new LambdaQueryWrapper<OntologyProperty>()
+                        .eq(OntologyProperty::getOntologyUniqueIdentifier, uid)
+                        .eq(OntologyProperty::getStatus, Status.ENABLE.getValue()))
+                .stream().map(p -> OntologyPropertyDTO.builder()
+                        .apiName(p.getApiName())
+                        .dataType(p.getPropertyType())
+                        .displayName(p.getDisplayName())
+                        .description(p.getDescription())
+                        .isPrimaryKey(p.getIsPrimaryKey() != null && p.getIsPrimaryKey() == 1)
+                        .isTitleKey(p.getIsTitleKey() != null && p.getIsTitleKey() == 1)
+                        .defaultValue(p.getDefaultValue())
+                        .storageGroup(p.getStorageGroup())
+                        .categoryPath(p.getPropertyCategoryId() == null ? null : propCategoryPathMap.get(p.getPropertyCategoryId()))
+                        .metadata(p.getMetadata())
+                        .build())
+                .collect(Collectors.toList());
+
+        //关系（仅 from=本本体，端点用 displayName；同时构建 linkUid -> relations 下标，供 actions 使用）
+        var linkUidToIndex = Maps.<String, Integer>newHashMap();
+        var relations = buildExportRelations(uid, uidToDisplayName, linkUidToIndex);
+
+        //行为
+        var actions = buildExportActions(uid, linkUidToIndex, uidToDisplayName, fnCache);
+
+        //实例（数据湖物理表全量；未绑定数据源则为空）
+        var instances = entityService.exportInstances(uid);
+
+        return OntologyCreateDTO.builder()
+                .metadata(metadata)
+                .propertyCategory(propertyCategory)
+                .propertySchema(propertySchema)
+                .properties(properties)
+                .relations(relations)
+                .actions(actions)
+                .instances(instances)
+                .build();
+    }
+
+    /**
+     * 装配本体级关系：仅取 from=本本体、启用中的关系，端点回填本体 displayName（对齐导入反查语义）。
+     * 同时构建 linkUid -> relations 下标映射，供 actions 的 relationIndex 使用。
+     */
+    private List<OntologyRelationDTO> buildExportRelations(String uid, Map<String, String> uidToDisplayName,
+                                                           Map<String, Integer> linkUidToIndex) {
+        var links = linkService.list(new LambdaQueryWrapper<OntologyLinkGroup>()
+                .eq(OntologyLinkGroup::getOntologyUniqueIdentifierFrom, uid)
+                .eq(OntologyLinkGroup::getStatus, Status.ENABLE.getValue()));
+        var relations = Lists.<OntologyRelationDTO>newArrayList();
+        if (CollectionUtils.isEmpty(links)) {
+            return relations;
+        }
+        for (int i = 0; i < links.size(); i++) {
+            var link = links.get(i);
+            linkUidToIndex.put(link.getUniqueIdentifier(), i);
+            relations.add(OntologyRelationDTO.builder()
+                    .name(link.getName())
+                    .type(link.getType())
+                    .ontologyUniqueIdentifierFrom(uidToDisplayName.get(link.getOntologyUniqueIdentifierFrom()))
+                    .ontologyUniqueIdentifierTo(uidToDisplayName.get(link.getOntologyUniqueIdentifierTo()))
+                    .build());
+        }
+        return relations;
+    }
+
+    /**
+     * 装配本体级行为：批量预加载 action_link / mapping_in / property（消除 per-action N+1 查询），
+     * relationIndex 取自本本体 relations 下标（命中不到则 null）。
+     */
+    private List<OntologyActionDTO> buildExportActions(String uid, Map<String, Integer> linkUidToIndex,
+                                                       Map<String, String> uidToDisplayName,
+                                                       Map<String, FunctionDetailVO> fnCache) {
+        var actions = actionService.list(new LambdaQueryWrapper<OntologyAction>()
+                .eq(OntologyAction::getOntologyUniqueIdentifier, uid)
+                .eq(OntologyAction::getStatus, Status.ENABLE.getValue()));
+        if (CollectionUtils.isEmpty(actions)) {
+            return Lists.newArrayList();
+        }
+        var actionIds = actions.stream().map(OntologyAction::getId).collect(Collectors.toList());
+
+        //批量查 action_link：actionId -> link
+        var linkByActionId = actionLinkService.list(new LambdaQueryWrapper<OntologyActionLink>()
+                        .in(OntologyActionLink::getOntologyActionId, actionIds))
+                .stream().collect(Collectors.toMap(OntologyActionLink::getOntologyActionId, l -> l, (a, b) -> a));
+
+        //批量查 mapping_in：actionId -> mappings
+        var allMappings = actionMappingInService.list(new LambdaQueryWrapper<OntologyActionMappingIn>()
+                .in(OntologyActionMappingIn::getOntologyActionId, actionIds));
+        var mappingsByActionId = allMappings.stream()
+                .collect(Collectors.groupingBy(OntologyActionMappingIn::getOntologyActionId));
+
+        //批量查属性：propertyUniqueIdentifier -> property
+        var propUniqIds = allMappings.stream()
+                .map(OntologyActionMappingIn::getPropertyUniqueIdentifier)
+                .filter(StringUtils::isNotEmpty)
+                .distinct()
+                .collect(Collectors.toList());
+        var propMap = CollectionUtils.isEmpty(propUniqIds) ? Maps.<String, OntologyProperty>newHashMap()
+                : ontologyPropertyService.list(new LambdaQueryWrapper<OntologyProperty>()
+                        .in(OntologyProperty::getUniqueIdentifier, propUniqIds))
+                .stream().collect(Collectors.toMap(OntologyProperty::getUniqueIdentifier, p -> p, (a, b) -> a));
+
+        return actions.stream().map(action -> {
+            Integer relationIndex = null;
+            var actionLink = linkByActionId.get(action.getId());
+            if (actionLink != null && StringUtils.isNotEmpty(actionLink.getOntologyLinkUniqueIdentifier())) {
+                relationIndex = linkUidToIndex.get(actionLink.getOntologyLinkUniqueIdentifier());
+            }
+            var mappings = mappingsByActionId.getOrDefault(action.getId(), Lists.<OntologyActionMappingIn>newArrayList());
+            return OntologyActionDTO.builder()
+                    .actionApi(action.getApi())
+                    .displayName(action.getDisplayName())
+                    .description(action.getDescription())
+                    .functionApi(action.getFunctionApi())
+                    .relationIndex(relationIndex)
+                    .mappingIns(buildActionMappingIns(action, mappings, propMap, uidToDisplayName, fnCache))
+                    .build();
+        }).collect(Collectors.toList());
+    }
+
+    /**
+     * 装配单个行为的入参映射（不查库）：functionParamId -> 函数参数名（取自缓存的函数详情）；
+     * propertyUniqueIdentifier -> 属性 displayName 与所属本体 displayName（取自预加载的 propMap）。
+     */
+    private List<OntologyActionDTO.ActionMappingIn> buildActionMappingIns(OntologyAction action,
+                                                                          List<OntologyActionMappingIn> mappings,
+                                                                          Map<String, OntologyProperty> propMap,
+                                                                          Map<String, String> uidToDisplayName,
+                                                                          Map<String, FunctionDetailVO> fnCache) {
+        if (CollectionUtils.isEmpty(mappings)) {
+            return Lists.newArrayList();
+        }
+        //functionParamId -> paramName（函数详情走缓存，跨 action / functions 复用）
+        var paramIdToName = Maps.<Long, String>newHashMap();
+        var detail = getFunctionDetailCached(fnCache, action.getFunctionApi());
+        if (detail != null && CollectionUtils.isNotEmpty(detail.getParams())) {
+            detail.getParams().forEach(p -> paramIdToName.put(p.getParamId(), p.getParamName()));
+        }
+        return mappings.stream().map(m -> {
+            var prop = propMap.get(m.getPropertyUniqueIdentifier());
+            return OntologyActionDTO.ActionMappingIn.builder()
+                    .functionParamName(paramIdToName.get(m.getFunctionParamId()))
+                    .ontologyName(prop == null ? null : uidToDisplayName.get(prop.getOntologyUniqueIdentifier()))
+                    .propertyName(prop == null ? null : prop.getDisplayName())
+                    .build();
+        }).collect(Collectors.toList());
+    }
+
+    private PropertyCategoryCreateParam buildPropertyCategoryTree(List<PropertyCategory> categories) {
+        if (CollectionUtils.isEmpty(categories)) {
+            return null;
+        }
+        var root = categories.stream()
+                .filter(c -> c.getParentId() != null && c.getParentId() == 0)
+                .findFirst().orElse(null);
+        if (root == null) {
+            return null;
+        }
+        return PropertyCategoryCreateParam.builder()
+                .parentId(root.getParentId())
+                .name(root.getName())
+                .children(buildPropertyCategoryChildren(root.getId(), categories))
+                .build();
+    }
+
+    private List<CategoryNode> buildPropertyCategoryChildren(Integer parentId, List<PropertyCategory> categories) {
+        return categories.stream()
+                .filter(c -> c.getParentId() != null && c.getParentId().equals(parentId))
+                .map(c -> CategoryNode.builder()
+                        .name(c.getName())
+                        .children(buildPropertyCategoryChildren(c.getId(), categories))
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    private PropertyMetadataSchemaCreateParam buildMetadataSchemaTree(List<PropertyMetadataSchema> schemas) {
+        if (CollectionUtils.isEmpty(schemas)) {
+            return null;
+        }
+        var root = schemas.stream()
+                .filter(s -> s.getParentId() != null && s.getParentId() == 0)
+                .findFirst().orElse(null);
+        if (root == null) {
+            return null;
+        }
+        return PropertyMetadataSchemaCreateParam.builder()
+                .parentId(root.getParentId())
+                .name(root.getName())
+                .enumValues(splitEnumValues(root.getEnumValues()))
+                .children(buildMetadataSchemaChildren(root.getId(), schemas))
+                .build();
+    }
+
+    private List<PropertyMetadataSchemaCreateParam.MetadataSchemaNode> buildMetadataSchemaChildren(Integer parentId, List<PropertyMetadataSchema> schemas) {
+        return schemas.stream()
+                .filter(s -> s.getParentId() != null && s.getParentId().equals(parentId))
+                .map(s -> PropertyMetadataSchemaCreateParam.MetadataSchemaNode.builder()
+                        .name(s.getName())
+                        .enumValues(splitEnumValues(s.getEnumValues()))
+                        .children(buildMetadataSchemaChildren(s.getId(), schemas))
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    private List<String> splitEnumValues(String enumValues) {
+        if (StringUtils.isEmpty(enumValues)) {
+            return null;
+        }
+        return Arrays.stream(enumValues.split(","))
+                .map(String::trim)
+                .filter(StringUtils::isNotEmpty)
+                .collect(Collectors.toList());
     }
 
 

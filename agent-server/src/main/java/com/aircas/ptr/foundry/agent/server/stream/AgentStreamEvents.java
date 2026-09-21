@@ -17,6 +17,9 @@ public final class AgentStreamEvents {
     /** toolContext 中事件 sink 的键。 */
     public static final String SINK_KEY = "agentStreamEventSink";
 
+    /** toolContext 中当前会话 id 的键，供本地会话工具（如清空上下文）读取。 */
+    public static final String SESSION_ID_KEY = "agentSessionId";
+
     /** 工具入参 / 结果摘要的最大长度，超出截断，避免单条 SSE 事件过大。 */
     private static final int MAX_SUMMARY_LENGTH = 2000;
 

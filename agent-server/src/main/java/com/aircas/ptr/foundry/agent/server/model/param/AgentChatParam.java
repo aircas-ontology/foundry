@@ -19,9 +19,14 @@ public class AgentChatParam {
     private String message;
 
     /**
-     * 会话 id，用于多轮对话记忆隔离；同一 sessionId 的多次请求共享上下文。为空时使用默认会话。
+     * 会话 id，用于多轮对话记忆隔离；同一 sessionId 的多次请求共享上下文。
+     *
+     * <p>约定：由前端生成并<b>每轮请求必带同一值</b>；用户发起“新对话”时前端重新生成一个新的
+     * UUID v4（不可预测，避免会话被越权读取）。后端不再生成或兜底默认会话，缺失即校验失败。</p>
      */
-    @Schema(description = "会话 id（多轮记忆键），同一会话传同一值；为空用默认会话", example = "sess-001")
+    @NotBlank(message = "会话 id 不能为空")
+    @Schema(description = "会话 id（多轮记忆键），同一会话每轮传同一值；新对话由前端生成新的 UUID v4",
+            example = "550e8400-e29b-41d4-a716-446655440000", requiredMode = Schema.RequiredMode.REQUIRED)
     private String sessionId;
 
     /**

@@ -8,6 +8,8 @@ import com.aircas.ptr.foundry.ontology.model.param.OntologySpaceUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologySpaceCanvasCreateVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologySpaceVO;
 import com.aircas.ptr.foundry.ontology.service.OntologySpaceService;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
@@ -16,6 +18,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import java.util.List;
 
@@ -27,6 +30,25 @@ import java.util.List;
 public class OntologySpaceController {
 
     private final OntologySpaceService ontologySpaceService;
+
+    private final ObjectMapper objectMapper;
+
+
+    @GetMapping("/export")
+    @Operation(summary = "导出本体空间（含分类树、全部本体 schema 与实例数据）")
+    public void exportOntologySpace(@RequestParam(name = "spaceId") Integer spaceId,
+                                    HttpServletResponse response) throws Exception {
+        var dto = ontologySpaceService.exportOntologySpace(spaceId);
+        var apiName = dto.getOntologySpace() != null ? dto.getOntologySpace().getApiName() : null;
+        var fileName = (apiName == null || apiName.isEmpty() ? "space_" + spaceId : apiName) + "_space.json";
+        response.setContentType("application/json;charset=UTF-8");
+        response.setCharacterEncoding("UTF-8");
+        response.setHeader("Content-Disposition", "attachment; filename=\"" + fileName + "\"");
+        objectMapper.copy()
+                .setSerializationInclusion(JsonInclude.Include.NON_NULL)
+                .writeValue(response.getOutputStream(), dto);
+        response.getOutputStream().flush();
+    }
 
 
     @PostMapping("/import")

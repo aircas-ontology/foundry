@@ -4,6 +4,7 @@ import com.aircas.ptr.foundry.agent.server.config.ChatClientConfig;
 import com.aircas.ptr.foundry.agent.server.model.param.AgentChatParam;
 import com.aircas.ptr.foundry.agent.server.model.vo.AgentChatStreamVO;
 import com.aircas.ptr.foundry.agent.server.model.vo.AgentChatVO;
+import com.aircas.ptr.foundry.agent.server.session.ConversationResetService;
 import com.aircas.ptr.foundry.agent.server.session.SessionStageCollector;
 import com.aircas.ptr.foundry.agent.server.session.SessionStateStore;
 import com.aircas.ptr.foundry.agent.server.stream.AgentStreamEvents;
@@ -20,6 +21,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -46,9 +48,6 @@ import java.util.Map;
 @Validated
 public class AgentChatController {
 
-    /** sessionId 为空时使用的默认会话键。 */
-    private static final String DEFAULT_SESSION_ID = "default";
-
     private final ChatClient chatClient;
 
     /** 会话级本体构建状态存储：跨轮持久化各 stage，注入 system 消息，规避 ChatMemory 滑动窗口淘汰。 */
@@ -57,13 +56,17 @@ public class AgentChatController {
     /** 从模型回复中抽取带 stage 的 JSON 块并写入 {@link #sessionStateStore}。 */
     private final SessionStageCollector sessionStageCollector;
 
+    /** 会话上下文重置：清空 ChatMemory 记忆窗口 + SessionStateStore 构建状态。 */
+    private final ConversationResetService conversationResetService;
+
     @PostMapping("/completions")
     @Operation(summary = "同步对话：一次性返回大模型完整回复")
     public RestResult<AgentChatVO> completions(@RequestBody @Valid AgentChatParam param) {
-        String sessionId = resolveSessionId(param);
+        String sessionId = param.getSessionId();
         String reply = chatClient.prompt()
                 .system(buildSystemPrompt(param, sessionId))
                 .user(param.getMessage())
+                .toolContext(buildToolContext(null, sessionId))
                 .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, sessionId))
                 .call()
                 .content();
@@ -77,14 +80,14 @@ public class AgentChatController {
     public Flux<ServerSentEvent<AgentChatStreamVO>> stream(@RequestBody @Valid AgentChatParam param) {
         // 每请求一个事件 sink：工具回调经 toolContext 拿到它，把 tool_call/tool_result 推入本流
         Sinks.Many<AgentChatStreamVO> sink = Sinks.many().unicast().onBackpressureBuffer();
-        String sessionId = resolveSessionId(param);
+        String sessionId = param.getSessionId();
         // 累积本轮 content 增量，流结束后整体解析 stage 状态（单订阅内 reactor 算子串行，无并发写）
         StringBuilder replyBuffer = new StringBuilder();
 
         Flux<AgentChatStreamVO> contentEvents = chatClient.prompt()
                 .system(buildSystemPrompt(param, sessionId))
                 .user(param.getMessage())
-                .toolContext(buildToolContext(sink))
+                .toolContext(buildToolContext(sink, sessionId))
                 .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, sessionId))
                 .stream()
                 .content()
@@ -102,25 +105,31 @@ public class AgentChatController {
                 .onErrorResume(e -> Flux.just(toSse(AgentChatStreamVO.error(e.getMessage()))));
     }
 
+    @PostMapping("/clear_context")
+    @Operation(summary = "清空会话上下文：清除多轮记忆与本体构建状态（用于“新对话/清空”）")
+    public RestResult<Boolean> clearContext(@RequestParam String sessionId) {
+        conversationResetService.reset(sessionId);
+        return RestResult.ofData(Boolean.TRUE);
+    }
+
     /**
-     * 构建工具上下文：携带事件 sink（仅流式），供工具回调把 tool_call/tool_result 推入当前 SSE 流。
+     * 构建工具上下文：携带事件 sink（仅流式）与当前会话 id，供工具回调把 tool_call/tool_result
+     * 推入当前 SSE 流、并让本地会话工具（clearConversationContext）读到 sessionId。
      */
-    private Map<String, Object> buildToolContext(Sinks.Many<AgentChatStreamVO> sink) {
+    private Map<String, Object> buildToolContext(Sinks.Many<AgentChatStreamVO> sink, String sessionId) {
         Map<String, Object> ctx = new HashMap<>();
         if (sink != null) {
             ctx.put(AgentStreamEvents.SINK_KEY, sink);
+        }
+        // 注入当前会话 id，供本地会话工具读取；不作为模型可见参数，避免被伪造为他人 sessionId
+        if (sessionId != null) {
+            ctx.put(AgentStreamEvents.SESSION_ID_KEY, sessionId);
         }
         return ctx;
     }
 
     private ServerSentEvent<AgentChatStreamVO> toSse(AgentChatStreamVO vo) {
         return ServerSentEvent.builder(vo).build();
-    }
-
-    private String resolveSessionId(AgentChatParam param) {
-        return (param.getSessionId() == null || param.getSessionId().isBlank())
-                ? DEFAULT_SESSION_ID
-                : param.getSessionId();
     }
 
     /**

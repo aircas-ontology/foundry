@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.agent.server.config;
 
 import com.aircas.ptr.foundry.agent.server.stream.EventEmittingToolCallback;
+import com.aircas.ptr.foundry.agent.server.tool.ConversationTools;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -45,6 +46,7 @@ public class ChatClientConfig {
             2. 工具返回结果后，用简洁、准确的中文总结回答；涉及数量、标识等关键信息时如实呈现。
             3. 若工具返回为空或调用失败，明确告知用户未查询到相关数据，而不是虚构内容。
             4. 与本体数据无关的闲聊，正常友好回答即可。
+            5. 当用户明确要求"清空上下文/清除记忆/清空对话/重新开始/新对话"时，必须调用 clearConversationContext 工具真正清空会话记忆与本体构建状态，再向用户简短确认；不要只在回复里声称已清空却未实际调用工具。
 
             【本体构建引导总流程】（最高优先级，覆盖下面的分功能说明）：
             只要用户表达出“要建/新建/构建本体对象”的意图（如"我要建个本体""新建一个对象""帮我构建 XX 对象""开始建本体"），
@@ -311,7 +313,8 @@ public class ChatClientConfig {
     @Bean
     public ChatClient chatClient(ChatClient.Builder builder,
                                  ToolCallbackProvider mcpToolCallbackProvider,
-                                 ChatMemory chatMemory) {
+                                 ChatMemory chatMemory,
+                                 ConversationTools conversationTools) {
         // MCP Client 启动时已从 ontology-server 动态发现工具并装配为 ToolCallbackProvider；
         // 取出回调后用装饰器包装，以在调用前后推送 tool_call/tool_result 流式事件
         ToolCallback[] rawCallbacks = mcpToolCallbackProvider.getToolCallbacks();
@@ -322,6 +325,8 @@ public class ChatClientConfig {
         return builder
                 .defaultSystem(DEFAULT_SYSTEM_PROMPT)
                 .defaultToolCallbacks(eventEmittingCallbacks)
+                // 本地会话控制工具（非 MCP）：清空上下文需操作本进程 ChatMemory/SessionStateStore，远端 MCP 工具无法触及
+                .defaultTools(conversationTools)
                 .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
                 .build();
     }

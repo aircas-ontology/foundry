@@ -9,6 +9,8 @@ import com.aircas.ptr.foundry.ontology.model.common.VisibilityWindow;
 import com.aircas.ptr.foundry.ontology.model.document.EntityNode;
 import com.aircas.ptr.foundry.ontology.model.document.EntityRelation;
 import com.aircas.ptr.foundry.ontology.model.dto.ActionContextInfoDTO;
+import com.aircas.ptr.foundry.ontology.model.dto.EntityNodeExportDTO;
+import com.aircas.ptr.foundry.ontology.model.dto.OntologyInstancesExportDTO;
 import com.aircas.ptr.foundry.ontology.model.enums.*;
 import com.aircas.ptr.foundry.ontology.model.param.*;
 import com.aircas.ptr.foundry.ontology.model.po.*;
@@ -1699,6 +1701,131 @@ public class EntityServiceImpl implements EntityService {
             log.error("evaluateJsonCondition failed! jsonStr: " + jsonStr + ", conditionExpr:" + conditionExpr, e);
             return false;
         }
+    }
+
+    @Override
+    public OntologyInstancesExportDTO exportInstances(String ontologyUniqueIdentifier) {
+        var emptyResult = OntologyInstancesExportDTO.builder()
+                .nodes(Lists.<EntityNodeExportDTO>newArrayList())
+                .build();
+
+        //仅取启用中且绑定了数据源列的属性
+        var props = propertyMapper.selectList(new LambdaQueryWrapper<OntologyProperty>()
+                        .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier)
+                        .eq(OntologyProperty::getStatus, Status.ENABLE.getValue()))
+                .stream()
+                .filter(v -> StringUtils.isNotEmpty(v.getDatasourceColumnName()))
+                .collect(Collectors.toList());
+        if (CollectionUtils.isEmpty(props)) {
+            return emptyResult;
+        }
+
+        //主键属性决定主表；不存在或未绑定数据源则不导实例
+        var primaryKeyProp = props.stream()
+                .filter(v -> v.getIsPrimaryKey() != null && v.getIsPrimaryKey() == 1)
+                .findFirst();
+        if (!primaryKeyProp.isPresent()) {
+            return emptyResult;
+        }
+        var pk = primaryKeyProp.get();
+        if (StringUtils.isEmpty(pk.getDatasourceId())
+                || StringUtils.isEmpty(pk.getDatasourceSchema())
+                || StringUtils.isEmpty(pk.getDatasourceColumnName())) {
+            return emptyResult;
+        }
+
+        var mainSchema = pk.getDatasourceSchema();
+        var mainTable = pk.getDatasourceId();
+        var pkApiName = pk.getApiName();
+
+        //标题键属性 apiName（用于 displayName），无则用主键值
+        var titleApiName = props.stream()
+                .filter(v -> v.getIsTitleKey() != null && v.getIsTitleKey() == 1)
+                .map(OntologyProperty::getApiName)
+                .findFirst().orElse(null);
+
+        //属性按 datasourceId（物理表）分组
+        var propsMap = props.stream().collect(Collectors.groupingBy(OntologyProperty::getDatasourceId));
+
+        var exportNodes = Lists.<EntityNodeExportDTO>newArrayList();
+        try {
+            //主表全量：物理列名 -> 别名(apiName)
+            var mainColumnToApiName = new LinkedHashMap<String, String>();
+            propsMap.get(mainTable).forEach(p -> mainColumnToApiName.put(p.getDatasourceColumnName(), p.getApiName()));
+            var mainRows = objectMapper.queryTableDataByColumn(mainSchema, mainTable, mainColumnToApiName, null);
+            if (CollectionUtils.isEmpty(mainRows)) {
+                return emptyResult;
+            }
+
+            //关联表：按关联键值分组缓存，避免逐行查库
+            //结构：物理表名 -> (关联键值 -> List<行(apiName->值)>)
+            var joinGroups = Maps.<String, Map<String, List<Map<String, Object>>>>newHashMap();
+            //物理表名 -> 关联键列名
+            var joinKeyByTable = Maps.<String, String>newHashMap();
+            propsMap.forEach((table, tableProps) -> {
+                if (StringUtils.equals(table, mainTable)) {
+                    return;
+                }
+                var mapping = tableFieldMappingMapper.selectBySourceAndTarget(mainSchema, mainTable, table);
+                if (mapping == null || StringUtils.isEmpty(mapping.getTargetColumnName())) {
+                    return;
+                }
+                var joinKey = mapping.getTargetColumnName();
+                //物理列名 -> 别名(apiName)，额外带上关联键列（用列名本身作别名）
+                var columnToAlias = new LinkedHashMap<String, String>();
+                tableProps.forEach(p -> columnToAlias.put(p.getDatasourceColumnName(), p.getApiName()));
+                columnToAlias.put(joinKey, joinKey);
+                var rows = objectMapper.queryTableDataByColumn(mainSchema, table, columnToAlias, null);
+                if (CollectionUtils.isEmpty(rows)) {
+                    return;
+                }
+                var grouped = rows.stream()
+                        .filter(r -> r.get(joinKey) != null)
+                        .collect(Collectors.groupingBy(r -> String.valueOf(r.get(joinKey))));
+                joinGroups.put(table, grouped);
+                joinKeyByTable.put(table, joinKey);
+            });
+
+            //内存 join：以主表行为骨架
+            for (var row : mainRows) {
+                var pkVal = row.get(pkApiName);
+                var properties = Maps.<String, Object>newLinkedHashMap();
+                //主表属性为标量
+                properties.putAll(row);
+                //关联表属性：一对一取标量，一对多聚合为 List
+                var pkKey = pkVal == null ? null : String.valueOf(pkVal);
+                if (pkKey != null) {
+                    joinGroups.forEach((table, grouped) -> {
+                        var matched = grouped.get(pkKey);
+                        if (CollectionUtils.isEmpty(matched)) {
+                            return;
+                        }
+                        var joinKey = joinKeyByTable.get(table);
+                        matched.get(0).keySet().stream()
+                                .filter(apiName -> !StringUtils.equals(apiName, joinKey))
+                                .forEach(apiName -> {
+                                    var values = matched.stream().map(m -> m.get(apiName)).collect(Collectors.toList());
+                                    properties.put(apiName, matched.size() == 1 ? values.get(0) : values);
+                                });
+                    });
+                }
+                var titleVal = titleApiName == null ? null : properties.get(titleApiName);
+                var displayName = titleVal != null ? String.valueOf(titleVal)
+                        : (pkVal == null ? null : String.valueOf(pkVal));
+                exportNodes.add(EntityNodeExportDTO.builder()
+                        .primaryKey(pkVal)
+                        .displayName(displayName)
+                        .properties(properties)
+                        .build());
+            }
+        } catch (Exception e) {
+            log.error("导出本体 {} 实例数据失败，数据源不可达或查询异常", ontologyUniqueIdentifier, e);
+            return emptyResult;
+        }
+
+        return OntologyInstancesExportDTO.builder()
+                .nodes(exportNodes)
+                .build();
     }
 
 
