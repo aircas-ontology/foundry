@@ -125,10 +125,11 @@ public class OntologyLinkCategoryServiceImpl extends ServiceImpl<OntologyLinkCat
             allCategories.forEach(category -> {
                 if (category.getId().equals(param.getCategoryId())) {
                     category.setName(param.getName());
+                    category.setPath(newPath);
+                } else {
+                    var updatedPath = newPath + category.getPath().substring(parentCategory.getPath().length());
+                    category.setPath(updatedPath);
                 }
-                //更新节点new path
-                var updatedPath = category.getPath().replace(parentCategory.getPath(), newPath);
-                category.setPath(updatedPath);
             });
             updateBatchById(allCategories);
         }
