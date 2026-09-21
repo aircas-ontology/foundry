@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
+import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -85,7 +86,7 @@ public class OntologySpaceCanvasCreateParam {
         private String apiName;
 
         @Schema(name = "dataType", description = "数据类型（OntologyDataTypeEnum名称），不传默认String", example = "String")
-        private String dataType;
+        private OntologyDataTypeEnum dataType;
 
         @Schema(name = "description", description = "属性描述")
         private String description;
