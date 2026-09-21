@@ -13,6 +13,8 @@ import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologySpaceCanvasCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologySpaceCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyCategoryCreateParam;
+import com.aircas.ptr.foundry.ontology.model.param.PropertyCategoryCreateParam;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyLinkCategoryCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologySpaceUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyCategory;
 import com.aircas.ptr.foundry.ontology.model.po.ActionHandleRule;
@@ -21,6 +23,8 @@ import com.aircas.ptr.foundry.ontology.model.po.Function;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyAction;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyCategory;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup;
+import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkCategory;
+import com.aircas.ptr.foundry.ontology.model.po.PropertyCategory;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.model.po.OntologySpace;
 import com.aircas.ptr.foundry.ontology.model.view.OntologyStatisticsCountView;
@@ -31,7 +35,9 @@ import com.aircas.ptr.foundry.ontology.model.vo.OntologySpaceVO;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.*;
 import com.aircas.ptr.foundry.ontology.service.OntologyCategoryService;
 import com.aircas.ptr.foundry.ontology.service.OntologyLinkGroupService;
+import com.aircas.ptr.foundry.ontology.service.OntologyLinkCategoryService;
 import com.aircas.ptr.foundry.ontology.service.OntologyPropertyService;
+import com.aircas.ptr.foundry.ontology.service.PropertyCategoryService;
 import com.aircas.ptr.foundry.ontology.service.OntologySpaceService;
 import com.aircas.ptr.foundry.ontology.service.TableMetadataService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -92,6 +98,10 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
     private final OntologyLinkGroupService ontologyLinkGroupService;
 
     private final OntologyLinkCategoryMapper ontologyLinkCategoryMapper;
+
+    private final PropertyCategoryService propertyCategoryService;
+
+    private final OntologyLinkCategoryService ontologyLinkCategoryService;
 
     private final ObjectMapper jsonMapper = new ObjectMapper();
 
@@ -156,6 +166,9 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
             defaultCategoryId = created.getId();
         }
 
+        // create (or reuse) a default root for the relation (link) category tree of the space
+        Integer defaultLinkCategoryId = createDefaultLinkCategoryRoot(spaceId);
+
         // create ontologies & properties, record apiName/displayName -> uniqueIdentifier for link resolution
         Map<String, String> uidByApiName = new HashMap<>();
         Map<String, String> uidByDisplayName = new HashMap<>();
@@ -172,15 +185,19 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                 uidByApiName.put(canvasOntology.getApiName(), uniqueIdentifier);
                 uidByDisplayName.put(canvasOntology.getDisplayName(), uniqueIdentifier);
 
+                // create (or reuse) a default root for the property category tree of this ontology
+                Integer defaultPropertyCategoryId = createDefaultPropertyCategoryRoot(uniqueIdentifier);
+
                 if (CollectionUtils.isNotEmpty(canvasOntology.getProperties())) {
                     for (var canvasProperty : canvasOntology.getProperties()) {
-                        ontologyPropertyService.createProperty(buildPropertyCreateParam(uniqueIdentifier, canvasProperty));
+                        ontologyPropertyService.createProperty(
+                                buildPropertyCreateParam(uniqueIdentifier, canvasProperty, defaultPropertyCategoryId));
                     }
                 }
             }
         }
 
-        // create links; canvas no longer carries any categoryId, links are created without a category
+        // create links; each link is bound to the default relation category root
         if (CollectionUtils.isNotEmpty(param.getLinks())) {
             for (var canvasLink : param.getLinks()) {
                 var fromUid = resolveOntologyUid(canvasLink.getFromOntologyApiName(), uidByApiName, uidByDisplayName);
@@ -195,7 +212,8 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                         .setOntologyUniqueIdentifierFrom(fromUid)
                         .setOntologyUniqueIdentifierTo(toUid)
                         .setType(OntologyLinkTypeEnum.OTHER)
-                        .setSpaceId(spaceId);
+                        .setSpaceId(spaceId)
+                        .setCategoryId(defaultLinkCategoryId);
                 ontologyLinkGroupService.createLink(linkParam);
             }
         }
@@ -206,7 +224,8 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
     }
 
     private OntologyPropertyCreateParam buildPropertyCreateParam(String ontologyUniqueIdentifier,
-                                                                 OntologySpaceCanvasCreateParam.CanvasProperty canvasProperty) {
+                                                                 OntologySpaceCanvasCreateParam.CanvasProperty canvasProperty,
+                                                                 Integer propertyCategoryId) {
         var propertyParam = new OntologyPropertyCreateParam()
                 .setDisplayName(canvasProperty.getDisplayName())
                 .setApiName(canvasProperty.getApiName())
@@ -216,9 +235,61 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                 .setIsTitleKey(Boolean.TRUE.equals(canvasProperty.getIsTitleKey()))
                 .setDefaultValue(canvasProperty.getDefaultValue())
                 // required by createProperty, canvas has no such input, use default storage group
-                .setStorageGroup("main");
+                .setStorageGroup("main")
+                .setCategoryId(propertyCategoryId);
         propertyParam.setOntologyIdentifier(ontologyUniqueIdentifier);
         return propertyParam;
+    }
+
+    /**
+     * 创建（或复用）本体的属性分类树根节点，让画布导入的属性都能挂到分类下。
+     */
+    private Integer createDefaultPropertyCategoryRoot(String ontologyUniqueIdentifier) {
+        var existingRoot = propertyCategoryService.getOne(new LambdaQueryWrapper<PropertyCategory>()
+                .eq(PropertyCategory::getOntologyUniqueIdentifier, ontologyUniqueIdentifier)
+                .eq(PropertyCategory::getParentId, 0)
+                .last("limit 1"));
+        if (existingRoot != null) {
+            return existingRoot.getId();
+        }
+        var categoryParam = PropertyCategoryCreateParam.builder()
+                .parentId(0)
+                .name("根节点")
+                .ontologyIdentifier(ontologyUniqueIdentifier)
+                .build();
+        ontologyPropertyService.createCategory(categoryParam);
+        var created = propertyCategoryService.getOne(new LambdaQueryWrapper<PropertyCategory>()
+                .eq(PropertyCategory::getOntologyUniqueIdentifier, ontologyUniqueIdentifier)
+                .eq(PropertyCategory::getParentId, 0)
+                .orderByDesc(PropertyCategory::getId)
+                .last("limit 1"));
+        PreconditionUtils.checkNotNull(created, "创建属性分类失败", HttpStatus.INTERNAL_SERVER_ERROR);
+        return created.getId();
+    }
+
+    /**
+     * 创建（或复用）空间的关系分类树根节点，让画布导入的关系都能挂到分类下。
+     */
+    private Integer createDefaultLinkCategoryRoot(Integer spaceId) {
+        var existingRoot = ontologyLinkCategoryService.getOne(new LambdaQueryWrapper<OntologyLinkCategory>()
+                .eq(OntologyLinkCategory::getOntologySpaceId, spaceId)
+                .eq(OntologyLinkCategory::getParentId, 0)
+                .last("limit 1"));
+        if (existingRoot != null) {
+            return existingRoot.getId();
+        }
+        var categoryParam = new OntologyLinkCategoryCreateParam()
+                .setParentId(0)
+                .setName("根节点");
+        categoryParam.setSpaceId(spaceId);
+        ontologyLinkCategoryService.createCategory(categoryParam);
+        var created = ontologyLinkCategoryService.getOne(new LambdaQueryWrapper<OntologyLinkCategory>()
+                .eq(OntologyLinkCategory::getOntologySpaceId, spaceId)
+                .eq(OntologyLinkCategory::getParentId, 0)
+                .orderByDesc(OntologyLinkCategory::getId)
+                .last("limit 1"));
+        PreconditionUtils.checkNotNull(created, "创建关系分类失败", HttpStatus.INTERNAL_SERVER_ERROR);
+        return created.getId();
     }
 
 
