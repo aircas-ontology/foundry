@@ -115,7 +115,9 @@ public class OntologyLinkCategoryServiceImpl extends ServiceImpl<OntologyLinkCat
         // 查询所有关联节点（节点树）
         var allCategories = list(new LambdaQueryWrapper<OntologyLinkCategory>()
                 .eq(OntologyLinkCategory::getOntologySpaceId, param.getSpaceId())
-                .likeRight(OntologyLinkCategory::getPath, parentCategory.getPath()));
+                .and(w -> w.eq(OntologyLinkCategory::getPath, parentCategory.getPath())
+                        .or()
+                        .likeRight(OntologyLinkCategory::getPath, parentCategory.getPath() + "/")));
         if (CollectionUtils.isNotEmpty(allCategories)) {
             var paths = parentCategory.getPath().split("/");
             paths[paths.length - 1] = param.getName();
@@ -141,10 +143,13 @@ public class OntologyLinkCategoryServiceImpl extends ServiceImpl<OntologyLinkCat
                 .eq(OntologyLinkCategory::getId, param.getCategoryId()));
         PreconditionUtils.checkArgument(parentCategory != null, "关系分类节点" + param.getCategoryId() + "不存在", HttpStatus.BAD_REQUEST);
 
-        // 查询所有关联节点（节点树）
+        // 查询所有关联节点（节点树）：精确匹配父节点自身，或以 "parentPath/" 为前缀的子孙节点
         var allCategories = list(new LambdaQueryWrapper<OntologyLinkCategory>()
                 .eq(OntologyLinkCategory::getOntologySpaceId, param.getSpaceId())
-                .likeRight(OntologyLinkCategory::getPath, parentCategory.getPath()));
+                .and(w -> w.eq(OntologyLinkCategory::getPath, parentCategory.getPath())
+                        .or()
+                        .likeRight(OntologyLinkCategory::getPath, parentCategory.getPath() + "/")));
+
         if (CollectionUtils.isNotEmpty(allCategories)) {
             var categoryIds = allCategories.stream().map(OntologyLinkCategory::getId).collect(Collectors.toList());
             var links = ontologyLinkGroupMapper.selectList(new LambdaQueryWrapper<OntologyLinkGroup>()
