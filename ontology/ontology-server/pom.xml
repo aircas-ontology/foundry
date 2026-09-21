@@ -35,11 +35,10 @@
             <version>${project.version}</version>
         </dependency>
 
-        <!-- Agent 工具契约：实现其工具接口，将本体原子操作以 REST 暴露给 agent-server -->
+        <!-- Spring AI MCP Server（WebMVC SSE 传输）：把本体/数据源只读能力以 MCP 工具形式暴露给 agent-server 动态发现；版本由 spring-ai-bom 管理 -->
         <dependency>
-            <groupId>com.aircas.ptr</groupId>
-            <artifactId>agent-tools-api</artifactId>
-            <version>${project.version}</version>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-mcp-server-webmvc</artifactId>
         </dependency>
 
         <dependency>

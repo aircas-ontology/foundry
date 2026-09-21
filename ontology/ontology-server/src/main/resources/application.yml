@@ -58,6 +58,17 @@ spring:
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
+  # Spring AI MCP Server：把本体/数据源只读能力以 MCP 工具暴露，供 agent-server 动态发现（SSE 传输，默认端点 /sse 与 /mcp/message）
+  ai:
+    mcp:
+      server:
+        name: ontology-mcp-server
+        version: 1.0.0
+        type: SYNC
+
+# MCP 服务级信任令牌：agent-server 建连时经 sse-endpoint 查询参数 token 携带，须与 agent 端保持一致
+mcp:
+  service-token: ${MCP_SERVICE_TOKEN:foundry-mcp-internal-token-2026}
 
 cdc:
   ontology-meta: ontology_server.ontology.ontology_meta

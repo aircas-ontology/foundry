@@ -183,7 +183,87 @@ return RestResult.ofData(vo);
   - 新增接口一律按 VO 规范实现。
   - 涉及该接口的功能迭代时，**同一次改动内**顺带迁移到 VO，并在 PR 说明中标注"返回类型迁移：`XxxDTO` → `XxxVO`，字段保持一致"。
 
-## 4. AI 生成代码检查清单
+## 4. 持久层 SQL 编写规范（强制）
+
+### 4.1 基本规则
+
+1. **所有 SQL 必须写在 MyBatis XML 映射文件中**（`resources/mybatis-mapper/{main|datalake}/*.xml`），**禁止在 Java 代码里编写 SQL**。
+2. **禁止注解式 SQL**：Mapper 接口上不得出现 `@Select`、`@Insert`、`@Update`、`@Delete`、`@SelectProvider`、`@Results` 等 MyBatis SQL 注解。
+3. **禁止用 `QueryWrapper` / `LambdaQueryWrapper` / `UpdateWrapper` 在 Java 中拼接业务查询**；Mapper 接口只声明方法签名，查询条件、多表联查、动态 SQL 一律由 XML 的 `<select>` / `<insert>` / `<update>` / `<delete>` 承载。
+   - 例外：MyBatis-Plus `BaseMapper` 内置的通用单表 CRUD（`selectById`、`insert`、`updateById` 等）属框架实现、非手写 SQL，可继续使用；一旦出现**自定义条件 / 多表联查 / 动态 SQL**，必须落到 XML。
+4. Mapper 方法多参数用 `@Param("xxx")` 显式命名，XML 内以 `#{xxx}` 引用。
+5. XML `namespace` 必须等于 Mapper 接口全限定名；`resultType` / `resultMap` 指向 PO 或 VO，**禁止用 `Map` 承接结果集**。
+6. **多数据源对应关系**：主库（`postgres?currentSchema=ontology`）的 SQL 放 `mybatis-mapper/main/`、Mapper 接口放 `repository.mainMapper`；数据湖库（`entity_datasource`，默认 `public` schema）的 SQL 放 `mybatis-mapper/datalake/`、Mapper 接口放 `repository.datalakeMapper`。二者不可混放。
+
+### 4.2 正例 / 反例
+
+```java
+// ❌ 错误：注解式 SQL
+@Select("SELECT * FROM datasource_connection WHERE status = 1 AND name LIKE #{kw}")
+List<DatasourceConnection> search(String kw);
+
+// ❌ 错误：Java 中用 Wrapper 拼业务查询
+LambdaQueryWrapper<DatasourceConnection> w = new LambdaQueryWrapper<>();
+w.eq(DatasourceConnection::getStatus, 1).like(DatasourceConnection::getName, kw);
+return baseMapper.selectList(w);
+
+// ✅ 正确：Mapper 只声明方法签名
+List<DatasourceConnection> searchByKeyword(@Param("keyword") String keyword);
+```
+
+```xml
+<!-- ✅ 正确：SQL 落在 mybatis-mapper/datalake/DatasourceConnectionMapper.xml -->
+<select id="searchByKeyword" resultType="com.aircas.ptr.foundry.ontology.model.po.DatasourceConnection">
+    SELECT id, name, db_type, host, port, db_name, schema_name, description, status, create_time, update_time
+    FROM public.datasource_connection
+    WHERE status = 1
+    <if test="keyword != null and keyword != ''">
+        AND (name LIKE CONCAT('%', #{keyword}, '%') OR db_type LIKE CONCAT('%', #{keyword}, '%'))
+    </if>
+    ORDER BY update_time DESC
+</select>
+```
+
+## 5. 命名规范（驼峰命名法，强制）
+
+### 5.1 Java 标识符命名
+
+1. **类 / 接口 / 枚举 / 记录（record）**：大驼峰 PascalCase（UpperCamelCase），如 `DatasourceToolVO`、`HttpDatasourceQueryTools`、`DatasourceConnectionMapper`。
+2. **方法名 / 变量名 / 字段名**（含 record 组件、VO/DTO/PO 字段、Query 参数、`@RequestBody` 字段）：小驼峰 camelCase（lowerCamelCase），如 `searchDatasources`、`searchByKeyword`、`dbType`、`schemaName`、`createTime`。
+3. **常量**（`static final`）：全大写 + 下划线 UPPER_SNAKE_CASE，如 `STATUS_ENABLED`、`DEFAULT_SYSTEM_PROMPT`。
+4. **包名**：全小写，不用下划线也不用驼峰，如 `com.aircas.ptr.foundry.ontology.model.vo`。
+5. **泛型参数**：单个大写字母，如 `T`、`E`、`K`、`V`。
+6. **禁止**拼音命名、无意义缩写；多单词缩写按单词处理（如 `HttpUrl` 而非 `HTTPURL`），但既有分层后缀 `VO`/`DTO`/`PO`/`BO` 约定保留。
+
+### 5.2 边界（不受驼峰规则约束的部分）
+
+| 对象 | 命名风格 | 依据 |
+|------|----------|------|
+| URL 路径段（`@RequestMapping`/`@GetMapping` 字面量） | **下划线** `snake_case` | 见 §2（如 `/tool/datasource_search`） |
+| 数据库表名 / 列名 | **下划线** `snake_case` | 如 `datasource_connection`、`db_type`、`create_time` |
+| MyBatis XML `<result column=...>` | `column` 对应 DB 列用 snake_case；`property` 对应 Java 字段用 camelCase | 如 `column="db_type" property="dbType"` |
+
+> 驼峰规则仅约束 **Java 标识符**；URL 路径与数据库命名有各自的 snake_case 约定，二者不冲突。
+
+### 5.3 正例 / 反例
+
+```java
+// ✅ 正确
+public class DatasourceQueryToolsImpl { }
+private String dbType;
+private Date createTime;
+public List<DatasourceToolVO> searchDatasources(String keyword) { }
+private static final Integer STATUS_ENABLED = 1;
+
+// ❌ 错误
+public class datasourceQueryToolsImpl { }      // 类名用了小驼峰
+private String db_type;                         // 字段用了下划线
+private String DbType;                          // 字段用了大驼峰
+public List<DatasourceToolVO> SearchDatasources(String keyword) { }  // 方法名用了大驼峰
+private static final Integer statusEnabled = 1; // 常量未用全大写
+```
+
+## 6. AI 生成代码检查清单
 
 生成或修改任何 Controller / 接口相关代码时，AI 必须自检：
 
@@ -198,8 +278,15 @@ return RestResult.ofData(vo);
 - [ ] 简单类型（`String`/`Integer`/`Long`/`Boolean`/`List<String>` 等）与无泛型 `RestResult` 已豁免，无需强制包装 VO。
 - [ ] `PO → VO`、`DTO → VO` 转换发生在 `service.impl` 内部，Controller 不含转换代码。
 - [ ] VO 类位于 `model.vo` 包，命名为 `{Domain}{Purpose}VO`，字段带 `@ApiModelProperty`。
+- [ ] 所有 SQL 写在 MyBatis XML（`mybatis-mapper/{main|datalake}/*.xml`），Java 中无 `@Select/@Insert/@Update/@Delete` 注解 SQL。
+- [ ] 未用 `QueryWrapper`/`LambdaQueryWrapper` 在 Java 拼业务查询；自定义条件/联查/动态 SQL 均在 XML。
+- [ ] Mapper 多参数用 `@Param` 命名；XML `namespace` 与接口全限定名一致，`resultType` 指向 PO/VO 而非 `Map`。
+- [ ] 主库 SQL 在 `main/` + `mainMapper` 包；数据湖 SQL 在 `datalake/` + `datalakeMapper` 包，未混放。
+- [ ] 类/接口/枚举/record 名用大驼峰 PascalCase；方法/变量/字段（含 record 组件、Query/Body 字段）用小驼峰 camelCase。
+- [ ] 常量（`static final`）用全大写下划线 UPPER_SNAKE_CASE；包名全小写。
+- [ ] URL 路径段仍为下划线（§2）、DB 表/列名仍为 snake_case，未与 Java 驼峰规则混淆。
 
-## 5. 违规示例（AI 必须拒绝输出）
+## 7. 违规示例（AI 必须拒绝输出）
 
 ```java
 // ❌ 短横线路径
@@ -228,7 +315,7 @@ public RestResult<List<String>>  listNames(...)  { ... }
 public RestResult                delete(...)     { ... }
 ```
 
-## 6. 合规示例
+## 8. 合规示例
 
 ```java
 @Api(tags = "本体关系发现")
@@ -263,6 +350,6 @@ public class OntologyRelationDiscoveryController {
 
 ---
 
-**规则版本**：v1.2（§3 调整：对象返回必须 VO；简单类型 String/Integer/Long/Boolean 及其集合、无泛型 RestResult 豁免）
+**规则版本**：v1.4（新增 §5 命名规范：Java 标识符遵循驼峰命名法，类大驼峰/方法字段小驼峰/常量全大写，URL 路径与 DB 列名仍为 snake_case；原 §5~§7 顺延为 §6~§8）
 **维护位置**：`AI_CODING_RULES.md`（仓库根目录）
 **变更要求**：调整本文件需同步在 PR 说明中列出影响的 Controller 与前端契约。

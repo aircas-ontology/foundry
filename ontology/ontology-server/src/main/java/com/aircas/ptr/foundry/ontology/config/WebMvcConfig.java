@@ -20,7 +20,9 @@ public class WebMvcConfig implements WebMvcConfigurer {
                         "/function/callback",
                         "/user/login",
                         "/user/create",
-                        "/ai/**",
+                        // MCP SSE 端点由 McpServiceTokenFilter 做服务令牌校验，不走用户 JWT 拦截器
+                        "/sse",
+                        "/mcp/message",
                         "/doc.html",
                         "/swagger-ui/**",
                         "/v3/api-docs/**",

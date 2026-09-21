@@ -33,17 +33,35 @@ public class LoggingFilter extends OncePerRequestFilter {
             "/doc.html"
     );
 
+    /**
+     * SSE / 流式端点：响应为长连接持续写出，若用 {@link ContentCachingResponseWrapper} 缓存响应体，
+     * 会在异步处理开始时（{@code doFilter} 返回即触发 finally）就把响应 {@code copyBodyToResponse} 提前结束，
+     * 导致后续经 SSE emitter 写出的数据（如 MCP 的 initialize/tools 响应）丢失、客户端超时。
+     * 故这些端点直接透传，不做请求/响应体缓存。含 MCP Server 的 {@code /sse}、{@code /mcp/message}。
+     */
+    private static final Set<String> STREAMING_IGNORE_PATH = Set.of(
+            "/sse",
+            "/mcp/message"
+    );
+
+    /** SSE 响应内容类型：命中则同样跳过响应体缓存，兼容 agent 的 {@code /chat/stream} 等流式接口。 */
+    private static final String TEXT_EVENT_STREAM = "text/event-stream";
+
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
 
         var servletPath = request.getServletPath();
         var isSwaggerPath = SWAGGER_IGNORE_PATH.stream().anyMatch(v -> servletPath.startsWith(v));
+        var isStreamingPath = STREAMING_IGNORE_PATH.stream().anyMatch(v -> servletPath.startsWith(v));
 
         var contentType = request.getContentType();
         var isMultipartRequest = contentType != null && contentType.toLowerCase().startsWith("multipart/");
 
-        if (isSwaggerPath || isMultipartRequest) {
+        var accept = request.getHeader("Accept");
+        var isSseRequest = accept != null && accept.toLowerCase().contains(TEXT_EVENT_STREAM);
+
+        if (isSwaggerPath || isMultipartRequest || isStreamingPath || isSseRequest) {
             filterChain.doFilter(request, response);
             return;
         }
