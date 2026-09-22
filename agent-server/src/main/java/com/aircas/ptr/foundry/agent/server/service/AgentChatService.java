@@ -15,6 +15,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
 
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -32,6 +33,12 @@ import java.util.Map;
 @Service
 @RequiredArgsConstructor
 public class AgentChatService {
+
+    /** content 聚合：每块最多攒多少个 token（模型原生 token 流，中文常约 1 字/token）。 */
+    private static final int CONTENT_BUFFER_SIZE = 20;
+
+    /** content 聚合：距上一块超过该时长即冲刷，为块延迟设上界，避免模型吐字慢时长时间不出块。 */
+    private static final Duration CONTENT_BUFFER_TIMEOUT = Duration.ofMillis(150);
 
     private final ChatClient chatClient;
 
@@ -65,7 +72,8 @@ public class AgentChatService {
      * 流式对话：返回领域事件流（thinking / tool_call / tool_result / content / done / error）。
      *
      * <p>每次调用创建一个独占事件 sink，经 toolContext 传给工具回调装饰器，把工具步骤并入同一条流；
-     * content 增量累积后于流结束时整体解析 stage 状态（单订阅内 reactor 算子串行，无并发写）。
+     * content 增量先逐字累积（供流结束时整体解析 stage 状态，单订阅内 reactor 算子串行、无并发写），
+     * 再按 {@link #CONTENT_BUFFER_SIZE}/{@link #CONTENT_BUFFER_TIMEOUT} 聚合成块下发，规避逐字 SSE 帧爆炸与前端抖动。
      * SSE 封装由 controller 完成。</p>
      *
      * @param param 对话入参
@@ -85,8 +93,12 @@ public class AgentChatService {
                 .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, sessionId))
                 .stream()
                 .content()
+                // 逐字累积全文（供流末整体解析 stage），必须置于聚合之前，确保一个字都不丢
                 .doOnNext(replyBuffer::append)
-                .map(AgentChatStreamVO::content)
+                // 把模型原生 token 流按「攒够 CONTENT_BUFFER_SIZE 个 token 或 距上一块超过 CONTENT_BUFFER_TIMEOUT」
+                // 聚成一块再下发，规避逐字导致的 SSE 帧爆炸与前端抖动；上游 complete 时会冲刷尾部残余，末块不丢
+                .bufferTimeout(CONTENT_BUFFER_SIZE, CONTENT_BUFFER_TIMEOUT)
+                .map(chunk -> AgentChatStreamVO.content(String.join("", chunk)))
                 .doOnComplete(() -> {
                     sink.tryEmitComplete();
                     sessionStageCollector.collectAndStore(sessionId, replyBuffer.toString());
