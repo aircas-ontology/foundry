@@ -2,7 +2,6 @@ package com.aircas.ptr.foundry.ontology.model.po;
 
 import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import com.aircas.ptr.foundry.common.util.DebeziumDateReader;
-import com.aircas.ptr.foundry.ontology.model.enums.OntologyPropertyPrimaryCategoryEnum;
 import com.alibaba.fastjson2.annotation.JSONField;
 import com.baomidou.mybatisplus.annotation.*;
 import com.aircas.ptr.foundry.ontology.repository.handler.JsonbTypeHandler;
@@ -15,7 +14,6 @@ import lombok.experimental.Accessors;
 
 import java.io.Serializable;
 import java.util.Date;
-import java.util.Map;
 
 /**
  * ontology_property
