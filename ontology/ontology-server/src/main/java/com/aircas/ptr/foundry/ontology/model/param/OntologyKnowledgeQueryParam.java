@@ -8,18 +8,19 @@ import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 
 @Data
 @SuperBuilder
 @Accessors(chain = true)
 @NoArgsConstructor
 @AllArgsConstructor
-@Schema(description = "关系分类更新请求")
-public class OntologyLinkCategoryUpdateParam extends OntologyLinkCategoryDeleteParam {
+@Schema(description = "本体知识库查询请求")
+public class OntologyKnowledgeQueryParam {
 
-    @Schema(name = "name", description = "关系分类名称", example = "平台")
-    @NotBlank(message = "name is empty")
-    private String name;
+    @NotBlank(message = "question is empty")
+    private String question;
 
-
+    @NotNull(message = "top_k is empty")
+    private Integer top_k;
 }

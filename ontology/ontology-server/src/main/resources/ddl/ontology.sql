@@ -287,7 +287,8 @@ create table if not exists ontology_action
     status                     smallint    default 1,
     handle_type                smallint    default 1,
     icon                       varchar(255),
-    ontology_space_id          integer
+    ontology_space_id          integer,
+    action_category_id         integer
     );
 
 comment on table ontology_action is '本体行为';
@@ -317,6 +318,8 @@ comment on column ontology_action.handle_type is '动作执行类型；
 comment on column ontology_action.icon is '行为icon url';
 
 comment on column ontology_action.ontology_space_id is '本体空间id';
+
+comment on column ontology_action.action_category_id is '所属行为分类id，对应 action_category.id';
 
 create table if not exists ontology_action_link
 (
@@ -852,4 +855,37 @@ comment on column ontology_category.ontology_space_id is '本体空间id';
 comment on column ontology_category.create_time is '创建时间';
 
 comment on column ontology_category.update_time is '更新时间';
+
+create table if not exists action_category
+(
+    id                serial
+    constraint pk_action_category
+    primary key,
+    parent_id         integer default 0 not null,
+    path              text,
+    name              varchar(255),
+    ontology_space_id integer,
+    create_time       timestamp(6),
+    update_time       timestamp(6),
+    constraint uk_action_category_space_id_path
+    unique (ontology_space_id, path)
+    );
+
+comment on table action_category is '行为分类表';
+
+comment on column action_category.id is '主键id';
+
+comment on column action_category.parent_id is '父分类节点，根节点为0';
+
+comment on column action_category.path is '分类路径，以 / 分隔';
+
+comment on column action_category.name is '分类名称';
+
+comment on column action_category.ontology_space_id is '本体空间id';
+
+comment on column action_category.create_time is '创建时间';
+
+comment on column action_category.update_time is '更新时间';
+
+comment on constraint uk_action_category_space_id_path on action_category is '本体空间id+分类path，唯一索引';
 

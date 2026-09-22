@@ -6,6 +6,7 @@ import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyLinkDirectionEnum;
 import com.aircas.ptr.foundry.ontology.converter.DataConverter;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyLinkCreateParam;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyLinkUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyActionLink;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
@@ -54,28 +55,19 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
     @Override
     @Transactional(value = "mainTransactionManager")
     public void createLink(OntologyLinkCreateParam linkCreateParam) {
-        // 校验关系分类必填且存在
+        // 关系分类选填：提供了才校验其存在，未提供则不入库
         var categoryId = linkCreateParam.getCategoryId();
-        PreconditionUtils.checkArgument(categoryId != null, "categoryId is empty", HttpStatus.BAD_REQUEST);
-        var category = ontologyLinkCategoryMapper.selectById(categoryId);
-        PreconditionUtils.checkArgument(category != null, "关系分类不存在：" + categoryId, HttpStatus.BAD_REQUEST);
+        if (categoryId != null) {
+            var category = ontologyLinkCategoryMapper.selectById(categoryId);
+            PreconditionUtils.checkArgument(category != null, "关系分类不存在：" + categoryId, HttpStatus.BAD_REQUEST);
+        }
 
-        // 入参未携带 spaceId，需通过两端的本体对象反查其所属空间id
-        var fromMeta = ontologyMetaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>()
-                .eq(OntologyMeta::getUniqueIdentifier, linkCreateParam.getOntologyUniqueIdentifierFrom())
-                .eq(OntologyMeta::getStatus, Status.ENABLE.getValue()));
-        PreconditionUtils.checkArgument(fromMeta != null,
-                "开始本体不存在：" + linkCreateParam.getOntologyUniqueIdentifierFrom(), HttpStatus.BAD_REQUEST);
-        PreconditionUtils.checkArgument(fromMeta.getOntologySpaceId() != null,
-                "开始本体未归属任何空间，无法创建关系", HttpStatus.BAD_REQUEST);
+        // 空间id由调用方直接传入，不再反查本体归属
+        var spaceId = linkCreateParam.getSpaceId();
+        PreconditionUtils.checkArgument(spaceId != null, "spaceId is empty", HttpStatus.BAD_REQUEST);
 
-        var toMeta = ontologyMetaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>()
-                .eq(OntologyMeta::getUniqueIdentifier, linkCreateParam.getOntologyUniqueIdentifierTo())
-                .eq(OntologyMeta::getStatus, Status.ENABLE.getValue()));
-        PreconditionUtils.checkArgument(toMeta != null,
-                "结束本体不存在：" + linkCreateParam.getOntologyUniqueIdentifierTo(), HttpStatus.BAD_REQUEST);
-        PreconditionUtils.checkArgument(fromMeta.getOntologySpaceId().equals(toMeta.getOntologySpaceId()),
-                "开始本体与结束本体不属于同一空间，无法创建关系", HttpStatus.BAD_REQUEST);
+        // apiName 创建时必填
+    //    PreconditionUtils.checkArgument(StringUtils.isNotBlank(linkCreateParam.getApiName()), "apiName is empty", HttpStatus.BAD_REQUEST);
 
         var link = OntologyLinkGroup.builder()
                 .uniqueIdentifier(IdGenerator.generateUUID())
@@ -85,12 +77,29 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
                 .name(linkCreateParam.getName())
                 .type(linkCreateParam.getType())
                 .categoryId(linkCreateParam.getCategoryId())
-                .ontologySpaceId(fromMeta.getOntologySpaceId())
+                .ontologySpaceId(spaceId)
+                .apiName(linkCreateParam.getApiName())
+                .description(linkCreateParam.getDescription())
                 .build();
         //创建本体间关系
         save(link);
         //创建实体间关系
         entityService.createEntityRelations(link.getUniqueIdentifier());
+    }
+
+    @Override
+    @Transactional(value = "mainTransactionManager")
+    public void updateLink(OntologyLinkUpdateParam param) {
+        var link = getOne(new LambdaQueryWrapper<OntologyLinkGroup>()
+                .eq(OntologyLinkGroup::getUniqueIdentifier, param.getUniqueIdentifier()));
+        PreconditionUtils.checkArgument(link != null, "关系不存在：" + param.getUniqueIdentifier(), HttpStatus.BAD_REQUEST);
+        if (StringUtils.isNotBlank(param.getName())) {
+            link.setName(param.getName());
+        }
+        if (param.getDescription() != null) {
+            link.setDescription(param.getDescription());
+        }
+        updateById(link);
     }
 
     @Override
@@ -208,10 +217,11 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
                 .map(l -> OntologyLinkGraphVO.GraphEdge.builder()
                         .uniqueIdentifier(l.getUniqueIdentifier())
                         .name(l.getName())
-                        .type(l.getType())
                         .from(l.getOntologyUniqueIdentifierFrom())
                         .to(l.getOntologyUniqueIdentifierTo())
                         .categoryId(l.getCategoryId())
+                        .apiName(l.getApiName())
+                        .description(l.getDescription())
                         .build())
                 .collect(Collectors.toList());
 

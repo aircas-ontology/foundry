@@ -82,4 +82,15 @@ public class OntologyLinkGroup implements Serializable {
      */
     private Integer categoryId;
 
+    /**
+     * 关系在代码中使用的api名称
+     */
+    private String apiName;
+
+    /**
+     * 关系备注/描述（comment 为保留字，映射时用双引号转义）
+     */
+    @TableField("\"description\"")
+    private String description;
+
 }

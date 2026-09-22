@@ -563,7 +563,13 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         if (CollectionUtils.isEmpty(roots)) {
             return null;
         }
-        return buildCategoryVO(roots.get(0), categoryMap);
+        // query properties of this ontology, grouped by propertyCategoryId, so each category node carries its own properties
+        var props = list(new LambdaQueryWrapper<OntologyProperty>()
+                .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier));
+        var propMap = props.stream()
+                .collect(Collectors.groupingBy(OntologyProperty::getPropertyCategoryId,
+                        Collectors.mapping(DataConverter::convertToPropertyInfoVO, Collectors.toList())));
+        return buildCategoryVO(roots.get(0), categoryMap, propMap);
     }
 
     @Transactional(transactionManager = "mainTransactionManager")
@@ -979,14 +985,20 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         return vo;
     }
 
-    private PropertyCategoryVO buildCategoryVO(PropertyCategory category, Map<Integer, List<PropertyCategory>> categoryMap) {
+    private PropertyCategoryVO buildCategoryVO(PropertyCategory category,
+                                               Map<Integer, List<PropertyCategory>> categoryMap,
+                                               Map<Integer, List<OntologyPropertyInfoVO>> propMap) {
         var vo = new PropertyCategoryVO()
                 .setCategoryId(category.getId())
                 .setName(category.getName());
+        var propInfos = propMap.get(category.getId());
+        if (CollectionUtils.isNotEmpty(propInfos)) {
+            vo.setPropertyInfos(propInfos);
+        }
         var children = categoryMap.get(category.getId());
         if (CollectionUtils.isNotEmpty(children)) {
             vo.setChildren(children.stream()
-                    .map(child -> buildCategoryVO(child, categoryMap))
+                    .map(child -> buildCategoryVO(child, categoryMap, propMap))
                     .collect(Collectors.toList()));
         }
         return vo;

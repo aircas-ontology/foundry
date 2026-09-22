@@ -12,6 +12,7 @@ import com.aircas.ptr.foundry.ontology.model.vo.IdentifierVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyGroupMetaVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaNodeVO;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaStatisticVO;
 import com.aircas.ptr.foundry.ontology.service.OntologyMetaService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -88,6 +89,13 @@ public class OntologyMetaController {
     @Operation(summary = "根据unique identifier查询一个本体元数据")
     public RestResult<OntologyMetaInfoVO> getMetaByUniqueIdentifier(@RequestParam(name = "uniqueIdentifier", required = true) @Parameter(description = "本体unique identifer") @OntologyIdVerify String uniqueIdentifier) {
         return RestResult.ofData(ontologyMetaService.getMetaByUniqueIdentifier(uniqueIdentifier));
+    }
+
+
+    @GetMapping("/statistic")
+    @Operation(summary = "统计本体对象关联的核心资源数量（实例、属性、关系、行为）")
+    public RestResult<OntologyMetaStatisticVO> getStatistic(@RequestParam(name = "uniqueIdentifier", required = true) @Parameter(description = "本体unique identifer") @OntologyIdVerify String uniqueIdentifier) {
+        return RestResult.ofData(ontologyMetaService.getStatistic(uniqueIdentifier));
     }
 
 

@@ -8,11 +8,14 @@ import com.aircas.ptr.foundry.ontology.model.param.OntologyLinkCategoryDeletePar
 import com.aircas.ptr.foundry.ontology.model.param.OntologyLinkCategoryUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkCategory;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup;
+import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkCategoryLinkVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkCategoryVO;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyLinkCategoryMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyLinkGroupMapper;
+import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyMetaMapper;
 import com.aircas.ptr.foundry.ontology.service.OntologyLinkCategoryService;
+import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.google.common.collect.Lists;
@@ -33,6 +36,9 @@ public class OntologyLinkCategoryServiceImpl extends ServiceImpl<OntologyLinkCat
 
     @Resource
     private OntologyLinkGroupMapper ontologyLinkGroupMapper;
+
+    @Resource
+    private OntologyMetaMapper ontologyMetaMapper;
 
     /**
      * 关系分类与本体分类采用同一套树模型：
@@ -109,7 +115,9 @@ public class OntologyLinkCategoryServiceImpl extends ServiceImpl<OntologyLinkCat
         // 查询所有关联节点（节点树）
         var allCategories = list(new LambdaQueryWrapper<OntologyLinkCategory>()
                 .eq(OntologyLinkCategory::getOntologySpaceId, param.getSpaceId())
-                .likeRight(OntologyLinkCategory::getPath, parentCategory.getPath()));
+                .and(w -> w.eq(OntologyLinkCategory::getPath, parentCategory.getPath())
+                        .or()
+                        .likeRight(OntologyLinkCategory::getPath, parentCategory.getPath() + "/")));
         if (CollectionUtils.isNotEmpty(allCategories)) {
             var paths = parentCategory.getPath().split("/");
             paths[paths.length - 1] = param.getName();
@@ -117,10 +125,12 @@ public class OntologyLinkCategoryServiceImpl extends ServiceImpl<OntologyLinkCat
             allCategories.forEach(category -> {
                 if (category.getId().equals(param.getCategoryId())) {
                     category.setName(param.getName());
+
+                    category.setPath(newPath);
+                } else {
+                    var updatedPath = newPath + category.getPath().substring(parentCategory.getPath().length());
+                    category.setPath(updatedPath);
                 }
-                //更新节点new path
-                var updatedPath = category.getPath().replace(parentCategory.getPath(), newPath);
-                category.setPath(updatedPath);
             });
             updateBatchById(allCategories);
         }
@@ -135,10 +145,13 @@ public class OntologyLinkCategoryServiceImpl extends ServiceImpl<OntologyLinkCat
                 .eq(OntologyLinkCategory::getId, param.getCategoryId()));
         PreconditionUtils.checkArgument(parentCategory != null, "关系分类节点" + param.getCategoryId() + "不存在", HttpStatus.BAD_REQUEST);
 
-        // 查询所有关联节点（节点树）
+        // 查询所有关联节点（节点树）：精确匹配父节点自身，或以 "parentPath/" 为前缀的子孙节点
         var allCategories = list(new LambdaQueryWrapper<OntologyLinkCategory>()
                 .eq(OntologyLinkCategory::getOntologySpaceId, param.getSpaceId())
-                .likeRight(OntologyLinkCategory::getPath, parentCategory.getPath()));
+                .and(w -> w.eq(OntologyLinkCategory::getPath, parentCategory.getPath())
+                        .or()
+                        .likeRight(OntologyLinkCategory::getPath, parentCategory.getPath() + "/")));
+
         if (CollectionUtils.isNotEmpty(allCategories)) {
             var categoryIds = allCategories.stream().map(OntologyLinkCategory::getId).collect(Collectors.toList());
             var links = ontologyLinkGroupMapper.selectList(new LambdaQueryWrapper<OntologyLinkGroup>()
@@ -170,12 +183,28 @@ public class OntologyLinkCategoryServiceImpl extends ServiceImpl<OntologyLinkCat
         Map<Integer, List<OntologyLinkGroup>> linkMap = links.stream()
                 .filter(l -> l.getCategoryId() != null)
                 .collect(Collectors.groupingBy(OntologyLinkGroup::getCategoryId));
-        return buildCategoryVO(roots.get(0), categoryMap, linkMap);
+
+        // 收集关系两端本体的 uniqueIdentifier，一次性查出本体名称，供 linkVO 填充 ontologyNameFrom/To
+        Set<String> uidSet = new HashSet<>();
+        links.forEach(l -> {
+            if (l.getOntologyUniqueIdentifierFrom() != null) uidSet.add(l.getOntologyUniqueIdentifierFrom());
+            if (l.getOntologyUniqueIdentifierTo() != null) uidSet.add(l.getOntologyUniqueIdentifierTo());
+        });
+        Map<String, OntologyMeta> metaMap = new HashMap<>();
+        if (CollectionUtils.isNotEmpty(uidSet)) {
+            metaMap = ontologyMetaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>()
+                            .eq(OntologyMeta::getStatus, Status.ENABLE.getValue())
+                            .in(OntologyMeta::getUniqueIdentifier, uidSet))
+                    .stream()
+                    .collect(Collectors.toMap(OntologyMeta::getUniqueIdentifier, v -> v, (a, b) -> a));
+        }
+        return buildCategoryVO(roots.get(0), categoryMap, linkMap, metaMap);
     }
 
     private OntologyLinkCategoryVO buildCategoryVO(OntologyLinkCategory category,
                                                   Map<Integer, List<OntologyLinkCategory>> categoryMap,
-                                                  Map<Integer, List<OntologyLinkGroup>> linkMap) {
+                                                  Map<Integer, List<OntologyLinkGroup>> linkMap,
+                                                  Map<String, OntologyMeta> metaMap) {
 
         var vo = OntologyLinkCategoryVO.builder()
                 .categoryId(category.getId())
@@ -184,18 +213,31 @@ public class OntologyLinkCategoryServiceImpl extends ServiceImpl<OntologyLinkCat
         var linkList = linkMap.get(category.getId());
 
         if (CollectionUtils.isNotEmpty(linkList)) {
-            var linkVOList = linkList.stream().map(v -> OntologyLinkCategoryLinkVO.builder()
-                    .id(v.getId())
-                    .name(v.getName())
-                    .type(v.getType() == null ? null : v.getType().name())
-                    .build()).collect(Collectors.toList());
+            var linkVOList = linkList.stream().map(v -> {
+                var from = metaMap.get(v.getOntologyUniqueIdentifierFrom());
+                var to = metaMap.get(v.getOntologyUniqueIdentifierTo());
+                return OntologyLinkCategoryLinkVO.builder()
+                        .uniqueIdentifier(v.getUniqueIdentifier())
+                        .name(v.getName())
+                        .type(v.getType() == null ? null : v.getType().name())
+                        .categoryId(v.getCategoryId())
+                        .ontologyUniqueIdentifierFrom(v.getOntologyUniqueIdentifierFrom())
+                        .ontologyNameFrom(from != null ? from.getDisplayName() : null)
+                        .ontologyUniqueIdentifierTo(v.getOntologyUniqueIdentifierTo())
+                        .ontologyNameTo(to != null ? to.getDisplayName() : null)
+                        .ontologyIconFrom(from != null ? from.getIcon() : null)
+                        .ontologyIconTO(to != null ? to.getIcon() : null)
+                        .apiName(v.getApiName() == null ? null : v.getApiName())
+                        .description(v.getDescription() == null ? null : v.getDescription())
+                        .build();
+            }).collect(Collectors.toList());
             vo.setLinks(linkVOList);
         }
 
         var children = categoryMap.get(category.getId());
         if (CollectionUtils.isNotEmpty(children)) {
             vo.setChildren(children.stream()
-                    .map(child -> buildCategoryVO(child, categoryMap, linkMap))
+                    .map(child -> buildCategoryVO(child, categoryMap, linkMap, metaMap))
                     .collect(Collectors.toList()));
         }
         return vo;
