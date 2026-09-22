@@ -42,11 +42,14 @@ public class OntologyMetaController {
 
 
     @GetMapping("/export")
-    @Operation(summary = "导出本体空间下全部本体（含 schema 与实例数据）")
-    public void exportOntologies(@RequestParam(name = "spaceId") Integer spaceId,
-                                 HttpServletResponse response) throws Exception {
-        var dtos = ontologyMetaService.exportOntologies(spaceId);
-        DownloadUtil.writeJsonAttachment(response, jacksonObjectMapper, "ontologies_" + spaceId + ".json", dtos);
+    @Operation(summary = "导出单个本体（含 schema 与实例数据）")
+    public void exportOntology(@RequestParam(name = "uniqueIdentifier") @OntologyIdVerify String uniqueIdentifier,
+                               HttpServletResponse response) throws Exception {
+        var dtos = ontologyMetaService.exportOntology(uniqueIdentifier);
+        var apiName = CollectionUtils.isNotEmpty(dtos) && dtos.get(0).getMetadata() != null
+                ? dtos.get(0).getMetadata().getApiName() : null;
+        var fileName = (apiName == null || apiName.isEmpty() ? "ontology_" + uniqueIdentifier : apiName) + ".json";
+        DownloadUtil.writeJsonAttachment(response, jacksonObjectMapper, fileName, dtos);
     }
 
 

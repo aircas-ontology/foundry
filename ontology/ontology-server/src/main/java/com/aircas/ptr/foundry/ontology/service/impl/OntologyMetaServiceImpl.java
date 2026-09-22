@@ -748,13 +748,15 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
     }
 
     @Override
-    public List<OntologyCreateDTO> exportOntologies(Integer spaceId) {
-        var space = getSpaceOrThrow(spaceId);
-        var metas = listEnabledMetas(space);
-        if (CollectionUtils.isEmpty(metas)) {
-            return Lists.newArrayList();
-        }
-        return buildOntologies(space, metas, Maps.newHashMap());
+    public List<OntologyCreateDTO> exportOntology(String uniqueIdentifier) {
+        var meta = getOne(new LambdaQueryWrapper<OntologyMeta>()
+                .eq(OntologyMeta::getUniqueIdentifier, uniqueIdentifier)
+                .eq(OntologyMeta::getStatus, Status.ENABLE.getValue()));
+        PreconditionUtils.checkNotNull(meta, "本体不存在或已停用:" + uniqueIdentifier);
+        var space = getSpaceOrThrow(meta.getOntologySpaceId());
+        //关系端点可能指向同空间其它本体，displayName 解析需覆盖空间内全部启用本体
+        var scopeMetas = listEnabledMetas(space);
+        return buildOntologies(space, Lists.newArrayList(meta), scopeMetas, Maps.newHashMap());
     }
 
     @Override
@@ -770,14 +772,13 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         if (CollectionUtils.isEmpty(metas)) {
             return OntologySpaceExportData.builder()
                     .ontologies(Lists.newArrayList())
-                    .functions(Lists.newArrayList())
                     .build();
         }
-        //共享函数详情缓存：actions 装配与空间级 functions 收集复用，避免同一函数重复查询
+        //共享函数详情缓存：actions 装配复用（functions 暂不导出）
         var fnCache = Maps.<String, FunctionDetailVO>newHashMap();
+        //functions 暂不导出；恢复方式：加回 .functions(buildFunctions(metas, fnCache))
         return OntologySpaceExportData.builder()
-                .ontologies(buildOntologies(space, metas, fnCache))
-                .functions(buildFunctions(metas, fnCache))
+                .ontologies(buildOntologies(space, metas, metas, fnCache))
                 .build();
     }
 
@@ -793,10 +794,12 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 .eq(OntologyMeta::getStatus, Status.ENABLE.getValue()));
     }
 
-    private List<OntologyCreateDTO> buildOntologies(OntologySpace space, List<OntologyMeta> metas,
+    private List<OntologyCreateDTO> buildOntologies(OntologySpace space, List<OntologyMeta> metasToExport,
+                                                    List<OntologyMeta> displayNameScope,
                                                     Map<String, FunctionDetailVO> fnCache) {
         //uid -> displayName（供 relations 端点与 actions 的 ontologyName 回填，对齐导入侧按 displayName 反查的语义）
-        var uidToDisplayName = metas.stream()
+        //解析范围取 displayNameScope：单本体导出时关系端点可能指向同空间其它本体，需覆盖全空间启用本体
+        var uidToDisplayName = displayNameScope.stream()
                 .collect(Collectors.toMap(OntologyMeta::getUniqueIdentifier, OntologyMeta::getDisplayName, (a, b) -> a));
         //本体分类 id -> path
         var ontologyCategoryPathMap = categoryService.list(new LambdaQueryWrapper<OntologyCategory>()
@@ -807,7 +810,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                         .eq(OntologyGroup::getOntologySpaceId, space.getId()))
                 .stream().collect(Collectors.toMap(OntologyGroup::getGroupId, OntologyGroup::getGroupName, (a, b) -> a));
 
-        return metas.stream()
+        return metasToExport.stream()
                 .map(meta -> buildExportDTO(meta, space, ontologyCategoryPathMap, groupNameMap, uidToDisplayName, fnCache))
                 .collect(Collectors.toList());
     }
@@ -934,13 +937,8 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                         .build())
                 .collect(Collectors.toList());
 
-        //关系（仅 from=本本体，端点用 displayName；同时构建 linkUid -> relations 下标，供 actions 使用）
-        var linkUidToIndex = Maps.<String, Integer>newHashMap();
-        var relations = buildExportRelations(uid, uidToDisplayName, linkUidToIndex);
-
-        //行为
-        var actions = buildExportActions(uid, linkUidToIndex, uidToDisplayName, fnCache);
-
+        //关系/行为暂不导出（先只导出 schema + 实例）；恢复方式：
+        //relations=buildExportRelations(uid, uidToDisplayName, linkUidToIndex)、actions=buildExportActions(uid, linkUidToIndex, uidToDisplayName, fnCache)，并加回下方 builder
         //实例（数据湖物理表全量；未绑定数据源则为空）
         var instances = entityService.exportInstances(uid);
 
@@ -949,8 +947,6 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 .propertyCategory(propertyCategory)
                 .propertySchema(propertySchema)
                 .properties(properties)
-                .relations(relations)
-                .actions(actions)
                 .instances(instances)
                 .build();
     }

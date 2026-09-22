@@ -50,12 +50,15 @@ public interface OntologyMetaService extends IService<OntologyMeta> {
     List<String> importOntologies(MultipartFile file);
 
     /**
-     * 导出指定本体空间下的全部本体（含 schema 与实例数据），结构对齐导入模板。
+     * 导出单个本体（含 schema 与实例数据），结构对齐导入模板。
      *
-     * @param spaceId 本体空间 id
-     * @return 本体导出列表，无本体时返回空列表
+     * <p>关系端点可能指向同空间其它本体，displayName 解析覆盖该本体所属空间的全部启用本体；
+     * 不附带函数定义（函数为空间级资源，随空间导出给出）。</p>
+     *
+     * @param uniqueIdentifier 本体唯一标识
+     * @return 单元素本体导出列表
      */
-    List<OntologyCreateDTO> exportOntologies(Integer spaceId);
+    List<OntologyCreateDTO> exportOntology(String uniqueIdentifier);
 
     /**
      * 一次装配导出指定空间的全部本体与空间级函数。
