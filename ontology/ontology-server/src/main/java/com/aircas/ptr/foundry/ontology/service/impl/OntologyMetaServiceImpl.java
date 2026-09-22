@@ -90,9 +90,6 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
     @Resource
     private PropertyMetadataSchemaService propertyMetadataSchemaService;
 
-    @Resource
-    private StorageGroupService storageGroupService;
-
     @Lazy
     @Resource
     private OntologyMetaServiceImpl proxyService;
@@ -146,10 +143,6 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
             createOntologyByInherit(ontologyCreateParam, meta);
         }
         // 默认创建存储分组
-        storageGroupService.create(StorageGroupCreateParam.builder()
-                .ontologyUniqueIdentifier(meta.getUniqueIdentifier())
-                .storageName("main")
-                .build());
         return meta.getUniqueIdentifier();
     }
 

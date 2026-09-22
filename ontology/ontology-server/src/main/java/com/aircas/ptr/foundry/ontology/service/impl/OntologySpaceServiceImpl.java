@@ -138,24 +138,12 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
     @Transactional(transactionManager = "chainedTransactionManager", rollbackFor = Exception.class)
     @Override
     public OntologySpaceCanvasCreateVO createSpaceWithCanvasContent(OntologySpaceCanvasCreateParam param) {
-        // 传入spaceId则复用已有空间，不再创建空间；否则根据空间信息新建空间（createSpace会默认创建对象/关系分类根节点）
         Integer spaceId = param.getSpaceId();
-        if (spaceId == null) {
-            PreconditionUtils.checkArgument(StringUtils.isNotBlank(param.getDisplayName())
-                            && StringUtils.isNotBlank(param.getApiName()),
-                    "未传spaceId时，空间displayName和apiName不能为空", HttpStatus.BAD_REQUEST);
-            var spaceParam = new OntologySpaceCreateParam()
-                    .setIconUrl(param.getIconUrl())
-                    .setDisplayName(param.getDisplayName())
-                    .setDescription(param.getDescription())
-                    .setApiName(param.getApiName());
-            spaceId = createSpace(spaceParam);
-        } else {
-            var space = spaceMapper.selectById(spaceId);
-            PreconditionUtils.checkNotNull(space, "空间id不存在", HttpStatus.BAD_REQUEST);
-        }
 
-        // 对象、关系分类根节点在创建空间时已默认生成，这里直接查询挂载（不再重复创建）
+        var space = spaceMapper.selectById(spaceId);
+        PreconditionUtils.checkNotNull(space, "空间id不存在", HttpStatus.BAD_REQUEST);
+
+
         Integer defaultCategoryId = getOntologyCategoryRoot(spaceId);
         Integer defaultLinkCategoryId = getLinkCategoryRoot(spaceId);
 
@@ -171,7 +159,7 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                         .setIconUrl(canvasOntology.getIconUrl())
                         .setCategoryId(defaultCategoryId);
                 metaParam.setSpaceId(spaceId);
-                // createOntology内部已默认创建属性分类树根节点，对象挂载到空间根节点，属性挂载到本体属性根节点
+
                 var uniqueIdentifier = ontologyMetaService.createOntology(metaParam);
                 uidByApiName.put(canvasOntology.getApiName(), uniqueIdentifier);
                 uidByDisplayName.put(canvasOntology.getDisplayName(), uniqueIdentifier);
