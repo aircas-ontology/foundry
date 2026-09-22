@@ -136,10 +136,18 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
             meta.setMetaGroupId(CollectionUtils.isNotEmpty(groupIds) ? String.join(",", groupIds) : null)
                     .setOntologyCategoryId(ontologyCreateParam.getCategoryId());
             save(meta);
+            // 默认创建属性分类树根节点
+            var propertyCategoryParam = PropertyCategoryCreateParam.builder()
+                    .parentId(0)
+                    .name("根节点")
+                    .ontologyIdentifier(meta.getUniqueIdentifier())
+                    .build();
+            ontologyPropertyService.createCategory(propertyCategoryParam);
         }//继承创建
         else {
             createOntologyByInherit(ontologyCreateParam, meta);
         }
+        // 默认创建存储分组
         return meta.getUniqueIdentifier();
     }
 

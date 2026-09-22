@@ -94,7 +94,6 @@ public class OntologyLinkGroup implements Serializable {
     /**
      * 关系备注/描述（comment 为保留字，映射时用双引号转义）
      */
-    @TableField("\"description\"")
     private String description;
 
 }
