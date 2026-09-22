@@ -2,6 +2,7 @@ package com.aircas.ptr.foundry.ontology.controller;
 
 import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.common.base.ResultCode;
+import com.aircas.ptr.foundry.common.util.DownloadUtil;
 import com.aircas.ptr.foundry.ontology.controller.validator.OntologyIdVerify;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyOrderByEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.QuerySortEnum;
@@ -13,6 +14,7 @@ import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaNodeVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaStatisticVO;
 import com.aircas.ptr.foundry.ontology.service.OntologyMetaService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -22,6 +24,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import jakarta.annotation.Resource;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import java.util.List;
 
@@ -34,6 +37,21 @@ public class OntologyMetaController {
 
     @Resource
     private OntologyMetaService ontologyMetaService;
+
+    @Resource
+    private ObjectMapper jacksonObjectMapper;
+
+
+    @GetMapping("/export")
+    @Operation(summary = "导出单个本体（含 schema 与实例数据）")
+    public void exportOntology(@RequestParam(name = "uniqueIdentifier") @OntologyIdVerify String uniqueIdentifier,
+                               HttpServletResponse response) throws Exception {
+        var dtos = ontologyMetaService.exportOntology(uniqueIdentifier);
+        var apiName = CollectionUtils.isNotEmpty(dtos) && dtos.get(0).getMetadata() != null
+                ? dtos.get(0).getMetadata().getApiName() : null;
+        var fileName = (apiName == null || apiName.isEmpty() ? "ontology_" + uniqueIdentifier : apiName) + ".json";
+        DownloadUtil.writeJsonAttachment(response, jacksonObjectMapper, fileName, dtos);
+    }
 
 
     @PostMapping("/import")

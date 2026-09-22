@@ -5,12 +5,14 @@ import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.ontology.model.dto.OntologySpaceCreateDTO;
+import com.aircas.ptr.foundry.ontology.model.dto.OntologySpaceDTO;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyLinkTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyLinkCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyMetaCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologySpaceCanvasCreateParam;
+import com.aircas.ptr.foundry.ontology.model.param.CategoryNode;
 import com.aircas.ptr.foundry.ontology.model.param.OntologySpaceCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyCategoryCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.PropertyCategoryCreateParam;
@@ -465,6 +467,58 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
             });
         }
         return failedOntology;
+    }
+
+    @Override
+    public OntologySpaceCreateDTO exportOntologySpace(Integer spaceId) {
+        var space = getById(spaceId);
+        PreconditionUtils.checkNotNull(space, "本体空间不存在:" + spaceId);
+
+        var ontologySpace = OntologySpaceDTO.builder()
+                .apiName(space.getApiName())
+                .displayName(space.getDisplayName())
+                .description(space.getDescription())
+                .build();
+
+        var categories = categoryService.list(new LambdaQueryWrapper<OntologyCategory>()
+                .eq(OntologyCategory::getOntologySpaceId, space.getId()));
+        var ontologyCategory = buildOntologyCategoryTree(categories);
+
+        //一次装配空间下全部本体
+        var ontologies = ontologyMetaService.exportOntologies(space);
+
+        return OntologySpaceCreateDTO.builder()
+                .ontologySpace(ontologySpace)
+                .ontologyCategory(ontologyCategory)
+                .ontologies(ontologies)
+                .build();
+    }
+
+    private OntologyCategoryCreateParam buildOntologyCategoryTree(List<OntologyCategory> categories) {
+        if (CollectionUtils.isEmpty(categories)) {
+            return null;
+        }
+        var root = categories.stream()
+                .filter(c -> c.getParentId() != null && c.getParentId() == 0)
+                .findFirst().orElse(null);
+        if (root == null) {
+            return null;
+        }
+        return OntologyCategoryCreateParam.builder()
+                .parentId(root.getParentId())
+                .name(root.getName())
+                .children(buildOntologyCategoryChildren(root.getId(), categories))
+                .build();
+    }
+
+    private List<CategoryNode> buildOntologyCategoryChildren(Integer parentId, List<OntologyCategory> categories) {
+        return categories.stream()
+                .filter(c -> c.getParentId() != null && c.getParentId().equals(parentId))
+                .map(c -> CategoryNode.builder()
+                        .name(c.getName())
+                        .children(buildOntologyCategoryChildren(c.getId(), categories))
+                        .build())
+                .collect(Collectors.toList());
     }
 
 
