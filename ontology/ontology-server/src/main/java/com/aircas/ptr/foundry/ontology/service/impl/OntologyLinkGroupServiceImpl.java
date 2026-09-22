@@ -66,8 +66,6 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
         var spaceId = linkCreateParam.getSpaceId();
         PreconditionUtils.checkArgument(spaceId != null, "spaceId is empty", HttpStatus.BAD_REQUEST);
 
-        // apiName 创建时必填
-    //    PreconditionUtils.checkArgument(StringUtils.isNotBlank(linkCreateParam.getApiName()), "apiName is empty", HttpStatus.BAD_REQUEST);
 
         var link = OntologyLinkGroup.builder()
                 .uniqueIdentifier(IdGenerator.generateUUID())
@@ -93,8 +91,8 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
         var link = getOne(new LambdaQueryWrapper<OntologyLinkGroup>()
                 .eq(OntologyLinkGroup::getUniqueIdentifier, param.getUniqueIdentifier()));
         PreconditionUtils.checkArgument(link != null, "关系不存在：" + param.getUniqueIdentifier(), HttpStatus.BAD_REQUEST);
-        if (StringUtils.isNotBlank(param.getName())) {
-            link.setName(param.getName());
+        if (param.getCategoryId() != null) {
+            link.setCategoryId(param.getCategoryId());
         }
         if (param.getDescription() != null) {
             link.setDescription(param.getDescription());

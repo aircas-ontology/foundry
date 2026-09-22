@@ -128,46 +128,36 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
         spaceMapper.insert(ontologySpace);
         //create new schema &  table_filed_mapping table
         tableMetadataService.initSpaceSchema(param.getApiName());
+        // 默认创建本体（本地对象）分类树根节点
+        createDefaultOntologyCategoryRoot(ontologySpace.getId());
+        // 默认创建关系分类树根节点
+        createDefaultLinkCategoryRoot(ontologySpace.getId());
         return ontologySpace.getId();
     }
 
     @Transactional(transactionManager = "chainedTransactionManager", rollbackFor = Exception.class)
     @Override
     public OntologySpaceCanvasCreateVO createSpaceWithCanvasContent(OntologySpaceCanvasCreateParam param) {
-        // create space
-        var spaceParam = new OntologySpaceCreateParam()
-                .setIconUrl(param.getIconUrl())
-                .setDisplayName(param.getDisplayName())
-                .setDescription(param.getDescription())
-                .setApiName(param.getApiName());
-        var spaceId = createSpace(spaceParam);
-
-        // create (or reuse) a default root category for the space; every canvas ontology is bound to it
-        var existingRoot = categoryService.getOne(new LambdaQueryWrapper<OntologyCategory>()
-                .eq(OntologyCategory::getOntologySpaceId, spaceId)
-                .eq(OntologyCategory::getParentId, 0)
-                .last("limit 1"));
-        Integer defaultCategoryId;
-        if (existingRoot != null) {
-            defaultCategoryId = existingRoot.getId();
+        // 传入spaceId则复用已有空间，不再创建空间；否则根据空间信息新建空间（createSpace会默认创建对象/关系分类根节点）
+        Integer spaceId = param.getSpaceId();
+        if (spaceId == null) {
+            PreconditionUtils.checkArgument(StringUtils.isNotBlank(param.getDisplayName())
+                            && StringUtils.isNotBlank(param.getApiName()),
+                    "未传spaceId时，空间displayName和apiName不能为空", HttpStatus.BAD_REQUEST);
+            var spaceParam = new OntologySpaceCreateParam()
+                    .setIconUrl(param.getIconUrl())
+                    .setDisplayName(param.getDisplayName())
+                    .setDescription(param.getDescription())
+                    .setApiName(param.getApiName());
+            spaceId = createSpace(spaceParam);
         } else {
-            var categoryParam = new OntologyCategoryCreateParam()
-                    .setParentId(0)
-                    .setName("根节点");
-            categoryParam.setSpaceId(spaceId);
-            categoryService.createCategory(categoryParam);
-            var created = categoryService.getOne(new LambdaQueryWrapper<OntologyCategory>()
-                    .eq(OntologyCategory::getOntologySpaceId, spaceId)
-                    .eq(OntologyCategory::getParentId, 0)
-
-                    .orderByDesc(OntologyCategory::getId)
-                    .last("limit 1"));
-            PreconditionUtils.checkNotNull(created, "创建本体分类失败", HttpStatus.INTERNAL_SERVER_ERROR);
-            defaultCategoryId = created.getId();
+            var space = spaceMapper.selectById(spaceId);
+            PreconditionUtils.checkNotNull(space, "空间id不存在", HttpStatus.BAD_REQUEST);
         }
 
-        // create (or reuse) a default root for the relation (link) category tree of the space
-        Integer defaultLinkCategoryId = createDefaultLinkCategoryRoot(spaceId);
+        // 对象、关系分类根节点在创建空间时已默认生成，这里直接查询挂载（不再重复创建）
+        Integer defaultCategoryId = getOntologyCategoryRoot(spaceId);
+        Integer defaultLinkCategoryId = getLinkCategoryRoot(spaceId);
 
         // create ontologies & properties, record apiName/displayName -> uniqueIdentifier for link resolution
         Map<String, String> uidByApiName = new HashMap<>();
@@ -181,12 +171,12 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                         .setIconUrl(canvasOntology.getIconUrl())
                         .setCategoryId(defaultCategoryId);
                 metaParam.setSpaceId(spaceId);
+                // createOntology内部已默认创建属性分类树根节点，对象挂载到空间根节点，属性挂载到本体属性根节点
                 var uniqueIdentifier = ontologyMetaService.createOntology(metaParam);
                 uidByApiName.put(canvasOntology.getApiName(), uniqueIdentifier);
                 uidByDisplayName.put(canvasOntology.getDisplayName(), uniqueIdentifier);
 
-                // create (or reuse) a default root for the property category tree of this ontology
-                Integer defaultPropertyCategoryId = createDefaultPropertyCategoryRoot(uniqueIdentifier);
+                Integer defaultPropertyCategoryId = getPropertyCategoryRoot(uniqueIdentifier);
 
                 if (CollectionUtils.isNotEmpty(canvasOntology.getProperties())) {
                     for (var canvasProperty : canvasOntology.getProperties()) {
@@ -292,7 +282,30 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
         return created.getId();
     }
 
-
+    /**
+     * 创建（或复用）空间的本体分类树根节点，让画布导入的本体都能挂到分类下。
+     */
+    private Integer createDefaultOntologyCategoryRoot(Integer spaceId) {
+        var existingRoot = categoryService.getOne(new LambdaQueryWrapper<OntologyCategory>()
+                .eq(OntologyCategory::getOntologySpaceId, spaceId)
+                .eq(OntologyCategory::getParentId, 0)
+                .last("limit 1"));
+        if (existingRoot != null) {
+            return existingRoot.getId();
+        }
+        var categoryParam = new OntologyCategoryCreateParam()
+                .setParentId(0)
+                .setName("根节点");
+        categoryParam.setSpaceId(spaceId);
+        categoryService.createCategory(categoryParam);
+        var created = categoryService.getOne(new LambdaQueryWrapper<OntologyCategory>()
+                .eq(OntologyCategory::getOntologySpaceId, spaceId)
+                .eq(OntologyCategory::getParentId, 0)
+                .orderByDesc(OntologyCategory::getId)
+                .last("limit 1"));
+        PreconditionUtils.checkNotNull(created, "创建本体分类失败", HttpStatus.INTERNAL_SERVER_ERROR);
+        return created.getId();
+    }
 
     private String resolveOntologyUid(String apiNameOrDisplayName, Map<String, String> uidByApiName, Map<String, String> uidByDisplayName) {
         var uid = uidByApiName.get(apiNameOrDisplayName);
@@ -467,5 +480,39 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
         return failedOntology;
     }
 
+    /**
+     * 查询本体的属性分类树根节点（创建本体时已默认生成）。
+     */
+    private Integer getPropertyCategoryRoot(String ontologyUniqueIdentifier) {
+        var root = propertyCategoryService.getOne(new LambdaQueryWrapper<PropertyCategory>()
+                .eq(PropertyCategory::getOntologyUniqueIdentifier, ontologyUniqueIdentifier)
+                .eq(PropertyCategory::getParentId, 0)
+                .last("limit 1"));
+        PreconditionUtils.checkNotNull(root, "属性分类根节点不存在", HttpStatus.INTERNAL_SERVER_ERROR);
+        return root.getId();
+    }
 
+    /**
+     * 查询空间的关系分类树根节点（创建空间时已默认生成）。
+     */
+    private Integer getLinkCategoryRoot(Integer spaceId) {
+        var root = ontologyLinkCategoryService.getOne(new LambdaQueryWrapper<OntologyLinkCategory>()
+                .eq(OntologyLinkCategory::getOntologySpaceId, spaceId)
+                .eq(OntologyLinkCategory::getParentId, 0)
+                .last("limit 1"));
+        PreconditionUtils.checkNotNull(root, "关系分类根节点不存在", HttpStatus.INTERNAL_SERVER_ERROR);
+        return root.getId();
+    }
+
+    /**
+     * 查询空间的本体（本地对象）分类树根节点（创建空间时已默认生成）。
+     */
+    private Integer getOntologyCategoryRoot(Integer spaceId) {
+        var root = categoryService.getOne(new LambdaQueryWrapper<OntologyCategory>()
+                .eq(OntologyCategory::getOntologySpaceId, spaceId)
+                .eq(OntologyCategory::getParentId, 0)
+                .last("limit 1"));
+        PreconditionUtils.checkNotNull(root, "本体分类根节点不存在", HttpStatus.INTERNAL_SERVER_ERROR);
+        return root.getId();
+    }
 }

@@ -19,18 +19,19 @@ import java.util.List;
 @NoArgsConstructor
 public class OntologySpaceCanvasCreateParam {
 
+    @Schema(name = "spaceId", description = "本体空间id，传入则直接在该空间下创建对象、属性、关系，不再创建空间；不传则根据下方空间信息新建空间", example = "1")
+    private Integer spaceId;
+
     @Schema(name = "iconUrl", description = "空间图标url")
     private String iconUrl;
 
-    @Schema(name = "displayName", description = "空间名称", required = true, example = "公共安全")
-    @NotBlank(message = "displayName is empty")
+    @Schema(name = "displayName", description = "空间名称（不传spaceId新建空间时必填）", example = "公共安全")
     private String displayName;
 
     @Schema(name = "description", description = "空间描述")
     private String description;
 
-    @Schema(name = "apiName", description = "空间api名称", required = true, example = "public_security")
-    @NotBlank(message = "apiName is empty")
+    @Schema(name = "apiName", description = "空间api名称（不传spaceId新建空间时必填）", example = "public_security")
     @Pattern(regexp = "^[a-zA-Z_$][a-zA-Z0-9_$]{0,62}$", message = "空间api名称格式不合法")
     private String apiName;
 
