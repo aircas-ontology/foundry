@@ -60,6 +60,9 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     private OntologyActionMapper actionMapper;
 
     @Resource
+    private ActionCategoryMapper actionCategoryMapper;
+
+    @Resource
     private ObjectMapper entityMapper;
 
     @Resource
@@ -111,6 +114,17 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     public void createAction(ActionCreateOrUpdateParam param) {
         var action = getOne(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getApi, param.getActionApi()));
         PreconditionUtils.checkArgument(action == null, "action api 已存在：" + param.getActionApi(), HttpStatus.BAD_REQUEST);
+        // 归属的行为分类必须存在，且与该行为所属本体位于同一空间（行为分类的作用域为本体空间）
+        if (param.getCategoryId() != null) {
+            var category = actionCategoryMapper.selectById(param.getCategoryId());
+            var ontologyMeta = ontologyMetaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>()
+                    .eq(OntologyMeta::getUniqueIdentifier, param.getOntologyIdentifier()));
+            PreconditionUtils.checkArgument(category != null
+                            && ontologyMeta != null
+                            && ontologyMeta.getOntologySpaceId() != null
+                            && ontologyMeta.getOntologySpaceId().equals(category.getOntologySpaceId()),
+                    "无效的行为分类：" + param.getCategoryId(), HttpStatus.BAD_REQUEST);
+        }
         var ontologyAction = OntologyAction.builder()
                 .api(param.getActionApi())
                 .description(param.getDescription())
@@ -118,6 +132,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 .functionApi(param.getFunctionApi())
                 .icon(param.getIcon())
                 .ontologyUniqueIdentifier(param.getOntologyIdentifier())
+                .actionCategoryId(param.getCategoryId())
                 .status(Status.ENABLE.getValue())
                 .build();
         save(ontologyAction);
