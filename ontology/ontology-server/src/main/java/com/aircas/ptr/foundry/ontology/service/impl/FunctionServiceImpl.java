@@ -211,7 +211,9 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 .displayName(param.getDisplayName())
                 .referenceName(param.getReferenceName())
                 .type(function.getType())
-                .model(function.getModel())
+                .model(param.getModel())
+                .ontologySpaceId(function.getOntologySpaceId())
+                .queryConfig(param.getQueryConfig())
                 .build());
     }
 
