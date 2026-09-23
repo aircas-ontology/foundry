@@ -9,6 +9,7 @@ import com.aircas.ptr.foundry.ontology.model.dto.FunctionParamDTO;
 import com.aircas.ptr.foundry.ontology.model.enums.AggFuncEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamCategoryEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.TaskStatusEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.FunctionModelEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import com.aircas.ptr.foundry.ontology.model.param.BasicQueryConfig;
@@ -162,6 +163,13 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     @Override
     @Transactional(value = "mainTransactionManager")
     public void createFunction(FunctionCreateParam param) {
+        // 自动填充 model：未传时根据 type 推断
+        FunctionModelEnum model = param.getModel();
+        if (model == null) {
+            model = (param.getType() == FunctionTypeEnum.BASIC_QUERY) 
+                    ? FunctionModelEnum.BASIC 
+                    : FunctionModelEnum.OTHER;
+        }
         var function = getOne(new LambdaQueryWrapper<Function>().eq(Function::getApi, param.getFunctionApi()));
         PreconditionUtils.checkArgument(function == null, "函数api已存在:" + param.getFunctionApi(), HttpStatus.BAD_REQUEST);
         //函数插入
@@ -171,7 +179,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 .displayName(param.getDisplayName())
                 .code(param.getCode())
                 .type(param.getType())
-                .model(param.getModel())
+                .model(model)
                 .status(Status.ENABLE.getValue())
                 .referenceName(param.getReferenceName())
                 .ontologySpaceId(param.getOntologySpaceId())

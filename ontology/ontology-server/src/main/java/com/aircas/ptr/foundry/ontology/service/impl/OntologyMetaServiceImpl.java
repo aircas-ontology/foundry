@@ -111,16 +111,16 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 .eq(OntologyMeta::getOntologySpaceId, ontologyCreateParam.getSpaceId())
                 .eq(OntologyMeta::getDisplayName, ontologyCreateParam.getDisplayName())
         );
-        PreconditionUtils.checkIsNull(duplicateDisplayName, "duplicate display name", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkIsNull(duplicateDisplayName, "本体显示名称 '" + ontologyCreateParam.getDisplayName() + "' 已存在", HttpStatus.BAD_REQUEST);
         var duplicateApiName = getOne(new LambdaQueryWrapper<OntologyMeta>()
                 .eq(OntologyMeta::getOntologySpaceId, ontologyCreateParam.getSpaceId())
                 .eq(OntologyMeta::getApiName, ontologyCreateParam.getApiName())
         );
-        PreconditionUtils.checkIsNull(duplicateApiName, "duplicate api name", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkIsNull(duplicateApiName, "本体api名称 '" + ontologyCreateParam.getApiName() + "' 已存在", HttpStatus.BAD_REQUEST);
         var groupIds = ontologyCreateParam.getGroupIds();
         if (CollectionUtils.isNotEmpty(groupIds)) {
             List<OntologyGroup> list = groupService.list(new LambdaQueryWrapper<OntologyGroup>().in(OntologyGroup::getGroupId, groupIds));
-            PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(list) && list.size() == groupIds.size(), "Invalid groupIds", HttpStatus.BAD_REQUEST);
+            PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(list) && list.size() == groupIds.size(), "无效的本体分组ID", HttpStatus.BAD_REQUEST);
         }
         var meta = OntologyMeta.builder()
                 .uniqueIdentifier(IdGenerator.generateUUID())
@@ -341,7 +341,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
     @Transactional(value = "mainTransactionManager")
     public void deleteOntology(String ontologyIdentifier) {
         var meta = getOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, ontologyIdentifier));
-        PreconditionUtils.checkArgument(meta != null, "ontology not exist:" + ontologyIdentifier, ResultCode.PARAM_ERROR, HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(meta != null, "本体不存在:" + ontologyIdentifier, ResultCode.PARAM_ERROR, HttpStatus.BAD_REQUEST);
         //删除本体元数据
         this.remove(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, ontologyIdentifier));
         //删除属性分类
@@ -396,7 +396,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         var meta = getOne(new LambdaQueryWrapper<OntologyMeta>()
                 .eq(OntologyMeta::getUniqueIdentifier, uniqueIdentifier)
                 .eq(OntologyMeta::getStatus, Status.ENABLE.getValue()));
-        PreconditionUtils.checkNotNull(meta, "ontology not exist:" + uniqueIdentifier, HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkNotNull(meta, "本体不存在:" + uniqueIdentifier, HttpStatus.BAD_REQUEST);
         return buildStatistic(uniqueIdentifier);
     }
 
@@ -548,15 +548,15 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
     }
 
 
-    @Transactional(value = "mainTransactionManager")
+    @Transactional(value = "mainTransactionManager", propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
     public void importOntology(OntologyCreateDTO dto) {
 
         var metaData = dto.getMetadata();
-        PreconditionUtils.checkNotNull(metaData, "ontology meta data is null");
+        PreconditionUtils.checkNotNull(metaData, "本体元数据为空");
         //保存基本信息
         var space = spaceService.getOne(new LambdaQueryWrapper<OntologySpace>()
                 .eq(OntologySpace::getDisplayName, metaData.getOntologySpaceName()));
-        PreconditionUtils.checkNotNull(space, "invalid ontology space name:" + dto.getMetadata().getOntologySpaceName());
+        PreconditionUtils.checkNotNull(space, "本体所属空间 '" + dto.getMetadata().getOntologySpaceName() + "' 不存在，请检查 metadata.ontologySpaceName 是否正确");
 
         //空间分组
         var groups = groupService.list(new LambdaQueryWrapper<OntologyGroup>()
@@ -573,6 +573,12 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                         .eq(OntologyCategory::getOntologySpaceId, space.getId()))
                 .stream().collect(Collectors.toMap(OntologyCategory::getPath, OntologyCategory::getId));
 
+        // 获取根分类（"全部"），作为未指定分类时的默认值
+        var rootCategory = categoryService.getOne(new LambdaQueryWrapper<OntologyCategory>()
+                .eq(OntologyCategory::getOntologySpaceId, space.getId())
+                .eq(OntologyCategory::getParentId, 0));
+        Integer defaultCategoryId = rootCategory != null ? rootCategory.getId() : null;
+
         var meta = OntologyMeta.builder()
                 .apiName(metaData.getApiName())
                 .description(metaData.getDescription())
@@ -581,8 +587,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 .metaGroupId(metaGroups)
                 .uniqueIdentifier(IdGenerator.generateUUID())
                 .ontologySpaceId(space.getId())
-                .ontologyCategoryId(StringUtils.isEmpty(metaData.getCategoryPath()) ?
-                        null : ontologyCategoryMap.get(metaData.getCategoryPath()))
+                .ontologyCategoryId(resolveCategoryId(metaData.getCategoryPath(), ontologyCategoryMap, defaultCategoryId))
                 .build();
         
         // 检查本体是否已存在（同一空间下 displayName 唯一）
@@ -980,6 +985,17 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 .map(String::trim)
                 .filter(StringUtils::isNotEmpty)
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * 解析本体分类 ID：categoryPath 为空或找不到时返回默认分类 ID（根分类"全部"）。
+     */
+    private Integer resolveCategoryId(String categoryPath, Map<String, Integer> categoryMap, Integer defaultCategoryId) {
+        if (StringUtils.isEmpty(categoryPath)) {
+            return defaultCategoryId;
+        }
+        Integer categoryId = categoryMap.get(categoryPath);
+        return categoryId != null ? categoryId : defaultCategoryId;
     }
 
 
