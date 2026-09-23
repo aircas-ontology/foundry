@@ -26,6 +26,10 @@ public class CdcTaskInitServiceImpl implements CdcTaskInitService {
     private String databaseUserName;
     @Value("${spring.datasource.main.password}")
     private String databasePassword;
+    @Value("${cdc.datasource.hostname:172.16.18.58}")
+    private String cdcDbHostname;
+    @Value("${cdc.datasource.port:35432}")
+    private String cdcDbPort;
     @Value("${cdc.ontology-topic-prefix}")
     private String ontologyTopicPrefix;
 
@@ -124,8 +128,8 @@ public class CdcTaskInitServiceImpl implements CdcTaskInitService {
         // 构建连接器配置
         Map<String, Object> config = new HashMap<>();
         config.put("connector.class", "io.debezium.connector.postgresql.PostgresConnector");
-        config.put("database.hostname", "172.16.18.62");
-        config.put("database.port", "35432");
+        config.put("database.hostname", cdcDbHostname);
+        config.put("database.port", cdcDbPort);
         config.put("database.user", databaseUserName);
         config.put("database.password", databasePassword);
         config.put("database.dbname", "entity_datasource");
@@ -155,8 +159,8 @@ public class CdcTaskInitServiceImpl implements CdcTaskInitService {
         // 构建连接器配置
         Map<String, Object> config = new HashMap<>();
         config.put("connector.class", "io.debezium.connector.postgresql.PostgresConnector");
-        config.put("database.hostname", "172.16.18.62");
-        config.put("database.port", "35432");
+        config.put("database.hostname", cdcDbHostname);
+        config.put("database.port", cdcDbPort);
         config.put("database.user", databaseUserName);
         config.put("database.password",databasePassword);
         config.put("database.dbname", "postgres");
