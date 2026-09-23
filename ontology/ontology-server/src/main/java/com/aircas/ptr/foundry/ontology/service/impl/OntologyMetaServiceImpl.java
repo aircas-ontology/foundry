@@ -538,7 +538,11 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 proxyService.importOntology(dto);
             } catch (Exception e) {
                 log.error("本体 {} 导入失败", dto.getMetadata().getDisplayName(), e);
-                failedOntology.add(dto.getMetadata().getDisplayName());
+                String reason = e.getMessage();
+                if (reason == null && e.getCause() != null) {
+                    reason = e.getCause().getMessage();
+                }
+                failedOntology.add(dto.getMetadata().getDisplayName() + "：" + (reason != null ? reason : "未知错误"));
             }
         });
         return failedOntology;
@@ -581,6 +585,15 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 .ontologyCategoryId(StringUtils.isEmpty(metaData.getCategoryPath()) ?
                         null : ontologyCategoryMap.get(metaData.getCategoryPath()))
                 .build();
+        
+        // 检查本体是否已存在（同一空间下 displayName 唯一）
+        var existingMeta = getOne(new LambdaQueryWrapper<OntologyMeta>()
+                .eq(OntologyMeta::getOntologySpaceId, space.getId())
+                .eq(OntologyMeta::getDisplayName, meta.getDisplayName()));
+        PreconditionUtils.checkArgument(existingMeta == null,
+                "本体 '" + meta.getDisplayName() + "' 在空间 '" + space.getDisplayName() + "' 下已存在",
+                HttpStatus.BAD_REQUEST);
+        
         save(meta);
         //保存属性分类
         var propertyCategoryCreateParam = dto.getPropertyCategory();

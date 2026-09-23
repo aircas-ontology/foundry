@@ -4,6 +4,7 @@ import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionCallbackParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionExecuteParam;
+import com.aircas.ptr.foundry.ontology.model.param.FunctionTestParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.vo.FunctionDetailVO;
 import com.aircas.ptr.foundry.ontology.model.vo.FunctionExecuteResultVO;
@@ -18,6 +19,8 @@ import org.springframework.web.bind.annotation.*;
 
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
+
+import java.util.List;
 
 
 @Tag(name = "函数算子管理")
@@ -88,6 +91,12 @@ public class OntologyFunctionController {
     @Operation(summary = "根据taskId查询异步函数执行结果")
     public RestResult<FunctionExecuteResultVO> getExecuteResult(@RequestParam(required = true, name = "taskId") @Parameter(description = "任务id") String taskId) {
         return RestResult.ofData(functionService.getExecuteResult(taskId));
+    }
+
+    @PostMapping("/test")
+    @Operation(summary = "统一函数测试入口：根据函数类型分发到不同测试逻辑")
+    public RestResult<Object> testFunction(@RequestBody @Valid FunctionTestParam param) {
+        return RestResult.ofData(functionService.testFunction(param));
     }
 
 }

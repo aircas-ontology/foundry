@@ -1342,6 +1342,9 @@ public class EntityServiceImpl implements EntityService {
         // 查询主键是否存在且关联了数据源
         var pkProp = props.stream().filter(p -> p.getIsPrimaryKey() == 1).findFirst().orElse(null);
         PreconditionUtils.checkArgument(pkProp != null && StringUtils.isNotEmpty(pkProp.getDatasourceId()), "主键属性不存在或未关联数据源", HttpStatus.BAD_REQUEST);
+        // 校验 schema 不为空
+        PreconditionUtils.checkArgument(StringUtils.isNotEmpty(pkProp.getDatasourceSchema()), 
+                "本体数据源 schema 为空，请检查数据源配置", HttpStatus.BAD_REQUEST);
         // 校验返回属性是否存在或者是否关联了数据源
         var propMap = props.stream().collect(Collectors.toMap(OntologyProperty::getApiName, v -> v));
         param.getSelectProperties().forEach(p -> {
@@ -1358,6 +1361,7 @@ public class EntityServiceImpl implements EntityService {
         var selectBuilder = new StringBuilder();
         List<String> selectColumnList = Lists.newArrayList();
         Map<String, OntologySelectPropertyParam> selectParamMap = Maps.newLinkedHashMap();
+        boolean hasAggregation = false;
         for (OntologySelectPropertyParam selectProp : param.getSelectProperties()) {
             if (selectBuilder.length() > 0) {
                 selectBuilder.append(",");
@@ -1368,6 +1372,7 @@ public class EntityServiceImpl implements EntityService {
             var columnRef = wrapColumnRef(prop.getDatasourceSchema(), prop.getDatasourceId(), prop.getDatasourceColumnName());
 
             if (selectProp.getAggFunc() != null) {
+                hasAggregation = true;
                 switch (selectProp.getAggFunc()) {
                     case COUNT:
                     case SUM:
@@ -1472,14 +1477,23 @@ public class EntityServiceImpl implements EntityService {
         var offset = (param.getPageNum() - 1) * pageSize;
         // base SQL
         var baseSql = "SELECT " + selectBuilder + " FROM " + fromBuilder + whereBuilder + groupByBuilder + orderByBuilder;
-        // 计数SQL
-        var countSql = "SELECT COUNT(*) FROM (" + baseSql + ") AS t";
-        var total = objectMapper.queryCountBySql(countSql);
-        if (total == null || total == 0) {
-            return new Page<>(param.getPageNum(), pageSize, 0);
+        
+        long total;
+        String dataSql;
+        if (hasAggregation) {
+            // 聚合查询不需要分页，直接返回结果
+            total = 1;
+            dataSql = baseSql;
+        } else {
+            // 计数SQL
+            var countSql = "SELECT COUNT(*) FROM (" + baseSql + ") AS t";
+            total = objectMapper.queryCountBySql(countSql);
+            if (total == 0) {
+                return new Page<>(param.getPageNum(), pageSize, 0);
+            }
+            // 数据SQL
+            dataSql = baseSql + " LIMIT " + pageSize + " OFFSET " + offset;
         }
-        // 数据SQL
-        var dataSql = baseSql + " LIMIT " + pageSize + " OFFSET " + offset;
         var resultMaps = objectMapper.queryBySql(dataSql);
         // 9. 转换结果
         List<List<EntityPropertyGenericQueryVO>> resultVOs = Lists.newArrayList();
@@ -1491,12 +1505,14 @@ public class EntityServiceImpl implements EntityService {
                     continue;
                 }
                 var prop = propMap.get(selectProp.getPropertyApiName());
+                // row 为 null 时（聚合无匹配行），value 为 null
+                Object value = (row != null) ? row.get(column) : null;
                 voList.add(EntityPropertyGenericQueryVO.builder()
                         .propertyApiName(selectProp.getPropertyApiName())
                         .propertyDisplayName(prop != null ? prop.getDisplayName() : selectProp.getPropertyApiName())
                         .aggFunc(selectProp.getAggFunc())
                         .alias(selectProp.getAlias())
-                        .value(row.get(column))
+                        .value(value)
                         .build());
             }
             resultVOs.add(voList);
@@ -1568,12 +1584,15 @@ public class EntityServiceImpl implements EntityService {
 
         String columnRef = wrapColumnRef(prop.getDatasourceSchema(), prop.getDatasourceId(), prop.getDatasourceColumnName());
         QueryOpEnum op = filter.getOp() != null ? filter.getOp() : QueryOpEnum.EQ;
+        
+        // 优先使用 filter 声明的 dataType，否则使用属性定义的类型
+        OntologyDataTypeEnum effectiveType = getEffectiveType(filter.getDataType(), prop.getPropertyType());
 
         switch (op) {
             case EQ:
-                return columnRef + " = " + formatSqlValue(filter.getValue(), prop.getPropertyType());
+                return columnRef + " = " + formatSqlValue(filter.getValue(), effectiveType);
             case NE:
-                return columnRef + " != " + formatSqlValue(filter.getValue(), prop.getPropertyType());
+                return columnRef + " != " + formatSqlValue(filter.getValue(), effectiveType);
             case LIKE:
                 return columnRef + " LIKE " + formatSqlValue("%" + filter.getValue() + "%", OntologyDataTypeEnum.String);
             case LIKE_LEFT:
@@ -1589,7 +1608,7 @@ public class EntityServiceImpl implements EntityService {
                     if (i > 0) {
                         inSb.append(",");
                     }
-                    inSb.append(formatSqlValue(filter.getValues().get(i), prop.getPropertyType()));
+                    inSb.append(formatSqlValue(filter.getValues().get(i), effectiveType));
                 }
                 inSb.append(")");
                 return inSb.toString();
@@ -1602,28 +1621,28 @@ public class EntityServiceImpl implements EntityService {
                     if (i > 0) {
                         notInSb.append(",");
                     }
-                    notInSb.append(formatSqlValue(filter.getValues().get(i), prop.getPropertyType()));
+                    notInSb.append(formatSqlValue(filter.getValues().get(i), effectiveType));
                 }
                 notInSb.append(")");
                 return notInSb.toString();
             case BETWEEN:
                 PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(filter.getValues()) && filter.getValues().size() >= 2,
                         "BETWEEN 需要提供两个值", HttpStatus.BAD_REQUEST);
-                return columnRef + " BETWEEN " + formatSqlValue(filter.getValues().get(0), prop.getPropertyType())
-                        + " AND " + formatSqlValue(filter.getValues().get(1), prop.getPropertyType());
+                return columnRef + " BETWEEN " + formatSqlValue(filter.getValues().get(0), effectiveType)
+                        + " AND " + formatSqlValue(filter.getValues().get(1), effectiveType);
             case NOT_BETWEEN:
                 PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(filter.getValues()) && filter.getValues().size() >= 2,
                         "NOT BETWEEN 需要提供两个值", HttpStatus.BAD_REQUEST);
-                return columnRef + " NOT BETWEEN " + formatSqlValue(filter.getValues().get(0), prop.getPropertyType())
-                        + " AND " + formatSqlValue(filter.getValues().get(1), prop.getPropertyType());
+                return columnRef + " NOT BETWEEN " + formatSqlValue(filter.getValues().get(0), effectiveType)
+                        + " AND " + formatSqlValue(filter.getValues().get(1), effectiveType);
             case GT:
-                return columnRef + " > " + formatSqlValue(filter.getValue(), prop.getPropertyType());
+                return columnRef + " > " + formatSqlValue(filter.getValue(), effectiveType);
             case GE:
-                return columnRef + " >= " + formatSqlValue(filter.getValue(), prop.getPropertyType());
+                return columnRef + " >= " + formatSqlValue(filter.getValue(), effectiveType);
             case LT:
-                return columnRef + " < " + formatSqlValue(filter.getValue(), prop.getPropertyType());
+                return columnRef + " < " + formatSqlValue(filter.getValue(), effectiveType);
             case LE:
-                return columnRef + " <= " + formatSqlValue(filter.getValue(), prop.getPropertyType());
+                return columnRef + " <= " + formatSqlValue(filter.getValue(), effectiveType);
             case IS_NULL:
                 return columnRef + " IS NULL";
             case IS_NOT_NULL:
@@ -1643,6 +1662,24 @@ public class EntityServiceImpl implements EntityService {
             default:
                 return "";
         }
+    }
+
+    /**
+     * 获取有效的类型：优先使用 filter 声明的 dataType，否则使用属性定义的类型。
+     */
+    private OntologyDataTypeEnum getEffectiveType(String dataType, OntologyDataTypeEnum propType) {
+        if (StringUtils.isNotEmpty(dataType)) {
+            switch (dataType.toUpperCase()) {
+                case "NUMBER":
+                    return OntologyDataTypeEnum.Double;
+                case "BOOLEAN":
+                    return OntologyDataTypeEnum.Bool;
+                case "STRING":
+                default:
+                    return OntologyDataTypeEnum.String;
+            }
+        }
+        return propType;
     }
 
     private String formatSqlValue(Object value, OntologyDataTypeEnum type) {

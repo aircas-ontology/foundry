@@ -34,4 +34,7 @@ public class FunctionInfoVO {
 
     @Schema(name = "type", description = "函数类型")
     private FunctionTypeEnum type;
+
+    @Schema(name = "ontologySpaceId", description = "所属本体空间 id")
+    private Integer ontologySpaceId;
 }

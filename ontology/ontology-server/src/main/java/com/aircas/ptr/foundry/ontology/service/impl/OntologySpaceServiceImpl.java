@@ -114,10 +114,14 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
     @Override
     public Integer createSpace(OntologySpaceCreateParam param) {
         //check param
-        var space = spaceMapper.selectOne(new LambdaQueryWrapper<OntologySpace>()
-                .eq(OntologySpace::getDisplayName, param.getDisplayName())
-                .or().eq(OntologySpace::getApiName, param.getApiName()));
-        PreconditionUtils.checkArgument(space == null, "空间显示名称或api名称已存在", HttpStatus.BAD_REQUEST);
+        var existByName = spaceMapper.selectOne(new LambdaQueryWrapper<OntologySpace>()
+                .eq(OntologySpace::getDisplayName, param.getDisplayName()));
+        PreconditionUtils.checkArgument(existByName == null, 
+                "空间显示名称 '" + param.getDisplayName() + "' 已存在", HttpStatus.BAD_REQUEST);
+        var existByApi = spaceMapper.selectOne(new LambdaQueryWrapper<OntologySpace>()
+                .eq(OntologySpace::getApiName, param.getApiName()));
+        PreconditionUtils.checkArgument(existByApi == null, 
+                "空间api名称 '" + param.getApiName() + "' 已存在", HttpStatus.BAD_REQUEST);
         //create space
         var ontologySpace = OntologySpace.builder()
                 .description(param.getDescription())
@@ -441,11 +445,32 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
         if (ontologySpace == null) {
             return Lists.newArrayList();
         }
-        var spaceId = proxy.createSpace(OntologySpaceCreateParam.builder()
-                .apiName(ontologySpace.getApiName())
-                .description(ontologySpace.getDescription())
-                .displayName(ontologySpace.getDisplayName())
-                .build());
+        // 预检查：空间是否已存在（避免调用 createSpace 抛异常后污染外层事务导致 UnexpectedRollbackException）
+        var existByName = spaceMapper.selectOne(new LambdaQueryWrapper<OntologySpace>()
+                .eq(OntologySpace::getDisplayName, ontologySpace.getDisplayName()));
+        if (existByName != null) {
+            return Lists.newArrayList("空间显示名称 '" + ontologySpace.getDisplayName() + "' 已存在");
+        }
+        var existByApi = spaceMapper.selectOne(new LambdaQueryWrapper<OntologySpace>()
+                .eq(OntologySpace::getApiName, ontologySpace.getApiName()));
+        if (existByApi != null) {
+            return Lists.newArrayList("空间api名称 '" + ontologySpace.getApiName() + "' 已存在");
+        }
+        Integer spaceId;
+        try {
+            spaceId = proxy.createSpace(OntologySpaceCreateParam.builder()
+                    .apiName(ontologySpace.getApiName())
+                    .description(ontologySpace.getDescription())
+                    .displayName(ontologySpace.getDisplayName())
+                    .build());
+        } catch (Exception e) {
+            log.error("空间 {} 导入失败", ontologySpace.getDisplayName(), e);
+            String reason = e.getMessage();
+            if (reason == null && e.getCause() != null) {
+                reason = e.getCause().getMessage();
+            }
+            return Lists.newArrayList("空间 '" + ontologySpace.getDisplayName() + "' 导入失败：" + (reason != null ? reason : "未知错误"));
+        }
         //create ontology category
         var category = spaceCreateDTO.getOntologyCategory();
         if (category != null) {
@@ -457,11 +482,23 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
         List<String> failedOntology = Lists.newArrayList();
         if (CollectionUtils.isNotEmpty(spaceCreateDTO.getOntologies())) {
             spaceCreateDTO.getOntologies().forEach(dto -> {
+                // 预检查：本体是否已存在（避免 importOntology 抛异常后污染外层事务）
+                var existingMeta = metaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>()
+                        .eq(OntologyMeta::getOntologySpaceId, spaceId)
+                        .eq(OntologyMeta::getDisplayName, dto.getMetadata().getDisplayName()));
+                if (existingMeta != null) {
+                    failedOntology.add(dto.getMetadata().getDisplayName() + "：本体 '" + dto.getMetadata().getDisplayName() + "' 在空间下已存在");
+                    return;
+                }
                 try {
                     ontologyMetaService.importOntology(dto);
                 } catch (Exception e) {
                     log.error("本体 {} 导入失败", dto.getMetadata().getDisplayName(), e);
-                    failedOntology.add(dto.getMetadata().getDisplayName());
+                    String reason = e.getMessage();
+                    if (reason == null && e.getCause() != null) {
+                        reason = e.getCause().getMessage();
+                    }
+                    failedOntology.add(dto.getMetadata().getDisplayName() + "：" + (reason != null ? reason : "未知错误"));
                 }
             });
         }
