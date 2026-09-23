@@ -30,6 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import jakarta.annotation.Resource;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -49,6 +50,9 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
 
     @Resource
     private FunctionMapper functionMapper;
+
+    @Resource
+    private FunctionService functionService;
 
     @Resource
     private FunctionParamMapper functionParamMapper;
@@ -214,6 +218,10 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         Page<OntologyActionInfoVO> result = new Page<>(pageNum, pageSize);
         var pageResult = page(new Page<>(pageNum, pageSize),
                 new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getOntologyUniqueIdentifier, ontologyUniqIdentifier));
+        // 一次批量取函数描述，避免逐条查函数表
+        var functionDescMap = functionService.mapDescriptionByApi(pageResult.getRecords().stream()
+                .map(OntologyAction::getFunctionApi)
+                .collect(Collectors.toList()));
         List<OntologyActionInfoVO> records = pageResult.getRecords().stream()
                 .map(v -> OntologyActionInfoVO.builder()
                         .actionApi(v.getApi())
@@ -221,6 +229,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                         .ontologyUniqIdentifier(v.getOntologyUniqueIdentifier())
                         .displayName(v.getDisplayName())
                         .icon(v.getIcon())
+                        .functionApi(v.getFunctionApi())
+                        .functionDescription(functionDescMap.get(v.getFunctionApi()))
                         .build())
                 .collect(Collectors.toList());
         result.setRecords(records).setTotal(pageResult.getTotal());
@@ -234,6 +244,9 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         var detailVO = OntologyActionDetailVO
                 .builder()
                 .functionApi(action.getFunctionApi())
+                .functionDescription(functionService
+                        .mapDescriptionByApi(Collections.singletonList(action.getFunctionApi()))
+                        .get(action.getFunctionApi()))
                 .actionApi(action.getApi())
                 .description(action.getDescription())
                 .displayName(action.getDisplayName())

@@ -15,6 +15,7 @@ import com.aircas.ptr.foundry.ontology.repository.mainMapper.ActionCategoryMappe
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyActionMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyMetaMapper;
 import com.aircas.ptr.foundry.ontology.service.ActionCategoryService;
+import com.aircas.ptr.foundry.ontology.service.FunctionService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.google.common.collect.Lists;
@@ -55,6 +56,9 @@ public class ActionCategoryServiceImpl extends ServiceImpl<ActionCategoryMapper,
 
     @Resource
     private OntologyMetaMapper ontologyMetaMapper;
+
+    @Resource
+    private FunctionService functionService;
 
     @Transactional(transactionManager = "mainTransactionManager")
     @Override
@@ -210,7 +214,12 @@ public class ActionCategoryServiceImpl extends ServiceImpl<ActionCategoryMapper,
                 .filter(action -> action.getActionCategoryId() != null)
                 .collect(Collectors.groupingBy(OntologyAction::getActionCategoryId));
 
-        return buildCategoryVO(roots.get(0), categoryMap, actionMap);
+        // 一次批量取函数描述，避免在递归装配 VO 时逐条查函数表
+        var functionDescMap = functionService.mapDescriptionByApi(actions.stream()
+                .map(OntologyAction::getFunctionApi)
+                .collect(Collectors.toList()));
+
+        return buildCategoryVO(roots.get(0), categoryMap, actionMap, functionDescMap);
     }
 
     /**
@@ -229,7 +238,8 @@ public class ActionCategoryServiceImpl extends ServiceImpl<ActionCategoryMapper,
 
     private ActionCategoryVO buildCategoryVO(ActionCategory category,
                                              Map<Integer, List<ActionCategory>> categoryMap,
-                                             Map<Integer, List<OntologyAction>> actionMap) {
+                                             Map<Integer, List<OntologyAction>> actionMap,
+                                             Map<String, String> functionDescMap) {
 
         var vo = new ActionCategoryVO()
                 .setCategoryId(category.getId())
@@ -244,6 +254,8 @@ public class ActionCategoryServiceImpl extends ServiceImpl<ActionCategoryMapper,
                             .ontologyUniqIdentifier(v.getOntologyUniqueIdentifier())
                             .displayName(v.getDisplayName())
                             .icon(v.getIcon())
+                            .functionApi(v.getFunctionApi())
+                            .functionDescription(functionDescMap.get(v.getFunctionApi()))
                             .build())
                     .collect(Collectors.toList()));
         }
@@ -251,7 +263,7 @@ public class ActionCategoryServiceImpl extends ServiceImpl<ActionCategoryMapper,
         var children = categoryMap.get(category.getId());
         if (CollectionUtils.isNotEmpty(children)) {
             vo.setChildren(children.stream()
-                    .map(child -> buildCategoryVO(child, categoryMap, actionMap))
+                    .map(child -> buildCategoryVO(child, categoryMap, actionMap, functionDescMap))
                     .collect(Collectors.toList()));
         }
         return vo;
