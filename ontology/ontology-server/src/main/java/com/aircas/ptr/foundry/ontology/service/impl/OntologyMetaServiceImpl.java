@@ -871,11 +871,6 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 .collect(Collectors.toMap(PropertyCategory::getId, PropertyCategory::getPath, (a, b) -> a));
         var propertyCategory = buildPropertyCategoryTree(propertyCategories);
 
-        //属性元数据 schema 树
-        var metadataSchemas = propertyMetadataSchemaService.list(new LambdaQueryWrapper<PropertyMetadataSchema>()
-                .eq(PropertyMetadataSchema::getOntologyUniqueIdentifier, uid));
-        var propertySchema = buildMetadataSchemaTree(metadataSchemas);
-
         //属性
         var properties = ontologyPropertyService.list(new LambdaQueryWrapper<OntologyProperty>()
                         .eq(OntologyProperty::getOntologyUniqueIdentifier, uid)
@@ -890,7 +885,6 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                         .defaultValue(p.getDefaultValue())
                         .storageGroup(p.getStorageGroup())
                         .categoryPath(p.getPropertyCategoryId() == null ? null : propCategoryPathMap.get(p.getPropertyCategoryId()))
-                        .metadata(p.getMetadata())
                         .build())
                 .collect(Collectors.toList());
 
@@ -900,7 +894,6 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         return OntologyCreateDTO.builder()
                 .metadata(metadata)
                 .propertyCategory(propertyCategory)
-                .propertySchema(propertySchema)
                 .properties(properties)
                 .instances(instances)
                 .build();

@@ -114,14 +114,10 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
     @Override
     public Integer createSpace(OntologySpaceCreateParam param) {
         //check param
-        var existByName = spaceMapper.selectOne(new LambdaQueryWrapper<OntologySpace>()
-                .eq(OntologySpace::getDisplayName, param.getDisplayName()));
-        PreconditionUtils.checkArgument(existByName == null, 
-                "空间显示名称 '" + param.getDisplayName() + "' 已存在", HttpStatus.BAD_REQUEST);
-        var existByApi = spaceMapper.selectOne(new LambdaQueryWrapper<OntologySpace>()
-                .eq(OntologySpace::getApiName, param.getApiName()));
-        PreconditionUtils.checkArgument(existByApi == null, 
-                "空间api名称 '" + param.getApiName() + "' 已存在", HttpStatus.BAD_REQUEST);
+        var space = spaceMapper.selectOne(new LambdaQueryWrapper<OntologySpace>()
+                .eq(OntologySpace::getDisplayName, param.getDisplayName())
+                .or().eq(OntologySpace::getApiName, param.getApiName()));
+        PreconditionUtils.checkArgument(space == null, "空间显示名称或api名称已存在", HttpStatus.BAD_REQUEST);
         //create space
         var ontologySpace = OntologySpace.builder()
                 .description(param.getDescription())
@@ -444,10 +440,10 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                 .description(ontologySpace.getDescription())
                 .displayName(ontologySpace.getDisplayName())
                 .build());
-        //create ontology category
+        //create ontology category：挂到 createSpace 已默认创建的根分类"全部"下（用根 id 作 parentId），避免与其争用 parentId=0 而报"无效的parentId"
         var category = spaceCreateDTO.getOntologyCategory();
         if (category != null) {
-            category.setParentId(0);
+            category.setParentId(getOntologyCategoryRoot(spaceId));
             category.setSpaceId(spaceId);
             categoryService.createCategory(category);
         }
