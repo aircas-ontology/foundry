@@ -537,26 +537,22 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 proxyService.importOntology(dto);
             } catch (Exception e) {
                 log.error("本体 {} 导入失败", dto.getMetadata().getDisplayName(), e);
-                String reason = e.getMessage();
-                if (reason == null && e.getCause() != null) {
-                    reason = e.getCause().getMessage();
-                }
-                failedOntology.add(dto.getMetadata().getDisplayName() + "：" + (reason != null ? reason : "未知错误"));
+                failedOntology.add(dto.getMetadata().getDisplayName());
             }
         });
         return failedOntology;
     }
 
 
-    @Transactional(value = "mainTransactionManager", propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    @Transactional(value = "mainTransactionManager")
     public void importOntology(OntologyCreateDTO dto) {
 
         var metaData = dto.getMetadata();
-        PreconditionUtils.checkNotNull(metaData, "本体元数据为空");
+        PreconditionUtils.checkNotNull(metaData, "ontology meta data is null");
         //保存基本信息
         var space = spaceService.getOne(new LambdaQueryWrapper<OntologySpace>()
                 .eq(OntologySpace::getDisplayName, metaData.getOntologySpaceName()));
-        PreconditionUtils.checkNotNull(space, "本体所属空间 '" + dto.getMetadata().getOntologySpaceName() + "' 不存在，请检查 metadata.ontologySpaceName 是否正确");
+        PreconditionUtils.checkNotNull(space, "invalid ontology space name:" + dto.getMetadata().getOntologySpaceName());
 
         //空间分组
         var groups = groupService.list(new LambdaQueryWrapper<OntologyGroup>()
@@ -573,12 +569,6 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                         .eq(OntologyCategory::getOntologySpaceId, space.getId()))
                 .stream().collect(Collectors.toMap(OntologyCategory::getPath, OntologyCategory::getId));
 
-        // 获取根分类（"全部"），作为未指定分类时的默认值
-        var rootCategory = categoryService.getOne(new LambdaQueryWrapper<OntologyCategory>()
-                .eq(OntologyCategory::getOntologySpaceId, space.getId())
-                .eq(OntologyCategory::getParentId, 0));
-        Integer defaultCategoryId = rootCategory != null ? rootCategory.getId() : null;
-
         var meta = OntologyMeta.builder()
                 .apiName(metaData.getApiName())
                 .description(metaData.getDescription())
@@ -587,17 +577,9 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 .metaGroupId(metaGroups)
                 .uniqueIdentifier(IdGenerator.generateUUID())
                 .ontologySpaceId(space.getId())
-                .ontologyCategoryId(resolveCategoryId(metaData.getCategoryPath(), ontologyCategoryMap, defaultCategoryId))
+                .ontologyCategoryId(StringUtils.isEmpty(metaData.getCategoryPath()) ?
+                        null : ontologyCategoryMap.get(metaData.getCategoryPath()))
                 .build();
-        
-        // 检查本体是否已存在（同一空间下 displayName 唯一）
-        var existingMeta = getOne(new LambdaQueryWrapper<OntologyMeta>()
-                .eq(OntologyMeta::getOntologySpaceId, space.getId())
-                .eq(OntologyMeta::getDisplayName, meta.getDisplayName()));
-        PreconditionUtils.checkArgument(existingMeta == null,
-                "本体 '" + meta.getDisplayName() + "' 在空间 '" + space.getDisplayName() + "' 下已存在",
-                HttpStatus.BAD_REQUEST);
-        
         save(meta);
         //保存属性分类
         var propertyCategoryCreateParam = dto.getPropertyCategory();
@@ -635,8 +617,11 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                     .collect(Collectors.toList());
             ontologyPropertyService.batchCreateProperties(ontologyPropertyCreateParams);
         }
-        //自动建实体表以及关联属性数据源
-        ontologyPropertyService.autoBindDatasource(meta.getUniqueIdentifier());
+        //自动建实体表以及关联属性数据源：仅当导入了实例数据时才执行，无实例数据则跳过（避免无谓建表/绑定数据源及主键校验失败）
+        var instances = dto.getInstances();
+        if (instances != null && CollectionUtils.isNotEmpty(instances.getNodes())) {
+            ontologyPropertyService.autoBindDatasource(meta.getUniqueIdentifier());
+        }
         //保存关系
         var relations = dto.getRelations();
         Map<Integer, String> relationMap = Maps.newHashMap();
@@ -751,7 +736,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
             });
         }
         //导入实例数据（若传递了 instances）：写数据湖物理表，id 由数据库重新生成；本体未绑定数据源或无实例时静默跳过
-        entityService.importInstances(meta.getUniqueIdentifier(), dto.getInstances());
+        entityService.importInstances(meta.getUniqueIdentifier(), instances);
     }
 
 
@@ -985,17 +970,6 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 .map(String::trim)
                 .filter(StringUtils::isNotEmpty)
                 .collect(Collectors.toList());
-    }
-
-    /**
-     * 解析本体分类 ID：categoryPath 为空或找不到时返回默认分类 ID（根分类"全部"）。
-     */
-    private Integer resolveCategoryId(String categoryPath, Map<String, Integer> categoryMap, Integer defaultCategoryId) {
-        if (StringUtils.isEmpty(categoryPath)) {
-            return defaultCategoryId;
-        }
-        Integer categoryId = categoryMap.get(categoryPath);
-        return categoryId != null ? categoryId : defaultCategoryId;
     }
 
 
