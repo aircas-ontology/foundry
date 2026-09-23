@@ -443,9 +443,23 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
         //create ontology category：挂到 createSpace 已默认创建的根分类"全部"下（用根 id 作 parentId），避免与其争用 parentId=0 而报"无效的parentId"
         var category = spaceCreateDTO.getOntologyCategory();
         if (category != null) {
-            category.setParentId(getOntologyCategoryRoot(spaceId));
-            category.setSpaceId(spaceId);
-            categoryService.createCategory(category);
+            var rootId = getOntologyCategoryRoot(spaceId);
+            // 如果导入的分类树顶层名为"全部"（与自动创建的根重名），跳过它，直接导入其子节点，避免嵌套成"全部/全部/..."
+            if ("全部".equals(category.getName()) && CollectionUtils.isNotEmpty(category.getChildren())) {
+                for (var child : category.getChildren()) {
+                    var childParam = OntologyCategoryCreateParam.builder()
+                            .name(child.getName())
+                            .children(child.getChildren())
+                            .parentId(rootId)
+                            .build();
+                    childParam.setSpaceId(spaceId);
+                    categoryService.createCategory(childParam);
+                }
+            } else {
+                category.setParentId(rootId);
+                category.setSpaceId(spaceId);
+                categoryService.createCategory(category);
+            }
         }
         //import ontologies
         List<String> failedOntology = Lists.newArrayList();
