@@ -114,17 +114,11 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     public void createAction(ActionCreateOrUpdateParam param) {
         var action = getOne(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getApi, param.getActionApi()));
         PreconditionUtils.checkArgument(action == null, "action api 已存在：" + param.getActionApi(), HttpStatus.BAD_REQUEST);
-        // 归属的行为分类必须存在，且与该行为所属本体位于同一空间（行为分类的作用域为本体空间）
-        if (param.getCategoryId() != null) {
-            var category = actionCategoryMapper.selectById(param.getCategoryId());
-            var ontologyMeta = ontologyMetaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>()
-                    .eq(OntologyMeta::getUniqueIdentifier, param.getOntologyIdentifier()));
-            PreconditionUtils.checkArgument(category != null
-                            && ontologyMeta != null
-                            && ontologyMeta.getOntologySpaceId() != null
-                            && ontologyMeta.getOntologySpaceId().equals(category.getOntologySpaceId()),
-                    "无效的行为分类：" + param.getCategoryId(), HttpStatus.BAD_REQUEST);
-        }
+        // 归属的行为分类必须存在
+        // TODO 行为后续将改由本体空间承载，创建行为的参数会增加 spaceId；
+        //      届时此处改为按 spaceId + categoryId 校验分类归属（当前仅校验分类是否存在）
+        var category = actionCategoryMapper.selectById(param.getCategoryId());
+        PreconditionUtils.checkArgument(category != null, "无效的行为分类：" + param.getCategoryId(), HttpStatus.BAD_REQUEST);
         var ontologyAction = OntologyAction.builder()
                 .api(param.getActionApi())
                 .description(param.getDescription())

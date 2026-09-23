@@ -56,20 +56,6 @@ public class ActionCategoryServiceImpl extends ServiceImpl<ActionCategoryMapper,
     @Resource
     private OntologyMetaMapper ontologyMetaMapper;
 
-    /**
-     * 取本空间下的全部本体唯一标识。
-     * <p>
-     * 行为的空间归属以本体为准：行为表上的空间列不由本服务维护，
-     * 因此统一经本体（{@code ontology_meta.ontology_space_id}）解析，避免两处空间值不一致。
-     */
-    private List<String> listOntologyIdentifiersOfSpace(Integer spaceId) {
-        return ontologyMetaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>()
-                        .eq(OntologyMeta::getOntologySpaceId, spaceId))
-                .stream()
-                .map(OntologyMeta::getUniqueIdentifier)
-                .collect(Collectors.toList());
-    }
-
     @Transactional(transactionManager = "mainTransactionManager")
     @Override
     public void createActionCategory(ActionCategoryCreateParam param) {
@@ -225,6 +211,20 @@ public class ActionCategoryServiceImpl extends ServiceImpl<ActionCategoryMapper,
                 .collect(Collectors.groupingBy(OntologyAction::getActionCategoryId));
 
         return buildCategoryVO(roots.get(0), categoryMap, actionMap);
+    }
+
+    /**
+     * 取本空间下的全部本体唯一标识。
+     * <p>
+     * 行为的空间归属以本体为准：行为表上的空间列不由本服务维护，
+     * 因此统一经本体（{@code ontology_meta.ontology_space_id}）解析，避免两处空间值不一致。
+     */
+    private List<String> listOntologyIdentifiersOfSpace(Integer spaceId) {
+        return ontologyMetaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>()
+                        .eq(OntologyMeta::getOntologySpaceId, spaceId))
+                .stream()
+                .map(OntologyMeta::getUniqueIdentifier)
+                .collect(Collectors.toList());
     }
 
     private ActionCategoryVO buildCategoryVO(ActionCategory category,
