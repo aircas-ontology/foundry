@@ -229,22 +229,20 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
     private Integer createDefaultPropertyCategoryRoot(String ontologyUniqueIdentifier) {
         var existingRoot = propertyCategoryService.getOne(new LambdaQueryWrapper<PropertyCategory>()
                 .eq(PropertyCategory::getOntologyUniqueIdentifier, ontologyUniqueIdentifier)
-                .eq(PropertyCategory::getParentId, 0)
-                .last("limit 1"));
+                .eq(PropertyCategory::getParentId, 0));
         if (existingRoot != null) {
             return existingRoot.getId();
         }
         var categoryParam = PropertyCategoryCreateParam.builder()
                 .parentId(0)
-                .name("根节点")
+                .name("全部")
                 .ontologyIdentifier(ontologyUniqueIdentifier)
                 .build();
         ontologyPropertyService.createCategory(categoryParam);
         var created = propertyCategoryService.getOne(new LambdaQueryWrapper<PropertyCategory>()
                 .eq(PropertyCategory::getOntologyUniqueIdentifier, ontologyUniqueIdentifier)
                 .eq(PropertyCategory::getParentId, 0)
-                .orderByDesc(PropertyCategory::getId)
-                .last("limit 1"));
+                .orderByDesc(PropertyCategory::getId));
         PreconditionUtils.checkNotNull(created, "创建属性分类失败", HttpStatus.INTERNAL_SERVER_ERROR);
         return created.getId();
     }
@@ -255,46 +253,42 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
     private Integer createDefaultLinkCategoryRoot(Integer spaceId) {
         var existingRoot = ontologyLinkCategoryService.getOne(new LambdaQueryWrapper<OntologyLinkCategory>()
                 .eq(OntologyLinkCategory::getOntologySpaceId, spaceId)
-                .eq(OntologyLinkCategory::getParentId, 0)
-                .last("limit 1"));
+                .eq(OntologyLinkCategory::getParentId, 0));
         if (existingRoot != null) {
             return existingRoot.getId();
         }
         var categoryParam = new OntologyLinkCategoryCreateParam()
                 .setParentId(0)
-                .setName("根节点");
+                .setName("全部");
         categoryParam.setSpaceId(spaceId);
         ontologyLinkCategoryService.createCategory(categoryParam);
         var created = ontologyLinkCategoryService.getOne(new LambdaQueryWrapper<OntologyLinkCategory>()
                 .eq(OntologyLinkCategory::getOntologySpaceId, spaceId)
                 .eq(OntologyLinkCategory::getParentId, 0)
-                .orderByDesc(OntologyLinkCategory::getId)
-                .last("limit 1"));
+                .orderByDesc(OntologyLinkCategory::getId));
         PreconditionUtils.checkNotNull(created, "创建关系分类失败", HttpStatus.INTERNAL_SERVER_ERROR);
         return created.getId();
     }
 
     /**
-     * 创建（或复用）空间的本体分类树根节点，让画布导入的本体都能挂到分类下。
+     * 创建（或复用）空间的本体分类树全部，让画布导入的本体都能挂到分类下。
      */
     private Integer createDefaultOntologyCategoryRoot(Integer spaceId) {
         var existingRoot = categoryService.getOne(new LambdaQueryWrapper<OntologyCategory>()
                 .eq(OntologyCategory::getOntologySpaceId, spaceId)
-                .eq(OntologyCategory::getParentId, 0)
-                .last("limit 1"));
+                .eq(OntologyCategory::getParentId, 0));
         if (existingRoot != null) {
             return existingRoot.getId();
         }
         var categoryParam = new OntologyCategoryCreateParam()
                 .setParentId(0)
-                .setName("根节点");
+                .setName("全部");
         categoryParam.setSpaceId(spaceId);
         categoryService.createCategory(categoryParam);
         var created = categoryService.getOne(new LambdaQueryWrapper<OntologyCategory>()
                 .eq(OntologyCategory::getOntologySpaceId, spaceId)
                 .eq(OntologyCategory::getParentId, 0)
-                .orderByDesc(OntologyCategory::getId)
-                .last("limit 1"));
+                .orderByDesc(OntologyCategory::getId));
         PreconditionUtils.checkNotNull(created, "创建本体分类失败", HttpStatus.INTERNAL_SERVER_ERROR);
         return created.getId();
     }
@@ -563,8 +557,7 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
     private Integer getPropertyCategoryRoot(String ontologyUniqueIdentifier) {
         var root = propertyCategoryService.getOne(new LambdaQueryWrapper<PropertyCategory>()
                 .eq(PropertyCategory::getOntologyUniqueIdentifier, ontologyUniqueIdentifier)
-                .eq(PropertyCategory::getParentId, 0)
-                .last("limit 1"));
+                .eq(PropertyCategory::getParentId, 0));
         PreconditionUtils.checkNotNull(root, "属性分类根节点不存在", HttpStatus.INTERNAL_SERVER_ERROR);
         return root.getId();
     }
@@ -575,8 +568,8 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
     private Integer getLinkCategoryRoot(Integer spaceId) {
         var root = ontologyLinkCategoryService.getOne(new LambdaQueryWrapper<OntologyLinkCategory>()
                 .eq(OntologyLinkCategory::getOntologySpaceId, spaceId)
-                .eq(OntologyLinkCategory::getParentId, 0)
-                .last("limit 1"));
+                .eq(OntologyLinkCategory::getParentId, 0));
+
         PreconditionUtils.checkNotNull(root, "关系分类根节点不存在", HttpStatus.INTERNAL_SERVER_ERROR);
         return root.getId();
     }
@@ -587,8 +580,7 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
     private Integer getOntologyCategoryRoot(Integer spaceId) {
         var root = categoryService.getOne(new LambdaQueryWrapper<OntologyCategory>()
                 .eq(OntologyCategory::getOntologySpaceId, spaceId)
-                .eq(OntologyCategory::getParentId, 0)
-                .last("limit 1"));
+                .eq(OntologyCategory::getParentId, 0));
         PreconditionUtils.checkNotNull(root, "本体分类根节点不存在", HttpStatus.INTERNAL_SERVER_ERROR);
         return root.getId();
     }

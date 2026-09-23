@@ -147,7 +147,6 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         else {
             createOntologyByInherit(ontologyCreateParam, meta);
         }
-        // 默认创建存储分组
         return meta.getUniqueIdentifier();
     }
 

@@ -72,6 +72,9 @@ cdc:
   connect:
     rest:
       url: http://172.16.18.62:8083
+  datasource:
+    hostname: 172.16.18.58
+    port: 35432
   ontology-topic-prefix: ontology_server
   ontology-meta: ontology.ontology_meta
   ontology-space: ontology.ontology_space

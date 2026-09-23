@@ -11,7 +11,7 @@ import org.springframework.kafka.annotation.EnableKafka;
         DataSourceAutoConfiguration.class,
         DruidDataSourceAutoConfigure.class
 })
-//@EnableKafka
+@EnableKafka
 public class OntologyServerApplication {
 
     public static ApplicationContext context;
