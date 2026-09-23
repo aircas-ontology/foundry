@@ -1,0 +1,1 @@
+ALTER TABLE ontology_property ADD CONSTRAINT ontology_property_pkey PRIMARY KEY (id);

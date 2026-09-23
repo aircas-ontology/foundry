@@ -19,6 +19,9 @@ public class GlobalSearchHitVO {
     @Schema(name = "type", description = "命中类型：空间 / 对象 / 属性 / 实例 / 关系分组")
     private String type;
 
+    @Schema(name = "uniqueIdentifier", description = "唯一标识：对象/属性/关系分组取 unique_identifier，实例取 ontology_uid，空间取 api_name（空间索引未存 unique_identifier 字段）")
+    private String uniqueIdentifier;
+
     @Schema(name = "desc", description = "描述：空间/对象/属性取 description，实例取 search_text，关系分组为空")
     private String desc;
 
@@ -33,4 +36,6 @@ public class GlobalSearchHitVO {
 
     @Schema(name = "propertyId", description = "属性 id，仅属性命中时有值")
     private Long propertyId;
+
+
 }

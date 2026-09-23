@@ -7,6 +7,7 @@ import com.aircas.ptr.foundry.ontology.model.param.OntologyMetaCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyGroupMetaVO;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaBriefVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaNodeVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaStatisticVO;
@@ -43,6 +44,14 @@ public interface OntologyMetaService extends IService<OntologyMeta> {
      * @return 空间内已存在的本体列表，无则返回空集合
      */
     List<OntologyMetaInfoVO> listBySpaceId(Integer spaceId);
+
+    /**
+     * 根据本地对象id（ontology_meta 主键）查询对象简要信息。
+     *
+     * @param id 本地对象id
+     * @return 含 id、对象名称、空间名称、uniqueIdentifier 的简要信息，对象不存在则返回 null
+     */
+    OntologyMetaBriefVO getMetaById(Long id);
 
     List<OntologyMetaInfoVO> getByCategoryId(Integer categoryId);
 

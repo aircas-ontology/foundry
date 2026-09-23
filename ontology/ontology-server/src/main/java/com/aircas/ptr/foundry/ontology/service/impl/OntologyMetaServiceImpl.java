@@ -15,6 +15,7 @@ import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import com.aircas.ptr.foundry.ontology.model.param.*;
 import com.aircas.ptr.foundry.ontology.model.po.*;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyGroupMetaVO;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaBriefVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaNodeVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaStatisticVO;
@@ -139,7 +140,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
             // 默认创建属性分类树根节点
             var propertyCategoryParam = PropertyCategoryCreateParam.builder()
                     .parentId(0)
-                    .name("根节点")
+                    .name("全部")
                     .ontologyIdentifier(meta.getUniqueIdentifier())
                     .build();
             ontologyPropertyService.createCategory(propertyCategoryParam);
@@ -389,6 +390,23 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         }
         buildMetaInfoStatistic(metaInfoVO);
         return metaInfoVO;
+    }
+
+    @Override
+    public OntologyMetaBriefVO getMetaById(Long id) {
+        var meta = getById(id);
+        PreconditionUtils.checkNotNull(meta, "本体不存在:" + id, HttpStatus.BAD_REQUEST);
+        String spaceName = null;
+        if (meta.getOntologySpaceId() != null) {
+            var space = spaceService.getById(meta.getOntologySpaceId());
+            spaceName = space != null ? space.getDisplayName() : null;
+        }
+        return OntologyMetaBriefVO.builder()
+                .id(meta.getId())
+                .displayName(meta.getDisplayName())
+                .spaceName(spaceName)
+                .uniqueIdentifier(meta.getUniqueIdentifier())
+                .build();
     }
 
     @Override
