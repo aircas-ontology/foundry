@@ -231,7 +231,7 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
         }
         var categoryParam = PropertyCategoryCreateParam.builder()
                 .parentId(0)
-                .name("根节点")
+                .name("全部")
                 .ontologyIdentifier(ontologyUniqueIdentifier)
                 .build();
         ontologyPropertyService.createCategory(categoryParam);
