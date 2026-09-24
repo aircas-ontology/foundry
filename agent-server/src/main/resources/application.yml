@@ -12,7 +12,7 @@ spring:
     # DeepSeek（OpenAI 兼容接口）——Spring AI OpenAI starter 配置前缀为 spring.ai.openai
     openai:
       # 密钥/地址/模型均可通过环境变量 LLM_API_KEY / LLM_BASE_URL / LLM_MODEL 覆盖，默认取下方值
-      api-key: ${LLM_API_KEY:sk-a1f5e5c06e874af98afb073ad738185d}
+      api-key: ${LLM_API_KEY: aaaa}
       base-url: ${LLM_BASE_URL:https://api.deepseek.com}
       chat:
         # DeepSeek OpenAI 兼容端点为 {base-url}/chat/completions（官方当前路径，不含 /v1；Spring AI 默认 /v1/chat/completions 亦向后兼容）
