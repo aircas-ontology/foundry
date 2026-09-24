@@ -266,6 +266,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                         .displayName(func.getDisplayName())
                         .type(func.getType())
                         .description(func.getDescription())
+                        .updateTime(func.getUpdateTime())
                         .build()
         ).collect(Collectors.toList());
 

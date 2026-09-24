@@ -57,7 +57,8 @@ public class GlobalSearchServiceImpl implements GlobalSearchService {
     /** 只需取回映射 VO 用到的字段，避免实例文档整行数据回传 */
     private static final List<String> SOURCE_FIELDS = List.of(
             "id", "display_name", "description", "name", "search_text",
-            "ontology_space_id", "space_id", "pk", "ontology_uid", "ontology_unique_identifier");
+            "ontology_space_id", "space_id", "pk", "ontology_uid", "ontology_unique_identifier",
+            "unique_identifier", "api_name");
 
     private final ElasticsearchClient elasticsearchClient;
 
@@ -124,12 +125,16 @@ public class GlobalSearchServiceImpl implements GlobalSearchService {
             case "ontology_space" -> vo.name(str(src.get("display_name")))
                     .type(TYPE_SPACE)
                     .desc(str(src.get("description")))
-                    .spaceId(docId);
+                    .spaceId(docId)
+                    // 优先取 unique_identifier（重建索引后写入），旧文档回退到 api_name
+                    .uniqueIdentifier(str(src.get("unique_identifier")) != null
+                            ? str(src.get("unique_identifier")) : str(src.get("api_name")));
             case "ontology_meta" -> vo.name(str(src.get("display_name")))
                     .type(TYPE_META)
                     .desc(str(src.get("description")))
                     .spaceId(longOf(src.get("ontology_space_id")))
-                    .objectId(docId);
+                    .objectId(docId)
+                    .uniqueIdentifier(str(src.get("unique_identifier")));
             case "ontology_property" -> {
                 MetaRef ref = metaByUid.get(str(src.get("ontology_unique_identifier")));
                 vo.name(str(src.get("display_name")))
@@ -137,7 +142,8 @@ public class GlobalSearchServiceImpl implements GlobalSearchService {
                         .desc(str(src.get("description")))
                         .spaceId(ref == null ? null : ref.spaceId())
                         .objectId(ref == null ? null : ref.metaId())
-                        .propertyId(docId);
+                        .propertyId(docId)
+                        .uniqueIdentifier(str(src.get("unique_identifier")));
             }
             case "ontology_instance" -> {
                 MetaRef ref = metaByUid.get(str(src.get("ontology_uid")));
@@ -146,11 +152,13 @@ public class GlobalSearchServiceImpl implements GlobalSearchService {
                         .desc(str(src.get("search_text")))
                         .spaceId(longOf(src.get("space_id")))
                         .objectId(ref == null ? null : ref.metaId())
-                        .instanceId(hitId);
+                        .instanceId(hitId)
+                        .uniqueIdentifier(str(src.get("ontology_uid")));
             }
             case "ontology_link_group" -> vo.name(str(src.get("name")))
                     .type(TYPE_LINK_GROUP)
-                    .spaceId(longOf(src.get("ontology_space_id")));
+                    .spaceId(longOf(src.get("ontology_space_id")))
+                    .uniqueIdentifier(str(src.get("unique_identifier")));
             default -> {
                 return null;
             }

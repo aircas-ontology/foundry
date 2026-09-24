@@ -213,8 +213,7 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                 .setIsPrimaryKey(Boolean.TRUE.equals(canvasProperty.getIsPrimaryKey()))
                 .setIsTitleKey(Boolean.TRUE.equals(canvasProperty.getIsTitleKey()))
                 .setDefaultValue(canvasProperty.getDefaultValue())
-                // required by createProperty, canvas has no such input, use default storage group
-                .setStorageGroup("main")
+                .setStorageGroup(canvasProperty.getStorageGroup())
                 .setCategoryId(propertyCategoryId);
         propertyParam.setOntologyIdentifier(ontologyUniqueIdentifier);
         return propertyParam;

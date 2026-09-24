@@ -11,6 +11,7 @@ import com.aircas.ptr.foundry.ontology.model.param.OntologyMetaCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.vo.IdentifierVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyGroupMetaVO;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaBriefVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaNodeVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaStatisticVO;
@@ -94,6 +95,13 @@ public class OntologyMetaController {
     @Operation(summary = "根据unique identifier查询一个本体元数据")
     public RestResult<OntologyMetaInfoVO> getMetaByUniqueIdentifier(@RequestParam(name = "uniqueIdentifier", required = true) @Parameter(description = "本体unique identifer") @OntologyIdVerify String uniqueIdentifier) {
         return RestResult.ofData(ontologyMetaService.getMetaByUniqueIdentifier(uniqueIdentifier));
+    }
+
+
+    @GetMapping("/{id}")
+    @Operation(summary = "根据对象id查询对象简要信息（id、对象名称、空间名称、uniqueIdentifier）")
+    public RestResult<OntologyMetaBriefVO> getMetaById(@PathVariable(name = "id", required = true) @Parameter(description = "本地对象id（ontology_meta 主键）") Long id) {
+        return RestResult.ofData(ontologyMetaService.getMetaById(id));
     }
 
 
