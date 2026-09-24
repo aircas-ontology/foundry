@@ -9,6 +9,7 @@ import com.aircas.ptr.foundry.ontology.converter.DataConverter;
 import com.aircas.ptr.foundry.ontology.model.dto.OntologyCreateDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.OntologyMetaDataDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.OntologyPropertyDTO;
+import com.aircas.ptr.foundry.ontology.model.enums.OntologyExportTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyOrderByEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.QuerySortEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.Status;
@@ -778,7 +779,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
     }
 
     @Override
-    public List<OntologyCreateDTO> exportOntology(String uniqueIdentifier) {
+    public List<OntologyCreateDTO> exportOntology(String uniqueIdentifier, OntologyExportTypeEnum exportType) {
         var meta = getOne(new LambdaQueryWrapper<OntologyMeta>()
                 .eq(OntologyMeta::getUniqueIdentifier, uniqueIdentifier)
                 .eq(OntologyMeta::getStatus, Status.ENABLE.getValue()));
@@ -786,23 +787,23 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         var space = getSpaceOrThrow(meta.getOntologySpaceId());
         //关系端点可能指向同空间其它本体，displayName 解析需覆盖空间内全部启用本体
         var scopeMetas = listEnabledMetas(space);
-        return buildOntologies(space, Lists.newArrayList(meta), scopeMetas);
+        return buildOntologies(space, Lists.newArrayList(meta), scopeMetas, exportType);
     }
 
     @Override
-    public List<OntologyCreateDTO> exportOntologies(Integer spaceId) {
-        return exportOntologies(getSpaceOrThrow(spaceId));
+    public List<OntologyCreateDTO> exportOntologies(Integer spaceId, OntologyExportTypeEnum exportType) {
+        return exportOntologies(getSpaceOrThrow(spaceId), exportType);
     }
 
     /**
      * 空间已加载时的重载：供空间导出复用已查出的 space，避免重复 getById。
      */
-    public List<OntologyCreateDTO> exportOntologies(OntologySpace space) {
+    public List<OntologyCreateDTO> exportOntologies(OntologySpace space, OntologyExportTypeEnum exportType) {
         var metas = listEnabledMetas(space);
         if (CollectionUtils.isEmpty(metas)) {
             return Lists.newArrayList();
         }
-        return buildOntologies(space, metas, metas);
+        return buildOntologies(space, metas, metas, exportType);
     }
 
     private OntologySpace getSpaceOrThrow(Integer spaceId) {
@@ -818,7 +819,8 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
     }
 
     private List<OntologyCreateDTO> buildOntologies(OntologySpace space, List<OntologyMeta> metasToExport,
-                                                    List<OntologyMeta> displayNameScope) {
+                                                    List<OntologyMeta> displayNameScope,
+                                                    OntologyExportTypeEnum exportType) {
         //uid -> displayName（解析范围取 displayNameScope：单本体导出时关系端点可能指向同空间其它本体，需覆盖全空间启用本体）
         var uidToDisplayName = displayNameScope.stream()
                 .collect(Collectors.toMap(OntologyMeta::getUniqueIdentifier, OntologyMeta::getDisplayName, (a, b) -> a));
@@ -832,14 +834,15 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 .stream().collect(Collectors.toMap(OntologyGroup::getGroupId, OntologyGroup::getGroupName, (a, b) -> a));
 
         return metasToExport.stream()
-                .map(meta -> buildExportDTO(meta, space, ontologyCategoryPathMap, groupNameMap, uidToDisplayName))
+                .map(meta -> buildExportDTO(meta, space, ontologyCategoryPathMap, groupNameMap, uidToDisplayName, exportType))
                 .collect(Collectors.toList());
     }
 
     private OntologyCreateDTO buildExportDTO(OntologyMeta meta, OntologySpace space,
                                              Map<Integer, String> ontologyCategoryPathMap,
                                              Map<String, String> groupNameMap,
-                                             Map<String, String> uidToDisplayName) {
+                                             Map<String, String> uidToDisplayName,
+                                             OntologyExportTypeEnum exportType) {
         var uid = meta.getUniqueIdentifier();
 
         //metadata
@@ -888,8 +891,10 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                         .build())
                 .collect(Collectors.toList());
 
-        //实例（数据湖物理表全量；未绑定数据源则为空）
-        var instances = entityService.exportInstances(uid);
+        //实例（仅 INSTANCE 模式导出；SCHEMA 模式不含实例数据）
+        var instances = exportType == OntologyExportTypeEnum.INSTANCE
+                ? entityService.exportInstances(uid)
+                : null;
 
         return OntologyCreateDTO.builder()
                 .metadata(metadata)

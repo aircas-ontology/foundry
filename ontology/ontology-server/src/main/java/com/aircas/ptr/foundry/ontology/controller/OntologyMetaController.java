@@ -4,6 +4,7 @@ import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.common.base.ResultCode;
 import com.aircas.ptr.foundry.common.util.DownloadUtil;
 import com.aircas.ptr.foundry.ontology.controller.validator.OntologyIdVerify;
+import com.aircas.ptr.foundry.ontology.model.enums.OntologyExportTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyOrderByEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.QuerySortEnum;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyMetaCreateParam;
@@ -43,13 +44,17 @@ public class OntologyMetaController {
 
 
     @GetMapping("/export")
-    @Operation(summary = "导出单个本体（含 schema 与实例数据）")
+    @Operation(summary = "导出单个本体（含 schema，可选是否含实例数据）")
     public void exportOntology(@RequestParam(name = "uniqueIdentifier") @OntologyIdVerify String uniqueIdentifier,
+                               @RequestParam(name = "exportType", defaultValue = "INSTANCE")
+                               @Parameter(description = "导出类型：SCHEMA=仅结构, INSTANCE=含实例数据（默认）")
+                               OntologyExportTypeEnum exportType,
                                HttpServletResponse response) throws Exception {
-        var dtos = ontologyMetaService.exportOntology(uniqueIdentifier);
+        var dtos = ontologyMetaService.exportOntology(uniqueIdentifier, exportType);
         var apiName = CollectionUtils.isNotEmpty(dtos) && dtos.get(0).getMetadata() != null
                 ? dtos.get(0).getMetadata().getApiName() : null;
-        var fileName = (apiName == null || apiName.isEmpty() ? "ontology_" + uniqueIdentifier : apiName) + ".json";
+        var suffix = exportType == OntologyExportTypeEnum.SCHEMA ? "_schema" : "";
+        var fileName = (apiName == null || apiName.isEmpty() ? "ontology_" + uniqueIdentifier : apiName) + suffix + ".json";
         DownloadUtil.writeJsonAttachment(response, jacksonObjectMapper, fileName, dtos);
     }
 

@@ -4,6 +4,7 @@ import com.aircas.ptr.foundry.common.util.IdGenerator;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.ontology.model.dto.OntologySpaceCreateDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.OntologySpaceDTO;
+import com.aircas.ptr.foundry.ontology.model.enums.OntologyExportTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyLinkTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyLinkCreateParam;
@@ -477,7 +478,7 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
     }
 
     @Override
-    public OntologySpaceCreateDTO exportOntologySpace(Integer spaceId) {
+    public OntologySpaceCreateDTO exportOntologySpace(Integer spaceId, OntologyExportTypeEnum exportType) {
         var space = getById(spaceId);
         PreconditionUtils.checkNotNull(space, "本体空间不存在:" + spaceId);
 
@@ -492,7 +493,7 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
         var ontologyCategory = buildOntologyCategoryTree(categories);
 
         //一次装配空间下全部本体
-        var ontologies = ontologyMetaService.exportOntologies(space);
+        var ontologies = ontologyMetaService.exportOntologies(space, exportType);
 
         return OntologySpaceCreateDTO.builder()
                 .ontologySpace(ontologySpace)

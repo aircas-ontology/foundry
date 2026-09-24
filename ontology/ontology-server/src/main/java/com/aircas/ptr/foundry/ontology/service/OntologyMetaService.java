@@ -1,11 +1,13 @@
 package com.aircas.ptr.foundry.ontology.service;
 
+import com.aircas.ptr.foundry.ontology.model.enums.OntologyExportTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.QuerySortEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyOrderByEnum;
 import com.aircas.ptr.foundry.ontology.model.dto.OntologyCreateDTO;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyMetaCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
+import com.aircas.ptr.foundry.ontology.model.po.OntologySpace;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyGroupMetaVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaNodeVO;
@@ -58,15 +60,26 @@ public interface OntologyMetaService extends IService<OntologyMeta> {
      * 不附带函数定义（函数为空间级资源，随空间导出给出）。</p>
      *
      * @param uniqueIdentifier 本体唯一标识
+     * @param exportType       导出类型（SCHEMA=仅结构, INSTANCE=含实例数据）
      * @return 单元素本体导出列表
      */
-    List<OntologyCreateDTO> exportOntology(String uniqueIdentifier);
+    List<OntologyCreateDTO> exportOntology(String uniqueIdentifier, OntologyExportTypeEnum exportType);
 
     /**
-     * 导出指定空间的全部本体（含 schema 与实例数据）。
+     * 导出指定空间的全部本体（含 schema，按 exportType 决定是否含实例数据）。
      *
-     * @param spaceId 本体空间 id
+     * @param spaceId    本体空间 id
+     * @param exportType 导出类型
      * @return 本体导出列表，无本体时返回空列表
      */
-    List<OntologyCreateDTO> exportOntologies(Integer spaceId);
+    List<OntologyCreateDTO> exportOntologies(Integer spaceId, OntologyExportTypeEnum exportType);
+
+    /**
+     * 空间已加载时的重载：供空间导出复用已查出的 space，避免重复 getById。
+     *
+     * @param space      本体空间实体
+     * @param exportType 导出类型
+     * @return 本体导出列表
+     */
+    List<OntologyCreateDTO> exportOntologies(OntologySpace space, OntologyExportTypeEnum exportType);
 }
