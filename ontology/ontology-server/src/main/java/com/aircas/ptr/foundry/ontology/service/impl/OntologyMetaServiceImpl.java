@@ -134,7 +134,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
             // 默认创建属性分类树根节点
             var propertyCategoryParam = PropertyCategoryCreateParam.builder()
                     .parentId(0)
-                    .name("根节点")
+                    .name("全部")
                     .ontologyIdentifier(meta.getUniqueIdentifier())
                     .build();
             ontologyPropertyService.createCategory(propertyCategoryParam);
