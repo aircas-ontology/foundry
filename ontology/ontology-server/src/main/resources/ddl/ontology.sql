@@ -605,12 +605,9 @@ create table if not exists ontology_property
     datasource_id              varchar(64),
     unique_identifier          varchar(255)                                                                not null,
     ontology_unique_identifier varchar(255)                                                                not null,
-    tag                        varchar(255),
-    secondary_category         varchar(255),
-    primary_category           varchar(255),
     default_value              varchar(255),
-    storage_group              varchar(255) default 'main'::character varying,
-    datasource_schema          varchar(255) default 'public'::character varying,
+    storage_group              varchar(255),
+    datasource_schema          varchar(255),
     datasource_db              varchar(255) default 'entity_datasource'::character varying,
     property_category_id       integer,
     metadata                   jsonb
@@ -647,12 +644,6 @@ comment on column ontology_property.datasource_id is '数据源ID';
 comment on column ontology_property.unique_identifier is '本体属性identifier';
 
 comment on column ontology_property.ontology_unique_identifier is '本体id';
-
-comment on column ontology_property.tag is '属性标签';
-
-comment on column ontology_property.secondary_category is '属性二级分类（待废弃）';
-
-comment on column ontology_property.primary_category is '属性一级分类（待废弃）';
 
 comment on column ontology_property.default_value is '属性默认值';
 

@@ -21,8 +21,6 @@ public class OntologyLinkUpdateParam extends IdentifierParam {
     @Schema(name = "categoryId", required = false, description = "关系分类id（ontology_link_category.id），选填", example = "1")
     private Integer categoryId;
 
-    @Schema(name = "apiName", required = false, description = "关系在代码中使用的api名称")
-    private String apiName;
 
     @Schema(name = "description", required = false, description = "关系备注/描述，可置空")
     private String description;

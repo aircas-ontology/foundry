@@ -1,9 +1,17 @@
+# 配置约定：
+# 1. 新增配置项时，必须在本文件（application.yml）中声明 key，保持结构完整、可被仓库共享。
+# 2. 环境相关 / 敏感 value 写在 application-local.yml，由本地维护，不要提交到 Git。
+# 3. 启动时使用 spring.profiles.active=local 加载本地覆盖；application-local.yml 已加入 .gitignore。
+# 4. 注意：Spring Boot 强类型属性（如 DataSize）不要留空字符串，需在 local 中给出合法值，或直接删除该 key 使用默认值。
 server:
   port: 37002
   servlet:
     context-path: /ontology
 
+
 spring:
+  profiles:
+    active: local
   jackson:
     default-property-inclusion: non_null
   application:
@@ -17,24 +25,23 @@ spring:
   datasource:
     main:
       driver-class-name: org.postgresql.Driver
-      #url: jdbc:postgresql://${PG_DB_HOST}:${PG_DB_PORT}/${PG_DB_NAME}?currentSchema=ontology
-      url: jdbc:postgresql://172.16.18.58:35432/postgres?currentSchema=ontology&rewriteBatchedStatements=true&TimeZone=UTC
-      username: postgres
-      password: 123456
+      url:
+      username:
+      password:
       validation-query: SELECT 1
       test-on-borrow: true
     datalake:
       driver-class-name: org.postgresql.Driver
-      url: jdbc:postgresql://172.16.18.58:35432/entity_datasource
-      username: postgres
-      password: 123456
+      url:
+      username:
+      password:
     arangodb:
-      host: 172.16.18.62
-      port: 8529
-      database: entity
-      collections: node,relation
-      user: root
-      password: root
+      host:
+      port:
+      database:
+      collections:
+      user:
+      password:
       connections:
         max: 8
         ttl: 1800
@@ -42,13 +49,13 @@ spring:
         connect: 5000
         request: 10000
   rabbitmq:
-    host: 172.16.18.62
-    port: 5672
-    username: admin
-    password: C7O5O4AC2NAFQp9dTvwL
-    virtual-host: /
+    host:
+    port:
+    username:
+    password:
+    virtual-host:
   kafka:
-    bootstrap-servers: 172.16.18.62:39092
+    bootstrap-servers:
     consumer:
       group-id: cdc-monitor-group
       auto-offset-reset: earliest
@@ -108,30 +115,28 @@ springdoc:
 jwt:
   # HS256 要求密钥 ≥ 256 bits（32 字节），当前 64 字节兼容 HS256/HS384/HS512，预防未来切换算法报错
   # 生产环境建议通过环境变量 JWT_SECRET 注入随机密钥，避免写死在仓库
-  secret: ${JWT_SECRET:ontology-jwt-secret-key-2026-foundry-aircas-ptr-hs256-random-v1a}
+  secret:
   access-token-expire-days: 7
   refresh-token-expire-days: 30
 
 
 minio:
-  endpoint: http://172.16.18.58:9000
-  accessKey: minioadmin
-  secretKey: minioadmin
-  bucketName: ptr
+  endpoint:
+  accessKey:
+  secretKey:
+  bucketName:
 
 
 orekit:
   data:
     path: "ontology/ontology-server/src/main/resources/orekit-data"
 
-#logging:
-#  level:
-#    com.arangodb: DEBUG
+
 
 
 xxl:
   job:
-    baseUrl: http://172.16.18.58:18888/xxl-job-admin
+    baseUrl:
     admin:
       addresses: ${xxl.job.baseUrl}
       addJobUrl:  ${xxl.job.baseUrl}/jobinfo/add
@@ -141,29 +146,29 @@ xxl:
       removeJobUrl: ${xxl.job.baseUrl}/jobinfo/remove
       startJobUrl: ${xxl.job.baseUrl}/jobinfo/start
       stopJobUrl: ${xxl.job.baseUrl}/jobinfo/stop
-    accessToken: iecas123
-    cookie: XXL_JOB_LOGIN_IDENTITY=7b226964223a312c22757365726e616d65223a2261646d696e222c2270617373776f7264223a226531306164633339343962613539616262653536653035376632306638383365222c22726f6c65223a312c227065726d697373696f6e223a6e756c6c7d
+    accessToken:
+    cookie:
     executor:
       appname: ontology-xxl-job-executor
       address:
-      ip: 127.0.0.1
-      port: 9999
+      ip:
+      port:
       logpath: ./logs/xxl-job/jobhandler
       logretentiondays: 30
 
 
 license:
-  enable: false
-  licensePath: "D:\\ideaProjects\\license.lic"
-  publicKeyStorePath: "/publicCerts.keystore"
-  storePass: iecas123
-  alias: publiccert
-  subject: aircas
+  enable:
+  licensePath:
+  publicKeyStorePath:
+  storePass:
+  alias:
+  subject:
+
 
 rag:
-  knowledge-url: http://192.168.9.13:1124/chat/ask
-  build-url: http://192.168.9.13:1124/ontology/build
-
+  knowledge-url:
+  build-url:
 
 threadpool:
   core-pool-size: 10

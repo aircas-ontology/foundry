@@ -188,7 +188,7 @@ mvn clean package -pl ontology/license-generator -am -DskipTests
 
 1. 按上文 [依赖服务部署](#依赖服务部署) 启动并初始化中间件（详见 [`deploy/`](deploy/)）。
 2. 执行 `ontology/ontology-server/src/main/resources/ddl/ontology.sql` 初始化主库（若尚未执行）。
-3. 按环境修改 `ontology/ontology-server/src/main/resources/application.yml`（数据源、消息队列、对象存储、调度中心等）。
+3. 按下文 [配置要点](#配置要点) 编写本地 `application-local.yml`（数据源、消息队列、对象存储、调度中心等），**不要**把该文件提交到 Git。
 4. 启动：
 
 ```bash
@@ -224,7 +224,12 @@ java -jar ontology/license-generator/target/license-generator-0.0.1-SNAPSHOT-exe
 
 ## 配置要点
 
-主配置文件：`ontology/ontology-server/src/main/resources/application.yml`
+| 文件 | 职责 | 是否提交 |
+|------|------|----------|
+| `ontology/ontology-server/src/main/resources/application.yml` | 声明全部配置 **key**（结构模板），可含非敏感默认值 | 提交 |
+| `ontology/ontology-server/src/main/resources/application-local.yml` | 填写本机 / 环境相关 **value** | **不提交**（已加入 `.gitignore`） |
+
+约定：新增配置时 **key 必须先写入主配置 `application.yml`**；敏感或环境相关的 **value 写在 `application-local.yml` 本地保存**，通过 `spring.profiles.active=local` 覆盖主配置。Spring Boot 强类型属性不要在主配置中留空字符串。
 
 | 配置项 | 说明 |
 |--------|------|
@@ -241,7 +246,7 @@ java -jar ontology/license-generator/target/license-generator-0.0.1-SNAPSHOT-exe
 | `rag.*` | RAG 知识问答与构建服务地址 |
 | `ontology.swagger.enable` | Knife4j 文档开关 |
 
-`bootstrap.properties` 中保留了历史 PostgreSQL 环境变量占位（`PG_DB_HOST` 等），当前 `application.yml` 使用显式 JDBC URL。
+`bootstrap.properties` 中保留了历史 PostgreSQL 环境变量占位（`PG_DB_HOST` 等），当前主配置使用显式 JDBC URL，具体连接信息放在 `application-local.yml`。
 
 ## 主要 API
 
