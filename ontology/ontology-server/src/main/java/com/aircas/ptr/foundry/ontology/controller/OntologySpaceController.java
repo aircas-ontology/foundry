@@ -2,12 +2,15 @@ package com.aircas.ptr.foundry.ontology.controller;
 
 import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.common.base.ResultCode;
+import com.aircas.ptr.foundry.ontology.controller.validator.SpaceIdVerify;
 import com.aircas.ptr.foundry.ontology.model.param.OntologySpaceCanvasCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologySpaceCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologySpaceUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologySpaceCanvasCreateVO;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologySpaceStatisticVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologySpaceVO;
 import com.aircas.ptr.foundry.ontology.service.OntologySpaceService;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
@@ -64,6 +67,15 @@ public class OntologySpaceController {
     @Operation(summary = "查询本体空间列表")
     public RestResult<List<OntologySpaceVO>> querySpace() {
         List<OntologySpaceVO> res = ontologySpaceService.querySpace();
+        return RestResult.ofData(res);
+    }
+
+    @GetMapping("/statistic")
+    @Operation(summary = "查询本体空间资源统计")
+    public RestResult<OntologySpaceStatisticVO> getStatistic(@RequestParam(required = true, name = "spaceId")
+                                                             @Parameter(description = "本体空间id")
+                                                             @SpaceIdVerify Integer spaceId) {
+        OntologySpaceStatisticVO res = ontologySpaceService.getStatistic(spaceId);
         return RestResult.ofData(res);
     }
 

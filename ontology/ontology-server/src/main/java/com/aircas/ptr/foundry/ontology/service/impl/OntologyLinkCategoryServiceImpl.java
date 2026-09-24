@@ -125,6 +125,7 @@ public class OntologyLinkCategoryServiceImpl extends ServiceImpl<OntologyLinkCat
             allCategories.forEach(category -> {
                 if (category.getId().equals(param.getCategoryId())) {
                     category.setName(param.getName());
+
                     category.setPath(newPath);
                 } else {
                     var updatedPath = newPath + category.getPath().substring(parentCategory.getPath().length());
@@ -226,6 +227,8 @@ public class OntologyLinkCategoryServiceImpl extends ServiceImpl<OntologyLinkCat
                         .ontologyNameTo(to != null ? to.getDisplayName() : null)
                         .ontologyIconFrom(from != null ? from.getIcon() : null)
                         .ontologyIconTO(to != null ? to.getIcon() : null)
+                        .apiName(v.getApiName() == null ? null : v.getApiName())
+                        .description(v.getDescription() == null ? null : v.getDescription())
                         .build();
             }).collect(Collectors.toList());
             vo.setLinks(linkVOList);

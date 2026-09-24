@@ -56,10 +56,25 @@ public class OntologyLinkCreateParam {
     private Integer categoryId;
 
     /**
+     * 关系在代码中使用的api名称（创建时必填）
+     */
+    @Schema(name = "apiName",required = true, description = "关系api名称（创建时必填）",example = "api")
+    @NotBlank(message = "apiName is empty")
+    private String apiName;
+
+    /**
+     * 关系备注/描述
+     */
+    @Schema(name = "description", required = false, description = "关系备注/描述",example = "comment")
+    private String description;
+
+    /**
      * 关系所属空间id（ontology_space.id），由调用方直接传入，不再反查本体归属
      */
     @Schema(name = "spaceId", required = true, description = "关系所属空间id（ontology_space.id）", example = "1")
     @NotNull(message = "spaceId is empty")
     private Integer spaceId;
+
+
 
 }

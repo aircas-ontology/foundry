@@ -15,6 +15,7 @@ import com.aircas.ptr.foundry.ontology.model.po.*;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyGroupMetaVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaNodeVO;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaStatisticVO;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyMetaMapper;
 import com.aircas.ptr.foundry.ontology.service.*;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -130,6 +131,13 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
             meta.setMetaGroupId(CollectionUtils.isNotEmpty(groupIds) ? String.join(",", groupIds) : null)
                     .setOntologyCategoryId(ontologyCreateParam.getCategoryId());
             save(meta);
+            // 默认创建属性分类树根节点
+            var propertyCategoryParam = PropertyCategoryCreateParam.builder()
+                    .parentId(0)
+                    .name("全部")
+                    .ontologyIdentifier(meta.getUniqueIdentifier())
+                    .build();
+            ontologyPropertyService.createCategory(propertyCategoryParam);
         }//继承创建
         else {
             createOntologyByInherit(ontologyCreateParam, meta);
@@ -378,16 +386,29 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         return metaInfoVO;
     }
 
-    public void buildMetaInfoStatistic(OntologyMetaInfoVO metaInfoVO) {
-        var propCnt = ontologyPropertyService.count(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, metaInfoVO.getUniqueIdentifier()));
-        var actionCnt = actionService.count(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getOntologyUniqueIdentifier, metaInfoVO.getUniqueIdentifier()));
-        var linkCnt = linkService.count(new LambdaQueryWrapper<OntologyLinkGroup>()
-                .eq(OntologyLinkGroup::getOntologyUniqueIdentifierFrom, metaInfoVO.getUniqueIdentifier())
-                .or().eq(OntologyLinkGroup::getOntologyUniqueIdentifierTo, metaInfoVO.getUniqueIdentifier()));
+    @Override
+    public OntologyMetaStatisticVO getStatistic(String uniqueIdentifier) {
+        var meta = getOne(new LambdaQueryWrapper<OntologyMeta>()
+                .eq(OntologyMeta::getUniqueIdentifier, uniqueIdentifier)
+                .eq(OntologyMeta::getStatus, Status.ENABLE.getValue()));
+        PreconditionUtils.checkNotNull(meta, "ontology not exist:" + uniqueIdentifier, HttpStatus.BAD_REQUEST);
+        return buildStatistic(uniqueIdentifier);
+    }
 
+    /**
+     * 统计本体对象关联的核心资源数量：实例、属性、关系、行为
+     */
+    private OntologyMetaStatisticVO buildStatistic(String ontologyIdentifier) {
+        var propCnt = ontologyPropertyService.count(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyIdentifier));
+        var actionCnt = actionService.count(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getOntologyUniqueIdentifier, ontologyIdentifier));
+        var linkCnt = linkService.count(new LambdaQueryWrapper<OntologyLinkGroup>()
+                .eq(OntologyLinkGroup::getOntologyUniqueIdentifierFrom, ontologyIdentifier)
+                .or().eq(OntologyLinkGroup::getOntologyUniqueIdentifierTo, ontologyIdentifier));
+
+        //实例数量取自本体主键属性绑定的数据源表
         var pk = ontologyPropertyService.getOne(new LambdaQueryWrapper<OntologyProperty>()
                 .eq(OntologyProperty::getIsPrimaryKey, 1)
-                .eq(OntologyProperty::getOntologyUniqueIdentifier, metaInfoVO.getUniqueIdentifier()));
+                .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyIdentifier));
 
         var entityCnt = 0;
         if (pk != null
@@ -397,10 +418,21 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
             entityCnt = entityService.countEntity(pk.getDatasourceSchema(), pk.getDatasourceId());
         }
 
-        metaInfoVO.setActionCount(Math.toIntExact(actionCnt))
-                .setEntityCount(Math.toIntExact(entityCnt))
-                .setPropertyCount(Math.toIntExact(propCnt))
-                .setRelationCount(Math.toIntExact(linkCnt));
+        return OntologyMetaStatisticVO.builder()
+                .uniqueIdentifier(ontologyIdentifier)
+                .entityCount(Math.toIntExact(entityCnt))
+                .propertyCount(Math.toIntExact(propCnt))
+                .relationCount(Math.toIntExact(linkCnt))
+                .actionCount(Math.toIntExact(actionCnt))
+                .build();
+    }
+
+    public void buildMetaInfoStatistic(OntologyMetaInfoVO metaInfoVO) {
+        var statistic = buildStatistic(metaInfoVO.getUniqueIdentifier());
+        metaInfoVO.setEntityCount(statistic.getEntityCount())
+                .setPropertyCount(statistic.getPropertyCount())
+                .setRelationCount(statistic.getRelationCount())
+                .setActionCount(statistic.getActionCount());
     }
 
 

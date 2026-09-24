@@ -20,4 +20,6 @@ public class OntologyLinkCategoryUpdateParam extends OntologyLinkCategoryDeleteP
     @Schema(name = "name", description = "关系分类名称", example = "平台")
     @NotBlank(message = "name is empty")
     private String name;
+
+
 }
