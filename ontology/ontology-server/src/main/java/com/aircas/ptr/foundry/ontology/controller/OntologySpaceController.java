@@ -2,7 +2,9 @@ package com.aircas.ptr.foundry.ontology.controller;
 
 import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.common.base.ResultCode;
+import com.aircas.ptr.foundry.common.util.DownloadUtil;
 import com.aircas.ptr.foundry.ontology.controller.validator.SpaceIdVerify;
+import com.aircas.ptr.foundry.ontology.model.enums.OntologyExportTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.param.OntologySpaceCanvasCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologySpaceCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologySpaceUpdateParam;
@@ -10,6 +12,7 @@ import com.aircas.ptr.foundry.ontology.model.vo.OntologySpaceCanvasCreateVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologySpaceStatisticVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologySpaceVO;
 import com.aircas.ptr.foundry.ontology.service.OntologySpaceService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.Operation;
@@ -18,6 +21,8 @@ import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+
+import jakarta.servlet.http.HttpServletResponse;
 
 import jakarta.validation.Valid;
 import java.util.List;
@@ -30,6 +35,23 @@ import java.util.List;
 public class OntologySpaceController {
 
     private final OntologySpaceService ontologySpaceService;
+
+    private final ObjectMapper objectMapper;
+
+
+    @GetMapping("/export")
+    @Operation(summary = "导出本体空间（含分类树、全部本体 schema，可选是否含实例数据）")
+    public void exportOntologySpace(@RequestParam(name = "spaceId") Integer spaceId,
+                                    @RequestParam(name = "exportType", defaultValue = "INSTANCE")
+                                    @Parameter(description = "导出类型：SCHEMA=仅结构, INSTANCE=含实例数据（默认）")
+                                    OntologyExportTypeEnum exportType,
+                                    HttpServletResponse response) throws Exception {
+        var dto = ontologySpaceService.exportOntologySpace(spaceId, exportType);
+        var apiName = dto.getOntologySpace() != null ? dto.getOntologySpace().getApiName() : null;
+        var suffix = exportType == OntologyExportTypeEnum.SCHEMA ? "_schema" : "_space";
+        var fileName = (apiName == null || apiName.isEmpty() ? "space_" + spaceId : apiName) + suffix + ".json";
+        DownloadUtil.writeJsonAttachment(response, objectMapper, fileName, dto);
+    }
 
 
     @PostMapping("/import")

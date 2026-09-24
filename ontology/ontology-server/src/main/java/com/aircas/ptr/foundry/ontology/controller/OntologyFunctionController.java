@@ -1,9 +1,11 @@
 package com.aircas.ptr.foundry.ontology.controller;
 
 import com.aircas.ptr.foundry.common.base.RestResult;
+import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionCallbackParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionExecuteParam;
+import com.aircas.ptr.foundry.ontology.model.param.FunctionTestParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.vo.FunctionDetailVO;
 import com.aircas.ptr.foundry.ontology.model.vo.FunctionExecuteResultVO;
@@ -18,6 +20,8 @@ import org.springframework.web.bind.annotation.*;
 
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
+
+import java.util.List;
 
 
 @Tag(name = "函数算子管理")
@@ -38,9 +42,15 @@ public class OntologyFunctionController {
 
     @Operation(summary = "查询函数列表")
     @GetMapping("/list")
-    public RestResult<Page<FunctionInfoVO>> getFunctions(@RequestParam(required = false, defaultValue = "1") Integer pageNum,
-                                                         @RequestParam(required = false, defaultValue = "10") Integer pageSize) {
-        return RestResult.ofData(functionService.getFunctions(pageNum, pageSize));
+    public RestResult<Page<FunctionInfoVO>> getFunctions(
+            @RequestParam(required = false) @Parameter(description = "空间id") Integer ontologySpaceId,
+            @RequestParam(required = false) @Parameter(description = "函数名称（模糊搜索）") String displayName,
+            @RequestParam(required = false) @Parameter(description = "函数类型") FunctionTypeEnum type,
+            @RequestParam(required = false) @Parameter(description = "创建开始日期，格式 yyyy-MM-dd") String startDate,
+            @RequestParam(required = false) @Parameter(description = "创建结束日期，格式 yyyy-MM-dd") String endDate,
+            @RequestParam(required = false, defaultValue = "1") Integer pageNum,
+            @RequestParam(required = false, defaultValue = "10") Integer pageSize) {
+        return RestResult.ofData(functionService.getFunctions(ontologySpaceId, displayName, type, startDate, endDate, pageNum, pageSize));
     }
 
     @Operation(summary = "创建函数")
@@ -88,6 +98,12 @@ public class OntologyFunctionController {
     @Operation(summary = "根据taskId查询异步函数执行结果")
     public RestResult<FunctionExecuteResultVO> getExecuteResult(@RequestParam(required = true, name = "taskId") @Parameter(description = "任务id") String taskId) {
         return RestResult.ofData(functionService.getExecuteResult(taskId));
+    }
+
+    @PostMapping("/test")
+    @Operation(summary = "统一函数测试入口：根据函数类型分发到不同测试逻辑")
+    public RestResult<Object> testFunction(@RequestBody @Valid FunctionTestParam param) {
+        return RestResult.ofData(functionService.testFunction(param));
     }
 
 }

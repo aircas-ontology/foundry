@@ -2,15 +2,16 @@ package com.aircas.ptr.foundry.ontology.service.impl;
 
 import com.aircas.ptr.foundry.common.util.IdGenerator;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
-import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
-import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.ontology.model.dto.OntologySpaceCreateDTO;
+import com.aircas.ptr.foundry.ontology.model.dto.OntologySpaceDTO;
+import com.aircas.ptr.foundry.ontology.model.enums.OntologyExportTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyLinkTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyLinkCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyMetaCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologySpaceCanvasCreateParam;
+import com.aircas.ptr.foundry.ontology.model.param.CategoryNode;
 import com.aircas.ptr.foundry.ontology.model.param.OntologySpaceCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyCategoryCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.PropertyCategoryCreateParam;
@@ -212,8 +213,7 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                 .setIsPrimaryKey(Boolean.TRUE.equals(canvasProperty.getIsPrimaryKey()))
                 .setIsTitleKey(Boolean.TRUE.equals(canvasProperty.getIsTitleKey()))
                 .setDefaultValue(canvasProperty.getDefaultValue())
-                // required by createProperty, canvas has no such input, use default storage group
-                .setStorageGroup("main")
+                .setStorageGroup(canvasProperty.getStorageGroup())
                 .setCategoryId(propertyCategoryId);
         propertyParam.setOntologyIdentifier(ontologyUniqueIdentifier);
         return propertyParam;
@@ -440,12 +440,26 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                 .description(ontologySpace.getDescription())
                 .displayName(ontologySpace.getDisplayName())
                 .build());
-        //create ontology category
+        //create ontology category：挂到 createSpace 已默认创建的根分类"全部"下（用根 id 作 parentId），避免与其争用 parentId=0 而报"无效的parentId"
         var category = spaceCreateDTO.getOntologyCategory();
         if (category != null) {
-            category.setParentId(0);
-            category.setSpaceId(spaceId);
-            categoryService.createCategory(category);
+            var rootId = getOntologyCategoryRoot(spaceId);
+            // 如果导入的分类树顶层名为"全部"（与自动创建的根重名），跳过它，直接导入其子节点，避免嵌套成"全部/全部/..."
+            if ("全部".equals(category.getName()) && CollectionUtils.isNotEmpty(category.getChildren())) {
+                for (var child : category.getChildren()) {
+                    var childParam = OntologyCategoryCreateParam.builder()
+                            .name(child.getName())
+                            .children(child.getChildren())
+                            .parentId(rootId)
+                            .build();
+                    childParam.setSpaceId(spaceId);
+                    categoryService.createCategory(childParam);
+                }
+            } else {
+                category.setParentId(rootId);
+                category.setSpaceId(spaceId);
+                categoryService.createCategory(category);
+            }
         }
         //import ontologies
         List<String> failedOntology = Lists.newArrayList();
@@ -460,6 +474,58 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
             });
         }
         return failedOntology;
+    }
+
+    @Override
+    public OntologySpaceCreateDTO exportOntologySpace(Integer spaceId, OntologyExportTypeEnum exportType) {
+        var space = getById(spaceId);
+        PreconditionUtils.checkNotNull(space, "本体空间不存在:" + spaceId);
+
+        var ontologySpace = OntologySpaceDTO.builder()
+                .apiName(space.getApiName())
+                .displayName(space.getDisplayName())
+                .description(space.getDescription())
+                .build();
+
+        var categories = categoryService.list(new LambdaQueryWrapper<OntologyCategory>()
+                .eq(OntologyCategory::getOntologySpaceId, space.getId()));
+        var ontologyCategory = buildOntologyCategoryTree(categories);
+
+        //一次装配空间下全部本体
+        var ontologies = ontologyMetaService.exportOntologies(space, exportType);
+
+        return OntologySpaceCreateDTO.builder()
+                .ontologySpace(ontologySpace)
+                .ontologyCategory(ontologyCategory)
+                .ontologies(ontologies)
+                .build();
+    }
+
+    private OntologyCategoryCreateParam buildOntologyCategoryTree(List<OntologyCategory> categories) {
+        if (CollectionUtils.isEmpty(categories)) {
+            return null;
+        }
+        var root = categories.stream()
+                .filter(c -> c.getParentId() != null && c.getParentId() == 0)
+                .findFirst().orElse(null);
+        if (root == null) {
+            return null;
+        }
+        return OntologyCategoryCreateParam.builder()
+                .parentId(root.getParentId())
+                .name(root.getName())
+                .children(buildOntologyCategoryChildren(root.getId(), categories))
+                .build();
+    }
+
+    private List<CategoryNode> buildOntologyCategoryChildren(Integer parentId, List<OntologyCategory> categories) {
+        return categories.stream()
+                .filter(c -> c.getParentId() != null && c.getParentId().equals(parentId))
+                .map(c -> CategoryNode.builder()
+                        .name(c.getName())
+                        .children(buildOntologyCategoryChildren(c.getId(), categories))
+                        .build())
+                .collect(Collectors.toList());
     }
 
     /**

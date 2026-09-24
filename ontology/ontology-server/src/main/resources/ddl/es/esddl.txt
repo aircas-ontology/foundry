@@ -1,0 +1,487 @@
+PUT /ontology_instance
+{
+  "aliases": {},
+  "mappings": {
+    "dynamic": "strict",
+    "_routing": {
+      "required": true
+    },
+    "properties": {
+      "_class": {
+        "type": "keyword"
+      },
+      "api_name": {
+        "type": "keyword"
+      },
+      "doc_type": {
+        "type": "keyword"
+      },
+      "name": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        },
+        "analyzer": "od_index",
+        "search_analyzer": "od_search"
+      },
+      "name_suggest": {
+        "type": "completion",
+        "analyzer": "ik_max_word",
+        "preserve_separators": true,
+        "preserve_position_increments": true,
+        "max_input_length": 50
+      },
+      "ontology_name": {
+        "type": "keyword"
+      },
+      "ontology_uid": {
+        "type": "keyword"
+      },
+      "pk": {
+        "type": "keyword"
+      },
+      "schema": {
+        "type": "text"
+      },
+      "search_text": {
+        "type": "text",
+        "index_options": "offsets",
+        "analyzer": "od_index",
+        "search_analyzer": "od_search"
+      },
+      "space_api_name": {
+        "type": "keyword"
+      },
+      "space_display_name": {
+        "type": "keyword"
+      },
+      "space_id": {
+        "type": "integer"
+      },
+      "table_name": {
+        "type": "keyword"
+      }
+    }
+  },
+  "settings": {
+    "index": {
+      "routing": {
+        "allocation": {
+          "include": {
+            "_tier_preference": "data_content"
+          }
+        }
+      },
+      "refresh_interval": "200ms",
+      "number_of_shards": "3",
+      "analysis": {
+        "analyzer": {
+          "od_index": {
+            "type": "custom",
+            "tokenizer": "ik_max_word"
+          },
+          "od_search": {
+            "type": "custom",
+            "tokenizer": "ik_smart"
+          }
+        }
+      },
+      "number_of_replicas": "0"
+    }
+  }
+}
+
+
+
+
+
+PUT /ontology_link_group
+{
+  "aliases": {},
+  "mappings": {
+    "properties": {
+      "_class": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "create_time": {
+        "type": "date",
+        "format": "yyyy-MM-dd HH:mm:ss||yyyy-MM-dd'T'HH:mm:ss.SSSZ||epoch_millis"
+      },
+      "id": {
+        "type": "long"
+      },
+      "name": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "ontology_space_id": {
+        "type": "long"
+      },
+      "ontology_unique_identifier_from": {
+        "type": "keyword"
+      },
+      "ontology_unique_identifier_to": {
+        "type": "keyword"
+      },
+      "status": {
+        "type": "byte"
+      },
+      "type": {
+        "type": "keyword"
+      },
+      "unique_identifier": {
+        "type": "keyword"
+      },
+      "update_time": {
+        "type": "date",
+        "format": "yyyy-MM-dd HH:mm:ss||yyyy-MM-dd'T'HH:mm:ss.SSSZ||epoch_millis"
+      }
+    }
+  },
+  "settings": {
+    "index": {
+      "routing": {
+        "allocation": {
+          "include": {
+            "_tier_preference": "data_content"
+          }
+        }
+      },
+      "refresh_interval": "200ms",
+      "number_of_shards": "1",
+      "number_of_replicas": "0"
+    }
+  }
+}
+
+
+
+
+PUT /ontology_meta
+{
+  "aliases": {},
+  "mappings": {
+    "properties": {
+      "_class": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "api_name": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "create_time": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "description": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "display_name": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "id": {
+        "type": "long"
+      },
+      "ontology_space_id": {
+        "type": "long"
+      },
+      "status": {
+        "type": "long"
+      },
+      "unique_identifier": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "update_time": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      }
+    }
+  },
+  "settings": {
+    "index": {
+      "routing": {
+        "allocation": {
+          "include": {
+            "_tier_preference": "data_content"
+          }
+        }
+      },
+      "refresh_interval": "200ms",
+      "number_of_shards": "1",
+      "number_of_replicas": "0"
+    }
+  }
+}
+
+
+
+
+PUT /ontology_property
+{
+  "aliases": {},
+  "mappings": {
+    "properties": {
+      "_class": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "api_name": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "create_time": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "description": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "display_name": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "id": {
+        "type": "long"
+      },
+      "is_primary_key": {
+        "type": "boolean"
+      },
+      "is_title_key": {
+        "type": "boolean"
+      },
+      "ontology_unique_identifier": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "property_type": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "status": {
+        "type": "long"
+      },
+      "unique_identifier": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "update_time": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      }
+    }
+  },
+  "settings": {
+    "index": {
+      "routing": {
+        "allocation": {
+          "include": {
+            "_tier_preference": "data_content"
+          }
+        }
+      },
+      "refresh_interval": "200ms",
+      "number_of_shards": "1",
+      "number_of_replicas": "0"
+    }
+  }
+}
+
+
+
+PUT /ontology_space
+{
+  "aliases": {},
+  "mappings": {
+    "properties": {
+      "_class": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "apiName": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "api_name": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "create_time": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "description": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "displayName": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "display_name": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "id": {
+        "type": "long"
+      },
+      "update_time": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      }
+    }
+  },
+  "settings": {
+    "index": {
+      "routing": {
+        "allocation": {
+          "include": {
+            "_tier_preference": "data_content"
+          }
+        }
+      },
+      "refresh_interval": "200ms",
+      "number_of_shards": "1",
+      "number_of_replicas": "0"
+    }
+  }
+}
+

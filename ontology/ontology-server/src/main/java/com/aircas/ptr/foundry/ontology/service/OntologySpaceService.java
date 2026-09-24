@@ -1,8 +1,10 @@
 package com.aircas.ptr.foundry.ontology.service;
 
+import com.aircas.ptr.foundry.ontology.model.enums.OntologyExportTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.param.OntologySpaceCanvasCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologySpaceCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologySpaceUpdateParam;
+import com.aircas.ptr.foundry.ontology.model.dto.OntologySpaceCreateDTO;
 import com.aircas.ptr.foundry.ontology.model.po.OntologySpace;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologySpaceCanvasCreateVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologySpaceStatisticVO;
@@ -27,4 +29,13 @@ public interface OntologySpaceService extends IService<OntologySpace> {
     void deleteSpace(Integer spaceId);
 
     List<String> importOntologySpace(MultipartFile file);
+
+    /**
+     * 导出指定本体空间（含分类树、全部本体 schema，按 exportType 决定是否含实例数据）。
+     *
+     * @param spaceId    本体空间 id
+     * @param exportType 导出类型（SCHEMA=仅结构, INSTANCE=含实例数据）
+     * @return 空间导出结构
+     */
+    OntologySpaceCreateDTO exportOntologySpace(Integer spaceId, OntologyExportTypeEnum exportType);
 }
