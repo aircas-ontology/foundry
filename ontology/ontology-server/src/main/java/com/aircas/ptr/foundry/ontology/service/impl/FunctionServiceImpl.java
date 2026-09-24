@@ -8,6 +8,7 @@ import com.aircas.ptr.foundry.ontology.model.dto.ActionContextInfoDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.FunctionParamDTO;
 import com.aircas.ptr.foundry.ontology.model.enums.AggFuncEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamCategoryEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamRoleEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.TaskStatusEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionModelEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
@@ -119,11 +120,17 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                                 .build())
                 .collect(Collectors.toList());
 
-        // BASIC_QUERY 类型：解析 queryConfig
+        // BASIC_QUERY 类型：解析 queryConfig，并根据 targetProperty 动态推导每个参数的角色
         BasicQueryConfig queryConfig = null;
         if (function.getType() == FunctionTypeEnum.BASIC_QUERY && StringUtils.isNotEmpty(function.getCode())) {
             try {
                 queryConfig = objectMapper.readValue(function.getCode(), BasicQueryConfig.class);
+                // 动态设置 paramRole：有聚合目标时匹配的为 AGGREGATION，其余均为 FILTER
+                String targetVar = queryConfig != null ? queryConfig.getTargetProperty() : null;
+                params.forEach(vo ->
+                        vo.setParamRole(StringUtils.isNotEmpty(targetVar) && vo.getParamName().equals(targetVar)
+                                ? FunctionParamRoleEnum.AGGREGATION
+                                : FunctionParamRoleEnum.FILTER));
             } catch (JsonProcessingException e) {
                 log.warn("解析基础查询算子配置失败: {}", api, e);
             }
