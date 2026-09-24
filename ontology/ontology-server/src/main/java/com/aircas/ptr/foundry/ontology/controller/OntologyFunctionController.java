@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.ontology.controller;
 
 import com.aircas.ptr.foundry.common.base.RestResult;
+import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionCallbackParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionExecuteParam;
@@ -41,10 +42,15 @@ public class OntologyFunctionController {
 
     @Operation(summary = "查询函数列表")
     @GetMapping("/list")
-    public RestResult<Page<FunctionInfoVO>> getFunctions(@RequestParam(required = false) @Parameter(description = "空间id") Integer ontologySpaceId,
-                                                         @RequestParam(required = false, defaultValue = "1") Integer pageNum,
-                                                         @RequestParam(required = false, defaultValue = "10") Integer pageSize) {
-        return RestResult.ofData(functionService.getFunctions(ontologySpaceId, pageNum, pageSize));
+    public RestResult<Page<FunctionInfoVO>> getFunctions(
+            @RequestParam(required = false) @Parameter(description = "空间id") Integer ontologySpaceId,
+            @RequestParam(required = false) @Parameter(description = "函数名称（模糊搜索）") String displayName,
+            @RequestParam(required = false) @Parameter(description = "函数类型") FunctionTypeEnum type,
+            @RequestParam(required = false) @Parameter(description = "创建开始日期，格式 yyyy-MM-dd") String startDate,
+            @RequestParam(required = false) @Parameter(description = "创建结束日期，格式 yyyy-MM-dd") String endDate,
+            @RequestParam(required = false, defaultValue = "1") Integer pageNum,
+            @RequestParam(required = false, defaultValue = "10") Integer pageSize) {
+        return RestResult.ofData(functionService.getFunctions(ontologySpaceId, displayName, type, startDate, endDate, pageNum, pageSize));
     }
 
     @Operation(summary = "创建函数")

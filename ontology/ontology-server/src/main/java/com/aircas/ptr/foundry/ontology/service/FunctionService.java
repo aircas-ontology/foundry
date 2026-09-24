@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.ontology.service;
 
 
+import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.param.BasicQueryTestParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionExecuteParam;
@@ -21,7 +22,10 @@ import java.util.List;
 public interface FunctionService extends IService<Function> {
 
 
-    Page<FunctionInfoVO> getFunctions(Integer ontologySpaceId, Integer pageNum, Integer pageSize);
+    Page<FunctionInfoVO> getFunctions(Integer ontologySpaceId, String displayName,
+                                       FunctionTypeEnum type,
+                                       String startDate, String endDate,
+                                       Integer pageNum, Integer pageSize);
 
     String executeFunction(FunctionExecuteParam param);
 

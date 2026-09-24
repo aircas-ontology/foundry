@@ -6,7 +6,6 @@ import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.ontology.model.dto.ActionContextInfoDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.FunctionParamDTO;
-import com.aircas.ptr.foundry.ontology.model.enums.AggFuncEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamCategoryEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamRoleEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.TaskStatusEnum;
@@ -263,12 +262,27 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
 
 
     @Override
-    public Page<FunctionInfoVO> getFunctions(Integer ontologySpaceId, Integer pageNum, Integer pageSize) {
+    public Page<FunctionInfoVO> getFunctions(Integer ontologySpaceId, String displayName,
+                                              FunctionTypeEnum type,
+                                              String startDate, String endDate,
+                                              Integer pageNum, Integer pageSize) {
         var pageInfo = new Page<Function>(pageNum, pageSize);
         pageInfo.addOrder(OrderItem.desc("create_time"));
         var wrapper = new LambdaQueryWrapper<Function>();
         if (ontologySpaceId != null) {
             wrapper.eq(Function::getOntologySpaceId, ontologySpaceId);
+        }
+        if (StringUtils.isNotEmpty(displayName)) {
+            wrapper.like(Function::getDisplayName, displayName);
+        }
+        if (type != null) {
+            wrapper.eq(Function::getType, type);
+        }
+        if (StringUtils.isNotEmpty(startDate)) {
+            wrapper.ge(Function::getCreateTime, startDate);
+        }
+        if (StringUtils.isNotEmpty(endDate)) {
+            wrapper.le(Function::getCreateTime, endDate);
         }
         var functionPage = page(pageInfo, wrapper);
         var records = functionPage.getRecords().stream().<FunctionInfoVO>map(func ->
