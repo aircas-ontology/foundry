@@ -37,6 +37,12 @@ public class CdcFullSyncResultVO {
     @Schema(name = "instanceDeleted", description = "实例索引清理的孤儿文档数")
     private long instanceDeleted;
 
+    @Schema(name = "linkGroupSynced", description = "关系索引写入文档数")
+    private long linkGroupSynced;
+
+    @Schema(name = "linkGroupDeleted", description = "关系索引清理的孤儿文档数")
+    private long linkGroupDeleted;
+
     @Schema(name = "costMillis", description = "同步耗时（毫秒）")
     private long costMillis;
 }

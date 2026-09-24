@@ -6,15 +6,18 @@ import co.elastic.clients.util.ObjectBuilder;
 import com.aircas.ptr.foundry.common.base.ResultCode;
 import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.ontology.converter.OntologyInstanceConverter;
+import com.aircas.ptr.foundry.ontology.converter.OntologyLinkGroupConverter;
 import com.aircas.ptr.foundry.ontology.converter.OntologyMetaConverter;
 import com.aircas.ptr.foundry.ontology.converter.OntologyPropertyConverter;
 import com.aircas.ptr.foundry.ontology.converter.OntologySpaceConverter;
 import com.aircas.ptr.foundry.ontology.model.dto.elasticsearch.EsOntologyInstanceDTO;
+import com.aircas.ptr.foundry.ontology.model.dto.elasticsearch.EsOntologyLinkGroupDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.elasticsearch.EsOntologyMetaDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.elasticsearch.EsOntologyPropertyDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.elasticsearch.EsOntologySpaceDTO;
 import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import com.aircas.ptr.foundry.ontology.model.param.CdcFullSyncParam;
+import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
 import com.aircas.ptr.foundry.ontology.model.po.OntologySpace;
@@ -22,9 +25,11 @@ import com.aircas.ptr.foundry.ontology.model.vo.CdcFullSyncResultVO;
 import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.ObjectMapper;
 import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.TableMetadataMapper;
 import com.aircas.ptr.foundry.ontology.repository.elasticsearch.OntologyInstanceRepository;
+import com.aircas.ptr.foundry.ontology.repository.elasticsearch.OntologyLinkGroupRepository;
 import com.aircas.ptr.foundry.ontology.repository.elasticsearch.OntologyMetaRepository;
 import com.aircas.ptr.foundry.ontology.repository.elasticsearch.OntologyPropertyRepository;
 import com.aircas.ptr.foundry.ontology.repository.elasticsearch.OntologySpaceRepository;
+import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyLinkGroupMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyMetaMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyPropertyMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologySpaceMapper;
@@ -93,6 +98,8 @@ public class CdcFullSyncServiceImpl implements CdcFullSyncService {
     @Autowired
     private OntologyPropertyMapper propertyMapper;
     @Autowired
+    private OntologyLinkGroupMapper linkGroupMapper;
+    @Autowired
     private ObjectMapper lakeObjectMapper;
     @Autowired
     private TableMetadataMapper tableMetadataMapper;
@@ -102,6 +109,8 @@ public class CdcFullSyncServiceImpl implements CdcFullSyncService {
     private OntologyMetaRepository metaRepository;
     @Autowired
     private OntologyPropertyRepository propertyRepository;
+    @Autowired
+    private OntologyLinkGroupRepository linkGroupRepository;
     @Autowired
     private OntologyInstanceRepository instanceRepository;
     @Autowired
@@ -136,6 +145,12 @@ public class CdcFullSyncServiceImpl implements CdcFullSyncService {
                         OntologyPropertyConverter::convert, propertyRepository, EsOntologyPropertyDTO::getId,
                         "ontology_property");
                 result.propertySynced(r[0]).propertyDeleted(r[1]);
+            }
+            if (!Boolean.FALSE.equals(options.getSyncLinkGroup())) {
+                long[] r = syncIndex(linkGroupMapper, OntologyLinkGroup::getStatus, OntologyLinkGroup::getId,
+                        OntologyLinkGroupConverter::convert, linkGroupRepository, EsOntologyLinkGroupDTO::getId,
+                        "ontology_link_group");
+                result.linkGroupSynced(r[0]).linkGroupDeleted(r[1]);
             }
             if (!Boolean.FALSE.equals(options.getSyncInstance())) {
                 long[] r = syncInstanceIndex(options.getOntologyUids());
@@ -432,6 +447,7 @@ public class CdcFullSyncServiceImpl implements CdcFullSyncService {
         refreshIndexIfPresent(EsOntologySpaceDTO.class);
         refreshIndexIfPresent(EsOntologyMetaDTO.class);
         refreshIndexIfPresent(EsOntologyPropertyDTO.class);
+        refreshIndexIfPresent(EsOntologyLinkGroupDTO.class);
         refreshIndexIfPresent(EsOntologyInstanceDTO.class);
     }
 

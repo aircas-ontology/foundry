@@ -27,6 +27,9 @@ public class CdcFullSyncParam {
     @Schema(name = "syncInstance", description = "是否同步数据湖实例索引 ontology_instance，缺省 true")
     private Boolean syncInstance;
 
+    @Schema(name = "syncLinkGroup", description = "是否同步关系索引 ontology_link_group，缺省 true")
+    private Boolean syncLinkGroup;
+
     @Schema(name = "ontologyUids", description = "仅同步指定本体（unique_identifier 列表）的实例文档，缺省全部启用本体。仅作用于实例同步")
     private List<String> ontologyUids;
 }
