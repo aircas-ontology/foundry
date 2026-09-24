@@ -9,8 +9,8 @@ SET search_path TO ontology;
 create table if not exists action_category
 (
     id                serial
-        constraint pk_action_category
-            primary key,
+    constraint pk_action_category
+    primary key,
     parent_id         integer default 0 not null,
     path              text,
     name              varchar(255),
@@ -18,8 +18,8 @@ create table if not exists action_category
     create_time       timestamp(6),
     update_time       timestamp(6),
     constraint uk_action_category_space_id_path
-        unique (ontology_space_id, path)
-);
+    unique (ontology_space_id, path)
+    );
 
 comment on table action_category is '行为分类表';
 
@@ -40,10 +40,10 @@ comment on column action_category.update_time is '更新时间';
 comment on constraint uk_action_category_space_id_path on action_category is '本体空间id+分类path，唯一索引';
 
 -- 行为挂载到行为分类体系树上
-alter table ontology_action
+alter table ontology.ontology_action
     add column if not exists action_category_id integer;
 
-comment on column ontology_action.action_category_id is '所属行为分类id，对应 action_category.id';
+comment on column ontology.ontology_action.action_category_id is '所属行为分类id，对应 action_category.id';
 
 create index if not exists ontology_action_action_category_id_idx
-    on ontology_action (action_category_id);
+    on ontology.ontology_action (action_category_id);

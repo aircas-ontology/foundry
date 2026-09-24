@@ -160,7 +160,23 @@ ontology-server/
 
 ## 配置说明
 
-主要配置项在 `application.yml` 中：
+### 主配置与本地配置约定
+
+| 文件 | 职责 | 是否提交 |
+|------|------|----------|
+| `application.yml` | 声明全部配置 **key**（结构模板），可含非敏感默认值 | 提交 |
+| `application-local.yml` | 填写本机 / 环境相关 **value**（数据源、密码、中间件地址等） | **不提交**（已加入 `.gitignore`） |
+
+约定：
+
+1. **有新配置时，key 必须先写进 `application.yml`**，保证仓库内配置结构完整、其他人可知晓有哪些项。
+2. **敏感或环境相关的 value 写在 `application-local.yml`**，本地保存并覆盖主配置；该文件不要提交。
+3. 本地启动使用 `spring.profiles.active=local`（主配置中已默认开启），加载 `application-local.yml`。
+4. Spring Boot 强类型属性（如 `spring.servlet.multipart.max-file-size`）不要在主配置中留空，应在 local 中给出合法值，或删除该 key 使用默认值。
+
+首次本地开发：可将已有同事的 `application-local.yml` 拷贝到 `src/main/resources/`，或按 `application.yml` 中的 key 自行补全 value。
+
+### 主要配置项
 
 | 配置项 | 说明 |
 |--------|------|

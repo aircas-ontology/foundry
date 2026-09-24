@@ -31,3 +31,6 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Local Spring profile (secrets / machine-specific, do not commit) ###
+**/application-local.yml
