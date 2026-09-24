@@ -263,16 +263,21 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
 
 
     @Override
-    public Page<FunctionInfoVO> getFunctions(Integer pageNum, Integer pageSize) {
+    public Page<FunctionInfoVO> getFunctions(Integer ontologySpaceId, Integer pageNum, Integer pageSize) {
         var pageInfo = new Page<Function>(pageNum, pageSize);
         pageInfo.addOrder(OrderItem.desc("create_time"));
-        var functionPage = page(pageInfo);
+        var wrapper = new LambdaQueryWrapper<Function>();
+        if (ontologySpaceId != null) {
+            wrapper.eq(Function::getOntologySpaceId, ontologySpaceId);
+        }
+        var functionPage = page(pageInfo, wrapper);
         var records = functionPage.getRecords().stream().<FunctionInfoVO>map(func ->
                 FunctionInfoVO.builder()
                         .functionApi(func.getApi())
                         .displayName(func.getDisplayName())
                         .type(func.getType())
                         .description(func.getDescription())
+                        .ontologySpaceId(func.getOntologySpaceId())
                         .updateTime(func.getUpdateTime())
                         .build()
         ).collect(Collectors.toList());

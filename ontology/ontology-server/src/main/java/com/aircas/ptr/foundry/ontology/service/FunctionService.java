@@ -21,7 +21,7 @@ import java.util.List;
 public interface FunctionService extends IService<Function> {
 
 
-    Page<FunctionInfoVO> getFunctions(Integer pageNum, Integer pageSize);
+    Page<FunctionInfoVO> getFunctions(Integer ontologySpaceId, Integer pageNum, Integer pageSize);
 
     String executeFunction(FunctionExecuteParam param);
 

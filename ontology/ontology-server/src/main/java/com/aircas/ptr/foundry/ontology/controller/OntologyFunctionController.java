@@ -41,9 +41,10 @@ public class OntologyFunctionController {
 
     @Operation(summary = "查询函数列表")
     @GetMapping("/list")
-    public RestResult<Page<FunctionInfoVO>> getFunctions(@RequestParam(required = false, defaultValue = "1") Integer pageNum,
+    public RestResult<Page<FunctionInfoVO>> getFunctions(@RequestParam(required = false) @Parameter(description = "空间id") Integer ontologySpaceId,
+                                                         @RequestParam(required = false, defaultValue = "1") Integer pageNum,
                                                          @RequestParam(required = false, defaultValue = "10") Integer pageSize) {
-        return RestResult.ofData(functionService.getFunctions(pageNum, pageSize));
+        return RestResult.ofData(functionService.getFunctions(ontologySpaceId, pageNum, pageSize));
     }
 
     @Operation(summary = "创建函数")
