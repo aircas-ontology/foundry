@@ -133,6 +133,9 @@ ontology-server/
 ### 10. RAG 流程
 与 RAG（检索增强生成）相关的流程处理。
 
+### 11. 行为分类体系（Action Category）
+行为（Action）的分类体系树，作用域为本体空间（一个空间一棵树），把同一空间下的行为按战术/功能归类。支持子树一次性创建、改名级联重写 path、级联删除（节点下有行为时拒绝）。
+
 ## 数据架构
 
 ```
@@ -243,6 +246,10 @@ http://localhost:37002/ontology/doc.html
 | `/link` | POST | 创建链接关系 |
 | `/entity` | POST | 创建实体 |
 | `/action` | POST | 创建行为 |
+| `/action_category` | POST | 创建行为分类体系树（入参 `spaceId`） |
+| `/action_category` | PUT | 修改行为分类名称（入参 `spaceId`） |
+| `/action_category` | DELETE | 删除行为分类树（入参 `spaceId`） |
+| `/action_category/tree` | GET | 查询行为分类体系树（`?spaceId=`） |
 | `/function` | POST | 创建函数 |
 | `/datasource` | POST | 管理数据源 |
 | `/overview/count` | GET | 概览统计 |

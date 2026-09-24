@@ -18,10 +18,6 @@ import java.util.List;
 @Schema(description = "本体行为详情")
 public class OntologyActionDetailVO extends OntologyActionInfoVO {
 
-
-    @Schema(name = "functionApi", description = "本体下函数api", example = "getInfo")
-    private String functionApi;
-
     @Schema(description = "行为关系映射")
     private ActionLinkMappingParam linkMapping;
 

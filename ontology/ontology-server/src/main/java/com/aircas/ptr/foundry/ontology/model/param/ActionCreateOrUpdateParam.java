@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import java.util.List;
 
 /**
@@ -36,6 +37,10 @@ public class ActionCreateOrUpdateParam extends OntologyIdentifierParam {
     @NotBlank(message = "displayName is empty")
     private String displayName;
 
+
+    @Schema(name = "categoryId", description = "所属行为分类id，对应行为分类体系树的节点id；", example = "1")
+    @NotNull(message = "categoryId is null")
+    private Integer categoryId;
 
     @Schema(description = "行为关系映射")
     private ActionLinkMappingParam linkMapping;

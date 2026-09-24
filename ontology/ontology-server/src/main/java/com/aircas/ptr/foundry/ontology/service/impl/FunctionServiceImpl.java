@@ -43,6 +43,7 @@ import org.springframework.transaction.annotation.Transactional;
 import jakarta.annotation.Resource;
 import java.io.File;
 import java.io.IOException;
+import java.util.Collection;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -73,6 +74,28 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     private EntityServiceImpl entityService;
 
     private ObjectMapper objectMapper = new ObjectMapper();
+
+
+    @Override
+    public Map<String, String> mapDescriptionByApi(Collection<String> functionApis) {
+        if (CollectionUtils.isEmpty(functionApis)) {
+            return new HashMap<>();
+        }
+        var apis = functionApis.stream()
+                .filter(StringUtils::isNotBlank)
+                .distinct()
+                .collect(Collectors.toList());
+        if (apis.isEmpty()) {
+            return new HashMap<>();
+        }
+        // function.api 上有唯一约束 uk_function_api，故可安全按 api 收敛为 Map
+        return list(new LambdaQueryWrapper<Function>()
+                        .select(Function::getApi, Function::getDescription)
+                        .in(Function::getApi, apis))
+                .stream()
+                .filter(function -> StringUtils.isNotBlank(function.getDescription()))
+                .collect(Collectors.toMap(Function::getApi, Function::getDescription, (existing, replacement) -> existing));
+    }
 
 
     @Override
