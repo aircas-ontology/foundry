@@ -43,7 +43,6 @@ import org.springframework.transaction.annotation.Transactional;
 import jakarta.annotation.Resource;
 import java.io.File;
 import java.io.IOException;
-import java.util.Collection;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -77,24 +76,18 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
 
 
     @Override
-    public Map<String, String> mapDescriptionByApi(Collection<String> functionApis) {
-        if (CollectionUtils.isEmpty(functionApis)) {
+    public Map<String, String> mapDescriptionByApi(List<String> functionApis) {
+        if (functionApis == null || functionApis.isEmpty()) {
             return new HashMap<>();
         }
-        var apis = functionApis.stream()
-                .filter(StringUtils::isNotBlank)
-                .distinct()
-                .collect(Collectors.toList());
-        if (apis.isEmpty()) {
-            return new HashMap<>();
-        }
-        // function.api 上有唯一约束 uk_function_api，故可安全按 api 收敛为 Map
+        // function.api 上有唯一约束 uk_function_api；description 列可为 null，
+        // 过滤空白描述，避免 Collectors.toMap 在 value 为 null 时抛 NPE
         return list(new LambdaQueryWrapper<Function>()
                         .select(Function::getApi, Function::getDescription)
-                        .in(Function::getApi, apis))
+                        .in(Function::getApi, functionApis))
                 .stream()
                 .filter(function -> StringUtils.isNotBlank(function.getDescription()))
-                .collect(Collectors.toMap(Function::getApi, Function::getDescription, (existing, replacement) -> existing));
+                .collect(Collectors.toMap(Function::getApi, Function::getDescription));
     }
 
 
