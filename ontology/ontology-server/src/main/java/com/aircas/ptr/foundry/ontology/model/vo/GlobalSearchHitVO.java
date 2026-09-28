@@ -37,5 +37,10 @@ public class GlobalSearchHitVO {
     @Schema(name = "propertyId", description = "属性 id，仅属性命中时有值")
     private Long propertyId;
 
+    @Schema(name = "ontologyName", description = "所属对象（本体）名称，属性/实例/关系分组命中时有值")
+    private String ontologyName;
+
+    @Schema(name = "spaceName", description = "所属空间名称")
+    private String spaceName;
 
 }

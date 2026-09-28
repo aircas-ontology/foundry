@@ -5,8 +5,10 @@ import com.aircas.ptr.foundry.ontology.converter.OntologyMetaConverter;
 import com.aircas.ptr.foundry.ontology.model.dto.elasticsearch.EsOntologyInstanceDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.elasticsearch.EsOntologyMetaDTO;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
+import com.aircas.ptr.foundry.ontology.model.po.OntologySpace;
 import com.aircas.ptr.foundry.ontology.repository.elasticsearch.OntologyInstanceRepository;
 import com.aircas.ptr.foundry.ontology.repository.elasticsearch.OntologyMetaRepository;
+import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologySpaceMapper;
 import com.aircas.ptr.foundry.ontology.service.MetaCdcJobService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,10 +34,13 @@ public class MetaCdcJobServiceImpl implements MetaCdcJobService {
     OntologyInstanceRepository ontologyInstanceRepository;
     @Autowired
     ElasticsearchOperations elasticsearchOperations;
+    @Autowired
+    OntologySpaceMapper spaceMapper;
 
     @Override
     public void handleCreateCdc(OntologyMeta ontologyMeta) {
         EsOntologyMetaDTO esOntologyMetaDTO = OntologyMetaConverter.convert(ontologyMeta);
+        enrichMetaDTO(esOntologyMetaDTO);
         ontologyMetaRepository.save(esOntologyMetaDTO);
     }
 
@@ -44,8 +49,9 @@ public class MetaCdcJobServiceImpl implements MetaCdcJobService {
         if (after == null) {
             return false;
         }
-        // 1. 更新本体元数据文档（ontology_meta 索引）
-        ontologyMetaRepository.save(OntologyMetaConverter.convert(after));
+        EsOntologyMetaDTO esOntologyMetaDTO = OntologyMetaConverter.convert(after);
+        enrichMetaDTO(esOntologyMetaDTO);
+        ontologyMetaRepository.save(esOntologyMetaDTO);
 
         // 2. 实例文档（ontology_instance 索引）中来源于本体的字段：
         //    ontology_name = 本体 displayName，api_name = 本体 apiName。
@@ -104,5 +110,15 @@ public class MetaCdcJobServiceImpl implements MetaCdcJobService {
         return NativeQuery.builder()
                 .withQuery(q -> q.term(t -> t.field("ontology_uid").value(ontologyUid)))
                 .build();
+    }
+
+    private void enrichMetaDTO(EsOntologyMetaDTO dto) {
+        if (dto.getOntologySpaceId() == null) {
+            return;
+        }
+        OntologySpace space = spaceMapper.selectById(dto.getOntologySpaceId().intValue());
+        if (space != null) {
+            dto.setSpaceName(space.getDisplayName());
+        }
     }
 }

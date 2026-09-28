@@ -31,6 +31,9 @@ public class EsOntologyLinkGroupDTO {
     @Field(name = "ontology_space_id", type = FieldType.Long)
     private Long ontologySpaceId;
 
+    @Field(name = "space_name", type = FieldType.Text)
+    private String spaceName;
+
     @Field(name = "ontology_unique_identifier_from", type = FieldType.Keyword)
     private String ontologyUniqueIdentifierFrom;
 

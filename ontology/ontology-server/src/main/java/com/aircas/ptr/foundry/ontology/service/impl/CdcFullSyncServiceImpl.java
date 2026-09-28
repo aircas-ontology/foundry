@@ -58,7 +58,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /**
@@ -128,30 +130,81 @@ public class CdcFullSyncServiceImpl implements CdcFullSyncService {
             CdcFullSyncResultVO.CdcFullSyncResultVOBuilder result = CdcFullSyncResultVO.builder();
 
             if (!Boolean.FALSE.equals(options.getSyncSpace())) {
-                // ontology_space 无软删 status 列（空间为物理删除），statusCol 传 null
                 long[] r = syncIndex(spaceMapper, null, OntologySpace::getId,
                         OntologySpaceConverter::convert, spaceRepository, EsOntologySpaceDTO::getId,
-                        "ontology_space");
+                        "ontology_space", null);
                 result.spaceSynced(r[0]).spaceDeleted(r[1]);
             }
+
+            Map<Integer, OntologySpace> spaceById = new HashMap<>();
+            Map<String, OntologyMeta> metaByUid = new HashMap<>();
+
             if (!Boolean.FALSE.equals(options.getSyncMeta())) {
-                long[] r = syncIndex(metaMapper, OntologyMeta::getStatus, OntologyMeta::getId,
-                        OntologyMetaConverter::convert, metaRepository, EsOntologyMetaDTO::getId,
-                        "ontology_meta");
+                List<OntologyMeta> allMetas = metaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>()
+                        .ne(OntologyMeta::getStatus, Status.DELETE.getValue()));
+                Set<Integer> metaSpaceIds = allMetas.stream()
+                        .map(OntologyMeta::getOntologySpaceId).filter(Objects::nonNull).collect(Collectors.toSet());
+                if (!metaSpaceIds.isEmpty()) {
+                    spaceMapper.selectBatchIds(metaSpaceIds).forEach(s -> spaceById.put(s.getId(), s));
+                }
+                allMetas.stream().filter(m -> StringUtils.isNotEmpty(m.getUniqueIdentifier()))
+                        .forEach(m -> metaByUid.put(m.getUniqueIdentifier(), m));
+
+                List<EsOntologyMetaDTO> metaDocs = allMetas.stream()
+                        .map(OntologyMetaConverter::convert).filter(Objects::nonNull).collect(Collectors.toList());
+                for (EsOntologyMetaDTO doc : metaDocs) {
+                    OntologySpace space = doc.getOntologySpaceId() != null ? spaceById.get(doc.getOntologySpaceId().intValue()) : null;
+                    doc.setSpaceName(space != null ? space.getDisplayName() : null);
+                }
+                long[] r = saveAndSweep(metaDocs, metaRepository, EsOntologyMetaDTO::getId, "ontology_meta");
                 result.metaSynced(r[0]).metaDeleted(r[1]);
             }
+
             if (!Boolean.FALSE.equals(options.getSyncProperty())) {
+                if (metaByUid.isEmpty()) {
+                    List<OntologyMeta> allMetas = metaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>()
+                            .ne(OntologyMeta::getStatus, Status.DELETE.getValue()));
+                    Set<Integer> propSpaceIds = new java.util.HashSet<>();
+                    allMetas.stream().map(OntologyMeta::getOntologySpaceId).filter(Objects::nonNull).forEach(propSpaceIds::add);
+                    if (!propSpaceIds.isEmpty()) {
+                        spaceMapper.selectBatchIds(propSpaceIds).forEach(s -> spaceById.put(s.getId(), s));
+                    }
+                    allMetas.stream().filter(m -> StringUtils.isNotEmpty(m.getUniqueIdentifier()))
+                            .forEach(m -> metaByUid.put(m.getUniqueIdentifier(), m));
+                }
                 long[] r = syncIndex(propertyMapper, OntologyProperty::getStatus, OntologyProperty::getId,
                         OntologyPropertyConverter::convert, propertyRepository, EsOntologyPropertyDTO::getId,
-                        "ontology_property");
+                        "ontology_property", doc -> {
+                            OntologyMeta meta = metaByUid.get(doc.getOntologyUniqueIdentifier());
+                            if (meta != null) {
+                                doc.setOntologyName(meta.getDisplayName());
+                                doc.setOntologySpaceId(meta.getOntologySpaceId());
+                                OntologySpace space = meta.getOntologySpaceId() != null ? spaceById.get(meta.getOntologySpaceId()) : null;
+                                doc.setSpaceName(space != null ? space.getDisplayName() : null);
+                            }
+                        });
                 result.propertySynced(r[0]).propertyDeleted(r[1]);
             }
+
             if (!Boolean.FALSE.equals(options.getSyncLinkGroup())) {
+                if (spaceById.isEmpty()) {
+                    List<OntologyLinkGroup> allLinks = linkGroupMapper.selectList(new LambdaQueryWrapper<OntologyLinkGroup>()
+                            .ne(OntologyLinkGroup::getStatus, Status.DELETE.getValue()));
+                    Set<Integer> linkSpaceIds = allLinks.stream()
+                            .map(OntologyLinkGroup::getOntologySpaceId).filter(Objects::nonNull).collect(Collectors.toSet());
+                    if (!linkSpaceIds.isEmpty()) {
+                        spaceMapper.selectBatchIds(linkSpaceIds).forEach(s -> spaceById.put(s.getId(), s));
+                    }
+                }
                 long[] r = syncIndex(linkGroupMapper, OntologyLinkGroup::getStatus, OntologyLinkGroup::getId,
                         OntologyLinkGroupConverter::convert, linkGroupRepository, EsOntologyLinkGroupDTO::getId,
-                        "ontology_link_group");
+                        "ontology_link_group", doc -> {
+                            OntologySpace space = doc.getOntologySpaceId() != null ? spaceById.get(doc.getOntologySpaceId().intValue()) : null;
+                            doc.setSpaceName(space != null ? space.getDisplayName() : null);
+                        });
                 result.linkGroupSynced(r[0]).linkGroupDeleted(r[1]);
             }
+
             if (!Boolean.FALSE.equals(options.getSyncInstance())) {
                 long[] r = syncInstanceIndex(options.getOntologyUids());
                 result.instanceSynced(r[0]).instanceDeleted(r[1]);
@@ -185,7 +238,8 @@ public class CdcFullSyncServiceImpl implements CdcFullSyncService {
                                        Function<P, D> converter,
                                        ElasticsearchRepository<D, I> repository,
                                        Function<D, I> docIdGetter,
-                                       String indexName) {
+                                       String indexName,
+                                       Consumer<D> enricher) {
         LambdaQueryWrapper<P> wrapper = new LambdaQueryWrapper<>();
         if (statusCol != null) {
             wrapper.ne(statusCol, Status.DELETE.getValue());
@@ -193,10 +247,31 @@ public class CdcFullSyncServiceImpl implements CdcFullSyncService {
         wrapper.orderByAsc(idCol);
         List<P> rows = mapper.selectList(wrapper);
         List<D> docs = rows.stream().map(converter).filter(Objects::nonNull).collect(Collectors.toList());
+        if (enricher != null) {
+            docs.forEach(enricher);
+        }
         repository.saveAll(docs);
 
         Set<I> expectedIds = docs.stream().map(docIdGetter).filter(Objects::nonNull)
                 .collect(Collectors.toSet());
+        List<I> orphanIds = new ArrayList<>();
+        for (D esDoc : repository.findAll()) {
+            I id = docIdGetter.apply(esDoc);
+            if (id != null && !expectedIds.contains(id)) {
+                orphanIds.add(id);
+            }
+        }
+        orphanIds.forEach(repository::deleteById);
+        log.info("全量同步[{}]: 写入 {} 条, 清理孤儿 {} 条", indexName, docs.size(), orphanIds.size());
+        return new long[]{docs.size(), orphanIds.size()};
+    }
+
+    private <D, I> long[] saveAndSweep(List<D> docs,
+                                       ElasticsearchRepository<D, I> repository,
+                                       Function<D, I> docIdGetter,
+                                       String indexName) {
+        repository.saveAll(docs);
+        Set<I> expectedIds = docs.stream().map(docIdGetter).filter(Objects::nonNull).collect(Collectors.toSet());
         List<I> orphanIds = new ArrayList<>();
         for (D esDoc : repository.findAll()) {
             I id = docIdGetter.apply(esDoc);

@@ -40,6 +40,15 @@ public class EsOntologyPropertyDTO {
     @Field(name = "ontology_unique_identifier", type = FieldType.Keyword)
     private String ontologyUniqueIdentifier;
 
+    @Field(name = "ontology_name", type = FieldType.Text)
+    private String ontologyName;
+
+    @Field(name = "ontology_space_id", type = FieldType.Integer)
+    private Integer ontologySpaceId;
+
+    @Field(name = "space_name", type = FieldType.Text)
+    private String spaceName;
+
     /** property_type：keyword */
     @Field(name = "property_type", type = FieldType.Keyword)
     private String propertyType;

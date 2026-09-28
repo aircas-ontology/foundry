@@ -32,6 +32,9 @@ public class EsOntologyMetaDTO {
     @Field(name = "ontology_space_id", type = FieldType.Long)
     private Long ontologySpaceId;
 
+    @Field(name = "space_name", type = FieldType.Text)
+    private String spaceName;
+
     /** status：byte */
     @Field(name = "status", type = FieldType.Byte)
     private Integer status;
