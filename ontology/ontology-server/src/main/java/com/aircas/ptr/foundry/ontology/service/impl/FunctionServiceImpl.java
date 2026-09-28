@@ -74,10 +74,6 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
 
     private final static String ROOT_PATH = "functions";
 
-    /**
-     * 基础查询算子聚合目标字段的默认占位符名（前端未传时后端自动生成）
-     */
-    private final static String DEFAULT_TARGET_PLACEHOLDER = "target";
 
     @Resource
     private OntologyActionMapper ontologyActionMapper;
@@ -341,9 +337,9 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     @SneakyThrows
     private void createBasicQueryParams(Long functionId, BasicQueryConfig queryConfig) {
         PreconditionUtils.checkArgument(queryConfig != null, "基础查询算子必须提供 queryConfig", HttpStatus.BAD_REQUEST);
-        // 聚合操作：targetProperty 仅为占位符（创建时不选实际字段，执行时才绑定），前端未传则后端自动生成
+        // 聚合操作：targetProperty 必须由前端传入（作为变量名），执行时通过 variableBindings 映射到实际属性 apiName
         if (queryConfig.getAggFunc() != null && StringUtils.isEmpty(queryConfig.getTargetProperty())) {
-            queryConfig.setTargetProperty(DEFAULT_TARGET_PLACEHOLDER);
+            PreconditionUtils.checkArgument(false, "聚合函数必须提供 targetProperty（聚合目标字段）", HttpStatus.BAD_REQUEST);
         }
 
         // 更新 code 字段为 queryConfig JSON

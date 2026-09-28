@@ -13,7 +13,7 @@ import lombok.experimental.SuperBuilder;
  * <p>targetProperty 和 filters 中的 propertyApiName 均为<b>变量名</b>，
  * 测试执行时由前端通过 variableBindings 映射到实际属性 apiName。</p>
  * <ul>
- *   <li>aggFunc 为 SUM/COUNT/AVG/MAX/MIN 时：需要聚合目标，targetProperty 前端未传则后端自动生成占位符</li>
+ *   <li>aggFunc 为 SUM/COUNT/AVG/MAX/MIN 时：需要聚合目标，targetProperty 必须由前端传入，支持修改</li>
  *   <li>aggFunc 为 null（query 模式）时：无聚合，targetProperty 可省略</li>
  * </ul>
  */
@@ -28,7 +28,7 @@ public class BasicQueryConfig {
     @Schema(name = "aggFunc", description = "聚合类型：SUM/COUNT/AVG/MAX/MIN，不传则为 query 模式（无聚合）", example = "COUNT")
     private AggFuncEnum aggFunc;
 
-    @Schema(name = "targetProperty", description = "目标占位符名（创建时不选实际字段，前端未传时后端自动生成为 target；执行时通过 variableBindings 映射到实际属性 apiName）", example = "amount")
+    @Schema(name = "targetProperty", description = "聚合目标变量名（aggFunc 不为空时必填，由前端传入，支持修改；执行时通过 variableBindings 映射到实际属性 apiName）", example = "amount")
     private String targetProperty;
 
     @Schema(name = "filters", description = "过滤条件（嵌套过滤树，propertyApiName 为变量名）")
