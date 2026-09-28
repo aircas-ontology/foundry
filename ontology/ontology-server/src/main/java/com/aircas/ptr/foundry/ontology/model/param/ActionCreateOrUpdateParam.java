@@ -30,6 +30,12 @@ public class ActionCreateOrUpdateParam extends OntologyIdentifierParam {
     @Schema(description = "本体下函数api", example = "satellite")
     private String functionApi;
 
+    @Schema(description = "绑定的函数版本ID；为空时默认固定到当前发布版本")
+    private Long functionVersionId;
+
+    @Schema(description = "绑定的函数版本号，兼容展示字段")
+    private Integer functionVersionNo;
+
     @Schema(description = "行为描述", example = "这是一个行为")
     private String description;
 

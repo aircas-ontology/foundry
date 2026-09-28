@@ -22,6 +22,6 @@ public class FunctionApiValidator implements ConstraintValidator<FunctionApiVeri
             return false;
         }
         var func = functionMapper.selectOne(new LambdaQueryWrapper<Function>().eq(Function::getApi, api));
-        return func != null;
+        return func != null && func.getPublishedVersionId() != null;
     }
 }

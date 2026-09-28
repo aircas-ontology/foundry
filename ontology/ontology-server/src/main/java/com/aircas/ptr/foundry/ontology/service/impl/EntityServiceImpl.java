@@ -836,7 +836,7 @@ public class EntityServiceImpl implements EntityService {
     public ActionContextInfoDTO initActionContextInfoDTO(EntityActionExecuteParam param) {
 
         var actionDetailVO = actionService.getActionByApi(param.getActionApi());
-        var functionDetailVO = functionService.getFunctionDetailByApi(actionDetailVO.getFunctionApi());
+        var functionDetailVO = functionService.getFunctionDetailByApi(actionDetailVO.getFunctionApi(), actionDetailVO.getEffectiveFunctionVersionNo());
         var link = actionDetailVO.getLinkMapping();
         var mappings = actionDetailVO.getMappingIns();
         //src本体属性
@@ -1032,6 +1032,7 @@ public class EntityServiceImpl implements EntityService {
         //执行函数
         var functionResultJson = functionService.executeFunction(FunctionExecuteParam.builder()
                 .functionApi(actionContext.getActionDetailVO().getFunctionApi())
+                .versionNo(actionContext.getFunctionDetailVO().getVersionNo())
                 .parameters(parameters)
                 .build());
 

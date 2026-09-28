@@ -44,4 +44,10 @@ public class FunctionCreateParam {
 
     @Schema(name = "referenceName", description = "外部函数：函数全限定名")
     private String referenceName;
+
+    @Schema(description = "版本变更说明")
+    private String changeLog;
+
+    @Schema(description = "创建后立即发布")
+    private Boolean publish;
 }

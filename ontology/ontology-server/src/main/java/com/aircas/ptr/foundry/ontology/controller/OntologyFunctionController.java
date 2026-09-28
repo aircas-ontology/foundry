@@ -5,10 +5,12 @@ import com.aircas.ptr.foundry.ontology.model.param.FunctionCallbackParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionExecuteParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionUpdateParam;
+import com.aircas.ptr.foundry.ontology.model.param.FunctionVersionParam;
 import com.aircas.ptr.foundry.ontology.model.vo.FunctionDetailVO;
 import com.aircas.ptr.foundry.ontology.model.vo.FunctionExecuteResultVO;
 import com.aircas.ptr.foundry.ontology.model.vo.FunctionInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.FunctionResultVO;
+import com.aircas.ptr.foundry.ontology.model.vo.FunctionVersionVO;
 import com.aircas.ptr.foundry.ontology.service.FunctionService;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -62,8 +64,28 @@ public class OntologyFunctionController {
 
     @Operation(summary = "根据函数api获取函数详情")
     @GetMapping("/detail")
-    public RestResult<FunctionDetailVO> getFunctionByApi(@RequestParam(required = true, name = "functionApi") @Parameter(description = "函数api") String functionApi) {
-        return RestResult.ofData(functionService.getFunctionDetailByApi(functionApi));
+    public RestResult<FunctionDetailVO> getFunctionByApi(@RequestParam(name = "functionApi") @Parameter(description = "函数api") String functionApi,
+                                                         @RequestParam(required = false, name = "versionNo") Integer versionNo) {
+        return RestResult.ofData(functionService.getFunctionDetailByApi(functionApi, versionNo));
+    }
+
+    @PostMapping("/version_create")
+    @Operation(summary = "创建函数草稿版本")
+    public RestResult createVersion(@RequestBody @Valid FunctionVersionParam param) { functionService.createDraft(param); return RestResult.success(); }
+
+    @PostMapping("/version_publish")
+    @Operation(summary = "发布函数版本")
+    public RestResult publishVersion(@RequestBody @Valid FunctionVersionParam param) { functionService.publishVersion(param); return RestResult.success(); }
+
+    @PostMapping("/version_rollback")
+    @Operation(summary = "前滚式回滚函数版本")
+    public RestResult rollbackVersion(@RequestBody @Valid FunctionVersionParam param) { functionService.rollbackVersion(param); return RestResult.success(); }
+
+    @GetMapping("/version_list")
+    @Operation(summary = "查询函数版本列表")
+    public RestResult<Page<FunctionVersionVO>> listVersions(@RequestParam String functionApi,
+            @RequestParam(defaultValue = "1") Integer pageNum, @RequestParam(defaultValue = "10") Integer pageSize) {
+        return RestResult.ofData(functionService.listVersions(functionApi, pageNum, pageSize));
     }
 
 

@@ -52,6 +52,9 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     private FunctionMapper functionMapper;
 
     @Resource
+    private FunctionVersionMapper functionVersionMapper;
+
+    @Resource
     private FunctionService functionService;
 
     @Resource
@@ -123,11 +126,23 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         //      届时此处改为按 spaceId + categoryId 校验分类归属（当前仅校验分类是否存在）
         var category = actionCategoryMapper.selectById(param.getCategoryId());
         PreconditionUtils.checkArgument(category != null, "无效的行为分类：" + param.getCategoryId(), HttpStatus.BAD_REQUEST);
+        var funcApi = param.getFunctionApi();
+        Function func = StringUtils.isEmpty(funcApi) ? null : functionMapper.selectOne(new LambdaQueryWrapper<Function>().eq(Function::getApi, funcApi));
+        FunctionVersion boundVersion = null;
+        if (func != null) {
+            boundVersion = param.getFunctionVersionId() == null ? functionVersionMapper.selectById(func.getPublishedVersionId())
+                    : functionVersionMapper.selectById(param.getFunctionVersionId());
+            PreconditionUtils.checkArgument(boundVersion != null && boundVersion.getFunctionId().equals(func.getId())
+                    && boundVersion.getVersionStatus() != FunctionVersionStatusEnum.DRAFT,
+                    "函数版本不存在或不可绑定：" + funcApi, HttpStatus.BAD_REQUEST);
+        }
         var ontologyAction = OntologyAction.builder()
                 .api(param.getActionApi())
                 .description(param.getDescription())
                 .displayName(param.getDisplayName())
                 .functionApi(param.getFunctionApi())
+                .functionVersionId(boundVersion == null ? null : boundVersion.getId())
+                .functionVersionNo(boundVersion == null ? null : boundVersion.getVersionNo())
                 .icon(param.getIcon())
                 .ontologyUniqueIdentifier(param.getOntologyIdentifier())
                 .actionCategoryId(param.getCategoryId())
@@ -135,14 +150,12 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 .build();
         save(ontologyAction);
 
-        var funcApi = param.getFunctionApi();
         if (StringUtils.isEmpty(funcApi)) {
             return;
         }
-        var func = functionMapper.selectOne(new LambdaQueryWrapper<Function>().eq(Function::getApi, funcApi));
-        //目前仅支行为与自定义函数api绑定
-        PreconditionUtils.checkArgument(func != null && func.getType().equals(FunctionTypeEnum.CUSTOMIZE), "function api 不存在：" + func, HttpStatus.BAD_REQUEST);
-        var functionParams = functionParamMapper.selectList(new LambdaQueryWrapper<FunctionParamPO>().eq(FunctionParamPO::getFunctionId, func.getId()));
+        PreconditionUtils.checkArgument(func != null, "function api 不存在：" + funcApi, HttpStatus.BAD_REQUEST);
+        var functionParams = functionParamMapper.selectList(new LambdaQueryWrapper<FunctionParamPO>()
+                .eq(FunctionParamPO::getFunctionVersionId, boundVersion.getId()));
         //校验本体关系
         var ontologyId = param.getOntologyIdentifier();
         var link = param.getLinkMapping();
@@ -194,6 +207,12 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     @Override
     @Transactional(value = "mainTransactionManager")
     public void updateAction(ActionCreateOrUpdateParam param) {
+        var existing = getOne(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getApi, param.getActionApi()));
+        if (existing != null && param.getFunctionVersionId() == null
+                && StringUtils.equals(existing.getFunctionApi(), param.getFunctionApi())) {
+            param.setFunctionVersionId(existing.getFunctionVersionId());
+            param.setFunctionVersionNo(existing.getFunctionVersionNo());
+        }
         deleteActionByApi(param.getActionApi());
         createAction(param);
     }
@@ -231,6 +250,9 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                         .icon(v.getIcon())
                         .functionApi(v.getFunctionApi())
                         .functionDescription(functionDescMap.get(v.getFunctionApi()))
+                        .functionVersionId(v.getFunctionVersionId())
+                        .functionVersionNo(v.getFunctionVersionNo())
+                        .effectiveFunctionVersionNo(v.getFunctionVersionNo())
                         .build())
                 .collect(Collectors.toList());
         result.setRecords(records).setTotal(pageResult.getTotal());
@@ -244,6 +266,9 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         var detailVO = OntologyActionDetailVO
                 .builder()
                 .functionApi(action.getFunctionApi())
+                .functionVersionId(action.getFunctionVersionId())
+                .functionVersionNo(action.getFunctionVersionNo())
+                .effectiveFunctionVersionNo(action.getFunctionVersionNo())
                 .functionDescription(functionService
                         .mapDescriptionByApi(Collections.singletonList(action.getFunctionApi()))
                         .get(action.getFunctionApi()))
