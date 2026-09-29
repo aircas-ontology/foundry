@@ -4,6 +4,7 @@ import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.controller.validator.OntologyIdVerify;
 import com.aircas.ptr.foundry.ontology.model.enums.ActionSchedulingTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.param.ActionCreateOrUpdateParam;
+import com.aircas.ptr.foundry.ontology.model.param.ActionFunctionVersionUpgradeParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionSchedulingCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionSchedulingUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyActionExecuteParam;
@@ -42,6 +43,13 @@ public class OntologyActionController {
         //已经被行为调度的行为不可直接编辑，需要先暂停调度
         ontologyActionService.updateAction(param);
         return RestResult.success();
+    }
+
+    @Operation(summary = "预览或确认行为升级函数版本")
+    @PostMapping("/upgrade-function-version")
+    public RestResult<ActionFunctionVersionUpgradeVO> upgradeFunctionVersion(
+            @RequestBody @Valid ActionFunctionVersionUpgradeParam param) {
+        return RestResult.ofData(ontologyActionService.upgradeFunctionVersion(param));
     }
 
     @Operation(summary = "依据actionApi删除行为")

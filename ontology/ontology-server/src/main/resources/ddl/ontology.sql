@@ -96,31 +96,8 @@ create table if not exists action_handle_rule
     description       varchar(255),
     id                bigint default nextval('ontology.action_handle_rule_id_seq1'::regclass) not null
     primary key,
-    ontology_space_id integer,
-    latest_version_no integer default 1 not null,
-    published_version_no integer,
-    published_version_id bigint
+    ontology_space_id integer
     );
-
-create table if not exists function_version
-(
-    id bigserial primary key,
-    function_id bigint not null references function(id),
-    function_api varchar(255) not null,
-    version_no integer not null,
-    code text,
-    reference_name varchar(512),
-    version_status varchar(32) default 'DRAFT' not null,
-    change_log varchar(1024),
-    create_by varchar(128),
-    publish_time timestamp(6),
-    create_time timestamp(6) default current_timestamp,
-    update_time timestamp(6) default current_timestamp,
-    constraint uk_function_version_no unique(function_id, version_no),
-    constraint ck_function_version_status check(version_status in ('DRAFT','PUBLISHED','DEPRECATED'))
-    );
-create unique index if not exists uk_function_published_version on function_version(function_id) where version_status='PUBLISHED';
-alter table function add constraint fk_function_published_version foreign key(published_version_id) references function_version(id);
 
 comment on column action_handle_rule.status is '状态: START/STOP';
 
@@ -199,8 +176,11 @@ create table if not exists function
     reference_name    varchar(512),
     code              text,
     display_name      varchar(255),
-    model             varchar(255),
-    ontology_space_id integer
+    model                varchar(255),
+    ontology_space_id    integer,
+    latest_version_no    integer default 1 not null,
+    published_version_no integer,
+    published_version_id bigint
     );
 
 comment on table function is '函数';
@@ -228,6 +208,31 @@ comment on column function.display_name is '函数展示名称';
 comment on column function.model is '函数模型';
 
 comment on column function.ontology_space_id is '本体空间id';
+
+create table if not exists function_version
+(
+    id bigserial primary key,
+    function_id bigint not null references function(id),
+    function_api varchar(255) not null,
+    version_no integer not null,
+    code text,
+    reference_name varchar(512),
+    version_status varchar(32) default 'DRAFT' not null,
+    change_log varchar(1024),
+    create_by varchar(128),
+    publish_time timestamp(6),
+    create_time timestamp(6) default current_timestamp,
+    update_time timestamp(6) default current_timestamp,
+    constraint uk_function_version_no unique(function_id, version_no),
+    constraint ck_function_version_status check(version_status in ('DRAFT','PUBLISHED','DEPRECATED'))
+    );
+
+create unique index if not exists uk_function_published_version
+    on function_version(function_id) where version_status='PUBLISHED';
+
+alter table function
+    add constraint fk_function_published_version
+    foreign key(published_version_id) references function_version(id);
 
 create table if not exists function_execute_result
 (

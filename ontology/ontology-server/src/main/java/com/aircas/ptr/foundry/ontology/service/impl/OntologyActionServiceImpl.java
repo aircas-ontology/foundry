@@ -29,9 +29,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import jakarta.annotation.Resource;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -215,6 +213,124 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         }
         deleteActionByApi(param.getActionApi());
         createAction(param);
+    }
+
+    @Override
+    @Transactional(value = "mainTransactionManager")
+    public ActionFunctionVersionUpgradeVO upgradeFunctionVersion(ActionFunctionVersionUpgradeParam param) {
+        OntologyAction action = getOne(new LambdaQueryWrapper<OntologyAction>()
+                .eq(OntologyAction::getApi, param.getActionApi()));
+        PreconditionUtils.checkArgument(action != null, "行为不存在：" + param.getActionApi(), HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(StringUtils.isNotBlank(action.getFunctionApi()),
+                "行为未绑定函数：" + param.getActionApi(), HttpStatus.BAD_REQUEST);
+
+        Function function = functionMapper.selectOne(new LambdaQueryWrapper<Function>()
+                .eq(Function::getApi, action.getFunctionApi()));
+        PreconditionUtils.checkArgument(function != null, "函数不存在：" + action.getFunctionApi(), HttpStatus.BAD_REQUEST);
+
+        Long sourceVersionId = action.getFunctionVersionId() == null
+                ? function.getPublishedVersionId() : action.getFunctionVersionId();
+        FunctionVersion sourceVersion = sourceVersionId == null ? null : functionVersionMapper.selectById(sourceVersionId);
+        FunctionVersion targetVersion = functionVersionMapper.selectById(param.getTargetFunctionVersionId());
+        PreconditionUtils.checkArgument(sourceVersion != null && sourceVersion.getFunctionId().equals(function.getId()),
+                "行为当前函数版本无效", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(targetVersion != null && targetVersion.getFunctionId().equals(function.getId()),
+                "目标版本不属于行为绑定的函数", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(targetVersion.getVersionStatus() != FunctionVersionStatusEnum.DRAFT,
+                "行为不能升级到草稿版本", HttpStatus.BAD_REQUEST);
+
+        List<FunctionParamPO> sourceParams = functionParamMapper.selectList(new LambdaQueryWrapper<FunctionParamPO>()
+                .eq(FunctionParamPO::getFunctionVersionId, sourceVersion.getId()));
+        List<FunctionParamPO> targetParams = functionParamMapper.selectList(new LambdaQueryWrapper<FunctionParamPO>()
+                .eq(FunctionParamPO::getFunctionVersionId, targetVersion.getId()));
+        List<OntologyActionMappingIn> mappings = ontologyActionMappingInService.list(
+                new LambdaQueryWrapper<OntologyActionMappingIn>().eq(OntologyActionMappingIn::getOntologyActionId, action.getId()));
+        Set<Long> mappedSourceParamIds = mappings.stream().map(OntologyActionMappingIn::getFunctionParamId)
+                .collect(Collectors.toSet());
+
+        Map<String, List<FunctionParamPO>> sourceGroups = sourceParams.stream()
+                .collect(Collectors.groupingBy(this::parameterLogicalKey));
+        Map<String, List<FunctionParamPO>> targetGroups = targetParams.stream()
+                .collect(Collectors.groupingBy(this::parameterLogicalKey));
+        Set<String> keys = new LinkedHashSet<>();
+        keys.addAll(sourceGroups.keySet());
+        keys.addAll(targetGroups.keySet());
+
+        List<ActionFunctionVersionUpgradeVO.ParamMatch> matches = new ArrayList<>();
+        Map<Long, Long> remappedParamIds = new HashMap<>();
+        for (String key : keys) {
+            List<FunctionParamPO> sources = sourceGroups.getOrDefault(key, Collections.emptyList());
+            List<FunctionParamPO> targets = targetGroups.getOrDefault(key, Collections.emptyList());
+            if (sources.size() > 1 || targets.size() > 1) {
+                FunctionParamPO source = sources.isEmpty() ? null : sources.get(0);
+                FunctionParamPO target = targets.isEmpty() ? null : targets.get(0);
+                matches.add(toParamMatch("AMBIGUOUS", source, target, mappedSourceParamIds,
+                        "同名且同类别的参数不唯一，无法自动匹配"));
+            } else if (sources.isEmpty()) {
+                matches.add(toParamMatch("PARAMETER_ADDED", null, targets.get(0), mappedSourceParamIds,
+                        "目标版本新增参数"));
+            } else if (targets.isEmpty()) {
+                matches.add(toParamMatch("PARAMETER_DELETED", sources.get(0), null, mappedSourceParamIds,
+                        "目标版本删除参数"));
+            } else {
+                FunctionParamPO source = sources.get(0);
+                FunctionParamPO target = targets.get(0);
+                if (source.getParamType() != target.getParamType()) {
+                    matches.add(toParamMatch("TYPE_CHANGED", source, target, mappedSourceParamIds,
+                            "参数类型发生变化，无法自动迁移映射"));
+                } else {
+                    matches.add(toParamMatch("AUTO_MATCHED", source, target, mappedSourceParamIds,
+                            "按 param_name + category 自动匹配"));
+                    remappedParamIds.put(source.getId(), target.getId());
+                }
+            }
+        }
+
+        boolean canUpgrade = mappings.stream().allMatch(mapping -> remappedParamIds.containsKey(mapping.getFunctionParamId()));
+        boolean confirm = Boolean.TRUE.equals(param.getConfirm());
+        if (confirm) {
+            PreconditionUtils.checkNotNull(param.getSourceFunctionVersionId(), "确认升级时 sourceFunctionVersionId 不能为空");
+            PreconditionUtils.checkArgument(sourceVersion.getId().equals(param.getSourceFunctionVersionId()),
+                    "行为绑定版本已变化，请重新预览", HttpStatus.CONFLICT);
+            PreconditionUtils.checkArgument(canUpgrade, "存在无法自动迁移的参数映射，请处理后重试", HttpStatus.BAD_REQUEST);
+            for (OntologyActionMappingIn mapping : mappings) {
+                mapping.setFunctionParamId(remappedParamIds.get(mapping.getFunctionParamId()));
+                ontologyActionMappingInService.updateById(mapping);
+            }
+            action.setFunctionVersionId(targetVersion.getId());
+            action.setFunctionVersionNo(targetVersion.getVersionNo());
+            updateById(action);
+        }
+
+        return ActionFunctionVersionUpgradeVO.builder()
+                .actionApi(action.getApi())
+                .sourceFunctionVersionId(sourceVersion.getId())
+                .sourceFunctionVersionNo(sourceVersion.getVersionNo())
+                .targetFunctionVersionId(targetVersion.getId())
+                .targetFunctionVersionNo(targetVersion.getVersionNo())
+                .canUpgrade(canUpgrade)
+                .upgraded(confirm)
+                .parameterMatches(matches)
+                .build();
+    }
+
+    private String parameterLogicalKey(FunctionParamPO param) {
+        return param.getCategory().name() + "\u0000" + param.getParamName();
+    }
+
+    private ActionFunctionVersionUpgradeVO.ParamMatch toParamMatch(
+            String status, FunctionParamPO source, FunctionParamPO target, Set<Long> mappedSourceParamIds, String message) {
+        return ActionFunctionVersionUpgradeVO.ParamMatch.builder()
+                .status(status)
+                .paramName(source == null ? target.getParamName() : source.getParamName())
+                .category(source == null ? target.getCategory() : source.getCategory())
+                .sourceParamId(source == null ? null : source.getId())
+                .sourceParamType(source == null ? null : source.getParamType())
+                .targetParamId(target == null ? null : target.getId())
+                .targetParamType(target == null ? null : target.getParamType())
+                .mappedByAction(source != null && mappedSourceParamIds.contains(source.getId()))
+                .message(message)
+                .build();
     }
 
     @Override
