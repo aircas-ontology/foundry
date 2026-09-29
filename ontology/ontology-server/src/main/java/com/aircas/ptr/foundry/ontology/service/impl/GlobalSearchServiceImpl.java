@@ -3,6 +3,7 @@ package com.aircas.ptr.foundry.ontology.service.impl;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.FieldValue;
 import co.elastic.clients.elasticsearch._types.query_dsl.Operator;
+import co.elastic.clients.elasticsearch._types.query_dsl.Query;
 import co.elastic.clients.elasticsearch.core.SearchRequest;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
@@ -66,6 +67,14 @@ public class GlobalSearchServiceImpl implements GlobalSearchService {
             indexNameOf(EsOntologyInstanceDTO.class), TYPE_INSTANCE,
             indexNameOf(EsOntologyLinkGroupDTO.class), TYPE_LINK_GROUP);
 
+    /** 每个索引参与关键词匹配的字段列表 */
+    private static final Map<String, List<String>> INDEX_SEARCH_FIELDS = Map.of(
+            indexNameOf(EsOntologySpaceDTO.class),      List.of("api_name", "display_name"),
+            indexNameOf(EsOntologyMetaDTO.class),       List.of("api_name", "display_name"),
+            indexNameOf(EsOntologyPropertyDTO.class),   List.of("display_name", "api_name"),
+            indexNameOf(EsOntologyInstanceDTO.class),   List.of("name"),
+            indexNameOf(EsOntologyLinkGroupDTO.class),  List.of("name"));
+
     private final ElasticsearchClient elasticsearchClient;
 
     private static String indexNameOf(Class<?> clazz) {
@@ -76,15 +85,23 @@ public class GlobalSearchServiceImpl implements GlobalSearchService {
     public List<GlobalSearchHitVO> search(GlobalSearchParam param) {
         int size = param.getSize() == null || param.getSize() <= 0 ? DEFAULT_SIZE
                 : Math.min(param.getSize(), MAX_SIZE);
+        String escapedKeyword = escapeQuery(param.getKeyword());
         SearchRequest request = SearchRequest.of(b -> b
                 .index(SEARCH_INDICES)
                 .size(size)
                 .source(includeSource(SOURCE_FIELDS))
-                .query(q -> q.queryString(qs -> qs
-                        .fields("*")
-                        .lenient(true)
-                        .defaultOperator(Operator.Or)
-                        .query(escapeQuery(param.getKeyword())))));
+                .query(q -> q.bool(bool -> {
+                    INDEX_SEARCH_FIELDS.forEach((index, fields) -> bool.should(sh -> sh
+                            .bool(inner -> inner
+                                    .must(m -> m.term(t -> t.field("_index").value(index)))
+                                    .must(m -> m.queryString(qs -> qs
+                                            .fields(fields)
+                                            .lenient(true)
+                                            .defaultOperator(Operator.Or)
+                                            .query(escapedKeyword)))
+                            )));
+                    return bool;
+                })));
         List<Hit<Map>> hits;
         try {
             SearchResponse<Map> response = elasticsearchClient.search(request, Map.class);
@@ -163,7 +180,8 @@ public class GlobalSearchServiceImpl implements GlobalSearchService {
                         .propertyId(docId)
                         .ontologyName(str(src.get("ontology_name")))
                         .spaceName(str(src.get("space_name")))
-                        .uniqueIdentifier(str(src.get("unique_identifier")));
+                        .uniqueIdentifier(str(src.get("unique_identifier")))
+                        .ontologyUniqueIdentifier(str(src.get("ontology_unique_identifier")));
             }
             case TYPE_INSTANCE -> {
                 MetaRef ref = metaByUid.get(str(src.get("ontology_uid")));
