@@ -64,6 +64,11 @@ public class OntologyAction {
     private String icon;
 
     /**
+     * 所属行为分类id，对应 action_category.id
+     */
+    private Integer actionCategoryId;
+
+    /**
      * 本体空间id
      */
     private Integer ontologySpaceId;

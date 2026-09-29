@@ -30,5 +30,9 @@ public class OntologyActionInfoVO {
     @Schema(name = "displayName", description = "行为显示名称", example = "调用函数")
     private String displayName;
 
+    @Schema(name = "functionApi", description = "本体下函数api", example = "getInfo")
+    private String functionApi;
 
+    @Schema(name = "functionDescription", description = "函数描述", example = "这是一个函数")
+    private String functionDescription;
 }
