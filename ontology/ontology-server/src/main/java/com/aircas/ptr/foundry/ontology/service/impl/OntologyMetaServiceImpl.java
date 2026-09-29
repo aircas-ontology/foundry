@@ -664,6 +664,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                         .displayName(f.getDisplayName())
                         .model(f.getModel())
                         .type(f.getType())
+                        .publish(true)
                         .build());
             });
         }

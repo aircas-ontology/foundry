@@ -25,6 +25,9 @@ public class FunctionExecuteParam {
     @Schema(name = "parameters", description = "参数列表", required = true)
     private List<FunctionParameter> parameters;
 
+    @Schema(description = "指定已发布或已废弃版本号；为空时执行当前发布版本")
+    private Integer versionNo;
+
 
 
 }

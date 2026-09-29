@@ -132,9 +132,10 @@ public class GroovyServiceImpl implements GroovyService {
 
     @SneakyThrows
     @Override
-    public String executeGroovy(String functionApi, String code, Map<String, Object> paramMap, List<FunctionParamPO> paramInfos) {
+    public String executeGroovy(Long functionVersionId, String functionApi, String code, Map<String, Object> paramMap, List<FunctionParamPO> paramInfos) {
         PreconditionUtils.checkArgument(StringUtils.isNotEmpty(functionApi), "functionApi不能为空");
-        Class<?> groovyClass = getOrCompileByFunctionApi(functionApi, code);
+        PreconditionUtils.checkNotNull(functionVersionId, "functionVersionId不能为空");
+        Class<?> groovyClass = getOrCompileByVersion(functionVersionId, code);
         GroovyObject groovyInstance = (GroovyObject) groovyClass.getDeclaredConstructor().newInstance();
 
         var paramValues = paramInfos.stream().map(p -> {
@@ -152,11 +153,11 @@ public class GroovyServiceImpl implements GroovyService {
     }
 
     @Override
-    public void invalidateCompiledClass(String functionApi) {
-        if (StringUtils.isEmpty(functionApi)) {
+    public void invalidateCompiledClass(Long functionVersionId) {
+        if (functionVersionId == null) {
             return;
         }
-        compiledScriptCache.invalidate(functionApi);
+        compiledScriptCache.invalidate(String.valueOf(functionVersionId));
     }
 
     @PreDestroy
@@ -175,15 +176,16 @@ public class GroovyServiceImpl implements GroovyService {
     /**
      * 按 functionApi 缓存；DB 中 code 变更后 codeHash 不一致则替换并关闭旧 ClassLoader。
      */
-    private Class<?> getOrCompileByFunctionApi(String functionApi, String code) {
+    private Class<?> getOrCompileByVersion(Long functionVersionId, String code) {
+        String cacheId = String.valueOf(functionVersionId);
         String codeHash = cacheKey(code);
-        CompiledScript cached = compiledScriptCache.getIfPresent(functionApi);
+        CompiledScript cached = compiledScriptCache.getIfPresent(cacheId);
         if (cached != null && codeHash.equals(cached.codeHash)) {
             return cached.clazz;
         }
         CompiledScript compiled = compile(code);
         // put 替换旧条目时 Guava 会走 removalListener 关闭旧 ClassLoader
-        compiledScriptCache.put(functionApi, compiled);
+        compiledScriptCache.put(cacheId, compiled);
         return compiled.clazz;
     }
 

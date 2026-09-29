@@ -3,6 +3,7 @@ package com.aircas.ptr.foundry.ontology.service;
 
 import com.aircas.ptr.foundry.ontology.model.enums.ActionSchedulingTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.param.ActionCreateOrUpdateParam;
+import com.aircas.ptr.foundry.ontology.model.param.ActionFunctionVersionUpgradeParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionSchedulingCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionSchedulingUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyActionExecuteParam;
@@ -18,6 +19,8 @@ public interface OntologyActionService extends IService<OntologyAction> {
     void createAction(ActionCreateOrUpdateParam param);
 
     void updateAction(ActionCreateOrUpdateParam param);
+
+    ActionFunctionVersionUpgradeVO upgradeFunctionVersion(ActionFunctionVersionUpgradeParam param);
 
     void deleteActionByApi(String actionApi);
 

@@ -1,7 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionModelEnum;
-import com.aircas.ptr.foundry.ontology.controller.validator.FunctionApiVerify;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -23,7 +22,6 @@ public class FunctionUpdateParam {
 
     @Schema(name = "functionApi", description = "函数api", required = true)
     @NotBlank(message = "functionApi is empty")
-    @FunctionApiVerify
     private String functionApi;
 
     @Schema(name = "description", description = "描述")
@@ -42,4 +40,7 @@ public class FunctionUpdateParam {
     @Schema(name = "type", description = "函数模型")
     @NotNull(message = "model is null")
     private FunctionModelEnum model;
+
+    @Schema(description = "版本变更说明")
+    private String changeLog;
 }

@@ -50,6 +50,10 @@ public class FunctionExecuteResult {
      */
     private String functionApi;
 
+    private Long functionVersionId;
+
+    private Integer functionVersionNo;
+
     /**
      * Column: action_api
      */

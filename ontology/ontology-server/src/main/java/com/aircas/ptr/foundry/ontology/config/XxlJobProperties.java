@@ -43,7 +43,7 @@ public class XxlJobProperties {
         private String appname;
         private String address;
         private String ip;
-        private int port;
+        private int port = 9999;
         private String logPath;
         private int logRetentionDays;
     }

@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import java.util.List;
 
 /**
@@ -29,6 +30,12 @@ public class ActionCreateOrUpdateParam extends OntologyIdentifierParam {
     @Schema(description = "本体下函数api", example = "satellite")
     private String functionApi;
 
+    @Schema(description = "绑定的函数版本ID；为空时默认固定到当前发布版本")
+    private Long functionVersionId;
+
+    @Schema(description = "绑定的函数版本号，兼容展示字段")
+    private Integer functionVersionNo;
+
     @Schema(description = "行为描述", example = "这是一个行为")
     private String description;
 
@@ -36,6 +43,10 @@ public class ActionCreateOrUpdateParam extends OntologyIdentifierParam {
     @NotBlank(message = "displayName is empty")
     private String displayName;
 
+
+    @Schema(name = "categoryId", description = "所属行为分类id，对应行为分类体系树的节点id；", example = "1")
+    @NotNull(message = "categoryId is null")
+    private Integer categoryId;
 
     @Schema(description = "行为关系映射")
     private ActionLinkMappingParam linkMapping;

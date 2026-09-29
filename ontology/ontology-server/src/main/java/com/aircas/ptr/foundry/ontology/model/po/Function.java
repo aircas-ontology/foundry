@@ -92,4 +92,10 @@ public class Function {
      * 本体空间id
      */
     private Integer ontologySpaceId;
+
+    private Integer latestVersionNo;
+
+    private Integer publishedVersionNo;
+
+    private Long publishedVersionId;
 }

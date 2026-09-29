@@ -263,6 +263,7 @@ java -jar ontology/license-generator/target/license-generator-0.0.1-SNAPSHOT-exe
 | `/link` | 链接关系 |
 | `/entity` | 实体查询、节点/关系、行为执行 |
 | `/action` | 行为与调度 |
+| `/action_category` | 行为分类体系树 |
 | `/function` | 函数定义与执行 |
 | `/datasource` | 数据源表/列 |
 | `/lemma` | 词条 |

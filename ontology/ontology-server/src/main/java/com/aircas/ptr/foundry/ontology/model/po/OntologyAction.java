@@ -33,6 +33,10 @@ public class OntologyAction {
      */
     private String functionApi;
 
+    private Long functionVersionId;
+
+    private Integer functionVersionNo;
+
     /**
      * Column: ontology_unique_identifier
      */
@@ -62,6 +66,11 @@ public class OntologyAction {
     private Integer status;
 
     private String icon;
+
+    /**
+     * 所属行为分类id，对应 action_category.id
+     */
+    private Integer actionCategoryId;
 
     /**
      * 本体空间id
