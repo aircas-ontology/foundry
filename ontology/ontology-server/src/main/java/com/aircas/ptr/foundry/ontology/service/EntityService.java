@@ -95,4 +95,14 @@ public interface EntityService {
      * @param instances                实例导出结构，为 null 或 nodes 为空时不做任何操作
      */
     void importInstances(String ontologyUniqueIdentifier, OntologyInstancesExportDTO instances);
+
+    /**
+     * 按本体空间 + 本体对象查询实例数据的指定属性值，支持可选过滤条件。
+     * <p>过滤条件中的属性必须是该本体的属性，值类型需与属性定义的类型兼容，
+     * 执行查询前先做完整校验，避免类型不匹配或 SQL 异常。</p>
+     *
+     * @param param 查询参数，包括 spaceId、ontologyUniqueIdentifier、propertyApiNames 及可选 filters
+     * @return 分页结果
+     */
+    Page<List<EntityPropertyGenericQueryVO>> queryInstancePropertyData(EntityInstanceDataQueryParam param);
 }

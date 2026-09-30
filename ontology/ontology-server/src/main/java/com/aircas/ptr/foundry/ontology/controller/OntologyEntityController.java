@@ -171,5 +171,13 @@ public class OntologyEntityController {
         return RestResult.ofData(res);
     }
 
+    @Operation(summary = "实例数据属性查询（支持可选过滤条件，条件自动类型校验）")
+    @PostMapping("/instance_data/query")
+    public RestResult<Page<List<EntityPropertyGenericQueryVO>>> queryInstancePropertyData(
+            @RequestBody @Valid EntityInstanceDataQueryParam param) {
+        var res = entityService.queryInstancePropertyData(param);
+        return RestResult.ofData(res);
+    }
+
 
 }

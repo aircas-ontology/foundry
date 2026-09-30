@@ -3,6 +3,7 @@ package com.aircas.ptr.foundry.ontology.service.impl;
 import com.aircas.ptr.foundry.common.base.ResultCode;
 import com.aircas.ptr.foundry.common.constant.FunctionParamTypeEnum;
 import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
+import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.ontology.converter.DataConverter;
 import com.aircas.ptr.foundry.ontology.model.common.VisibilityWindow;
@@ -2021,6 +2022,147 @@ public class EntityServiceImpl implements EntityService {
             rows.add(row);
         }
         return rows;
+    }
+
+    // ────────────────── 实例数据属性查询（带条件校验） ──────────────────
+
+    @Override
+    public Page<List<EntityPropertyGenericQueryVO>> queryInstancePropertyData(EntityInstanceDataQueryParam param) {
+        // 1. 查询该本体的所有属性
+        var props = propertyMapper.selectList(new LambdaQueryWrapper<OntologyProperty>()
+                .eq(OntologyProperty::getOntologyUniqueIdentifier, param.getOntologyUniqueIdentifier()));
+        var propMap = props.stream().collect(Collectors.toMap(OntologyProperty::getApiName, v -> v));
+
+        // 2. 校验返回属性：必须存在且已关联数据源
+        for (String apiName : param.getPropertyApiNames()) {
+            var prop = propMap.get(apiName);
+            PreconditionUtils.checkArgument(prop != null && StringUtils.isNotEmpty(prop.getDatasourceId()),
+                    "属性 " + apiName + " 不存在或未关联数据源", HttpStatus.BAD_REQUEST);
+        }
+
+        // 3. 校验过滤条件（属性存在性 + 类型兼容性），不通过则直接抛异常
+        if (param.getFilters() != null) {
+            validateFilterGroup(param.getFilters(), propMap);
+        }
+
+        // 4. 转换为 EntityPropertyGenericQueryParam，复用已有查询逻辑
+        var genericParam = new EntityPropertyGenericQueryParam();
+        genericParam.setOntologyIdentifier(param.getOntologyUniqueIdentifier());
+        genericParam.setSelectProperties(param.getPropertyApiNames().stream()
+                .map(name -> OntologySelectPropertyParam.builder().propertyApiName(name).build())
+                .collect(Collectors.toList()));
+        genericParam.setFilters(param.getFilters());
+        genericParam.setPageNum(param.getPageNum());
+        genericParam.setPageSize(param.getPageSize());
+
+        return genericQuery(genericParam);
+    }
+
+    /**
+     * 递归校验过滤条件树：每个 filter 节点的属性必须属于该本体，
+     * 值类型必须与属性定义的类型兼容。
+     */
+    private void validateFilterGroup(FilterGroupParam group, Map<String, OntologyProperty> propMap) {
+        if (group == null || CollectionUtils.isEmpty(group.getChildren())) {
+            return;
+        }
+        for (FilterNodeParam node : group.getChildren()) {
+            if (node.getType() == FilterNodeTypeEnum.FILTER && node.getFilter() != null) {
+                var filter = node.getFilter();
+                var prop = propMap.get(filter.getPropertyApiName());
+                PreconditionUtils.checkArgument(prop != null,
+                        "过滤条件中的属性 " + filter.getPropertyApiName() + " 不属于该本体", HttpStatus.BAD_REQUEST);
+                PreconditionUtils.checkArgument(StringUtils.isNotEmpty(prop.getDatasourceId()),
+                        "过滤条件中的属性 " + filter.getPropertyApiName() + " 未关联数据源", HttpStatus.BAD_REQUEST);
+
+                OntologyDataTypeEnum propType = prop.getPropertyType();
+                QueryOpEnum op = filter.getOp() != null ? filter.getOp() : QueryOpEnum.EQ;
+
+                // IS_NULL / IS_NOT_NULL 不需要校验值
+                if (op == QueryOpEnum.IS_NULL || op == QueryOpEnum.IS_NOT_NULL) {
+                    continue;
+                }
+
+                // LIKE 类操作只适用于字符串类型
+                if (op == QueryOpEnum.LIKE || op == QueryOpEnum.LIKE_LEFT || op == QueryOpEnum.LIKE_RIGHT) {
+                    PreconditionUtils.checkArgument(propType == OntologyDataTypeEnum.String,
+                            "属性 " + filter.getPropertyApiName() + " 类型为 " + propType.getValue() + "，不支持 " + op + " 操作",
+                            HttpStatus.BAD_REQUEST);
+                }
+
+                // 校验单值
+                if (filter.getValue() != null) {
+                    validateFilterValue(filter.getPropertyApiName(), filter.getValue(), propType, op);
+                }
+                // 校验多值（IN / BETWEEN）
+                if (CollectionUtils.isNotEmpty(filter.getValues())) {
+                    for (Object v : filter.getValues()) {
+                        validateFilterValue(filter.getPropertyApiName(), v, propType, op);
+                    }
+                }
+            } else if (node.getType() == FilterNodeTypeEnum.GROUP && node.getGroup() != null) {
+                validateFilterGroup(node.getGroup(), propMap);
+            }
+        }
+    }
+
+    /**
+     * 校验单个过滤值与属性类型是否兼容：
+     * 数值类型必须可解析为数字，日期/时间戳类型必须可解析，布尔类型必须为 true/false。
+     */
+    private void validateFilterValue(String apiName, Object value, OntologyDataTypeEnum propType, QueryOpEnum op) {
+        if (value == null) {
+            return;
+        }
+        String strVal = value.toString();
+        try {
+            switch (propType) {
+                case Int:
+                    Integer.parseInt(strVal);
+                    break;
+                case Long:
+                    Long.parseLong(strVal);
+                    break;
+                case Float:
+                    Float.parseFloat(strVal);
+                    break;
+                case Double:
+                case Decimal:
+                    Double.parseDouble(strVal);
+                    break;
+                case Bool:
+                    if (!"true".equalsIgnoreCase(strVal) && !"false".equalsIgnoreCase(strVal)) {
+                        throw new BusinessException(
+                                "属性 " + apiName + " 类型为 Boolean，值 \"" + strVal + "\" 不合法，应为 true 或 false",
+                                HttpStatus.BAD_REQUEST);
+                    }
+                    break;
+                case Date:
+                    java.time.LocalDate.parse(strVal);
+                    break;
+                case Timestamp:
+                    java.time.LocalDateTime.parse(strVal);
+                    break;
+                case String:
+                    // 字符串类型接受任何值
+                    break;
+                default:
+                    // 其他复杂类型（Array/Map/Ontology 等）不做比较操作，拒绝 GT/LT/GE/LE/BETWEEN
+                    if (op == QueryOpEnum.GT || op == QueryOpEnum.GE || op == QueryOpEnum.LT
+                            || op == QueryOpEnum.LE || op == QueryOpEnum.BETWEEN || op == QueryOpEnum.NOT_BETWEEN) {
+                        throw new BusinessException(
+                                "属性 " + apiName + " 类型为 " + propType.getValue() + "，不支持 " + op + " 比较操作",
+                                HttpStatus.BAD_REQUEST);
+                    }
+                    break;
+            }
+        } catch (BusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new BusinessException(
+                    "属性 " + apiName + " 类型为 " + propType.getValue() + "，值 \"" + strVal + "\" 无法解析",
+                    HttpStatus.BAD_REQUEST);
+        }
     }
 
 
