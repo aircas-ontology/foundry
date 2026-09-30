@@ -1,6 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.po;
 
-import com.aircas.ptr.foundry.ontology.model.enums.FunctionVersionStatusEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.FunctionStatusEnum;
 import com.baomidou.mybatisplus.annotation.FieldFill;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
@@ -28,7 +28,7 @@ public class FunctionVersion {
     private Integer versionNo;
     private String code;
     private String referenceName;
-    private FunctionVersionStatusEnum versionStatus;
+    private FunctionStatusEnum versionStatus;
     private String changeLog;
     private String createBy;
     private Date publishTime;

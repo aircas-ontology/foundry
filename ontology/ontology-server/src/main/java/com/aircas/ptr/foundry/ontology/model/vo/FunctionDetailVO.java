@@ -35,6 +35,6 @@ public class FunctionDetailVO extends FunctionInfoVO {
     private Integer versionNo;
 
     @Schema(description = "版本状态")
-    private com.aircas.ptr.foundry.ontology.model.enums.FunctionVersionStatusEnum versionStatus;
+    private com.aircas.ptr.foundry.ontology.model.enums.FunctionStatusEnum versionStatus;
 
 }

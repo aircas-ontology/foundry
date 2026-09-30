@@ -1,6 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.vo;
 
-import com.aircas.ptr.foundry.ontology.model.enums.FunctionVersionStatusEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.FunctionStatusEnum;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 import lombok.Data;
@@ -14,7 +14,7 @@ public class FunctionVersionVO {
     private Long versionId;
     private String functionApi;
     private Integer versionNo;
-    private FunctionVersionStatusEnum versionStatus;
+    private FunctionStatusEnum versionStatus;
     private String changeLog;
     private String createBy;
     private Date publishTime;

@@ -120,7 +120,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             boundVersion = param.getFunctionVersionId() == null ? functionVersionMapper.selectById(func.getPublishedVersionId())
                     : functionVersionMapper.selectById(param.getFunctionVersionId());
             PreconditionUtils.checkArgument(boundVersion != null && boundVersion.getFunctionId().equals(func.getId())
-                    && boundVersion.getVersionStatus() != FunctionVersionStatusEnum.DRAFT,
+                    && boundVersion.getVersionStatus() != FunctionStatusEnum.DRAFT,
                     "函数版本不存在或不可绑定：" + funcApi, HttpStatus.BAD_REQUEST);
         }
         var ontologyAction = OntologyAction.builder()
@@ -224,7 +224,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 "行为当前函数版本无效", HttpStatus.BAD_REQUEST);
         PreconditionUtils.checkArgument(targetVersion != null && targetVersion.getFunctionId().equals(function.getId()),
                 "目标版本不属于行为绑定的函数", HttpStatus.BAD_REQUEST);
-        PreconditionUtils.checkArgument(targetVersion.getVersionStatus() != FunctionVersionStatusEnum.DRAFT,
+        PreconditionUtils.checkArgument(targetVersion.getVersionStatus() != FunctionStatusEnum.DRAFT,
                 "行为不能升级到草稿版本", HttpStatus.BAD_REQUEST);
 
         List<FunctionParamPO> sourceParams = functionParamMapper.selectList(new LambdaQueryWrapper<FunctionParamPO>()
