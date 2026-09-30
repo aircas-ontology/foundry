@@ -18,6 +18,7 @@ import com.baomidou.mybatisplus.extension.service.IService;
 import com.fasterxml.jackson.databind.JsonNode;
 
 import java.util.List;
+import java.util.Map;
 
 public interface FunctionService extends IService<Function> {
 
@@ -53,4 +54,14 @@ public interface FunctionService extends IService<Function> {
      * 统一函数测试入口：根据函数类型分发到不同测试逻辑。
      */
     Object testFunction(FunctionTestParam param);
+
+    /**
+     * 按 function api 批量取函数描述，供行为出参冗余函数描述使用（一次查询，避免逐条查库）。
+     * <p>
+     * api 不存在或描述为空的不会出现在返回结果中。
+     *
+     * @param functionApis 函数 api 列表，允许为空
+     * @return {@code functionApi -> description} 映射；无数据时返回空 Map，不返回 null
+     */
+    Map<String, String> mapDescriptionByApi(List<String> functionApis);
 }

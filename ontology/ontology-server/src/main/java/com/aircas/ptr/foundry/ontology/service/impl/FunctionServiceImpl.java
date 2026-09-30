@@ -98,6 +98,22 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
 
 
     @Override
+    public Map<String, String> mapDescriptionByApi(List<String> functionApis) {
+        if (functionApis == null || functionApis.isEmpty()) {
+            return new HashMap<>();
+        }
+        // function.api 上有唯一约束 uk_function_api；description 列可为 null，
+        // 过滤空白描述，避免 Collectors.toMap 在 value 为 null 时抛 NPE
+        return list(new LambdaQueryWrapper<Function>()
+                        .select(Function::getApi, Function::getDescription)
+                        .in(Function::getApi, functionApis))
+                .stream()
+                .filter(function -> StringUtils.isNotBlank(function.getDescription()))
+                .collect(Collectors.toMap(Function::getApi, Function::getDescription));
+    }
+
+
+    @Override
     public FunctionDetailVO getFunctionDetailByApi(String api) {
         var function = getOne(new LambdaQueryWrapper<Function>().eq(Function::getApi, api));
         PreconditionUtils.checkArgument(function != null, "函数api不存在：" + api, HttpStatus.BAD_REQUEST);
