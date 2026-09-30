@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
 
+import com.aircas.ptr.foundry.common.base.ResultCode;
 import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.ontology.model.dto.ActionContextInfoDTO;
@@ -23,6 +24,7 @@ import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyActionMappe
 import com.aircas.ptr.foundry.ontology.service.FunctionParamService;
 import com.aircas.ptr.foundry.ontology.service.FunctionService;
 import com.aircas.ptr.foundry.ontology.service.GroovyService;
+import com.aircas.ptr.foundry.ontology.service.ScriptSecurityService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.OrderItem;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -43,6 +45,7 @@ import org.springframework.transaction.annotation.Transactional;
 import jakarta.annotation.Resource;
 import java.io.File;
 import java.io.IOException;
+import java.util.Collection;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -71,6 +74,9 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     @Lazy
     @Resource
     private EntityServiceImpl entityService;
+
+    @Resource
+    private ScriptSecurityService scriptSecurityService;
 
     private ObjectMapper objectMapper = new ObjectMapper();
 
@@ -142,6 +148,12 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     public void createFunction(FunctionCreateParam param) {
         var function = getOne(new LambdaQueryWrapper<Function>().eq(Function::getApi, param.getFunctionApi()));
         PreconditionUtils.checkArgument(function == null, "函数api已存在:" + param.getFunctionApi(), HttpStatus.BAD_REQUEST);
+        // 自定义函数在入库前必须通过安全检测。
+        // 保存动作本身就会编译脚本（createFunction -> insertBatchFuncParams -> parseGroovyCode），
+        // 一旦放行恶意代码，编译期（@Grab 拉依赖）与运行期（命令执行）都可能被利用，故必须在编译之前拦截。
+        if (FunctionTypeEnum.CUSTOMIZE.equals(param.getType()) && StringUtils.isNotBlank(param.getCode())) {
+            assertCodeSecurity(param.getCode());
+        }
         //函数插入
         var func = Function.builder()
                 .api(param.getFunctionApi())
@@ -160,6 +172,26 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
             insertBatchFuncParams(func.getId(), param.getCode());
         }
         //todo 暂不考虑注册的外部函数
+    }
+
+    /**
+     * 安全检测不通过直接抛异常（硬拦截）。
+     * <p>
+     * 提示中只带规则说明与行号，不回显脚本正文，避免大对象进入日志与响应
+     * （CODING_CONVENTIONS §13）。完整明细可通过 /function/validate_code 预校验接口获取。
+     */
+    private void assertCodeSecurity(String code) {
+        var scan = scriptSecurityService.validateCode(code);
+        if (scan.isPassed()) {
+            return;
+        }
+        String detail = scan.getViolations().stream()
+                .limit(5)
+                .map(v -> v.getMessage() + (v.getLineNumber() > 0 ? "（第 " + v.getLineNumber() + " 行）" : ""))
+                .collect(Collectors.joining("；"));
+        // 提交的代码不合法，属于入参校验失败，固定错误码便于前端识别（CODING_CONVENTIONS §6）
+        throw new BusinessException("函数代码未通过安全检测：" + detail,
+                ResultCode.PARAM_ERROR, HttpStatus.BAD_REQUEST);
     }
 
     @Override

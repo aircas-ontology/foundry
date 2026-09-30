@@ -81,6 +81,20 @@ rabbitmq:
 ontology:
   swagger:
     enable: true
+  # 行为算子（函数）代码安全检测。黑名单的默认值见 ScriptSecurityProperties，
+  # 此处只显式声明开关与阈值，便于运维在不改代码的情况下应急调整。
+  script:
+    security:
+      # 总开关。关闭后不做任何检测直接放行，仅用于紧急排障，正常必须为 true
+      enabled: true
+      # DANGER 违规是否拦截（硬拦截）
+      block-on-violation: true
+      # WARN 是否升级为拦截
+      block-on-warn: true
+      max-script-size: 65536
+      max-ast-depth: 400
+      scan-timeout-ms: 2000
+      self-check-on-startup: true
 
 # Knife4j / SpringDoc OpenAPI 3 配置
 knife4j:

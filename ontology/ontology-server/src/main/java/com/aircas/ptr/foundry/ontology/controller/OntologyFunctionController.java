@@ -4,12 +4,15 @@ import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionCallbackParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionExecuteParam;
+import com.aircas.ptr.foundry.ontology.model.param.FunctionSecurityCheckParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.vo.FunctionDetailVO;
 import com.aircas.ptr.foundry.ontology.model.vo.FunctionExecuteResultVO;
 import com.aircas.ptr.foundry.ontology.model.vo.FunctionInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.FunctionResultVO;
+import com.aircas.ptr.foundry.ontology.model.vo.FunctionSecurityScanVO;
 import com.aircas.ptr.foundry.ontology.service.FunctionService;
+import com.aircas.ptr.foundry.ontology.service.ScriptSecurityService;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.Operation;
@@ -27,6 +30,19 @@ public class OntologyFunctionController {
 
     @Resource
     private FunctionService functionService;
+
+    @Resource
+    private ScriptSecurityService scriptSecurityService;
+
+    /**
+     * 保存前预校验：让开发者在提交前就知道代码会不会被拒，避免「保存才报错」的往返。
+     * 保存接口内部会再扫一次，本接口只是提前暴露结果，不是可绕过的旁路。
+     */
+    @PostMapping("/validate_code")
+    @Operation(summary = "函数代码安全检测（保存前预校验）")
+    public RestResult<FunctionSecurityScanVO> validateCode(@RequestBody @Valid FunctionSecurityCheckParam param) {
+        return RestResult.ofData(scriptSecurityService.validateCode(param.getCode()));
+    }
 
 
     @PostMapping("/execute")
@@ -46,7 +62,6 @@ public class OntologyFunctionController {
     @Operation(summary = "创建函数")
     @PostMapping
     public RestResult createFunction(@RequestBody @Valid FunctionCreateParam param) {
-        //todo 需要增加代码安全检测
         functionService.createFunction(param);
         return RestResult.success();
     }
@@ -54,7 +69,7 @@ public class OntologyFunctionController {
     @Operation(summary = "更新函数")
     @PutMapping
     public RestResult updateFunction(@RequestBody FunctionUpdateParam param) {
-        // 需要 1 校验函数有没有被本体行为使用到，否则不能修改 2 需要增加代码安全检测
+        // 需要 校验函数有没有被本体行为使用到，否则不能修改
         functionService.updateFunction(param);
         return RestResult.success();
     }
