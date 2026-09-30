@@ -134,7 +134,7 @@ xxl:
       appname: ontology-xxl-job-executor
       address:
       ip:
-      port: ${XXL_JOB_EXECUTOR_PORT:9999}
+      port:
       logpath: ./logs/xxl-job/jobhandler
       logretentiondays: 30
 

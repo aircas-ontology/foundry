@@ -53,9 +53,6 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     private FunctionVersionMapper functionVersionMapper;
 
     @Resource
-    private FunctionService functionService;
-
-    @Resource
     private FunctionParamMapper functionParamMapper;
 
     @Resource
@@ -63,9 +60,6 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
 
     @Resource
     private OntologyActionMapper actionMapper;
-
-    @Resource
-    private ActionCategoryMapper actionCategoryMapper;
 
     @Resource
     private ObjectMapper entityMapper;
@@ -119,11 +113,6 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     public void createAction(ActionCreateOrUpdateParam param) {
         var action = getOne(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getApi, param.getActionApi()));
         PreconditionUtils.checkArgument(action == null, "action api 已存在：" + param.getActionApi(), HttpStatus.BAD_REQUEST);
-        // 归属的行为分类必须存在
-        // TODO 行为后续将改由本体空间承载，创建行为的参数会增加 spaceId；
-        //      届时此处改为按 spaceId + categoryId 校验分类归属（当前仅校验分类是否存在）
-        var category = actionCategoryMapper.selectById(param.getCategoryId());
-        PreconditionUtils.checkArgument(category != null, "无效的行为分类：" + param.getCategoryId(), HttpStatus.BAD_REQUEST);
         var funcApi = param.getFunctionApi();
         Function func = StringUtils.isEmpty(funcApi) ? null : functionMapper.selectOne(new LambdaQueryWrapper<Function>().eq(Function::getApi, funcApi));
         FunctionVersion boundVersion = null;
@@ -143,7 +132,6 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 .functionVersionNo(boundVersion == null ? null : boundVersion.getVersionNo())
                 .icon(param.getIcon())
                 .ontologyUniqueIdentifier(param.getOntologyIdentifier())
-                .actionCategoryId(param.getCategoryId())
                 .status(Status.ENABLE.getValue())
                 .build();
         save(ontologyAction);
@@ -353,10 +341,6 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         Page<OntologyActionInfoVO> result = new Page<>(pageNum, pageSize);
         var pageResult = page(new Page<>(pageNum, pageSize),
                 new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getOntologyUniqueIdentifier, ontologyUniqIdentifier));
-        // 一次批量取函数描述，避免逐条查函数表
-        var functionDescMap = functionService.mapDescriptionByApi(pageResult.getRecords().stream()
-                .map(OntologyAction::getFunctionApi)
-                .collect(Collectors.toList()));
         List<OntologyActionInfoVO> records = pageResult.getRecords().stream()
                 .map(v -> OntologyActionInfoVO.builder()
                         .actionApi(v.getApi())
@@ -364,8 +348,6 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                         .ontologyUniqIdentifier(v.getOntologyUniqueIdentifier())
                         .displayName(v.getDisplayName())
                         .icon(v.getIcon())
-                        .functionApi(v.getFunctionApi())
-                        .functionDescription(functionDescMap.get(v.getFunctionApi()))
                         .functionVersionId(v.getFunctionVersionId())
                         .functionVersionNo(v.getFunctionVersionNo())
                         .effectiveFunctionVersionNo(v.getFunctionVersionNo())
@@ -385,9 +367,6 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 .functionVersionId(action.getFunctionVersionId())
                 .functionVersionNo(action.getFunctionVersionNo())
                 .effectiveFunctionVersionNo(action.getFunctionVersionNo())
-                .functionDescription(functionService
-                        .mapDescriptionByApi(Collections.singletonList(action.getFunctionApi()))
-                        .get(action.getFunctionApi()))
                 .actionApi(action.getApi())
                 .description(action.getDescription())
                 .displayName(action.getDisplayName())
