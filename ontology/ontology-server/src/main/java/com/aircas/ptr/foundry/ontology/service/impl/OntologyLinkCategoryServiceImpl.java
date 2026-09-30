@@ -164,7 +164,7 @@ public class OntologyLinkCategoryServiceImpl extends ServiceImpl<OntologyLinkCat
     }
 
     @Override
-    public OntologyLinkCategoryVO getCategoryTree(Integer spaceId) {
+    public OntologyLinkCategoryVO getCategoryTree(Integer spaceId, String ontologyUniqueIdentifierFrom) {
         var categories = list(new LambdaQueryWrapper<OntologyLinkCategory>().eq(OntologyLinkCategory::getOntologySpaceId, spaceId));
         if (CollectionUtils.isEmpty(categories)) {
             return null;
@@ -176,10 +176,15 @@ public class OntologyLinkCategoryServiceImpl extends ServiceImpl<OntologyLinkCat
         }
         // 查询该空间下所有挂载到分类的关系（status=1 有效），按分类id分组
         var categoryIds = categories.stream().map(OntologyLinkCategory::getId).collect(Collectors.toList());
-        var links = ontologyLinkGroupMapper.selectList(new LambdaQueryWrapper<OntologyLinkGroup>()
+        var linkQuery = new LambdaQueryWrapper<OntologyLinkGroup>()
                 .eq(OntologyLinkGroup::getStatus, 1)
                 .eq(OntologyLinkGroup::getOntologySpaceId, spaceId)
-                .in(OntologyLinkGroup::getCategoryId, categoryIds));
+                .in(OntologyLinkGroup::getCategoryId, categoryIds);
+        // 可选过滤：前端传递了本体唯一标识时，仅返回该本体关联的关系
+        if (ontologyUniqueIdentifierFrom != null && !ontologyUniqueIdentifierFrom.isBlank()) {
+            linkQuery.eq(OntologyLinkGroup::getOntologyUniqueIdentifierFrom, ontologyUniqueIdentifierFrom);
+        }
+        var links = ontologyLinkGroupMapper.selectList(linkQuery);
         Map<Integer, List<OntologyLinkGroup>> linkMap = links.stream()
                 .filter(l -> l.getCategoryId() != null)
                 .collect(Collectors.groupingBy(OntologyLinkGroup::getCategoryId));
