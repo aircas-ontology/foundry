@@ -11,7 +11,8 @@ import lombok.Getter;
 public enum FunctionTypeEnum {
 
     CUSTOMIZE(1, "自定义"),
-    EXTERNAL(2, "外部");
+    EXTERNAL(2, "外部"),
+    BASIC_QUERY(3, "基础查询");
 
     private final int value;
 

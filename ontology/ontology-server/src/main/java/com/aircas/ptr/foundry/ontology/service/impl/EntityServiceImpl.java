@@ -9,6 +9,8 @@ import com.aircas.ptr.foundry.ontology.model.common.VisibilityWindow;
 import com.aircas.ptr.foundry.ontology.model.document.EntityNode;
 import com.aircas.ptr.foundry.ontology.model.document.EntityRelation;
 import com.aircas.ptr.foundry.ontology.model.dto.ActionContextInfoDTO;
+import com.aircas.ptr.foundry.ontology.model.dto.EntityNodeExportDTO;
+import com.aircas.ptr.foundry.ontology.model.dto.OntologyInstancesExportDTO;
 import com.aircas.ptr.foundry.ontology.model.enums.*;
 import com.aircas.ptr.foundry.ontology.model.param.*;
 import com.aircas.ptr.foundry.ontology.model.po.*;
@@ -1340,6 +1342,9 @@ public class EntityServiceImpl implements EntityService {
         // 查询主键是否存在且关联了数据源
         var pkProp = props.stream().filter(p -> p.getIsPrimaryKey() == 1).findFirst().orElse(null);
         PreconditionUtils.checkArgument(pkProp != null && StringUtils.isNotEmpty(pkProp.getDatasourceId()), "主键属性不存在或未关联数据源", HttpStatus.BAD_REQUEST);
+        // 校验 schema 不为空
+        PreconditionUtils.checkArgument(StringUtils.isNotEmpty(pkProp.getDatasourceSchema()), 
+                "本体数据源 schema 为空，请检查数据源配置", HttpStatus.BAD_REQUEST);
         // 校验返回属性是否存在或者是否关联了数据源
         var propMap = props.stream().collect(Collectors.toMap(OntologyProperty::getApiName, v -> v));
         param.getSelectProperties().forEach(p -> {
@@ -1356,6 +1361,7 @@ public class EntityServiceImpl implements EntityService {
         var selectBuilder = new StringBuilder();
         List<String> selectColumnList = Lists.newArrayList();
         Map<String, OntologySelectPropertyParam> selectParamMap = Maps.newLinkedHashMap();
+        boolean hasAggregation = false;
         for (OntologySelectPropertyParam selectProp : param.getSelectProperties()) {
             if (selectBuilder.length() > 0) {
                 selectBuilder.append(",");
@@ -1366,6 +1372,7 @@ public class EntityServiceImpl implements EntityService {
             var columnRef = wrapColumnRef(prop.getDatasourceSchema(), prop.getDatasourceId(), prop.getDatasourceColumnName());
 
             if (selectProp.getAggFunc() != null) {
+                hasAggregation = true;
                 switch (selectProp.getAggFunc()) {
                     case COUNT:
                     case SUM:
@@ -1470,14 +1477,23 @@ public class EntityServiceImpl implements EntityService {
         var offset = (param.getPageNum() - 1) * pageSize;
         // base SQL
         var baseSql = "SELECT " + selectBuilder + " FROM " + fromBuilder + whereBuilder + groupByBuilder + orderByBuilder;
-        // 计数SQL
-        var countSql = "SELECT COUNT(*) FROM (" + baseSql + ") AS t";
-        var total = objectMapper.queryCountBySql(countSql);
-        if (total == null || total == 0) {
-            return new Page<>(param.getPageNum(), pageSize, 0);
+        
+        long total;
+        String dataSql;
+        if (hasAggregation) {
+            // 聚合查询不需要分页，直接返回结果
+            total = 1;
+            dataSql = baseSql;
+        } else {
+            // 计数SQL
+            var countSql = "SELECT COUNT(*) FROM (" + baseSql + ") AS t";
+            total = objectMapper.queryCountBySql(countSql);
+            if (total == 0) {
+                return new Page<>(param.getPageNum(), pageSize, 0);
+            }
+            // 数据SQL
+            dataSql = baseSql + " LIMIT " + pageSize + " OFFSET " + offset;
         }
-        // 数据SQL
-        var dataSql = baseSql + " LIMIT " + pageSize + " OFFSET " + offset;
         var resultMaps = objectMapper.queryBySql(dataSql);
         // 9. 转换结果
         List<List<EntityPropertyGenericQueryVO>> resultVOs = Lists.newArrayList();
@@ -1489,12 +1505,14 @@ public class EntityServiceImpl implements EntityService {
                     continue;
                 }
                 var prop = propMap.get(selectProp.getPropertyApiName());
+                // row 为 null 时（聚合无匹配行），value 为 null
+                Object value = (row != null) ? row.get(column) : null;
                 voList.add(EntityPropertyGenericQueryVO.builder()
                         .propertyApiName(selectProp.getPropertyApiName())
                         .propertyDisplayName(prop != null ? prop.getDisplayName() : selectProp.getPropertyApiName())
                         .aggFunc(selectProp.getAggFunc())
                         .alias(selectProp.getAlias())
-                        .value(row.get(column))
+                        .value(value)
                         .build());
             }
             resultVOs.add(voList);
@@ -1566,12 +1584,15 @@ public class EntityServiceImpl implements EntityService {
 
         String columnRef = wrapColumnRef(prop.getDatasourceSchema(), prop.getDatasourceId(), prop.getDatasourceColumnName());
         QueryOpEnum op = filter.getOp() != null ? filter.getOp() : QueryOpEnum.EQ;
+        
+        // 优先使用 filter 声明的 dataType，否则使用属性定义的类型
+        OntologyDataTypeEnum effectiveType = getEffectiveType(filter.getDataType(), prop.getPropertyType());
 
         switch (op) {
             case EQ:
-                return columnRef + " = " + formatSqlValue(filter.getValue(), prop.getPropertyType());
+                return columnRef + " = " + formatSqlValue(filter.getValue(), effectiveType);
             case NE:
-                return columnRef + " != " + formatSqlValue(filter.getValue(), prop.getPropertyType());
+                return columnRef + " != " + formatSqlValue(filter.getValue(), effectiveType);
             case LIKE:
                 return columnRef + " LIKE " + formatSqlValue("%" + filter.getValue() + "%", OntologyDataTypeEnum.String);
             case LIKE_LEFT:
@@ -1587,7 +1608,7 @@ public class EntityServiceImpl implements EntityService {
                     if (i > 0) {
                         inSb.append(",");
                     }
-                    inSb.append(formatSqlValue(filter.getValues().get(i), prop.getPropertyType()));
+                    inSb.append(formatSqlValue(filter.getValues().get(i), effectiveType));
                 }
                 inSb.append(")");
                 return inSb.toString();
@@ -1600,28 +1621,28 @@ public class EntityServiceImpl implements EntityService {
                     if (i > 0) {
                         notInSb.append(",");
                     }
-                    notInSb.append(formatSqlValue(filter.getValues().get(i), prop.getPropertyType()));
+                    notInSb.append(formatSqlValue(filter.getValues().get(i), effectiveType));
                 }
                 notInSb.append(")");
                 return notInSb.toString();
             case BETWEEN:
                 PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(filter.getValues()) && filter.getValues().size() >= 2,
                         "BETWEEN 需要提供两个值", HttpStatus.BAD_REQUEST);
-                return columnRef + " BETWEEN " + formatSqlValue(filter.getValues().get(0), prop.getPropertyType())
-                        + " AND " + formatSqlValue(filter.getValues().get(1), prop.getPropertyType());
+                return columnRef + " BETWEEN " + formatSqlValue(filter.getValues().get(0), effectiveType)
+                        + " AND " + formatSqlValue(filter.getValues().get(1), effectiveType);
             case NOT_BETWEEN:
                 PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(filter.getValues()) && filter.getValues().size() >= 2,
                         "NOT BETWEEN 需要提供两个值", HttpStatus.BAD_REQUEST);
-                return columnRef + " NOT BETWEEN " + formatSqlValue(filter.getValues().get(0), prop.getPropertyType())
-                        + " AND " + formatSqlValue(filter.getValues().get(1), prop.getPropertyType());
+                return columnRef + " NOT BETWEEN " + formatSqlValue(filter.getValues().get(0), effectiveType)
+                        + " AND " + formatSqlValue(filter.getValues().get(1), effectiveType);
             case GT:
-                return columnRef + " > " + formatSqlValue(filter.getValue(), prop.getPropertyType());
+                return columnRef + " > " + formatSqlValue(filter.getValue(), effectiveType);
             case GE:
-                return columnRef + " >= " + formatSqlValue(filter.getValue(), prop.getPropertyType());
+                return columnRef + " >= " + formatSqlValue(filter.getValue(), effectiveType);
             case LT:
-                return columnRef + " < " + formatSqlValue(filter.getValue(), prop.getPropertyType());
+                return columnRef + " < " + formatSqlValue(filter.getValue(), effectiveType);
             case LE:
-                return columnRef + " <= " + formatSqlValue(filter.getValue(), prop.getPropertyType());
+                return columnRef + " <= " + formatSqlValue(filter.getValue(), effectiveType);
             case IS_NULL:
                 return columnRef + " IS NULL";
             case IS_NOT_NULL:
@@ -1641,6 +1662,24 @@ public class EntityServiceImpl implements EntityService {
             default:
                 return "";
         }
+    }
+
+    /**
+     * 获取有效的类型：优先使用 filter 声明的 dataType，否则使用属性定义的类型。
+     */
+    private OntologyDataTypeEnum getEffectiveType(String dataType, OntologyDataTypeEnum propType) {
+        if (StringUtils.isNotEmpty(dataType)) {
+            switch (dataType.toUpperCase()) {
+                case "NUMBER":
+                    return OntologyDataTypeEnum.Double;
+                case "BOOLEAN":
+                    return OntologyDataTypeEnum.Bool;
+                case "STRING":
+                default:
+                    return OntologyDataTypeEnum.String;
+            }
+        }
+        return propType;
     }
 
     private String formatSqlValue(Object value, OntologyDataTypeEnum type) {
@@ -1699,6 +1738,289 @@ public class EntityServiceImpl implements EntityService {
             log.error("evaluateJsonCondition failed! jsonStr: " + jsonStr + ", conditionExpr:" + conditionExpr, e);
             return false;
         }
+    }
+
+    @Override
+    public OntologyInstancesExportDTO exportInstances(String ontologyUniqueIdentifier) {
+        var emptyResult = OntologyInstancesExportDTO.builder()
+                .nodes(Lists.<EntityNodeExportDTO>newArrayList())
+                .build();
+
+        //仅取启用中且绑定了数据源列的属性
+        var props = propertyMapper.selectList(new LambdaQueryWrapper<OntologyProperty>()
+                        .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier)
+                        .eq(OntologyProperty::getStatus, Status.ENABLE.getValue()))
+                .stream()
+                .filter(v -> StringUtils.isNotEmpty(v.getDatasourceColumnName()))
+                .collect(Collectors.toList());
+        if (CollectionUtils.isEmpty(props)) {
+            return emptyResult;
+        }
+
+        //主键属性决定主表；不存在或未绑定数据源则不导实例
+        var primaryKeyProp = props.stream()
+                .filter(v -> v.getIsPrimaryKey() != null && v.getIsPrimaryKey() == 1)
+                .findFirst();
+        if (!primaryKeyProp.isPresent()) {
+            return emptyResult;
+        }
+        var pk = primaryKeyProp.get();
+        if (StringUtils.isEmpty(pk.getDatasourceId())
+                || StringUtils.isEmpty(pk.getDatasourceSchema())
+                || StringUtils.isEmpty(pk.getDatasourceColumnName())) {
+            return emptyResult;
+        }
+
+        var mainSchema = pk.getDatasourceSchema();
+        var mainTable = pk.getDatasourceId();
+        var pkApiName = pk.getApiName();
+
+        //标题键属性 apiName（用于 displayName），无则用主键值
+        var titleApiName = props.stream()
+                .filter(v -> v.getIsTitleKey() != null && v.getIsTitleKey() == 1)
+                .map(OntologyProperty::getApiName)
+                .findFirst().orElse(null);
+
+        //属性按 datasourceId（物理表）分组
+        var propsMap = props.stream().collect(Collectors.groupingBy(OntologyProperty::getDatasourceId));
+
+        var exportNodes = Lists.<EntityNodeExportDTO>newArrayList();
+        try {
+            //主表全量：物理列名 -> 别名(apiName)
+            var mainColumnToApiName = new LinkedHashMap<String, String>();
+            propsMap.get(mainTable).forEach(p -> mainColumnToApiName.put(p.getDatasourceColumnName(), p.getApiName()));
+            var mainRows = objectMapper.queryTableDataByColumn(mainSchema, mainTable, mainColumnToApiName, null);
+            if (CollectionUtils.isEmpty(mainRows)) {
+                return emptyResult;
+            }
+
+            //关联表：按关联键值分组缓存，避免逐行查库
+            //结构：物理表名 -> (关联键值 -> List<行(apiName->值)>)
+            var joinGroups = Maps.<String, Map<String, List<Map<String, Object>>>>newHashMap();
+            //物理表名 -> 关联键列名
+            var joinKeyByTable = Maps.<String, String>newHashMap();
+            propsMap.forEach((table, tableProps) -> {
+                if (StringUtils.equals(table, mainTable)) {
+                    return;
+                }
+                var mapping = tableFieldMappingMapper.selectBySourceAndTarget(mainSchema, mainTable, table);
+                if (mapping == null || StringUtils.isEmpty(mapping.getTargetColumnName())) {
+                    return;
+                }
+                var joinKey = mapping.getTargetColumnName();
+                //物理列名 -> 别名(apiName)，额外带上关联键列（用列名本身作别名）
+                var columnToAlias = new LinkedHashMap<String, String>();
+                tableProps.forEach(p -> columnToAlias.put(p.getDatasourceColumnName(), p.getApiName()));
+                columnToAlias.put(joinKey, joinKey);
+                var rows = objectMapper.queryTableDataByColumn(mainSchema, table, columnToAlias, null);
+                if (CollectionUtils.isEmpty(rows)) {
+                    return;
+                }
+                var grouped = rows.stream()
+                        .filter(r -> r.get(joinKey) != null)
+                        .collect(Collectors.groupingBy(r -> String.valueOf(r.get(joinKey))));
+                joinGroups.put(table, grouped);
+                joinKeyByTable.put(table, joinKey);
+            });
+
+            //内存 join：以主表行为骨架
+            for (var row : mainRows) {
+                var pkVal = row.get(pkApiName);
+                var properties = Maps.<String, Object>newLinkedHashMap();
+                //主表属性为标量
+                properties.putAll(row);
+                //关联表属性：一对一取标量，一对多聚合为 List
+                var pkKey = pkVal == null ? null : String.valueOf(pkVal);
+                if (pkKey != null) {
+                    joinGroups.forEach((table, grouped) -> {
+                        var matched = grouped.get(pkKey);
+                        if (CollectionUtils.isEmpty(matched)) {
+                            return;
+                        }
+                        var joinKey = joinKeyByTable.get(table);
+                        matched.get(0).keySet().stream()
+                                .filter(apiName -> !StringUtils.equals(apiName, joinKey))
+                                .forEach(apiName -> {
+                                    var values = matched.stream().map(m -> m.get(apiName)).collect(Collectors.toList());
+                                    properties.put(apiName, matched.size() == 1 ? values.get(0) : values);
+                                });
+                    });
+                }
+                var titleVal = titleApiName == null ? null : properties.get(titleApiName);
+                var displayName = titleVal != null ? String.valueOf(titleVal)
+                        : (pkVal == null ? null : String.valueOf(pkVal));
+                exportNodes.add(EntityNodeExportDTO.builder()
+                        .primaryKey(pkVal)
+                        .displayName(displayName)
+                        .properties(properties)
+                        .build());
+            }
+        } catch (Exception e) {
+            log.error("导出本体 {} 实例数据失败，数据源不可达或查询异常", ontologyUniqueIdentifier, e);
+            return emptyResult;
+        }
+
+        return OntologyInstancesExportDTO.builder()
+                .nodes(exportNodes)
+                .build();
+    }
+
+    @Transactional(transactionManager = "datalakeTransactionManager")
+    @Override
+    public void importInstances(String ontologyUniqueIdentifier, OntologyInstancesExportDTO instances) {
+        if (instances == null || CollectionUtils.isEmpty(instances.getNodes())) {
+            return;
+        }
+        var ontologyProperties = propertyMapper.selectList(new LambdaQueryWrapper<OntologyProperty>()
+                .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier));
+        if (CollectionUtils.isEmpty(ontologyProperties)) {
+            log.warn("导入本体 {} 实例数据跳过：本体无属性", ontologyUniqueIdentifier);
+            return;
+        }
+        //主键属性 apiName：物理主键为 id SERIAL，导入时丢弃原值，由数据库重新生成
+        var pkApiName = ontologyProperties.stream()
+                .filter(p -> p.getIsPrimaryKey() != null && p.getIsPrimaryKey() == 1)
+                .map(OntologyProperty::getApiName)
+                .findFirst().orElse(null);
+        //apiName -> 属性（仅取已绑定数据源列的），用于取 storageGroup
+        var propertyMap = ontologyProperties.stream()
+                .filter(p -> StringUtils.isNotEmpty(p.getDatasourceColumnName()))
+                .collect(Collectors.toMap(OntologyProperty::getApiName, v -> v, (a, b) -> a));
+
+        var entities = instances.getNodes().stream()
+                .map(node -> buildEntityFromNode(node, propertyMap, pkApiName))
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+        if (CollectionUtils.isEmpty(entities)) {
+            log.warn("导入本体 {} 实例数据跳过：无有效节点（属性未绑定数据源或缺少主存储分组属性）", ontologyUniqueIdentifier);
+            return;
+        }
+        //复用实体创建逻辑：写数据湖主表 + 关联表（id 由 SERIAL 生成，不建 ArangoDB 节点）
+        createEntities(EntityCreateParam.builder()
+                .ontologyIdentifier(ontologyUniqueIdentifier)
+                .entityList(entities)
+                .build());
+    }
+
+    /**
+     * 将导出节点（扁平 apiName->值）还原为实体创建入参。
+     *
+     * <p>丢弃主键 id（由数据库 SERIAL 重新生成）与未绑定数据源/未知属性；main 组的 null 值一并丢弃
+     * （规避 createEntities 主表插入 Collectors.toMap 对 null 值抛 NPE）。按 storageGroup 分组：
+     * main 组还原为单行，非 main 组按 List 下标还原为一对多多行。</p>
+     *
+     * @return 无可导入的 main 组属性时返回 null（该节点跳过）
+     */
+    private EntityCreateParam.Entity buildEntityFromNode(EntityNodeExportDTO node,
+                                                         Map<String, OntologyProperty> propertyMap,
+                                                         String pkApiName) {
+        var properties = node.getProperties();
+        if (properties == null || properties.isEmpty()) {
+            return null;
+        }
+        //storageGroup -> (apiName -> 值)，丢弃主键、未知/未绑定属性
+        var groupedValues = Maps.<String, Map<String, Object>>newLinkedHashMap();
+        properties.forEach((apiName, value) -> {
+            if (StringUtils.equals(apiName, pkApiName)) {
+                return;
+            }
+            var prop = propertyMap.get(apiName);
+            if (prop == null) {
+                return;
+            }
+            var group = StringUtils.isEmpty(prop.getStorageGroup()) ? "main" : prop.getStorageGroup();
+            groupedValues.computeIfAbsent(group, k -> Maps.newLinkedHashMap()).put(apiName, value);
+        });
+
+        //main 组：单行，跳过 null 值；无有效主存储列则跳过该节点
+        var mainInfos = toPropertyInfos(groupedValues.get("main"), true);
+        if (CollectionUtils.isEmpty(mainInfos)) {
+            log.warn("导入实例节点跳过：无主存储分组(main)有效属性，primaryKey={}", node.getPrimaryKey());
+            return null;
+        }
+        var entityProperties = Lists.<EntityCreateParam.EntityProperty>newArrayList();
+        //main 组单行：显式包一层 List<List<PropertyInfo>>，避开 Guava newArrayList 重载歧义
+        var mainRows = Lists.<List<EntityCreateParam.PropertyInfo>>newArrayList();
+        mainRows.add(mainInfos);
+        entityProperties.add(EntityCreateParam.EntityProperty.builder()
+                .storageGroup("main")
+                .props(mainRows)
+                .build());
+        //非 main 组：一对多按 List 下标还原多行
+        groupedValues.forEach((group, values) -> {
+            if (StringUtils.equals(group, "main")) {
+                return;
+            }
+            entityProperties.add(EntityCreateParam.EntityProperty.builder()
+                    .storageGroup(group)
+                    .props(buildRelatedRows(values))
+                    .build());
+        });
+        return EntityCreateParam.Entity.builder()
+                .entityProperties(entityProperties)
+                .build();
+    }
+
+    /**
+     * 属性值映射转 PropertyInfo 列表。
+     *
+     * @param skipNull 为 true 时跳过 null 值（main 组插入用 Collectors.toMap，null 值会 NPE）
+     */
+    private List<EntityCreateParam.PropertyInfo> toPropertyInfos(Map<String, Object> values, boolean skipNull) {
+        if (values == null || values.isEmpty()) {
+            return Lists.newArrayList();
+        }
+        return values.entrySet().stream()
+                .filter(e -> !(skipNull && e.getValue() == null))
+                .map(e -> EntityCreateParam.PropertyInfo.builder()
+                        .propertyApiName(e.getKey())
+                        .propertyValue(e.getValue())
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 关联表（非 main 存储分组）属性值还原为多行：List 值按下标展开，标量值在各行重复；
+     * 行数取该组内 List 的最大长度（至少 1）。
+     */
+    private List<List<EntityCreateParam.PropertyInfo>> buildRelatedRows(Map<String, Object> values) {
+        //apiName -> 归一化后的值列表
+        var normalized = Maps.<String, List<Object>>newLinkedHashMap();
+        var rowCount = 1;
+        for (var e : values.entrySet()) {
+            var list = new ArrayList<Object>();
+            if (e.getValue() instanceof List) {
+                for (var o : (List<?>) e.getValue()) {
+                    list.add(o);
+                }
+            } else {
+                list.add(e.getValue());
+            }
+            normalized.put(e.getKey(), list);
+            rowCount = Math.max(rowCount, list.size());
+        }
+        var rows = Lists.<List<EntityCreateParam.PropertyInfo>>newArrayList();
+        for (int i = 0; i < rowCount; i++) {
+            var row = Lists.<EntityCreateParam.PropertyInfo>newArrayList();
+            for (var e : normalized.entrySet()) {
+                var list = e.getValue();
+                Object v;
+                if (list.size() > i) {
+                    v = list.get(i);
+                } else if (list.size() == 1) {
+                    //标量在多行间重复
+                    v = list.get(0);
+                } else {
+                    v = null;
+                }
+                row.add(EntityCreateParam.PropertyInfo.builder()
+                        .propertyApiName(e.getKey())
+                        .propertyValue(v)
+                        .build());
+            }
+            rows.add(row);
+        }
+        return rows;
     }
 
 

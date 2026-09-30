@@ -78,6 +78,9 @@ public class OntologySpaceCanvasCreateParam {
         @Schema(name = "dataType", description = "数据类型（OntologyDataTypeEnum名称），不传默认String", example = "String")
         private OntologyDataTypeEnum dataType;
 
+        @Schema(name = "storageGroup", description = "存储分组", example = "String")
+        private String  storageGroup;
+
         @Schema(name = "description", description = "属性描述")
         private String description;
 

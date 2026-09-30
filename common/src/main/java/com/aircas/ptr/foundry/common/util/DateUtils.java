@@ -9,10 +9,7 @@ import java.sql.Timestamp;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
+import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.util.Calendar;
 import java.util.Date;
@@ -68,6 +65,11 @@ public class DateUtils {
 
         String dateStr = format(date, "yyyyMMdd");
         return fromString2Date(dateStr, "yyyyMMdd");
+    }
+
+    public static LocalDateTime toLocalDateTime(Date date) {
+        return date == null ? null
+                : LocalDateTime.ofInstant(Instant.ofEpochMilli(date.getTime()), ZoneId.systemDefault());
     }
 
     /**

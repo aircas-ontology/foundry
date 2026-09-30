@@ -128,6 +128,16 @@
             <version>7.23.0</version>
         </dependency>
 
+        <!-- Jakarta JSON-P implementation: required at runtime by jackson-datatype-jakarta-jsonp's
+             JSONPModule (its <init> calls jakarta.json.spi.JsonProvider.provider()); without it,
+             ObjectMapper.findAndRegisterModules() throws ServiceConfigurationError and SchemaHandleUtil
+             fails to initialize, breaking every function execute. -->
+        <dependency>
+            <groupId>org.eclipse.parsson</groupId>
+            <artifactId>parsson</artifactId>
+            <version>1.0.5</version>
+        </dependency>
+
 
 
 

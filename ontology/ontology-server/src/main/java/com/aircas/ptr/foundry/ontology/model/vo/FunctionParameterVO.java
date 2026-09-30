@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.ontology.model.vo;
 
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamCategoryEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamRoleEnum;
 import com.aircas.ptr.foundry.common.constant.FunctionParamTypeEnum;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
@@ -37,4 +38,7 @@ public class FunctionParameterVO {
 
     @Schema(name = "description",description = "参数描述")
     private String description;
+
+    @Schema(name = "paramRole", description = "参数角色：AGGREGATION-聚合目标 / FILTER-过滤条件（仅 BASIC_QUERY 类型返回）")
+    private FunctionParamRoleEnum paramRole;
 }

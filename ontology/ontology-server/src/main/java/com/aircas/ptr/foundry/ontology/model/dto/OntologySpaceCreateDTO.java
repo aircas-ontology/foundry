@@ -20,6 +20,11 @@ public class OntologySpaceCreateDTO {
 
     private OntologyCategoryCreateParam ontologyCategory;
 
+    /**
+     * 空间级函数（按空间内本体 action 引用的 functionApi 去重收集）
+     */
+    private List<OntologyFunctionDTO> functions;
+
     private List<OntologyCreateDTO> ontologies;
 
 }

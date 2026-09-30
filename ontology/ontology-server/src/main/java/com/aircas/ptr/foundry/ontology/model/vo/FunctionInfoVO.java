@@ -3,13 +3,15 @@ package com.aircas.ptr.foundry.ontology.model.vo;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionModelEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
 
-import jakarta.validation.constraints.NotNull;
+import java.util.Date;
 
 @NoArgsConstructor
 @AllArgsConstructor
@@ -34,4 +36,10 @@ public class FunctionInfoVO {
 
     @Schema(name = "type", description = "函数类型")
     private FunctionTypeEnum type;
+
+    @Schema(name = "ontologySpaceId", description = "所属本体空间 id")
+    private Integer ontologySpaceId;
+
+    @Schema(name = "updateTime", description = "更新时间")
+    private Date updateTime;
 }

@@ -1,6 +1,8 @@
 package com.aircas.ptr.foundry.ontology.model.po;
 
+import com.aircas.ptr.foundry.common.util.DebeziumDateReader;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyLinkTypeEnum;
+import com.alibaba.fastjson2.annotation.JSONField;
 import com.baomidou.mybatisplus.annotation.*;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.AllArgsConstructor;
@@ -46,6 +48,7 @@ public class OntologyLinkGroup implements Serializable {
     /**
      * 记录创建时间
      */
+    @JSONField(deserializeUsing = DebeziumDateReader.class)
     @JsonFormat(pattern = DATE_FORMAT_DEFAULT, timezone = "GMT+8")
     @TableField(fill = FieldFill.INSERT)
     private Date createTime;
@@ -53,6 +56,7 @@ public class OntologyLinkGroup implements Serializable {
     /**
      * 记录修改时间
      */
+    @JSONField(deserializeUsing = DebeziumDateReader.class)
     @JsonFormat(pattern = DATE_FORMAT_DEFAULT, timezone = "GMT+8")
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private Date updateTime;
