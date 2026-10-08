@@ -59,14 +59,9 @@ public class SubspacePropertyFilter implements Serializable {
     private String filterOp;
 
     /**
-     * 单值筛选值（EQ/LIKE/GT 等），JSON 序列化存储
+     * 筛选值：单值 op（EQ/LIKE/GT 等）直接存原始值（如 驱逐舰、10）；多值 op（IN/BETWEEN）以 JSON 数组存储（如 ["福特","通用"]、[10,20]）；读取时按 filter_op 区分，值类型由 data_type 决定
      */
     private String filterValue;
-
-    /**
-     * 多值筛选值（IN/BETWEEN 等），JSON 数组序列化存储
-     */
-    private String filterValues;
 
     /**
      * 属性数据类型，取值见 {@link com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum}

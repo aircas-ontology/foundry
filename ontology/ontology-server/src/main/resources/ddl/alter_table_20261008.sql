@@ -10,7 +10,6 @@ create table if not exists ontology.ontology_subspace_property_filter
     source_property_unique_identifier varchar(255),
     filter_op                      varchar(64),
     filter_value                   text,
-    filter_values                  text,
     data_type                      varchar(64),
     status                         integer      default 1,
     create_time                    timestamp(6) default CURRENT_TIMESTAMP not null,
@@ -25,8 +24,7 @@ comment on column ontology.ontology_subspace_property_filter.ontology_unique_ide
 comment on column ontology.ontology_subspace_property_filter.property_unique_identifier is '子空间中新属性的唯一标识';
 comment on column ontology.ontology_subspace_property_filter.source_property_unique_identifier is '源空间中被复制属性的唯一标识（冗余，便于追溯）';
 comment on column ontology.ontology_subspace_property_filter.filter_op is '筛选操作符，取值见 QueryOpEnum';
-comment on column ontology.ontology_subspace_property_filter.filter_value is '单值筛选值（EQ/LIKE/GT 等），JSON 序列化存储';
-comment on column ontology.ontology_subspace_property_filter.filter_values is '多值筛选值（IN/BETWEEN 等），JSON 数组序列化存储';
+comment on column ontology.ontology_subspace_property_filter.filter_value is '筛选值：单值 op（EQ/LIKE/GT 等）直接存原始值（如 驱逐舰、10），多值 op（IN/BETWEEN）以 JSON 数组存储（如 ["福特","通用"]、[10,20]）；读取时按 filter_op 区分，值类型由 data_type 决定';
 comment on column ontology.ontology_subspace_property_filter.data_type is '属性数据类型，取值见 OntologyDataTypeEnum';
 comment on column ontology.ontology_subspace_property_filter.status is '软删除状态位，1 有效 0 无效';
 comment on column ontology.ontology_subspace_property_filter.create_time is '记录创建时间';

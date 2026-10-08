@@ -5,10 +5,12 @@ import com.aircas.ptr.foundry.ontology.model.param.OntologySpaceCanvasCreatePara
 import com.aircas.ptr.foundry.ontology.model.param.OntologySpaceCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologySpaceUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.dto.OntologySpaceCreateDTO;
+import com.aircas.ptr.foundry.ontology.model.param.OntologySubspaceCreateParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologySpace;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologySpaceCanvasCreateVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologySpaceStatisticVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologySpaceVO;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologySubspaceCreateVO;
 import com.baomidou.mybatisplus.extension.service.IService;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -38,4 +40,12 @@ public interface OntologySpaceService extends IService<OntologySpace> {
      * @return 空间导出结构
      */
     OntologySpaceCreateDTO exportOntologySpace(Integer spaceId, OntologyExportTypeEnum exportType);
+
+    /**
+     * 基于父空间创建子空间。
+     *
+     * @param param 子空间创建参数
+     * @return 创建结果，包含子空间 id 及本体/关系映射
+     */
+    OntologySubspaceCreateVO createSubspace(OntologySubspaceCreateParam param);
 }

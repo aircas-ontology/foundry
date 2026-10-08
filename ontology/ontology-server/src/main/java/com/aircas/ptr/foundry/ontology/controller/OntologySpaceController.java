@@ -14,7 +14,6 @@ import com.aircas.ptr.foundry.ontology.model.vo.OntologySpaceVO;
 import com.aircas.ptr.foundry.ontology.model.param.OntologySubspaceCreateParam;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologySubspaceCreateVO;
 import com.aircas.ptr.foundry.ontology.service.OntologySpaceService;
-import com.aircas.ptr.foundry.ontology.service.OntologySubspaceService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -40,8 +39,6 @@ public class OntologySpaceController {
     private final OntologySpaceService ontologySpaceService;
 
     private final ObjectMapper objectMapper;
-
-    private final OntologySubspaceService ontologySubspaceService;
 
 
     @GetMapping("/export")
@@ -86,7 +83,7 @@ public class OntologySpaceController {
     @Operation(summary = "基于父空间创建子空间",
             description = "创建子空间")
     public RestResult<OntologySubspaceCreateVO> createSubspace(@RequestBody @Valid OntologySubspaceCreateParam param) {
-        var res = ontologySubspaceService.createSubspace(param);
+        var res = ontologySpaceService.createSubspace(param);
         return RestResult.ofData(res);
     }
 

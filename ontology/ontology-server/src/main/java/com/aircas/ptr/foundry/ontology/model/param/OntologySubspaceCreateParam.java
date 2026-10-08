@@ -116,11 +116,8 @@ public class OntologySubspaceCreateParam {
         @NotNull(message = "op is empty")
         private QueryOpEnum op;
 
-        @Schema(name = "value", description = "单值（EQ/LIKE/GT 等使用）", example = "福特")
+        @Schema(name = "value", description = "筛选值：单值 op（EQ/LIKE/GT 等）传标量，如 \"驱逐舰\" 或 3000；多值 op（IN/BETWEEN 等）传数组，如 [\"福特\",\"通用\"] 或 [3000,10000]（BETWEEN 约定 [lower, upper]）。统一用本字段，不再有 values 字段")
         private Object value;
-
-        @Schema(name = "values", description = "多值（IN/BETWEEN 使用，BETWEEN 约定 [lower, upper]）")
-        private List<Object> values;
 
         @Schema(name = "dataType", description = "属性数据类型", example = "String", required = true)
         @NotNull(message = "dataType is empty")
