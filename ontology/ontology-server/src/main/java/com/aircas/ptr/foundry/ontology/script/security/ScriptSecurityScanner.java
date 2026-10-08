@@ -42,15 +42,15 @@ public class ScriptSecurityScanner {
     private final ScriptSecurityProperties properties;
 
     /**
-     * 由 {@code ThreadPoolConfig#scriptSecurityExecutor} 提供，不在业务类里自建线程
-     * （CODING_CONVENTIONS §12）。有界队列 + AbortPolicy，池满时提交会被拒绝，此处按 fail-closed 处理。
+     * 容器共用的 {@code taskExecutor}（由 {@code ThreadPoolConfig} 声明），不在业务类里自建线程
+     * 。该池有界且为 AbortPolicy，池满时提交会被拒绝，此处按 fail-closed 处理。
      */
     private final ThreadPoolTaskExecutor scanExecutor;
 
     public ScriptSecurityScanner(ScriptAstParser parser,
                                  ScriptSecurityRuleEngine engine,
                                  ScriptSecurityProperties properties,
-                                 @Qualifier("scriptSecurityExecutor") ThreadPoolTaskExecutor scanExecutor) {
+                                 @Qualifier("taskExecutor") ThreadPoolTaskExecutor scanExecutor) {
         this.parser = parser;
         this.engine = engine;
         this.properties = properties;

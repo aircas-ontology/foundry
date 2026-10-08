@@ -48,27 +48,6 @@ class ScriptSecurityScannerTest {
         executor.initialize();
     }
 
-    private ScriptSecurityScanner scanner() {
-        if (scanner == null) {
-            scanner = newScanner(new ScriptSecurityProperties());
-        }
-        return scanner;
-    }
-
-    private ScriptSecurityScanner newScanner(ScriptSecurityProperties properties) {
-        ScriptSecurityRuleEngine engine = new ScriptSecurityRuleEngine(List.of(
-                new DangerousImportRule(),
-                new DangerousMethodCallRule(),
-                new DangerousConstructorRule(),
-                new DangerousAnnotationRule(),
-                new InternalPackageRule(),
-                new GroovyExtensionMethodRule(),
-                new ReflectionChainRule(),
-                new ResourceExhaustionRule(),
-                new ScriptComplexityRule()));
-        return new ScriptSecurityScanner(new ScriptAstParser(), engine, properties, executor);
-    }
-
     @AfterEach
     void tearDown() {
         scanner = null;
@@ -217,6 +196,29 @@ class ScriptSecurityScannerTest {
         assertTrue(newScanner(properties)
                 .scan("class Calc { def handle(Map p) { return Runtime.getRuntime().exec(\"id\") } }")
                 .isPassed());
+    }
+
+    /** 复用同一个扫描器，避免每个样本重复构造规则引擎 */
+    private ScriptSecurityScanner scanner() {
+        if (scanner == null) {
+            scanner = newScanner(new ScriptSecurityProperties());
+        }
+        return scanner;
+    }
+
+    /** 与生产一致：扫描器不自建线程，线程池由外部注入 */
+    private ScriptSecurityScanner newScanner(ScriptSecurityProperties properties) {
+        ScriptSecurityRuleEngine engine = new ScriptSecurityRuleEngine(List.of(
+                new DangerousImportRule(),
+                new DangerousMethodCallRule(),
+                new DangerousConstructorRule(),
+                new DangerousAnnotationRule(),
+                new InternalPackageRule(),
+                new GroovyExtensionMethodRule(),
+                new ReflectionChainRule(),
+                new ResourceExhaustionRule(),
+                new ScriptComplexityRule()));
+        return new ScriptSecurityScanner(new ScriptAstParser(), engine, properties, executor);
     }
 
     private void assertRuleFired(String code, String expectedRuleId) {

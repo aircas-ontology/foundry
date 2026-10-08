@@ -38,18 +38,9 @@ public class ScriptSecurityProperties {
     private long scanTimeoutMs = 2000;
 
     /**
-     * 扫描专用线程池参数。
-     * <p>
-     * 线程池由 {@code ThreadPoolConfig} 统一声明（CODING_CONVENTIONS §12：不得在业务类里自建线程），
-     * 这里只提供参数。之所以不直接复用通用 {@code taskExecutor}：恶意脚本可能让解析器卡死，
-     * 独立小池可以把影响限制在扫描本身，不牵连其它异步任务。
+     * 扫描在容器共用的 {@code taskExecutor} 上执行（CODING_CONVENTIONS §12：不另建线程池）。
+     * 该池有界且为 AbortPolicy，池满时提交会被拒绝，扫描器按 fail-closed 转为拒绝保存。
      */
-    private int scanExecutorCorePoolSize = 2;
-
-    private int scanExecutorMaxPoolSize = 4;
-
-    /** 有界队列，满则触发 AbortPolicy，扫描器按 fail-closed 拒绝 */
-    private int scanExecutorQueueCapacity = 64;
 
     /** 启动时自检；自检不通过则记录 error 日志（用于发现规则静默失效） */
     private boolean selfCheckOnStartup = true;

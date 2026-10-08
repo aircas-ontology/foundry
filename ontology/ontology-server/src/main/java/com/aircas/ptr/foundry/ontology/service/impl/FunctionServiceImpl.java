@@ -174,26 +174,6 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         //todo 暂不考虑注册的外部函数
     }
 
-    /**
-     * 安全检测不通过直接抛异常（硬拦截）。
-     * <p>
-     * 提示中只带规则说明与行号，不回显脚本正文，避免大对象进入日志与响应
-     * （CODING_CONVENTIONS §13）。完整明细可通过 /function/validate_code 预校验接口获取。
-     */
-    private void assertCodeSecurity(String code) {
-        var scan = scriptSecurityService.validateCode(code);
-        if (scan.isPassed()) {
-            return;
-        }
-        String detail = scan.getViolations().stream()
-                .limit(5)
-                .map(v -> v.getMessage() + (v.getLineNumber() > 0 ? "（第 " + v.getLineNumber() + " 行）" : ""))
-                .collect(Collectors.joining("；"));
-        // 提交的代码不合法，属于入参校验失败，固定错误码便于前端识别（CODING_CONVENTIONS §6）
-        throw new BusinessException("函数代码未通过安全检测：" + detail,
-                ResultCode.PARAM_ERROR, HttpStatus.BAD_REQUEST);
-    }
-
     @Override
     @Transactional(value = "mainTransactionManager")
     public void updateFunction(FunctionUpdateParam param) {
@@ -328,6 +308,22 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         }
     }
 
-
-
+    /**
+     * 代码安全检测：不通过直接抛异常（硬拦截），不会落库。
+     * <p>
+     * 异常提示只带规则说明与行号，不回显脚本正文，避免大对象进入日志与响应
+     */
+    private void assertCodeSecurity(String code) {
+        var scan = scriptSecurityService.validateCode(code);
+        if (scan.isPassed()) {
+            return;
+        }
+        String detail = scan.getViolations().stream()
+                .limit(5)
+                .map(v -> v.getMessage() + (v.getLineNumber() > 0 ? "（第 " + v.getLineNumber() + " 行）" : ""))
+                .collect(Collectors.joining("；"));
+        // 提交的代码不合法，属于入参校验失败，固定错误码便于前端识别
+        throw new BusinessException("函数代码未通过安全检测：" + detail,
+                ResultCode.PARAM_ERROR, HttpStatus.BAD_REQUEST);
+    }
 }
