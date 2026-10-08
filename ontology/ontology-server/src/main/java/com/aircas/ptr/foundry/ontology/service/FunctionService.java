@@ -29,6 +29,8 @@ public interface FunctionService extends IService<Function> {
 
     FunctionVersionCreatedVO createFunction(FunctionCreateParam param);
 
+    FunctionVersionCreatedVO createDraftFunction(FunctionCreateParam param);
+
     void updateFunction(FunctionUpdateParam param);
 
     FunctionExecuteResultVO getExecuteResult(String taskId);

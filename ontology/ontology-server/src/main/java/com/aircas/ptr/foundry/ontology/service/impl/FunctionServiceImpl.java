@@ -80,12 +80,23 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     @Override
     @Transactional(value = "mainTransactionManager")
     public FunctionVersionCreatedVO createFunction(FunctionCreateParam param) {
+        return createFunction(param, FunctionStatusEnum.PUBLISHED);
+    }
+
+    @Override
+    @Transactional(value = "mainTransactionManager")
+    public FunctionVersionCreatedVO createDraftFunction(FunctionCreateParam param) {
+        return createFunction(param, FunctionStatusEnum.DRAFT);
+    }
+
+    private FunctionVersionCreatedVO createFunction(FunctionCreateParam param, FunctionStatusEnum versionStatus) {
         String version = StringUtils.defaultIfBlank(param.getVersion(), "1.0.0");
         long duplicateCount = count(new LambdaQueryWrapper<Function>().eq(Function::getApi, param.getFunctionApi()).eq(Function::getVersion, version));
         PreconditionUtils.checkArgument(duplicateCount == 0, "函数 API 与版本号已存在：" + param.getFunctionApi() + "#" + version, HttpStatus.BAD_REQUEST);
         validateExecutable(param.getType(), param.getCode(), param.getReferenceName());
         String user = UserContextHolder.get() == null ? null : UserContextHolder.get().getUsername();
-        Function function = Function.builder().api(param.getFunctionApi()).version(version).versionStatus(FunctionStatusEnum.PUBLISHED).description(param.getDescription()).displayName(param.getDisplayName()).type(param.getType()).model(param.getModel()).code(param.getCode()).referenceName(param.getReferenceName()).createBy(user).publishTime(new Date()).status(Status.ENABLE.getValue()).build();
+        Date publishTime = versionStatus == FunctionStatusEnum.PUBLISHED ? new Date() : null;
+        Function function = Function.builder().api(param.getFunctionApi()).version(version).versionStatus(versionStatus).description(param.getDescription()).displayName(param.getDisplayName()).type(param.getType()).model(param.getModel()).code(param.getCode()).referenceName(param.getReferenceName()).createBy(user).publishTime(publishTime).status(Status.ENABLE.getValue()).build();
         save(function);
         insertParams(function);
         return FunctionVersionCreatedVO.builder().functionVersionId(function.getId()).version(function.getVersion()).build();

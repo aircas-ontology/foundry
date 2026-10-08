@@ -627,7 +627,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                         "}";
                 String code = String.format(codeTemplate, f.getFunctionApi(), inputParamString);
 
-                FunctionVersionCreatedVO createdVersion = functionService.createFunction(FunctionCreateParam.builder()
+                FunctionVersionCreatedVO createdVersion = functionService.createDraftFunction(FunctionCreateParam.builder()
                         .code(code)
                         .description(f.getDescription())
                         .functionApi(f.getFunctionApi())
@@ -642,16 +642,17 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         var actions = dto.getActions();
         if (CollectionUtils.isNotEmpty(actions)) {
             actions.forEach(action -> {
+                boolean referencesImportedDraft = functionVersionIds.containsKey(action.getFunctionApi());
                 val relationIndex = action.getRelationIndex();
                 ActionLinkMappingParam linkMapping = null;
-                if (relationIndex != null) {
+                if (!referencesImportedDraft && relationIndex != null) {
                     linkMapping = ActionLinkMappingParam.builder()
                             .ontologyLinkUniqIdentifier(relationMap.get(relationIndex))
                             .build();
                 }
                 List<ActionParamMappingCreateParam> mappingIns = null;
                 var mapping = action.getMappingIns();
-                if (CollectionUtils.isNotEmpty(mapping)) {
+                if (!referencesImportedDraft && CollectionUtils.isNotEmpty(mapping)) {
                     var detail = functionService.getFunctionDetailByApi(
                             action.getFunctionApi(), functionVersionIds.get(action.getFunctionApi()));
                     var paramMap = detail.getParams().stream().collect(Collectors.toMap(v -> v.getParamName(), v -> v));
@@ -674,13 +675,18 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
 
                 }
 
+                if (referencesImportedDraft) {
+                    log.info("Imported action {} is left unbound because function {} was created as a draft",
+                            action.getActionApi(), action.getFunctionApi());
+                }
+
                 actionService.createAction(ActionCreateOrUpdateParam.builder()
                         .ontologyIdentifier(meta.getUniqueIdentifier())
                         .actionApi(action.getActionApi())
                         .description(action.getDescription())
                         .displayName(action.getDisplayName())
-                        .functionApi(action.getFunctionApi())
-                        .functionVersionId(functionVersionIds.get(action.getFunctionApi()))
+                        .functionApi(referencesImportedDraft ? null : action.getFunctionApi())
+                        .functionVersionId(referencesImportedDraft ? null : functionVersionIds.get(action.getFunctionApi()))
                         .linkMapping(linkMapping)
                         .mappingIns(mappingIns)
                         .build());
