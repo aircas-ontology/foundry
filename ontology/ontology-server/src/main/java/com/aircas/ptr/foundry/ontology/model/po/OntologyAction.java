@@ -35,8 +35,6 @@ public class OntologyAction {
 
     private Long functionVersionId;
 
-    private Integer functionVersionNo;
-
     /**
      * Column: ontology_unique_identifier
      */

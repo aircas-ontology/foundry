@@ -52,8 +52,6 @@ public class FunctionExecuteResult {
 
     private Long functionVersionId;
 
-    private Integer functionVersionNo;
-
     /**
      * Column: action_api
      */

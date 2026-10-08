@@ -11,9 +11,8 @@ import java.util.Date;
 @Builder
 @Schema(description = "函数版本信息")
 public class FunctionVersionVO {
-    private Long versionId;
+    private Long functionVersionId;
     private String functionApi;
-    private Integer versionNo;
     private FunctionStatusEnum versionStatus;
     private String changeLog;
     private String createBy;

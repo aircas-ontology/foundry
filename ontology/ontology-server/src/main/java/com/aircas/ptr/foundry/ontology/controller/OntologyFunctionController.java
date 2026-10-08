@@ -47,39 +47,36 @@ public class OntologyFunctionController {
 
     @Operation(summary = "创建函数")
     @PostMapping
-    public RestResult createFunction(@RequestBody @Valid FunctionCreateParam param) {
+    public RestResult<Long> createFunction(@RequestBody @Valid FunctionCreateParam param) {
         //todo 需要增加代码安全检测
-        functionService.createFunction(param);
-        return RestResult.success();
+        return RestResult.ofData(functionService.createFunction(param));
     }
 
     @Operation(summary = "更新函数")
     @PutMapping
-    public RestResult updateFunction(@RequestBody FunctionUpdateParam param) {
+    public RestResult updateFunction(@RequestBody @Valid FunctionUpdateParam param) {
         // 需要 1 校验函数有没有被本体行为使用到，否则不能修改 2 需要增加代码安全检测
         functionService.updateFunction(param);
         return RestResult.success();
     }
 
 
-    @Operation(summary = "根据函数api获取函数详情")
+    @Operation(summary = "根据函数 API 和版本 ID 获取函数详情")
     @GetMapping("/detail")
     public RestResult<FunctionDetailVO> getFunctionByApi(@RequestParam(name = "functionApi") @Parameter(description = "函数api") String functionApi,
-                                                         @RequestParam(required = false, name = "versionNo") Integer versionNo) {
-        return RestResult.ofData(functionService.getFunctionDetailByApi(functionApi, versionNo));
+                                                         @RequestParam(name = "functionVersionId") Long functionVersionId) {
+        return RestResult.ofData(functionService.getFunctionDetailByApi(functionApi, functionVersionId));
     }
 
     @PostMapping("/version_create")
     @Operation(summary = "创建函数草稿版本")
-    public RestResult createVersion(@RequestBody @Valid FunctionVersionParam param) { functionService.createDraft(param); return RestResult.success(); }
+    public RestResult<Long> createVersion(@RequestBody @Valid FunctionVersionParam param) {
+        return RestResult.ofData(functionService.createDraft(param));
+    }
 
     @PostMapping("/version_publish")
     @Operation(summary = "发布函数版本")
     public RestResult publishVersion(@RequestBody @Valid FunctionVersionParam param) { functionService.publishVersion(param); return RestResult.success(); }
-
-    @PostMapping("/version_rollback")
-    @Operation(summary = "前滚式回滚函数版本")
-    public RestResult rollbackVersion(@RequestBody @Valid FunctionVersionParam param) { functionService.rollbackVersion(param); return RestResult.success(); }
 
     @GetMapping("/version_list")
     @Operation(summary = "查询函数版本列表")

@@ -178,9 +178,7 @@ create table if not exists function
     display_name      varchar(255),
     model                varchar(255),
     ontology_space_id    integer,
-    latest_version_no    integer default 1 not null,
-    published_version_no integer,
-    published_version_id bigint
+    latest_version_no    integer default 1 not null
     );
 
 comment on table function is '函数';
@@ -212,7 +210,7 @@ comment on column function.ontology_space_id is '本体空间id';
 create table if not exists function_version
 (
     id bigserial primary key,
-    function_id bigint not null references function(id),
+    function_id bigint not null constraint fk_function_version_function references function(id),
     function_api varchar(255) not null,
     version_no integer not null,
     code text,
@@ -224,15 +222,11 @@ create table if not exists function_version
     create_time timestamp(6) default current_timestamp,
     update_time timestamp(6) default current_timestamp,
     constraint uk_function_version_no unique(function_id, version_no),
-    constraint ck_function_version_status check(version_status in ('DRAFT','PUBLISHED','DEPRECATED'))
+    constraint ck_function_version_status check(version_status in ('DRAFT','PUBLISHED'))
     );
 
-create unique index if not exists uk_function_published_version
-    on function_version(function_id) where version_status='PUBLISHED';
-
-alter table function
-    add constraint fk_function_published_version
-    foreign key(published_version_id) references function_version(id);
+create unique index if not exists uk_function_draft_version
+    on function_version(function_id) where version_status='DRAFT';
 
 create table if not exists function_execute_result
 (
@@ -247,8 +241,7 @@ create table if not exists function_execute_result
     update_time         timestamp(6),
     function_param      text,
     task_status         varchar(255),
-    function_version_id bigint references function_version(id),
-    function_version_no integer
+    function_version_id bigint not null constraint fk_execute_result_function_version references function_version(id)
     );
 
 comment on table function_execute_result is '异步函数执行结果';
@@ -286,8 +279,7 @@ create table if not exists function_param
     param_schema        text,
     param_order         integer       not null,
     description         varchar(255),
-    function_version_id bigint not null references function_version(id),
-    function_version_no integer not null
+    function_version_id bigint not null constraint fk_function_param_version references function_version(id)
     );
 
 comment on table function_param is '函数参数';
@@ -321,8 +313,7 @@ create table if not exists ontology_action
     icon                       varchar(255),
     ontology_space_id          integer,
     action_category_id         integer,
-    function_version_id        bigint references function_version(id),
-    function_version_no        integer
+    function_version_id        bigint constraint fk_action_function_version references function_version(id)
     );
 
 comment on table ontology_action is '本体行为';

@@ -13,7 +13,6 @@ import com.aircas.ptr.foundry.ontology.model.vo.FunctionResultVO;
 import com.aircas.ptr.foundry.ontology.model.vo.FunctionVersionVO;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
-import com.fasterxml.jackson.databind.JsonNode;
 
 public interface FunctionService extends IService<Function> {
 
@@ -23,14 +22,12 @@ public interface FunctionService extends IService<Function> {
     String executeFunction(FunctionExecuteParam param);
 
 
-    FunctionDetailVO getFunctionDetailByApi(String api);
-
-    FunctionDetailVO getFunctionDetailByApi(String api, Integer versionNo);
+    FunctionDetailVO getFunctionDetailByApi(String api, Long functionVersionId);
 
     void deleteByApi(String api);
 
 
-    void createFunction(FunctionCreateParam param);
+    Long createFunction(FunctionCreateParam param);
 
     void updateFunction(FunctionUpdateParam param);
 
@@ -38,11 +35,9 @@ public interface FunctionService extends IService<Function> {
 
     void callback(FunctionResultVO result);
 
-    void createDraft(FunctionVersionParam param);
+    Long createDraft(FunctionVersionParam param);
 
     void publishVersion(FunctionVersionParam param);
-
-    void rollbackVersion(FunctionVersionParam param);
 
     Page<FunctionVersionVO> listVersions(String functionApi, Integer pageNum, Integer pageSize);
 }

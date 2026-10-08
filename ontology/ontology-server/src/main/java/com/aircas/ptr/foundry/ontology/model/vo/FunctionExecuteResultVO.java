@@ -22,8 +22,6 @@ public class FunctionExecuteResultVO {
 
     private Long functionVersionId;
 
-    private Integer functionVersionNo;
-
     private String actionApi;
 
     private String functionParam;

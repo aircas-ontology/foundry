@@ -28,11 +28,8 @@ public class FunctionDetailVO extends FunctionInfoVO {
     @Schema(name = "code", description = "函数代码：只有自定义函数会存在")
     private String code;
 
-    @Schema(description = "版本ID")
-    private Long versionId;
-
-    @Schema(description = "版本号")
-    private Integer versionNo;
+    @Schema(description = "函数版本 ID")
+    private Long functionVersionId;
 
     @Schema(description = "版本状态")
     private com.aircas.ptr.foundry.ontology.model.enums.FunctionStatusEnum versionStatus;

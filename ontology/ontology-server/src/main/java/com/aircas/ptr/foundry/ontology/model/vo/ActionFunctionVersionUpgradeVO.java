@@ -19,9 +19,7 @@ public class ActionFunctionVersionUpgradeVO {
 
     private String actionApi;
     private Long sourceFunctionVersionId;
-    private Integer sourceFunctionVersionNo;
     private Long targetFunctionVersionId;
-    private Integer targetFunctionVersionNo;
     private boolean canUpgrade;
     private boolean upgraded;
     private List<ParamMatch> parameterMatches;

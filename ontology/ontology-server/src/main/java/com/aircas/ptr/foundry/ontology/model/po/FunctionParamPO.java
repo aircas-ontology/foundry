@@ -29,8 +29,6 @@ public class FunctionParamPO {
 
     private Long functionVersionId;
 
-    private Integer functionVersionNo;
-
     private String paramName;
 
     private FunctionParamTypeEnum paramType;

@@ -24,6 +24,10 @@ public class FunctionUpdateParam {
     @NotBlank(message = "functionApi is empty")
     private String functionApi;
 
+    @NotNull(message = "functionVersionId is null")
+    @Schema(description = "待更新的草稿版本 ID", requiredMode = Schema.RequiredMode.REQUIRED)
+    private Long functionVersionId;
+
     @Schema(name = "description", description = "描述")
     private String description;
 

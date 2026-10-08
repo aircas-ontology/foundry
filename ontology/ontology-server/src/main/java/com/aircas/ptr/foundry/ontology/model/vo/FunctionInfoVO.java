@@ -10,6 +10,7 @@ import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
 
 import jakarta.validation.constraints.NotNull;
+import java.util.List;
 
 @NoArgsConstructor
 @AllArgsConstructor
@@ -35,11 +36,11 @@ public class FunctionInfoVO {
     @Schema(name = "type", description = "函数类型")
     private FunctionTypeEnum type;
 
-    @Schema(description = "当前发布版本号")
-    private Integer publishedVersionNo;
+    @Schema(description = "已发布版本 ID 列表")
+    private List<Long> publishedFunctionVersionIds;
 
-    @Schema(description = "草稿版本号")
-    private Integer draftVersionNo;
+    @Schema(description = "草稿版本 ID")
+    private Long draftFunctionVersionId;
 
     @Schema(description = "是否存在草稿")
     private Boolean hasDraft;

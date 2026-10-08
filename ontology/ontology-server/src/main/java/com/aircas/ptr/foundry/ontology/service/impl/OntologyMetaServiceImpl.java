@@ -599,6 +599,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
             linkService.saveBatch(links);
         }
         //保存函数
+        Map<String, Long> functionVersionIds = Maps.newHashMap();
         var funcs = dto.getFunctions();
         if (CollectionUtils.isNotEmpty(funcs)) {
             funcs.stream().forEach(f -> {
@@ -625,7 +626,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                         "}";
                 String code = String.format(codeTemplate, f.getFunctionApi(), inputParamString);
 
-                functionService.createFunction(FunctionCreateParam.builder()
+                Long functionVersionId = functionService.createFunction(FunctionCreateParam.builder()
                         .code(code)
                         .description(f.getDescription())
                         .functionApi(f.getFunctionApi())
@@ -634,6 +635,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                         .type(f.getType())
                         .publish(true)
                         .build());
+                functionVersionIds.put(f.getFunctionApi(), functionVersionId);
             });
         }
         //保存行为
@@ -650,7 +652,8 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 List<ActionParamMappingCreateParam> mappingIns = null;
                 var mapping = action.getMappingIns();
                 if (CollectionUtils.isNotEmpty(mapping)) {
-                    var detail = functionService.getFunctionDetailByApi(action.getFunctionApi());
+                    var detail = functionService.getFunctionDetailByApi(
+                            action.getFunctionApi(), functionVersionIds.get(action.getFunctionApi()));
                     var paramMap = detail.getParams().stream().collect(Collectors.toMap(v -> v.getParamName(), v -> v));
 
                     mappingIns = mapping.stream().map(m -> {
@@ -677,6 +680,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                         .description(action.getDescription())
                         .displayName(action.getDisplayName())
                         .functionApi(action.getFunctionApi())
+                        .functionVersionId(functionVersionIds.get(action.getFunctionApi()))
                         .linkMapping(linkMapping)
                         .mappingIns(mappingIns)
                         .build());

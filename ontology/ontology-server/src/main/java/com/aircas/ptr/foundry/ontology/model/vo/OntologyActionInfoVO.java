@@ -30,12 +30,6 @@ public class OntologyActionInfoVO {
     @Schema(name = "displayName", description = "行为显示名称", example = "调用函数")
     private String displayName;
 
-    @Schema(description = "固定绑定的函数版本ID，空表示跟随发布版本")
+    @Schema(description = "固定绑定的函数版本 ID")
     private Long functionVersionId;
-
-    @Schema(description = "绑定版本号")
-    private Integer functionVersionNo;
-
-    @Schema(description = "实际生效版本号")
-    private Integer effectiveFunctionVersionNo;
 }

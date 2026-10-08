@@ -8,6 +8,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import java.util.List;
 
 @Data
@@ -25,8 +26,9 @@ public class FunctionExecuteParam {
     @Schema(name = "parameters", description = "参数列表", required = true)
     private List<FunctionParameter> parameters;
 
-    @Schema(description = "指定已发布或已废弃版本号；为空时执行当前发布版本")
-    private Integer versionNo;
+    @NotNull(message = "functionVersionId is null")
+    @Schema(description = "函数版本 ID", requiredMode = Schema.RequiredMode.REQUIRED)
+    private Long functionVersionId;
 
 
 
