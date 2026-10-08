@@ -39,8 +39,8 @@ public class FunctionInfoVO {
     @Schema(description = "已发布版本 ID 列表")
     private List<Long> publishedFunctionVersionIds;
 
-    @Schema(description = "草稿版本 ID")
-    private Long draftFunctionVersionId;
+    @Schema(description = "草稿版本 ID 列表")
+    private List<Long> draftFunctionVersionIds;
 
     @Schema(description = "是否存在草稿")
     private Boolean hasDraft;

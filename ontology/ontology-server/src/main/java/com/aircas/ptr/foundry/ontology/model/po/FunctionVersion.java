@@ -25,7 +25,7 @@ public class FunctionVersion {
     private Long id;
     private Long functionId;
     private String functionApi;
-    private Integer versionNo;
+    private String version;
     private String code;
     private String referenceName;
     private FunctionStatusEnum versionStatus;

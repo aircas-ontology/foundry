@@ -6,14 +6,13 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 @Data
-@Schema(description = "函数版本操作参数")
-public class FunctionVersionParam {
+@Schema(description = "发布函数版本参数")
+public class FunctionVersionPublishParam {
+
     @NotBlank(message = "functionApi is empty")
     private String functionApi;
+
     @NotNull(message = "functionVersionId is null")
-    @Schema(description = "函数版本 ID。创建新版本时表示源版本，发布时表示待发布版本")
+    @Schema(description = "待发布函数版本 ID", requiredMode = Schema.RequiredMode.REQUIRED)
     private Long functionVersionId;
-    private String code;
-    private String referenceName;
-    private String changeLog;
 }

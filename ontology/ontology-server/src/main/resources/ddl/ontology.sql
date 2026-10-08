@@ -177,8 +177,7 @@ create table if not exists function
     code              text,
     display_name      varchar(255),
     model                varchar(255),
-    ontology_space_id    integer,
-    latest_version_no    integer default 1 not null
+    ontology_space_id    integer
     );
 
 comment on table function is '函数';
@@ -212,7 +211,7 @@ create table if not exists function_version
     id bigserial primary key,
     function_id bigint not null constraint fk_function_version_function references function(id),
     function_api varchar(255) not null,
-    version_no integer not null,
+    version varchar(64) not null,
     code text,
     reference_name varchar(512),
     version_status varchar(32) default 'DRAFT' not null,
@@ -221,12 +220,10 @@ create table if not exists function_version
     publish_time timestamp(6),
     create_time timestamp(6) default current_timestamp,
     update_time timestamp(6) default current_timestamp,
-    constraint uk_function_version_no unique(function_id, version_no),
+    constraint uk_function_version unique(function_id, version),
+    constraint ck_function_version_format check(version ~ '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'),
     constraint ck_function_version_status check(version_status in ('DRAFT','PUBLISHED'))
     );
-
-create unique index if not exists uk_function_draft_version
-    on function_version(function_id) where version_status='DRAFT';
 
 create table if not exists function_execute_result
 (

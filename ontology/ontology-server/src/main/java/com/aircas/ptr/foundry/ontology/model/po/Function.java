@@ -93,5 +93,4 @@ public class Function {
      */
     private Integer ontologySpaceId;
 
-    private Integer latestVersionNo;
 }

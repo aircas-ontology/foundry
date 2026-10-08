@@ -13,6 +13,7 @@ import java.util.Date;
 public class FunctionVersionVO {
     private Long functionVersionId;
     private String functionApi;
+    private String version;
     private FunctionStatusEnum versionStatus;
     private String changeLog;
     private String createBy;

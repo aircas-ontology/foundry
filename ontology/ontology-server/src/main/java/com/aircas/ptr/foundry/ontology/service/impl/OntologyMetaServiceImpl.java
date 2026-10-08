@@ -15,6 +15,7 @@ import com.aircas.ptr.foundry.ontology.model.po.*;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyGroupMetaVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaNodeVO;
+import com.aircas.ptr.foundry.ontology.model.vo.FunctionVersionCreatedVO;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyMetaMapper;
 import com.aircas.ptr.foundry.ontology.service.*;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -626,7 +627,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                         "}";
                 String code = String.format(codeTemplate, f.getFunctionApi(), inputParamString);
 
-                Long functionVersionId = functionService.createFunction(FunctionCreateParam.builder()
+                FunctionVersionCreatedVO createdVersion = functionService.createFunction(FunctionCreateParam.builder()
                         .code(code)
                         .description(f.getDescription())
                         .functionApi(f.getFunctionApi())
@@ -635,7 +636,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                         .type(f.getType())
                         .publish(true)
                         .build());
-                functionVersionIds.put(f.getFunctionApi(), functionVersionId);
+                functionVersionIds.put(f.getFunctionApi(), createdVersion.getFunctionVersionId());
             });
         }
         //保存行为

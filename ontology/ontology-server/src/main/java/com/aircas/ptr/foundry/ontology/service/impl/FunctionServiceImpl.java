@@ -11,7 +11,6 @@ import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.*;
 import com.aircas.ptr.foundry.ontology.service.*;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.OrderItem;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -82,6 +81,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 .referenceName(version.getReferenceName())
                 .params(parameters)
                 .functionVersionId(version.getId())
+                .version(version.getVersion())
                 .versionStatus(version.getVersionStatus())
                 .build();
     }
@@ -99,7 +99,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
 
     @Override
     @Transactional(value = "mainTransactionManager")
-    public Long createFunction(FunctionCreateParam param) {
+    public FunctionVersionCreatedVO createFunction(FunctionCreateParam param) {
         PreconditionUtils.checkArgument(
                 getOne(new LambdaQueryWrapper<Function>().eq(Function::getApi, param.getFunctionApi())) == null,
                 "函数api已存在:" + param.getFunctionApi(), HttpStatus.BAD_REQUEST);
@@ -110,17 +110,20 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 .type(param.getType())
                 .model(param.getModel())
                 .status(Status.ENABLE.getValue())
-                .latestVersionNo(1)
                 .build();
         save(function);
+        String versionName = StringUtils.defaultIfBlank(param.getVersion(), "1.0.0");
         FunctionVersion version = newVersion(
-                function, 1, param.getCode(), param.getReferenceName(), param.getChangeLog());
+                function, versionName, param.getCode(), param.getReferenceName(), param.getChangeLog());
         functionVersionMapper.insert(version);
         insertParams(function.getId(), version, function.getType());
         if (Boolean.TRUE.equals(param.getPublish())) {
             publish(function, version);
         }
-        return version.getId();
+        return FunctionVersionCreatedVO.builder()
+                .functionVersionId(version.getId())
+                .version(version.getVersion())
+                .build();
     }
 
     @Override
@@ -143,27 +146,29 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
 
     @Override
     @Transactional(value = "mainTransactionManager")
-    public Long createDraft(FunctionVersionParam param) {
+    public FunctionVersionCreatedVO createDraft(FunctionVersionCreateParam param) {
         Function function = requireFunction(param.getFunctionApi());
-        PreconditionUtils.checkArgument(findDraft(function.getId()) == null,
-                "该函数已存在草稿", HttpStatus.BAD_REQUEST);
-        FunctionVersion source = requireVersion(function, param.getFunctionVersionId());
+        requireVersionAvailable(function, param.getVersion());
+        FunctionVersion source = requireVersion(function, param.getSourceFunctionVersionId());
         PreconditionUtils.checkArgument(source.getVersionStatus() == FunctionStatusEnum.PUBLISHED,
                 "只能基于已发布版本创建草稿", HttpStatus.BAD_REQUEST);
         FunctionVersion version = newVersion(
                 function,
-                allocate(function),
+                param.getVersion(),
                 param.getCode() != null ? param.getCode() : source.getCode(),
                 param.getReferenceName() != null ? param.getReferenceName() : source.getReferenceName(),
                 param.getChangeLog());
         functionVersionMapper.insert(version);
         insertParams(function.getId(), version, function.getType());
-        return version.getId();
+        return FunctionVersionCreatedVO.builder()
+                .functionVersionId(version.getId())
+                .version(version.getVersion())
+                .build();
     }
 
     @Override
     @Transactional(value = "mainTransactionManager")
-    public void publishVersion(FunctionVersionParam param) {
+    public void publishVersion(FunctionVersionPublishParam param) {
         Function function = requireFunction(param.getFunctionApi());
         publish(function, requireVersion(function, param.getFunctionVersionId()));
     }
@@ -185,12 +190,14 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     public Page<FunctionVersionVO> listVersions(String api, Integer pageNum, Integer pageSize) {
         Function function = requireFunction(api);
         Page<FunctionVersion> page = functionVersionMapper.selectPage(
-                new Page<FunctionVersion>(pageNum, pageSize).addOrder(OrderItem.desc("version_no")),
+                new Page<FunctionVersion>(pageNum, pageSize)
+                        .addOrder(OrderItem.desc("create_time"), OrderItem.desc("id")),
                 new LambdaQueryWrapper<FunctionVersion>().eq(FunctionVersion::getFunctionId, function.getId()));
         List<FunctionVersionVO> records = page.getRecords().stream()
                 .map(version -> FunctionVersionVO.builder()
                         .functionVersionId(version.getId())
                         .functionApi(version.getFunctionApi())
+                        .version(version.getVersion())
                         .versionStatus(version.getVersionStatus())
                         .changeLog(version.getChangeLog())
                         .createBy(version.getCreateBy())
@@ -209,11 +216,17 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 new Page<Function>(pageNum, pageSize).addOrder(OrderItem.desc("create_time")),
                 new LambdaQueryWrapper<Function>().ne(Function::getStatus, Status.DELETE.getValue()));
         List<FunctionInfoVO> records = page.getRecords().stream().map(function -> {
-            FunctionVersion draft = findDraft(function.getId());
             List<Long> publishedVersionIds = functionVersionMapper.selectList(
                             new LambdaQueryWrapper<FunctionVersion>()
                                     .eq(FunctionVersion::getFunctionId, function.getId())
-                                    .eq(FunctionVersion::getVersionStatus, FunctionStatusEnum.PUBLISHED))
+                                    .eq(FunctionVersion::getVersionStatus, FunctionStatusEnum.PUBLISHED)
+                                    .orderByDesc(FunctionVersion::getCreateTime, FunctionVersion::getId))
+                    .stream().map(FunctionVersion::getId).collect(Collectors.toList());
+            List<Long> draftVersionIds = functionVersionMapper.selectList(
+                            new LambdaQueryWrapper<FunctionVersion>()
+                                    .eq(FunctionVersion::getFunctionId, function.getId())
+                                    .eq(FunctionVersion::getVersionStatus, FunctionStatusEnum.DRAFT)
+                                    .orderByDesc(FunctionVersion::getCreateTime, FunctionVersion::getId))
                     .stream().map(FunctionVersion::getId).collect(Collectors.toList());
             return FunctionInfoVO.builder()
                     .functionApi(function.getApi())
@@ -222,8 +235,8 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                     .model(function.getModel())
                     .description(function.getDescription())
                     .publishedFunctionVersionIds(publishedVersionIds)
-                    .draftFunctionVersionId(draft == null ? null : draft.getId())
-                    .hasDraft(draft != null)
+                    .draftFunctionVersionIds(draftVersionIds)
+                    .hasDraft(!draftVersionIds.isEmpty())
                     .build();
         }).collect(Collectors.toList());
         return new Page<FunctionInfoVO>(pageNum, pageSize)
@@ -324,35 +337,21 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         return version;
     }
 
-    private FunctionVersion findDraft(Long functionId) {
-        return functionVersionMapper.selectOne(new LambdaQueryWrapper<FunctionVersion>()
-                .eq(FunctionVersion::getFunctionId, functionId)
-                .eq(FunctionVersion::getVersionStatus, FunctionStatusEnum.DRAFT));
-    }
-
-    private int allocate(Function function) {
-        for (int retry = 0; retry < 5; retry++) {
-            int current = function.getLatestVersionNo() == null ? 0 : function.getLatestVersionNo();
-            int changed = baseMapper.update(null, new LambdaUpdateWrapper<Function>()
-                    .eq(Function::getId, function.getId())
-                    .eq(Function::getLatestVersionNo, current)
-                    .set(Function::getLatestVersionNo, current + 1));
-            if (changed == 1) {
-                function.setLatestVersionNo(current + 1);
-                return current + 1;
-            }
-            function = baseMapper.selectById(function.getId());
-        }
-        throw new IllegalStateException("函数版本号分配冲突，请重试");
+    private void requireVersionAvailable(Function function, String version) {
+        Long count = functionVersionMapper.selectCount(new LambdaQueryWrapper<FunctionVersion>()
+                .eq(FunctionVersion::getFunctionId, function.getId())
+                .eq(FunctionVersion::getVersion, version));
+        PreconditionUtils.checkArgument(count == 0,
+                "函数版本号已存在: " + function.getApi() + "#" + version, HttpStatus.BAD_REQUEST);
     }
 
     private FunctionVersion newVersion(
-            Function function, int versionNo, String code, String referenceName, String changeLog) {
+            Function function, String versionName, String code, String referenceName, String changeLog) {
         String user = UserContextHolder.get() == null ? null : UserContextHolder.get().getUsername();
         return FunctionVersion.builder()
                 .functionId(function.getId())
                 .functionApi(function.getApi())
-                .versionNo(versionNo)
+                .version(versionName)
                 .code(code)
                 .referenceName(referenceName)
                 .versionStatus(FunctionStatusEnum.DRAFT)

@@ -4,13 +4,15 @@ package com.aircas.ptr.foundry.ontology.service;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionExecuteParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionUpdateParam;
-import com.aircas.ptr.foundry.ontology.model.param.FunctionVersionParam;
+import com.aircas.ptr.foundry.ontology.model.param.FunctionVersionCreateParam;
+import com.aircas.ptr.foundry.ontology.model.param.FunctionVersionPublishParam;
 import com.aircas.ptr.foundry.ontology.model.po.Function;
 import com.aircas.ptr.foundry.ontology.model.vo.FunctionDetailVO;
 import com.aircas.ptr.foundry.ontology.model.vo.FunctionExecuteResultVO;
 import com.aircas.ptr.foundry.ontology.model.vo.FunctionInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.FunctionResultVO;
 import com.aircas.ptr.foundry.ontology.model.vo.FunctionVersionVO;
+import com.aircas.ptr.foundry.ontology.model.vo.FunctionVersionCreatedVO;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
 
@@ -27,7 +29,7 @@ public interface FunctionService extends IService<Function> {
     void deleteByApi(String api);
 
 
-    Long createFunction(FunctionCreateParam param);
+    FunctionVersionCreatedVO createFunction(FunctionCreateParam param);
 
     void updateFunction(FunctionUpdateParam param);
 
@@ -35,9 +37,9 @@ public interface FunctionService extends IService<Function> {
 
     void callback(FunctionResultVO result);
 
-    Long createDraft(FunctionVersionParam param);
+    FunctionVersionCreatedVO createDraft(FunctionVersionCreateParam param);
 
-    void publishVersion(FunctionVersionParam param);
+    void publishVersion(FunctionVersionPublishParam param);
 
     Page<FunctionVersionVO> listVersions(String functionApi, Integer pageNum, Integer pageSize);
 }

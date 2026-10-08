@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS function_version
     id              BIGSERIAL PRIMARY KEY,
     function_id     BIGINT       NOT NULL,
     function_api    VARCHAR(255) NOT NULL,
-    version_no      INT4         NOT NULL,
+    version         VARCHAR(64)  NOT NULL,
     code            TEXT,
     reference_name  VARCHAR(512),
     version_status  VARCHAR(32)  NOT NULL DEFAULT 'DRAFT',
@@ -13,22 +13,36 @@ CREATE TABLE IF NOT EXISTS function_version
     create_by       VARCHAR(128),
     publish_time    TIMESTAMP(6),
     create_time     TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
-    update_time     TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT uk_function_version_no UNIQUE (function_id, version_no)
+    update_time     TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_function_version_api ON function_version (function_api);
-CREATE UNIQUE INDEX IF NOT EXISTS uk_function_draft_version
-    ON function_version (function_id) WHERE version_status = 'DRAFT';
 
--- 多个已发布版本可以并存；旧实现中的 DEPRECATED 版本恢复为可绑定的 PUBLISHED 版本。
+-- 兼容已落过整数 version_no 的中间版本：N 迁移为 N.0.0。
+ALTER TABLE function_version ADD COLUMN IF NOT EXISTS version VARCHAR(64);
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'ontology'
+          AND table_name = 'function_version'
+          AND column_name = 'version_no'
+    ) THEN
+        EXECUTE 'UPDATE ontology.function_version
+                 SET version = version_no::text || ''.0.0''
+                 WHERE version IS NULL';
+    END IF;
+END $$;
+
+-- 多个发布版本、多个草稿版本均可并存；旧 DEPRECATED 版本恢复为可绑定的 PUBLISHED。
 DROP INDEX IF EXISTS uk_function_published_version;
+DROP INDEX IF EXISTS uk_function_draft_version;
 ALTER TABLE function_version DROP CONSTRAINT IF EXISTS ck_function_version_status;
+ALTER TABLE function_version DROP CONSTRAINT IF EXISTS ck_function_version_format;
+ALTER TABLE function_version DROP CONSTRAINT IF EXISTS uk_function_version_no;
+ALTER TABLE function_version DROP CONSTRAINT IF EXISTS uk_function_version;
 UPDATE function_version SET version_status = 'PUBLISHED' WHERE version_status = 'DEPRECATED';
-ALTER TABLE function_version
-    ADD CONSTRAINT ck_function_version_status CHECK (version_status IN ('DRAFT', 'PUBLISHED'));
 
-ALTER TABLE function ADD COLUMN IF NOT EXISTS latest_version_no INT4 NOT NULL DEFAULT 1;
 ALTER TABLE function_param ADD COLUMN IF NOT EXISTS function_version_id BIGINT;
 ALTER TABLE ontology_action ADD COLUMN IF NOT EXISTS function_version_id BIGINT;
 ALTER TABLE function_execute_result ADD COLUMN IF NOT EXISTS function_version_id BIGINT;
@@ -51,36 +65,55 @@ BEGIN
     END IF;
 END $$;
 
--- 每个存量函数生成一个初始已发布版本。
+-- 每个尚未版本化的存量函数生成默认 1.0.0 已发布版本。
 INSERT INTO function_version
-    (function_id, function_api, version_no, code, reference_name, version_status,
+    (function_id, function_api, version, code, reference_name, version_status,
      change_log, create_time, update_time, publish_time)
-SELECT f.id, f.api, 1, f.code, f.reference_name, 'PUBLISHED',
+SELECT f.id, f.api, '1.0.0', f.code, f.reference_name, 'PUBLISHED',
        '存量数据迁移生成初始版本', f.create_time, f.update_time, f.update_time
 FROM function f
 WHERE NOT EXISTS (SELECT 1 FROM function_version v WHERE v.function_id = f.id);
 
-UPDATE function f
-SET latest_version_no = versions.max_version_no
-FROM (
-    SELECT function_id, MAX(version_no) AS max_version_no
-    FROM function_version
-    GROUP BY function_id
-) versions
-WHERE versions.function_id = f.id
-  AND f.latest_version_no < versions.max_version_no;
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM function_version WHERE version IS NULL) THEN
+        RAISE EXCEPTION 'function_version.version backfill incomplete';
+    END IF;
+    IF EXISTS (
+        SELECT 1 FROM function_version
+        WHERE version !~ '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+    ) THEN
+        RAISE EXCEPTION 'invalid semantic function version';
+    END IF;
+    IF EXISTS (
+        SELECT 1 FROM function_version
+        GROUP BY function_id, version
+        HAVING COUNT(*) > 1
+    ) THEN
+        RAISE EXCEPTION 'duplicate function version';
+    END IF;
+END $$;
+
+ALTER TABLE function_version ALTER COLUMN version SET NOT NULL;
+ALTER TABLE function_version
+    ADD CONSTRAINT uk_function_version UNIQUE (function_id, version);
+ALTER TABLE function_version
+    ADD CONSTRAINT ck_function_version_format
+    CHECK (version ~ '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$');
+ALTER TABLE function_version
+    ADD CONSTRAINT ck_function_version_status CHECK (version_status IN ('DRAFT', 'PUBLISHED'));
 
 UPDATE function_param p
 SET function_version_id = v.id
 FROM function_version v
 WHERE v.function_id = p.function_id
-  AND v.version_no = 1
+  AND v.version = '1.0.0'
   AND p.function_version_id IS NULL;
 
 UPDATE ontology_action a
 SET function_version_id = v.id
 FROM function f
-JOIN function_version v ON v.function_id = f.id AND v.version_no = 1
+JOIN function_version v ON v.function_id = f.id AND v.version = '1.0.0'
 WHERE f.api = a.function_api
   AND a.function_api IS NOT NULL
   AND a.function_version_id IS NULL;
@@ -88,7 +121,7 @@ WHERE f.api = a.function_api
 UPDATE function_execute_result r
 SET function_version_id = v.id
 FROM function f
-JOIN function_version v ON v.function_id = f.id AND v.version_no = 1
+JOIN function_version v ON v.function_id = f.id AND v.version = '1.0.0'
 WHERE f.api = r.function_api
   AND r.function_version_id IS NULL;
 
@@ -175,6 +208,8 @@ ALTER TABLE function_execute_result ALTER COLUMN function_version_id SET NOT NUL
 ALTER TABLE function DROP CONSTRAINT IF EXISTS fk_function_published_version;
 ALTER TABLE function DROP COLUMN IF EXISTS published_version_no;
 ALTER TABLE function DROP COLUMN IF EXISTS published_version_id;
+ALTER TABLE function DROP COLUMN IF EXISTS latest_version_no;
 ALTER TABLE function_param DROP COLUMN IF EXISTS function_version_no;
 ALTER TABLE ontology_action DROP COLUMN IF EXISTS function_version_no;
 ALTER TABLE function_execute_result DROP COLUMN IF EXISTS function_version_no;
+ALTER TABLE function_version DROP COLUMN IF EXISTS version_no;

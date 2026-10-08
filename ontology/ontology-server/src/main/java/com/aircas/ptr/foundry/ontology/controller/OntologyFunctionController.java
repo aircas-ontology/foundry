@@ -5,12 +5,14 @@ import com.aircas.ptr.foundry.ontology.model.param.FunctionCallbackParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionExecuteParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionUpdateParam;
-import com.aircas.ptr.foundry.ontology.model.param.FunctionVersionParam;
+import com.aircas.ptr.foundry.ontology.model.param.FunctionVersionCreateParam;
+import com.aircas.ptr.foundry.ontology.model.param.FunctionVersionPublishParam;
 import com.aircas.ptr.foundry.ontology.model.vo.FunctionDetailVO;
 import com.aircas.ptr.foundry.ontology.model.vo.FunctionExecuteResultVO;
 import com.aircas.ptr.foundry.ontology.model.vo.FunctionInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.FunctionResultVO;
 import com.aircas.ptr.foundry.ontology.model.vo.FunctionVersionVO;
+import com.aircas.ptr.foundry.ontology.model.vo.FunctionVersionCreatedVO;
 import com.aircas.ptr.foundry.ontology.service.FunctionService;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -47,7 +49,7 @@ public class OntologyFunctionController {
 
     @Operation(summary = "创建函数")
     @PostMapping
-    public RestResult<Long> createFunction(@RequestBody @Valid FunctionCreateParam param) {
+    public RestResult<FunctionVersionCreatedVO> createFunction(@RequestBody @Valid FunctionCreateParam param) {
         //todo 需要增加代码安全检测
         return RestResult.ofData(functionService.createFunction(param));
     }
@@ -70,13 +72,13 @@ public class OntologyFunctionController {
 
     @PostMapping("/version_create")
     @Operation(summary = "创建函数草稿版本")
-    public RestResult<Long> createVersion(@RequestBody @Valid FunctionVersionParam param) {
+    public RestResult<FunctionVersionCreatedVO> createVersion(@RequestBody @Valid FunctionVersionCreateParam param) {
         return RestResult.ofData(functionService.createDraft(param));
     }
 
     @PostMapping("/version_publish")
     @Operation(summary = "发布函数版本")
-    public RestResult publishVersion(@RequestBody @Valid FunctionVersionParam param) { functionService.publishVersion(param); return RestResult.success(); }
+    public RestResult publishVersion(@RequestBody @Valid FunctionVersionPublishParam param) { functionService.publishVersion(param); return RestResult.success(); }
 
     @GetMapping("/version_list")
     @Operation(summary = "查询函数版本列表")
