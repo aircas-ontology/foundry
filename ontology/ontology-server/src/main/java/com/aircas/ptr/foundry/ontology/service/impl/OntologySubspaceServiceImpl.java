@@ -1,10 +1,8 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
-import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.common.util.IdGenerator;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
-import com.aircas.ptr.foundry.ontology.model.dto.EntityNodeExportDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.OntologyInstancesExportDTO;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyLinkTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.QueryOpEnum;
@@ -43,7 +41,6 @@ import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
-import org.apache.commons.lang3.tuple.Pair;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -139,10 +136,9 @@ public class OntologySubspaceServiceImpl implements OntologySubspaceService {
             // 自动绑定数据源并创建实体表
             ontologyPropertyService.autoBindDatasource(newOntologyId);
 
-            // 导入实例（按主键 + 属性筛选条件过滤）
+            // 导入实例（按显式勾选主键过滤；属性筛选条件已由 savePropertyFilter 作为元数据写入新表）
             importInstances(sourceMeta.getUniqueIdentifier(), newOntologyId,
-                    ontologySelection.getSelectedInstancePrimaryKeys(),
-                    ontologySelection.getSelectedProperties(), sourcePropMap);
+                    ontologySelection.getSelectedInstancePrimaryKeys());
 
             // 同步 ArangoDB 实体节点，供后续创建关系使用
             entityService.createEntityNodes(newOntologyId);
@@ -254,16 +250,16 @@ public class OntologySubspaceServiceImpl implements OntologySubspaceService {
     }
 
     private void importInstances(String sourceOntologyId, String newOntologyId,
-                                 List<Object> selectedPrimaryKeys,
-                                 List<OntologySubspaceCreateParam.PropertySelection> propertySelections,
-                                 Map<String, OntologyProperty> sourcePropMap) {
+                                 List<Object> selectedPrimaryKeys) {
         var exported = entityService.exportInstances(sourceOntologyId);
         if (CollectionUtils.isEmpty(exported.getNodes())) {
             return;
         }
         var nodes = exported.getNodes();
 
-        // 按显式勾选主键过滤
+        // 仅按显式勾选的主键过滤；为空表示导入该本体下全部实例。
+        // 说明：第三步配置的属性筛选条件仅作为元数据写入 ontology_subspace_property_filter 表，
+        // 不参与本次实例导入的裁剪（需求：选实例=决定导哪些，选属性配置=记录筛选规则）。
         if (CollectionUtils.isNotEmpty(selectedPrimaryKeys)) {
             var selectedPkSet = selectedPrimaryKeys.stream()
                     .filter(Objects::nonNull)
@@ -275,18 +271,6 @@ public class OntologySubspaceServiceImpl implements OntologySubspaceService {
                     .collect(Collectors.toList());
         }
 
-        // 按属性筛选条件过滤
-        var activeFilters = propertySelections.stream()
-                .filter(p -> p.getFilter() != null)
-                .map(p -> Pair.of(sourcePropMap.get(p.getSourcePropertyUniqueIdentifier()), p.getFilter()))
-                .filter(p -> p.getLeft() != null)
-                .collect(Collectors.toList());
-        if (CollectionUtils.isNotEmpty(activeFilters)) {
-            nodes = nodes.stream()
-                    .filter(n -> matchAllFilters(n, activeFilters))
-                    .collect(Collectors.toList());
-        }
-
         if (CollectionUtils.isEmpty(nodes)) {
             log.info("子空间实例导入：过滤后无匹配实例，sourceOntologyId={}", sourceOntologyId);
             return;
@@ -294,107 +278,6 @@ public class OntologySubspaceServiceImpl implements OntologySubspaceService {
 
         var instances = OntologyInstancesExportDTO.builder().nodes(nodes).build();
         entityService.importInstances(newOntologyId, instances);
-    }
-
-    private boolean matchAllFilters(EntityNodeExportDTO node,
-                                    List<Pair<OntologyProperty, OntologySubspaceCreateParam.PropertyFilterConfig>> filters) {
-        for (var pair : filters) {
-            var prop = pair.getLeft();
-            var filter = pair.getRight();
-            var value = node.getProperties() != null ? node.getProperties().get(prop.getApiName()) : null;
-            if (!matchFilter(value, filter)) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private boolean matchFilter(Object value, OntologySubspaceCreateParam.PropertyFilterConfig filter) {
-        var op = filter.getOp();
-        var dataType = filter.getDataType();
-        var singleValue = filter.getValue();
-        var multiValues = filter.getValues();
-
-        switch (op) {
-            case EQ:
-                return compare(value, singleValue, dataType) == 0;
-            case NE:
-                return compare(value, singleValue, dataType) != 0;
-            case GT:
-                return compare(value, singleValue, dataType) > 0;
-            case GE:
-                return compare(value, singleValue, dataType) >= 0;
-            case LT:
-                return compare(value, singleValue, dataType) < 0;
-            case LE:
-                return compare(value, singleValue, dataType) <= 0;
-            case LIKE:
-                return value != null && String.valueOf(value).contains(String.valueOf(singleValue));
-            case LIKE_LEFT:
-                return value != null && String.valueOf(value).startsWith(String.valueOf(singleValue));
-            case LIKE_RIGHT:
-                return value != null && String.valueOf(value).endsWith(String.valueOf(singleValue));
-            case IN:
-                if (multiValues == null || value == null) {
-                    return false;
-                }
-                var inValues = multiValues.stream().map(v -> convert(v, dataType)).collect(Collectors.toSet());
-                return inValues.contains(convert(value, dataType));
-            case NOT_IN:
-                if (multiValues == null || value == null) {
-                    return true;
-                }
-                var notInValues = multiValues.stream().map(v -> convert(v, dataType)).collect(Collectors.toSet());
-                return !notInValues.contains(convert(value, dataType));
-            case BETWEEN:
-                if (multiValues == null || multiValues.size() < 2 || value == null) {
-                    return false;
-                }
-                var lower = convert(multiValues.get(0), dataType);
-                var upper = convert(multiValues.get(1), dataType);
-                var cv = convert(value, dataType);
-                return compareComparable(cv, lower) >= 0 && compareComparable(cv, upper) <= 0;
-            case IS_NULL:
-                return value == null;
-            case IS_NOT_NULL:
-                return value != null;
-            default:
-                throw new BusinessException("不支持的筛选操作符：" + op, HttpStatus.BAD_REQUEST);
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    private int compare(Object v1, Object v2, OntologyDataTypeEnum dataType) {
-        if (v1 == null || v2 == null) {
-            throw new BusinessException("筛选比较值不能为 null", HttpStatus.BAD_REQUEST);
-        }
-        var c1 = convert(v1, dataType);
-        var c2 = convert(v2, dataType);
-        return compareComparable(c1, c2);
-    }
-
-    @SuppressWarnings({"rawtypes", "unchecked"})
-    private int compareComparable(Object c1, Object c2) {
-        if (!(c1 instanceof Comparable) || !(c2 instanceof Comparable)) {
-            throw new BusinessException("筛选值不可比较", HttpStatus.BAD_REQUEST);
-        }
-        return ((Comparable) c1).compareTo(c2);
-    }
-
-    private Object convert(Object value, OntologyDataTypeEnum dataType) {
-        if (value == null || dataType == null) {
-            return value;
-        }
-        switch (dataType) {
-            case Date:
-            case Timestamp:
-                if (value instanceof java.util.Date) {
-                    return value;
-                }
-                return value;
-            default:
-                return OntologyDataTypeEnum.convert(dataType, value);
-        }
     }
 
     private String createLinkInSubspace(Integer spaceId, OntologyLinkGroup sourceLink,
@@ -418,6 +301,9 @@ public class OntologySubspaceServiceImpl implements OntologySubspaceService {
                         .eq(OntologyLinkGroup::getOntologyUniqueIdentifierTo, toId)
                         .eq(OntologyLinkGroup::getApiName, linkApiName));
         PreconditionUtils.checkNotNull(newLink, "关系创建失败", HttpStatus.INTERNAL_SERVER_ERROR);
+        // 平台 createLink 生成的关系边默认 Status.DELETE（按启用过滤的查询看不到）。
+        // 子空间为一次性全量复制，这里将新建关系边置为 ENABLE，使其在子空间中可见可用。
+        entityService.activateLinkRelations(newLink.getUniqueIdentifier());
         return newLink.getUniqueIdentifier();
     }
 

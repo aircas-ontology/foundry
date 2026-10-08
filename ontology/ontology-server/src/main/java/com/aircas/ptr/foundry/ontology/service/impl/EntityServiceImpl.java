@@ -163,6 +163,16 @@ public class EntityServiceImpl implements EntityService {
         }
     }
 
+    @Override
+    public void activateLinkRelations(String linkUniqueIdentifier) {
+        var relations = relationRepository.queryRelationsByLinkId(linkUniqueIdentifier);
+        if (CollectionUtils.isEmpty(relations)) {
+            return;
+        }
+        relations.forEach(r -> relationRepository.updateRelation(
+                r.getStartTime(), r.getEndTime(), r.getTimeWindows(), Status.ENABLE, r.getId()));
+    }
+
 
     /**
      * 标题健需要和主键为同一个数据源

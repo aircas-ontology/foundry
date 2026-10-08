@@ -22,6 +22,15 @@ public interface EntityService {
 
     void createEntityRelations(String linkUniqueIdentifier);
 
+    /**
+     * 将指定关系下的全部实体关系边置为 ENABLE。
+     * <p>平台 {@code createEntityRelations} 默认生成 Status.DELETE 的边（启用过滤查询看不到），
+     * 子空间等一次性全量复制场景调用此方法将其激活为可见可用的关系。</p>
+     *
+     * @param linkUniqueIdentifier 关系唯一标识
+     */
+    void activateLinkRelations(String linkUniqueIdentifier);
+
     void syncNodes(String ontologyUniqueIdentifier, String schemaName, String datasourceId, String primaryKeyColumnName, String titleKeyColumnName);
 
     void deleteRelationsByLinkId(String linkId);
