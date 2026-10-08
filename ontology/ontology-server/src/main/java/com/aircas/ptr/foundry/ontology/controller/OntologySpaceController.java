@@ -11,7 +11,10 @@ import com.aircas.ptr.foundry.ontology.model.param.OntologySpaceUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologySpaceCanvasCreateVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologySpaceStatisticVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologySpaceVO;
+import com.aircas.ptr.foundry.ontology.model.param.OntologySubspaceCreateParam;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologySubspaceCreateVO;
 import com.aircas.ptr.foundry.ontology.service.OntologySpaceService;
+import com.aircas.ptr.foundry.ontology.service.OntologySubspaceService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -37,6 +40,8 @@ public class OntologySpaceController {
     private final OntologySpaceService ontologySpaceService;
 
     private final ObjectMapper objectMapper;
+
+    private final OntologySubspaceService ontologySubspaceService;
 
 
     @GetMapping("/export")
@@ -74,6 +79,15 @@ public class OntologySpaceController {
     @Operation(summary = "画布一键建空间：创建空间并批量创建对象、属性、关系")
     public RestResult<OntologySpaceCanvasCreateVO> createSpaceWithCanvasContent(@RequestBody @Valid OntologySpaceCanvasCreateParam param) {
         var res = ontologySpaceService.createSpaceWithCanvasContent(param);
+        return RestResult.ofData(res);
+    }
+
+    @PostMapping("/subspace")
+    @Operation(summary = "基于父空间创建子空间",
+            description = "按向导四步生成子空间：选择对象 → 选择实例 → 选择属性（含筛选条件，记录在 ontology_subspace_property_filter 表） → 选择关系。"
+                    + "返回子空间 id 及源/新本体、源/新关系 uniqueIdentifier 映射。")
+    public RestResult<OntologySubspaceCreateVO> createSubspace(@RequestBody @Valid OntologySubspaceCreateParam param) {
+        var res = ontologySubspaceService.createSubspace(param);
         return RestResult.ofData(res);
     }
 
