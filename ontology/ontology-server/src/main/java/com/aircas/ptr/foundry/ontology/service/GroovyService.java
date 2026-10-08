@@ -32,5 +32,5 @@ public interface GroovyService {
     /**
      * 函数更新/删除时主动失效编译缓存，避免旧 Class 长期占用 Metaspace。
      */
-    void invalidateCompiledClass(Long functionVersionId);
+    void invalidateCompiledClass(Long functionVersionId, String functionApi);
 }

@@ -56,7 +56,7 @@ public class GroovyServiceImpl implements GroovyService {
     private final static String FUNCTION_RESULT_REFERENCE_NAME = "com.aircas.ptr.foundry.ontology.model.vo.FunctionResultVO";
 
     /**
-     * 按 functionApi 缓存。每个条目使用独立 ClassLoader，失效时可关闭，便于 GC 回收 Class（Metaspace）。
+     * 按 functionApi + functionVersionId 缓存。每个条目使用独立 ClassLoader，失效时可关闭，便于 GC 回收 Class（Metaspace）。
      * maximumSize / expireAfterAccess 作为兜底，防止忘记 invalidate 时无限增长。
      */
     private final Cache<String, CompiledScript> compiledScriptCache = CacheBuilder.newBuilder()
@@ -135,7 +135,7 @@ public class GroovyServiceImpl implements GroovyService {
     public String executeGroovy(Long functionVersionId, String functionApi, String code, Map<String, Object> paramMap, List<FunctionParamPO> paramInfos) {
         PreconditionUtils.checkArgument(StringUtils.isNotEmpty(functionApi), "functionApi不能为空");
         PreconditionUtils.checkNotNull(functionVersionId, "functionVersionId不能为空");
-        Class<?> groovyClass = getOrCompileByVersion(functionVersionId, code);
+        Class<?> groovyClass = getOrCompileByVersion(functionVersionId, functionApi, code);
         GroovyObject groovyInstance = (GroovyObject) groovyClass.getDeclaredConstructor().newInstance();
 
         var paramValues = paramInfos.stream().map(p -> {
@@ -153,11 +153,11 @@ public class GroovyServiceImpl implements GroovyService {
     }
 
     @Override
-    public void invalidateCompiledClass(Long functionVersionId) {
-        if (functionVersionId == null) {
+    public void invalidateCompiledClass(Long functionVersionId, String functionApi) {
+        if (functionVersionId == null || StringUtils.isEmpty(functionApi)) {
             return;
         }
-        compiledScriptCache.invalidate(String.valueOf(functionVersionId));
+        compiledScriptCache.invalidate(compiledScriptCacheKey(functionVersionId, functionApi));
     }
 
     @PreDestroy
@@ -174,10 +174,10 @@ public class GroovyServiceImpl implements GroovyService {
     }
 
     /**
-     * 按 functionApi 缓存；DB 中 code 变更后 codeHash 不一致则替换并关闭旧 ClassLoader。
+     * 按 functionApi + functionVersionId 缓存；DB 中 code 变更后 codeHash 不一致则替换并关闭旧 ClassLoader。
      */
-    private Class<?> getOrCompileByVersion(Long functionVersionId, String code) {
-        String cacheId = String.valueOf(functionVersionId);
+    private Class<?> getOrCompileByVersion(Long functionVersionId, String functionApi, String code) {
+        String cacheId = compiledScriptCacheKey(functionVersionId, functionApi);
         String codeHash = cacheKey(code);
         CompiledScript cached = compiledScriptCache.getIfPresent(cacheId);
         if (cached != null && codeHash.equals(cached.codeHash)) {
@@ -187,6 +187,10 @@ public class GroovyServiceImpl implements GroovyService {
         // put 替换旧条目时 Guava 会走 removalListener 关闭旧 ClassLoader
         compiledScriptCache.put(cacheId, compiled);
         return compiled.clazz;
+    }
+
+    private String compiledScriptCacheKey(Long functionVersionId, String functionApi) {
+        return functionApi + ":" + functionVersionId;
     }
 
     private CompiledScript compile(String code) {
