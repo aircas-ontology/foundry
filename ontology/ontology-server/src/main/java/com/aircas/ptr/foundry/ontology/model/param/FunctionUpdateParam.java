@@ -2,14 +2,15 @@ package com.aircas.ptr.foundry.ontology.model.param;
 
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionModelEnum;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
-
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 
 @Data
 @SuperBuilder
@@ -18,33 +19,36 @@ import jakarta.validation.constraints.NotNull;
 @NoArgsConstructor
 @Schema(description = "函数更新请求")
 public class FunctionUpdateParam {
-
-
-    @Schema(name = "functionApi", description = "函数api", required = true)
     @NotBlank(message = "functionApi is empty")
+    @Schema(description = "函数 API", requiredMode = Schema.RequiredMode.REQUIRED)
     private String functionApi;
 
     @NotNull(message = "functionVersionId is null")
-    @Schema(description = "待更新的草稿版本 ID", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(description = "待更新的函数版本 ID", requiredMode = Schema.RequiredMode.REQUIRED)
     private Long functionVersionId;
 
-    @Schema(name = "description", description = "描述")
+    @NotBlank(message = "version is empty")
+    @Pattern(regexp = "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$",
+            message = "version must match x.y.z")
+    @Size(max = 64, message = "version length must not exceed 64")
+    @Schema(description = "版本号，仅校验与 functionVersionId 一致，不允许修改",
+            example = "1.2.31", requiredMode = Schema.RequiredMode.REQUIRED)
+    private String version;
+
+    @Schema(description = "描述")
     private String description;
 
-    @Schema(name = "displayName", description = "函数名称")
     @NotBlank(message = "displayName is empty")
+    @Schema(description = "函数名称", requiredMode = Schema.RequiredMode.REQUIRED)
     private String displayName;
 
-    @Schema(name = "code", description = "自定义函数：函数代码")
+    @Schema(description = "自定义函数代码")
     private String code;
 
-    @Schema(name = "referenceName", description = "外部函数：函数全限定名")
+    @Schema(description = "外部函数全限定名")
     private String referenceName;
 
-    @Schema(name = "type", description = "函数模型")
     @NotNull(message = "model is null")
+    @Schema(description = "函数模型", requiredMode = Schema.RequiredMode.REQUIRED)
     private FunctionModelEnum model;
-
-    @Schema(description = "版本变更说明")
-    private String changeLog;
 }

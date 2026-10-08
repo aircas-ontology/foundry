@@ -162,9 +162,12 @@ alter sequence action_handle_task_id_seq1 owned by action_handle_task.id;
 
 create table if not exists function
 (
-    api               varchar(255)                                                          not null
-    constraint uk_function_api
-    unique,
+    api               varchar(255)                                                          not null,
+    version           varchar(64)                                                           not null,
+    version_status    varchar(32) default 'PUBLISHED'                                       not null,
+    change_log        varchar(1024),
+    create_by         varchar(128),
+    publish_time      timestamp(6),
     description       varchar(25500),
     status            smallint                                                              not null,
     id                bigint default nextval('ontology.ontology_function_id_seq'::regclass) not null
@@ -177,7 +180,10 @@ create table if not exists function
     code              text,
     display_name      varchar(255),
     model                varchar(255),
-    ontology_space_id    integer
+    ontology_space_id    integer,
+    constraint uk_function_api_version unique(api, version),
+    constraint ck_function_version_format check(version ~ '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'),
+    constraint ck_function_version_status check(version_status in ('DRAFT','PUBLISHED'))
     );
 
 comment on table function is '函数';
@@ -206,25 +212,6 @@ comment on column function.model is '函数模型';
 
 comment on column function.ontology_space_id is '本体空间id';
 
-create table if not exists function_version
-(
-    id bigserial primary key,
-    function_id bigint not null constraint fk_function_version_function references function(id),
-    function_api varchar(255) not null,
-    version varchar(64) not null,
-    code text,
-    reference_name varchar(512),
-    version_status varchar(32) default 'DRAFT' not null,
-    change_log varchar(1024),
-    create_by varchar(128),
-    publish_time timestamp(6),
-    create_time timestamp(6) default current_timestamp,
-    update_time timestamp(6) default current_timestamp,
-    constraint uk_function_version unique(function_id, version),
-    constraint ck_function_version_format check(version ~ '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'),
-    constraint ck_function_version_status check(version_status in ('DRAFT','PUBLISHED'))
-    );
-
 create table if not exists function_execute_result
 (
     id                  integer default nextval('ontology.function_execute_result_id_seq'::regclass) not null
@@ -238,7 +225,7 @@ create table if not exists function_execute_result
     update_time         timestamp(6),
     function_param      text,
     task_status         varchar(255),
-    function_version_id bigint not null constraint fk_execute_result_function_version references function_version(id)
+    function_version_id bigint not null constraint fk_execute_result_function_version references function(id)
     );
 
 comment on table function_execute_result is '异步函数执行结果';
@@ -264,7 +251,6 @@ create unique index if not exists uk_task_id
 
 create table if not exists function_param
 (
-    function_id         bigint        not null,
     param_name          varchar(255)  not null,
     param_type          varchar(1024) not null,
     id                  bigserial
@@ -276,7 +262,7 @@ create table if not exists function_param
     param_schema        text,
     param_order         integer       not null,
     description         varchar(255),
-    function_version_id bigint not null constraint fk_function_param_version references function_version(id)
+    function_version_id bigint not null constraint fk_function_param_version references function(id)
     );
 
 comment on table function_param is '函数参数';
@@ -310,7 +296,7 @@ create table if not exists ontology_action
     icon                       varchar(255),
     ontology_space_id          integer,
     action_category_id         integer,
-    function_version_id        bigint constraint fk_action_function_version references function_version(id)
+    function_version_id        bigint constraint fk_action_function_version references function(id)
     );
 
 comment on table ontology_action is '本体行为';

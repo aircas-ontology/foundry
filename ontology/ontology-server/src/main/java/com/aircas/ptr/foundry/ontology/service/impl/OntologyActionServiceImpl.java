@@ -50,9 +50,6 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     private FunctionMapper functionMapper;
 
     @Resource
-    private FunctionVersionMapper functionVersionMapper;
-
-    @Resource
     private FunctionParamMapper functionParamMapper;
 
     @Resource
@@ -116,13 +113,12 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         var funcApi = param.getFunctionApi();
         PreconditionUtils.checkArgument(StringUtils.isNotEmpty(funcApi) || param.getFunctionVersionId() == null,
                 "未绑定函数时不能指定 functionVersionId", HttpStatus.BAD_REQUEST);
-        Function func = StringUtils.isEmpty(funcApi) ? null : functionMapper.selectOne(new LambdaQueryWrapper<Function>().eq(Function::getApi, funcApi));
-        FunctionVersion boundVersion = null;
+        Function boundVersion = null;
         if (StringUtils.isNotEmpty(funcApi)) {
-            PreconditionUtils.checkArgument(func != null, "function api 不存在：" + funcApi, HttpStatus.BAD_REQUEST);
             PreconditionUtils.checkNotNull(param.getFunctionVersionId(), "绑定函数时 functionVersionId 不能为空");
-            boundVersion = functionVersionMapper.selectById(param.getFunctionVersionId());
-            PreconditionUtils.checkArgument(boundVersion != null && boundVersion.getFunctionId().equals(func.getId())
+            boundVersion = functionMapper.selectById(param.getFunctionVersionId());
+            PreconditionUtils.checkArgument(boundVersion != null && funcApi.equals(boundVersion.getApi())
+                    && !Objects.equals(boundVersion.getStatus(), Status.DELETE.getValue())
                     && boundVersion.getVersionStatus() == FunctionStatusEnum.PUBLISHED,
                     "函数版本不存在或不可绑定：" + funcApi, HttpStatus.BAD_REQUEST);
         }
@@ -154,7 +150,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             PreconditionUtils.checkArgument(actionLink == null, "该本体关系已被其他行为关联：" + link.getOntologyLinkUniqIdentifier(), HttpStatus.BAD_REQUEST);
 
             var output = functionParams.stream().filter(p -> p.getCategory().equals(FunctionParamCategoryEnum.OUTPUT)).findFirst().orElse(null);
-            PreconditionUtils.checkArgument(output != null, "函数无输出参数,functionId:" + func.getId());
+            PreconditionUtils.checkArgument(output != null,
+                    "函数无输出参数，functionVersionId:" + boundVersion.getId());
             actionLinkMapper.insert(OntologyActionLink.builder()
                     .ontologyActionId(ontologyAction.getId())
                     .ontologyLinkParamExpression(link.getOntologyLinkFunctionParamExpression())
@@ -207,15 +204,13 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         PreconditionUtils.checkArgument(StringUtils.isNotBlank(action.getFunctionApi()),
                 "行为未绑定函数：" + param.getActionApi(), HttpStatus.BAD_REQUEST);
 
-        Function function = functionMapper.selectOne(new LambdaQueryWrapper<Function>()
-                .eq(Function::getApi, action.getFunctionApi()));
-        PreconditionUtils.checkArgument(function != null, "函数不存在：" + action.getFunctionApi(), HttpStatus.BAD_REQUEST);
-
-        FunctionVersion sourceVersion = functionVersionMapper.selectById(action.getFunctionVersionId());
-        FunctionVersion targetVersion = functionVersionMapper.selectById(param.getTargetFunctionVersionId());
-        PreconditionUtils.checkArgument(sourceVersion != null && sourceVersion.getFunctionId().equals(function.getId()),
+        Function sourceVersion = functionMapper.selectById(action.getFunctionVersionId());
+        Function targetVersion = functionMapper.selectById(param.getTargetFunctionVersionId());
+        PreconditionUtils.checkArgument(sourceVersion != null && action.getFunctionApi().equals(sourceVersion.getApi())
+                        && !Objects.equals(sourceVersion.getStatus(), Status.DELETE.getValue()),
                 "行为当前函数版本无效", HttpStatus.BAD_REQUEST);
-        PreconditionUtils.checkArgument(targetVersion != null && targetVersion.getFunctionId().equals(function.getId()),
+        PreconditionUtils.checkArgument(targetVersion != null && action.getFunctionApi().equals(targetVersion.getApi())
+                        && !Objects.equals(targetVersion.getStatus(), Status.DELETE.getValue()),
                 "目标版本不属于行为绑定的函数", HttpStatus.BAD_REQUEST);
         PreconditionUtils.checkArgument(targetVersion.getVersionStatus() == FunctionStatusEnum.PUBLISHED,
                 "行为不能升级到草稿版本", HttpStatus.BAD_REQUEST);

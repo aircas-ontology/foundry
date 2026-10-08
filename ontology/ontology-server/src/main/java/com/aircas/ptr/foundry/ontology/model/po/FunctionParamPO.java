@@ -25,8 +25,6 @@ public class FunctionParamPO {
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    private Long functionId;
-
     private Long functionVersionId;
 
     private String paramName;

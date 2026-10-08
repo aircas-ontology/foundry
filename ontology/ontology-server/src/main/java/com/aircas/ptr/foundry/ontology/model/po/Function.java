@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.ontology.model.po;
 
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionModelEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.FunctionStatusEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
 import com.baomidou.mybatisplus.annotation.*;
 import lombok.AllArgsConstructor;
@@ -42,6 +43,17 @@ public class Function {
      * Column: api
      */
     private String api;
+
+    /** Business version. The row id is the technical functionVersionId. */
+    private String version;
+
+    private FunctionStatusEnum versionStatus;
+
+    private String changeLog;
+
+    private String createBy;
+
+    private Date publishTime;
 
     /**
      * Column: desc

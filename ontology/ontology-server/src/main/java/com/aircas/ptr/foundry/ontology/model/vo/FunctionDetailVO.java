@@ -1,6 +1,5 @@
 package com.aircas.ptr.foundry.ontology.model.vo;
 
-
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -15,26 +14,12 @@ import java.util.List;
 @Data
 @SuperBuilder
 @Accessors(chain = true)
-@Schema(description = "函数详细信息VO")
+@Schema(description = "函数版本详细信息")
 public class FunctionDetailVO extends FunctionInfoVO {
-
-
-    @Schema(name = "params", description = "函数参数")
+    @Schema(description = "函数参数")
     private List<FunctionParameterVO> params;
-
-    @Schema(name = "referenceName", description = "函数全限定名称")
+    @Schema(description = "函数全限定名")
     private String referenceName;
-
-    @Schema(name = "code", description = "函数代码：只有自定义函数会存在")
+    @Schema(description = "自定义函数代码")
     private String code;
-
-    @Schema(description = "函数版本 ID")
-    private Long functionVersionId;
-
-    @Schema(description = "自定义版本号", example = "1.2.31")
-    private String version;
-
-    @Schema(description = "版本状态")
-    private com.aircas.ptr.foundry.ontology.model.enums.FunctionStatusEnum versionStatus;
-
 }
