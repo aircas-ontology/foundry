@@ -84,8 +84,7 @@ public class OntologySpaceController {
 
     @PostMapping("/subspace")
     @Operation(summary = "基于父空间创建子空间",
-            description = "按向导四步生成子空间：选择对象 → 选择实例 → 选择属性（含筛选条件，记录在 ontology_subspace_property_filter 表） → 选择关系。"
-                    + "返回子空间 id 及源/新本体、源/新关系 uniqueIdentifier 映射。")
+            description = "创建子空间")
     public RestResult<OntologySubspaceCreateVO> createSubspace(@RequestBody @Valid OntologySubspaceCreateParam param) {
         var res = ontologySubspaceService.createSubspace(param);
         return RestResult.ofData(res);

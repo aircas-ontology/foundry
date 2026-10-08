@@ -15,7 +15,6 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Pattern;
 import java.util.List;
 
 /**
@@ -40,7 +39,6 @@ public class OntologySubspaceCreateParam {
 
     @Schema(name = "apiName", description = "子空间 api 名称", example = "subspace_1791431719233", required = true)
     @NotBlank(message = "apiName is empty")
-    @Pattern(regexp = "^[a-zA-Z_$][a-zA-Z0-9_$]{0,62}$", message = "apiName格式不合法")
     private String apiName;
 
     @Schema(name = "description", description = "子空间描述")
@@ -148,7 +146,6 @@ public class OntologySubspaceCreateParam {
         private String name;
 
         @Schema(name = "apiName", description = "新关系 api 名称；为空则自动生成")
-        @Pattern(regexp = "^[a-zA-Z_$][a-zA-Z0-9_$]{0,62}$", message = "apiName格式不合法")
         private String apiName;
 
         @Schema(name = "type", description = "新关系类型；为空则沿用源关系类型")
