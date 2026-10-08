@@ -35,6 +35,12 @@
             <version>${project.version}</version>
         </dependency>
 
+        <!-- Spring AI MCP Server（WebMVC SSE 传输）：把本体/数据源只读能力以 MCP 工具形式暴露给 agent-server 动态发现；版本由 spring-ai-bom 管理 -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-mcp-server-webmvc</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-amqp</artifactId>

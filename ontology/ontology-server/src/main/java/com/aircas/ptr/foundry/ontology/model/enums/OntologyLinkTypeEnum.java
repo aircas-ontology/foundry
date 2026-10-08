@@ -12,6 +12,8 @@ public enum OntologyLinkTypeEnum {
     STRIKE(3, "打击关系"),
     COORDINATION(4, "协同关系"),
     OTHER(5, "其他关系"),
+    POSSESSION(6, "拥有关系"),
+    ATTRIBUTION(7, "归属关系"),
     ;
 
     private final Integer value;

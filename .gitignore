@@ -34,3 +34,6 @@ build/
 
 ### Local Spring profile (secrets / machine-specific, do not commit) ###
 **/application-local.yml
+
+### 代码审查报告（本地留存，不入库）###
+CODE_REVIEW_*.md
