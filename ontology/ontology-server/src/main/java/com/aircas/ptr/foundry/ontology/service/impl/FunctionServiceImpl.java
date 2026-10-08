@@ -114,12 +114,10 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         save(function);
         String versionName = StringUtils.defaultIfBlank(param.getVersion(), "1.0.0");
         FunctionVersion version = newVersion(
-                function, versionName, param.getCode(), param.getReferenceName(), param.getChangeLog());
+                function, versionName, param.getCode(), param.getReferenceName());
         functionVersionMapper.insert(version);
         insertParams(function.getId(), version, function.getType());
-        if (Boolean.TRUE.equals(param.getPublish())) {
-            publish(function, version);
-        }
+        publish(function, version);
         return FunctionVersionCreatedVO.builder()
                 .functionVersionId(version.getId())
                 .version(version.getVersion())
@@ -142,35 +140,6 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         functionParamService.remove(new LambdaQueryWrapper<FunctionParamPO>()
                 .eq(FunctionParamPO::getFunctionVersionId, version.getId()));
         insertParams(function.getId(), version, function.getType());
-    }
-
-    @Override
-    @Transactional(value = "mainTransactionManager")
-    public FunctionVersionCreatedVO createDraft(FunctionVersionCreateParam param) {
-        Function function = requireFunction(param.getFunctionApi());
-        requireVersionAvailable(function, param.getVersion());
-        FunctionVersion source = requireVersion(function, param.getSourceFunctionVersionId());
-        PreconditionUtils.checkArgument(source.getVersionStatus() == FunctionStatusEnum.PUBLISHED,
-                "只能基于已发布版本创建草稿", HttpStatus.BAD_REQUEST);
-        FunctionVersion version = newVersion(
-                function,
-                param.getVersion(),
-                param.getCode() != null ? param.getCode() : source.getCode(),
-                param.getReferenceName() != null ? param.getReferenceName() : source.getReferenceName(),
-                param.getChangeLog());
-        functionVersionMapper.insert(version);
-        insertParams(function.getId(), version, function.getType());
-        return FunctionVersionCreatedVO.builder()
-                .functionVersionId(version.getId())
-                .version(version.getVersion())
-                .build();
-    }
-
-    @Override
-    @Transactional(value = "mainTransactionManager")
-    public void publishVersion(FunctionVersionPublishParam param) {
-        Function function = requireFunction(param.getFunctionApi());
-        publish(function, requireVersion(function, param.getFunctionVersionId()));
     }
 
     private void publish(Function function, FunctionVersion version) {
@@ -337,16 +306,8 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         return version;
     }
 
-    private void requireVersionAvailable(Function function, String version) {
-        Long count = functionVersionMapper.selectCount(new LambdaQueryWrapper<FunctionVersion>()
-                .eq(FunctionVersion::getFunctionId, function.getId())
-                .eq(FunctionVersion::getVersion, version));
-        PreconditionUtils.checkArgument(count == 0,
-                "函数版本号已存在: " + function.getApi() + "#" + version, HttpStatus.BAD_REQUEST);
-    }
-
     private FunctionVersion newVersion(
-            Function function, String versionName, String code, String referenceName, String changeLog) {
+            Function function, String versionName, String code, String referenceName) {
         String user = UserContextHolder.get() == null ? null : UserContextHolder.get().getUsername();
         return FunctionVersion.builder()
                 .functionId(function.getId())
@@ -355,7 +316,6 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 .code(code)
                 .referenceName(referenceName)
                 .versionStatus(FunctionStatusEnum.DRAFT)
-                .changeLog(changeLog)
                 .createBy(user)
                 .build();
     }

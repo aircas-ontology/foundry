@@ -5,8 +5,6 @@ import com.aircas.ptr.foundry.ontology.model.param.FunctionCallbackParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionExecuteParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionUpdateParam;
-import com.aircas.ptr.foundry.ontology.model.param.FunctionVersionCreateParam;
-import com.aircas.ptr.foundry.ontology.model.param.FunctionVersionPublishParam;
 import com.aircas.ptr.foundry.ontology.model.vo.FunctionDetailVO;
 import com.aircas.ptr.foundry.ontology.model.vo.FunctionExecuteResultVO;
 import com.aircas.ptr.foundry.ontology.model.vo.FunctionInfoVO;
@@ -70,15 +68,7 @@ public class OntologyFunctionController {
         return RestResult.ofData(functionService.getFunctionDetailByApi(functionApi, functionVersionId));
     }
 
-    @PostMapping("/version_create")
-    @Operation(summary = "创建函数草稿版本")
-    public RestResult<FunctionVersionCreatedVO> createVersion(@RequestBody @Valid FunctionVersionCreateParam param) {
-        return RestResult.ofData(functionService.createDraft(param));
-    }
-
-    @PostMapping("/version_publish")
-    @Operation(summary = "发布函数版本")
-    public RestResult publishVersion(@RequestBody @Valid FunctionVersionPublishParam param) { functionService.publishVersion(param); return RestResult.success(); }
+    // TODO 创建函数草稿版本、发布函数版本接口暂不开放，后续版本管理迭代时实现。
 
     @GetMapping("/version_list")
     @Operation(summary = "查询函数版本列表")

@@ -4,8 +4,6 @@ package com.aircas.ptr.foundry.ontology.service;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionExecuteParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionUpdateParam;
-import com.aircas.ptr.foundry.ontology.model.param.FunctionVersionCreateParam;
-import com.aircas.ptr.foundry.ontology.model.param.FunctionVersionPublishParam;
 import com.aircas.ptr.foundry.ontology.model.po.Function;
 import com.aircas.ptr.foundry.ontology.model.vo.FunctionDetailVO;
 import com.aircas.ptr.foundry.ontology.model.vo.FunctionExecuteResultVO;
@@ -36,10 +34,6 @@ public interface FunctionService extends IService<Function> {
     FunctionExecuteResultVO getExecuteResult(String taskId);
 
     void callback(FunctionResultVO result);
-
-    FunctionVersionCreatedVO createDraft(FunctionVersionCreateParam param);
-
-    void publishVersion(FunctionVersionPublishParam param);
 
     Page<FunctionVersionVO> listVersions(String functionApi, Integer pageNum, Integer pageSize);
 }

@@ -47,15 +47,9 @@ public class FunctionCreateParam {
     @Schema(name = "referenceName", description = "外部函数：函数全限定名")
     private String referenceName;
 
-    @Schema(description = "版本变更说明")
-    private String changeLog;
-
     @Pattern(regexp = "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$",
             message = "version must match x.y.z")
     @Size(max = 64, message = "version length must not exceed 64")
     @Schema(description = "自定义版本号，严格为 x.y.z；为空时默认 1.0.0", example = "1.0.0")
     private String version;
-
-    @Schema(description = "创建后立即发布")
-    private Boolean publish;
 }
