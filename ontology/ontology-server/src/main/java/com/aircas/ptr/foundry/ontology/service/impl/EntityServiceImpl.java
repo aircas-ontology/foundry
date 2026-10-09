@@ -173,6 +173,12 @@ public class EntityServiceImpl implements EntityService {
                 r.getStartTime(), r.getEndTime(), r.getTimeWindows(), Status.ENABLE, r.getId()));
     }
 
+    @Override
+    public boolean hasEnabledRelations(String linkUniqueIdentifier) {
+        var relations = relationRepository.queryRelationsByLinkId(linkUniqueIdentifier);
+        return relations.stream().anyMatch(r -> Status.ENABLE.equals(r.getStatus()));
+    }
+
 
     /**
      * 标题健需要和主键为同一个数据源

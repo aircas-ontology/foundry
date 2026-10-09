@@ -662,6 +662,11 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
             importInstances(sourceMeta.getUniqueIdentifier(), newOntologyId,
                     ontologySelection.getSelectedInstancePrimaryKeys());
 
+            // 同步导入的实例到 ArangoDB 图（node 集合）：本步补齐“实例数据”。
+            // 否则子空间 ArangoDB 里既无实例节点，下面第 6 步 createLink 调用
+            // createEntityRelations 生成 relation 边时也会因找不到两端节点而落空（即“关系数据”缺失）。
+            entityService.createEntityNodes(newOntologyId);
+
         }
 
         // 6. 复制关系
@@ -829,15 +834,15 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                         .eq(OntologyLinkGroup::getOntologyUniqueIdentifierTo, toId)
                         .eq(OntologyLinkGroup::getApiName, linkApiName));
         PreconditionUtils.checkNotNull(newLink, "关系创建失败", HttpStatus.INTERNAL_SERVER_ERROR);
-        // 平台 createLink 生成的关系边默认 Status.DELETE（按启用过滤的查询看不到）。
-        // 子空间为一次性全量复制，这里将新建关系边置为 ENABLE，使其在子空间中可见可用。
-        entityService.activateLinkRelations(newLink.getUniqueIdentifier());
+
+        if (entityService.hasEnabledRelations(sourceLink.getUniqueIdentifier())) {
+            entityService.activateLinkRelations(newLink.getUniqueIdentifier());
+        }
         return newLink.getUniqueIdentifier();
     }
 
     /**
      * 拷贝父空间的本体分类树（ontology_category，按 spaceId）到子空间。
-     * 复用 createSpace 已生成的“全部”根节点，仅复制其下多级子节点，并把 旧分类id -> 新分类id 映射返回。
      */
     private Map<Integer, Integer> copyOntologyCategoryTree(Integer parentSpaceId, Integer newSpaceId) {
         Integer newRootId = getOntologyCategoryRoot(newSpaceId);
