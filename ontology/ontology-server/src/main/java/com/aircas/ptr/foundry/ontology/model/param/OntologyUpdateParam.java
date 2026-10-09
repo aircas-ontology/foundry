@@ -24,7 +24,7 @@ public class OntologyUpdateParam extends OntologyIdentifierParam {
     /**
      * 图标
      */
-    @Schema(name = "icon", description = "本体图标", example = "飞机图标base64")
+    @Schema(name = "iconUrl", description = "本体图标", example = "飞机图标base64")
     private String icon;
 
     /**

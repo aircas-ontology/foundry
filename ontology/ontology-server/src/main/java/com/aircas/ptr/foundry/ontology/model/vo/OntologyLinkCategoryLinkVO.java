@@ -44,4 +44,12 @@ public class OntologyLinkCategoryLinkVO {
 
     @Schema(name = "ontologyIconTO", description = "结束本体icon")
     private String ontologyIconTO;
+
+    @Schema(name = "apiName", description = "apiName")
+    private String apiName;
+
+    @Schema(name = "description", description = "description")
+    private String description;
+
+
 }

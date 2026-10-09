@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.vo;
 
+import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
@@ -68,4 +69,10 @@ public class OntologyPropertyInfoVO {
 
     @Schema(name = "metadata", description = "属性元数据")
     private JsonNode metadata;
+
+    @Schema(name = "propertyType", description = "属性基础类型、时间、字符、数值", example = "String")
+    private OntologyDataTypeEnum propertyType;
+
+    @Schema(name = "apiName", description = "在代码里用的属性名称、驼峰式", example = "mbbh")
+    private String apiName;
 }

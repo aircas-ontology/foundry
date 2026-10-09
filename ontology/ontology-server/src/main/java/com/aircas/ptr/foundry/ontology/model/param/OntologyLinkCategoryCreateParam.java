@@ -29,6 +29,7 @@ public class OntologyLinkCategoryCreateParam extends OntologySpaceIdParam {
     @NotBlank(message = "name is empty")
     private String name;
 
+
     @Schema(name = "children", description = "子节点")
     @Valid
     private List<CategoryNode> children;

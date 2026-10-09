@@ -2,6 +2,7 @@ package com.aircas.ptr.foundry.ontology.service;
 
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyLinkDirectionEnum;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyLinkCreateParam;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyLinkUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkGraphVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkInfoVO;
@@ -15,6 +16,8 @@ import java.util.List;
 public interface OntologyLinkGroupService extends IService<OntologyLinkGroup> {
 
     void createLink(OntologyLinkCreateParam linkCreateParam);
+
+    void updateLink(OntologyLinkUpdateParam linkUpdateParam);
 
     List<OntologyMetaInfoVO> getLinkedOntology(String ontologyUniqueIdentifier);
 

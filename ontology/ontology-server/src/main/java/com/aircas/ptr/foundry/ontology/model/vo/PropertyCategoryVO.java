@@ -2,6 +2,7 @@ package com.aircas.ptr.foundry.ontology.model.vo;
 
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyInfoVO;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -23,6 +24,9 @@ public class PropertyCategoryVO {
 
     @Schema(name = "name", description = "分类名称", example = "平台")
     private String name;
+
+    @Schema(name = "propertyInfos", description = "该分类下的属性列表")
+    private List<OntologyPropertyInfoVO> propertyInfos;
 
     @Schema(name = "children", description = "子分类")
     private List<PropertyCategoryVO> children;

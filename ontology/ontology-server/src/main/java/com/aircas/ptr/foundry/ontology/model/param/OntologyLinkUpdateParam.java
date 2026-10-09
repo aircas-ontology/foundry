@@ -1,0 +1,27 @@
+package com.aircas.ptr.foundry.ontology.model.param;
+
+import io.swagger.v3.oas.annotations.media.Schema;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.experimental.Accessors;
+import lombok.experimental.SuperBuilder;
+
+@Data
+@SuperBuilder
+@Accessors(chain = true)
+@NoArgsConstructor
+@AllArgsConstructor
+@Schema(description = "本体关系更新请求")
+public class OntologyLinkUpdateParam extends IdentifierParam {
+
+    @Schema(name = "name", required = false, description = "关系名称")
+    private String name;
+
+    @Schema(name = "categoryId", required = false, description = "关系分类id（ontology_link_category.id），选填", example = "1")
+    private Integer categoryId;
+
+
+    @Schema(name = "description", required = false, description = "关系备注/描述，可置空")
+    private String description;
+}

@@ -50,6 +50,9 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     private FunctionMapper functionMapper;
 
     @Resource
+    private FunctionService functionService;
+
+    @Resource
     private FunctionParamMapper functionParamMapper;
 
     @Resource
@@ -326,6 +329,9 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         Page<OntologyActionInfoVO> result = new Page<>(pageNum, pageSize);
         var pageResult = page(new Page<>(pageNum, pageSize),
                 new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getOntologyUniqueIdentifier, ontologyUniqIdentifier));
+        Map<String, String> functionDescMap = functionService.mapDescriptionByApi(pageResult.getRecords().stream()
+                .map(OntologyAction::getFunctionApi)
+                .collect(Collectors.toList()));
         List<OntologyActionInfoVO> records = pageResult.getRecords().stream()
                 .map(v -> OntologyActionInfoVO.builder()
                         .actionApi(v.getApi())
@@ -333,6 +339,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                         .ontologyUniqIdentifier(v.getOntologyUniqueIdentifier())
                         .displayName(v.getDisplayName())
                         .icon(v.getIcon())
+                        .functionApi(v.getFunctionApi())
+                        .functionDescription(functionDescMap.get(v.getFunctionApi()))
                         .functionVersionId(v.getFunctionVersionId())
                         .build())
                 .collect(Collectors.toList());
@@ -347,6 +355,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         var detailVO = OntologyActionDetailVO
                 .builder()
                 .functionApi(action.getFunctionApi())
+                .functionDescription(functionService.mapDescriptionByApi(
+                        Collections.singletonList(action.getFunctionApi())).get(action.getFunctionApi()))
                 .functionVersionId(action.getFunctionVersionId())
                 .actionApi(action.getApi())
                 .description(action.getDescription())

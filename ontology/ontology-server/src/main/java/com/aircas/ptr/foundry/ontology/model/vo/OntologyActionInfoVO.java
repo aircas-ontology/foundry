@@ -30,6 +30,12 @@ public class OntologyActionInfoVO {
     @Schema(name = "displayName", description = "行为显示名称", example = "调用函数")
     private String displayName;
 
+    @Schema(name = "functionApi", description = "本体下函数 api", example = "getInfo")
+    private String functionApi;
+
+    @Schema(name = "functionDescription", description = "最新已发布版本的函数描述", example = "这是一个函数")
+    private String functionDescription;
+
     @Schema(description = "固定绑定的函数版本 ID")
     private Long functionVersionId;
 }

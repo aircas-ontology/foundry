@@ -22,7 +22,7 @@ import java.util.Set;
 @Schema(description = "ontology create request param")
 public class OntologyMetaCreateParam extends OntologySpaceIdParam {
 
-    @Schema(name = "icon", description = "本体图标url", required = false)
+    @Schema(name = "iconUrl", description = "本体图标url", required = false)
     private String iconUrl;
 
     @Schema(name = "displayName", description = "本体名称", example = "飞机", required = true)

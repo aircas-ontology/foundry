@@ -15,7 +15,7 @@ import org.springframework.kafka.annotation.EnableKafka;
         ElasticsearchRestClientAutoConfiguration.class,
         ElasticsearchClientAutoConfiguration.class
 })
-@EnableKafka
+//@EnableKafka
 public class OntologyServerApplication {
 
     public static ApplicationContext context;

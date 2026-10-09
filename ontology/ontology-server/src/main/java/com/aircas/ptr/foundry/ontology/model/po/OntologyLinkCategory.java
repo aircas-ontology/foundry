@@ -43,6 +43,8 @@ public class OntologyLinkCategory {
      */
     private Integer ontologySpaceId;
 
+
+
     /**
      * 记录创建时间
      */

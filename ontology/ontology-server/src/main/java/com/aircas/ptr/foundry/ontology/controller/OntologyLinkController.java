@@ -4,6 +4,7 @@ import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyLinkDirectionEnum;
 import com.aircas.ptr.foundry.ontology.controller.validator.OntologyIdVerify;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyLinkCreateParam;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyLinkUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkGraphVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaInfoVO;
@@ -15,6 +16,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.annotation.Resource;
+import jakarta.validation.Valid;
 import java.util.List;
 
 
@@ -32,6 +34,13 @@ public class OntologyLinkController {
     @Operation(summary = "创建本体之间的关系")
     public RestResult createLink(@RequestBody OntologyLinkCreateParam linkCreateParam) {
         ontologyLinkGroupService.createLink(linkCreateParam);
+        return RestResult.success();
+    }
+
+    @PutMapping("")
+    @Operation(summary = "更新本体关系（名称/api名称/备注）")
+    public RestResult updateLink(@RequestBody @Valid OntologyLinkUpdateParam linkUpdateParam) {
+        ontologyLinkGroupService.updateLink(linkUpdateParam);
         return RestResult.success();
     }
 

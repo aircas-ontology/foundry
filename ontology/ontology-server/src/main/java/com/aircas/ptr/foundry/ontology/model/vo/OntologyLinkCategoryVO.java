@@ -23,6 +23,7 @@ public class OntologyLinkCategoryVO {
     @Schema(name = "name", description = "分类名称", example = "平台")
     private String name;
 
+
     @Schema(name = "links", description = "该分类下的关系")
     private List<OntologyLinkCategoryLinkVO> links;
 
