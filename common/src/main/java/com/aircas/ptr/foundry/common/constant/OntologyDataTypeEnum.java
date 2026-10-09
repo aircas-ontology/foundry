@@ -153,6 +153,44 @@ public enum OntologyDataTypeEnum {
         return type;
     }
 
+    /**
+     * 将 JDBC {@code DatabaseMetaData#getColumns} 返回的 TYPE_NAME（各厂商原生类型字符串）
+     * 归一化为 {@link OntologyDataTypeEnum}。
+     *
+     * <p>兼容 PostgreSQL（varchar/int8/timestamptz）、MySQL（varchar/bigint/datetime）、
+     * SQL Server、Oracle 等常见写法：先转小写并剥离长度/精度修饰（如 varchar(255) → varchar、
+     * numeric(10,2) → numeric），再按别名归并；空值或无法识别时兜底 {@link #String}，
+     * 避免因类型字符串的厂商差异导致批量落库失败。</p>
+     *
+     * @param jdbcTypeName 数据库原生类型名，可为空
+     * @return 归一化后的本体数据类型；空或无法识别时返回 {@link #String}
+     */
+    public static OntologyDataTypeEnum valueOfJdbcType(String jdbcTypeName) {
+        if (jdbcTypeName == null || jdbcTypeName.isBlank()) {
+            return OntologyDataTypeEnum.String;
+        }
+        String normalized = jdbcTypeName.trim().toLowerCase();
+        // 去掉长度/精度修饰，如 varchar(255) → varchar、numeric(10,2) → numeric
+        int paren = normalized.indexOf('(');
+        if (paren > 0) {
+            normalized = normalized.substring(0, paren).trim();
+        }
+        return switch (normalized) {
+            case "bool", "boolean", "bit" -> OntologyDataTypeEnum.Bool;
+            case "int2", "smallint", "int", "int4", "integer", "mediumint", "tinyint", "serial" -> OntologyDataTypeEnum.Int;
+            case "int8", "bigint", "long", "bigserial" -> OntologyDataTypeEnum.Long;
+            case "float", "float4", "real" -> OntologyDataTypeEnum.Float;
+            case "double", "float8", "double precision" -> OntologyDataTypeEnum.Double;
+            case "decimal", "numeric", "money", "smallmoney" -> OntologyDataTypeEnum.Decimal;
+            case "date" -> OntologyDataTypeEnum.Date;
+            case "time", "timetz", "timestamp", "timestamptz", "datetime",
+                 "timestamp without time zone", "timestamp with time zone",
+                 "time without time zone", "time with time zone" -> OntologyDataTypeEnum.Timestamp;
+            // 字符与文本类一律归 String：varchar/char/text/nvarchar/nchar/clob/longvarchar/json/xml 等
+            default -> OntologyDataTypeEnum.String;
+        };
+    }
+
 
     public static OntologyDataTypeEnum valueOfDataType(FunctionParamTypeEnum paramType) {
         return FUNCTION_PARAM_TO_ONTOLOGY_DATA.get(paramType);
