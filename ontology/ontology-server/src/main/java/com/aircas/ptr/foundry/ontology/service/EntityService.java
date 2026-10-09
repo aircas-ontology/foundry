@@ -31,6 +31,16 @@ public interface EntityService {
      */
     void activateLinkRelations(String linkUniqueIdentifier);
 
+    /**
+     * 判断指定关系在 ArangoDB 中是否已存在 ENABLE 的实体关系边。
+     * <p>用于子空间复制时镜像源关系的可见状态：源边为 ENABLE 则子空间新边也应 ENABLE，
+     * 源边为 DELETE（或无边）则保持默认 DELETE，避免子空间关系与源不一致。</p>
+     *
+     * @param linkUniqueIdentifier 关系唯一标识
+     * @return 是否存在 ENABLE 的关系边
+     */
+    boolean hasEnabledRelations(String linkUniqueIdentifier);
+
     void syncNodes(String ontologyUniqueIdentifier, String schemaName, String datasourceId, String primaryKeyColumnName, String titleKeyColumnName);
 
     void deleteRelationsByLinkId(String linkId);
