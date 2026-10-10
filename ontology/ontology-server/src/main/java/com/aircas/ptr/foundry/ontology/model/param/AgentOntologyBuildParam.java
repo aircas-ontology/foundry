@@ -36,7 +36,8 @@ public class AgentOntologyBuildParam {
     @NotNull(message = "spaceId is empty")
     private Integer spaceId;
 
-    @Schema(name = "categoryId", description = "本体分类 id（ontology_category.id），无合适分类时传 null", example = "1")
+    @Schema(name = "categoryId", description = "本体分类 id（ontology_category.id），必填；无法确定时传“全部”根分类 id", required = true, example = "1")
+    @NotNull(message = "categoryId（本体分类）不能为空")
     private Integer categoryId;
 
     @Schema(name = "displayName", description = "本体名称（中文展示名）", required = true, example = "用户")

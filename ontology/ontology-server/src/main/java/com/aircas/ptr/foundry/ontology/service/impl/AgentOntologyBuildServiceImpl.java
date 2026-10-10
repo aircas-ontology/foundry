@@ -64,6 +64,7 @@ public class AgentOntologyBuildServiceImpl implements AgentOntologyBuildService 
         //    此处在事务开始前拦截非法入参，避免脏数据直达 DB 或落库到一半回滚。
         PreconditionUtils.checkNotNull(param, "本体构建入参不能为空", HttpStatus.BAD_REQUEST);
         PreconditionUtils.checkNotNull(param.getSpaceId(), "spaceId（本体空间 id）不能为空", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkNotNull(param.getCategoryId(), "categoryId（本体分类）不能为空", HttpStatus.BAD_REQUEST);
         PreconditionUtils.checkArgument(StringUtils.isNotBlank(param.getDisplayName()),
                 "displayName（对象名称）不能为空", HttpStatus.BAD_REQUEST);
         PreconditionUtils.checkArgument(StringUtils.isNotBlank(param.getApiName()),
