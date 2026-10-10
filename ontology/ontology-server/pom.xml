@@ -294,4 +294,62 @@
         </plugins>
     </build>
 
+    <profiles>
+        <profile>
+            <id>script-security-rules-it</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>exec-maven-plugin</artifactId>
+                        <version>3.5.0</version>
+                        <executions>
+                            <execution>
+                                <id>verify-offline-semgrep-rules</id>
+                                <phase>integration-test</phase>
+                                <goals>
+                                    <goal>exec</goal>
+                                </goals>
+                                <configuration>
+                                    <executable>docker</executable>
+                                    <arguments>
+                                        <argument>run</argument>
+                                        <argument>--rm</argument>
+                                        <argument>--pull</argument>
+                                        <argument>never</argument>
+                                        <argument>--network</argument>
+                                        <argument>none</argument>
+                                        <argument>--read-only</argument>
+                                        <argument>--cap-drop</argument>
+                                        <argument>ALL</argument>
+                                        <argument>--security-opt</argument>
+                                        <argument>no-new-privileges</argument>
+                                        <argument>--pids-limit</argument>
+                                        <argument>64</argument>
+                                        <argument>--memory</argument>
+                                        <argument>256m</argument>
+                                        <argument>--cpus</argument>
+                                        <argument>0.5</argument>
+                                        <argument>--user</argument>
+                                        <argument>65534:65534</argument>
+                                        <argument>--tmpfs</argument>
+                                        <argument>/tmp:rw,noexec,nosuid,size=64m</argument>
+                                        <argument>--mount</argument>
+                                        <argument>type=bind,src=${project.basedir}/semgrep-rules,dst=/rules,readonly</argument>
+                                        <argument>semgrep/semgrep:1.99.0</argument>
+                                        <argument>semgrep</argument>
+                                        <argument>--test</argument>
+                                        <argument>--config</argument>
+                                        <argument>/rules</argument>
+                                        <argument>/rules/tests</argument>
+                                    </arguments>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+
 </project>

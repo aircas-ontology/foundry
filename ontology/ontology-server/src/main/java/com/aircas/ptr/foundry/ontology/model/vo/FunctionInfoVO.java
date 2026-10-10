@@ -2,6 +2,7 @@ package com.aircas.ptr.foundry.ontology.model.vo;
 
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionModelEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.ScriptTypeEnum;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -34,4 +35,7 @@ public class FunctionInfoVO {
 
     @Schema(name = "type", description = "函数类型")
     private FunctionTypeEnum type;
+
+    @Schema(name = "scriptType", description = "脚本类型")
+    private ScriptTypeEnum scriptType;
 }

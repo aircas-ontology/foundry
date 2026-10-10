@@ -1,0 +1,80 @@
+rules:
+  - id: typescript.command-execution
+    languages: [typescript]
+    message: 禁止执行操作系统命令
+    severity: ERROR
+    metadata: { category: COMMAND_EXECUTION }
+    pattern-either:
+      - pattern: child_process.$FUNC(...)
+      - pattern: require('child_process').$FUNC(...)
+  - id: typescript.dynamic-execution
+    languages: [typescript]
+    message: 禁止动态执行代码
+    severity: ERROR
+    metadata: { category: DYNAMIC_EXECUTION }
+    pattern-either:
+      - pattern: eval(...)
+      - pattern: new Function(...)
+  - id: typescript.network-access
+    languages: [typescript]
+    message: 禁止访问网络
+    severity: ERROR
+    metadata: { category: NETWORK_ACCESS }
+    pattern-either:
+      - pattern: fetch(...)
+      - pattern: axios.$FUNC(...)
+      - pattern: http.$FUNC(...)
+      - pattern: https.$FUNC(...)
+      - pattern: new WebSocket(...)
+  - id: typescript.file-write-delete
+    languages: [typescript]
+    message: 禁止写入、修改或删除文件
+    severity: ERROR
+    metadata: { category: FILE_WRITE_DELETE }
+    pattern-either:
+      - pattern: fs.writeFile(...)
+      - pattern: fs.writeFileSync(...)
+      - pattern: fs.unlink(...)
+      - pattern: fs.unlinkSync(...)
+      - pattern: fs.rm(...)
+      - pattern: fs.rmSync(...)
+  - id: typescript.file-read
+    languages: [typescript]
+    message: 禁止读取文件
+    severity: WARNING
+    metadata: { category: FILE_READ }
+    pattern-either:
+      - pattern: fs.readFile(...)
+      - pattern: fs.readFileSync(...)
+      - pattern: Deno.readTextFile(...)
+  - id: typescript.process-thread
+    languages: [typescript]
+    message: 禁止创建进程、线程或定时任务
+    severity: ERROR
+    metadata: { category: PROCESS_THREAD }
+    pattern-either:
+      - pattern: new Worker(...)
+      - pattern: setInterval(...)
+      - pattern: Deno.Command(...)
+  - id: typescript.obvious-infinite-loop
+    languages: [typescript]
+    message: 禁止明显的无限循环
+    severity: ERROR
+    metadata: { category: RESOURCE_EXHAUSTION }
+    pattern-either:
+      - pattern: while (true) { ... }
+      - pattern: for (;;) { ... }
+  - id: typescript.dynamic-loading-bypass
+    languages: [typescript]
+    message: 禁止动态加载模块或动态属性调用
+    severity: ERROR
+    metadata: { category: BYPASS }
+    pattern-either:
+      - pattern: import($MODULE)
+      - patterns:
+          - pattern: require($MODULE)
+          - metavariable-pattern:
+              metavariable: $MODULE
+              patterns:
+                - pattern-not: "'...'"
+                - pattern-not: '"..."'

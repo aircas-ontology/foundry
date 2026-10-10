@@ -2,6 +2,7 @@ package com.aircas.ptr.foundry.ontology.model.po;
 
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionModelEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.ScriptTypeEnum;
 import com.baomidou.mybatisplus.annotation.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -69,6 +70,11 @@ public class Function {
      * 自定义函数类型才保存code
      */
     private String code;
+
+    /**
+     * 脚本语言。历史数据兼容为 GROOVY。
+     */
+    private ScriptTypeEnum scriptType;
 
 
     /**

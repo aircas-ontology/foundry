@@ -53,7 +53,7 @@ public class OntologyFunctionController {
 
     @Operation(summary = "更新函数")
     @PutMapping
-    public RestResult updateFunction(@RequestBody FunctionUpdateParam param) {
+    public RestResult updateFunction(@RequestBody @Valid FunctionUpdateParam param) {
         // 需要 1 校验函数有没有被本体行为使用到，否则不能修改 2 需要增加代码安全检测
         functionService.updateFunction(param);
         return RestResult.success();
