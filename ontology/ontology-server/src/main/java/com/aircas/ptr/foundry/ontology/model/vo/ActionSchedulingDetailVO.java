@@ -18,6 +18,6 @@ public class ActionSchedulingDetailVO extends ActionSchedulingInfoVO {
     @Schema(name = "ruleVO", description = "行为规则调度详情")
     private ActionHandleRuleVO ruleVO;
 
-    @Schema(name = "ruleVO", description = "行为周期调度详情")
+    @Schema(name = "taskVO", description = "行为周期调度详情")
     private ActionHandleTaskInfoVO taskVO;
 }

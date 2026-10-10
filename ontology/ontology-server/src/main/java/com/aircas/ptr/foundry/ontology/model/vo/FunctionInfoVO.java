@@ -29,7 +29,7 @@ public class FunctionInfoVO {
     @Schema(name = "description", description = "描述")
     private String description;
 
-    @Schema(name = "type", description = "函数模型")
+    @Schema(name = "model", description = "函数模型")
     @NotNull(message = "model is null")
     private FunctionModelEnum model;
 

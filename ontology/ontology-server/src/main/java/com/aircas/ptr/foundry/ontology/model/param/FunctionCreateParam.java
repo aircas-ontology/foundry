@@ -36,7 +36,7 @@ public class FunctionCreateParam {
     @NotNull(message = "type is null")
     private FunctionTypeEnum type;
 
-    @Schema(name = "type", description = "函数模型")
+    @Schema(name = "model", description = "函数模型")
     @NotNull(message = "model is null")
     private FunctionModelEnum model;
 

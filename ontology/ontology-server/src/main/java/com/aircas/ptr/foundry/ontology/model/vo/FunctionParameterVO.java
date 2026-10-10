@@ -32,7 +32,7 @@ public class FunctionParameterVO {
     @Schema(name = "paramOrder",description = "参数顺序")
     private Integer paramOrder;
 
-    @Schema(name = "paramOrder",description = "参数schema")
+    @Schema(name = "paramSchema",description = "参数schema")
     private String paramSchema;
 
     @Schema(name = "description",description = "参数描述")
