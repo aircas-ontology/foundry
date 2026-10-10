@@ -21,7 +21,7 @@ import static com.aircas.ptr.foundry.common.constant.DateFormat.DATE_FORMAT_DEFA
 @Schema(description = "本体空间VO")
 public class OntologySpaceVO {
 
-    @Schema(name = "icon", description = "空间图标url")
+    @Schema(name = "iconUrl", description = "空间图标url")
     private String iconUrl;
 
     @Schema(name = "displayName", description = "空间名称", example = "xxx战场")

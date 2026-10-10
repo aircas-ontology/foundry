@@ -43,7 +43,7 @@ public class FunctionUpdateParam {
     @Schema(name = "referenceName", description = "外部函数：函数全限定名")
     private String referenceName;
 
-    @Schema(name = "type", description = "函数模型")
+    @Schema(name = "model", description = "函数模型")
     @NotNull(message = "model is null")
     private FunctionModelEnum model;
 }

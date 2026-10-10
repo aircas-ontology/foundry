@@ -25,6 +25,6 @@ public class OntologyGroupCreateParam extends OntologySpaceIdParam {
     @NotBlank(message = "description is empty")
     private String description;
 
-    @Schema(name = "icon", description = "分组图标url", required = false)
+    @Schema(name = "iconUrl", description = "分组图标url", required = false)
     private String iconUrl;
 }

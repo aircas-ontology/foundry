@@ -19,7 +19,7 @@ import java.util.List;
 @Schema(description = "实体属性信息VO")
 public class EntityPropertyRowDetailVO {
 
-    @Schema(name = "primaryKey", description = "实体主键", example = "1")
+    @Schema(name = "entityPrimaryKey", description = "实体主键", example = "1")
     private Object entityPrimaryKey;
 
     @Schema(name = "ontologyUniqueIdentifier", description = "本体id")
@@ -40,7 +40,7 @@ public class EntityPropertyRowDetailVO {
         @Schema(name = "storageGroup", description = "属性存储分组名称", example = "main")
         private String storageGroup;
 
-        @Schema(name = "groupData", description = "属性存储分组数据列表")
+        @Schema(name = "groupDataList", description = "属性存储分组数据列表")
         private List<PropertyGroupData> groupDataList;
 
     }
@@ -79,7 +79,7 @@ public class EntityPropertyRowDetailVO {
         @Schema(name = "propertyDisplayName", description = "属性显示名称", example = "名称")
         private String propertyDisplayName;
 
-        @Schema(name = "propertyValues", description = "属性值", example = "1")
+        @Schema(name = "propertyValue", description = "属性值", example = "1")
         private Object propertyValue;
 
         @Schema(name = "categoryId", description = "属性分类id", example = "10")

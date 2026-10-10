@@ -75,7 +75,7 @@ public class EntityCreateParam extends OntologyIdentifierParam {
         @NotBlank(message = "propertyApiName is empty")
         private String propertyApiName;
 
-        @Schema(name = "propertyValues", description = "属性值", example = "1")
+        @Schema(name = "propertyValue", description = "属性值", example = "1")
         @NotNull(message = "propertyValue is null")
         private Object propertyValue;
 
