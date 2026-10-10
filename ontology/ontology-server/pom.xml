@@ -332,12 +332,18 @@
                                         <argument>0.5</argument>
                                         <argument>--user</argument>
                                         <argument>65534:65534</argument>
+                                        <argument>--env</argument>
+                                        <argument>HOME=/tmp</argument>
                                         <argument>--tmpfs</argument>
                                         <argument>/tmp:rw,noexec,nosuid,size=64m</argument>
                                         <argument>--mount</argument>
                                         <argument>type=bind,src=${project.basedir}/semgrep-rules,dst=/rules,readonly</argument>
                                         <argument>semgrep/semgrep:1.99.0</argument>
                                         <argument>semgrep</argument>
+                                        <argument>--disable-version-check</argument>
+                                        <argument>--metrics=off</argument>
+                                        <argument>--jobs</argument>
+                                        <argument>1</argument>
                                         <argument>--test</argument>
                                         <argument>--config</argument>
                                         <argument>/rules</argument>
