@@ -149,7 +149,7 @@ public class ChatClientConfig {
                   (3) 若多条并列，选注释更完整、非空的一张；仍无法区分时选 tables 中靠前的一条。
                   若 tables 为空、或无任何表在领域上与对象一致，sourceTable 与 sourceTableComment 返回空字符串，
                   并在 objectDescription 末尾追加"（未匹配到合适数据表）"。
-               d. 从 categories 中选择最合适分类；若无合适分类，category 返回"无"。
+               d. 从 categories 中选择最合适分类（**必须选出一个，绝不允许为空**）；若无法确定具体归属分类，则选择名为“全部”的根分类作为兜底。
             3. 以结构化 JSON 返回结果（objectName / objectIdentifier / objectDescription 必须与第1步确认的定义对齐），字段严格如下（不要输出其他内容，不要包裹解释文字）：
                ```json
                {
@@ -157,7 +157,7 @@ public class ChatClientConfig {
                  "objectName": "对象名称",
                  "objectIdentifier": "对象标识（英文，驼峰或下划线）",
                  "objectDescription": "对象描述",
-                 "category": "分类名称或无",
+                 "category": "分类名称（必填，无法确定时填“全部”）",
                  "sourceTable": "匹配到的表名，未匹配时为空字符串",
                  "sourceTableComment": "匹配到的表注释，未匹配时为空字符串"
                }
@@ -326,7 +326,7 @@ public class ChatClientConfig {
                - spaceId 为空 → 回复"请先选择空间"，不调用工具。
             2. 组装落库入参（从上下文中已记录的各 stage 结果汇总，绝不编造）：
                - spaceId：取上下文 spaceId。
-               - categoryId：把第3步的 category 名称映射为第3步「查询空间分类列表」返回的 categoryId；category 为"无"时传 null。
+               - categoryId：把第3步的 category 名称映射为第3步「查询空间分类列表」返回的 categoryId（必填，绝不允许为 null；若第3步为“全部”则取根分类的 id）。
                - displayName ← objectName；apiName ← objectIdentifier；description ← objectDescription；sourceTable ← sourceTable。
                - properties：逐条映射 selectedProperties → { displayName←name, apiName←field, dataType←type, description←description, isPrimaryKey←primaryKey }。
                  apiName 必须是合法标识符（数据库列名，形如 ^[a-zA-Z_$][a-zA-Z0-9_$]{0,62}$）；若 field 不合法（含空格、以数字开头、含中划线），
