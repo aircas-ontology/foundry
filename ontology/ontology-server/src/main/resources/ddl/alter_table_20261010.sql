@@ -20,3 +20,10 @@ alter table ontology.function
 
 create unique index if not exists uk_function_api_version
     on ontology.function (api, version);
+
+-- 脚本函数多语言：新增语言列，执行时按 language 路由到对应语言 runner 容器
+-- 仅 type=CUSTOMIZE/EXTERNAL 有意义；存量脚本均为 Groovy，默认 GROOVY 行为不变
+alter table ontology.function
+    add column if not exists language varchar(32) not null default 'GROOVY';
+
+comment on column ontology.function.language is '脚本语言：GROOVY/JAVA/PYTHON/TYPESCRIPT，仅 CUSTOMIZE/EXTERNAL 有意义；创建后锁定，执行按此路由到对应 runner';

@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.po;
 
+import com.aircas.ptr.foundry.ontology.model.enums.FunctionLanguageEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionModelEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
 import com.baomidou.mybatisplus.annotation.*;
@@ -96,6 +97,13 @@ public class Function {
      * FunctionTypeEnum
      */
     private FunctionTypeEnum type;
+
+    /**
+     * 脚本语言，仅 type=CUSTOMIZE/EXTERNAL 有意义；执行时按此路由到对应语言 runner 容器。
+     * 创建后锁定（updateStrategy=NEVER），换语言请走新版本。
+     */
+    @TableField(updateStrategy = FieldStrategy.NEVER)
+    private FunctionLanguageEnum language;
 
     private FunctionModelEnum model;
 

@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
+import com.aircas.ptr.foundry.ontology.model.dto.FunctionParamDTO;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionModelEnum;
 import com.aircas.ptr.foundry.ontology.controller.validator.FunctionApiVerify;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -11,6 +12,8 @@ import lombok.experimental.SuperBuilder;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
+
+import java.util.List;
 
 import static com.aircas.ptr.foundry.ontology.constant.FunctionConstant.VERSION_PATTERN;
 
@@ -54,4 +57,11 @@ public class FunctionUpdateParam {
      */
     @Schema(name = "queryConfig", description = "基础查询算子配置（仅 type=BASIC_QUERY 时必填）")
     private BasicQueryConfig queryConfig;
+
+    /**
+     * 前端 Web IDE 解析 handle 签名后提交的参数定义（入参/出参）。
+     * 非 Groovy 语言依赖此字段重建 function_param；Groovy 若不传可回退后端反射解析。
+     */
+    @Schema(name = "parameters", description = "参数定义列表（前端 IDE 解析 handle 签名后提交，CUSTOMIZE 推荐传入）")
+    private List<FunctionParamDTO> parameters;
 }

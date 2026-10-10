@@ -1,0 +1,12 @@
+# 依赖与构建产物（可再生，不入库）
+node_modules/
+target/
+dist/
+
+# Python 缓存
+__pycache__/
+*.pyc
+.venv/
+
+# npm 锁文件按需保留；如需固定依赖可移除下一行
+package-lock.json

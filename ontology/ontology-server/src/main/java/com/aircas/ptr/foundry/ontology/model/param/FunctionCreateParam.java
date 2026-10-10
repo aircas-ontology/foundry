@@ -1,5 +1,7 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
+import com.aircas.ptr.foundry.ontology.model.dto.FunctionParamDTO;
+import com.aircas.ptr.foundry.ontology.model.enums.FunctionLanguageEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionModelEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -44,6 +46,9 @@ public class FunctionCreateParam {
     @NotNull(message = "type is null")
     private FunctionTypeEnum type;
 
+    @Schema(name = "language", description = "脚本语言（仅 CUSTOMIZE/EXTERNAL 有意义，不传默认 GROOVY；创建后不可修改）")
+    private FunctionLanguageEnum language;
+
     @Schema(name = "model", description = "函数模型（可选，不传时根据 type 自动推断：BASIC_QUERY→BASIC，其他→OTHER）")
     private FunctionModelEnum model;
 
@@ -62,4 +67,11 @@ public class FunctionCreateParam {
      */
     @Schema(name = "queryConfig", description = "基础查询算子配置（仅 type=BASIC_QUERY 时必填）")
     private BasicQueryConfig queryConfig;
+
+    /**
+     * 前端 Web IDE 通过 AST 解析 handle 签名后提交的参数定义（入参/出参）。
+     * 非 Groovy 语言依赖此字段建 function_param；Groovy 若不传可回退后端反射解析。
+     */
+    @Schema(name = "parameters", description = "参数定义列表（前端 IDE 解析 handle 签名后提交，CUSTOMIZE 推荐传入）")
+    private List<FunctionParamDTO> parameters;
 }

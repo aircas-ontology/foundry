@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.vo;
 
+import com.aircas.ptr.foundry.ontology.model.enums.FunctionLanguageEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionModelEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -42,6 +43,9 @@ public class FunctionInfoVO {
 
     @Schema(name = "type", description = "函数类型")
     private FunctionTypeEnum type;
+
+    @Schema(name = "language", description = "脚本语言（仅 CUSTOMIZE/EXTERNAL 有意义）")
+    private FunctionLanguageEnum language;
 
     @Schema(name = "ontologySpaceId", description = "所属本体空间 id")
     private Integer ontologySpaceId;

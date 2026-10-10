@@ -5,12 +5,15 @@ import com.aircas.ptr.foundry.common.constant.FunctionParamTypeEnum;
 import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.ontology.constant.FunctionConstant;
+import com.aircas.ptr.foundry.ontology.engine.ScriptEngineRouter;
+import com.aircas.ptr.foundry.ontology.engine.ScriptExecutionContext;
 import com.aircas.ptr.foundry.ontology.model.dto.ActionContextInfoDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.FunctionParamDTO;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamCategoryEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamRoleEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.TaskStatusEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionModelEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.FunctionLanguageEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import com.aircas.ptr.foundry.ontology.model.param.BasicQueryConfig;
@@ -40,6 +43,7 @@ import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyPropertyMap
 import com.aircas.ptr.foundry.ontology.service.FunctionParamService;
 import com.aircas.ptr.foundry.ontology.service.FunctionService;
 import com.aircas.ptr.foundry.ontology.service.GroovyService;
+import com.aircas.ptr.foundry.ontology.utils.SchemaHandleUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -63,6 +67,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -83,6 +88,9 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
 
     @Resource
     private GroovyService groovyService;
+
+    @Resource
+    private ScriptEngineRouter scriptEngineRouter;
 
     @Lazy
     @Resource
@@ -155,6 +163,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 .displayName(function.getDisplayName())
                 .description(function.getDescription())
                 .type(function.getType())
+                .language(function.getLanguage())
                 .model(function.getModel())
                 .ontologySpaceId(function.getOntologySpaceId())
                 .build();
@@ -174,8 +183,8 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         functionParamService.remove(new LambdaQueryWrapper<FunctionParamPO>().eq(FunctionParamPO::getFunctionId, function.getId()));
         //删除函数记录
         removeById(function.getId());
-        //失效编译缓存，释放旧 Class / ClassLoader
-        groovyService.invalidateCompiledClass(api);
+        //失效对应语言 runner 的编译/产物缓存
+        scriptEngineRouter.route(function.getLanguage()).invalidate(function.getLanguage(), api);
     }
 
 
@@ -205,6 +214,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         PreconditionUtils.checkArgument(maxVersion == null || compareVersion(version, maxVersion) > 0,
                 "新版本号必须大于当前最大版本号 " + maxVersion, HttpStatus.BAD_REQUEST);
         //函数插入，新增版本默认为未发布状态
+        FunctionLanguageEnum language = param.getLanguage() == null ? FunctionLanguageEnum.GROOVY : param.getLanguage();
         var func = Function.builder()
                 .api(param.getFunctionApi())
                 .version(version)
@@ -213,6 +223,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 .displayName(displayName)
                 .code(param.getCode())
                 .type(param.getType())
+                .language(language)
                 .model(model)
                 .status(Status.ENABLE.getValue())
                 .referenceName(param.getReferenceName())
@@ -221,8 +232,8 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         save(func);
         //自定义函数需要解析函数参数
         if (param.getType().equals(FunctionTypeEnum.CUSTOMIZE)) {
-            //解析函数参数，批量入库
-            insertBatchFuncParams(func.getId(), param.getCode());
+            //参数入库：前端 IDE 声明优先，Groovy 未声明时回退后端反射解析
+            buildCustomizeParams(func.getId(), language, param.getCode(), param.getParameters());
         }
         //基础查询算子：序列化 queryConfig 到 code，提取变量存入 function_param
         if (param.getType().equals(FunctionTypeEnum.BASIC_QUERY)) {
@@ -250,13 +261,13 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         // 参数重建：先删后建
         functionParamService.remove(new LambdaQueryWrapper<FunctionParamPO>().eq(FunctionParamPO::getFunctionId, function.getId()));
         if (function.getType() == FunctionTypeEnum.CUSTOMIZE) {
-            insertBatchFuncParams(function.getId(), param.getCode());
+            buildCustomizeParams(function.getId(), function.getLanguage(), param.getCode(), param.getParameters());
         } else if (function.getType() == FunctionTypeEnum.BASIC_QUERY) {
             // 内部校验 queryConfig 非空并重写 code
             createBasicQueryParams(function.getId(), param.getQueryConfig());
         }
-        //失效编译缓存，释放旧 Class / ClassLoader
-        groovyService.invalidateCompiledClass(function.getApi());
+        //失效对应语言 runner 的编译/产物缓存
+        scriptEngineRouter.route(function.getLanguage()).invalidate(function.getLanguage(), function.getApi());
     }
 
     @Override
@@ -337,6 +348,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                         .publishStatus(func.getPublish())
                         .displayName(func.getDisplayName())
                         .type(func.getType())
+                        .language(func.getLanguage())
                         .description(func.getDescription())
                         .ontologySpaceId(func.getOntologySpaceId())
                         .updateTime(func.getUpdateTime())
@@ -366,7 +378,18 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         //参数取值
         Map<String, Object> funParamMap = CollectionUtils.isEmpty(param.getParameters()) ?
                 new HashMap<>() : param.getParameters().stream().collect(HashMap::new, (m, p) -> m.put(p.getParamName(), p.getParamValue()), HashMap::putAll);
-        var resultJsonStr = groovyService.executeGroovy(param.getFunctionApi(), function.getCode(), funParamMap, executeInputParams);
+        //按参数定义组装单对象入参（handle(input)），转基本类型后序列化为 JSON
+        String inputJson = buildInputJson(executeInputParams, funParamMap);
+        //按语言路由到对应 runner 引擎执行（主应用不再本地执行任何用户代码）
+        FunctionLanguageEnum language = function.getLanguage() == null ? FunctionLanguageEnum.GROOVY : function.getLanguage();
+        ScriptExecutionContext ctx = ScriptExecutionContext.builder()
+                .language(language)
+                .functionApi(param.getFunctionApi())
+                .version(function.getVersion())
+                .code(function.getCode())
+                .inputJson(inputJson)
+                .build();
+        var resultJsonStr = scriptEngineRouter.route(language).execute(ctx);
         var result = objectMapper.readValue(resultJsonStr, new TypeReference<FunctionResultVO>() {
         });
         if (result != null && StringUtils.isNotEmpty(result.getTaskId())) {
@@ -584,30 +607,61 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     }
 
     /***
-     * 解析groovy代码，获取参数列表及返回值，批量入库
-     * @param functionId
-     * @param code
+     * 自定义函数参数入库：前端 IDE 声明的参数优先（四语言统一）；
+     * Groovy 未声明时回退后端反射解析（过渡能力），其他语言未声明则不建参数（等待前端 AST 接入）。
      */
-    private void insertBatchFuncParams(Long functionId, String code) {
-        //获取groovy参数、返回值信息
-        List<FunctionParamDTO> functionParam = groovyService.parseGroovyCode(code);
-
-        if (CollectionUtils.isNotEmpty(functionParam)) {
-            List<FunctionParamPO> params = functionParam.stream().map(p ->
-                    FunctionParamPO.builder()
-                            .functionId(functionId)
-                            .paramName(p.getParamName())
-                            .paramType(p.getParamType())
-                            .category(p.getCategory())
-                            .paramSchema(p.getParamSchema())
-                            .paramOrder(p.getParamOrder())
-                            .typeReferenceName(p.getReferenceType())
-                            .createTime(new Date())
-                            .updateTime(new Date())
-                            .build()
-            ).collect(Collectors.toList());
-            functionParamService.saveBatch(params);
+    private void buildCustomizeParams(Long functionId, FunctionLanguageEnum language, String code, List<FunctionParamDTO> declared) {
+        if (CollectionUtils.isNotEmpty(declared)) {
+            saveParams(functionId, declared);
+            return;
         }
+        if (language == null || language == FunctionLanguageEnum.GROOVY) {
+            saveParams(functionId, groovyService.parseGroovyCode(code));
+        }
+    }
+
+    /**
+     * 将参数定义（前端声明或 Groovy 解析）批量写入 function_param。
+     */
+    private void saveParams(Long functionId, List<FunctionParamDTO> functionParam) {
+        if (CollectionUtils.isEmpty(functionParam)) {
+            return;
+        }
+        List<FunctionParamPO> params = functionParam.stream().map(p ->
+                FunctionParamPO.builder()
+                        .functionId(functionId)
+                        .paramName(p.getParamName())
+                        .paramType(p.getParamType())
+                        .category(p.getCategory())
+                        .paramSchema(p.getParamSchema())
+                        .paramOrder(p.getParamOrder())
+                        .typeReferenceName(p.getReferenceType())
+                        .description(p.getDescription())
+                        .createTime(new Date())
+                        .updateTime(new Date())
+                        .build()
+        ).collect(Collectors.toList());
+        functionParamService.saveBatch(params);
+    }
+
+    /**
+     * 按入参定义将执行参数值转为基本类型，组装为单对象入参 JSON（handle(input) 的 input）。
+     * 基本类型走 SchemaHandleUtil 转换；OBJECT 直接透传原始值（统一单对象入参契约后支持复杂类型）。
+     */
+    @SneakyThrows
+    private String buildInputJson(List<FunctionParamPO> inputParams, Map<String, Object> funParamMap) {
+        Map<String, Object> input = new LinkedHashMap<>();
+        if (CollectionUtils.isNotEmpty(inputParams)) {
+            for (FunctionParamPO p : inputParams) {
+                Object value = funParamMap.get(p.getParamName());
+                if (p.getParamType() == FunctionParamTypeEnum.OBJECT) {
+                    input.put(p.getParamName(), value);
+                } else {
+                    input.put(p.getParamName(), SchemaHandleUtil.convertValue(value, p.getTypeReferenceName()));
+                }
+            }
+        }
+        return objectMapper.writeValueAsString(input);
     }
 
     /**
