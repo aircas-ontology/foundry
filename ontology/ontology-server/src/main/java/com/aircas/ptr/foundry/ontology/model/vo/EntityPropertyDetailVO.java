@@ -30,7 +30,7 @@ public class EntityPropertyDetailVO  {
     @Schema(name = "propertyValues", description = "属性值列表", example = "[123,456]")
     private List<Object> propertyValues;
 
-    @Schema(name = "primaryKey", description = "主键", example = "1")
+    @Schema(name = "entityPrimaryKey", description = "主键", example = "1")
     private Object entityPrimaryKey;
 
     @Schema(name = "categoryId", description = "属性分类id", example = "10")

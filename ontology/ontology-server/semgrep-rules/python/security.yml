@@ -1,0 +1,80 @@
+rules:
+  - id: python.command-execution
+    languages: [python]
+    message: 禁止执行操作系统命令
+    severity: ERROR
+    metadata: { category: COMMAND_EXECUTION }
+    pattern-either:
+      - pattern: os.system(...)
+      - pattern: os.popen(...)
+      - pattern: subprocess.$FUNC(...)
+  - id: python.dynamic-execution
+    languages: [python]
+    message: 禁止动态执行代码
+    severity: ERROR
+    metadata: { category: DYNAMIC_EXECUTION }
+    pattern-either:
+      - pattern: eval(...)
+      - pattern: exec(...)
+      - pattern: compile(...)
+  - id: python.network-access
+    languages: [python]
+    message: 禁止访问网络
+    severity: ERROR
+    metadata: { category: NETWORK_ACCESS }
+    pattern-either:
+      - pattern: requests.$FUNC(...)
+      - pattern: socket.$FUNC(...)
+      - pattern: urllib.request.$FUNC(...)
+      - pattern: http.client.$FUNC(...)
+  - id: python.file-write-delete
+    languages: [python]
+    message: 禁止写入、修改或删除文件
+    severity: ERROR
+    metadata: { category: FILE_WRITE_DELETE }
+    pattern-either:
+      - patterns:
+          - pattern: open($PATH, $MODE, ...)
+          - metavariable-regex: { metavariable: $MODE, regex: ".*[wax+].*" }
+      - pattern: os.remove(...)
+      - pattern: os.unlink(...)
+      - pattern: shutil.rmtree(...)
+      - pattern: pathlib.Path(...).write_text(...)
+      - pattern: pathlib.Path(...).write_bytes(...)
+  - id: python.file-read
+    languages: [python]
+    message: 禁止读取文件
+    severity: WARNING
+    metadata: { category: FILE_READ }
+    pattern-either:
+      - pattern: open($PATH)
+      - pattern: open($PATH, "r", ...)
+      - pattern: pathlib.Path(...).read_text(...)
+      - pattern: pathlib.Path(...).read_bytes(...)
+  - id: python.process-thread
+    languages: [python]
+    message: 禁止创建进程、线程或异步任务
+    severity: ERROR
+    metadata: { category: PROCESS_THREAD }
+    pattern-either:
+      - pattern: threading.$FUNC(...)
+      - pattern: multiprocessing.$FUNC(...)
+      - pattern: asyncio.create_task(...)
+      - pattern: concurrent.futures.$FUNC(...)
+  - id: python.obvious-infinite-loop
+    languages: [python]
+    message: 禁止明显的无限循环
+    severity: ERROR
+    metadata: { category: RESOURCE_EXHAUSTION }
+    pattern: |
+      while True:
+        ...
+  - id: python.dynamic-loading-bypass
+    languages: [python]
+    message: 禁止动态加载或反射调用
+    severity: ERROR
+    metadata: { category: BYPASS }
+    pattern-either:
+      - pattern: __import__(...)
+      - pattern: importlib.$FUNC(...)
+      - pattern: getattr(...)

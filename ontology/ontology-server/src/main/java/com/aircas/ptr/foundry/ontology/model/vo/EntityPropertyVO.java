@@ -21,7 +21,7 @@ public class EntityPropertyVO {
     private String propertyApiName;
 
 
-    @Schema(name = "propertyName", description = "属性名称", example = "名称")
+    @Schema(name = "propertyDisplayName", description = "属性名称", example = "名称")
     private String propertyDisplayName;
 
 

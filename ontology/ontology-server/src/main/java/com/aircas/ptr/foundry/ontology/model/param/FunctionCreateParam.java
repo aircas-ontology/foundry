@@ -2,6 +2,7 @@ package com.aircas.ptr.foundry.ontology.model.param;
 
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionModelEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.ScriptTypeEnum;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -35,12 +36,15 @@ public class FunctionCreateParam {
     @NotNull(message = "type is null")
     private FunctionTypeEnum type;
 
-    @Schema(name = "type", description = "函数模型")
+    @Schema(name = "model", description = "函数模型")
     @NotNull(message = "model is null")
     private FunctionModelEnum model;
 
     @Schema(name = "code", description = "自定义函数：函数代码")
     private String code;
+
+    @Schema(name = "scriptType", description = "脚本类型：GROOVY、PYTHON、TYPESCRIPT；缺省兼容为 GROOVY")
+    private ScriptTypeEnum scriptType;
 
     @Schema(name = "referenceName", description = "外部函数：函数全限定名")
     private String referenceName;

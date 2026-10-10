@@ -22,12 +22,12 @@ public class EntityPropertyGenericQueryVO {
     @Schema(name = "propertyDisplayName", description = "属性显示名称", example = "名称")
     private String propertyDisplayName;
 
-    @Schema(name = "func", description = "聚合函数名称：SUM, COUNT, AVG, MAX, MIN, DISTINCT, 当查询条件有聚合参数时才填值", example = "SUM")
+    @Schema(name = "aggFunc", description = "聚合函数名称：SUM, COUNT, AVG, MAX, MIN, DISTINCT, 当查询条件有聚合参数时才填值", example = "SUM")
     private AggFuncEnum aggFunc;
 
     @Schema(name = "alias", description = "聚合函数或属性别名", example = "sum")
     private String alias;
 
-    @Schema(name = "propertyValue", description = "返回值", example = "123")
+    @Schema(name = "value", description = "返回值", example = "123")
     private Object value;
 }

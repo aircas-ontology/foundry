@@ -158,3 +158,28 @@ threadpool:
   queue-capacity: 100
   keep-alive-seconds: 60
   thread-name-prefix: ontology-thread-
+
+# 脚本静态安全检测。生产启用时必须使用可信宿主机上的 Docker CLI、固定镜像和本地只读规则包。
+# 现有业务容器不得通过挂载 Docker Socket 的方式启用此能力。
+script-security:
+  enabled: false
+  fail-closed: true
+  max-code-bytes: 262144
+  scan-timeout: 15s
+  max-output-bytes: 2097152
+  max-concurrent-scans: 4
+  acquire-timeout: 2s
+  rules-dir: /app/semgrep-rules
+  rule-set-version: ""
+  semgrep-image: ""
+  docker-command: docker
+  pids-limit: 64
+  memory: 256m
+  cpus: "0.5"
+  user: "65534:65534"
+  tmpfs: /tmp:rw,noexec,nosuid,size=64m
+  semgrep-max-memory-mb: 256
+  max-findings: 100
+  block-severities:
+    - ERROR
+    - WARNING

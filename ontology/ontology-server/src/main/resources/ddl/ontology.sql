@@ -175,6 +175,7 @@ create table if not exists function
     type              varchar(255),
     reference_name    varchar(512),
     code              text,
+    script_type       varchar(32) default 'GROOVY' not null,
     display_name      varchar(255),
     model             varchar(255),
     ontology_space_id integer
@@ -199,6 +200,8 @@ comment on column function.type is 'CUSTOMIZE,EXIST';
 comment on column function.reference_name is '函数全限定名称';
 
 comment on column function.code is '函数代码';
+
+comment on column function.script_type is '脚本类型：GROOVY、PYTHON、TYPESCRIPT';
 
 comment on column function.display_name is '函数展示名称';
 

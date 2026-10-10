@@ -57,7 +57,7 @@ public class OntologyDataSourceColumnParam {
     @Schema(name = "associateDatasourceColumnName", description = "关联的主数据源表的列名，必须存在于主数据源表的列中", example = "id")
     private String associateDatasourceColumnName;
 
-    @Schema(name = "type", description = "属性的自定义标签", example = "载荷基本信息")
+    @Schema(name = "tag", description = "属性的自定义标签", example = "载荷基本信息")
     private String tag;
 
 }

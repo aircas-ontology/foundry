@@ -253,3 +253,28 @@ http://localhost:37002/ontology/doc.html
 | `/function` | POST | 创建函数 |
 | `/datasource` | POST | 管理数据源 |
 | `/overview/count` | GET | 概览统计 |
+
+## 脚本算子安全检测
+
+`POST /function` 与 `PUT /function` 对自定义函数执行入库前静态扫描。扫描位于 Service 层，任何扫描命中、超时、引擎失败或结果解析失败都会在数据库写入、删除和 Groovy 编译前拒绝请求。
+
+本期运行方式为可信宿主机上的本地 Docker CLI 适配器：
+
+1. 使用固定版本或 digest 的 Semgrep 镜像，禁止 `latest`；
+2. 将 `semgrep-rules/` 作为版本化离线制品部署到宿主机只读目录；
+3. 在环境配置中设置 `script-security.rules-dir`、`rule-set-version`、`semgrep-image` 并显式启用；
+4. Docker daemon 必须可从 Java 进程所在的可信宿主环境访问；
+5. 当前 `deploy/ontology-server/docker-compose.yml` 不支持直接启用扫描，不得向业务容器挂载 Docker Socket；容器化生产环境应改用独立扫描服务或受控编排任务；
+6. 上线前人工执行 `ddl/alter_table_20261010_function_script_type.sql`，应用不会自动迁移数据库。
+
+固定镜像已离线预载后，可运行规则集成测试：
+
+```text
+mvn -pl ontology/ontology-server -am -Pscript-security-rules-it verify
+```
+
+该 Profile 设置 `--pull never`，不会在线拉取镜像。
+
+扫描器默认 `enabled=false` 且 `fail-closed=true`，因此未完成运行环境配置时自定义函数创建和更新会被拒绝。Python、TypeScript 首期仅有扫描规则，没有执行器，创建和执行会返回明确的不支持错误，且不会回落到 Groovy。
+
+回滚时可恢复上一版固定规则包和镜像。代码回滚建议保留 `script_type` 列；生产环境不得通过自动切换 fail-open 绕过扫描。

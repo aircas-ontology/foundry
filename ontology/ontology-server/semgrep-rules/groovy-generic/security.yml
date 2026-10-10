@@ -1,0 +1,49 @@
+rules:
+  - id: groovy.command-execution
+    languages: [generic]
+    message: 禁止执行操作系统命令
+    severity: ERROR
+    metadata: { category: COMMAND_EXECUTION, coverage: LIMITED_TEXT }
+    pattern-regex: '(Runtime\s*\.\s*getRuntime\s*\(\s*\)\s*\.\s*exec|ProcessBuilder|\.\s*execute\s*\()'
+  - id: groovy.dynamic-execution
+    languages: [generic]
+    message: 禁止动态执行代码
+    severity: ERROR
+    metadata: { category: DYNAMIC_EXECUTION, coverage: LIMITED_TEXT }
+    pattern-regex: '(GroovyShell|Eval\s*\.|evaluate\s*\(|parseClass\s*\()'
+  - id: groovy.network-access
+    languages: [generic]
+    message: 禁止访问网络
+    severity: ERROR
+    metadata: { category: NETWORK_ACCESS, coverage: LIMITED_TEXT }
+    pattern-regex: '(new\s+(URL|Socket|ServerSocket)\s*\(|HttpBuilder|HttpClient|openConnection\s*\()'
+  - id: groovy.file-write-delete
+    languages: [generic]
+    message: 禁止写入、修改或删除文件
+    severity: ERROR
+    metadata: { category: FILE_WRITE_DELETE, coverage: LIMITED_TEXT }
+    pattern-regex: '(FileOutputStream|FileWriter|Files\s*\.\s*(write|delete|move|copy)\s*\(|\.\s*delete\s*\()'
+  - id: groovy.file-read
+    languages: [generic]
+    message: 禁止读取文件
+    severity: WARNING
+    metadata: { category: FILE_READ, coverage: LIMITED_TEXT }
+    pattern-regex: '(FileInputStream|FileReader|Files\s*\.\s*(read|lines)|\.\s*(getText|readLines)\s*\()'
+  - id: groovy.process-thread
+    languages: [generic]
+    message: 禁止创建进程、线程或定时任务
+    severity: ERROR
+    metadata: { category: PROCESS_THREAD, coverage: LIMITED_TEXT }
+    pattern-regex: '(new\s+Thread\s*\(|Executors\s*\.|Timer\s*\(|CompletableFuture\s*\.)'
+  - id: groovy.obvious-infinite-loop
+    languages: [generic]
+    message: 禁止明显的无限循环
+    severity: ERROR
+    metadata: { category: RESOURCE_EXHAUSTION, coverage: LIMITED_TEXT }
+    pattern-regex: '(while\s*\(\s*true\s*\)|for\s*\(\s*;\s*;\s*\))'
+  - id: groovy.dynamic-loading-bypass
+    languages: [generic]
+    message: 禁止动态加载、反射或元编程绕过
+    severity: ERROR
+    metadata: { category: BYPASS, coverage: LIMITED_TEXT }
+    pattern-regex: '(Class\s*\.\s*forName|classLoader|metaClass|invokeMethod|getDeclared(Method|Field))'

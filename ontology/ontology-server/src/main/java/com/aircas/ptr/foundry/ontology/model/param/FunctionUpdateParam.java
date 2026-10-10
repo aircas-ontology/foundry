@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionModelEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.ScriptTypeEnum;
 import com.aircas.ptr.foundry.ontology.controller.validator.FunctionApiVerify;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
@@ -36,10 +37,13 @@ public class FunctionUpdateParam {
     @Schema(name = "code", description = "自定义函数：函数代码")
     private String code;
 
+    @Schema(name = "scriptType", description = "脚本类型：GROOVY、PYTHON、TYPESCRIPT；缺省时保留原类型")
+    private ScriptTypeEnum scriptType;
+
     @Schema(name = "referenceName", description = "外部函数：函数全限定名")
     private String referenceName;
 
-    @Schema(name = "type", description = "函数模型")
+    @Schema(name = "model", description = "函数模型")
     @NotNull(message = "model is null")
     private FunctionModelEnum model;
 }

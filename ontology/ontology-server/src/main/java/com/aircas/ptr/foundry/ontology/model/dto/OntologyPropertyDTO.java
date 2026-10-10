@@ -35,7 +35,7 @@ public class OntologyPropertyDTO {
     @Schema(name = "isTitleKey", description = "是否为名称键", required = true, example = "true")
     private Boolean isTitleKey;
 
-    @Schema(name = "type", description = "属性的自定义标签", example = "载荷基本信息")
+    @Schema(name = "tag", description = "属性的自定义标签", example = "载荷基本信息")
     private String tag;
 
     @Schema(name = "defaultValue", description = "属性的默认值", example = "30")

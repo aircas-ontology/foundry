@@ -9,6 +9,8 @@ import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamCategoryEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.TaskStatusEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.Status;
+import com.aircas.ptr.foundry.ontology.model.enums.ScriptScanStatusEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.ScriptTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionExecuteParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionUpdateParam;
@@ -23,6 +25,7 @@ import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyActionMappe
 import com.aircas.ptr.foundry.ontology.service.FunctionParamService;
 import com.aircas.ptr.foundry.ontology.service.FunctionService;
 import com.aircas.ptr.foundry.ontology.service.GroovyService;
+import com.aircas.ptr.foundry.ontology.service.ScriptSecurityScanner;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.OrderItem;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -67,6 +70,9 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
 
     @Resource
     private GroovyService groovyService;
+
+    @Resource
+    private ScriptSecurityScanner scriptSecurityScanner;
 
     @Lazy
     @Resource
@@ -117,6 +123,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 .description(function.getDescription())
                 .type(function.getType())
                 .model(function.getModel())
+                .scriptType(resolveScriptType(function.getScriptType()))
                 .build();
     }
 
@@ -142,12 +149,20 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     public void createFunction(FunctionCreateParam param) {
         var function = getOne(new LambdaQueryWrapper<Function>().eq(Function::getApi, param.getFunctionApi()));
         PreconditionUtils.checkArgument(function == null, "函数api已存在:" + param.getFunctionApi(), HttpStatus.BAD_REQUEST);
+        param.setScriptType(resolveScriptType(param.getScriptType()));
+        validateAndScan(param);
+        persistFunction(param);
+        //todo 暂不考虑注册的外部函数
+    }
+
+    private void persistFunction(FunctionCreateParam param) {
         //函数插入
         var func = Function.builder()
                 .api(param.getFunctionApi())
                 .description(param.getDescription())
                 .displayName(param.getDisplayName())
                 .code(param.getCode())
+                .scriptType(resolveScriptType(param.getScriptType()))
                 .type(param.getType())
                 .model(param.getModel())
                 .status(Status.ENABLE.getValue())
@@ -155,29 +170,35 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 .build();
         save(func);
         //自定义函数需要解析函数参数
-        if (param.getType().equals(FunctionTypeEnum.CUSTOMIZE)) {
+        if (param.getType().equals(FunctionTypeEnum.CUSTOMIZE)
+                && resolveScriptType(param.getScriptType()) == ScriptTypeEnum.GROOVY) {
             //解析函数参数，批量入库
             insertBatchFuncParams(func.getId(), param.getCode());
         }
-        //todo 暂不考虑注册的外部函数
     }
 
     @Override
     @Transactional(value = "mainTransactionManager")
     public void updateFunction(FunctionUpdateParam param) {
         var function = getOne(new LambdaQueryWrapper<Function>().eq(Function::getApi, param.getFunctionApi()));
-        //delete function
-        deleteByApi(param.getFunctionApi());
-        //create function
-        createFunction(FunctionCreateParam.builder()
+        PreconditionUtils.checkArgument(function != null, "无效的函数api:" + param.getFunctionApi(), HttpStatus.BAD_REQUEST);
+        FunctionCreateParam finalParam = FunctionCreateParam.builder()
                 .functionApi(param.getFunctionApi())
-                .code(param.getCode())
+                .code(param.getCode() == null ? function.getCode() : param.getCode())
+                .scriptType(param.getScriptType() == null
+                        ? resolveScriptType(function.getScriptType())
+                        : param.getScriptType())
                 .description(param.getDescription())
                 .displayName(param.getDisplayName())
                 .referenceName(param.getReferenceName())
                 .type(function.getType())
                 .model(function.getModel())
-                .build());
+                .build();
+        validateAndScan(finalParam);
+        //delete function
+        deleteByApi(param.getFunctionApi());
+        //create function
+        persistFunction(finalParam);
     }
 
     @Override
@@ -228,6 +249,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                         .functionApi(func.getApi())
                         .displayName(func.getDisplayName())
                         .type(func.getType())
+                        .scriptType(resolveScriptType(func.getScriptType()))
                         .description(func.getDescription())
                         .build()
         ).collect(Collectors.toList());
@@ -244,6 +266,11 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     public String executeFunction(FunctionExecuteParam param) {
         //查询函数
         var function = getOne(new LambdaQueryWrapper<Function>().eq(Function::getApi, param.getFunctionApi()));
+        PreconditionUtils.checkArgument(function != null, "无效的函数api:" + param.getFunctionApi(), HttpStatus.BAD_REQUEST);
+        ScriptTypeEnum scriptType = resolveScriptType(function.getScriptType());
+        if (scriptType != ScriptTypeEnum.GROOVY) {
+            throw new BusinessException("当前环境不支持执行 " + scriptType + " 脚本", HttpStatus.BAD_REQUEST);
+        }
         //查询输入参数
         var executeInputParams = functionParamService.list(
                 new LambdaQueryWrapper<FunctionParamPO>()
@@ -294,6 +321,38 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
             ).collect(Collectors.toList());
             functionParamService.saveBatch(params);
         }
+    }
+
+    private void validateAndScan(FunctionCreateParam param) {
+        PreconditionUtils.checkNotNull(param.getType(), "函数类型不能为空", HttpStatus.BAD_REQUEST);
+        if (param.getType() != FunctionTypeEnum.CUSTOMIZE) {
+            return;
+        }
+        PreconditionUtils.checkArgument(StringUtils.isNotBlank(param.getCode()), "自定义函数code不能为空", HttpStatus.BAD_REQUEST);
+        ScriptTypeEnum scriptType = resolveScriptType(param.getScriptType());
+        param.setScriptType(scriptType);
+        var result = scriptSecurityScanner.scan(scriptType, param.getCode());
+        if (result.getStatus() == ScriptScanStatusEnum.REJECTED) {
+            var firstFinding = result.getFindings().isEmpty() ? null : result.getFindings().get(0);
+            String detail = firstFinding == null
+                    ? ""
+                    : "：命中规则 " + firstFinding.getRuleId() + "，位置 "
+                    + firstFinding.getLine() + ":" + firstFinding.getColumn();
+            throw new BusinessException("脚本安全检测未通过" + detail, HttpStatus.BAD_REQUEST);
+        }
+        if (result.getStatus() != ScriptScanStatusEnum.PASSED) {
+            String message = result.getErrorSummary() != null && result.getErrorSummary().contains("超时")
+                    ? "脚本安全检测超时，请稍后重试"
+                    : "脚本安全检测失败，请稍后重试";
+            throw new BusinessException(message, HttpStatus.SERVICE_UNAVAILABLE);
+        }
+        if (scriptType != ScriptTypeEnum.GROOVY) {
+            throw new BusinessException("当前环境不支持执行 " + scriptType + " 脚本", HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    private ScriptTypeEnum resolveScriptType(ScriptTypeEnum scriptType) {
+        return scriptType == null ? ScriptTypeEnum.GROOVY : scriptType;
     }
 
 

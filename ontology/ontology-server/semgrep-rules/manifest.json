@@ -1,0 +1,12 @@
+{
+  "ruleSetVersion": "2026.10.1",
+  "semgrepImage": "semgrep/semgrep:1.99.0",
+  "sourceRevision": "8326b2e67c78627b48578349bf04bdff71998b67",
+  "builtAt": "2026-10-10T00:00:00+08:00",
+  "testSuiteVersion": "1",
+  "files": {
+    "python/security.yml": "a816c61d9c29c0f6244b15221d30e4cdbdf8e7fdcbd5032d5064a29cbadcf34a",
+    "typescript/security.yml": "226fc30077e30862189e2db0564fea4d031c5a372116e96955e637399c0ed253",
+    "groovy-generic/security.yml": "5b6bbad5984b02df7073b5d1f8d3abcefb67f8d7f7c50311719aece215c08969"
+  }
+}
