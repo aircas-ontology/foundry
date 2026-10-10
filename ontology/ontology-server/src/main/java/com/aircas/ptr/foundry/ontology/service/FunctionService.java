@@ -45,16 +45,9 @@ public interface FunctionService extends IService<Function> {
     }
 
     /**
-     * 按 api + 版本号删除函数；version 为空时取最新版本。仅未发布状态可删除
+     * 按 api + 版本号删除函数（version 必填，精确定位）。仅未发布状态可删除
      */
     void deleteByApi(String api, String version);
-
-    /**
-     * 兼容旧调用：默认作用于该 api 的最新版本
-     */
-    default void deleteByApi(String api) {
-        deleteByApi(api, null);
-    }
 
     /**
      * 创建函数版本：新版本号必须大于同 api 下已有最大版本号，初始为未发布状态
@@ -62,8 +55,8 @@ public interface FunctionService extends IService<Function> {
     void createFunction(FunctionCreateParam param);
 
     /**
-     * 修改函数版本：目标版本必须为未发布状态（原地更新）；
-     * 目标版本已发布且 copyToNewVersion=true 时，另存为 version 指定的新版本（未发布）
+     * 修改函数版本：仅未发布且未被行为关联的版本可原地更新；
+     * 已发布版本一律禁止修改（需先下线），需要新版本请走创建接口
      */
     void updateFunction(FunctionUpdateParam param);
 

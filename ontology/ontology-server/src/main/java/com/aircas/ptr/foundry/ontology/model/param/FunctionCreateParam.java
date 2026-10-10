@@ -24,7 +24,7 @@ import static com.aircas.ptr.foundry.ontology.constant.FunctionConstant.VERSION_
 @Schema(description = "函数请求")
 public class FunctionCreateParam {
 
-    @Schema(name = "functionApi", description = "函数api")
+    @Schema(name = "functionApi", description = "函数api（创建后不可修改）")
     @NotBlank(message = "functionApi is empty")
     private String functionApi;
 
@@ -33,7 +33,7 @@ public class FunctionCreateParam {
     @Pattern(regexp = VERSION_PATTERN, message = "版本号格式必须为 x.y.z（如 1.0.0）")
     private String version;
 
-    @Schema(name = "displayName", description = "函数名称")
+    @Schema(name = "displayName", description = "函数名称（必填，创建后不可修改）")
     @NotBlank(message = "displayName is empty")
     private String displayName;
 

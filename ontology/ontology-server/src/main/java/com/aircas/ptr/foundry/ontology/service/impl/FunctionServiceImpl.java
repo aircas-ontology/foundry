@@ -50,7 +50,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections.CollectionUtils;
-import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.http.HttpStatus;
@@ -72,9 +71,6 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> implements FunctionService {
-
-    private final static String ROOT_PATH = "functions";
-
 
     @Resource
     private OntologyActionMapper ontologyActionMapper;
@@ -186,6 +182,11 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     @Override
     @Transactional(value = "mainTransactionManager")
     public void createFunction(FunctionCreateParam param) {
+        // apiName 与函数名称必填（@NotBlank 已在 Controller 层校验，此处纵深防御，防绕过 Controller 直接调用服务）
+        PreconditionUtils.checkArgument(StringUtils.isNotEmpty(param.getFunctionApi()),
+                "functionApi is empty", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(StringUtils.isNotEmpty(param.getDisplayName()),
+                "displayName is empty", HttpStatus.BAD_REQUEST);
         // 自动填充 model：未传时根据 type 推断
         FunctionModelEnum model = param.getModel();
         if (model == null) {
@@ -193,6 +194,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                     ? FunctionModelEnum.BASIC 
                     : FunctionModelEnum.OTHER;
         }
+        String displayName = param.getDisplayName();
         // 版本管理：版本号必须大于同 api 下已有最大版本号（首次创建无此限制）
         String version = requireValidVersion(param.getVersion());
         List<Function> existVersions = listVersions(param.getFunctionApi());
@@ -208,7 +210,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 .version(version)
                 .publish(FunctionConstant.PUBLISH_UNPUBLISHED)
                 .description(param.getDescription())
-                .displayName(param.getDisplayName())
+                .displayName(displayName)
                 .code(param.getCode())
                 .type(param.getType())
                 .model(model)
@@ -235,40 +237,23 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         var function = resolveVersion(param.getFunctionApi(), param.getVersion());
         PreconditionUtils.checkArgument(function != null,
                 "函数版本不存在：" + param.getFunctionApi() + " " + param.getVersion(), HttpStatus.BAD_REQUEST);
-        // 修改需先下线：已发布版本只能通过复制为新版本的方式修改
-        boolean published = function.getPublish() == FunctionConstant.PUBLISH_PUBLISHED;
-        PreconditionUtils.checkArgument(!published || Boolean.TRUE.equals(param.getCopyToNewVersion()),
-                published ? "已发布的函数不能修改，请先下线或复制为新版本" : "未发布的函数请直接修改", HttpStatus.BAD_REQUEST);
-        String targetVersion = StringUtils.isNotEmpty(param.getVersion())
-                ? requireValidVersion(param.getVersion()) : function.getVersion();
-        if (published || !targetVersion.equals(function.getVersion())) {
-            // 另存新版本 / 变更版本号：新值必须大于其余版本的最大版本号
-            String newApi = function.getApi() + " " + targetVersion;
-            PreconditionUtils.checkArgument(listVersions(function.getApi()).stream()
-                            .noneMatch(f -> targetVersion.equals(f.getVersion())),
-                    "函数版本已存在:" + newApi, HttpStatus.BAD_REQUEST);
-            String maxOther = listVersions(function.getApi()).stream()
-                    .filter(f -> !f.getId().equals(function.getId()))
-                    .map(Function::getVersion).max(FunctionServiceImpl::compareVersion).orElse(null);
-            PreconditionUtils.checkArgument(maxOther == null || compareVersion(targetVersion, maxOther) > 0,
-                    "版本号必须大于当前最大版本号 " + maxOther, HttpStatus.BAD_REQUEST);
-        }
-        if (published) {
-            // 已发布：复制为未发布的新版本，原发布版本不动
-            saveAsNewVersion(function, param, targetVersion);
-        } else {
-            // 未发布：原地更新
-            applyEditableFields(function, param);
-            function.setVersion(targetVersion);
-            updateById(function);
-            // 参数重建：先删后建
-            functionParamService.remove(new LambdaQueryWrapper<FunctionParamPO>().eq(FunctionParamPO::getFunctionId, function.getId()));
-            if (function.getType() == FunctionTypeEnum.CUSTOMIZE) {
-                insertBatchFuncParams(function.getId(), param.getCode());
-            } else if (function.getType() == FunctionTypeEnum.BASIC_QUERY) {
-                // 内部校验 queryConfig 非空并重写 code
-                createBasicQueryParams(function.getId(), param.getQueryConfig());
-            }
+        // 已发布版本一律禁止修改，需先下线（无“另存新版本”口子，需要新版本请走创建接口）
+        PreconditionUtils.checkArgument(function.getPublish() == FunctionConstant.PUBLISH_UNPUBLISHED,
+                "已发布的函数不能修改，请先下线：" + param.getFunctionApi(), HttpStatus.BAD_REQUEST);
+        // 原地修改前校验行为关联（与删除/下线一致的 api 级粒度），被行为引用则禁止直接改
+        var ontologyActions = ontologyActionMapper.selectList(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getFunctionApi, function.getApi()));
+        PreconditionUtils.checkArgument(CollectionUtils.isEmpty(ontologyActions),
+                "该函数已被行为关联，不能修改：" + function.getApi());
+        // 未发布：原地更新（版本号不可改，param.version 仅作定位）
+        applyEditableFields(function, param);
+        updateById(function);
+        // 参数重建：先删后建
+        functionParamService.remove(new LambdaQueryWrapper<FunctionParamPO>().eq(FunctionParamPO::getFunctionId, function.getId()));
+        if (function.getType() == FunctionTypeEnum.CUSTOMIZE) {
+            insertBatchFuncParams(function.getId(), param.getCode());
+        } else if (function.getType() == FunctionTypeEnum.BASIC_QUERY) {
+            // 内部校验 queryConfig 非空并重写 code
+            createBasicQueryParams(function.getId(), param.getQueryConfig());
         }
         //失效编译缓存，释放旧 Class / ClassLoader
         groovyService.invalidateCompiledClass(function.getApi());
@@ -734,7 +719,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
      */
     private void applyEditableFields(Function function, FunctionUpdateParam param) {
         function.setDescription(param.getDescription());
-        function.setDisplayName(param.getDisplayName());
+        // 修改时 api 与函数名称不可变更：api 仅用于定位不会变，displayName 不赋值保留原值
         if (param.getModel() != null) {
             function.setModel(param.getModel());
         }
@@ -749,35 +734,5 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                     "基础查询算子更新必须提供 queryConfig", HttpStatus.BAD_REQUEST);
         }
     }
-
-    /**
-     * 已发布版本复制为未发布的新版本：插入新记录并按类型重建参数，原发布版本不动
-     */
-    @SneakyThrows
-    private void saveAsNewVersion(Function source, FunctionUpdateParam param, String targetVersion) {
-        var copy = Function.builder()
-                .api(source.getApi())
-                .version(targetVersion)
-                .publish(FunctionConstant.PUBLISH_UNPUBLISHED)
-                .displayName(param.getDisplayName())
-                .description(param.getDescription())
-                .type(source.getType())
-                .model(param.getModel() != null ? param.getModel() : source.getModel())
-                .status(Status.ENABLE.getValue())
-                .referenceName(StringUtils.isNotEmpty(param.getReferenceName()) ? param.getReferenceName() : source.getReferenceName())
-                .ontologySpaceId(source.getOntologySpaceId())
-                .build();
-        // 类型特有内容：CUSTOMIZE 取入参 code；BASIC_QUERY 由 createBasicQueryParams 序列化 queryConfig 到 code
-        if (source.getType() == FunctionTypeEnum.CUSTOMIZE) {
-            copy.setCode(param.getCode());
-        }
-        save(copy);
-        if (source.getType() == FunctionTypeEnum.CUSTOMIZE) {
-            insertBatchFuncParams(copy.getId(), param.getCode());
-        } else if (source.getType() == FunctionTypeEnum.BASIC_QUERY) {
-            createBasicQueryParams(copy.getId(), param.getQueryConfig());
-        }
-    }
-
 
 }

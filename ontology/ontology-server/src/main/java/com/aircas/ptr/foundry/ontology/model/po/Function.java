@@ -40,7 +40,9 @@ public class Function {
 
     /**
      * Column: api
+     * 创建后不可修改：updateStrategy = NEVER 使生成的 UPDATE 语句永不包含 api 列
      */
+    @TableField(updateStrategy = FieldStrategy.NEVER)
     private String api;
 
     /**
@@ -50,7 +52,9 @@ public class Function {
 
     /**
      * Column: displayName
+     * 创建后不可修改：updateStrategy = NEVER 使生成的 UPDATE 语句永不包含 display_name 列
      */
+    @TableField(updateStrategy = FieldStrategy.NEVER)
     private String displayName;
 
     /**

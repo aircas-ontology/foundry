@@ -10,7 +10,6 @@ import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 
 import static com.aircas.ptr.foundry.ontology.constant.FunctionConstant.VERSION_PATTERN;
@@ -29,18 +28,15 @@ public class FunctionUpdateParam {
     @FunctionApiVerify
     private String functionApi;
 
-    @Schema(name = "version", description = "版本号；缺省时作用于该 api 的最新版本。仅修改未发布版本时允许变更，变更后的值必须大于其余版本的最大版本号")
+    @Schema(name = "version", description = "版本号（必填，格式 x.y.z），仅用于定位要修改的未发布版本；修改不会变更版本号（需要新版本请走创建接口）", required = true)
+    @NotBlank(message = "version is empty")
     @Pattern(regexp = VERSION_PATTERN, message = "版本号格式必须为 x.y.z（如 1.0.0）")
     private String version;
-
-    @Schema(name = "copyToNewVersion", description = "是否复制为新版本：目标版本已发布时为 true，将内容另存为 version 指定的新版本（未发布），原发布版本不动；目标版本未发布时忽略该字段，直接原地修改")
-    private Boolean copyToNewVersion;
 
     @Schema(name = "description", description = "描述")
     private String description;
 
-    @Schema(name = "displayName", description = "函数名称")
-    @NotBlank(message = "displayName is empty")
+    @Schema(name = "displayName", description = "函数名称（修改时不可变更，此字段忽略）")
     private String displayName;
 
     @Schema(name = "code", description = "自定义函数：函数代码")
@@ -49,8 +45,7 @@ public class FunctionUpdateParam {
     @Schema(name = "referenceName", description = "外部函数：函数全限定名")
     private String referenceName;
 
-    @Schema(name = "type", description = "函数模型")
-    @NotNull(message = "model is null")
+    @Schema(name = "model", description = "函数模型（可选，不传时保留原值）")
     private FunctionModelEnum model;
 
     /**
