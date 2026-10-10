@@ -11,6 +11,9 @@ import lombok.experimental.SuperBuilder;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
+
+import static com.aircas.ptr.foundry.ontology.constant.FunctionConstant.VERSION_PATTERN;
 
 @Data
 @SuperBuilder
@@ -25,6 +28,13 @@ public class FunctionUpdateParam {
     @NotBlank(message = "functionApi is empty")
     @FunctionApiVerify
     private String functionApi;
+
+    @Schema(name = "version", description = "版本号；缺省时作用于该 api 的最新版本。仅修改未发布版本时允许变更，变更后的值必须大于其余版本的最大版本号")
+    @Pattern(regexp = VERSION_PATTERN, message = "版本号格式必须为 x.y.z（如 1.0.0）")
+    private String version;
+
+    @Schema(name = "copyToNewVersion", description = "是否复制为新版本：目标版本已发布时为 true，将内容另存为 version 指定的新版本（未发布），原发布版本不动；目标版本未发布时忽略该字段，直接原地修改")
+    private Boolean copyToNewVersion;
 
     @Schema(name = "description", description = "描述")
     private String description;

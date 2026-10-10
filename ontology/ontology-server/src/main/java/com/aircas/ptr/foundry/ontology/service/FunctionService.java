@@ -25,20 +25,57 @@ public interface FunctionService extends IService<Function> {
 
     Page<FunctionInfoVO> getFunctions(Integer ontologySpaceId, String displayName,
                                        FunctionTypeEnum type,
+                                       Integer publishStatus,
                                        String startDate, String endDate,
                                        Integer pageNum, Integer pageSize);
 
     String executeFunction(FunctionExecuteParam param);
 
 
-    FunctionDetailVO getFunctionDetailByApi(String api);
+    /**
+     * 按 api + 版本号查函数详情；version 为空时取该 api 的最新版本
+     */
+    FunctionDetailVO getFunctionDetailByApi(String api, String version);
 
-    void deleteByApi(String api);
+    /**
+     * 兼容旧调用：默认取该 api 的最新版本
+     */
+    default FunctionDetailVO getFunctionDetailByApi(String api) {
+        return getFunctionDetailByApi(api, null);
+    }
 
+    /**
+     * 按 api + 版本号删除函数；version 为空时取最新版本。仅未发布状态可删除
+     */
+    void deleteByApi(String api, String version);
 
+    /**
+     * 兼容旧调用：默认作用于该 api 的最新版本
+     */
+    default void deleteByApi(String api) {
+        deleteByApi(api, null);
+    }
+
+    /**
+     * 创建函数版本：新版本号必须大于同 api 下已有最大版本号，初始为未发布状态
+     */
     void createFunction(FunctionCreateParam param);
 
+    /**
+     * 修改函数版本：目标版本必须为未发布状态（原地更新）；
+     * 目标版本已发布且 copyToNewVersion=true 时，另存为 version 指定的新版本（未发布）
+     */
     void updateFunction(FunctionUpdateParam param);
+
+    /**
+     * 发布：未发布 → 已发布，发布后不可修改/删除
+     */
+    void publishFunction(String api, String version);
+
+    /**
+     * 下线：已发布 → 未发布，下线后才可修改/删除
+     */
+    void unpublishFunction(String api, String version);
 
     FunctionExecuteResultVO getExecuteResult(String taskId);
 
@@ -56,7 +93,7 @@ public interface FunctionService extends IService<Function> {
     Object testFunction(FunctionTestParam param);
 
     /**
-     * 按 function api 批量取函数描述，供行为出参冗余函数描述使用（一次查询，避免逐条查库）。
+     * 按 function api 批量取函数描述（每个 api 取最新版本），供行为出参冗余函数描述使用（一次查询，避免逐条查库）。
      * <p>
      * api 不存在或描述为空的不会出现在返回结果中。
      *

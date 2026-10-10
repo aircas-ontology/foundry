@@ -22,6 +22,9 @@ public class FunctionExecuteParam {
     @FunctionApiVerify
     private String functionApi;
 
+    @Schema(name = "version", description = "版本号；缺省时执行该 api 的最新版本")
+    private String version;
+
     @Schema(name = "parameters", description = "参数列表", required = true)
     private List<FunctionParameter> parameters;
 

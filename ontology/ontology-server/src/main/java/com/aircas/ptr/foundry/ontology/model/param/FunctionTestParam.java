@@ -32,6 +32,9 @@ public class FunctionTestParam {
     @NotBlank(message = "functionApi is empty")
     private String functionApi;
 
+    @Schema(name = "version", description = "版本号；缺省时测试该 api 的最新版本")
+    private String version;
+
     // ========== BASIC_QUERY 类型专用 ==========
 
     @Schema(name = "ontologyIdentifier", description = "测试本体 id（BASIC_QUERY 类型必填）")

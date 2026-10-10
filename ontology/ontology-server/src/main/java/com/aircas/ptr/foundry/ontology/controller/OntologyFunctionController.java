@@ -40,20 +40,21 @@ public class OntologyFunctionController {
     }
 
 
-    @Operation(summary = "查询函数列表")
+    @Operation(summary = "查询函数列表（版本分组：按 apiName 分组，仅展示最新版本）")
     @GetMapping("/list")
     public RestResult<Page<FunctionInfoVO>> getFunctions(
             @RequestParam(required = false) @Parameter(description = "空间id") Integer ontologySpaceId,
             @RequestParam(required = false) @Parameter(description = "函数名称（模糊搜索）") String displayName,
             @RequestParam(required = false) @Parameter(description = "函数类型") FunctionTypeEnum type,
+            @RequestParam(required = false) @Parameter(description = "发布状态：0 未发布，1 已发布") Integer publishStatus,
             @RequestParam(required = false) @Parameter(description = "创建开始日期，格式 yyyy-MM-dd") String startDate,
             @RequestParam(required = false) @Parameter(description = "创建结束日期，格式 yyyy-MM-dd") String endDate,
             @RequestParam(required = false, defaultValue = "1") Integer pageNum,
             @RequestParam(required = false, defaultValue = "10") Integer pageSize) {
-        return RestResult.ofData(functionService.getFunctions(ontologySpaceId, displayName, type, startDate, endDate, pageNum, pageSize));
+        return RestResult.ofData(functionService.getFunctions(ontologySpaceId, displayName, type, publishStatus, startDate, endDate, pageNum, pageSize));
     }
 
-    @Operation(summary = "创建函数")
+    @Operation(summary = "创建函数（版本号必传且需大于已有最大版本，初始为未发布状态）")
     @PostMapping
     public RestResult createFunction(@RequestBody @Valid FunctionCreateParam param) {
         //todo 需要增加代码安全检测
@@ -61,27 +62,47 @@ public class OntologyFunctionController {
         return RestResult.success();
     }
 
-    @Operation(summary = "更新函数")
+    @Operation(summary = "更新函数（仅未发布版本可原地修改；已发布版本需传 copyToNewVersion=true 另存为新版本）")
     @PutMapping
-    public RestResult updateFunction(@RequestBody FunctionUpdateParam param) {
-        // 需要 1 校验函数有没有被本体行为使用到，否则不能修改 2 需要增加代码安全检测
+    public RestResult updateFunction(@RequestBody @Valid FunctionUpdateParam param) {
+        //todo 需要校验函数有没有被本体行为使用到，否则不能修改；需要增加代码安全检测
         functionService.updateFunction(param);
         return RestResult.success();
     }
 
 
-    @Operation(summary = "根据函数api获取函数详情")
+    @Operation(summary = "根据函数api与版本号获取函数详情，版本号缺省时取最新版本")
     @GetMapping("/detail")
-    public RestResult<FunctionDetailVO> getFunctionByApi(@RequestParam(required = true, name = "functionApi") @Parameter(description = "函数api") String functionApi) {
-        return RestResult.ofData(functionService.getFunctionDetailByApi(functionApi));
+    public RestResult<FunctionDetailVO> getFunctionByApi(@RequestParam(required = true, name = "functionApi") @Parameter(description = "函数api") String functionApi,
+                                                         @RequestParam(required = false, name = "version") @Parameter(description = "版本号，缺省取最新版本") String version) {
+        return RestResult.ofData(functionService.getFunctionDetailByApi(functionApi, version));
     }
 
 
-    @Operation(summary = "根据functionApi删除函数")
+    @Operation(summary = "根据functionApi+版本号删除函数（仅未发布状态可删除，版本号缺省时取最新版本）")
     @DeleteMapping("/delete/{functionApi}")
-    public RestResult deleteById(@PathVariable(required = true, name = "functionApi") String functionApi) {
+    public RestResult deleteById(@PathVariable(required = true, name = "functionApi") String functionApi,
+                                 @RequestParam(required = false, name = "version") @Parameter(description = "版本号，缺省取最新版本") String version) {
         //需要校验函数有没有被本体行为使用到
-        functionService.deleteByApi(functionApi);
+        functionService.deleteByApi(functionApi, version);
+        return RestResult.success();
+    }
+
+
+    @Operation(summary = "发布函数版本（未发布 → 已发布，发布后不可修改/删除）")
+    @PostMapping("/publish/{functionApi}")
+    public RestResult publishFunction(@PathVariable(required = true, name = "functionApi") String functionApi,
+                                      @RequestParam(required = false, name = "version") @Parameter(description = "版本号，缺省取最新版本") String version) {
+        functionService.publishFunction(functionApi, version);
+        return RestResult.success();
+    }
+
+
+    @Operation(summary = "下线函数版本（已发布 → 未发布，下线后才可修改/删除）")
+    @PostMapping("/unpublish/{functionApi}")
+    public RestResult unpublishFunction(@PathVariable(required = true, name = "functionApi") String functionApi,
+                                        @RequestParam(required = false, name = "version") @Parameter(description = "版本号，缺省取最新版本") String version) {
+        functionService.unpublishFunction(functionApi, version);
         return RestResult.success();
     }
 

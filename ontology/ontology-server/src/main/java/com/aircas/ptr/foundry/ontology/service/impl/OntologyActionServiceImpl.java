@@ -31,6 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
 import jakarta.annotation.Resource;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -139,7 +140,13 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         if (StringUtils.isEmpty(funcApi)) {
             return;
         }
-        var func = functionMapper.selectOne(new LambdaQueryWrapper<Function>().eq(Function::getApi, funcApi));
+        // 版本管理后 api 可能对应多条记录，取版本号最大的最新版本（x.y.z 逐段数值比较）
+        var func = functionMapper.selectList(new LambdaQueryWrapper<Function>().eq(Function::getApi, funcApi))
+                .stream()
+                .max(Comparator.comparing((Function f) -> f.getVersion() == null ? "" : f.getVersion(),
+                                FunctionServiceImpl::compareVersion)
+                        .thenComparing(Function::getId))
+                .orElse(null);
         //目前仅支行为与自定义函数api绑定
         PreconditionUtils.checkArgument(func != null && func.getType().equals(FunctionTypeEnum.CUSTOMIZE), "function api 不存在：" + func, HttpStatus.BAD_REQUEST);
         var functionParams = functionParamMapper.selectList(new LambdaQueryWrapper<FunctionParamPO>().eq(FunctionParamPO::getFunctionId, func.getId()));

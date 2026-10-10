@@ -59,6 +59,18 @@ public class Function {
     private Integer status;
 
     /**
+     * 版本号，格式 x.y.z（如 1.0.0）；与 api 联合唯一，同一 api 下必须递增
+     */
+    private String version;
+
+    /**
+     * 发布状态：0 未发布（可修改/删除），1 已发布（锁定）
+     *
+     * @see com.aircas.ptr.foundry.ontology.constant.FunctionConstant
+     */
+    private Integer publish;
+
+    /**
      * Column: id
      */
     @TableId(type = IdType.AUTO)

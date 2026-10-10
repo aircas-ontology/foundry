@@ -11,7 +11,10 @@ import lombok.experimental.SuperBuilder;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import java.util.List;
+
+import static com.aircas.ptr.foundry.ontology.constant.FunctionConstant.VERSION_PATTERN;
 
 @Data
 @SuperBuilder
@@ -24,6 +27,11 @@ public class FunctionCreateParam {
     @Schema(name = "functionApi", description = "函数api")
     @NotBlank(message = "functionApi is empty")
     private String functionApi;
+
+    @Schema(name = "version", description = "版本号，格式 x.y.z（如 1.0.0），同一 api 下不可重复且必须大于已有最大版本号", required = true)
+    @NotBlank(message = "version is empty")
+    @Pattern(regexp = VERSION_PATTERN, message = "版本号格式必须为 x.y.z（如 1.0.0）")
+    private String version;
 
     @Schema(name = "displayName", description = "函数名称")
     @NotBlank(message = "displayName is empty")

@@ -24,6 +24,12 @@ public class FunctionInfoVO {
     @Schema(name = "functionApi", description = "函数api", required = true)
     private String functionApi;
 
+    @Schema(name = "version", description = "版本号，格式 x.y.z")
+    private String version;
+
+    @Schema(name = "publishStatus", description = "发布状态：0 未发布，1 已发布")
+    private Integer publishStatus;
+
     @Schema(name = "displayName", description = "函数名称", required = true)
     private String displayName;
 

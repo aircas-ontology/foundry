@@ -4,6 +4,7 @@ package com.aircas.ptr.foundry.ontology.service.impl;
 import com.aircas.ptr.foundry.common.constant.FunctionParamTypeEnum;
 import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
+import com.aircas.ptr.foundry.ontology.constant.FunctionConstant;
 import com.aircas.ptr.foundry.ontology.model.dto.ActionContextInfoDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.FunctionParamDTO;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamCategoryEnum;
@@ -40,7 +41,6 @@ import com.aircas.ptr.foundry.ontology.service.FunctionParamService;
 import com.aircas.ptr.foundry.ontology.service.FunctionService;
 import com.aircas.ptr.foundry.ontology.service.GroovyService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.metadata.OrderItem;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -61,6 +61,7 @@ import jakarta.annotation.Resource;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -102,20 +103,20 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         if (functionApis == null || functionApis.isEmpty()) {
             return new HashMap<>();
         }
-        // function.api 上有唯一约束 uk_function_api；description 列可为 null，
-        // 过滤空白描述，避免 Collectors.toMap 在 value 为 null 时抛 NPE
+        // 版本管理后 api 不再唯一，同一 api 多个版本时描述取任意一条（toMap 保留先遇到的）；
+        // description 列可为 null，过滤空白描述，避免 Collectors.toMap 在 value 为 null 时抛 NPE
         return list(new LambdaQueryWrapper<Function>()
                         .select(Function::getApi, Function::getDescription)
                         .in(Function::getApi, functionApis))
                 .stream()
                 .filter(function -> StringUtils.isNotBlank(function.getDescription()))
-                .collect(Collectors.toMap(Function::getApi, Function::getDescription));
+                .collect(Collectors.toMap(Function::getApi, Function::getDescription, (first, second) -> first));
     }
 
 
     @Override
-    public FunctionDetailVO getFunctionDetailByApi(String api) {
-        var function = getOne(new LambdaQueryWrapper<Function>().eq(Function::getApi, api));
+    public FunctionDetailVO getFunctionDetailByApi(String api, String version) {
+        var function = resolveVersion(api, version);
         PreconditionUtils.checkArgument(function != null, "函数api不存在：" + api, HttpStatus.BAD_REQUEST);
         var functionParams = functionParamService.list(
                 new LambdaQueryWrapper<FunctionParamPO>().eq(FunctionParamPO::getFunctionId, function.getId()));
@@ -153,6 +154,8 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 .params(params)
                 .queryConfig(queryConfig)
                 .functionApi(function.getApi())
+                .version(function.getVersion())
+                .publishStatus(function.getPublish())
                 .displayName(function.getDisplayName())
                 .description(function.getDescription())
                 .type(function.getType())
@@ -163,9 +166,11 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
 
     @Override
     @Transactional(value = "mainTransactionManager")
-    public void deleteByApi(String api) {
-        var function = getOne(new LambdaQueryWrapper<Function>().eq(Function::getApi, api));
+    public void deleteByApi(String api, String version) {
+        var function = resolveVersion(api, version);
         PreconditionUtils.checkArgument(function != null, "无效的函数api:" + api, HttpStatus.BAD_REQUEST);
+        // 已发布状态不允许删除，需先下线
+        requireUnpublished(function, "已发布的函数不能删除，请先下线");
         //判断函数是否关联了行为，被本体行为使用到则不删除
         var ontologyActions = ontologyActionMapper.selectList(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getFunctionApi, api));
         PreconditionUtils.checkArgument(CollectionUtils.isEmpty(ontologyActions), "该函数已被行为关联" + api);
@@ -188,11 +193,20 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                     ? FunctionModelEnum.BASIC 
                     : FunctionModelEnum.OTHER;
         }
-        var function = getOne(new LambdaQueryWrapper<Function>().eq(Function::getApi, param.getFunctionApi()));
-        PreconditionUtils.checkArgument(function == null, "函数api已存在:" + param.getFunctionApi(), HttpStatus.BAD_REQUEST);
-        //函数插入
+        // 版本管理：版本号必须大于同 api 下已有最大版本号（首次创建无此限制）
+        String version = requireValidVersion(param.getVersion());
+        List<Function> existVersions = listVersions(param.getFunctionApi());
+        String newApi = param.getFunctionApi() + " " + version;
+        PreconditionUtils.checkArgument(existVersions.stream().noneMatch(f -> version.equals(f.getVersion())),
+                "函数版本已存在:" + newApi, HttpStatus.BAD_REQUEST);
+        String maxVersion = existVersions.stream().map(Function::getVersion).max(FunctionServiceImpl::compareVersion).orElse(null);
+        PreconditionUtils.checkArgument(maxVersion == null || compareVersion(version, maxVersion) > 0,
+                "新版本号必须大于当前最大版本号 " + maxVersion, HttpStatus.BAD_REQUEST);
+        //函数插入，新增版本默认为未发布状态
         var func = Function.builder()
                 .api(param.getFunctionApi())
+                .version(version)
+                .publish(FunctionConstant.PUBLISH_UNPUBLISHED)
                 .description(param.getDescription())
                 .displayName(param.getDisplayName())
                 .code(param.getCode())
@@ -218,21 +232,69 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     @Override
     @Transactional(value = "mainTransactionManager")
     public void updateFunction(FunctionUpdateParam param) {
-        var function = getOne(new LambdaQueryWrapper<Function>().eq(Function::getApi, param.getFunctionApi()));
-        //delete function
-        deleteByApi(param.getFunctionApi());
-        //create function
-        createFunction(FunctionCreateParam.builder()
-                .functionApi(param.getFunctionApi())
-                .code(param.getCode())
-                .description(param.getDescription())
-                .displayName(param.getDisplayName())
-                .referenceName(param.getReferenceName())
-                .type(function.getType())
-                .model(param.getModel())
-                .ontologySpaceId(function.getOntologySpaceId())
-                .queryConfig(param.getQueryConfig())
-                .build());
+        var function = resolveVersion(param.getFunctionApi(), param.getVersion());
+        PreconditionUtils.checkArgument(function != null,
+                "函数版本不存在：" + param.getFunctionApi() + " " + param.getVersion(), HttpStatus.BAD_REQUEST);
+        // 修改需先下线：已发布版本只能通过复制为新版本的方式修改
+        boolean published = function.getPublish() == FunctionConstant.PUBLISH_PUBLISHED;
+        PreconditionUtils.checkArgument(!published || Boolean.TRUE.equals(param.getCopyToNewVersion()),
+                published ? "已发布的函数不能修改，请先下线或复制为新版本" : "未发布的函数请直接修改", HttpStatus.BAD_REQUEST);
+        String targetVersion = StringUtils.isNotEmpty(param.getVersion())
+                ? requireValidVersion(param.getVersion()) : function.getVersion();
+        if (published || !targetVersion.equals(function.getVersion())) {
+            // 另存新版本 / 变更版本号：新值必须大于其余版本的最大版本号
+            String newApi = function.getApi() + " " + targetVersion;
+            PreconditionUtils.checkArgument(listVersions(function.getApi()).stream()
+                            .noneMatch(f -> targetVersion.equals(f.getVersion())),
+                    "函数版本已存在:" + newApi, HttpStatus.BAD_REQUEST);
+            String maxOther = listVersions(function.getApi()).stream()
+                    .filter(f -> !f.getId().equals(function.getId()))
+                    .map(Function::getVersion).max(FunctionServiceImpl::compareVersion).orElse(null);
+            PreconditionUtils.checkArgument(maxOther == null || compareVersion(targetVersion, maxOther) > 0,
+                    "版本号必须大于当前最大版本号 " + maxOther, HttpStatus.BAD_REQUEST);
+        }
+        if (published) {
+            // 已发布：复制为未发布的新版本，原发布版本不动
+            saveAsNewVersion(function, param, targetVersion);
+        } else {
+            // 未发布：原地更新
+            applyEditableFields(function, param);
+            function.setVersion(targetVersion);
+            updateById(function);
+            // 参数重建：先删后建
+            functionParamService.remove(new LambdaQueryWrapper<FunctionParamPO>().eq(FunctionParamPO::getFunctionId, function.getId()));
+            if (function.getType() == FunctionTypeEnum.CUSTOMIZE) {
+                insertBatchFuncParams(function.getId(), param.getCode());
+            } else if (function.getType() == FunctionTypeEnum.BASIC_QUERY) {
+                // 内部校验 queryConfig 非空并重写 code
+                createBasicQueryParams(function.getId(), param.getQueryConfig());
+            }
+        }
+        //失效编译缓存，释放旧 Class / ClassLoader
+        groovyService.invalidateCompiledClass(function.getApi());
+    }
+
+    @Override
+    @Transactional(value = "mainTransactionManager")
+    public void publishFunction(String api, String version) {
+        var function = requireVersionExists(api, version);
+        PreconditionUtils.checkArgument(function.getPublish() == FunctionConstant.PUBLISH_UNPUBLISHED,
+                "该版本已是发布状态：" + api + " " + function.getVersion(), HttpStatus.BAD_REQUEST);
+        function.setPublish(FunctionConstant.PUBLISH_PUBLISHED);
+        updateById(function);
+    }
+
+    @Override
+    @Transactional(value = "mainTransactionManager")
+    public void unpublishFunction(String api, String version) {
+        var function = requireVersionExists(api, version);
+        PreconditionUtils.checkArgument(function.getPublish() == FunctionConstant.PUBLISH_PUBLISHED,
+                "该版本不是发布状态：" + api + " " + function.getVersion(), HttpStatus.BAD_REQUEST);
+        //判断函数是否关联了行为，被本体行为使用到则不能下线
+        var ontologyActions = ontologyActionMapper.selectList(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getFunctionApi, api));
+        PreconditionUtils.checkArgument(CollectionUtils.isEmpty(ontologyActions), "该函数已被行为关联，不能下线：" + api);
+        function.setPublish(FunctionConstant.PUBLISH_UNPUBLISHED);
+        updateById(function);
     }
 
     @Override
@@ -276,30 +338,18 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     @Override
     public Page<FunctionInfoVO> getFunctions(Integer ontologySpaceId, String displayName,
                                               FunctionTypeEnum type,
+                                              Integer publishStatus,
                                               String startDate, String endDate,
                                               Integer pageNum, Integer pageSize) {
         var pageInfo = new Page<Function>(pageNum, pageSize);
-        pageInfo.addOrder(OrderItem.desc("create_time"));
-        var wrapper = new LambdaQueryWrapper<Function>();
-        if (ontologySpaceId != null) {
-            wrapper.eq(Function::getOntologySpaceId, ontologySpaceId);
-        }
-        if (StringUtils.isNotEmpty(displayName)) {
-            wrapper.like(Function::getDisplayName, displayName);
-        }
-        if (type != null) {
-            wrapper.eq(Function::getType, type);
-        }
-        if (StringUtils.isNotEmpty(startDate)) {
-            wrapper.ge(Function::getCreateTime, startDate);
-        }
-        if (StringUtils.isNotEmpty(endDate)) {
-            wrapper.le(Function::getCreateTime, endDate);
-        }
-        var functionPage = page(pageInfo, wrapper);
+        // 版本分组分页：按 api 分组，每组仅展示版本号最大的一条（XML 内按 x.y.z 语义化比较）
+        var functionPage = getBaseMapper().pageLatestVersion(pageInfo, ontologySpaceId, displayName, type,
+                publishStatus, startDate, endDate);
         var records = functionPage.getRecords().stream().<FunctionInfoVO>map(func ->
                 FunctionInfoVO.builder()
                         .functionApi(func.getApi())
+                        .version(func.getVersion())
+                        .publishStatus(func.getPublish())
                         .displayName(func.getDisplayName())
                         .type(func.getType())
                         .description(func.getDescription())
@@ -318,8 +368,10 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     @Override
     @SneakyThrows
     public String executeFunction(FunctionExecuteParam param) {
-        //查询函数
-        var function = getOne(new LambdaQueryWrapper<Function>().eq(Function::getApi, param.getFunctionApi()));
+        //查询函数（指定版本，缺省取最新版本）
+        var function = resolveVersion(param.getFunctionApi(), param.getVersion());
+        PreconditionUtils.checkArgument(function != null,
+                "函数版本不存在：" + param.getFunctionApi() + " " + param.getVersion(), HttpStatus.BAD_REQUEST);
         //查询输入参数
         var executeInputParams = functionParamService.list(
                 new LambdaQueryWrapper<FunctionParamPO>()
@@ -433,9 +485,9 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     @SneakyThrows
     @Override
     public Object testBasicQuery(BasicQueryTestParam param) {
-        // 1. 获取函数并解析 queryConfig
-        var function = getOne(new LambdaQueryWrapper<Function>().eq(Function::getApi, param.getFunctionApi()));
-        PreconditionUtils.checkArgument(function != null, "函数不存在：" + param.getFunctionApi(), HttpStatus.BAD_REQUEST);
+        // 1. 获取函数版本并解析 queryConfig
+        var function = resolveVersion(param.getFunctionApi(), param.getVersion());
+        PreconditionUtils.checkArgument(function != null, "函数版本不存在：" + param.getFunctionApi(), HttpStatus.BAD_REQUEST);
         PreconditionUtils.checkArgument(function.getType() == FunctionTypeEnum.BASIC_QUERY,
                 "该函数不是基础查询算子", HttpStatus.BAD_REQUEST);
         var config = objectMapper.readValue(function.getCode(), BasicQueryConfig.class);
@@ -579,14 +631,15 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     @SneakyThrows
     @Override
     public Object testFunction(FunctionTestParam param) {
-        var function = getOne(new LambdaQueryWrapper<Function>().eq(Function::getApi, param.getFunctionApi()));
-        PreconditionUtils.checkArgument(function != null, "函数不存在：" + param.getFunctionApi(), HttpStatus.BAD_REQUEST);
+        var function = resolveVersion(param.getFunctionApi(), param.getVersion());
+        PreconditionUtils.checkArgument(function != null, "函数版本不存在：" + param.getFunctionApi(), HttpStatus.BAD_REQUEST);
 
         switch (function.getType()) {
             case BASIC_QUERY:
                 // 转换为 BasicQueryTestParam 并调用 testBasicQuery
                 var basicParam = BasicQueryTestParam.builder()
                         .functionApi(param.getFunctionApi())
+                        .version(function.getVersion())
                         .ontologyIdentifier(param.getOntologyIdentifier())
                         .variableBindings(param.getVariableBindings())
                         .pageNum(param.getPageNum())
@@ -599,12 +652,130 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 // 复用 executeFunction 逻辑
                 var executeParam = FunctionExecuteParam.builder()
                         .functionApi(param.getFunctionApi())
+                        .version(function.getVersion())
                         .parameters(param.getParameters())
                         .build();
                 return executeFunction(executeParam);
 
             default:
                 throw new BusinessException("不支持的函数类型：" + function.getType());
+        }
+    }
+
+    // ==================== 版本管理私有方法 ====================
+
+    /**
+     * 解析目标版本：version 为空时按 x.y.z 语义化比较取该 api 的最大版本
+     */
+    private Function resolveVersion(String api, String version) {
+        if (StringUtils.isNotEmpty(version)) {
+            return getOne(new LambdaQueryWrapper<Function>()
+                    .eq(Function::getApi, api)
+                    .eq(Function::getVersion, version));
+        }
+        return listVersions(api).stream()
+                .max(Comparator.comparing(Function::getVersion, FunctionServiceImpl::compareVersion))
+                .orElse(null);
+    }
+
+    /**
+     * 查询指定 api 的全部版本
+     */
+    private List<Function> listVersions(String api) {
+        return list(new LambdaQueryWrapper<Function>().eq(Function::getApi, api));
+    }
+
+    /**
+     * 解析目标版本，不存在则抛业务异常（发布/下线接口使用，版本号必传）
+     */
+    private Function requireVersionExists(String api, String version) {
+        var function = resolveVersion(api, version);
+        PreconditionUtils.checkArgument(function != null,
+                "函数版本不存在：" + api + (StringUtils.isEmpty(version) ? "" : " " + version), HttpStatus.BAD_REQUEST);
+        return function;
+    }
+
+    /**
+     * 校验并发布状态：非未发布则抛业务异常
+     */
+    private void requireUnpublished(Function function, String message) {
+        PreconditionUtils.checkArgument(function.getPublish() == FunctionConstant.PUBLISH_UNPUBLISHED, message);
+    }
+
+    /**
+     * 校验版本号格式 x.y.z，返回规范化后的版本号
+     */
+    private String requireValidVersion(String version) {
+        PreconditionUtils.checkArgument(StringUtils.isNotEmpty(version) && version.matches(FunctionConstant.VERSION_PATTERN),
+                "版本号格式必须为 x.y.z（如 1.0.0）：" + version, HttpStatus.BAD_REQUEST);
+        return version;
+    }
+
+    /**
+     * 语义化版本号逐段数值比较，段数不足按 0 补齐（如 1.10.0 > 1.9.0）
+     */
+    static int compareVersion(String left, String right) {
+        String[] l = left.split("\\.");
+        String[] r = right.split("\\.");
+        int len = Math.max(l.length, r.length);
+        for (int i = 0; i < len; i++) {
+            long lv = i < l.length ? Long.parseLong(l[i]) : 0L;
+            long rv = i < r.length ? Long.parseLong(r[i]) : 0L;
+            int cmp = Long.compare(lv, rv);
+            if (cmp != 0) {
+                return cmp;
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * 将更新参数中的可编辑字段应用到函数实体（type 特有内容另处理）
+     */
+    private void applyEditableFields(Function function, FunctionUpdateParam param) {
+        function.setDescription(param.getDescription());
+        function.setDisplayName(param.getDisplayName());
+        if (param.getModel() != null) {
+            function.setModel(param.getModel());
+        }
+        if (StringUtils.isNotEmpty(param.getReferenceName())) {
+            function.setReferenceName(param.getReferenceName());
+        }
+        if (function.getType() == FunctionTypeEnum.CUSTOMIZE) {
+            function.setCode(param.getCode());
+        } else if (function.getType() == FunctionTypeEnum.BASIC_QUERY) {
+            // code 由后续 createBasicQueryParams 序列化 queryConfig 重新写入，此处不覆盖旧值
+            PreconditionUtils.checkArgument(param.getQueryConfig() != null,
+                    "基础查询算子更新必须提供 queryConfig", HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    /**
+     * 已发布版本复制为未发布的新版本：插入新记录并按类型重建参数，原发布版本不动
+     */
+    @SneakyThrows
+    private void saveAsNewVersion(Function source, FunctionUpdateParam param, String targetVersion) {
+        var copy = Function.builder()
+                .api(source.getApi())
+                .version(targetVersion)
+                .publish(FunctionConstant.PUBLISH_UNPUBLISHED)
+                .displayName(param.getDisplayName())
+                .description(param.getDescription())
+                .type(source.getType())
+                .model(param.getModel() != null ? param.getModel() : source.getModel())
+                .status(Status.ENABLE.getValue())
+                .referenceName(StringUtils.isNotEmpty(param.getReferenceName()) ? param.getReferenceName() : source.getReferenceName())
+                .ontologySpaceId(source.getOntologySpaceId())
+                .build();
+        // 类型特有内容：CUSTOMIZE 取入参 code；BASIC_QUERY 由 createBasicQueryParams 序列化 queryConfig 到 code
+        if (source.getType() == FunctionTypeEnum.CUSTOMIZE) {
+            copy.setCode(param.getCode());
+        }
+        save(copy);
+        if (source.getType() == FunctionTypeEnum.CUSTOMIZE) {
+            insertBatchFuncParams(copy.getId(), param.getCode());
+        } else if (source.getType() == FunctionTypeEnum.BASIC_QUERY) {
+            createBasicQueryParams(copy.getId(), param.getQueryConfig());
         }
     }
 
