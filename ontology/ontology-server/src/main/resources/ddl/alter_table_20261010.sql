@@ -32,4 +32,5 @@ comment on column ontology.function.language is '脚本语言：GROOVY/JAVA/PYTH
 -- 旧版兼容：此前已按 NOT NULL DEFAULT 'GROOVY' 建列的库需去除约束并清理脏数据（可重复执行）
 alter table ontology.function alter column language drop default;
 alter table ontology.function alter column language drop not null;
-update ontology.function set language = null where type <> 'CUSTOMIZE';
+-- type 为 NULL 的历史行也算非脚本算子，故用 is distinct from 而非 <>（<> 对 NULL 结果为 NULL 会漏清）
+update ontology.function set language = null where type is distinct from 'CUSTOMIZE';
