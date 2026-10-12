@@ -34,3 +34,15 @@ build/
 
 ### Local Spring profile (secrets / machine-specific, do not commit) ###
 **/application-local.yml
+
+### WorkBuddy local runtime data (do not commit) ###
+.workbuddy/
+
+### Generated API docs / explorer artifacts (regenerable, do not commit) ###
+_apidocs.json
+_doc.html
+api-explorer.html
+api-explorer-template.html
+formatted.json
+function-create-example.http
+subspace-create-example.http
