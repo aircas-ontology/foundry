@@ -215,6 +215,10 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 "新版本号必须大于当前最大版本号 " + maxVersion, HttpStatus.BAD_REQUEST);
         //函数插入，新增版本默认为未发布状态
         FunctionLanguageEnum language = param.getLanguage() == null ? FunctionLanguageEnum.GROOVY : param.getLanguage();
+        //脚本函数落库前先做语法/编译校验（走对应 runner 的 /validate），失败即拒、不落库
+        if (param.getType() == FunctionTypeEnum.CUSTOMIZE) {
+            validateScript(language, param.getFunctionApi(), version, param.getCode());
+        }
         var func = Function.builder()
                 .api(param.getFunctionApi())
                 .version(version)
@@ -256,6 +260,10 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         PreconditionUtils.checkArgument(CollectionUtils.isEmpty(ontologyActions),
                 "该函数已被行为关联，不能修改：" + function.getApi());
         // 未发布：原地更新（版本号不可改，param.version 仅作定位）
+        //脚本函数更新前先校验新代码（语言锁定不可改，取 function.language）
+        if (function.getType() == FunctionTypeEnum.CUSTOMIZE) {
+            validateScript(function.getLanguage(), function.getApi(), function.getVersion(), param.getCode());
+        }
         applyEditableFields(function, param);
         updateById(function);
         // 参数重建：先删后建
@@ -291,6 +299,24 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         PreconditionUtils.checkArgument(CollectionUtils.isEmpty(ontologyActions), "该函数已被行为关联，不能下线：" + api);
         function.setPublish(FunctionConstant.PUBLISH_UNPUBLISHED);
         updateById(function);
+    }
+
+    /**
+     * 脚本语法/编译校验：走对应语言 runner 的 /validate，失败抛业务异常。
+     * 仅 CUSTOMIZE 脚本函数需要；无代码时跳过（BASIC_QUERY/EXTERNAL 不走脚本校验）。
+     */
+    private void validateScript(FunctionLanguageEnum language, String functionApi, String version, String code) {
+        if (StringUtils.isEmpty(code)) {
+            return;
+        }
+        FunctionLanguageEnum lang = language == null ? FunctionLanguageEnum.GROOVY : language;
+        ScriptExecutionContext ctx = ScriptExecutionContext.builder()
+                .language(lang)
+                .functionApi(functionApi)
+                .version(version)
+                .code(code)
+                .build();
+        scriptEngineRouter.route(lang).validate(ctx);
     }
 
     @Override

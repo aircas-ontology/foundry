@@ -57,7 +57,7 @@ public class RemoteRunnerScriptEngine implements ScriptEngine {
 
         Map<String, Object> resp = HttpUtil.postJson(url, new HashMap<>(), body,
                 new TypeReference<Map<String, Object>>() {
-                });
+                }, properties.getTimeoutMs());
         if (resp == null) {
             throw new BusinessException("语言运行时返回为空：" + ctx.getLanguage().getCode());
         }
@@ -75,7 +75,7 @@ public class RemoteRunnerScriptEngine implements ScriptEngine {
 
         Map<String, Object> resp = HttpUtil.postJson(url, new HashMap<>(), body,
                 new TypeReference<Map<String, Object>>() {
-                });
+                }, properties.getTimeoutMs());
         boolean ok = resp != null && Boolean.TRUE.equals(resp.get("ok"));
         if (!ok) {
             Object error = resp == null ? "无响应" : resp.get("error");

@@ -114,6 +114,41 @@ public class HttpUtil {
         return executeRequest(request, responseType);
     }
 
+    /**
+     * POST JSON（带 per-call 超时）。与 {@link #postJson(String, Map, Object, TypeReference)} 的区别：
+     * <ul>
+     *   <li>使用独立超时（callTimeout/connect/read/write），不影响共享客户端；</li>
+     *   <li>非 2xx 保留响应体详情（不再吞成“远程调用出错”），便于调用方拿到下游错误；</li>
+     *   <li>超时抛出可识别的“远程调用超时”。</li>
+     * </ul>
+     * 供脚本 runner 等需区分超时/业务错误且需控制超时的调用方使用。
+     */
+    public static <T> T postJson(String url, Map<String, String> params, Object jsonBody, TypeReference<T> responseType, long timeoutMs) {
+        String jsonString;
+        try {
+            jsonString = objectMapper.writeValueAsString(jsonBody);
+            log.info("reuest url:" + url + ", request param:" + jsonString);
+        } catch (JsonProcessingException e) {
+            log.error("json序列化失败", e);
+            throw new BusinessException("json序列化失败");
+        }
+        RequestBody body = RequestBody.create(JSON, jsonString);
+        Request request = new Request.Builder()
+                .header(LoggingFilter.LOG_ID_HEADER, MDC.get(LoggingFilter.LOG_ID_KEY) == null ? IdGenerator.generateLogId() : MDC.get(LoggingFilter.LOG_ID_KEY))
+                .post(body)
+                .url(buildUrl(url, params))
+                .build();
+        return executeWithTimeout(request, responseType, timeoutMs);
+    }
+
+    private static HttpUrl buildUrl(String url, Map<String, String> params) {
+        HttpUrl.Builder urlBuilder = HttpUrl.parse(url).newBuilder();
+        if (MapUtils.isNotEmpty(params)) {
+            params.forEach(urlBuilder::addQueryParameter);
+        }
+        return urlBuilder.build();
+    }
+
     public static <T> T putJson(String url, Map<String, String> params, String jsonString, TypeReference<T> responseType) {
         HttpUrl.Builder urlBuilder = HttpUrl.parse(url).newBuilder();
         if (MapUtils.isNotEmpty(params)) {
@@ -158,6 +193,38 @@ public class HttpUtil {
             return null;
         } catch (Exception e) {
             log.error("executeRequest failed", e);
+            throw new BusinessException("远程调用出错");
+        }
+    }
+
+    /**
+     * 带超时的执行：per-call 超时客户端（共享连接池/调度器，newBuilder 轻量）。
+     * 与 {@link #executeRequest} 不同：非 2xx 保留响应体详情，超时单独报“远程调用超时”。
+     */
+    private static <T> T executeWithTimeout(Request request, TypeReference<T> responseType, long timeoutMs) {
+        OkHttpClient callClient = client.newBuilder()
+                .callTimeout(timeoutMs, TimeUnit.MILLISECONDS)
+                .connectTimeout(timeoutMs, TimeUnit.MILLISECONDS)
+                .readTimeout(timeoutMs, TimeUnit.MILLISECONDS)
+                .writeTimeout(timeoutMs, TimeUnit.MILLISECONDS)
+                .build();
+        try (Response response = callClient.newCall(request).execute()) {
+            ResponseBody responseBody = response.body();
+            String respStr = responseBody == null ? null : responseBody.string();
+            if (!response.isSuccessful()) {
+                throw new BusinessException("远程调用失败, code=" + response.code() + ", body=" + respStr);
+            }
+            if (respStr != null) {
+                return objectMapper.readValue(respStr, responseType);
+            }
+            return null;
+        } catch (BusinessException e) {
+            throw e;
+        } catch (java.io.InterruptedIOException e) {
+            log.error("executeWithTimeout timeout, url={}", request.url(), e);
+            throw new BusinessException("远程调用超时（" + timeoutMs + "ms）");
+        } catch (Exception e) {
+            log.error("executeWithTimeout failed, url={}", request.url(), e);
             throw new BusinessException("远程调用出错");
         }
     }
