@@ -49,6 +49,8 @@ public class AuthInterceptor implements HandlerInterceptor {
                 .eq(User::getUsername, userContext.getUsername()));
 
         PreconditionUtils.checkNotNull(user, "用户不存在");
+        // 以库中配置为准回填绑定空间，配置变更无需重新登录即可生效
+        userContext.setSpaceId(user.getSpaceId());
         UserContextHolder.set(userContext);
         return true;
     }
