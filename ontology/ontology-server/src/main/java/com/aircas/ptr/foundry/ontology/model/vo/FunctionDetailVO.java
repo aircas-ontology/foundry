@@ -2,6 +2,8 @@ package com.aircas.ptr.foundry.ontology.model.vo;
 
 
 import com.aircas.ptr.foundry.ontology.model.param.BasicQueryConfig;
+import com.aircas.ptr.foundry.ontology.model.param.CompositeConfig;
+import com.aircas.ptr.foundry.ontology.model.param.ExternalApiConfig;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
@@ -33,5 +35,11 @@ public class FunctionDetailVO extends FunctionInfoVO {
 
     @Schema(name = "queryConfig", description = "基础查询算子配置：只有 BASIC_QUERY 类型会存在")
     private BasicQueryConfig queryConfig;
+
+    @Schema(name = "compositeConfig", description = "函数编排配置：只有 COMPOSITE 类型会存在")
+    private CompositeConfig compositeConfig;
+
+    @Schema(name = "apiConfig", description = "外部API算子配置：只有 EXTERNAL 类型会存在")
+    private ExternalApiConfig apiConfig;
 
 }

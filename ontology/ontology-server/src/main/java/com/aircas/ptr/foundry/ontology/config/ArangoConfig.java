@@ -4,6 +4,7 @@ import com.arangodb.ArangoDB;
 import com.arangodb.springframework.annotation.EnableArangoRepositories;
 import com.arangodb.springframework.config.ArangoConfiguration;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Configuration;
 
 import jakarta.annotation.PostConstruct;
@@ -12,6 +13,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @Configuration
+@ConditionalOnProperty(prefix = "foundry.integration.arangodb", name = "enabled", havingValue = "true", matchIfMissing = true)
 @EnableArangoRepositories(basePackages = {"com.aircas.ptr.foundry.ontology.repository.arangodb"})
 public class ArangoConfig implements ArangoConfiguration {
 

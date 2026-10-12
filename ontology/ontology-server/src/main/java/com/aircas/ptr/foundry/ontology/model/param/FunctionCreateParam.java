@@ -54,4 +54,19 @@ public class FunctionCreateParam {
      */
     @Schema(name = "queryConfig", description = "基础查询算子配置（仅 type=BASIC_QUERY 时必填）")
     private BasicQueryConfig queryConfig;
+
+    /**
+     * 函数编排的编排图定义，仅 type=COMPOSITE 时传递。
+     * 后端将其序列化为 JSON 存入 code 字段，并根据输入/输出映射自动生成 function_param。
+     */
+    @Schema(name = "compositeConfig", description = "函数编排配置（仅 type=COMPOSITE 时必填）")
+    private CompositeConfig compositeConfig;
+
+    /**
+     * 外部API算子的接口定义，仅 type=EXTERNAL 时传递。
+     * 后端将其序列化为 JSON 存入 code 字段，并根据请求/响应映射自动生成 function_param，
+     * 使外部API算子既能单独调用，也能作为函数编排画布节点接入工作流。
+     */
+    @Schema(name = "apiConfig", description = "外部API算子配置（仅 type=EXTERNAL 时必填）")
+    private ExternalApiConfig apiConfig;
 }
