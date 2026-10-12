@@ -2,6 +2,7 @@ package com.aircas.ptr.foundry.ontology.service.impl;
 
 import com.aircas.ptr.foundry.common.util.IdGenerator;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
+import com.aircas.ptr.foundry.ontology.context.UserContextHolder;
 import com.aircas.ptr.foundry.ontology.model.dto.OntologySpaceCreateDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.OntologySpaceDTO;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyExportTypeEnum;
@@ -316,7 +317,11 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
 
     @Override
     public List<OntologySpaceVO> querySpace() {
-        var spaces = list();
+        // 当前用户配置了绑定空间时，仅返回该空间，未配置则返回全部空间
+        var userContext = UserContextHolder.get();
+        var bindSpaceId = userContext == null ? null : userContext.getSpaceId();
+        var spaces = bindSpaceId == null ? list()
+                : list(new LambdaQueryWrapper<OntologySpace>().eq(OntologySpace::getId, bindSpaceId));
         if (CollectionUtils.isEmpty(spaces)) {
             return Lists.newArrayList();
         }
