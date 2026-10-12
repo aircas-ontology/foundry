@@ -214,9 +214,11 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         PreconditionUtils.checkArgument(maxVersion == null || compareVersion(version, maxVersion) > 0,
                 "新版本号必须大于当前最大版本号 " + maxVersion, HttpStatus.BAD_REQUEST);
         //函数插入，新增版本默认为未发布状态
-        FunctionLanguageEnum language = param.getLanguage() == null ? FunctionLanguageEnum.GROOVY : param.getLanguage();
-        //脚本函数落库前先做语法/编译校验（走对应 runner 的 /validate），失败即拒、不落库
+        //language 仅 CUSTOMIZE 脚本算子有意义；基础查询/外部/容器算子存 NULL（EXTERNAL 执行链路待定，开发时再评估）
+        FunctionLanguageEnum language = null;
         if (param.getType() == FunctionTypeEnum.CUSTOMIZE) {
+            language = param.getLanguage() == null ? FunctionLanguageEnum.GROOVY : param.getLanguage();
+            //脚本函数落库前先做语法/编译校验（走对应 runner 的 /validate），失败即拒、不落库
             validateScript(language, param.getFunctionApi(), version, param.getCode());
         }
         var func = Function.builder()
@@ -237,7 +239,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         //自定义函数需要解析函数参数
         if (param.getType().equals(FunctionTypeEnum.CUSTOMIZE)) {
             //参数入库：前端 IDE 声明优先，Groovy 未声明时回退后端反射解析
-            buildCustomizeParams(func.getId(), language, param.getCode(), param.getParameters());
+            buildCustomizeParams(param.getFunctionApi(), func.getId(), language, param.getCode(), param.getParameters());
         }
         //基础查询算子：序列化 queryConfig 到 code，提取变量存入 function_param
         if (param.getType().equals(FunctionTypeEnum.BASIC_QUERY)) {
@@ -266,11 +268,11 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         }
         applyEditableFields(function, param);
         updateById(function);
-        // 参数重建：先删后建
-        functionParamService.remove(new LambdaQueryWrapper<FunctionParamPO>().eq(FunctionParamPO::getFunctionId, function.getId()));
+        // 参数重建：CUSTOMIZE 解析成功才删旧建新（解析失败保留原定义），BASIC_QUERY 先删后建
         if (function.getType() == FunctionTypeEnum.CUSTOMIZE) {
-            buildCustomizeParams(function.getId(), function.getLanguage(), param.getCode(), param.getParameters());
+            rebuildCustomizeParams(function.getApi(), function.getId(), function.getLanguage(), param.getCode(), param.getParameters());
         } else if (function.getType() == FunctionTypeEnum.BASIC_QUERY) {
+            functionParamService.remove(new LambdaQueryWrapper<FunctionParamPO>().eq(FunctionParamPO::getFunctionId, function.getId()));
             // 内部校验 queryConfig 非空并重写 code
             createBasicQueryParams(function.getId(), param.getQueryConfig());
         }
@@ -416,11 +418,12 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 .inputJson(inputJson)
                 .build();
         var resultJsonStr = scriptEngineRouter.route(language).execute(ctx);
-        var result = objectMapper.readValue(resultJsonStr, new TypeReference<FunctionResultVO>() {
-        });
-        if (result != null && StringUtils.isNotEmpty(result.getTaskId())) {
+        // 脚本返回字段由用户代码决定（可带 status 等自定义键），FunctionResultVO 已用 @JsonAnySetter 承接未知键
+        var resultNode = objectMapper.readTree(resultJsonStr);
+        String asyncTaskId = resultNode != null && resultNode.hasNonNull("taskId") ? resultNode.get("taskId").asText() : null;
+        if (StringUtils.isNotEmpty(asyncTaskId)) {
             executeResultMapper.insert(FunctionExecuteResult.builder()
-                    .taskId(result.getTaskId())
+                    .taskId(asyncTaskId)
                     .functionApi(param.getFunctionApi())
                     .functionParam(objectMapper.writeValueAsString(param.getParameters()))
                     .taskStatus(TaskStatusEnum.PENDING)
@@ -633,16 +636,51 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     }
 
     /***
-     * 自定义函数参数入库：前端 IDE 声明的参数优先（四语言统一）；
-     * Groovy 未声明时回退后端反射解析（过渡能力），其他语言未声明则不建参数（等待前端 AST 接入）。
+     * 自定义函数参数入库（创建）：解析不出参数时只记 warn、不建参数（无参数时执行 input 为空对象）。
      */
-    private void buildCustomizeParams(Long functionId, FunctionLanguageEnum language, String code, List<FunctionParamDTO> declared) {
-        if (CollectionUtils.isNotEmpty(declared)) {
-            saveParams(functionId, declared);
+    private void buildCustomizeParams(String functionApi, Long functionId, FunctionLanguageEnum language, String code, List<FunctionParamDTO> declared) {
+        List<FunctionParamDTO> resolved = resolveCustomizeParams(language, code, declared);
+        if (CollectionUtils.isEmpty(resolved)) {
+            if (resolved == null) {
+                log.warn("脚本参数未能自动解析，跳过参数入库：functionApi={}, functionId={}, language={}", functionApi, functionId, language);
+            }
             return;
         }
-        if (language == null || language == FunctionLanguageEnum.GROOVY) {
-            saveParams(functionId, groovyService.parseGroovyCode(code));
+        saveParams(functionId, resolved);
+    }
+
+    /**
+     * 自定义函数参数重建（更新）：解析失败（返回 null）时保留原有参数定义，避免误删前端已声明的参数。
+     */
+    private void rebuildCustomizeParams(String functionApi, Long functionId, FunctionLanguageEnum language, String code, List<FunctionParamDTO> declared) {
+        List<FunctionParamDTO> resolved = resolveCustomizeParams(language, code, declared);
+        if (resolved == null) {
+            log.warn("脚本参数未能自动解析，保留原有参数定义：functionApi={}, functionId={}, language={}", functionApi, functionId, language);
+            return;
+        }
+        functionParamService.remove(new LambdaQueryWrapper<FunctionParamPO>().eq(FunctionParamPO::getFunctionId, functionId));
+        saveParams(functionId, resolved);
+    }
+
+    /**
+     * 解析自定义函数的参数定义：
+     *   1) 前端 IDE 声明的参数优先（四语言统一契约）；
+     *   2) Groovy 未声明时回退后端反射解析，且仅老契约脚本（handle 返回 FunctionResultVO）能解析成功；
+     *   3) 新契约脚本 handle(input) 为单对象入参，反射拿不到字段名，返回 null 表示“无法确定”，
+     *      由调用方决定创建时不建参数 / 更新时保留原参数。
+     */
+    private List<FunctionParamDTO> resolveCustomizeParams(FunctionLanguageEnum language, String code, List<FunctionParamDTO> declared) {
+        if (CollectionUtils.isNotEmpty(declared)) {
+            return declared;
+        }
+        if (language != null && language != FunctionLanguageEnum.GROOVY) {
+            return null;
+        }
+        try {
+            return groovyService.parseGroovyCode(code);
+        } catch (Exception e) {
+            log.warn("Groovy 反射解析参数失败（新契约脚本属正常现象）：{}", e.getMessage());
+            return null;
         }
     }
 
@@ -673,6 +711,10 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     /**
      * 按入参定义将执行参数值转为基本类型，组装为单对象入参 JSON（handle(input) 的 input）。
      * 基本类型走 SchemaHandleUtil 转换；OBJECT 直接透传原始值（统一单对象入参契约后支持复杂类型）。
+     * typeReferenceName 为空时不做类型转换，直接透传（兼容非 JVM 语言前端声明参数未提供 Java 类名的场景）。
+     * 未赋值（value 为 null）的参数不写入 input：各语言对“键存在但值为 null”的处理不一致
+     * （Python input.get('name','world') 会拿到 None 而非默认值，只有 Groovy 的 input.name ?: 'world' 能兜底），
+     * 省略缺值键可让脚本自己的默认值在各语言统一生效。
      */
     @SneakyThrows
     private String buildInputJson(List<FunctionParamPO> inputParams, Map<String, Object> funParamMap) {
@@ -680,7 +722,11 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         if (CollectionUtils.isNotEmpty(inputParams)) {
             for (FunctionParamPO p : inputParams) {
                 Object value = funParamMap.get(p.getParamName());
-                if (p.getParamType() == FunctionParamTypeEnum.OBJECT) {
+                if (value == null) {
+                    continue;
+                }
+                if (p.getParamType() == FunctionParamTypeEnum.OBJECT
+                        || StringUtils.isEmpty(p.getTypeReferenceName())) {
                     input.put(p.getParamName(), value);
                 } else {
                     input.put(p.getParamName(), SchemaHandleUtil.convertValue(value, p.getTypeReferenceName()));
@@ -714,13 +760,16 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
 
             case CUSTOMIZE:
             case EXTERNAL:
-                // 复用 executeFunction 逻辑
+                // 复用 executeFunction 逻辑，将 JSON 字符串解析为结构化 VO，保证前端响应格式统一
+                // 脚本自定义返回键由 FunctionResultVO.extra 承接并平铺回传，不会因未知字段报错
                 var executeParam = FunctionExecuteParam.builder()
                         .functionApi(param.getFunctionApi())
                         .version(function.getVersion())
                         .parameters(param.getParameters())
                         .build();
-                return executeFunction(executeParam);
+                var resultJson = executeFunction(executeParam);
+                return objectMapper.readValue(resultJson, new TypeReference<FunctionResultVO>() {
+                });
 
             default:
                 throw new BusinessException("不支持的函数类型：" + function.getType());

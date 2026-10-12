@@ -113,6 +113,9 @@ public class EntityServiceImpl implements EntityService {
     private Configuration safeConfig = Configuration.builder().build().addOptions(Option.DEFAULT_PATH_LEAF_TO_NULL, Option.SUPPRESS_EXCEPTIONS);
 
 
+    /**
+     * 函数执行结果的自定义键由脚本决定，已由 FunctionResultVO 的 @JsonAnySetter 承接，此处保持默认严格解析。
+     */
     private final com.fasterxml.jackson.databind.ObjectMapper jsonMapper = new com.fasterxml.jackson.databind.ObjectMapper();
 
     private final ExpressionParser parser = new SpelExpressionParser();

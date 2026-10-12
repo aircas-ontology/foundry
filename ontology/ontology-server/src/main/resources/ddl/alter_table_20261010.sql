@@ -22,8 +22,14 @@ create unique index if not exists uk_function_api_version
     on ontology.function (api, version);
 
 -- 脚本函数多语言：新增语言列，执行时按 language 路由到对应语言 runner 容器
--- 仅 type=CUSTOMIZE/EXTERNAL 有意义；存量脚本均为 Groovy，默认 GROOVY 行为不变
+-- 仅 type=CUSTOMIZE 脚本算子有值；基础查询/外部/容器算子无脚本语言概念，存 NULL
+-- 不设库级默认值：默认 GROOVY 会给非脚本算子写入语义错误的脏数据
 alter table ontology.function
-    add column if not exists language varchar(32) not null default 'GROOVY';
+    add column if not exists language varchar(32);
 
-comment on column ontology.function.language is '脚本语言：GROOVY/JAVA/PYTHON/TYPESCRIPT，仅 CUSTOMIZE/EXTERNAL 有意义；创建后锁定，执行按此路由到对应 runner';
+comment on column ontology.function.language is '脚本语言：GROOVY/JAVA/PYTHON/TYPESCRIPT，仅 CUSTOMIZE 脚本算子有值；创建后锁定，执行按此路由到对应 runner';
+
+-- 旧版兼容：此前已按 NOT NULL DEFAULT 'GROOVY' 建列的库需去除约束并清理脏数据（可重复执行）
+alter table ontology.function alter column language drop default;
+alter table ontology.function alter column language drop not null;
+update ontology.function set language = null where type <> 'CUSTOMIZE';

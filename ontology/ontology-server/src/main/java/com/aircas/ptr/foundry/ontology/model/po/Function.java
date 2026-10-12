@@ -99,7 +99,7 @@ public class Function {
     private FunctionTypeEnum type;
 
     /**
-     * 脚本语言，仅 type=CUSTOMIZE/EXTERNAL 有意义；执行时按此路由到对应语言 runner 容器。
+     * 脚本语言，仅 type=CUSTOMIZE 脚本算子有值，其余算子（基础查询/外部/容器）为 NULL；执行时按此路由到对应语言 runner 容器。
      * 创建后锁定（updateStrategy=NEVER），换语言请走新版本。
      */
     @TableField(updateStrategy = FieldStrategy.NEVER)

@@ -46,7 +46,7 @@ public class FunctionCreateParam {
     @NotNull(message = "type is null")
     private FunctionTypeEnum type;
 
-    @Schema(name = "language", description = "脚本语言（仅 CUSTOMIZE/EXTERNAL 有意义，不传默认 GROOVY；创建后不可修改）")
+    @Schema(name = "language", description = "脚本语言（仅 CUSTOMIZE 脚本算子有效，不传默认 GROOVY；其他算子类型忽略此字段存 NULL；创建后不可修改）")
     private FunctionLanguageEnum language;
 
     @Schema(name = "model", description = "函数模型（可选，不传时根据 type 自动推断：BASIC_QUERY→BASIC，其他→OTHER）")
