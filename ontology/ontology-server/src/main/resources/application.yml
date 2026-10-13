@@ -99,6 +99,10 @@ rabbitmq:
 ontology:
   swagger:
     enable: true
+  space-binding:
+    users:
+      admin2: 89
+      admin3: 88
   # 函数编排（LiteFlow 组合函数）运行期配置
   composite:
     # JS 转换脚本通过 node 子进程执行（JDK17 无 Nashorn/GraalJS），可用值：node 的绝对路径或命令名

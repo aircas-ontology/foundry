@@ -29,11 +29,6 @@ public class User {
      */
     private String picture;
 
-    /**
-     * 用户绑定的本体空间id，为空表示不限制空间
-     */
-    private Integer spaceId;
-
 
     /**
      * 记录创建时间
