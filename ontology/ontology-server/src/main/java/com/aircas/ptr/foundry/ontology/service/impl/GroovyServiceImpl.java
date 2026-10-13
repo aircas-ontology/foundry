@@ -40,6 +40,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -54,6 +55,21 @@ public class GroovyServiceImpl implements GroovyService {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private final static String FUNCTION_RESULT_REFERENCE_NAME = "com.aircas.ptr.foundry.ontology.model.vo.FunctionResultVO";
+
+    /**
+     * 按 functionApi 缓存。每个条目使用独立 ClassLoader，失效时可关闭，便于 GC 回收 Class（Metaspace）。
+     * maximumSize / expireAfterAccess 作为兜底，防止忘记 invalidate 时无限增长。
+     */
+    private final Cache<String, CompiledScript> compiledScriptCache = CacheBuilder.newBuilder()
+            .maximumSize(256)
+            .expireAfterAccess(24, TimeUnit.HOURS)
+            .removalListener((RemovalNotification<String, CompiledScript> notification) -> {
+                CompiledScript value = notification.getValue();
+                if (value != null) {
+                    value.close();
+                }
+            })
+            .build();
 
     /**
      * 解析groovy代码块，获取参数列表和返回值信息
@@ -115,6 +131,65 @@ public class GroovyServiceImpl implements GroovyService {
     }
 
 
+@SneakyThrows
+    @Override
+    public String executeGroovy(String functionApi, String code, Map<String, Object> paramMap, List<FunctionParamPO> paramInfos) {
+        PreconditionUtils.checkArgument(StringUtils.isNotEmpty(functionApi), "functionApi不能为空");
+        Class<?> groovyClass = getOrCompileByFunctionApi(functionApi, code);
+        GroovyObject groovyInstance = (GroovyObject) groovyClass.getDeclaredConstructor().newInstance();
+
+        var paramValues = paramInfos.stream().map(p -> {
+            var value = paramMap.get(p.getParamName());
+            if (p.getParamType() == FunctionParamTypeEnum.OBJECT) {
+                throw new BusinessException("parse error");
+            } else {
+                return SchemaHandleUtil.convertValue(value, p.getTypeReferenceName());
+            }
+        }).collect(Collectors.toList());
+        var result = CollectionUtils.isEmpty(paramValues) ?
+                groovyInstance.invokeMethod("handle", null) :
+                groovyInstance.invokeMethod("handle", paramValues.toArray(new Object[]{}));
+        return objectMapper.writeValueAsString(result);
+    }
+
+    @SneakyThrows
+    @Override
+    public Object invokeHandle(String functionApi, String code, Map<String, Object> paramMap,
+                               List<FunctionParamPO> paramInfos) {
+        PreconditionUtils.checkArgument(StringUtils.isNotEmpty(functionApi), "functionApi不能为空");
+        Class<?> groovyClass = getOrCompileByFunctionApi(functionApi, code);
+        GroovyObject groovyInstance = (GroovyObject) groovyClass.getDeclaredConstructor().newInstance();
+        Map<String, Object> inputMap = paramMap == null ? new HashMap<>() : paramMap;
+        List<Object> paramValues = new ArrayList<>();
+        if (CollectionUtils.isNotEmpty(paramInfos)) {
+            for (FunctionParamPO paramInfo : paramInfos) {
+                Object value = inputMap.get(paramInfo.getParamName());
+                // 编排上游节点产出的对象/列表直接透传，其余按声明类型转换，与 executeGroovy 保持一致
+                if (paramInfo.getParamType() != FunctionParamTypeEnum.OBJECT
+                        && paramInfo.getParamType() != FunctionParamTypeEnum.LIST) {
+                    value = SchemaHandleUtil.convertValue(value, paramInfo.getTypeReferenceName());
+                }
+                paramValues.add(value);
+            }
+        }
+        return paramValues.isEmpty()
+                ? groovyInstance.invokeMethod("handle", null)
+                : groovyInstance.invokeMethod("handle", paramValues.toArray(new Object[]{}));
+    }
+
+    @Override
+    public void invalidateCompiledClass(String functionApi) {
+        if (StringUtils.isEmpty(functionApi)) {
+            return;
+        }
+        compiledScriptCache.invalidate(functionApi);
+    }
+
+    @PreDestroy
+    public void destroy() {
+        compiledScriptCache.invalidateAll();
+    }
+
     private String getParameterName(Parameter parameter) {
         FuncParam funcParam = parameter.getAnnotation(FuncParam.class);
         if (funcParam != null) {
@@ -124,8 +199,24 @@ public class GroovyServiceImpl implements GroovyService {
     }
 
     /**
+     * 按 functionApi 缓存；DB 中 code 变更后 codeHash 不一致则替换并关闭旧 ClassLoader。
+     */
+    private Class<?> getOrCompileByFunctionApi(String functionApi, String code) {
+        String codeHash = cacheKey(code);
+        CompiledScript cached = compiledScriptCache.getIfPresent(functionApi);
+        if (cached != null && codeHash.equals(cached.codeHash)) {
+            return cached.clazz;
+        }
+        CompiledScript compiled = compile(code);
+        // put 替换旧条目时 Guava 会走 removalListener 关闭旧 ClassLoader
+        compiledScriptCache.put(functionApi, compiled);
+        return compiled.clazz;
+    }
+
+    /**
      * 编译 Groovy 源码，在已加载类中查找含 handle 方法且返回 FunctionResultVO 的类。
-     * 仅供 parseGroovyCode 反射解析参数使用；脚本执行已下沉 groovy-runner。
+     * 用于创建时反射解析参数（parseGroovyCode）以及函数编排节点的进程内执行；
+     * 脚本函数（CUSTOMIZE）的独立执行已下沉 groovy-runner 容器。
      */
     private CompiledScript compile(String code) {
         String codeHash = cacheKey(code);

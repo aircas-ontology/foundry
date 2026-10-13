@@ -2,6 +2,7 @@ package com.aircas.ptr.foundry.ontology.config;
 
 import com.xxl.job.core.executor.impl.XxlJobSpringExecutor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -12,6 +13,7 @@ import jakarta.annotation.Resource;
  *
  */
 @Configuration
+@ConditionalOnProperty(prefix = "foundry.integration.xxl-job", name = "enabled", havingValue = "true", matchIfMissing = true)
 @Slf4j
 public class XxlJobConfig {
 

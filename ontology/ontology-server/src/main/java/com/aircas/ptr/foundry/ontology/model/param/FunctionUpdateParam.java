@@ -64,4 +64,18 @@ public class FunctionUpdateParam {
      */
     @Schema(name = "parameters", description = "参数定义列表（前端 IDE 解析 handle 签名后提交，CUSTOMIZE 推荐传入）")
     private List<FunctionParamDTO> parameters;
+
+    /**
+     * 函数编排的编排图定义，仅 type=COMPOSITE 时传递。
+     * 后端将其序列化为 JSON 存入 code 字段，并根据输入/输出映射自动生成 function_param。
+     */
+    @Schema(name = "compositeConfig", description = "函数编排配置（仅 type=COMPOSITE 时必填）")
+    private CompositeConfig compositeConfig;
+
+    /**
+     * 外部API算子的接口定义，仅 type=EXTERNAL 时传递。
+     * 未重新提交时沿用库中已存的配置，避免接口定义被清空。
+     */
+    @Schema(name = "apiConfig", description = "外部API算子配置（仅 type=EXTERNAL 时必填）")
+    private ExternalApiConfig apiConfig;
 }

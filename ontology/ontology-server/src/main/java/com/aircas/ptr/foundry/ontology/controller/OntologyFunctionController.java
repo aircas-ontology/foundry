@@ -1,7 +1,10 @@
 package com.aircas.ptr.foundry.ontology.controller;
 
 import com.aircas.ptr.foundry.common.base.RestResult;
+import com.aircas.ptr.foundry.ontology.model.bo.CompositePlanBO;
+import com.aircas.ptr.foundry.ontology.model.bo.CompositeValidationBO;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
+import com.aircas.ptr.foundry.ontology.model.param.CompositeValidateParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionCallbackParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionExecuteParam;
@@ -125,6 +128,19 @@ public class OntologyFunctionController {
     @Operation(summary = "函数测试")
     public RestResult<Object> testFunction(@RequestBody @Valid FunctionTestParam param) {
         return RestResult.ofData(functionService.testFunction(param));
+    }
+
+    @PostMapping("/composite/validate")
+    @Operation(summary = "校验函数编排定义（不落库）")
+    public RestResult<CompositeValidationBO> validateComposite(@RequestBody CompositeValidateParam param) {
+        return RestResult.ofData(functionService.validateComposite(param));
+    }
+
+    @GetMapping("/composite/el")
+    @Operation(summary = "编译已落库的函数编排定义，返回 LiteFlow 执行链 EL")
+    public RestResult<CompositePlanBO> compileComposite(
+            @RequestParam(required = true, name = "functionApi") @Parameter(description = "编排函数api") String functionApi) {
+        return RestResult.ofData(functionService.compileComposite(functionApi));
     }
 
 }
