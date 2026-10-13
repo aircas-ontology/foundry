@@ -23,6 +23,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import org.reactivestreams.Subscription;
 
 /**
  * Agent 对话编排服务。
@@ -41,12 +43,13 @@ public class AgentChatService {
 
     /**
      * 流式聚合：每批最多攒多少个模型响应块（token 级增量，中文常约 1 字/块）。
-     * thinking 与 content 同享该节流，规避逐 token 推送导致前端"思考过程"每次只蹦 2~3 字的碎片化。
+     * 配合句子边界检测使用：攒够该数量后开始检查句子边界，在标点处才推送，
+     * 规避逐 token 推送导致前端"思考过程"每次只蹦 2~3 字的碎片化。
      */
-    private static final int STREAM_BUFFER_SIZE = 20;
+    private static final int STREAM_BUFFER_SIZE = 30;
 
     /** 流式聚合：距上一批超过该时长即冲刷，为块延迟设上界，避免模型吐字慢时长时间不出块。 */
-    private static final Duration STREAM_BUFFER_TIMEOUT = Duration.ofMillis(150);
+    private static final Duration STREAM_BUFFER_TIMEOUT = Duration.ofMillis(300);
 
     private final ChatClient chatClient;
 
@@ -58,6 +61,9 @@ public class AgentChatService {
 
     /** 确定性选择卡片解析器：识别模型输出的 request_selection 标记，程序化取数推 selection_request。 */
     private final SelectionResolver selectionResolver;
+
+    /** 活跃流订阅注册表：sessionId → Subscription，供中断接口取消模型 token 流。 */
+    private final Map<String, Subscription> activeSubscriptions = new ConcurrentHashMap<>();
 
     /**
      * 同步对话：一次性返回大模型完整回复。
@@ -96,6 +102,8 @@ public class AgentChatService {
         String sessionId = param.getSessionId();
         // 累积本轮 content 增量，流结束后整体解析 stage 状态
         StringBuilder replyBuffer = new StringBuilder();
+        // 句子边界缓冲：按标点聚合，确保 thinking/content 以完整句子推送给前端
+        StringBuilder sentenceBuffer = new StringBuilder();
 
         Flux<AgentChatStreamVO> modelEvents = chatClient.prompt()
                 .system(buildSystemPrompt(param, sessionId))
@@ -110,20 +118,46 @@ public class AgentChatService {
                 .bufferTimeout(STREAM_BUFFER_SIZE, STREAM_BUFFER_TIMEOUT)
                 // 每批归并出至多两条事件：thinking（合并本批全部 reasoning 增量）先于 content（合并本批全部正文增量，
                 // 同时累积进 replyBuffer 供流末解析 stage）；无思维链的模型该批只产 content，两者皆空则跳过
-                .flatMapIterable(batch -> toStreamEvents(batch, replyBuffer))
+                .flatMapIterable(batch -> toStreamEvents(batch, replyBuffer, sentenceBuffer))
                 .doOnComplete(() -> {
+                    // 冲刷句子缓冲区残余，确保前端不丢末尾文本
+                    if (sentenceBuffer.length() > 0) {
+                        sink.tryEmitNext(AgentChatStreamVO.content(sentenceBuffer.toString()));
+                        sentenceBuffer.setLength(0);
+                    }
                     String reply = replyBuffer.toString();
                     // 先落盘本轮 stage 状态（properties_proposed / relations_proposed 等），供下面确定性回查取数
                     sessionStageCollector.collectAndStore(sessionId, reply);
                     // 再由状态机确定性判断是否推选择卡片（不依赖模型调工具/输出标记，在 done 之前推）
-                    selectionResolver.resolveForRound(sessionId, reply, sink);
+                    // 传入当前请求的 datasourceId/spaceId，使解析器能感知前端已选状态，避免重复推卡
+                    selectionResolver.resolveForRound(sessionId, reply, param.getDatasourceId(), param.getSpaceId(), sink);
                     sink.tryEmitComplete();
                 })
-                .doOnError(e -> sink.tryEmitComplete());
+                .doOnError(e -> sink.tryEmitComplete())
+                .doOnSubscribe(sub -> activeSubscriptions.put(sessionId, sub))
+                .doFinally(signal -> activeSubscriptions.remove(sessionId));
 
         return Flux.merge(sink.asFlux(), modelEvents)
                 .concatWith(Mono.fromSupplier(AgentChatStreamVO::done))
                 .onErrorResume(e -> Flux.just(AgentChatStreamVO.error(e.getMessage())));
+    }
+
+    /**
+     * 中断指定会话的流式对话：取消模型 token 流的上游订阅，使 SSE 连接随之关闭。
+     *
+     * <p>前端点击"停止"按钮时调用。取消订阅后 Reactor 的 {@code doFinally} 会自动清理注册表；
+     * 若该会话无活跃流（已结束或不存在）则返回 false。</p>
+     *
+     * @param sessionId 要中断的会话 id
+     * @return 是否成功找到并取消了活跃流
+     */
+    public boolean abort(String sessionId) {
+        Subscription sub = activeSubscriptions.remove(sessionId);
+        if (sub != null) {
+            sub.cancel();
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -175,26 +209,113 @@ public class AgentChatService {
     }
 
     /**
-     * 把一批流式 {@link ChatResponse} 归并为本轮事件：先合并全部 reasoning 增量为一条 {@code thinking}
-     * （保证"思考过程"在时间序上先于回答），再合并全部正文增量为一条 {@code content} 并累积进
-     * {@code replyBuffer}（供流末整体解析 stage）；两者皆空时返回空列表，不产出事件。
+     * 把一批流式 {@link ChatResponse} 归并为本轮事件，按句子边界聚合。
      *
-     * <p>thinking 与 content 同批聚合，从根源上消除"每个 reasoning token 一条 thinking 事件"导致的碎片化。</p>
+     * <p>将批内全部 reasoning/content 增量追加到句子缓冲区，在句号/问号/感叹号/换行处切分，
+     * 只推送完整句子。超长无标点（&gt;200 字）强制切一次，避免无限等待。
+     * thinking 与 content 共享同一缓冲区，保持输出连贯。</p>
+     *
+     * <p>同时检测模型循环重复（连续输出相同内容），发现时插入打断提示。</p>
      */
-    private static List<AgentChatStreamVO> toStreamEvents(List<ChatResponse> batch, StringBuilder replyBuffer) {
-        StringBuilder reasoning = new StringBuilder();
-        StringBuilder content = new StringBuilder();
+    private static List<AgentChatStreamVO> toStreamEvents(
+            List<ChatResponse> batch, StringBuilder replyBuffer, StringBuilder sentenceBuffer) {
         for (ChatResponse resp : batch) {
-            reasoning.append(extractReasoning(resp));
-            content.append(extractContent(resp));
+            String r = extractReasoning(resp);
+            String c = extractContent(resp);
+            if (!r.isEmpty()) {
+                sentenceBuffer.append(r);
+                flushSentences(sentenceBuffer, replyBuffer, null);
+            }
+            if (!c.isEmpty()) {
+                sentenceBuffer.append(c);
+                flushSentences(sentenceBuffer, replyBuffer, null);
+            }
         }
+        // 检测模型循环重复（如反复输出相同内容），插入打断提示
+        List<AgentChatStreamVO> events = detectLoopAndInterrupt(replyBuffer, sentenceBuffer);
+        return events;
+    }
+
+    /**
+     * 冲刷句子缓冲区：按句子边界（。！？.\n）切分，将完整句子作为事件发出。
+     * 超长无标点（&gt;{@code MAX_SENTENCE_LENGTH} 字）强制切一次。
+     *
+     * @param sentenceBuffer 句子累积缓冲区（调用方持有，本方法修改其内容）
+     * @param replyBuffer    原始回复累积器（用于 stage 解析，接收全部原文）
+     * @param events         输出事件列表；为 null 时仅冲刷不产事件（用于流结束兜底）
+     */
+    private static void flushSentences(StringBuilder sentenceBuffer,
+                                       StringBuilder replyBuffer,
+                                       List<AgentChatStreamVO> events) {
+        while (sentenceBuffer.length() > 0) {
+            int cutIdx = findSentenceBoundary(sentenceBuffer);
+            if (cutIdx < 0 && sentenceBuffer.length() > MAX_SENTENCE_LENGTH) {
+                cutIdx = sentenceBuffer.length();
+            }
+            if (cutIdx < 0) {
+                break;
+            }
+            String sentence = sentenceBuffer.substring(0, cutIdx);
+            sentenceBuffer.delete(0, cutIdx);
+            replyBuffer.append(sentence);
+            if (events != null && !sentence.isEmpty()) {
+                events.add(AgentChatStreamVO.content(sentence));
+            }
+        }
+    }
+
+    /**
+     * 在缓冲区中查找第一个句子边界位置（句号/问号/感叹号/换行之后）。
+     * 返回切割位置（不含标点），未找到返回 -1。
+     */
+    private static int findSentenceBoundary(StringBuilder sb) {
+        for (int i = 0; i < sb.length(); i++) {
+            char c = sb.charAt(i);
+            if (c == '\n' || c == '\r') {
+                return i + 1;
+            }
+            if (c == '。' || c == '！' || c == '？' || c == '.' || c == '!' || c == '?') {
+                int end = i + 1;
+                while (end < sb.length() && (sb.charAt(end) == ' ' || sb.charAt(end) == '\u3000')) {
+                    end++;
+                }
+                return end;
+            }
+        }
+        return -1;
+    }
+
+    /** 句子缓冲区最大长度：超过此值无标点则强制切出，避免无限等待。 */
+    private static final int MAX_SENTENCE_LENGTH = 200;
+
+    /**
+     * 检测模型循环重复：取回复缓冲区末尾文本，若同一短片段重复出现 ≥3 次，
+     * 则生成打断提示事件，引导模型换种表达。
+     */
+    private static List<AgentChatStreamVO> detectLoopAndInterrupt(
+            StringBuilder replyBuffer, StringBuilder sentenceBuffer) {
         List<AgentChatStreamVO> events = new ArrayList<>(2);
-        if (reasoning.length() > 0) {
-            events.add(AgentChatStreamVO.thinking(reasoning.toString()));
+        String fullReply = replyBuffer.toString();
+        if (fullReply.length() < 120) {
+            return events;
         }
-        if (content.length() > 0) {
-            replyBuffer.append(content);
-            events.add(AgentChatStreamVO.content(content.toString()));
+        int tailLen = Math.min(200, fullReply.length());
+        String recent = fullReply.substring(fullReply.length() - tailLen);
+        for (int segLen = 15; segLen <= tailLen / 3; segLen += 5) {
+            String seg = recent.substring(tailLen - segLen);
+            int count = 1;
+            int pos = tailLen - segLen;
+            while (pos >= segLen && recent.substring(pos - segLen, pos).equals(seg)) {
+                count++;
+                pos -= segLen;
+            }
+            if (count >= 3) {
+                sentenceBuffer.setLength(0);
+                String hint = "\n\n（检测到重复输出，请换种方式表达或询问用户是否需要帮助）";
+                replyBuffer.append(hint);
+                events.add(AgentChatStreamVO.content(hint));
+                break;
+            }
         }
         return events;
     }

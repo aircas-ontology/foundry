@@ -64,4 +64,10 @@ public class AgentChatController {
         conversationResetService.reset(sessionId);
         return RestResult.ofData(Boolean.TRUE);
     }
+
+    @PostMapping("/abort")
+    @Operation(summary = "中断对话：取消当前正在进行的流式回复（前端“停止”按钮）")
+    public RestResult<Boolean> abort(@RequestParam String sessionId) {
+        return RestResult.ofData(agentChatService.abort(sessionId));
+    }
 }
