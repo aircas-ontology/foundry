@@ -19,13 +19,15 @@ import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
  * Agent 对话编排服务。
  *
- * <p>承载与大模型交互的全部业务编排：system 提示词拼装（默认提示词 + 本次会话上下文 + 跨轮持久的本体构建
+ * <p>承载与大模型交互的全部业务编排：system 提示词拼装（默认提示词 + 本次会话上下文 + 跨轮持久的对象构建
  * 状态）、toolContext 构建、ChatClient 调用，以及流式场景下工具事件与回复增量的合流与 stage 状态采集。
  * 自 {@code AgentChatController} 下沉而来，使 controller 回归「收参数 → 调 service → 包 SSE」。</p>
  *
@@ -37,15 +39,18 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AgentChatService {
 
-    /** content 聚合：每块最多攒多少个 token（模型原生 token 流，中文常约 1 字/token）。 */
-    private static final int CONTENT_BUFFER_SIZE = 20;
+    /**
+     * 流式聚合：每批最多攒多少个模型响应块（token 级增量，中文常约 1 字/块）。
+     * thinking 与 content 同享该节流，规避逐 token 推送导致前端"思考过程"每次只蹦 2~3 字的碎片化。
+     */
+    private static final int STREAM_BUFFER_SIZE = 20;
 
-    /** content 聚合：距上一块超过该时长即冲刷，为块延迟设上界，避免模型吐字慢时长时间不出块。 */
-    private static final Duration CONTENT_BUFFER_TIMEOUT = Duration.ofMillis(150);
+    /** 流式聚合：距上一批超过该时长即冲刷，为块延迟设上界，避免模型吐字慢时长时间不出块。 */
+    private static final Duration STREAM_BUFFER_TIMEOUT = Duration.ofMillis(150);
 
     private final ChatClient chatClient;
 
-    /** 会话级本体构建状态存储：跨轮持久化各 stage，注入 system 消息，规避 ChatMemory 滑动窗口淘汰。 */
+    /** 会话级对象构建状态存储：跨轮持久化各 stage，注入 system 消息，规避 ChatMemory 滑动窗口淘汰。 */
     private final SessionStateStore sessionStateStore;
 
     /** 从模型回复中抽取带 stage 的 JSON 块并写入 {@link #sessionStateStore}。 */
@@ -92,25 +97,20 @@ public class AgentChatService {
         // 累积本轮 content 增量，流结束后整体解析 stage 状态
         StringBuilder replyBuffer = new StringBuilder();
 
-        Flux<AgentChatStreamVO> contentEvents = chatClient.prompt()
+        Flux<AgentChatStreamVO> modelEvents = chatClient.prompt()
                 .system(buildSystemPrompt(param, sessionId))
                 .user(param.getMessage())
                 .toolContext(buildToolContext(sink, sessionId))
                 .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, sessionId))
                 .stream()
                 .chatResponse()
-                // 抽取模型思维链（reasoning）增量，实时推入 sink 作为 thinking 事件（无思维链的模型为空操作）；
-                // 必须先于正文处理，使“思考过程”在时间序上先于回答出现
-                .doOnNext(resp -> AgentStreamEvents.thinking(sink, extractReasoning(resp)))
-                // 从 ChatResponse 抽出正文文本（过滤掉只带 usage/无 result 的尾块）
-                .map(AgentChatService::extractContent)
-                .filter(text -> !text.isEmpty())
-                // 逐字累积全文（供流末整体解析 stage），必须置于聚合之前，确保一个字都不丢
-                .doOnNext(replyBuffer::append)
-                // 把模型原生 token 流按「攒够 CONTENT_BUFFER_SIZE 个 token 或 距上一块超过 CONTENT_BUFFER_TIMEOUT」
-                // 聚成一块再下发，规避逐字导致的 SSE 帧爆炸与前端抖动；上游 complete 时会冲刷尾部残余，末块不丢
-                .bufferTimeout(CONTENT_BUFFER_SIZE, CONTENT_BUFFER_TIMEOUT)
-                .map(chunk -> AgentChatStreamVO.content(String.join("", chunk)))
+                // 把模型原生 token 流按「攒够 STREAM_BUFFER_SIZE 个响应块或距上一批超过 STREAM_BUFFER_TIMEOUT」
+                // 聚成一批再下发，规避逐 token 导致的 SSE 帧爆炸与前端抖动（尤其"思考过程"碎片化）；
+                // 上游 complete 时会冲刷尾部残余，末批不丢
+                .bufferTimeout(STREAM_BUFFER_SIZE, STREAM_BUFFER_TIMEOUT)
+                // 每批归并出至多两条事件：thinking（合并本批全部 reasoning 增量）先于 content（合并本批全部正文增量，
+                // 同时累积进 replyBuffer 供流末解析 stage）；无思维链的模型该批只产 content，两者皆空则跳过
+                .flatMapIterable(batch -> toStreamEvents(batch, replyBuffer))
                 .doOnComplete(() -> {
                     String reply = replyBuffer.toString();
                     // 先落盘本轮 stage 状态（properties_proposed / relations_proposed 等），供下面确定性回查取数
@@ -121,7 +121,7 @@ public class AgentChatService {
                 })
                 .doOnError(e -> sink.tryEmitComplete());
 
-        return Flux.merge(sink.asFlux(), contentEvents)
+        return Flux.merge(sink.asFlux(), modelEvents)
                 .concatWith(Mono.fromSupplier(AgentChatStreamVO::done))
                 .onErrorResume(e -> Flux.just(AgentChatStreamVO.error(e.getMessage())));
     }
@@ -143,18 +143,18 @@ public class AgentChatService {
     }
 
     /**
-     * 构建每请求发送给模型的完整 system 文本 = 默认系统提示词（角色/规范/本体构建全流程）+ 本次会话上下文。
+     * 构建每请求发送给模型的完整 system 文本 = 默认系统提示词（角色/规范/对象构建全流程）+ 本次会话上下文。
      *
      * <p>必须这样拼接：Spring AI 的 {@code .system(String)} 会整体覆盖 {@code ChatClientConfig} 里
      * {@code defaultSystem(DEFAULT_SYSTEM_PROMPT)} 设置的内容；若只传上下文，默认提示词将丢失、
-     * 本体构建全流程引导不会生效。</p>
+     * 对象构建全流程引导不会生效。</p>
      */
     private String buildSystemPrompt(AgentChatParam param, String sessionId) {
         return ChatClientConfig.DEFAULT_SYSTEM_PROMPT + "\n\n" + buildContextSystem(param, sessionId);
     }
 
     /**
-     * 构建本次会话上下文片段（追加在默认系统提示词之后）：告知模型当前已选数据源/空间，并注入跨轮持久的本体构建状态。
+     * 构建本次会话上下文片段（追加在默认系统提示词之后）：告知模型当前已选数据源/空间，并注入跨轮持久的对象构建状态。
      */
     private String buildContextSystem(AgentChatParam param, String sessionId) {
         StringBuilder sb = new StringBuilder("当前会话上下文（前端本次请求携带）：");
@@ -168,10 +168,35 @@ public class AgentChatService {
         // 使模型在长对话、记忆窗口淘汰后仍能回读到用户此前在对话中做出的选择
         String state = sessionStateStore.renderState(sessionId);
         if (state != null) {
-            sb.append("\n【已记录的本体构建状态】（跨轮持久，优先于短期记忆；当上方前端入参未提供 spaceId/datasourceId 时，以本块中的 space_selected/datasource_selected 为准）：")
+            sb.append("\n【已记录的对象构建状态】（跨轮持久，优先于短期记忆；当上方前端入参未提供 spaceId/datasourceId 时，以本块中的 space_selected/datasource_selected 为准）：")
               .append(state);
         }
         return sb.toString();
+    }
+
+    /**
+     * 把一批流式 {@link ChatResponse} 归并为本轮事件：先合并全部 reasoning 增量为一条 {@code thinking}
+     * （保证"思考过程"在时间序上先于回答），再合并全部正文增量为一条 {@code content} 并累积进
+     * {@code replyBuffer}（供流末整体解析 stage）；两者皆空时返回空列表，不产出事件。
+     *
+     * <p>thinking 与 content 同批聚合，从根源上消除"每个 reasoning token 一条 thinking 事件"导致的碎片化。</p>
+     */
+    private static List<AgentChatStreamVO> toStreamEvents(List<ChatResponse> batch, StringBuilder replyBuffer) {
+        StringBuilder reasoning = new StringBuilder();
+        StringBuilder content = new StringBuilder();
+        for (ChatResponse resp : batch) {
+            reasoning.append(extractReasoning(resp));
+            content.append(extractContent(resp));
+        }
+        List<AgentChatStreamVO> events = new ArrayList<>(2);
+        if (reasoning.length() > 0) {
+            events.add(AgentChatStreamVO.thinking(reasoning.toString()));
+        }
+        if (content.length() > 0) {
+            replyBuffer.append(content);
+            events.add(AgentChatStreamVO.content(content.toString()));
+        }
+        return events;
     }
 
     /**

@@ -27,7 +27,8 @@ import java.util.regex.Pattern;
  * <p>可依赖的稳定信号有二：
  * <ol>
  *   <li><b>步骤横幅</b>：提示词工作原则#4 要求每步开头输出 {@code 【第N步/共11步】}，模型对此遵从度极高。
- *       第0步→space_select、第2步→datasource_select。</li>
+ *       第0步→space_select、第2步→datasource_select。本类扫描回复中<b>全部</b>横幅编号（而非只看第一个），
+ *       以覆盖"确认上一步 + 提及下一步"同轮出现多个横幅的场景；并对数据源额外做"数据源/导入资料"意图关键词兜底。</li>
  *   <li><b>已持久化的 proposed 状态块</b>：第4/5步模型会稳定输出 {@code properties_proposed} /
  *       {@code relations_proposed} 的 JSON（纯文本产出），本类据此推 properties_select / relations_select。</li>
  * </ol>
@@ -95,8 +96,8 @@ public class SelectionResolver {
      * <ul>
      *   <li>本轮回复含 properties_proposed 且未选属性 → properties_select</li>
      *   <li>本轮回复含 relations_proposed 且未选关系 → relations_select</li>
-     *   <li>横幅第0步且未选空间 → space_select</li>
-     *   <li>横幅第2步且未选数据源 → datasource_select</li>
+     *   <li>回复横幅含第0步（扫描全部横幅）且未选空间 → space_select</li>
+     *   <li>回复横幅含第2步，或提及"数据源/导入资料"意图（兜底），且空间已选、未选数据源 → datasource_select</li>
      * </ul>
      *
      * @return 推断出的 scenario；无可推断时返回 {@code null}
@@ -112,30 +113,33 @@ public class SelectionResolver {
         if (RELATIONS_PROPOSED.matcher(replyText).find() && sessionStateStore.getStage(sessionId, "relations_selected") == null) {
             return SCENE_RELATIONS;
         }
-        // 第0/2步：靠步骤横幅定位（模型对横幅遵从度高）
-        Integer step = parseStep(replyText);
-        if (step != null) {
-            if (step == 0 && sessionStateStore.getStage(sessionId, "space_selected") == null) {
-                return SCENE_SPACE;
-            }
-            if (step == 2 && sessionStateStore.getStage(sessionId, "datasource_selected") == null) {
-                return SCENE_DATASOURCE;
-            }
+        // 第0/2步：靠步骤横幅定位（扫描回复中全部横幅，模型对横幅遵从度高）
+        Set<Integer> steps = parseAllSteps(replyText);
+        if (steps.contains(0) && sessionStateStore.getStage(sessionId, "space_selected") == null) {
+            return SCENE_SPACE;
+        }
+        // 数据源：横幅含第2步，或回复提及"数据源/导入资料"意图（兜底模型未输出标准横幅的情况）；
+        // 均需 space 已选定、datasource 尚未选中，避免误推（datasource_selected 已在前一步 collectAndStore 落盘）
+        if (sessionStateStore.getStage(sessionId, "space_selected") != null
+                && sessionStateStore.getStage(sessionId, "datasource_selected") == null
+                && (steps.contains(2) || replyText.contains("数据源") || replyText.contains("导入资料"))) {
+            return SCENE_DATASOURCE;
         }
         return null;
     }
 
-    /** 解析回复中出现的第一个步骤横幅编号；无横幅返回 {@code null}。 */
-    private Integer parseStep(String replyText) {
+    /** 收集回复中出现的所有步骤横幅编号（【第N步/共11步】）；无横幅时返回空集合。 */
+    private Set<Integer> parseAllSteps(String replyText) {
+        Set<Integer> steps = new LinkedHashSet<>();
         Matcher m = STEP_BANNER.matcher(replyText);
-        if (m.find()) {
+        while (m.find()) {
             try {
-                return Integer.parseInt(m.group(1));
+                steps.add(Integer.parseInt(m.group(1)));
             } catch (NumberFormatException ignored) {
-                return null;
+                // 单个横幅编号解析失败则跳过，不影响其余横幅
             }
         }
-        return null;
+        return steps;
     }
 
     /** 该场景是否已完成（对应 selected 状态块已存在），已完成则不再重复推卡。 */

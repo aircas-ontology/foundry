@@ -15,7 +15,7 @@ public class AgentChatParam {
      * 用户对话消息。
      */
     @NotBlank(message = "对话消息不能为空")
-    @Schema(description = "用户对话消息", example = "平台上有哪些本体？", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(description = "用户对话消息", example = "平台上有哪些对象？", requiredMode = Schema.RequiredMode.REQUIRED)
     private String message;
 
     /**

@@ -12,7 +12,7 @@ import java.util.List;
 /**
  * 从大模型回复文本中抽取带 {@code stage} 字段的 JSON 块，并写入 {@link SessionStateStore}。
  *
- * <p>本体构建各阶段的结构化输出（对象定义、属性选择、关系选择等）都带有 {@code stage} 标记。
+ * <p>对象构建各阶段的结构化输出（对象定义、属性选择、关系选择等）都带有 {@code stage} 标记。
  * 每轮回复结束后调用 {@link #collectAndStore}，把这些块解析出来持久化，使状态跨轮不丢，
  * 不受 ChatMemory 滑动窗口淘汰影响。</p>
  *
