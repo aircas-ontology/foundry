@@ -98,7 +98,7 @@ public class SessionStageCollector {
      * @param text 待扫描文本
      * @return 抽取到的 JSON 对象子串列表（可能为空）
      */
-    static List<String> extractJsonObjects(String text) {
+    public static List<String> extractJsonObjects(String text) {
         List<String> result = new ArrayList<>();
         int n = text.length();
         int i = 0;
