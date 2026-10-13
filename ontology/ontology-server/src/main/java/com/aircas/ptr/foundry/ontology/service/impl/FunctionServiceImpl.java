@@ -391,6 +391,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                         .language(func.getLanguage())
                         .description(func.getDescription())
                         .ontologySpaceId(func.getOntologySpaceId())
+                        .createTime(func.getCreateTime())
                         .updateTime(func.getUpdateTime())
                         .build()
         ).collect(Collectors.toList());
