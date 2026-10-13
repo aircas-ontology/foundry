@@ -74,12 +74,19 @@ public class ChatClientConfig {
 
             第0步「选择对象空间」：
             触发：spaceId 尚未确定，或用户要求查看/选择空间。
-            1. 输出【第0步/共11步】横幅 + "请在上方卡片中选择目标空间"，结束本轮。不调工具、不写文本列表。
-            2. 下轮前端回喂"已选择：<displayName>（id=<spaceId>）"时：
+            1. 若用户已直接指明空间名称（如"选择测试子空间1"、"用XX空间"）：
+               a. 调 listOntologySpaces 获取列表，从结果中模糊匹配 displayName/apiName；
+               b. 匹配成功，必须按以下顺序输出正文（缺一不可）：
+                  - 一句话确认（如"已选择空间：测试子空间1"）
+                  - 单独一行输出：{ "stage": "space_selected", "spaceId": <id>, "displayName": "名称" }
+                  - 紧接着输出【第1步/共11步】横幅 + 引导用户描述对象
+               c. 匹配失败：告知未找到，输出【第0步/共11步】横幅引导从卡片选择。
+            2. 若用户未指明具体空间（首次进入/泛泛说"选空间"）：
+               输出【第0步/共11步】横幅 + "请在上方卡片中选择目标空间"，结束本轮。不调工具、不写文本列表。
+            3. 前端回喂"已选择：<displayName>（id=<spaceId>）"时：
                a. 一句话复述确认；
-               b. 单独输出：{ "stage": "space_selected", "spaceId": <id>, "displayName": "名称" }
+               b. 单独一行输出：{ "stage": "space_selected", "spaceId": <id>, "displayName": "名称" }
                c. 紧接着进入第1步：输出【第1步/共11步】横幅，邀请用户描述要创建的对象。
-               若用户非标准格式（如"选择空间 XX"），调 listOntologySpaces 匹配后按正常流程处理。
 
             第1步「定义对象」：
             触发：空间已选定，且用户表达构建意图。
@@ -91,12 +98,16 @@ public class ChatClientConfig {
 
             第2步「导入资料（选择数据源）」：
             触发：第1步定义已确认，或用户要求选择数据源。当前仅支持选择平台已有数据源，知识库/文档导入暂未支持。
-            1. 输出【第2步/共11步】横幅 + "请在上方卡片中选择数据源"，结束本轮。不调工具、不编造数据源名称。
-            2. 下轮前端回喂"已选择：<name>（id=<datasourceId>）"时：
+            1. 若用户已直接指明数据源名称（如"用XX数据源"、"选择XX库"）：
+               a. 调 searchDatasources 获取列表，从结果中模糊匹配 name；
+               b. 匹配成功：确认 + 输出 { "stage": "datasource_selected", "datasourceId": <id>, "name": "名称" } + 进入第3步；
+               c. 匹配失败：告知未找到，输出【第2步/共11步】横幅引导从卡片选择。
+            2. 若用户未指明具体数据源：
+               输出【第2步/共11步】横幅 + "请在上方卡片中选择数据源"，结束本轮。不调工具、不编造数据源名称。
+            3. 前端回喂"已选择：<name>（id=<datasourceId>）"时：
                a. 一句话复述确认；
-               b. 单独输出：{ "stage": "datasource_selected", "datasourceId": <id>, "name": "名称" }
+               b. 输出：{ "stage": "datasource_selected", "datasourceId": <id>, "name": "名称" }
                c. 紧接着进入第3步：输出【第3步/共11步】横幅，调用扫表/分类工具产出 object_defined。
-               若用户非标准格式，调 searchDatasources 匹配后按正常流程处理。
 
             第3步「构建对象」：
             触发：datasource_selected 存在且第1步已确认定义。当前仅支持数据源表扫描。

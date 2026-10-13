@@ -71,6 +71,9 @@ public class SelectionResolver {
      * @param sink        本次请求的事件 sink
      */
     public void resolveForRound(String sessionId, String replyText, Integer datasourceId, Integer spaceId, Sinks.Many<AgentChatStreamVO> sink) {
+        // 先从横幅推断已完成的阶段并落盘（后端兜底，不依赖模型输出 stage JSON）
+        inferAndRecordCompletedStages(sessionId, replyText);
+
         // 候选场景（有序去重）：状态机推断优先，其次模型主动标记
         Set<String> candidates = new LinkedHashSet<>();
         String inferred = inferScenario(sessionId, replyText, datasourceId, spaceId);
@@ -132,6 +135,47 @@ public class SelectionResolver {
         if (spaceSelected && !datasourceSelected && !inPropertiesOrLater
                 && (steps.contains(2) || replyText.contains("数据源") || replyText.contains("导入资料"))) {
             return SCENE_DATASOURCE;
+        }
+        return null;
+    }
+
+    /**
+     * 从回复横幅推断已完成的阶段并记录到状态存储（后端兜底，不依赖模型输出 stage JSON）。
+     *
+     * <p>模型可能忘记输出 {@code space_selected} / {@code object_defined} 等 JSON，
+     * 但步骤横幅是稳定信号：出现第 1 步横幅 ⇒ 第 0 步（选空间）已完成；
+     * 出现第 2 步横幅 ⇒ 第 1 步（定义对象）已完成。本方法据此补录状态，
+     * 使下一轮模型注入的 system 消息中包含已完成阶段，避免重复确认。</p>
+     */
+    private void inferAndRecordCompletedStages(String sessionId, String replyText) {
+        if (replyText == null || replyText.isBlank()) {
+            return;
+        }
+        Set<Integer> steps = parseAllSteps(replyText);
+        // 第1步+横幅出现 ⇒ 空间已选（但状态存储尚无记录）
+        if (steps.stream().anyMatch(s -> s >= 1)
+                && sessionStateStore.getStage(sessionId, "space_selected") == null) {
+            String json = extractStageJson(replyText, "space_selected");
+            sessionStateStore.record(sessionId, "space_selected",
+                    json != null ? json : "{\"stage\":\"space_selected\"}");
+            log.info("[SelectionResolver] 横幅推断 space_selected 已补录 sessionId={}", sessionId);
+        }
+        // 第2步+横幅出现 ⇒ 对象已定义
+        if (steps.stream().anyMatch(s -> s >= 2)
+                && sessionStateStore.getStage(sessionId, "object_defined") == null) {
+            String json = extractStageJson(replyText, "object_defined");
+            sessionStateStore.record(sessionId, "object_defined",
+                    json != null ? json : "{\"stage\":\"object_defined\"}");
+            log.info("[SelectionResolver] 横幅推断 object_defined 已补录 sessionId={}", sessionId);
+        }
+    }
+
+    /** 尝试从回复文本中提取指定 stage 的 JSON 块；找不到则返回 null。 */
+    private String extractStageJson(String replyText, String stageName) {
+        for (String json : SessionStageCollector.extractJsonObjects(replyText)) {
+            if (json.contains("\"stage\"") && json.contains("\"" + stageName + "\"")) {
+                return json;
+            }
         }
         return null;
     }
