@@ -2,7 +2,10 @@ package com.aircas.ptr.foundry.ontology.service;
 
 
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
+import com.aircas.ptr.foundry.ontology.model.bo.CompositePlanBO;
+import com.aircas.ptr.foundry.ontology.model.bo.CompositeValidationBO;
 import com.aircas.ptr.foundry.ontology.model.param.BasicQueryTestParam;
+import com.aircas.ptr.foundry.ontology.model.param.CompositeValidateParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionExecuteParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionTestParam;
@@ -90,6 +93,22 @@ public interface FunctionService extends IService<Function> {
      * 统一函数测试入口：根据函数类型分发到不同测试逻辑。
      */
     Object testFunction(FunctionTestParam param);
+
+    /**
+     * 校验函数编排定义（不落库），供前端画布实时校验使用。
+     *
+     * @param param 校验请求，包含编排定义
+     * @return 校验结果，含错误与告警文案
+     */
+    CompositeValidationBO validateComposite(CompositeValidateParam param);
+
+    /**
+     * 编译已落库的函数编排定义，返回 LiteFlow 执行链 EL 与逐节点运行期定义（不注册执行链）。
+     *
+     * @param functionApi 编排函数 api
+     * @return 编译结果
+     */
+    CompositePlanBO compileComposite(String functionApi);
 
     /**
      * 按 function api 批量取函数描述（每个 api 取最新版本），供行为出参冗余函数描述使用（一次查询，避免逐条查库）。

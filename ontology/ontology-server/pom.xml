@@ -40,6 +40,16 @@
             <artifactId>spring-boot-starter-amqp</artifactId>
         </dependency>
 
+        <!-- LiteFlow 规则引擎（函数编排），脚本组件使用 Groovy -->
+        <dependency>
+            <groupId>com.yomahub</groupId>
+            <artifactId>liteflow-spring-boot-starter</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.yomahub</groupId>
+            <artifactId>liteflow-script-groovy</artifactId>
+        </dependency>
+
 
         <!--Knife4j OpenAPI3 Jakarta（knife4j-next fork，适配 Spring Boot 3.5.x）-->
         <dependency>
