@@ -2,6 +2,7 @@ package com.aircas.ptr.foundry.ontology.composite;
 
 import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.ontology.model.bo.CompositeFunctionRefBO;
+import com.aircas.ptr.foundry.ontology.model.bo.CompositeLoopRoundBO;
 import com.aircas.ptr.foundry.ontology.model.bo.CompositeNodePlanBO;
 import com.aircas.ptr.foundry.ontology.model.bo.CompositePlanBO;
 import com.aircas.ptr.foundry.ontology.model.bo.CompositeValidationBO;
@@ -50,6 +51,9 @@ public class CompositeChainRegistry {
 
     /** 空支路/空循环体占位节点 id，全局唯一并被所有链共用 */
     private static final String NOOP = CompositeElCompiler.NOOP_NODE_ID;
+
+    /** 编译器生成的循环体取数节点类型 */
+    private static final String LOOP_PRELOAD_KIND = CompositeElCompiler.LOOP_PRELOAD_KIND;
 
     /** 链名 -&gt; 已注册的 EL 文本，EL 未变化时跳过重复注册 */
     private final Map<String, String> installedEls = new ConcurrentHashMap<>();
@@ -121,7 +125,7 @@ public class CompositeChainRegistry {
         CompositePlanBO plan = compile(chainNameOf(functionApi), config);
         CompositeRuntimeRequest request = new CompositeRuntimeRequest(plan, inputs);
         synchronized (this) {
-            install(plan);
+            install(plan, request);
         }
         String chainName = plan.getChainName();
         LiteflowResponse response = executor().execute2Resp(chainName, request, CompositeContext.class);
@@ -151,43 +155,66 @@ public class CompositeChainRegistry {
     // ================================================================== 注册
 
     /** 注册节点与执行链；同一份定义（EL 文本相同）重复调用无副作用 */
-    private void install(CompositePlanBO plan) {
+    private void install(CompositePlanBO plan, CompositeRuntimeRequest request) {
         String chainName = plan.getChainName();
         String el = plan.getEl();
-        if (el.equals(installedEls.get(chainName)) && FlowBus.containChain(chainName)) {
-            return;
+        boolean alreadyInstalled = el.equals(installedEls.get(chainName)) && FlowBus.containChain(chainName);
+        if (!alreadyInstalled) {
+            registerNoop();
+            Set<String> nodeIds = new LinkedHashSet<>();
+            nodeIds.add(NOOP);
+            for (CompositeNodePlanBO nodePlan : plan.getNodes().values()) {
+                nodeIds.add(nodePlan.getElId());
+                registerNode(nodePlan);
+            }
+            // 取数节点由编译器生成、只存在于循环体 EL 中，画布上没有它，但同样要注册
+            for (CompositeLoopRoundBO round : plan.getLoopRounds()) {
+                if (nodeIds.add(round.getPreloadElId())) {
+                    registerNode(round.getPreloadNode());
+                }
+            }
+            // 画布节点 id 变更后，旧 id 若不再被任何链引用必须释放，否则全局节点表持续累积僵尸节点
+            Set<String> previousIds = nodesByChain.put(chainName, nodeIds);
+            releaseStaleNodes(previousIds, nodeIds);
+            if (FlowBus.containChain(chainName)) {
+                FlowBus.removeChain(chainName);
+            }
+            LiteFlowChainELBuilder.createChain().setChainName(chainName).setEL(el).build();
+            installedEls.put(chainName, el);
+            log.info("函数编排执行链已注册: 链={}, EL={}", chainName, el);
         }
-        registerNoop();
-        Set<String> nodeIds = new LinkedHashSet<>();
-        nodeIds.add(NOOP);
-        for (CompositeNodePlanBO nodePlan : plan.getNodes().values()) {
-            nodeIds.add(nodePlan.getElId());
-            registerNode(nodePlan);
+        // 循环逐轮重放的内容只能在本次执行请求上登记：编译器已经给出每个循环的区域成员
+        registerLoopRounds(plan, request);
+    }
+
+    /**
+     * 把编译器登记的循环区域挂到本次执行请求上，供循环体取数节点逐轮重放"来自循环体外的上游取值"。
+     * <p>登记键用取数节点 elId：它由编译器生成、带链名前缀，跨编排不会重复。</p>
+     */
+    private void registerLoopRounds(CompositePlanBO plan, CompositeRuntimeRequest request) {
+        for (CompositeLoopRoundBO round : plan.getLoopRounds()) {
+            request.registerLoopRound(round.getPreloadElId(), round.getMemberElIds());
         }
-        // 画布节点 id 变更后，旧 id 若不再被任何链引用必须释放，否则全局节点表持续累积僵尸节点
-        Set<String> previousIds = nodesByChain.put(chainName, nodeIds);
-        releaseStaleNodes(previousIds, nodeIds);
-        if (FlowBus.containChain(chainName)) {
-            FlowBus.removeChain(chainName);
-        }
-        LiteFlowChainELBuilder.createChain().setChainName(chainName).setEL(el).build();
-        installedEls.put(chainName, el);
-        log.info("函数编排执行链已注册: 链={}, EL={}", chainName, el);
     }
 
     /** 按节点类型创建组件实例并注册到 LiteFlow 全局节点表 */
     private void registerNode(CompositeNodePlanBO nodePlan) {
         String elId = nodePlan.getElId();
-        CompositeNodeKindEnum kind = CompositeNodeKindEnum.fromKind(nodePlan.getKind());
         NodeComponent instance;
-        if (kind == CompositeNodeKindEnum.LOOP) {
-            instance = timesLoop(nodePlan) ? new CompositeForComponent() : new CompositeLoopComponent();
-        } else if (kind == CompositeNodeKindEnum.BRANCH) {
-            instance = new CompositeBranchComponent();
-        } else if (kind == CompositeNodeKindEnum.TRANSFORM) {
-            instance = new CompositeTransformComponent(transformExecutor);
+        if (LOOP_PRELOAD_KIND.equals(nodePlan.getKind())) {
+            // 编译器为循环体生成的取数节点，画布上没有对应类型
+            instance = new CompositeLoopPreloadComponent();
         } else {
-            instance = new CompositeFunctionComponent(catalog, functionInvoker, objectMapper);
+            CompositeNodeKindEnum kind = CompositeNodeKindEnum.fromKind(nodePlan.getKind());
+            if (kind == CompositeNodeKindEnum.LOOP) {
+                instance = timesLoop(nodePlan) ? new CompositeForComponent() : new CompositeLoopComponent();
+            } else if (kind == CompositeNodeKindEnum.BRANCH) {
+                instance = new CompositeBranchComponent();
+            } else if (kind == CompositeNodeKindEnum.TRANSFORM) {
+                instance = new CompositeTransformComponent(transformExecutor);
+            } else {
+                instance = new CompositeFunctionComponent(catalog, functionInvoker, objectMapper);
+            }
         }
         // LiteFlow 在 initComponent 时读取 name 并固化到全局节点表，必须先设名再注册
         instance.setName(nodePlan.getLabel());

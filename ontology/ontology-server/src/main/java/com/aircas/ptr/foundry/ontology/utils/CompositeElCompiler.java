@@ -2,6 +2,7 @@ package com.aircas.ptr.foundry.ontology.utils;
 
 import com.aircas.ptr.foundry.ontology.model.bo.CompositeEdgeTargetBO;
 import com.aircas.ptr.foundry.ontology.model.bo.CompositeFunctionRefBO;
+import com.aircas.ptr.foundry.ontology.model.bo.CompositeLoopRoundBO;
 import com.aircas.ptr.foundry.ontology.model.bo.CompositeNodePlanBO;
 import com.aircas.ptr.foundry.ontology.model.bo.CompositePlanBO;
 import com.aircas.ptr.foundry.ontology.model.enums.CompositeNodeKindEnum;
@@ -44,6 +45,9 @@ public final class CompositeElCompiler {
     /** 空支路/空循环体占位节点 id，由运行期注册为普通组件 */
     public static final String NOOP_NODE_ID = "compositeNoop";
 
+    /** 循环体取数节点的 kind：画布上不存在该类型，只有编译期为逐轮重放生成的节点使用 */
+    public static final String LOOP_PRELOAD_KIND = "loopPreload";
+
     /** 控制流邻接表的键分隔符，节点 id 与端口 id 均不含该字符 */
     private static final char ADJ_SEPARATOR = '\u0001';
 
@@ -74,6 +78,7 @@ public final class CompositeElCompiler {
         plan.getNodes().putAll(graph.nodePlans());
         graph.fillExternalMappings(plan);
         plan.setEl(graph.buildMainRegion());
+        plan.getLoopRounds().addAll(graph.loopRounds());
         return plan;
     }
 
@@ -113,6 +118,12 @@ public final class CompositeElCompiler {
         /** 已被循环体或分支支路收纳的节点，避免在外层重复输出 */
         private final Set<String> visited = new LinkedHashSet<>();
 
+        /** 编译器为每个非空循环体生成的取数节点登记项 */
+        private final List<CompositeLoopRoundBO> loopRounds = new ArrayList<>();
+
+        /** 已占用的 LiteFlow 节点 id（不含链名前缀），取数节点也要从这里查重 */
+        private final Set<String> usedElIds = new LinkedHashSet<>();
+
         Graph(String chainName, CompositeConfig config, Map<String, CompositeFunctionRefBO> refs) {
             this.config = config;
             this.refs = refs;
@@ -125,14 +136,13 @@ public final class CompositeElCompiler {
 
         /** 建立画布节点与 LiteFlow 节点 id 的映射 */
         private void buildIndex() {
-            Set<String> used = new LinkedHashSet<>();
-            used.add(NOOP_NODE_ID);
+            usedElIds.add(NOOP_NODE_ID);
             for (CompositeNode node : config.getNodes()) {
                 if (node == null || isBlank(node.getId()) || nodeByCanvasId.containsKey(node.getId())) {
                     continue;
                 }
                 nodeByCanvasId.put(node.getId(), node);
-                elIdByCanvasId.put(node.getId(), namespace + "_" + allocateElId(node.getId(), used));
+                elIdByCanvasId.put(node.getId(), namespace + "_" + allocateElId(node.getId(), usedElIds));
             }
         }
 
@@ -146,6 +156,13 @@ public final class CompositeElCompiler {
         /** 全部节点的运行期定义，key 为 LiteFlow 节点 id */
         private Map<String, CompositeNodePlanBO> nodePlans() {
             return planByElId;
+        }
+
+        /**
+         * 循环逐轮重放登记项：按外层先、内层后的顺序生成（emitNode 递归时外层先建）。
+         */
+        private List<CompositeLoopRoundBO> loopRounds() {
+            return loopRounds;
         }
 
         /** 按连线建立控制流邻接表（仅顺序线）与数据流关系 */
@@ -331,11 +348,11 @@ public final class CompositeElCompiler {
                         memberPlan.getEnclosingLoops().add(elId);
                     }
                 }
-                String bodyEl = join(regionParts(body));
+                String preloadElId = preloadNode(elId, body);
                 if (timesLoop(plan)) {
-                    return "FOR(" + elId + ").DO(" + bodyEl + ")";
+                    return "FOR(" + elId + ").DO(" + preloadElId + ")";
                 }
-                return "ITERATOR(" + elId + ").DO(" + bodyEl + ")";
+                return "ITERATOR(" + elId + ").DO(" + preloadElId + ")";
             }
             if (kind == CompositeNodeKindEnum.BRANCH) {
                 // 两条支路汇聚到同一后续节点时，汇聚点及其独占的下游不属于任一支路，
@@ -453,8 +470,47 @@ public final class CompositeElCompiler {
             return !isBlank(mode) && "times".equalsIgnoreCase(mode.trim());
         }
 
+        /**
+         * 为循环体生成"每轮取数"节点并返回循环体的 EL 片段。
+         * <p>循环节点只执行一次，LiteFlow 在每一轮开始前不回调任何组件，所以来自循环体外的上游取值
+         * 只在第一轮可见。这里把它自己生成的取数节点放在循环体最前面，每轮先执行它重放这些取值；
+         * 空循环体没有需要重放的节点，保持占位节点不变。</p>
+         */
+        private String preloadNode(String loopElId, List<String> body) {
+            if (body.isEmpty()) {
+                return NOOP_NODE_ID;
+            }
+            CompositeNodePlanBO loopPlan = planByElId.get(loopElId);
+            // 前缀只加一次：loopElId 本身已带命名空间，整串归一化会让 id 出现重复前缀
+            String preloadElId = namespace + "_"
+                    + allocateElId(strippedNamespace(loopElId) + "_pre", usedElIds);
+            CompositeNodePlanBO preload = new CompositeNodePlanBO();
+            preload.setElId(preloadElId);
+            // 画布上没有对应节点：canvasId 留空，kind 用运行期专用的 loopPreload，label 只用于日志
+            preload.setKind(LOOP_PRELOAD_KIND);
+            preload.setLabel((loopPlan == null ? loopElId : loopPlan.getLabel()) + "-取数");
+
+            CompositeLoopRoundBO round = new CompositeLoopRoundBO();
+            round.setLoopElId(loopElId);
+            round.setPreloadElId(preloadElId);
+            round.setPreloadNode(preload);
+            round.getMemberElIds().addAll(body);
+            loopRounds.add(round);
+
+            List<String> parts = new ArrayList<>();
+            parts.add(preloadElId);
+            parts.addAll(regionParts(body));
+            return join(parts);
+        }
+
         private String firstOf(List<String> targets) {
             return targets.isEmpty() ? NOOP_NODE_ID : targets.get(0);
+        }
+
+        /** 去掉编译器加在节点 id 前面的命名空间，用于在已有 id 之后派生新 id */
+        private String strippedNamespace(String elId) {
+            String prefix = namespace + "_";
+            return elId.startsWith(prefix) ? elId.substring(prefix.length()) : elId;
         }
 
         private List<String> controlPorts() {
