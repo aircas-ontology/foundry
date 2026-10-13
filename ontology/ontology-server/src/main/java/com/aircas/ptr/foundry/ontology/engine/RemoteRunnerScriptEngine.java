@@ -45,6 +45,14 @@ public class RemoteRunnerScriptEngine implements ScriptEngine {
         return EnumSet.allOf(FunctionLanguageEnum.class);
     }
 
+    /**
+     * 该语言的 runner 基地址是否已配置。未配置时 {@link ScriptEngineRouter} 才会考虑进程内兜底引擎，
+     * 避免把「runner 没配」与「脚本执行失败」混成同一个报错。
+     */
+    public boolean isConfigured(FunctionLanguageEnum language) {
+        return properties.isConfigured(language);
+    }
+
     @SneakyThrows
     @Override
     public String execute(ScriptExecutionContext ctx) {
@@ -55,7 +63,7 @@ public class RemoteRunnerScriptEngine implements ScriptEngine {
         body.put("code", ctx.getCode());
         body.put("input", parseInput(ctx.getInputJson()));
 
-        Map<String, Object> resp = HttpUtil.postJson(url, new HashMap<>(), body,
+        Map<String, Object> resp = HttpUtil.postJson(url, new HashMap<String, String>(), body,
                 new TypeReference<Map<String, Object>>() {
                 }, properties.getTimeoutMs());
         if (resp == null) {
@@ -73,7 +81,7 @@ public class RemoteRunnerScriptEngine implements ScriptEngine {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("code", ctx.getCode());
 
-        Map<String, Object> resp = HttpUtil.postJson(url, new HashMap<>(), body,
+        Map<String, Object> resp = HttpUtil.postJson(url, new HashMap<String, String>(), body,
                 new TypeReference<Map<String, Object>>() {
                 }, properties.getTimeoutMs());
         boolean ok = resp != null && Boolean.TRUE.equals(resp.get("ok"));
