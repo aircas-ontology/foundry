@@ -773,6 +773,7 @@ create table if not exists users
     unique,
     password    varchar(256) not null,
     picture     varchar(1024),
+    space_id    integer,
     create_time timestamp(6) default CURRENT_TIMESTAMP,
     update_time timestamp(6) default CURRENT_TIMESTAMP
     );
@@ -786,6 +787,8 @@ comment on column users.username is '用户名（唯一）';
 comment on column users.password is '加密存储的登录密码';
 
 comment on column users.picture is '用户头像URL';
+
+comment on column users.space_id is '绑定的本体空间id（ontology_space.id），为空表示不限制空间';
 
 comment on column users.create_time is '创建时间';
 

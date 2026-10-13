@@ -11,6 +11,7 @@ import co.elastic.clients.elasticsearch.core.search.SourceConfig;
 import co.elastic.clients.elasticsearch.core.search.SourceFilter;
 import com.aircas.ptr.foundry.common.base.ResultCode;
 import com.aircas.ptr.foundry.common.exception.BusinessException;
+import com.aircas.ptr.foundry.ontology.context.UserContextHolder;
 import com.aircas.ptr.foundry.ontology.model.dto.elasticsearch.EsOntologyInstanceDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.elasticsearch.EsOntologyLinkGroupDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.elasticsearch.EsOntologyMetaDTO;
@@ -75,6 +76,14 @@ public class GlobalSearchServiceImpl implements GlobalSearchService {
             indexNameOf(EsOntologyInstanceDTO.class),   List.of("name"),
             indexNameOf(EsOntologyLinkGroupDTO.class),  List.of("name"));
 
+    /** 各索引用于空间过滤的字段：空间索引本身以文档 _id 作为空间id，其余索引按所属空间id字段 */
+    private static final Map<String, String> INDEX_SPACE_FIELD = Map.of(
+            indexNameOf(EsOntologySpaceDTO.class),      "_id",
+            indexNameOf(EsOntologyMetaDTO.class),       "ontology_space_id",
+            indexNameOf(EsOntologyPropertyDTO.class),   "ontology_space_id",
+            indexNameOf(EsOntologyInstanceDTO.class),   "space_id",
+            indexNameOf(EsOntologyLinkGroupDTO.class),  "ontology_space_id");
+
     private final ElasticsearchClient elasticsearchClient;
 
     private static String indexNameOf(Class<?> clazz) {
@@ -86,20 +95,28 @@ public class GlobalSearchServiceImpl implements GlobalSearchService {
         int size = param.getSize() == null || param.getSize() <= 0 ? DEFAULT_SIZE
                 : Math.min(param.getSize(), MAX_SIZE);
         String escapedKeyword = escapeQuery(param.getKeyword());
+        // 当前用户配置了绑定空间时，仅检索该空间下的内容，未配置则检索全部空间
+        var userContext = UserContextHolder.get();
+        var bindSpaceId = userContext == null || userContext.getSpaceId() == null
+                ? null : userContext.getSpaceId().longValue();
         SearchRequest request = SearchRequest.of(b -> b
                 .index(SEARCH_INDICES)
                 .size(size)
                 .source(includeSource(SOURCE_FIELDS))
                 .query(q -> q.bool(bool -> {
-                    INDEX_SEARCH_FIELDS.forEach((index, fields) -> bool.should(sh -> sh
-                            .bool(inner -> inner
-                                    .must(m -> m.term(t -> t.field("_index").value(index)))
-                                    .must(m -> m.queryString(qs -> qs
-                                            .fields(fields)
-                                            .lenient(true)
-                                            .defaultOperator(Operator.Or)
-                                            .query(escapedKeyword)))
-                            )));
+                    INDEX_SEARCH_FIELDS.forEach((index, fields) -> bool.should(sh -> sh.bool(inner -> {
+                        inner.must(m -> m.term(t -> t.field("_index").value(index)))
+                                .must(m -> m.queryString(qs -> qs
+                                        .fields(fields)
+                                        .lenient(true)
+                                        .defaultOperator(Operator.Or)
+                                        .query(escapedKeyword)));
+                        String spaceField = bindSpaceId == null ? null : INDEX_SPACE_FIELD.get(index);
+                        if (spaceField != null) {
+                            inner.filter(f -> f.term(t -> t.field(spaceField).value(bindSpaceId)));
+                        }
+                        return inner;
+                    })));
                     return bool;
                 })));
         List<Hit<Map>> hits;
