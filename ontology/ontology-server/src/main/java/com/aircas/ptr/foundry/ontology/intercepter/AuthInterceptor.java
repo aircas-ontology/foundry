@@ -3,6 +3,7 @@ package com.aircas.ptr.foundry.ontology.intercepter;
 import com.aircas.ptr.foundry.common.base.ResultCode;
 import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
+import com.aircas.ptr.foundry.ontology.config.SpaceBindingProperties;
 import com.aircas.ptr.foundry.ontology.context.UserContextHolder;
 import com.aircas.ptr.foundry.ontology.model.common.Constants;
 import com.aircas.ptr.foundry.ontology.model.dto.UserContextDTO;
@@ -25,6 +26,8 @@ public class AuthInterceptor implements HandlerInterceptor {
     private final JwtUtil jwtUtil;
 
     private final UserMapper userMapper;
+
+    private final SpaceBindingProperties spaceBindingProperties;
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
@@ -49,8 +52,8 @@ public class AuthInterceptor implements HandlerInterceptor {
                 .eq(User::getUsername, userContext.getUsername()));
 
         PreconditionUtils.checkNotNull(user, "用户不存在");
-        // 以库中配置为准回填绑定空间，配置变更无需重新登录即可生效
-        userContext.setSpaceId(user.getSpaceId());
+        // 回填配置中的绑定空间：配置了的用户只能访问该空间，未配置则不限制
+        userContext.setSpaceId(spaceBindingProperties.resolveSpaceId(user.getUsername()));
         UserContextHolder.set(userContext);
         return true;
     }

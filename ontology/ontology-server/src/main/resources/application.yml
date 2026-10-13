@@ -99,6 +99,10 @@ rabbitmq:
 ontology:
   swagger:
     enable: true
+  space-binding:
+    users:
+      admin2: 89
+      admin3: 88
 
 # Knife4j / SpringDoc OpenAPI 3 配置
 knife4j:
