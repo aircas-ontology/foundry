@@ -862,25 +862,30 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
 
     /**
      * 将参数定义（前端声明或 Groovy 解析）批量写入 function_param。
+     * 前端未传 paramOrder 时，按同 category 内列表顺序自动编号。
      */
     private void saveParams(Long functionId, List<FunctionParamDTO> functionParam) {
         if (CollectionUtils.isEmpty(functionParam)) {
             return;
         }
-        List<FunctionParamPO> params = functionParam.stream().map(p ->
-                FunctionParamPO.builder()
-                        .functionId(functionId)
-                        .paramName(p.getParamName())
-                        .paramType(p.getParamType())
-                        .category(p.getCategory())
-                        .paramSchema(p.getParamSchema())
-                        .paramOrder(p.getParamOrder())
-                        .typeReferenceName(p.getReferenceType())
-                        .description(p.getDescription())
-                        .createTime(new Date())
-                        .updateTime(new Date())
-                        .build()
-        ).collect(Collectors.toList());
+        // 按 category 独立计数器，前端未传 paramOrder 时自动填充
+        Map<FunctionParamCategoryEnum, Integer> orderCounters = new HashMap<>();
+        List<FunctionParamPO> params = functionParam.stream().map(p -> {
+            int order = p.getParamOrder() != null ? p.getParamOrder()
+                    : orderCounters.merge(p.getCategory(), 1, Integer::sum);
+            return FunctionParamPO.builder()
+                    .functionId(functionId)
+                    .paramName(p.getParamName())
+                    .paramType(p.getParamType())
+                    .category(p.getCategory())
+                    .paramSchema(p.getParamSchema())
+                    .paramOrder(order)
+                    .typeReferenceName(p.getReferenceType())
+                    .description(p.getDescription())
+                    .createTime(new Date())
+                    .updateTime(new Date())
+                    .build();
+        }).collect(Collectors.toList());
         functionParamService.saveBatch(params);
     }
 
