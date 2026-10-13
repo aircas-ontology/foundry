@@ -21,7 +21,7 @@ public class FunctionApiValidator implements ConstraintValidator<FunctionApiVeri
         if (StringUtils.isEmpty(api)) {
             return false;
         }
-        var func = functionMapper.selectOne(new LambdaQueryWrapper<Function>().eq(Function::getApi, api));
-        return func != null;
+        // 版本管理后 api 不再唯一，存在任意版本即合法
+        return functionMapper.exists(new LambdaQueryWrapper<Function>().eq(Function::getApi, api));
     }
 }

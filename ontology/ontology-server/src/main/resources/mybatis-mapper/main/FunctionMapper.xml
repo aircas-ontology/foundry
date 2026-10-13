@@ -2,5 +2,44 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.aircas.ptr.foundry.ontology.repository.mainMapper.FunctionMapper">
 
-</mapper>
+    <!-- 函数算子版本管理：按 api 分组分页，每个 api 仅展示版本号最大的一条记录。
+         版本号按 x.y.z 语义化比较（逐段数值比较），不能按字符串排序（如 1.10.0 > 1.9.0）。 -->
+    <select id="pageLatestVersion" resultType="com.aircas.ptr.foundry.ontology.model.po.Function">
+        select t.*
+        from (
+            select f.*,
+                   row_number() over (
+                       partition by f.api
+                       order by (
+                           cast(split_part(f.version, '.', 1) as bigint),
+                           cast(split_part(f.version, '.', 2) as bigint),
+                           cast(split_part(f.version, '.', 3) as bigint)
+                       ) desc
+                   ) as rn
+            from ontology.function f
+            <where>
+                <if test="ontologySpaceId != null">
+                    and f.ontology_space_id = #{ontologySpaceId}
+                </if>
+                <if test="displayName != null and displayName != ''">
+                    and f.display_name like '%' || #{displayName} || '%'
+                </if>
+                <if test="type != null">
+                    and f.type = #{type}
+                </if>
+                <if test="publishStatus != null">
+                    and f.publish = #{publishStatus}
+                </if>
+                <if test="startDate != null and startDate != ''">
+                    and f.create_time &gt;= cast(#{startDate} as timestamp)
+                </if>
+                <if test="endDate != null and endDate != ''">
+                    and f.create_time &lt; cast(#{endDate} as date) + interval '1 day'
+                </if>
+            </where>
+        ) t
+        where t.rn = 1
+        order by t.update_time desc nulls last, t.id desc
+    </select>
 
+</mapper>

@@ -5,6 +5,7 @@ import com.aircas.ptr.foundry.ontology.model.dto.cdc.DebeziumEnvelopeDTO;
 import com.aircas.ptr.foundry.ontology.service.EntityInstanceCdcJobService;
 import com.alibaba.fastjson2.TypeReference;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,6 +24,7 @@ import java.util.Objects;
  */
 @Slf4j
 @Component
+@ConditionalOnProperty(prefix = "foundry.integration.cdc", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class EntityDatasourceDMLListener {
 
     @Autowired

@@ -63,6 +63,8 @@
         <spring-ai-alibaba.version>1.1.2.0</spring-ai-alibaba.version>
         <!-- JWT -->
         <jjwt.version>0.12.6</jjwt.version>
+        <!-- LiteFlow 函数编排规则引擎 -->
+        <liteflow.version>2.16.0</liteflow.version>
     </properties>
 
     <dependencies>
@@ -151,6 +153,17 @@
                 <groupId>org.codehaus.groovy</groupId>
                 <artifactId>groovy-all</artifactId>
                 <version>3.0.22</version>
+            </dependency>
+            <!-- LiteFlow 规则引擎：Spring Boot 3 自动装配 + Groovy 脚本组件支持 -->
+            <dependency>
+                <groupId>com.yomahub</groupId>
+                <artifactId>liteflow-spring-boot-starter</artifactId>
+                <version>${liteflow.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.yomahub</groupId>
+                <artifactId>liteflow-script-groovy</artifactId>
+                <version>${liteflow.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.codehaus.groovy.modules.http-builder</groupId>
