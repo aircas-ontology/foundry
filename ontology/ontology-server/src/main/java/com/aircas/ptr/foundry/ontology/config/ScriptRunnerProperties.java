@@ -46,16 +46,28 @@ public class ScriptRunnerProperties {
      * 取指定语言 runner 的基地址；未配置则视为运行时不可用。
      */
     public String baseUrl(FunctionLanguageEnum language) {
-        String url = switch (language) {
+        String url = rawUrl(language);
+        if (url == null || url.isBlank()) {
+            throw new BusinessException("语言运行时未配置：" + language.getCode());
+        }
+        return trimTrailingSlash(url);
+    }
+
+    /**
+     * 指定语言的 runner 基地址是否已配置（不抛异常，供路由判断能否兜底）。
+     */
+    public boolean isConfigured(FunctionLanguageEnum language) {
+        String url = rawUrl(language);
+        return url != null && !url.isBlank();
+    }
+
+    private String rawUrl(FunctionLanguageEnum language) {
+        return switch (language) {
             case GROOVY -> groovy;
             case JAVA -> java;
             case PYTHON -> python;
             case TYPESCRIPT -> typescript;
         };
-        if (url == null || url.isBlank()) {
-            throw new BusinessException("语言运行时未配置：" + language.getCode());
-        }
-        return trimTrailingSlash(url);
     }
 
     private static String trimTrailingSlash(String url) {

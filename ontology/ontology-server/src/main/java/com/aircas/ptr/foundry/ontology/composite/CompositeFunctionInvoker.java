@@ -1,10 +1,12 @@
 package com.aircas.ptr.foundry.ontology.composite;
 
+import com.aircas.ptr.foundry.common.constant.FunctionParamTypeEnum;
 import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.ontology.model.bo.CompositeNodePlanBO;
 import com.aircas.ptr.foundry.ontology.model.po.Function;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionParamPO;
 import com.aircas.ptr.foundry.ontology.service.GroovyService;
+import com.aircas.ptr.foundry.ontology.utils.SchemaHandleUtil;
 import org.springframework.http.HttpStatus;
 
 import java.util.LinkedHashMap;
@@ -83,9 +85,32 @@ public class CompositeFunctionInvoker {
     static Map<String, Object> assembleParams(List<FunctionParamPO> inputParams, Map<String, Object> inputs) {
         Map<String, Object> paramMap = new LinkedHashMap<>();
         for (FunctionParamPO paramPO : inputParams) {
-            paramMap.put(paramPO.getParamName(), inputs.get(paramPO.getParamName()));
+            paramMap.put(paramPO.getParamName(),
+                    coerce(inputs.get(paramPO.getParamName()), paramPO));
         }
         return paramMap;
+    }
+
+    /**
+     * 把编排解析出的值转成算子声明的类型。
+     * <p>与 {@code FunctionServiceImpl#buildInputJson} 一致：转换只在系统边界（调用算子之前）做一次，
+     * 编排内部的端口值保持原样透传。缺失 Java 类名时按参数枚举类型名兜底（前端声明的参数只有枚举）；
+     * 转换失败也按原值透传，让"常量写成字符串"这类配置照常工作。</p>
+     */
+    private static Object coerce(Object value, FunctionParamPO paramPO) {
+        if (value == null || paramPO.getParamType() == FunctionParamTypeEnum.OBJECT) {
+            return value;
+        }
+        String typeReference = paramPO.getTypeReferenceName();
+        if (typeReference == null || typeReference.trim().isEmpty()) {
+            // 枚举的 vale 是简单类名（Integer/Boolean/List...），补成全限定名后才能定位目标类型
+            typeReference = "java.lang." + paramPO.getParamType().getVale();
+        }
+        try {
+            return SchemaHandleUtil.convertValue(value, typeReference);
+        } catch (RuntimeException e) {
+            return value;
+        }
     }
 
     private static String labelOf(CompositeNodePlanBO nodePlan) {
