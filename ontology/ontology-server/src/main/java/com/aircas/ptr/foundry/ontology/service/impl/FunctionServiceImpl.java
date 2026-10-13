@@ -170,6 +170,18 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     }
 
     @Override
+    public List<String> listVersionsByApi(String api) {
+        if (StringUtils.isEmpty(api)) {
+            return new ArrayList<>();
+        }
+        // 同一 api 下全部版本号，按语义化版本倒序（最新在前）
+        return listVersions(api).stream()
+                .map(Function::getVersion)
+                .sorted((v1, v2) -> compareVersion(v2, v1))
+                .collect(Collectors.toList());
+    }
+
+    @Override
     @Transactional(value = "mainTransactionManager")
     public void deleteByApi(String api, String version) {
         var function = resolveVersion(api, version);

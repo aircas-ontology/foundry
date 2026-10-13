@@ -79,6 +79,13 @@ public class OntologyFunctionController {
     }
 
 
+    @Operation(summary = "根据函数api查询版本号列表")
+    @GetMapping("/versions")
+    public RestResult<List<String>> getFunctionVersions(@RequestParam(required = true, name = "functionApi") @Parameter(description = "函数api") String functionApi) {
+        return RestResult.ofData(functionService.listVersionsByApi(functionApi));
+    }
+
+
     @Operation(summary = "删除函数")
     @DeleteMapping("/delete")
     public RestResult deleteById(@RequestParam(required = true, name = "functionApi") @Parameter(description = "函数api") String functionApi,
