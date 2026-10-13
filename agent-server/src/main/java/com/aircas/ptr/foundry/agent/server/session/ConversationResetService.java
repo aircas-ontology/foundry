@@ -6,7 +6,7 @@ import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.stereotype.Service;
 
 /**
- * 会话上下文重置服务：一次性清空某会话的短期记忆（{@link ChatMemory} 滑动窗口）与本体构建状态
+ * 会话上下文重置服务：一次性清空某会话的短期记忆（{@link ChatMemory} 滑动窗口）与对象构建状态
  * （{@link SessionStateStore}），供"新对话"与"聊天内清空上下文"两种入口复用。
  *
  * <p>两处调用方：① {@code AgentChatController} 的显式重置接口（前端"新对话/清空"按钮）；
@@ -24,7 +24,7 @@ public class ConversationResetService {
     private final SessionStateStore sessionStateStore;
 
     /**
-     * 清空指定会话的全部上下文（多轮记忆 + 本体构建状态）。
+     * 清空指定会话的全部上下文（多轮记忆 + 对象构建状态）。
      *
      * @param sessionId 会话 id；为空时不操作（无法定位会话）
      */

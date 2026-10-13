@@ -59,7 +59,7 @@ public class AgentChatController {
     }
 
     @PostMapping("/clear_context")
-    @Operation(summary = "清空会话上下文：清除多轮记忆与本体构建状态（用于“新对话/清空”）")
+    @Operation(summary = "清空会话上下文：清除多轮记忆与对象构建状态（用于“新对话/清空”）")
     public RestResult<Boolean> clearContext(@RequestParam String sessionId) {
         conversationResetService.reset(sessionId);
         return RestResult.ofData(Boolean.TRUE);

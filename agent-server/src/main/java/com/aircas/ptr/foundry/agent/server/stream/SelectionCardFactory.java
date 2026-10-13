@@ -30,10 +30,10 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class SelectionCardFactory {
 
-    private static final String TITLE_SPACE = "请选择目标本体空间";
+    private static final String TITLE_SPACE = "请选择目标对象空间";
     private static final String TITLE_DATASOURCE = "请选择目标数据源";
-    private static final String TITLE_PROPERTIES = "请勾选需要纳入本体的属性";
-    private static final String TITLE_RELATIONS = "请勾选需要纳入本体的关系";
+    private static final String TITLE_PROPERTIES = "请勾选需要纳入对象的属性";
+    private static final String TITLE_RELATIONS = "请勾选需要纳入对象的关系";
 
     private final ObjectMapper objectMapper;
 
@@ -73,7 +73,7 @@ public class SelectionCardFactory {
             String apiName = node.path("apiName").asText("");
             String description = node.path("description").asText("");
             StringBuilder desc = new StringBuilder("apiName=").append(apiName)
-                    .append("；本体数=").append(node.path("ontologyCount").asInt(0));
+                    .append("；对象数=").append(node.path("ontologyCount").asInt(0));
             if (!description.isBlank()) {
                 desc.append("；").append(description);
             }

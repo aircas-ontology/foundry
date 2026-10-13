@@ -18,10 +18,9 @@ import java.io.IOException;
  * {@code token} 携带共享服务令牌（而非每用户 JWT）。因 MCP 的能力发现（握手 + {@code tools/list}）
  * 发生在 agent-server 启动时、无登录用户，故无法沿用每用户 JWT 门禁。</p>
  *
- * <p>之所以用 Servlet {@link Filter} 而非 {@code HandlerInterceptor}：MCP WebMVC 的 SSE 端点通过
+ * <p>之所以用 Servlet {@link Filter} 而非 {@code HandlerInterceptor}：MCP WebMVC 端点通过
  * {@code RouterFunction} 注册，拦截器对其是否生效存在 Spring 版本差异；Filter 处于容器层、对任何
- * 请求必然生效，最稳妥。仅拦截 SSE 建连端点 {@code /sse}；消息端点 {@code /mcp/message} 依赖建连时
- * 派生的 sessionId，无需重复校验。</p>
+ * 请求必然生效，最稳妥。SSE 传输下仅拦截建连端点 {@code /sse}。</p>
  */
 public class McpServiceTokenFilter implements Filter {
 
