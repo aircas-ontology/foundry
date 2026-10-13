@@ -50,6 +50,9 @@ public class FunctionInfoVO {
     @Schema(name = "ontologySpaceId", description = "所属本体空间 id")
     private Integer ontologySpaceId;
 
+    @Schema(name = "createTime", description = "创建时间")
+    private Date createTime;
+
     @Schema(name = "updateTime", description = "更新时间")
     private Date updateTime;
 }

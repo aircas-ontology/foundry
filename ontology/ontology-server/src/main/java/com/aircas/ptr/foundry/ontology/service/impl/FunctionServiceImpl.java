@@ -278,6 +278,16 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         String maxVersion = existVersions.stream().map(Function::getVersion).max(FunctionServiceImpl::compareVersion).orElse(null);
         PreconditionUtils.checkArgument(maxVersion == null || compareVersion(version, maxVersion) > 0,
                 "新版本号必须大于当前最大版本号 " + maxVersion, HttpStatus.BAD_REQUEST);
+        // 基于旧版本创建 vs 全新创建的 api 重复校验策略
+        Boolean basedOnOldVersion = param.getBasedOnOldVersion();
+        if (basedOnOldVersion == null || !basedOnOldVersion) {
+            // 全新创建：api 不能与任何已存在的函数重复（即使版本不同）
+            boolean apiExists = count(new LambdaQueryWrapper<Function>()
+                    .eq(Function::getApi, param.getFunctionApi())) > 0;
+            PreconditionUtils.checkArgument(!apiExists,
+                    "函数 api 已存在:" + param.getFunctionApi() + "，全新创建请使用不同的 api 名称", HttpStatus.BAD_REQUEST);
+        }
+        // 如果 basedOnOldVersion = true，则允许相同 api，只校验 api + version 不重复（已在上面校验）
         //函数插入，新增版本默认为未发布状态
         //language 仅 CUSTOMIZE 脚本算子有意义；基础查询/外部/容器算子存 NULL（EXTERNAL 执行链路待定，开发时再评估）
         FunctionLanguageEnum language = null;
@@ -465,6 +475,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                         .language(func.getLanguage())
                         .description(func.getDescription())
                         .ontologySpaceId(func.getOntologySpaceId())
+                        .createTime(func.getCreateTime())
                         .updateTime(func.getUpdateTime())
                         .build()
         ).collect(Collectors.toList());
