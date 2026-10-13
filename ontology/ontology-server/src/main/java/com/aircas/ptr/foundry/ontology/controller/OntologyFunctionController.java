@@ -1,7 +1,10 @@
 package com.aircas.ptr.foundry.ontology.controller;
 
 import com.aircas.ptr.foundry.common.base.RestResult;
+import com.aircas.ptr.foundry.ontology.model.bo.CompositePlanBO;
+import com.aircas.ptr.foundry.ontology.model.bo.CompositeValidationBO;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
+import com.aircas.ptr.foundry.ontology.model.param.CompositeValidateParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionCallbackParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionExecuteParam;
@@ -46,11 +49,12 @@ public class OntologyFunctionController {
             @RequestParam(required = false) @Parameter(description = "空间id") Integer ontologySpaceId,
             @RequestParam(required = false) @Parameter(description = "函数名称（模糊搜索）") String displayName,
             @RequestParam(required = false) @Parameter(description = "函数类型") FunctionTypeEnum type,
+            @RequestParam(required = false) @Parameter(description = "发布状态：0 未发布，1 已发布") Integer publishStatus,
             @RequestParam(required = false) @Parameter(description = "创建开始日期，格式 yyyy-MM-dd") String startDate,
             @RequestParam(required = false) @Parameter(description = "创建结束日期，格式 yyyy-MM-dd") String endDate,
             @RequestParam(required = false, defaultValue = "1") Integer pageNum,
             @RequestParam(required = false, defaultValue = "10") Integer pageSize) {
-        return RestResult.ofData(functionService.getFunctions(ontologySpaceId, displayName, type, startDate, endDate, pageNum, pageSize));
+        return RestResult.ofData(functionService.getFunctions(ontologySpaceId, displayName, type, publishStatus, startDate, endDate, pageNum, pageSize));
     }
 
     @Operation(summary = "创建函数")
@@ -63,25 +67,52 @@ public class OntologyFunctionController {
 
     @Operation(summary = "更新函数")
     @PutMapping
-    public RestResult updateFunction(@RequestBody FunctionUpdateParam param) {
-        // 需要 1 校验函数有没有被本体行为使用到，否则不能修改 2 需要增加代码安全检测
+    public RestResult updateFunction(@RequestBody @Valid FunctionUpdateParam param) {
+        //todo 需要增加代码安全检测
         functionService.updateFunction(param);
         return RestResult.success();
     }
 
 
-    @Operation(summary = "根据函数api获取函数详情")
+    @Operation(summary = "查询函数详情")
     @GetMapping("/detail")
-    public RestResult<FunctionDetailVO> getFunctionByApi(@RequestParam(required = true, name = "functionApi") @Parameter(description = "函数api") String functionApi) {
-        return RestResult.ofData(functionService.getFunctionDetailByApi(functionApi));
+    public RestResult<FunctionDetailVO> getFunctionByApi(@RequestParam(required = true, name = "functionApi") @Parameter(description = "函数api") String functionApi,
+                                                         @RequestParam(required = true, name = "version") @Parameter(description = "版本号（必填，格式 x.y.z）") String version) {
+        return RestResult.ofData(functionService.getFunctionDetailByApi(functionApi, version));
     }
 
 
-    @Operation(summary = "根据functionApi删除函数")
-    @DeleteMapping("/delete/{functionApi}")
-    public RestResult deleteById(@PathVariable(required = true, name = "functionApi") String functionApi) {
+    @Operation(summary = "根据函数api查询版本号列表")
+    @GetMapping("/versions")
+    public RestResult<List<String>> getFunctionVersions(@RequestParam(required = true, name = "functionApi") @Parameter(description = "函数api") String functionApi) {
+        return RestResult.ofData(functionService.listVersionsByApi(functionApi));
+    }
+
+
+    @Operation(summary = "删除函数")
+    @DeleteMapping("/delete")
+    public RestResult deleteById(@RequestParam(required = true, name = "functionApi") @Parameter(description = "函数api") String functionApi,
+                                 @RequestParam(required = true, name = "version") @Parameter(description = "版本号（必填，格式 x.y.z）") String version) {
         //需要校验函数有没有被本体行为使用到
-        functionService.deleteByApi(functionApi);
+        functionService.deleteByApi(functionApi, version);
+        return RestResult.success();
+    }
+
+
+    @Operation(summary = "发布函数")
+    @PostMapping("/publish")
+    public RestResult publishFunction(@RequestParam(required = true, name = "functionApi") @Parameter(description = "函数api") String functionApi,
+                                      @RequestParam(required = true, name = "version") @Parameter(description = "版本号（必填，格式 x.y.z）") String version) {
+        functionService.publishFunction(functionApi, version);
+        return RestResult.success();
+    }
+
+
+    @Operation(summary = "下线函数")
+    @PostMapping("/unpublish")
+    public RestResult unpublishFunction(@RequestParam(required = true, name = "functionApi") @Parameter(description = "函数api") String functionApi,
+                                        @RequestParam(required = true, name = "version") @Parameter(description = "版本号（必填，格式 x.y.z）") String version) {
+        functionService.unpublishFunction(functionApi, version);
         return RestResult.success();
     }
 
@@ -101,9 +132,22 @@ public class OntologyFunctionController {
     }
 
     @PostMapping("/test")
-    @Operation(summary = "统一函数测试入口：根据函数类型分发到不同测试逻辑")
+    @Operation(summary = "函数测试")
     public RestResult<Object> testFunction(@RequestBody @Valid FunctionTestParam param) {
         return RestResult.ofData(functionService.testFunction(param));
+    }
+
+    @PostMapping("/composite/validate")
+    @Operation(summary = "校验函数编排定义（不落库）")
+    public RestResult<CompositeValidationBO> validateComposite(@RequestBody CompositeValidateParam param) {
+        return RestResult.ofData(functionService.validateComposite(param));
+    }
+
+    @GetMapping("/composite/el")
+    @Operation(summary = "编译已落库的函数编排定义，返回 LiteFlow 执行链 EL")
+    public RestResult<CompositePlanBO> compileComposite(
+            @RequestParam(required = true, name = "functionApi") @Parameter(description = "编排函数api") String functionApi) {
+        return RestResult.ofData(functionService.compileComposite(functionApi));
     }
 
 }

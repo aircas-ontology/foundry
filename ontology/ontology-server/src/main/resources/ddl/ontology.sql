@@ -162,9 +162,12 @@ alter sequence action_handle_task_id_seq1 owned by action_handle_task.id;
 
 create table if not exists function
 (
-    api               varchar(255)                                                          not null
-    constraint uk_function_api
-    unique,
+    api               varchar(255)                                                          not null,
+    version           varchar(64) default '1.0.0'                                           not null,
+    publish           smallint    default 0                                                 not null,
+    language          varchar(32),
+    constraint uk_function_api_version
+    unique (api, version),
     description       varchar(25500),
     status            smallint                                                              not null,
     id                bigint default nextval('ontology.ontology_function_id_seq'::regclass) not null
@@ -183,6 +186,12 @@ create table if not exists function
 comment on table function is '函数';
 
 comment on column function.api is 'api，函数调用时使用，不可后期修改';
+
+comment on column function.version is '版本号，格式 x.y.z，同一 api 下递增且唯一；创建后不可改';
+
+comment on column function.publish is '发布状态：0 未发布（可改可删），1 已发布（锁定，需先下线）';
+
+comment on column function.language is '脚本语言：GROOVY/JAVA/PYTHON/TYPESCRIPT，仅 type=CUSTOMIZE 脚本算子有值；执行按此路由到对应 runner';
 
 comment on column function.description is '函数描述';
 

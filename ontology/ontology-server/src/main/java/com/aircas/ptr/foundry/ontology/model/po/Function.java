@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.po;
 
+import com.aircas.ptr.foundry.ontology.model.enums.FunctionLanguageEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionModelEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
 import com.baomidou.mybatisplus.annotation.*;
@@ -40,7 +41,9 @@ public class Function {
 
     /**
      * Column: api
+     * 创建后不可修改：updateStrategy = NEVER 使生成的 UPDATE 语句永不包含 api 列
      */
+    @TableField(updateStrategy = FieldStrategy.NEVER)
     private String api;
 
     /**
@@ -50,13 +53,27 @@ public class Function {
 
     /**
      * Column: displayName
+     * 创建后不可修改：updateStrategy = NEVER 使生成的 UPDATE 语句永不包含 display_name 列
      */
+    @TableField(updateStrategy = FieldStrategy.NEVER)
     private String displayName;
 
     /**
      * Column: status
      */
     private Integer status;
+
+    /**
+     * 版本号，格式 x.y.z（如 1.0.0）；与 api 联合唯一，同一 api 下必须递增
+     */
+    private String version;
+
+    /**
+     * 发布状态：0 未发布（可修改/删除），1 已发布（锁定）
+     *
+     * @see com.aircas.ptr.foundry.ontology.constant.FunctionConstant
+     */
+    private Integer publish;
 
     /**
      * Column: id
@@ -80,6 +97,13 @@ public class Function {
      * FunctionTypeEnum
      */
     private FunctionTypeEnum type;
+
+    /**
+     * 脚本语言，仅 type=CUSTOMIZE 脚本算子有值，其余算子（基础查询/外部/容器）为 NULL；执行时按此路由到对应语言 runner 容器。
+     * 创建后锁定（updateStrategy=NEVER），换语言请走新版本。
+     */
+    @TableField(updateStrategy = FieldStrategy.NEVER)
+    private FunctionLanguageEnum language;
 
     private FunctionModelEnum model;
 

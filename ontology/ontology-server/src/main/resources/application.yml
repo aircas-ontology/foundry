@@ -103,6 +103,23 @@ ontology:
     users:
       admin2: 89
       admin3: 88
+  # 函数编排（LiteFlow 组合函数）运行期配置
+  composite:
+    # JS 转换脚本通过 node 子进程执行（JDK17 无 Nashorn/GraalJS），可用值：node 的绝对路径或命令名
+    node-executable: node
+    # 单个转换脚本的执行超时（秒）
+    script-timeout-seconds: 10
+
+# LiteFlow 规则引擎：编排执行链全部由后端在运行期动态注册（CompositeChainRegistry），
+# 因此不配置 rule-source；LiteFlow 在 rule-source 为空时不会加载任何静态规则文件。
+liteflow:
+  enable: true
+  print-banner: false
+  print-execution-log: false
+  # JDK17 下虚拟线程与 LiteFlow 线程池隔离组合不稳定，统一关闭
+  enable-virtual-thread: false
+  monitor:
+    enable-log: false
 
 # Knife4j / SpringDoc OpenAPI 3 配置
 knife4j:
@@ -180,3 +197,12 @@ threadpool:
   queue-capacity: 100
   keep-alive-seconds: 60
   thread-name-prefix: ontology-thread-
+
+# 脚本函数多语言执行：每种语言对应一个独立 Runner 容器（language -> base URL 严格一对一）。
+# 地址 value 属环境相关，写在 application-local.yml 覆盖；主应用不编译/执行任何用户代码。
+script-runner:
+  groovy:
+  java:
+  python:
+  typescript:
+  timeout-ms: 5000

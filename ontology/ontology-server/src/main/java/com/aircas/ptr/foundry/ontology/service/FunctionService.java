@@ -2,7 +2,10 @@ package com.aircas.ptr.foundry.ontology.service;
 
 
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
+import com.aircas.ptr.foundry.ontology.model.bo.CompositePlanBO;
+import com.aircas.ptr.foundry.ontology.model.bo.CompositeValidationBO;
 import com.aircas.ptr.foundry.ontology.model.param.BasicQueryTestParam;
+import com.aircas.ptr.foundry.ontology.model.param.CompositeValidateParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionExecuteParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionTestParam;
@@ -25,20 +28,56 @@ public interface FunctionService extends IService<Function> {
 
     Page<FunctionInfoVO> getFunctions(Integer ontologySpaceId, String displayName,
                                        FunctionTypeEnum type,
+                                       Integer publishStatus,
                                        String startDate, String endDate,
                                        Integer pageNum, Integer pageSize);
 
     String executeFunction(FunctionExecuteParam param);
 
 
-    FunctionDetailVO getFunctionDetailByApi(String api);
+    /**
+     * 按 api + 版本号查函数详情；version 为空时取该 api 的最新版本
+     */
+    FunctionDetailVO getFunctionDetailByApi(String api, String version);
 
-    void deleteByApi(String api);
+    /**
+     * 兼容旧调用：默认取该 api 的最新版本
+     */
+    default FunctionDetailVO getFunctionDetailByApi(String api) {
+        return getFunctionDetailByApi(api, null);
+    }
 
+    /**
+     * 按 function api 查询其全部版本号，按语义化版本倒序排列（最新在前）；
+     * api 不存在时返回空列表
+     */
+    List<String> listVersionsByApi(String api);
 
+    /**
+     * 按 api + 版本号删除函数（version 必填，精确定位）。仅未发布状态可删除
+     */
+    void deleteByApi(String api, String version);
+
+    /**
+     * 创建函数版本：新版本号必须大于同 api 下已有最大版本号，初始为未发布状态
+     */
     void createFunction(FunctionCreateParam param);
 
+    /**
+     * 修改函数版本：仅未发布且未被行为关联的版本可原地更新；
+     * 已发布版本一律禁止修改（需先下线），需要新版本请走创建接口
+     */
     void updateFunction(FunctionUpdateParam param);
+
+    /**
+     * 发布：未发布 → 已发布，发布后不可修改/删除
+     */
+    void publishFunction(String api, String version);
+
+    /**
+     * 下线：已发布 → 未发布，下线后才可修改/删除
+     */
+    void unpublishFunction(String api, String version);
 
     FunctionExecuteResultVO getExecuteResult(String taskId);
 
@@ -56,7 +95,23 @@ public interface FunctionService extends IService<Function> {
     Object testFunction(FunctionTestParam param);
 
     /**
-     * 按 function api 批量取函数描述，供行为出参冗余函数描述使用（一次查询，避免逐条查库）。
+     * 校验函数编排定义（不落库），供前端画布实时校验使用。
+     *
+     * @param param 校验请求，包含编排定义
+     * @return 校验结果，含错误与告警文案
+     */
+    CompositeValidationBO validateComposite(CompositeValidateParam param);
+
+    /**
+     * 编译已落库的函数编排定义，返回 LiteFlow 执行链 EL 与逐节点运行期定义（不注册执行链）。
+     *
+     * @param functionApi 编排函数 api
+     * @return 编译结果
+     */
+    CompositePlanBO compileComposite(String functionApi);
+
+    /**
+     * 按 function api 批量取函数描述（每个 api 取最新版本），供行为出参冗余函数描述使用（一次查询，避免逐条查库）。
      * <p>
      * api 不存在或描述为空的不会出现在返回结果中。
      *
