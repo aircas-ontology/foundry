@@ -48,6 +48,12 @@ public interface FunctionService extends IService<Function> {
     }
 
     /**
+     * 按 function api 查询其全部版本号，按语义化版本倒序排列（最新在前）；
+     * api 不存在时返回空列表
+     */
+    List<String> listVersionsByApi(String api);
+
+    /**
      * 按 api + 版本号删除函数（version 必填，精确定位）。仅未发布状态可删除
      */
     void deleteByApi(String api, String version);
