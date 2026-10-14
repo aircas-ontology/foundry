@@ -7,6 +7,7 @@ import com.aircas.ptr.foundry.ontology.model.dto.OntologySpaceCreateDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.OntologySpaceDTO;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyExportTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyLinkTypeEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.SpaceTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyLinkCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyMetaCreateParam;
@@ -121,11 +122,14 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                 .or().eq(OntologySpace::getApiName, param.getApiName()));
         PreconditionUtils.checkArgument(space == null, "空间显示名称或api名称已存在", HttpStatus.BAD_REQUEST);
         //create space
+        var userContext = UserContextHolder.get();
         var ontologySpace = OntologySpace.builder()
                 .description(param.getDescription())
                 .icon(param.getIconUrl())
                 .displayName(param.getDisplayName())
                 .apiName(param.getApiName())
+                .username(userContext == null ? null : userContext.getUsername())
+                .type(SpaceTypeEnum.SPACE.getValue())
                 .build();
         spaceMapper.insert(ontologySpace);
         //create new schema &  table_filed_mapping table
@@ -316,12 +320,22 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
     }
 
     @Override
-    public List<OntologySpaceVO> querySpace() {
-        // 当前用户配置了绑定空间时，仅返回该空间，未配置则返回全部空间
+    public List<OntologySpaceVO> querySpace(Integer type) {
         var userContext = UserContextHolder.get();
-        var bindSpaceId = userContext == null ? null : userContext.getSpaceId();
-        var spaces = bindSpaceId == null ? list()
-                : list(new LambdaQueryWrapper<OntologySpace>().eq(OntologySpace::getId, bindSpaceId));
+        List<OntologySpace> spaces;
+        if (SpaceTypeEnum.TOPIC.getValue().equals(SpaceTypeEnum.normalize(type))) {
+            // 主题：按创建用户名过滤
+            var username = userContext == null ? null : userContext.getUsername();
+            spaces = list(new LambdaQueryWrapper<OntologySpace>()
+                    .eq(OntologySpace::getType, SpaceTypeEnum.TOPIC.getValue())
+                    .eq(OntologySpace::getUsername, username));
+        } else {
+            // 空间：当前用户配置了绑定空间时仅返回该空间，未配置则返回全部空间
+            var bindSpaceId = userContext == null ? null : userContext.getSpaceId();
+            spaces = list(new LambdaQueryWrapper<OntologySpace>()
+                    .eq(OntologySpace::getType, SpaceTypeEnum.SPACE.getValue())
+                    .eq(bindSpaceId != null, OntologySpace::getId, bindSpaceId));
+        }
         if (CollectionUtils.isEmpty(spaces)) {
             return Lists.newArrayList();
         }
@@ -360,6 +374,8 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                             .iconUrl(space.getIcon())
                             .apiName(space.getApiName())
                             .spaceId(space.getId())
+                            .type(space.getType())
+                            .username(space.getUsername())
                             .displayName(space.getDisplayName())
                             .description(space.getDescription())
                             .ontologyCount(ontologyCnt)
