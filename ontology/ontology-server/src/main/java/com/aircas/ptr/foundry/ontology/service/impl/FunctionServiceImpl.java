@@ -34,6 +34,7 @@ import com.aircas.ptr.foundry.ontology.model.param.ExternalApiConfig;
 import com.aircas.ptr.foundry.ontology.model.param.FilterGroupParam;
 import com.aircas.ptr.foundry.ontology.model.param.FilterNodeParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionCreateParam;
+import com.aircas.ptr.foundry.ontology.model.param.FunctionListQueryParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionExecuteParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionTestParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionUpdateParam;
@@ -456,15 +457,11 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
 
 
     @Override
-    public Page<FunctionInfoVO> getFunctions(Integer ontologySpaceId, String displayName,
-                                              FunctionTypeEnum type,
-                                              Integer publishStatus,
-                                              String startDate, String endDate,
-                                              Integer pageNum, Integer pageSize) {
-        var pageInfo = new Page<Function>(pageNum, pageSize);
+    public Page<FunctionInfoVO> getFunctions(FunctionListQueryParam param) {
+        var pageInfo = new Page<Function>(param.getPageNum(), param.getPageSize());
         // 版本分组分页：按 api 分组，每组仅展示版本号最大的一条（XML 内按 x.y.z 语义化比较）
-        var functionPage = getBaseMapper().pageLatestVersion(pageInfo, ontologySpaceId, displayName, type,
-                publishStatus, startDate, endDate);
+        var functionPage = getBaseMapper().pageLatestVersion(pageInfo, param.getOntologySpaceId(), param.getDisplayName(),
+                param.getType(), param.getPublishStatus(), param.getStartDate(), param.getEndDate());
         var records = functionPage.getRecords().stream().<FunctionInfoVO>map(func ->
                 FunctionInfoVO.builder()
                         .functionApi(func.getApi())
@@ -921,10 +918,21 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
 
     /**
      * 统一函数测试入口：根据函数类型分发到不同测试逻辑。
+     * <p>支持两种模式：</p>
+     * <ul>
+     *   <li>已存库测试：functionApi 非空，按 api + version 查库取定义后执行</li>
+     *   <li>草稿测试：functionApi 为空 + type 非空，直接用请求体中的 code / apiConfig 执行，不查库不落库</li>
+     * </ul>
      */
     @SneakyThrows
     @Override
     public Object testFunction(FunctionTestParam param) {
+        // 草稿测试：未落库的函数定义直接试跑
+        if (param.isDraftTest()) {
+            return testDraftFunction(param);
+        }
+
+        // 已存库测试：按 api + version 查库
         var function = resolveVersion(param.getFunctionApi(), param.getVersion());
         PreconditionUtils.checkArgument(function != null, "函数版本不存在：" + param.getFunctionApi(), HttpStatus.BAD_REQUEST);
 
@@ -957,6 +965,62 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
 
             default:
                 throw new BusinessException("不支持的函数类型：" + function.getType());
+        }
+    }
+
+    /**
+     * 草稿测试：未落库的函数定义直接试跑，不查库不落库。
+     * <p>支持 CUSTOMIZE（脚本）和 EXTERNAL（外部API）两种类型。</p>
+     */
+    @SneakyThrows
+    private Object testDraftFunction(FunctionTestParam param) {
+        // 组装入参 Map
+        Map<String, Object> inputMap = CollectionUtils.isEmpty(param.getParameters())
+                ? new LinkedHashMap<>()
+                : param.getParameters().stream().collect(LinkedHashMap::new,
+                (m, p) -> m.put(p.getParamName(), p.getParamValue()), LinkedHashMap::putAll);
+
+        FunctionTypeEnum type = param.getType();
+        switch (type) {
+            case CUSTOMIZE -> {
+                PreconditionUtils.checkArgument(StringUtils.isNotEmpty(param.getCode()),
+                        "脚本草稿测试必须提供 code", HttpStatus.BAD_REQUEST);
+                FunctionLanguageEnum language = param.getLanguage() == null
+                        ? FunctionLanguageEnum.GROOVY : param.getLanguage();
+                String inputJson = objectMapper.writeValueAsString(inputMap);
+                ScriptExecutionContext ctx = ScriptExecutionContext.builder()
+                        .language(language)
+                        .functionApi("__draft__")
+                        .version("0.0.0")
+                        .code(param.getCode())
+                        .inputJson(inputJson)
+                        .inputMap(inputMap)
+                        .build();
+                String resultJsonStr = scriptEngineRouter.route(language).execute(ctx);
+                return objectMapper.readValue(resultJsonStr, new TypeReference<FunctionResultVO>() {
+                });
+            }
+            case EXTERNAL -> {
+                PreconditionUtils.checkArgument(param.getApiConfig() != null,
+                        "外部API草稿测试必须提供 apiConfig", HttpStatus.BAD_REQUEST);
+                PreconditionUtils.checkArgument(StringUtils.isNotBlank(param.getApiConfig().getEndpoint()),
+                        "外部API草稿测试 apiConfig.endpoint 不能为空", HttpStatus.BAD_REQUEST);
+                // 构造临时 Function 对象，不碰数据库
+                String apiConfigJson = objectMapper.writeValueAsString(param.getApiConfig());
+                Function tempFunction = Function.builder()
+                        .api("__draft_external__")
+                        .version("0.0.0")
+                        .type(FunctionTypeEnum.EXTERNAL)
+                        .code(apiConfigJson)
+                        .build();
+                Map<String, Object> ports = externalApiOperator.runAsNode(tempFunction, null, inputMap);
+                return FunctionResultVO.builder()
+                        .startTime(new Date())
+                        .data(ports)
+                        .description("外部API草稿测试")
+                        .build();
+            }
+            default -> throw new BusinessException("草稿测试仅支持 CUSTOMIZE / EXTERNAL 类型：" + type);
         }
     }
 

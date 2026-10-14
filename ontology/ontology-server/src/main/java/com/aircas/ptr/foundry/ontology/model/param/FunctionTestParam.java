@@ -1,5 +1,7 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
+import com.aircas.ptr.foundry.ontology.model.enums.FunctionLanguageEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -7,17 +9,20 @@ import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
 
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
 import java.util.List;
 import java.util.Map;
 
 /**
- * 函数算子统一测试请求。
+ * 函数算子统一测试请求（同时支持「已存库测试」和「草稿测试」两种模式）。
+ * <p>模式判定：</p>
+ * <ul>
+ *   <li>{@code functionApi} 非空 → 已存库测试，按 api + version 查库取定义</li>
+ *   <li>{@code functionApi} 为空 + {@code type} 非空 → 草稿测试，直接用请求体中的 code / apiConfig 执行，不落库</li>
+ * </ul>
  * <p>根据函数类型使用不同字段：</p>
  * <ul>
  *   <li>BASIC_QUERY：使用 ontologyIdentifier + variableBindings + 分页参数</li>
- *   <li>CUSTOMIZE/EXTERNAL：使用 parameters</li>
+ *   <li>CUSTOMIZE/EXTERNAL：使用 parameters（CUSTOMIZE 草稿需额外传 code + language；EXTERNAL 草稿需额外传 apiConfig）</li>
  * </ul>
  */
 @Data
@@ -25,16 +30,30 @@ import java.util.Map;
 @Accessors(chain = true)
 @AllArgsConstructor
 @NoArgsConstructor
-@Schema(description = "函数算子统一测试请求")
+@Schema(description = "函数算子统一测试请求（已存库 / 草稿通用）")
 public class FunctionTestParam {
 
-    @Schema(name = "functionApi", description = "函数 api", required = true)
-    @NotBlank(message = "functionApi is empty")
+    // ========== 已存库测试必填，草稿测试忽略 ==========
+
+    @Schema(name = "functionApi", description = "函数 api（已存库测试必填；草稿测试时不传）")
     private String functionApi;
 
-    @Schema(name = "version", description = "版本号（必填，格式 x.y.z）", required = true)
-    @NotBlank(message = "version is empty")
+    @Schema(name = "version", description = "版本号（已存库测试必填，格式 x.y.z；草稿测试时不传）")
     private String version;
+
+    // ========== 草稿测试专用 ==========
+
+    @Schema(name = "type", description = "函数类型（草稿测试必填：CUSTOMIZE / EXTERNAL；已存库测试忽略）")
+    private FunctionTypeEnum type;
+
+    @Schema(name = "code", description = "脚本源码（CUSTOMIZE 草稿测试必填）")
+    private String code;
+
+    @Schema(name = "language", description = "脚本语言（CUSTOMIZE 草稿测试必填，不传默认 GROOVY）")
+    private FunctionLanguageEnum language;
+
+    @Schema(name = "apiConfig", description = "外部 API 配置（EXTERNAL 草稿测试必填）")
+    private ExternalApiConfig apiConfig;
 
     // ========== BASIC_QUERY 类型专用 ==========
 
@@ -56,4 +75,11 @@ public class FunctionTestParam {
 
     @Schema(name = "parameters", description = "参数列表（CUSTOMIZE/EXTERNAL 类型必填）")
     private List<FunctionParameter> parameters;
+
+    /**
+     * 是否为草稿测试（functionApi 为空 + type 非空）。
+     */
+    public boolean isDraftTest() {
+        return (functionApi == null || functionApi.isBlank()) && type != null;
+    }
 }
