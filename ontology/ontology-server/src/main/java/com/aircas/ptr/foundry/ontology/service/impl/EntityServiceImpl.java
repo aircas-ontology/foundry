@@ -34,22 +34,22 @@ import com.google.common.collect.Sets;
 import com.jayway.jsonpath.Configuration;
 import com.jayway.jsonpath.JsonPath;
 import com.jayway.jsonpath.Option;
+import jakarta.annotation.Resource;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections.MapUtils;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.context.expression.MapAccessor;
 import org.springframework.expression.Expression;
 import org.springframework.expression.ExpressionParser;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
 import org.springframework.expression.spel.support.StandardEvaluationContext;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import jakarta.annotation.Resource;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -181,8 +181,12 @@ public class EntityServiceImpl implements EntityService {
             }
             if (existNodesMap.containsKey(primaryKeyValue)) {
                 var exist = existNodesMap.get(primaryKeyValue);
-                exist.setDisplayName(StringUtils.isEmpty(titleKeyColumnName) ? r.get(primaryKeyColumnName).toString() : r.get(titleKeyColumnName).toString());
-                nodes.add(exist);
+                var oldDisplayName = exist.getDisplayName();
+                var newDisplayName = StringUtils.isEmpty(titleKeyColumnName) ? r.get(primaryKeyColumnName).toString() : r.get(titleKeyColumnName).toString();
+                if (!StringUtils.equals(oldDisplayName, newDisplayName)) {
+                    exist.setDisplayName(newDisplayName);
+                    nodes.add(exist);
+                }
             } else {
                 nodes.add(EntityNode.builder()
                         .ontologyUniqIdentifier(ontologyUniqueIdentifier)

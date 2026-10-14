@@ -111,6 +111,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
             PreconditionUtils.checkNotNull(schema, "当前本体未定义元数据schema，不能设置元数据", HttpStatus.BAD_REQUEST);
             validateMetadataAgainstSchema(metadata, schema, "");
         }
+        var titleKeyChanged = isTitleKeyChanged(originalProperty, param);
         //update property
         updateById(originalProperty.setDatasourceColumnName(param.getDatasource() != null ? param.getDatasource().getDatasourceColumnName() : null)
                 .setDatasourceId(param.getDatasource() != null ? param.getDatasource().getDatasourceId() : null)
@@ -124,7 +125,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                 .setPropertyCategoryId(param.getCategoryId())
                 .setMetadata(param.getMetadata()));
         //update arangodb node
-        buildEntityNodes(originalProperty.getOntologyUniqueIdentifier());
+        buildEntityNodes(originalProperty.getOntologyUniqueIdentifier(), titleKeyChanged);
     }
 
     @Override
@@ -153,6 +154,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         var categoryIds = propertyCategoryService.list(new LambdaQueryWrapper<PropertyCategory>()
                         .eq(PropertyCategory::getOntologyUniqueIdentifier, ontologyId))
                 .stream().map(PropertyCategory::getId).collect(Collectors.toSet());
+        var titleKeyChanged = false;
 
         for (OntologyPropertyUpdateParam p : params) {
             //check storage group
@@ -188,6 +190,9 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                 validateMetadataAgainstSchema(metadata, schema, "");
             }
             var prop = updatePropMap.get(p.getUniqueIdentifier());
+            if (isTitleKeyChanged(prop, p)) {
+                titleKeyChanged = true;
+            }
             prop.setPropertyType(p.getDataType())
                     .setDefaultValue(p.getDefaultValue())
                     .setIsTitleKey(p.getIsTitleKey() ? 1 : 0)
@@ -203,7 +208,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         //batch update
         updateBatchById(updateProperties);
         //update arangodb node
-        buildEntityNodes(ontologyId);
+        buildEntityNodes(ontologyId, titleKeyChanged);
     }
 
     @Override
@@ -279,7 +284,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         //更新数据
         saveBatch(propertyList);
         //更新节点
-        buildEntityNodes(ontologyId);
+        buildEntityNodes(ontologyId, hasTitleKey);
     }
 
     @Override
@@ -335,7 +340,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         //create property
         save(DataConverter.convert(param));
         //create arangodb node by primary key
-        buildEntityNodes(param.getOntologyIdentifier());
+        buildEntityNodes(param.getOntologyIdentifier(), param.getIsTitleKey());
     }
 
 
@@ -1091,30 +1096,48 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
     }
 
 
-    private void buildEntityNodes(String ontologyIdentifier) {
+    private boolean isTitleKeyChanged(OntologyProperty original, OntologyPropertyUpdateParam param) {
+        boolean wasTitleKey = original.getIsTitleKey() != null && original.getIsTitleKey() == 1;
+        boolean nowTitleKey = param.getIsTitleKey();
+        if (wasTitleKey != nowTitleKey) {
+            return true;
+        }
+        if (!nowTitleKey) {
+            return false;
+        }
+        var datasource = param.getDatasource();
+        var newDatasourceId = datasource != null ? datasource.getDatasourceId() : null;
+        var newColumnName = datasource != null ? datasource.getDatasourceColumnName() : null;
+        return !StringUtils.equals(original.getDatasourceId(), newDatasourceId)
+                        || !StringUtils.equals(original.getDatasourceColumnName(), newColumnName);
+    }
+
+    private void buildEntityNodes(String ontologyIdentifier, boolean titleKeyChanged) {
         var primaryProperty = getOne(new LambdaQueryWrapper<OntologyProperty>()
                 .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyIdentifier)
                 .eq(OntologyProperty::getIsPrimaryKey, 1));
 
-        var tiltleProperty = getOne(new LambdaQueryWrapper<OntologyProperty>()
+        var titleProperty = getOne(new LambdaQueryWrapper<OntologyProperty>()
                 .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyIdentifier)
                 .eq(OntologyProperty::getIsTitleKey, 1));
 
         var titleColumn = "";
-        if (tiltleProperty != null
+        if (titleProperty != null
                 && primaryProperty != null
-                && StringUtils.equals(tiltleProperty.getDatasourceId(), primaryProperty.getDatasourceId())) {
-            titleColumn = tiltleProperty.getDatasourceColumnName();
+                && StringUtils.equals(titleProperty.getDatasourceSchema(), primaryProperty.getDatasourceSchema())
+                && StringUtils.equals(titleProperty.getDatasourceId(), primaryProperty.getDatasourceId())) {
+            titleColumn = titleProperty.getDatasourceColumnName();
         }
 
         var anyNode = entityService.findOneByOntologyUniqIdentifier(ontologyIdentifier);
-
+        //主键未创建，不需要生成实体节点
         if (primaryProperty == null && anyNode == null) {
             return;
         }
-        //新增主键数据源
+        //新增主键数据源，且不存在实体节点
         else if (primaryProperty != null && anyNode == null) {
-            if (StringUtils.isNotEmpty(primaryProperty.getDatasourceId())) {
+            if (StringUtils.isNotEmpty(primaryProperty.getDatasourceId())
+                    && StringUtils.isNotEmpty(primaryProperty.getDatasourceSchema())) {
                 entityService.syncNodes(ontologyIdentifier, primaryProperty.getDatasourceSchema(), primaryProperty.getDatasourceId(), primaryProperty.getDatasourceColumnName(), titleColumn);
                 createRelationsByLink(ontologyIdentifier);
             }
@@ -1130,8 +1153,8 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                     entityService.syncNodes(ontologyIdentifier, primaryProperty.getDatasourceSchema(), primaryProperty.getDatasourceId(), primaryProperty.getDatasourceColumnName(), titleColumn);
                     createRelationsByLink(ontologyIdentifier);
                 }
-                //更新titleKey
-                else {
+                //仅名称键变更时同步 displayName，避免普通属性更新触发全量 query
+                else if (titleKeyChanged) {
                     entityService.syncNodes(ontologyIdentifier, primaryProperty.getDatasourceSchema(), primaryProperty.getDatasourceId(), primaryProperty.getDatasourceColumnName(), titleColumn);
                 }
             }
