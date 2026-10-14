@@ -27,6 +27,9 @@ public class CompositePlanBO {
     @Schema(description = "节点定义：LiteFlow 节点 id -> 节点定义")
     private Map<String, CompositeNodePlanBO> nodes = new LinkedHashMap<>();
 
+    @Schema(description = "循环逐轮重放登记项，按外层到内层顺序")
+    private List<CompositeLoopRoundBO> loopRounds = new ArrayList<>();
+
     @Schema(description = "编排入参名列表")
     private List<String> inputParameterNames = new ArrayList<>();
 
@@ -39,6 +42,10 @@ public class CompositePlanBO {
 
     public Map<String, CompositeNodePlanBO> getNodes() {
         return nodes == null ? nodes = new LinkedHashMap<>() : nodes;
+    }
+
+    public List<CompositeLoopRoundBO> getLoopRounds() {
+        return loopRounds == null ? loopRounds = new ArrayList<>() : loopRounds;
     }
 
     public List<String> getInputParameterNames() {

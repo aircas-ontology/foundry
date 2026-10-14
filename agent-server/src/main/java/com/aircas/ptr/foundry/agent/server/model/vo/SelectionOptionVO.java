@@ -15,7 +15,7 @@ import java.util.Map;
  * 前端点击后按约定句 {@code "已选择：<label>（id=<id>）"} 回喂到下一轮 user message，
  * 由模型读取并输出对应的 {@code stage} JSON 块。</p>
  *
- * <p>{@link #id} 使用字符串而非整型：兼容 UUID（本体 uniqueIdentifier）、数字主键（datasourceId/spaceId）
+ * <p>{@link #id} 使用字符串而非整型：兼容 UUID（对象 uniqueIdentifier）、数字主键（datasourceId/spaceId）
  * 与列名（properties 场景）等多种主键形态，避免为不同场景设计不同字段。</p>
  *
  * <p>{@link #payload} 用于向导式结构化卡片（属性/关系表格等）：前端直接消费工具返回的原始字段渲染表格列，

@@ -27,7 +27,8 @@ import java.util.regex.Pattern;
  * <p>可依赖的稳定信号有二：
  * <ol>
  *   <li><b>步骤横幅</b>：提示词工作原则#4 要求每步开头输出 {@code 【第N步/共11步】}，模型对此遵从度极高。
- *       第0步→space_select、第2步→datasource_select。</li>
+ *       第0步→space_select、第2步→datasource_select。本类扫描回复中<b>全部</b>横幅编号（而非只看第一个），
+ *       以覆盖"确认上一步 + 提及下一步"同轮出现多个横幅的场景；并对数据源额外做"数据源/导入资料"意图关键词兜底。</li>
  *   <li><b>已持久化的 proposed 状态块</b>：第4/5步模型会稳定输出 {@code properties_proposed} /
  *       {@code relations_proposed} 的 JSON（纯文本产出），本类据此推 properties_select / relations_select。</li>
  * </ol>
@@ -63,14 +64,19 @@ public class SelectionResolver {
     /**
      * 一轮对话结束后，依据状态机决定是否推卡（确定性，不依赖模型显式触发）。
      *
-     * @param sessionId 会话 id
-     * @param replyText 本轮模型完整回复文本（用于解析步骤横幅 / proposed / 兼容标记）
-     * @param sink      本次请求的事件 sink
+     * @param sessionId   会话 id
+     * @param replyText   本轮模型完整回复文本（用于解析步骤横幅 / proposed / 兼容标记）
+     * @param datasourceId 当前请求携带的数据源 id（前端已选数据源），可为 null
+     * @param spaceId     当前请求携带的空间 id（前端已选空间），可为 null
+     * @param sink        本次请求的事件 sink
      */
-    public void resolveForRound(String sessionId, String replyText, Sinks.Many<AgentChatStreamVO> sink) {
+    public void resolveForRound(String sessionId, String replyText, Integer datasourceId, Integer spaceId, Sinks.Many<AgentChatStreamVO> sink) {
+        // 先从横幅推断已完成的阶段并落盘（后端兜底，不依赖模型输出 stage JSON）
+        inferAndRecordCompletedStages(sessionId, replyText);
+
         // 候选场景（有序去重）：状态机推断优先，其次模型主动标记
         Set<String> candidates = new LinkedHashSet<>();
-        String inferred = inferScenario(sessionId, replyText);
+        String inferred = inferScenario(sessionId, replyText, datasourceId, spaceId);
         if (inferred != null) {
             candidates.add(inferred);
         }
@@ -80,8 +86,8 @@ public class SelectionResolver {
             if (!SelectionCardFactory.supports(scenario)) {
                 continue;
             }
-            if (isSatisfied(sessionId, scenario)) {
-                log.debug("[SelectionResolver] {} 已满足（selected 已存在），跳过推卡", scenario);
+            if (isSatisfiedWithParams(sessionId, scenario, datasourceId, spaceId)) {
+                log.debug("[SelectionResolver] {} 已满足（selected 已存在或前端已传），跳过推卡", scenario);
                 continue;
             }
             resolveAndEmit(sessionId, scenario, sink);
@@ -95,13 +101,15 @@ public class SelectionResolver {
      * <ul>
      *   <li>本轮回复含 properties_proposed 且未选属性 → properties_select</li>
      *   <li>本轮回复含 relations_proposed 且未选关系 → relations_select</li>
-     *   <li>横幅第0步且未选空间 → space_select</li>
-     *   <li>横幅第2步且未选数据源 → datasource_select</li>
+     *   <li>回复横幅含第0步（扫描全部横幅）且未选空间 → space_select</li>
+     *   <li>回复横幅含第2步，或提及"数据源/导入资料"意图（兜底），且空间已选、未选数据源 → datasource_select</li>
      * </ul>
      *
+     * @param datasourceId 当前请求携带的数据源 id（前端已选数据源），可为 null
+     * @param spaceId     当前请求携带的空间 id（前端已选空间），可为 null
      * @return 推断出的 scenario；无可推断时返回 {@code null}
      */
-    private String inferScenario(String sessionId, String replyText) {
+    private String inferScenario(String sessionId, String replyText, Integer datasourceId, Integer spaceId) {
         if (replyText == null || replyText.isBlank()) {
             return null;
         }
@@ -112,39 +120,90 @@ public class SelectionResolver {
         if (RELATIONS_PROPOSED.matcher(replyText).find() && sessionStateStore.getStage(sessionId, "relations_selected") == null) {
             return SCENE_RELATIONS;
         }
-        // 第0/2步：靠步骤横幅定位（模型对横幅遵从度高）
-        Integer step = parseStep(replyText);
-        if (step != null) {
-            if (step == 0 && sessionStateStore.getStage(sessionId, "space_selected") == null) {
-                return SCENE_SPACE;
-            }
-            if (step == 2 && sessionStateStore.getStage(sessionId, "datasource_selected") == null) {
-                return SCENE_DATASOURCE;
+        // 第0/2步：靠步骤横幅定位（扫描回复中全部横幅,模型对横幅遵从度高）
+        Set<Integer> steps = parseAllSteps(replyText);
+        if (steps.contains(0) && sessionStateStore.getStage(sessionId, "space_selected") == null && spaceId == null) {
+            return SCENE_SPACE;
+        }
+        // 数据源：横幅含第2步，或回复提及"数据源/导入资料"意图（兜底模型未输出标准横幅的情况）；
+        // 均需 space 已选定（状态块或前端入参）、datasource 尚未选中（状态块和前端入参皆无），避免误推
+        // 额外检查：若已进入属性/关系阶段（properties_proposed/relations_proposed 存在），则不再回退推数据源
+        boolean spaceSelected = sessionStateStore.getStage(sessionId, "space_selected") != null || spaceId != null;
+        boolean datasourceSelected = sessionStateStore.getStage(sessionId, "datasource_selected") != null || datasourceId != null;
+        boolean inPropertiesOrLater = sessionStateStore.getStage(sessionId, "properties_proposed") != null
+                || sessionStateStore.getStage(sessionId, "relations_proposed") != null;
+        if (spaceSelected && !datasourceSelected && !inPropertiesOrLater
+                && (steps.contains(2) || replyText.contains("数据源") || replyText.contains("导入资料"))) {
+            return SCENE_DATASOURCE;
+        }
+        return null;
+    }
+
+    /**
+     * 从回复横幅推断已完成的阶段并记录到状态存储（后端兜底，不依赖模型输出 stage JSON）。
+     *
+     * <p>模型可能忘记输出 {@code space_selected} / {@code object_defined} 等 JSON，
+     * 但步骤横幅是稳定信号：出现第 1 步横幅 ⇒ 第 0 步（选空间）已完成；
+     * 出现第 2 步横幅 ⇒ 第 1 步（定义对象）已完成。本方法据此补录状态，
+     * 使下一轮模型注入的 system 消息中包含已完成阶段，避免重复确认。</p>
+     */
+    private void inferAndRecordCompletedStages(String sessionId, String replyText) {
+        if (replyText == null || replyText.isBlank()) {
+            return;
+        }
+        Set<Integer> steps = parseAllSteps(replyText);
+        // 第1步+横幅出现 ⇒ 空间已选（但状态存储尚无记录）
+        if (steps.stream().anyMatch(s -> s >= 1)
+                && sessionStateStore.getStage(sessionId, "space_selected") == null) {
+            String json = extractStageJson(replyText, "space_selected");
+            sessionStateStore.record(sessionId, "space_selected",
+                    json != null ? json : "{\"stage\":\"space_selected\"}");
+            log.info("[SelectionResolver] 横幅推断 space_selected 已补录 sessionId={}", sessionId);
+        }
+        // 第2步+横幅出现 ⇒ 对象已定义
+        if (steps.stream().anyMatch(s -> s >= 2)
+                && sessionStateStore.getStage(sessionId, "object_defined") == null) {
+            String json = extractStageJson(replyText, "object_defined");
+            sessionStateStore.record(sessionId, "object_defined",
+                    json != null ? json : "{\"stage\":\"object_defined\"}");
+            log.info("[SelectionResolver] 横幅推断 object_defined 已补录 sessionId={}", sessionId);
+        }
+    }
+
+    /** 尝试从回复文本中提取指定 stage 的 JSON 块；找不到则返回 null。 */
+    private String extractStageJson(String replyText, String stageName) {
+        for (String json : SessionStageCollector.extractJsonObjects(replyText)) {
+            if (json.contains("\"stage\"") && json.contains("\"" + stageName + "\"")) {
+                return json;
             }
         }
         return null;
     }
 
-    /** 解析回复中出现的第一个步骤横幅编号；无横幅返回 {@code null}。 */
-    private Integer parseStep(String replyText) {
+    /** 收集回复中出现的所有步骤横幅编号（【第N步/共11步】）；无横幅时返回空集合。 */
+    private Set<Integer> parseAllSteps(String replyText) {
+        Set<Integer> steps = new LinkedHashSet<>();
         Matcher m = STEP_BANNER.matcher(replyText);
-        if (m.find()) {
+        while (m.find()) {
             try {
-                return Integer.parseInt(m.group(1));
+                steps.add(Integer.parseInt(m.group(1)));
             } catch (NumberFormatException ignored) {
-                return null;
+                // 单个横幅编号解析失败则跳过，不影响其余横幅
             }
         }
-        return null;
+        return steps;
     }
 
-    /** 该场景是否已完成（对应 selected 状态块已存在），已完成则不再重复推卡。 */
-    private boolean isSatisfied(String sessionId, String scenario) {
+    /**
+     * 该场景是否已完成（支持从 session 状态或前端入参判断）。
+     * 与仅检查 session 状态不同，本方法额外检查前端入参，覆盖用户已选但模型尚未输出 JSON 确认块的场景。
+     */
+    private boolean isSatisfiedWithParams(String sessionId, String scenario, Integer datasourceId, Integer spaceId) {
         switch (scenario) {
             case SCENE_SPACE:
-                return sessionStateStore.getStage(sessionId, "space_selected") != null;
+                return sessionStateStore.getStage(sessionId, "space_selected") != null || spaceId != null;
             case SCENE_DATASOURCE:
-                return sessionStateStore.getStage(sessionId, "datasource_selected") != null;
+                return sessionStateStore.getStage(sessionId, "datasource_selected") != null || datasourceId != null;
             case SCENE_PROPERTIES:
                 return sessionStateStore.getStage(sessionId, "properties_selected") != null;
             case SCENE_RELATIONS:

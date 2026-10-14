@@ -16,6 +16,7 @@ import com.aircas.ptr.foundry.ontology.service.AgentOntologyBuildService;
 import com.aircas.ptr.foundry.ontology.service.OntologyLinkGroupService;
 import com.aircas.ptr.foundry.ontology.service.OntologyMetaService;
 import com.aircas.ptr.foundry.ontology.service.OntologyPropertyService;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
@@ -158,9 +159,20 @@ public class AgentOntologyBuildServiceImpl implements AgentOntologyBuildService 
     }
 
     /**
-     * 懒创建本空间的默认关系分类，返回其 id。与画布 {@code createDefaultLinkCategory} 同构。
+     * 获取或创建本空间的默认关系分类，返回其 id。与画布 {@code createDefaultLinkCategory} 同构。
+     * 先查是否已存在同名根分类（parentId=0），存在则直接返回，避免唯一约束冲突。
      */
     private Integer createDefaultLinkCategory(Integer spaceId) {
+        // 先查是否已存在
+        var existing = ontologyLinkCategoryMapper.selectList(
+                new LambdaQueryWrapper<OntologyLinkCategory>()
+                        .eq(OntologyLinkCategory::getOntologySpaceId, spaceId)
+                        .eq(OntologyLinkCategory::getParentId, 0)
+                        .eq(OntologyLinkCategory::getName, DEFAULT_LINK_CATEGORY_NAME));
+        if (!existing.isEmpty()) {
+            return existing.get(0).getId();
+        }
+        // 不存在才创建
         var category = OntologyLinkCategory.builder()
                 .ontologySpaceId(spaceId)
                 .name(DEFAULT_LINK_CATEGORY_NAME)

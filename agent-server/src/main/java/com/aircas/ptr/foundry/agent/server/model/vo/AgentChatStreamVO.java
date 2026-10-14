@@ -55,7 +55,7 @@ public class AgentChatStreamVO {
             example = "space_select")
     private String scenario;
 
-    @Schema(description = "卡片标题（selection_request 事件使用）", example = "请选择目标本体空间")
+    @Schema(description = "卡片标题（selection_request 事件使用）", example = "请选择目标对象空间")
     private String title;
 
     @Schema(description = "是否允许多选（selection_request 事件使用），不传默认 false")

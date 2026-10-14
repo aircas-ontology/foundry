@@ -59,9 +59,15 @@ public class AgentChatController {
     }
 
     @PostMapping("/clear_context")
-    @Operation(summary = "清空会话上下文：清除多轮记忆与本体构建状态（用于“新对话/清空”）")
+    @Operation(summary = "清空会话上下文：清除多轮记忆与对象构建状态（用于“新对话/清空”）")
     public RestResult<Boolean> clearContext(@RequestParam String sessionId) {
         conversationResetService.reset(sessionId);
         return RestResult.ofData(Boolean.TRUE);
+    }
+
+    @PostMapping("/abort")
+    @Operation(summary = "中断对话：取消当前正在进行的流式回复（前端“停止”按钮）")
+    public RestResult<Boolean> abort(@RequestParam String sessionId) {
+        return RestResult.ofData(agentChatService.abort(sessionId));
     }
 }

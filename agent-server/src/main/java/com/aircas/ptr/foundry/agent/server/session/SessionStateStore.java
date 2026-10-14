@@ -15,9 +15,9 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 会话级本体构建状态存储。
+ * 会话级对象构建状态存储。
  *
- * <p>解决的问题：本体构建是多轮流程（第3步对象定义 → 第4步属性选择 → 第5步关系选择 → 第11步落库），
+ * <p>解决的问题：对象构建是多轮流程（第3步对象定义 → 第4步属性选择 → 第5步关系选择 → 第11步落库），
  * 各阶段以带 {@code stage} 字段的 JSON 块承载状态。原先这些状态只存在于 {@code ChatMemory} 的滑动窗口
  * （maxMessages=20）中，长对话会把早先的 {@code properties_selected} / {@code relations_selected} 挤出窗口，
  * 导致落库阶段回读不到用户的选择。</p>
