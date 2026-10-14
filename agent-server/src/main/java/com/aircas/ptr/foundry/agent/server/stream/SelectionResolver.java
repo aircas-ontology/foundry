@@ -27,8 +27,8 @@ import java.util.regex.Pattern;
  * <p>可依赖的稳定信号有二：
  * <ol>
  *   <li><b>步骤横幅</b>：提示词工作原则#4 要求每步开头输出 {@code 【第N步/共11步】}，模型对此遵从度极高。
- *       第0步→space_select、第2步→datasource_select。本类扫描回复中<b>全部</b>横幅编号（而非只看第一个），
- *       以覆盖"确认上一步 + 提及下一步"同轮出现多个横幅的场景；并对数据源额外做"数据源/导入资料"意图关键词兜底。</li>
+ *       第0步→space_select、第2步或第3步→datasource_select。本类扫描回复中<b>全部</b>横幅编号（而非只看第一个），
+ *       以覆盖"确认上一步 + 提及下一步"同轮出现多个横幅的场景。</li>
  *   <li><b>已持久化的 proposed 状态块</b>：第4/5步模型会稳定输出 {@code properties_proposed} /
  *       {@code relations_proposed} 的 JSON（纯文本产出），本类据此推 properties_select / relations_select。</li>
  * </ol>
@@ -72,7 +72,7 @@ public class SelectionResolver {
      */
     public void resolveForRound(String sessionId, String replyText, Integer datasourceId, Integer spaceId, Sinks.Many<AgentChatStreamVO> sink) {
         // 先从横幅推断已完成的阶段并落盘（后端兜底，不依赖模型输出 stage JSON）
-        inferAndRecordCompletedStages(sessionId, replyText);
+        inferAndRecordCompletedStages(sessionId, replyText, spaceId, datasourceId);
 
         // 候选场景（有序去重）：状态机推断优先，其次模型主动标记
         Set<String> candidates = new LinkedHashSet<>();
@@ -102,7 +102,7 @@ public class SelectionResolver {
      *   <li>本轮回复含 properties_proposed 且未选属性 → properties_select</li>
      *   <li>本轮回复含 relations_proposed 且未选关系 → relations_select</li>
      *   <li>回复横幅含第0步（扫描全部横幅）且未选空间 → space_select</li>
-     *   <li>回复横幅含第2步，或提及"数据源/导入资料"意图（兜底），且空间已选、未选数据源 → datasource_select</li>
+     *   <li>回复横幅含第2步或第3步，且空间已选、未选数据源 → datasource_select</li>
      * </ul>
      *
      * @param datasourceId 当前请求携带的数据源 id（前端已选数据源），可为 null
@@ -125,15 +125,16 @@ public class SelectionResolver {
         if (steps.contains(0) && sessionStateStore.getStage(sessionId, "space_selected") == null && spaceId == null) {
             return SCENE_SPACE;
         }
-        // 数据源：横幅含第2步，或回复提及"数据源/导入资料"意图（兜底模型未输出标准横幅的情况）；
+        // 数据源：横幅含第2步（数据源选择步）或第3步（扫表步，兜底模型跳过了第2步横幅的情况）；
         // 均需 space 已选定（状态块或前端入参）、datasource 尚未选中（状态块和前端入参皆无），避免误推
         // 额外检查：若已进入属性/关系阶段（properties_proposed/relations_proposed 存在），则不再回退推数据源
+        // 注意：不再使用 replyText.contains("数据源") 等关键词兜底——模型在任意步骤提及"数据源"都会误触发推卡
         boolean spaceSelected = sessionStateStore.getStage(sessionId, "space_selected") != null || spaceId != null;
         boolean datasourceSelected = sessionStateStore.getStage(sessionId, "datasource_selected") != null || datasourceId != null;
         boolean inPropertiesOrLater = sessionStateStore.getStage(sessionId, "properties_proposed") != null
                 || sessionStateStore.getStage(sessionId, "relations_proposed") != null;
         if (spaceSelected && !datasourceSelected && !inPropertiesOrLater
-                && (steps.contains(2) || replyText.contains("数据源") || replyText.contains("导入资料"))) {
+                && (steps.contains(2) || steps.contains(3))) {
             return SCENE_DATASOURCE;
         }
         return null;
@@ -146,8 +147,11 @@ public class SelectionResolver {
      * 但步骤横幅是稳定信号：出现第 1 步横幅 ⇒ 第 0 步（选空间）已完成；
      * 出现第 2 步横幅 ⇒ 第 1 步（定义对象）已完成。本方法据此补录状态，
      * 使下一轮模型注入的 system 消息中包含已完成阶段，避免重复确认。</p>
+     *
+     * <p>补录时尽量用前端入参的 spaceId/datasourceId 填充，避免产生不含具体 id 的占位符 JSON
+     * （如 {@code {"stage":"space_selected"}}），否则下一轮模型看到不完整状态会反复纠结。</p>
      */
-    private void inferAndRecordCompletedStages(String sessionId, String replyText) {
+    private void inferAndRecordCompletedStages(String sessionId, String replyText, Integer spaceId, Integer datasourceId) {
         if (replyText == null || replyText.isBlank()) {
             return;
         }
@@ -156,9 +160,13 @@ public class SelectionResolver {
         if (steps.stream().anyMatch(s -> s >= 1)
                 && sessionStateStore.getStage(sessionId, "space_selected") == null) {
             String json = extractStageJson(replyText, "space_selected");
+            if (json == null && spaceId != null) {
+                // 模型没输出 space_selected JSON，但前端传了 spaceId，用前端信息补全
+                json = "{\"stage\":\"space_selected\",\"spaceId\":" + spaceId + "}";
+            }
             sessionStateStore.record(sessionId, "space_selected",
                     json != null ? json : "{\"stage\":\"space_selected\"}");
-            log.info("[SelectionResolver] 横幅推断 space_selected 已补录 sessionId={}", sessionId);
+            log.info("[SelectionResolver] 横幅推断 space_selected 已补录 sessionId={}, spaceId={}", sessionId, spaceId);
         }
         // 第2步+横幅出现 ⇒ 对象已定义
         if (steps.stream().anyMatch(s -> s >= 2)
