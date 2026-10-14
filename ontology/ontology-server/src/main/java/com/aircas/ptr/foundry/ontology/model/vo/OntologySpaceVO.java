@@ -36,6 +36,12 @@ public class OntologySpaceVO {
     @Schema(name = "spaceId", description = "空间id", example = "1")
     private Integer spaceId;
 
+    @Schema(name = "type", description = "类型：0=空间，1=主题", example = "0")
+    private Integer type;
+
+    @Schema(name = "username", description = "创建用户名", example = "admin")
+    private String username;
+
     /**
      * 本体数量统计
      */

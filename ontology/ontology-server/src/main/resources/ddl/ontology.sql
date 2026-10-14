@@ -801,7 +801,9 @@ create table if not exists ontology_space
     api_name     varchar(255)                            not null,
     create_time  timestamp(6)  default CURRENT_TIMESTAMP not null,
     update_time  timestamp(6)  default CURRENT_TIMESTAMP not null,
-    description  varchar(255)
+    description  varchar(255),
+    username     varchar(255) default NULL::character varying,
+    type         integer      default 0                  not null
     );
 
 comment on table ontology_space is '本体空间';
@@ -819,6 +821,10 @@ comment on column ontology_space.create_time is '创建时间';
 comment on column ontology_space.update_time is '更新时间';
 
 comment on column ontology_space.description is '空间描述';
+
+comment on column ontology_space.username is '创建该空间/主题的用户名';
+
+comment on column ontology_space.type is '类型：0=空间，1=主题';
 
 create unique index if not exists ontology_space_uk_apiname
     on ontology_space (api_name);

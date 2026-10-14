@@ -7,6 +7,7 @@ import com.aircas.ptr.foundry.ontology.model.dto.OntologySpaceCreateDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.OntologySpaceDTO;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyExportTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyLinkTypeEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.SpaceTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyLinkCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyMetaCreateParam;
@@ -47,6 +48,8 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Lists;
+import lombok.AllArgsConstructor;
+import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -65,8 +68,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import com.aircas.ptr.foundry.common.exception.BusinessException;
+import com.aircas.ptr.foundry.ontology.model.dto.EntityNodeExportDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.OntologyInstancesExportDTO;
+import com.aircas.ptr.foundry.ontology.model.enums.QueryOpEnum;
 import com.aircas.ptr.foundry.ontology.model.param.OntologySubspaceCreateParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
 import com.aircas.ptr.foundry.ontology.model.po.SubspacePropertyFilter;
@@ -77,6 +83,7 @@ import com.aircas.ptr.foundry.ontology.service.EntityService;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Date;
 import java.util.Objects;
 import java.util.Set;
 
@@ -134,17 +141,27 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
     @Transactional(transactionManager = "chainedTransactionManager")
     @Override
     public Integer createSpace(OntologySpaceCreateParam param) {
+        return doCreateSpace(param, SpaceTypeEnum.SPACE.getValue());
+    }
+
+    /**
+     * 创建空间/子空间公共流程：根据 type 写入类型（0=空间，1=主题/子空间），并记录创建用户名。
+     */
+    private Integer doCreateSpace(OntologySpaceCreateParam param, Integer type) {
         //check param
         var space = spaceMapper.selectOne(new LambdaQueryWrapper<OntologySpace>()
                 .eq(OntologySpace::getDisplayName, param.getDisplayName())
                 .or().eq(OntologySpace::getApiName, param.getApiName()));
         PreconditionUtils.checkArgument(space == null, "空间显示名称或api名称已存在", HttpStatus.BAD_REQUEST);
         //create space
+        var userContext = UserContextHolder.get();
         var ontologySpace = OntologySpace.builder()
                 .description(param.getDescription())
                 .icon(param.getIconUrl())
                 .displayName(param.getDisplayName())
                 .apiName(param.getApiName())
+                .username(userContext == null ? null : userContext.getUsername())
+                .type(type)
                 .build();
         spaceMapper.insert(ontologySpace);
         //create new schema &  table_filed_mapping table
@@ -335,12 +352,22 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
     }
 
     @Override
-    public List<OntologySpaceVO> querySpace() {
-        // 当前用户配置了绑定空间时，仅返回该空间，未配置则返回全部空间
+    public List<OntologySpaceVO> querySpace(Integer type) {
         var userContext = UserContextHolder.get();
-        var bindSpaceId = userContext == null ? null : userContext.getSpaceId();
-        var spaces = bindSpaceId == null ? list()
-                : list(new LambdaQueryWrapper<OntologySpace>().eq(OntologySpace::getId, bindSpaceId));
+        List<OntologySpace> spaces;
+        if (SpaceTypeEnum.TOPIC.getValue().equals(SpaceTypeEnum.normalize(type))) {
+            // 主题：按创建用户名过滤
+            var username = userContext == null ? null : userContext.getUsername();
+            spaces = list(new LambdaQueryWrapper<OntologySpace>()
+                    .eq(OntologySpace::getType, SpaceTypeEnum.TOPIC.getValue())
+                    .eq(OntologySpace::getUsername, username));
+        } else {
+            // 空间：当前用户配置了绑定空间时仅返回该空间，未配置则返回全部空间
+            var bindSpaceId = userContext == null ? null : userContext.getSpaceId();
+            spaces = list(new LambdaQueryWrapper<OntologySpace>()
+                    .eq(OntologySpace::getType, SpaceTypeEnum.SPACE.getValue())
+                    .eq(bindSpaceId != null, OntologySpace::getId, bindSpaceId));
+        }
         if (CollectionUtils.isEmpty(spaces)) {
             return Lists.newArrayList();
         }
@@ -379,6 +406,8 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                             .iconUrl(space.getIcon())
                             .apiName(space.getApiName())
                             .spaceId(space.getId())
+                            .type(space.getType())
+                            .username(space.getUsername())
                             .displayName(space.getDisplayName())
                             .description(space.getDescription())
                             .ontologyCount(ontologyCnt)
@@ -616,13 +645,13 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
         var sourceMetaMap = sourceMetas.stream()
                 .collect(Collectors.toMap(OntologyMeta::getUniqueIdentifier, v -> v));
 
-        // 4. 创建子空间
-        var spaceId = createSpace(OntologySpaceCreateParam.builder()
+        // 4. 创建子空间（type=主题/子空间，同时记录创建用户名）
+        var spaceId = doCreateSpace(OntologySpaceCreateParam.builder()
                 .displayName(param.getDisplayName())
                 .apiName(param.getApiName())
                 .description(param.getDescription())
                 .iconUrl(param.getIconUrl())
-                .build());
+                .build(), SpaceTypeEnum.TOPIC.getValue());
 
         // 4.1 拷贝父空间的本体分类树与关系分类树（含多级）到子空间，并记录  映射
         Integer newOntologyCatRoot = getOntologyCategoryRoot(spaceId);
@@ -653,19 +682,24 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
 
             var newPropRoot = getPropertyCategoryRoot(newOntologyId);
             Map<Integer, Integer> propCatMap = copyPropertyCategoryTree(sourceMeta.getUniqueIdentifier(), newOntologyId);
+            // 收集配置了筛选条件的属性（按源属性 apiName 匹配导出实例中的属性键值），用于导入实例时过滤
+            var instanceFilters = new ArrayList<InstancePropertyFilter>();
             for (var propSelection : ontologySelection.getSelectedProperties()) {
                 var sourceProp = sourcePropMap.get(propSelection.getSourcePropertyUniqueIdentifier());
                 var targetPropCat = resolveCategory(propCatMap, sourceProp.getPropertyCategoryId(), newPropRoot);
                 var newPropId = createPropertyInSubspace(newOntologyId, sourceProp, targetPropCat);
                 savePropertyFilter(spaceId, newOntologyId, sourceProp.getUniqueIdentifier(), newPropId, propSelection.getFilter());
+                if (propSelection.getFilter() != null && propSelection.getFilter().getOp() != null) {
+                    instanceFilters.add(new InstancePropertyFilter(sourceProp.getApiName(), propSelection.getFilter()));
+                }
             }
 
             // 自动绑定数据源并创建实体表
             ontologyPropertyService.autoBindDatasource(newOntologyId);
 
-            // 导入实例（按显式勾选主键过滤；属性筛选条件已由 savePropertyFilter 作为元数据写入新表）
+            // 导入实例（先按显式勾选主键过滤，再按属性筛选条件过滤实例；筛选条件元数据仍由 savePropertyFilter 写入新表）
             importInstances(sourceMeta.getUniqueIdentifier(), newOntologyId,
-                    ontologySelection.getSelectedInstancePrimaryKeys());
+                    ontologySelection.getSelectedInstancePrimaryKeys(), instanceFilters);
 
             // 同步导入的实例到 ArangoDB 图（node 集合）：本步补齐“实例数据”。
             // 否则子空间 ArangoDB 里既无实例节点，下面第 6 步 createLink 调用
@@ -788,7 +822,8 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
     }
 
     private void importInstances(String sourceOntologyId, String newOntologyId,
-                                 List<Object> selectedPrimaryKeys) {
+                                 List<Object> selectedPrimaryKeys,
+                                 List<InstancePropertyFilter> propertyFilters) {
         var exported = entityService.exportInstances(sourceOntologyId);
         if (CollectionUtils.isEmpty(exported.getNodes())) {
             return;
@@ -807,6 +842,13 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                     .collect(Collectors.toList());
         }
 
+        // 按属性筛选条件过滤实例：实例所有已配置的条件均命中才保留（多条件间为 AND）
+        if (CollectionUtils.isNotEmpty(propertyFilters)) {
+            nodes = nodes.stream()
+                    .filter(n -> matchesFilters(n, propertyFilters))
+                    .collect(Collectors.toList());
+        }
+
         if (CollectionUtils.isEmpty(nodes)) {
             log.info("子空间实例导入：过滤后无匹配实例，sourceOntologyId={}", sourceOntologyId);
             return;
@@ -814,6 +856,196 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
 
         var instances = OntologyInstancesExportDTO.builder().nodes(nodes).build();
         entityService.importInstances(newOntologyId, instances);
+    }
+
+    private boolean matchesFilters(EntityNodeExportDTO node, List<InstancePropertyFilter> filters) {
+        var properties = node.getProperties();
+        for (var f : filters) {
+            var value = properties == null ? null : properties.get(f.getApiName());
+            if (!matchesFilter(value, f.getFilter())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * 判断单个实例属性值是否命中筛选条件。
+     *
+     * <p>一对多属性值为 List 时，任一元素命中即视为命中；值无法按筛选配置类型解析时视为不命中；
+     * APPLY 为函数型表达式，仅作为元数据保存，不参与实例过滤。</p>
+     */
+    private boolean matchesFilter(Object value, OntologySubspaceCreateParam.PropertyFilterConfig filter) {
+        QueryOpEnum op = filter.getOp();
+        if (op == QueryOpEnum.IS_NULL) {
+            return value == null;
+        }
+        if (op == QueryOpEnum.IS_NOT_NULL) {
+            return value != null;
+        }
+        if (value == null) {
+            return false;
+        }
+        if (op == QueryOpEnum.APPLY) {
+            log.warn("属性筛选条件 op=APPLY 暂不参与实例过滤，默认放行：value={}", filter.getValue());
+            return true;
+        }
+        if (value instanceof Collection) {
+            Collection<?> values = (Collection<?>) value;
+            if (CollectionUtils.isEmpty(values)) {
+                return false;
+            }
+            return values.stream().anyMatch(v -> evaluateOp(op, v, filter));
+        }
+        return evaluateOp(op, value, filter);
+    }
+
+    private boolean evaluateOp(QueryOpEnum op, Object value,
+                               OntologySubspaceCreateParam.PropertyFilterConfig filter) {
+        OntologyDataTypeEnum dataType = filter.getDataType();
+        Object raw = filter.getValue();
+        List<?> operands;
+        if (raw instanceof Collection) {
+            operands = new ArrayList<>((Collection<?>) raw);
+        } else if (raw instanceof Object[]) {
+            operands = Arrays.asList((Object[]) raw);
+        } else {
+            operands = raw == null ? new ArrayList<>() : List.of(raw);
+        }
+        switch (op) {
+            case EQ:
+                return compareValue(dataType, value, operands.get(0)) == 0;
+            case NE:
+                return compareValue(dataType, value, operands.get(0)) != 0;
+            case GT:
+                return compareValue(dataType, value, operands.get(0)) > 0;
+            case GE:
+                return compareValue(dataType, value, operands.get(0)) >= 0;
+            case LT:
+                return compareValue(dataType, value, operands.get(0)) < 0;
+            case LE:
+                return compareValue(dataType, value, operands.get(0)) <= 0;
+            case BETWEEN: {
+                if (operands.size() < 2) {
+                    throw new BusinessException("BETWEEN 筛选条件需要 [下限, 上限] 两个值", HttpStatus.BAD_REQUEST);
+                }
+                int lower = compareValue(dataType, value, operands.get(0));
+                int upper = compareValue(dataType, value, operands.get(1));
+                return lower >= 0 && upper <= 0;
+            }
+            case NOT_BETWEEN: {
+                if (operands.size() < 2) {
+                    throw new BusinessException("NOT_BETWEEN 筛选条件需要 [下限, 上限] 两个值", HttpStatus.BAD_REQUEST);
+                }
+                int lower = compareValue(dataType, value, operands.get(0));
+                int upper = compareValue(dataType, value, operands.get(1));
+                return lower < 0 || upper > 0;
+            }
+            case IN:
+                return operands.stream().anyMatch(o -> compareValue(dataType, value, o) == 0);
+            case NOT_IN:
+                return operands.stream().noneMatch(o -> compareValue(dataType, value, o) == 0);
+            case LIKE:
+                return textOf(dataType, value).contains(textOf(dataType, operands.get(0)));
+            case LIKE_LEFT:
+                return textOf(dataType, value).startsWith(textOf(dataType, operands.get(0)));
+            case LIKE_RIGHT:
+                return textOf(dataType, value).endsWith(textOf(dataType, operands.get(0)));
+            default:
+                throw new BusinessException("不支持的筛选操作符：" + op, HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    /**
+     * 按筛选配置的数据类型将实例属性值与筛选值归一后比较。
+     */
+    private int compareValue(OntologyDataTypeEnum dataType, Object value, Object filterVal) {
+        if (dataType != null) {
+            switch (dataType) {
+                case Bool:
+                    return Boolean.compare(toBoolean(value), toBoolean(filterVal));
+                case Date:
+                case Timestamp:
+                    return Long.compare(toDate(value).getTime(), toDate(filterVal).getTime());
+                default:
+                    break;
+            }
+            if (isNumeric(dataType)) {
+                return toDecimal(value).compareTo(toDecimal(filterVal));
+            }
+        }
+        return String.valueOf(value).compareTo(String.valueOf(filterVal));
+    }
+
+    private String textOf(OntologyDataTypeEnum dataType, Object value) {
+        if (dataType != null && isNumeric(dataType)) {
+            return toDecimal(value).stripTrailingZeros().toPlainString();
+        }
+        return String.valueOf(value);
+    }
+
+    private boolean isNumeric(OntologyDataTypeEnum dataType) {
+        switch (dataType) {
+            case Byte:
+            case Short:
+            case Int:
+            case Long:
+            case Float:
+            case Double:
+            case Decimal:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private java.math.BigDecimal toDecimal(Object value) {
+        if (value instanceof java.math.BigDecimal) {
+            return (java.math.BigDecimal) value;
+        }
+        if (value instanceof Number) {
+            return java.math.BigDecimal.valueOf(((Number) value).doubleValue());
+        }
+        try {
+            return new java.math.BigDecimal(String.valueOf(value).trim());
+        } catch (NumberFormatException e) {
+            throw new BusinessException("实例属性值无法解析为数值：" + value, HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    private Boolean toBoolean(Object value) {
+        if (value instanceof Boolean) {
+            return (Boolean) value;
+        }
+        return Boolean.parseBoolean(String.valueOf(value).trim());
+    }
+
+    private Date toDate(Object value) {
+        if (value instanceof Date) {
+            return (Date) value;
+        }
+        String text = String.valueOf(value).trim();
+        // 兼容前端常见格式：2026-10-01 / 2026-10-01 08:00:00 / ISO8601（以 T 分隔）
+        try {
+            if (text.contains("T")) {
+                return new Date(java.time.OffsetDateTime.parse(text).toInstant().toEpochMilli());
+            }
+            return java.sql.Timestamp.valueOf(text.contains(" ") ? text : text + " 00:00:00");
+        } catch (Exception e) {
+            throw new BusinessException("实例属性值无法解析为日期：" + value, HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    /**
+     * 实例过滤条件：源属性 apiName（与导出实例 properties 的键一致）+ 筛选配置。
+     */
+    @Data
+    @AllArgsConstructor
+    private static class InstancePropertyFilter {
+
+        private final String apiName;
+
+        private final OntologySubspaceCreateParam.PropertyFilterConfig filter;
     }
 
     private String createLinkInSubspace(Integer spaceId, OntologyLinkGroup sourceLink,
