@@ -278,6 +278,16 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         String maxVersion = existVersions.stream().map(Function::getVersion).max(FunctionServiceImpl::compareVersion).orElse(null);
         PreconditionUtils.checkArgument(maxVersion == null || compareVersion(version, maxVersion) > 0,
                 "新版本号必须大于当前最大版本号 " + maxVersion, HttpStatus.BAD_REQUEST);
+        // 基于旧版本创建 vs 全新创建的 api 重复校验策略
+        Boolean basedOnOldVersion = param.getBasedOnOldVersion();
+        if (basedOnOldVersion == null || !basedOnOldVersion) {
+            // 全新创建：api 不能与任何已存在的函数重复（即使版本不同）
+            boolean apiExists = count(new LambdaQueryWrapper<Function>()
+                    .eq(Function::getApi, param.getFunctionApi())) > 0;
+            PreconditionUtils.checkArgument(!apiExists,
+                    "函数 api 已存在:" + param.getFunctionApi() + "，全新创建请使用不同的 api 名称", HttpStatus.BAD_REQUEST);
+        }
+        // 如果 basedOnOldVersion = true，则允许相同 api，只校验 api + version 不重复（已在上面校验）
         //函数插入，新增版本默认为未发布状态
         //language 仅 CUSTOMIZE 脚本算子有意义；基础查询/外部/容器算子存 NULL（EXTERNAL 执行链路待定，开发时再评估）
         FunctionLanguageEnum language = null;
@@ -502,8 +512,9 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 || function.getType() == FunctionTypeEnum.EXTERNAL) {
             return executeOperatorFunction(function, funParamMap, executeInputParams);
         }
-        //脚本函数：按参数定义组装单对象入参（handle(input)），按语言路由到对应 runner 引擎执行（主应用不本地执行用户代码）
-        String inputJson = buildInputJson(executeInputParams, funParamMap);
+        //脚本函数：按参数定义组装单对象入参（handle(input)），按语言路由到对应引擎执行
+        Map<String, Object> inputMap = buildInputMap(executeInputParams, funParamMap);
+        String inputJson = objectMapper.writeValueAsString(inputMap);
         FunctionLanguageEnum language = function.getLanguage() == null ? FunctionLanguageEnum.GROOVY : function.getLanguage();
         ScriptExecutionContext ctx = ScriptExecutionContext.builder()
                 .language(language)
@@ -511,6 +522,8 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 .version(function.getVersion())
                 .code(function.getCode())
                 .inputJson(inputJson)
+                .inputMap(inputMap)
+                .inputParams(executeInputParams)
                 .build();
         var resultJsonStr = scriptEngineRouter.route(language).execute(ctx);
         // 脚本返回字段由用户代码决定（可带 status 等自定义键），FunctionResultVO 已用 @JsonAnySetter 承接未知键
@@ -852,38 +865,42 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
 
     /**
      * 将参数定义（前端声明或 Groovy 解析）批量写入 function_param。
+     * 前端未传 paramOrder 时，按同 category 内列表顺序自动编号。
      */
     private void saveParams(Long functionId, List<FunctionParamDTO> functionParam) {
         if (CollectionUtils.isEmpty(functionParam)) {
             return;
         }
-        List<FunctionParamPO> params = functionParam.stream().map(p ->
-                FunctionParamPO.builder()
-                        .functionId(functionId)
-                        .paramName(p.getParamName())
-                        .paramType(p.getParamType())
-                        .category(p.getCategory())
-                        .paramSchema(p.getParamSchema())
-                        .paramOrder(p.getParamOrder())
-                        .typeReferenceName(p.getReferenceType())
-                        .description(p.getDescription())
-                        .createTime(new Date())
-                        .updateTime(new Date())
-                        .build()
-        ).collect(Collectors.toList());
+        // 按 category 独立计数器，前端未传 paramOrder 时自动填充
+        Map<FunctionParamCategoryEnum, Integer> orderCounters = new HashMap<>();
+        List<FunctionParamPO> params = functionParam.stream().map(p -> {
+            int order = p.getParamOrder() != null ? p.getParamOrder()
+                    : orderCounters.merge(p.getCategory(), 1, Integer::sum);
+            return FunctionParamPO.builder()
+                    .functionId(functionId)
+                    .paramName(p.getParamName())
+                    .paramType(p.getParamType())
+                    .category(p.getCategory())
+                    .paramSchema(p.getParamSchema())
+                    .paramOrder(order)
+                    .typeReferenceName(p.getReferenceType())
+                    .description(p.getDescription())
+                    .createTime(new Date())
+                    .updateTime(new Date())
+                    .build();
+        }).collect(Collectors.toList());
         functionParamService.saveBatch(params);
     }
 
     /**
-     * 按入参定义将执行参数值转为基本类型，组装为单对象入参 JSON（handle(input) 的 input）。
+     * 按入参定义把执行参数值组装成 `handle(input)` 的 input。
      * 基本类型走 SchemaHandleUtil 转换；OBJECT 直接透传原始值（统一单对象入参契约后支持复杂类型）。
      * typeReferenceName 为空时不做类型转换，直接透传（兼容非 JVM 语言前端声明参数未提供 Java 类名的场景）。
      * 未赋值（value 为 null）的参数不写入 input：各语言对“键存在但值为 null”的处理不一致
      * （Python input.get('name','world') 会拿到 None 而非默认值，只有 Groovy 的 input.name ?: 'world' 能兜底），
      * 省略缺值键可让脚本自己的默认值在各语言统一生效。
      */
-    @SneakyThrows
-    private String buildInputJson(List<FunctionParamPO> inputParams, Map<String, Object> funParamMap) {
+    static Map<String, Object> buildInputMap(List<FunctionParamPO> inputParams, Map<String, Object> funParamMap) {
         Map<String, Object> input = new LinkedHashMap<>();
         if (CollectionUtils.isNotEmpty(inputParams)) {
             for (FunctionParamPO p : inputParams) {
@@ -899,7 +916,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 }
             }
         }
-        return objectMapper.writeValueAsString(input);
+        return input;
     }
 
     /**

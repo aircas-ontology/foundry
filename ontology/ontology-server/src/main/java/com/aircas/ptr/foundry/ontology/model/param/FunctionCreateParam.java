@@ -89,4 +89,12 @@ public class FunctionCreateParam {
      */
     @Schema(name = "apiConfig", description = "外部API算子配置（仅 type=EXTERNAL 时必填）")
     private ExternalApiConfig apiConfig;
+
+    /**
+     * 是否基于旧版本创建函数。
+     * true: 基于旧版本创建，允许相同 api 但 api + version 不能重复；
+     * false/null: 全新创建，api 不能与任何已存在的函数重复。
+     */
+    @Schema(name = "basedOnOldVersion", description = "是否基于旧版本创建函数（true: 允许相同 api 但 api+version 不重复；false/null: 全新创建，api 不能重复）")
+    private Boolean basedOnOldVersion;
 }

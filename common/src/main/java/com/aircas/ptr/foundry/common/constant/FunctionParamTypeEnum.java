@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.common.constant;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -57,6 +58,37 @@ public enum FunctionParamTypeEnum {
         FUNC_PARAM_TYPE_MAP.put("java.lang.String", FunctionParamTypeEnum.STRING);
         FUNC_PARAM_TYPE_MAP.put("java.util.List", FunctionParamTypeEnum.LIST);
         FUNC_PARAM_TYPE_MAP.put("java.util.Date", FunctionParamTypeEnum.DATE);
+    }
+
+    /**
+     * Jackson 反序列化入口：兼容前端 TypeScript/Python 的通用类型别名。
+     * <ul>
+     *   <li>NUMBER → DOUBLE（TS/Python 的 number 为 IEEE 754 双精度浮点）</li>
+     *   <li>ARRAY → LIST</li>
+     *   <li>BOOLEAN → BOOL</li>
+     *   <li>INT → INTEGER</li>
+     * </ul>
+     */
+    @JsonCreator
+    public static FunctionParamTypeEnum fromJson(String value) {
+        if (value == null || value.isEmpty()) {
+            return null;
+        }
+        // 先尝试精确匹配枚举名
+        try {
+            return FunctionParamTypeEnum.valueOf(value.toUpperCase());
+        } catch (IllegalArgumentException ignored) {
+        }
+        // 别名映射
+        return switch (value.toUpperCase()) {
+            case "NUMBER" -> DOUBLE;
+            case "ARRAY" -> LIST;
+            case "BOOLEAN" -> BOOL;
+            case "INT" -> INTEGER;
+            case "STR" -> STRING;
+            case "DICT", "MAP" -> OBJECT;
+            default -> throw new IllegalArgumentException("未知的参数类型: " + value);
+        };
     }
 
     public static FunctionParamTypeEnum getByTypeName(String type) {
