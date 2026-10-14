@@ -4,7 +4,6 @@ import com.aircas.ptr.foundry.common.base.ResultCode;
 import com.aircas.ptr.foundry.common.constant.FunctionParamTypeEnum;
 import com.aircas.ptr.foundry.common.util.IdGenerator;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
-import com.aircas.ptr.foundry.common.util.SnowflakeIdUtil;
 import com.aircas.ptr.foundry.ontology.converter.DataConverter;
 import com.aircas.ptr.foundry.ontology.model.dto.OntologyCreateDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.OntologyMetaDataDTO;
@@ -30,6 +29,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import jakarta.annotation.Resource;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import lombok.val;
@@ -41,7 +41,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import jakarta.annotation.Resource;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -252,27 +251,26 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
             linkService.saveBatch(childLinks);
         }
         // 创建行为（不创建行为调度）
-        List<OntologyAction> actions = Lists.newArrayList();
         List<OntologyActionMappingIn> mappingIns = Lists.newArrayList();
         List<OntologyActionLink> actionLinks = Lists.newArrayList();
         var actionEntity = actionService.list(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getOntologyUniqueIdentifier, parentIdentifier));
 
         actionEntity.forEach(action -> {
-            var actionId = SnowflakeIdUtil.get();
-            actions.add(OntologyAction.builder().api(ontologyCreateParam.getApiName() + "_" + action.getApi())
+            var ontologyAction = OntologyAction.builder().api(ontologyCreateParam.getApiName() + "_" + action.getApi())
                     .description(action.getDescription())
                     .displayName(action.getDisplayName())
                     .functionApi(action.getFunctionApi())
                     .status(action.getStatus())
-                    .id(actionId)
                     .ontologyUniqueIdentifier(childIdentifier)
                     .icon(action.getIcon())
-                    .build());
+                    .build();
+            actionService.save(ontologyAction);
+            var ontologyActionId = ontologyAction.getId();
 
             var actionLink = actionLinkService.getOne(new LambdaQueryWrapper<OntologyActionLink>().eq(OntologyActionLink::getOntologyActionId, action.getId()));
             if (actionLink != null) {
                 actionLinks.add(OntologyActionLink.builder()
-                        .ontologyActionId(actionLink.getOntologyActionId())
+                        .ontologyActionId(ontologyActionId)
                         .ontologyLinkUniqueIdentifier(parentChildLinkMap.get(actionLink.getOntologyLinkUniqueIdentifier()))
                         .ontologyLinkParamExpression(actionLink.getOntologyLinkParamExpression())
                         .build());
@@ -282,16 +280,14 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
             mappingIns.addAll(mapping.stream().map(v -> {
                 return OntologyActionMappingIn.builder()
                         .propertyUniqueIdentifier(findChildOntologyProperty(parentProperties, childProps, v.getPropertyUniqueIdentifier()))
-                        .ontologyActionId(actionId)
+                        .ontologyActionId(ontologyActionId)
                         .functionParamId(v.getFunctionParamId())
                         .functionParamExpression(v.getFunctionParamExpression())
                         .build();
             }).collect(Collectors.toList()));
         });
-        actionService.saveBatch(actions);
         actionMappingInService.saveBatch(mappingIns);
         actionLinkService.saveBatch(actionLinks);
-
     }
 
 
