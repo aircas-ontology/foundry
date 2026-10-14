@@ -1,5 +1,7 @@
 package com.aircas.ptr.foundry.ontology.model.po;
 
+import com.aircas.ptr.foundry.common.util.DebeziumDateReader;
+import com.alibaba.fastjson2.annotation.JSONField;
 import com.baomidou.mybatisplus.annotation.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -41,16 +43,19 @@ public class OntologyMeta implements Serializable {
     /**
      * 记录创建时间
      */
+    @JSONField(deserializeUsing = DebeziumDateReader.class)
     @TableField(fill = FieldFill.INSERT)
     private Date createTime;
 
     /**
      * 记录修改时间
      */
+    @JSONField(deserializeUsing = DebeziumDateReader.class)
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private Date updateTime;
 
 
+    @JSONField(deserializeUsing = DebeziumDateReader.class)
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private Date latestQueryTime;
 

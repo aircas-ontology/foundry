@@ -1,11 +1,13 @@
 package com.aircas.ptr.foundry.ontology.mq;
 
-import com.aircas.ptr.foundry.ontology.service.CdcTaskService;
+import com.aircas.ptr.foundry.ontology.service.CdcTaskInitService;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import jakarta.annotation.PostConstruct;
-import jakarta.annotation.Resource;
+
+
 
 /**
  * 项目启动时自动初始化 CDC 任务
@@ -15,9 +17,8 @@ import jakarta.annotation.Resource;
 public class CdcTaskBuilder {
 
     @Resource
-    private CdcTaskService cdcTaskService;
-
-    //@PostConstruct
+    private CdcTaskInitService cdcTaskService;
+    @PostConstruct
     public void run() {
         log.info("=============== 开始初始化 CDC 任务 ===============");
 

@@ -38,4 +38,8 @@ public class PropertyFilterParam {
     /** 多值（IN/BETWEEN 用，BETWEEN 约定 [lower, upper]） */
     @Schema(name = "values", description = "多值（IN/BETWEEN 用，BETWEEN 约定 [lower, upper]",example = "[10,20]")
     private List<Object> values;
+
+    /** 变量数据类型（STRING/NUMBER/BOOLEAN），基础查询算子创建时使用 */
+    @Schema(name = "dataType", description = "变量数据类型：STRING/NUMBER/BOOLEAN", example = "NUMBER")
+    private String dataType;
 }
