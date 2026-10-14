@@ -2,11 +2,14 @@ package com.aircas.ptr.foundry.ontology.composite;
 
 import com.aircas.ptr.foundry.common.constant.FunctionParamTypeEnum;
 import com.aircas.ptr.foundry.common.exception.BusinessException;
+import com.aircas.ptr.foundry.ontology.engine.ScriptEngineRouter;
 import com.aircas.ptr.foundry.ontology.model.bo.CompositeNodePlanBO;
+import com.aircas.ptr.foundry.ontology.model.enums.FunctionLanguageEnum;
 import com.aircas.ptr.foundry.ontology.model.po.Function;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionParamPO;
 import com.aircas.ptr.foundry.ontology.service.GroovyService;
 import com.aircas.ptr.foundry.ontology.utils.SchemaHandleUtil;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.HttpStatus;
 
 import java.util.LinkedHashMap;
@@ -18,7 +21,8 @@ import java.util.Map;
  *
  * <p>函数编排画布上的"函数节点"可以引用三类算子，三类算子都能接入编排工作流：</p>
  * <ul>
- *   <li>{@code CUSTOMIZE} 脚本函数算子：调用 Groovy {@code handle} 方法；</li>
+ *   <li>{@code CUSTOMIZE} 脚本函数算子：GROOVY（含进程内兜底）走 {@link GroovyService#invokeHandle}，
+ *   JAVA/PYTHON/TYPESCRIPT 经 {@link ScriptEngineRouter} 路由到对应语言 runner 执行；</li>
  *   <li>{@code BASIC_QUERY} 基础函数算子：执行本体属性通用查询；</li>
  *   <li>{@code EXTERNAL} 外部API函数算子：按接口定义发起 HTTP 调用。</li>
  * </ul>
@@ -34,11 +38,22 @@ public class CompositeFunctionInvoker {
 
     private final ExternalApiOperator externalApiOperator;
 
+    /** 非 Groovy 语言的脚本算子路由器；为 null 时多语言脚本节点退回 Groovy 路径（兼容旧装配） */
+    private final ScriptEngineRouter scriptEngineRouter;
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
     public CompositeFunctionInvoker(GroovyService groovyService, BasicQueryOperator basicQueryOperator,
                                     ExternalApiOperator externalApiOperator) {
+        this(groovyService, basicQueryOperator, externalApiOperator, null);
+    }
+
+    public CompositeFunctionInvoker(GroovyService groovyService, BasicQueryOperator basicQueryOperator,
+                                    ExternalApiOperator externalApiOperator, ScriptEngineRouter scriptEngineRouter) {
         this.groovyService = groovyService;
         this.basicQueryOperator = basicQueryOperator;
         this.externalApiOperator = externalApiOperator;
+        this.scriptEngineRouter = scriptEngineRouter;
     }
 
     /**
@@ -61,8 +76,7 @@ public class CompositeFunctionInvoker {
         }
         Map<String, Object> paramMap = assembleParams(inputParams, inputs);
         return switch (function.getType()) {
-            case CUSTOMIZE -> require(groovyService, "脚本算子执行引擎").invokeHandle(
-                    function.getApi(), function.getCode(), paramMap, inputParams);
+            case CUSTOMIZE -> invokeScript(function, nodePlan, paramMap, inputParams);
             case BASIC_QUERY -> require(basicQueryOperator, "基础函数算子执行器").runAsNode(
                     require(basicQueryOperator, "基础函数算子执行器")
                             .parseConfig(function.getCode(), function.getApi()), paramMap);
@@ -71,6 +85,51 @@ public class CompositeFunctionInvoker {
             case COMPOSITE -> throw new BusinessException("编排节点[" + labelOf(nodePlan) + "]不能引用函数编排算子："
                     + function.getApi(), HttpStatus.BAD_REQUEST);
         };
+    }
+
+    /**
+     * 脚本算子按语言分发：Groovy（或语言为空）走进程内编译缓存；
+     * 其余语言把入参表转成 JSON 交给语言 runner，返回值即 FunctionResultVO 形态的 data 内容。
+     * <p>Python/Java 等语言的函数在注册时参数表就是 handle 的真实签名
+     * （例如字符串处理算子的 text 是 STRING），不能再按编排端口的 number/object 强转，
+     * 否则 "3" 会被 coerce 成 Double 传进 String 形参；因此这类算子按原值透传。</p>
+     */
+    private Object invokeScript(Function function, CompositeNodePlanBO nodePlan, Map<String, Object> rawParams,
+                                List<FunctionParamPO> inputParams) {
+        FunctionLanguageEnum language = function.getLanguage();
+        boolean groovyPath = language == null || language == FunctionLanguageEnum.GROOVY || scriptEngineRouter == null;
+        if (groovyPath) {
+            return require(groovyService, "脚本算子执行引擎").invokeHandle(
+                    function.getApi(), function.getCode(), assembleParams(inputParams, rawParams), inputParams);
+        }
+        try {
+            String resultJson = scriptEngineRouter.route(language).execute(
+                    com.aircas.ptr.foundry.ontology.engine.ScriptExecutionContext.builder()
+                            .language(language)
+                            .functionApi(function.getApi())
+                            .version(function.getVersion())
+                            .code(function.getCode())
+                            // 远程 runner 引擎按 inputJson 取参（与 FunctionServiceImpl#buildInputJson 同一约定）
+                            .inputJson(objectMapper.writeValueAsString(rawParams))
+                            .inputParams(inputParams)
+                            .inputMap(rawParams)
+                            .build());
+            return unwrapRunnerResult(resultJson);
+        } catch (BusinessException e) {
+            throw new BusinessException("编排节点[" + labelOf(nodePlan) + "]" + e.getMessage(), HttpStatus.BAD_REQUEST);
+        } catch (Exception e) {
+            throw new BusinessException("编排节点[" + labelOf(nodePlan) + "]脚本算子执行失败：" + e.getMessage(),
+                    HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    /** runner/引擎返回的是 FunctionResultVO 形态 JSON，解出 data 供端口绑定（引擎自己会再识别这层壳） */
+    private Object unwrapRunnerResult(String resultJson) throws com.fasterxml.jackson.core.JsonProcessingException {
+        if (resultJson == null || resultJson.isBlank()) {
+            return null;
+        }
+        Map<?, ?> parsed = objectMapper.readValue(resultJson, Map.class);
+        return parsed.containsKey("data") ? parsed.get("data") : parsed;
     }
 
     /** 算子执行器缺失时给出可读文案，而不是空指针 */

@@ -12,7 +12,9 @@ import com.aircas.ptr.foundry.ontology.model.param.CompositeParameter;
 import com.aircas.ptr.foundry.ontology.model.param.CompositePortMapping;
 import com.aircas.ptr.foundry.ontology.model.param.CompositeTransformConfig;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -27,7 +29,8 @@ import java.util.function.Function;
  * <p>规则与原型 functionOperator.ts 的 validateComposite 一一对应，错误文案保持一致，
  * 差异仅在于：函数引用改为按 function.api 从数据库解析、"已发布且测试通过" 对应
  * function.status = ENABLE，逻辑节点端口由服务端推导（loop/branch 固定虚拟端口，
- * transform 解析脚本注解）。</p>
+ * transform 解析脚本注解），以及同一循环区域内节点间的数据回环（含自反馈，跨轮回喂，
+ * 原型一律按环拒绝）不参与环路检测。</p>
  * <p>本类不依赖 Spring 容器，便于单元测试与在 EL 编译前复用。</p>
  */
 public final class CompositeValidator {
@@ -118,13 +121,24 @@ public final class CompositeValidator {
             return finish(errors, warnings);
         }
 
+        // 循环体内的节点可把出参连回自己或同区域节点的入参（跨轮回喂），这类数据边不代表执行顺序
+        Map<String, Set<String>> loopRegions = loopRegions(nodeMap, edges);
+
         Map<String, List<String>> adjacency = new HashMap<>();
         nodeMap.keySet().forEach(id -> adjacency.put(id, new ArrayList<>()));
         Set<String> connected = new HashSet<>();
         for (CompositeEdge edge : edges) {
-            if (edge == null || !nodeMap.containsKey(edge.getSourceNodeId()) || !nodeMap.containsKey(edge.getTargetNodeId())
-                    || java.util.Objects.equals(edge.getSourceNodeId(), edge.getTargetNodeId())) {
+            if (edge == null || !nodeMap.containsKey(edge.getSourceNodeId()) || !nodeMap.containsKey(edge.getTargetNodeId())) {
                 errors.add("函数编排存在无效连线");
+                return finish(errors, warnings);
+            }
+            boolean selfEdge = java.util.Objects.equals(edge.getSourceNodeId(), edge.getTargetNodeId());
+            if (selfEdge && isControlFlowEdge(edge)) {
+                errors.add("函数编排存在无效连线");
+                return finish(errors, warnings);
+            }
+            if (selfEdge && !isSelfFeedbackNode(nodeMap.get(edge.getSourceNodeId()), loopRegions)) {
+                errors.add("函数编排存在无效连线：自反馈连线只能用于循环体内的节点[" + edge.getSourceNodeId() + "]");
                 return finish(errors, warnings);
             }
             CompositeNode sourceNode = nodeMap.get(edge.getSourceNodeId());
@@ -145,7 +159,10 @@ public final class CompositeValidator {
                 errors.add("参数类型不匹配：" + displayName(sourceParameter) + " 不能连接 " + displayName(targetParameter));
                 return finish(errors, warnings);
             }
-            adjacency.get(edge.getSourceNodeId()).add(edge.getTargetNodeId());
+            // 同一循环区域内的数据回环表达的是跨轮取值而非执行顺序，计入邻接表会被误判成环
+            if (!inSameLoopRegion(edge.getSourceNodeId(), edge.getTargetNodeId(), loopRegions)) {
+                adjacency.get(edge.getSourceNodeId()).add(edge.getTargetNodeId());
+            }
             connected.add(edge.getSourceNodeId());
             connected.add(edge.getTargetNodeId());
         }
@@ -291,6 +308,54 @@ public final class CompositeValidator {
         visiting.remove(nodeId);
         visited.add(nodeId);
         return false;
+    }
+
+    /**
+     * 是否为合法的自反馈节点：数据自环边的源节点位于循环体内且不是循环节点。
+     * <p>循环体每轮重新执行，节点把上一轮的出参回喂自己的入参即可逐轮累积（如 a+b 循环累加）。
+     * 循环节点的 collection/item/done 虚拟端口没有逐轮重取值的语义，不允许自反馈。</p>
+     */
+    private static boolean isSelfFeedbackNode(CompositeNode node, Map<String, Set<String>> loopRegions) {
+        if (node == null || resolveKind(node) == CompositeNodeKindEnum.LOOP) {
+            return false;
+        }
+        return loopRegions.values().stream().anyMatch(region -> region.contains(node.getId()));
+    }
+
+    /** 连线两端是否同处一个循环区域内 */
+    private static boolean inSameLoopRegion(String sourceId, String targetId, Map<String, Set<String>> loopRegions) {
+        return loopRegions.values().stream()
+                .anyMatch(region -> region.contains(sourceId) && region.contains(targetId));
+    }
+
+    /**
+     * 每个循环节点的区域成员：从该循环节点的流程出口沿控制流连线向后可达（不含循环节点自身，
+     * 嵌套循环的成员同时属于外层区域）。与编译器生成循环体 EL 的收纳范围一致。
+     */
+    private static Map<String, Set<String>> loopRegions(Map<String, CompositeNode> nodeMap, List<CompositeEdge> edges) {
+        Map<String, List<String>> controlForward = new HashMap<>();
+        for (CompositeEdge edge : edges) {
+            if (edge == null || !isControlFlowEdge(edge)) {
+                continue;
+            }
+            controlForward.computeIfAbsent(edge.getSourceNodeId(), k -> new ArrayList<>()).add(edge.getTargetNodeId());
+        }
+        Map<String, Set<String>> regions = new LinkedHashMap<>();
+        for (Map.Entry<String, CompositeNode> entry : nodeMap.entrySet()) {
+            if (resolveKind(entry.getValue()) != CompositeNodeKindEnum.LOOP) {
+                continue;
+            }
+            Set<String> region = new HashSet<>();
+            Deque<String> queue = new ArrayDeque<>(controlForward.getOrDefault(entry.getKey(), List.of()));
+            while (!queue.isEmpty()) {
+                String current = queue.poll();
+                if (region.add(current)) {
+                    queue.addAll(controlForward.getOrDefault(current, List.of()));
+                }
+            }
+            regions.put(entry.getKey(), region);
+        }
+        return regions;
     }
 
     private static void validateLogicConfig(Iterable<CompositeNode> nodes, List<String> errors, List<String> warnings) {
