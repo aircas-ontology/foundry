@@ -3,11 +3,11 @@ package com.aircas.ptr.foundry.ontology.controller;
 import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.model.bo.CompositePlanBO;
 import com.aircas.ptr.foundry.ontology.model.bo.CompositeValidationBO;
-import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.param.CompositeValidateParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionCallbackParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionExecuteParam;
+import com.aircas.ptr.foundry.ontology.model.param.FunctionListQueryParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionTestParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.vo.FunctionDetailVO;
@@ -45,16 +45,8 @@ public class OntologyFunctionController {
 
     @Operation(summary = "查询函数列表")
     @GetMapping("/list")
-    public RestResult<Page<FunctionInfoVO>> getFunctions(
-            @RequestParam(required = false) @Parameter(description = "空间id") Integer ontologySpaceId,
-            @RequestParam(required = false) @Parameter(description = "函数名称（模糊搜索）") String displayName,
-            @RequestParam(required = false) @Parameter(description = "函数类型") FunctionTypeEnum type,
-            @RequestParam(required = false) @Parameter(description = "发布状态：0 未发布，1 已发布") Integer publishStatus,
-            @RequestParam(required = false) @Parameter(description = "创建开始日期，格式 yyyy-MM-dd") String startDate,
-            @RequestParam(required = false) @Parameter(description = "创建结束日期，格式 yyyy-MM-dd") String endDate,
-            @RequestParam(required = false, defaultValue = "1") Integer pageNum,
-            @RequestParam(required = false, defaultValue = "10") Integer pageSize) {
-        return RestResult.ofData(functionService.getFunctions(ontologySpaceId, displayName, type, publishStatus, startDate, endDate, pageNum, pageSize));
+    public RestResult<Page<FunctionInfoVO>> getFunctions(FunctionListQueryParam param) {
+        return RestResult.ofData(functionService.getFunctions(param));
     }
 
     @Operation(summary = "创建函数")
@@ -132,7 +124,7 @@ public class OntologyFunctionController {
     }
 
     @PostMapping("/test")
-    @Operation(summary = "函数测试")
+    @Operation(summary = "函数测试（支持已存库 / 草稿两种模式）")
     public RestResult<Object> testFunction(@RequestBody @Valid FunctionTestParam param) {
         return RestResult.ofData(functionService.testFunction(param));
     }

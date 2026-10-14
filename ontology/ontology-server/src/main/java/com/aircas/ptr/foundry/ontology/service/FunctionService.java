@@ -8,6 +8,7 @@ import com.aircas.ptr.foundry.ontology.model.param.BasicQueryTestParam;
 import com.aircas.ptr.foundry.ontology.model.param.CompositeValidateParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionExecuteParam;
+import com.aircas.ptr.foundry.ontology.model.param.FunctionListQueryParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionTestParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.po.Function;
@@ -26,11 +27,7 @@ import java.util.Map;
 public interface FunctionService extends IService<Function> {
 
 
-    Page<FunctionInfoVO> getFunctions(Integer ontologySpaceId, String displayName,
-                                       FunctionTypeEnum type,
-                                       Integer publishStatus,
-                                       String startDate, String endDate,
-                                       Integer pageNum, Integer pageSize);
+    Page<FunctionInfoVO> getFunctions(FunctionListQueryParam param);
 
     String executeFunction(FunctionExecuteParam param);
 
