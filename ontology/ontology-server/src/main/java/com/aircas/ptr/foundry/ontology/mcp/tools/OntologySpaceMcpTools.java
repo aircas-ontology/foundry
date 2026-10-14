@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.ontology.mcp.tools;
 
 import com.aircas.ptr.foundry.ontology.mcp.McpTools;
+import com.aircas.ptr.foundry.ontology.model.enums.SpaceTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologySpaceVO;
 import com.aircas.ptr.foundry.ontology.service.OntologySpaceService;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +32,6 @@ public class OntologySpaceMcpTools implements McpTools {
             无可用空间时返回空集合。
             """)
     public List<OntologySpaceVO> listOntologySpaces() {
-        return ontologySpaceService.querySpace();
+        return ontologySpaceService.querySpace(SpaceTypeEnum.SPACE.getValue());
     }
 }
