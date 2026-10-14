@@ -141,6 +141,13 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
     @Transactional(transactionManager = "chainedTransactionManager")
     @Override
     public Integer createSpace(OntologySpaceCreateParam param) {
+        return doCreateSpace(param, SpaceTypeEnum.SPACE.getValue());
+    }
+
+    /**
+     * 创建空间/子空间公共流程：根据 type 写入类型（0=空间，1=主题/子空间），并记录创建用户名。
+     */
+    private Integer doCreateSpace(OntologySpaceCreateParam param, Integer type) {
         //check param
         var space = spaceMapper.selectOne(new LambdaQueryWrapper<OntologySpace>()
                 .eq(OntologySpace::getDisplayName, param.getDisplayName())
@@ -154,7 +161,7 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                 .displayName(param.getDisplayName())
                 .apiName(param.getApiName())
                 .username(userContext == null ? null : userContext.getUsername())
-                .type(SpaceTypeEnum.SPACE.getValue())
+                .type(type)
                 .build();
         spaceMapper.insert(ontologySpace);
         //create new schema &  table_filed_mapping table
@@ -638,13 +645,13 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
         var sourceMetaMap = sourceMetas.stream()
                 .collect(Collectors.toMap(OntologyMeta::getUniqueIdentifier, v -> v));
 
-        // 4. 创建子空间
-        var spaceId = createSpace(OntologySpaceCreateParam.builder()
+        // 4. 创建子空间（type=主题/子空间，同时记录创建用户名）
+        var spaceId = doCreateSpace(OntologySpaceCreateParam.builder()
                 .displayName(param.getDisplayName())
                 .apiName(param.getApiName())
                 .description(param.getDescription())
                 .iconUrl(param.getIconUrl())
-                .build());
+                .build(), SpaceTypeEnum.TOPIC.getValue());
 
         // 4.1 拷贝父空间的本体分类树与关系分类树（含多级）到子空间，并记录  映射
         Integer newOntologyCatRoot = getOntologyCategoryRoot(spaceId);
