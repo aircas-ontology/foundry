@@ -1,0 +1,83 @@
+{
+  "java": {
+    "foundry.java.process": {
+      "category": "process",
+      "message": "脚本调用进程或命令执行 API。",
+      "reason": "Explicit direct API policy for untrusted standalone scripts; review against allowed business APIs before production."
+    },
+    "foundry.java.dynamic-code": {
+      "category": "dynamic-code",
+      "message": "脚本调用动态代码执行 API。",
+      "reason": "Explicit direct API policy for untrusted standalone scripts; review against allowed business APIs before production."
+    },
+    "foundry.java.deserialization": {
+      "category": "deserialization",
+      "message": "脚本调用危险反序列化 API。",
+      "reason": "Explicit direct API policy for untrusted standalone scripts; review against allowed business APIs before production."
+    },
+    "foundry.java.file-write": {
+      "category": "file-write",
+      "message": "脚本调用直接文件写入 API。",
+      "reason": "Explicit direct API policy for untrusted standalone scripts; review against allowed business APIs before production."
+    },
+    "foundry.java.network": {
+      "category": "network",
+      "message": "脚本调用直接网络访问 API。",
+      "reason": "Explicit direct API policy for untrusted standalone scripts; review against allowed business APIs before production."
+    }
+  },
+  "python": {
+    "foundry.python.process": {
+      "category": "process",
+      "message": "脚本调用进程或命令执行 API。",
+      "reason": "Explicit direct API policy for untrusted standalone scripts; review against allowed business APIs before production."
+    },
+    "foundry.python.dynamic-code": {
+      "category": "dynamic-code",
+      "message": "脚本调用动态代码执行 API。",
+      "reason": "Explicit direct API policy for untrusted standalone scripts; review against allowed business APIs before production."
+    },
+    "foundry.python.deserialization": {
+      "category": "deserialization",
+      "message": "脚本调用危险反序列化 API。",
+      "reason": "Explicit direct API policy for untrusted standalone scripts; review against allowed business APIs before production."
+    },
+    "foundry.python.file-write": {
+      "category": "file-write",
+      "message": "脚本调用直接文件写入 API。",
+      "reason": "Explicit direct API policy for untrusted standalone scripts; review against allowed business APIs before production."
+    },
+    "foundry.python.network": {
+      "category": "network",
+      "message": "脚本调用直接网络访问 API。",
+      "reason": "Explicit direct API policy for untrusted standalone scripts; review against allowed business APIs before production."
+    }
+  },
+  "typescript": {
+    "foundry.typescript.process": {
+      "category": "process",
+      "message": "脚本调用进程或命令执行 API。",
+      "reason": "Explicit direct API policy for untrusted standalone scripts; review against allowed business APIs before production."
+    },
+    "foundry.typescript.dynamic-code": {
+      "category": "dynamic-code",
+      "message": "脚本调用动态代码执行 API。",
+      "reason": "Explicit direct API policy for untrusted standalone scripts; review against allowed business APIs before production."
+    },
+    "foundry.typescript.deserialization": {
+      "category": "deserialization",
+      "message": "脚本调用危险反序列化 API。",
+      "reason": "Explicit direct API policy for untrusted standalone scripts; review against allowed business APIs before production."
+    },
+    "foundry.typescript.file-write": {
+      "category": "file-write",
+      "message": "脚本调用直接文件写入 API。",
+      "reason": "Explicit direct API policy for untrusted standalone scripts; review against allowed business APIs before production."
+    },
+    "foundry.typescript.network": {
+      "category": "network",
+      "message": "脚本调用直接网络访问 API。",
+      "reason": "Explicit direct API policy for untrusted standalone scripts; review against allowed business APIs before production."
+    }
+  }
+}
