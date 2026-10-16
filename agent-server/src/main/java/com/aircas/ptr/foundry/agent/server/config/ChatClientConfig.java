@@ -5,6 +5,7 @@ import com.aircas.ptr.foundry.agent.server.tool.ConversationTools;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
+import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.InMemoryChatMemoryRepository;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
@@ -220,7 +221,10 @@ public class ChatClientConfig {
                 // 选择卡片不再靠本地 presentSelection 工具：已改为后端 SelectionResolver 根据模型的
                 // request_selection 标记确定性生成，既降低对模型 function-calling 的依赖，也避免重复推卡。
                 .defaultTools(conversationTools)
-                .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
+                .defaultAdvisors(
+                        MessageChatMemoryAdvisor.builder(chatMemory).build(),
+                        new SimpleLoggerAdvisor()
+                )
                 .build();
     }
 }
