@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.composite;
 
+import com.aircas.ptr.foundry.ontology.engine.ScriptEngineRouter;
 import com.aircas.ptr.foundry.ontology.service.GroovyService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.context.annotation.Bean;
@@ -24,7 +25,8 @@ public class CompositeOperatorConfig {
     @Bean
     public CompositeFunctionInvoker compositeFunctionInvoker(GroovyService groovyService,
                                                             BasicQueryOperator basicQueryOperator,
-                                                            ExternalApiOperator externalApiOperator) {
-        return new CompositeFunctionInvoker(groovyService, basicQueryOperator, externalApiOperator);
+                                                            ExternalApiOperator externalApiOperator,
+                                                            ScriptEngineRouter scriptEngineRouter) {
+        return new CompositeFunctionInvoker(groovyService, basicQueryOperator, externalApiOperator, scriptEngineRouter);
     }
 }

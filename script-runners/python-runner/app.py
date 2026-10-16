@@ -58,6 +58,18 @@ def validate(req: ValidateRequest) -> dict:
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
 
 
+@app.post("/parse")
+def parse(req: ValidateRequest) -> dict:
+    """静态解析脚本输入/输出参数（ast），不执行用户代码。"""
+    try:
+        params = executor.parse(req.code)
+        return {"ok": True, "params": params}
+    except SyntaxError as e:
+        return {"ok": False, "error": f"Python 语法错误：{e.msg}（line {e.lineno}）"}
+    except Exception as e:  # noqa: BLE001
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+
 @app.post("/functions/handle")
 def handle(req: HandleRequest):
     start = time.time()

@@ -2,6 +2,7 @@ package com.aircas.ptr.foundry.ontology.composite;
 
 import com.aircas.ptr.foundry.common.constant.FunctionParamTypeEnum;
 import com.aircas.ptr.foundry.common.exception.BusinessException;
+import com.aircas.ptr.foundry.ontology.engine.ScriptEngineRouter;
 import com.aircas.ptr.foundry.ontology.model.bo.CompositeNodePlanBO;
 import com.aircas.ptr.foundry.ontology.model.po.Function;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionParamPO;
@@ -34,11 +35,14 @@ public class CompositeFunctionInvoker {
 
     private final ExternalApiOperator externalApiOperator;
 
+    private final ScriptEngineRouter scriptEngineRouter;
+
     public CompositeFunctionInvoker(GroovyService groovyService, BasicQueryOperator basicQueryOperator,
-                                    ExternalApiOperator externalApiOperator) {
+                                    ExternalApiOperator externalApiOperator, ScriptEngineRouter scriptEngineRouter) {
         this.groovyService = groovyService;
         this.basicQueryOperator = basicQueryOperator;
         this.externalApiOperator = externalApiOperator;
+        this.scriptEngineRouter = scriptEngineRouter;
     }
 
     /**
