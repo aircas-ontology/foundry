@@ -155,6 +155,7 @@ public class CdcFullSyncServiceImpl implements CdcFullSyncService {
                 for (EsOntologyMetaDTO doc : metaDocs) {
                     OntologySpace space = doc.getOntologySpaceId() != null ? spaceById.get(doc.getOntologySpaceId().intValue()) : null;
                     doc.setSpaceName(space != null ? space.getDisplayName() : null);
+                    doc.setSpaceType(space != null ? space.getType() : null);
                 }
                 long[] r = saveAndSweep(metaDocs, metaRepository, EsOntologyMetaDTO::getId, "ontology_meta");
                 result.metaSynced(r[0]).metaDeleted(r[1]);
@@ -181,6 +182,7 @@ public class CdcFullSyncServiceImpl implements CdcFullSyncService {
                                 doc.setOntologySpaceId(meta.getOntologySpaceId());
                                 OntologySpace space = meta.getOntologySpaceId() != null ? spaceById.get(meta.getOntologySpaceId()) : null;
                                 doc.setSpaceName(space != null ? space.getDisplayName() : null);
+                                doc.setSpaceType(space != null ? space.getType() : null);
                             }
                         });
                 result.propertySynced(r[0]).propertyDeleted(r[1]);
@@ -201,6 +203,7 @@ public class CdcFullSyncServiceImpl implements CdcFullSyncService {
                         "ontology_link_group", doc -> {
                             OntologySpace space = doc.getOntologySpaceId() != null ? spaceById.get(doc.getOntologySpaceId().intValue()) : null;
                             doc.setSpaceName(space != null ? space.getDisplayName() : null);
+                            doc.setSpaceType(space != null ? space.getType() : null);
                         });
                 result.linkGroupSynced(r[0]).linkGroupDeleted(r[1]);
             }

@@ -92,6 +92,7 @@ public class OntologyInstanceConverter {
             dto.setSpaceId(space.getId());
             dto.setSpaceDisplayName(space.getDisplayName());
             dto.setSpaceApiName(space.getApiName());
+            dto.setSpaceType(space.getType());
         }
         return dto;
     }

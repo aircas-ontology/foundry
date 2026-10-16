@@ -35,6 +35,10 @@ public class EsOntologyMetaDTO {
     @Field(name = "space_name", type = FieldType.Text)
     private String spaceName;
 
+    /** space_type：short，所属空间类型，0=空间，1=主题 */
+    @Field(name = "space_type", type = FieldType.Short)
+    private Integer spaceType;
+
     /** status：byte */
     @Field(name = "status", type = FieldType.Byte)
     private Integer status;
