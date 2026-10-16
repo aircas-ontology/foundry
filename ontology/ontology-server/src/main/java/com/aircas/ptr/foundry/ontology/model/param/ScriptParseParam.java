@@ -21,11 +21,11 @@ import jakarta.validation.constraints.Size;
 @Schema(description = "脚本参数解析请求")
 public class ScriptParseParam {
 
-    @Schema(name = "language", description = "脚本语言：GROOVY/JAVA/PYTHON/TYPESCRIPT")
+    @Schema(description = "脚本语言：GROOVY/JAVA/PYTHON/TYPESCRIPT")
     @NotNull(message = "language 不能为空")
     private FunctionLanguageEnum language;
 
-    @Schema(name = "code", description = "脚本源码")
+    @Schema(description = "脚本源码")
     @NotBlank(message = "code 不能为空")
     @Size(max = 200000, message = "code 长度超过上限（200000 字符）")
     private String code;

@@ -1,11 +1,8 @@
 package com.aircas.ptr.foundry.ontology.composite;
 
-import com.aircas.ptr.foundry.common.constant.FunctionParamTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.bo.CompositeFunctionRefBO;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamCategoryEnum;
-import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.Status;
-import com.aircas.ptr.foundry.ontology.model.param.BasicQueryConfig;
 import com.aircas.ptr.foundry.ontology.model.param.CompositeConfig;
 import com.aircas.ptr.foundry.ontology.model.param.CompositeNode;
 import com.aircas.ptr.foundry.ontology.model.param.CompositeParameter;
@@ -35,9 +32,6 @@ import java.util.Map;
 public class CompositeFunctionRefResolver {
 
     private final CompositeFunctionCatalog catalog;
-
-    /** 基础查询算子：其画布端口的约定名与形态在此统一推导，与创建时落库的 function_param 解耦 */
-    private final BasicQueryOperator basicQueryOperator;
 
     /**
      * 建立"画布节点 id -&gt; 被引用函数快照"的映射。
@@ -99,15 +93,13 @@ public class CompositeFunctionRefResolver {
         }
         List<FunctionParamPO> inputParams = catalog.findParams(function.getId(), FunctionParamCategoryEnum.INPUT);
         List<FunctionParamPO> outputParams = catalog.findParams(function.getId(), FunctionParamCategoryEnum.OUTPUT);
-        List<CompositeParameter> inputs = toPorts(inputParams);
-        List<CompositeParameter> outputs = toPorts(outputParams);
-        // 基础查询算子的「本体标识」入参与「结果」出参属于算子内在校识，已不再写入 function_param，
-        // 这里按查询配置动态补齐，保证画布端口、连线校验与单独创建时一致。
-        if (function.getType() == FunctionTypeEnum.BASIC_QUERY) {
-            inputs.add(0, port(BasicQueryOperator.PARAM_ONTOLOGY_IDENTIFIER,
-                    FunctionParamTypeEnum.STRING, "查询目标本体标识"));
-            outputs = basicQueryOutputPorts(function);
-        }
+        // 脚本算子（CUSTOMIZE）的 result 出参承载的是 FunctionResultVO.data，真实类型由用户代码决定，
+        // 注册表统一声明成 OBJECT；这里按声明类型还原（见 declaredScriptTypes），
+        // 基础查询/外部API 等结构化出参保持原样。
+        boolean scriptOperator = function.getType() != null && function.getType().name().equals("CUSTOMIZE");
+        List<CompositeParameter> inputs = toPorts(inputParams, FunctionParamCategoryEnum.INPUT);
+        List<CompositeParameter> outputs = toPorts(outputParams, FunctionParamCategoryEnum.OUTPUT,
+                scriptOperator ? declaredScriptTypes(function.getCode()) : Map.of());
         return CompositeFunctionRefBO.builder()
                 .functionApi(function.getApi())
                 .displayName(function.getDisplayName() == null ? function.getApi() : function.getDisplayName())
@@ -119,54 +111,69 @@ public class CompositeFunctionRefResolver {
     }
 
     /**
-     * 基础查询算子的输出端口：与 {@link BasicQueryOperator#runAsNode} 返回值键一一对应，
-     * 聚合/查询两种模式端口集不同，根据 code 里的 queryConfig 推导。
-     */
-    private List<CompositeParameter> basicQueryOutputPorts(Function function) {
-        List<CompositeParameter> ports = new ArrayList<>();
-        BasicQueryConfig config = basicQueryOperator.parseConfig(function.getCode(), function.getApi());
-        if (config != null && config.getAggFunc() != null) {
-            // 聚合模式：result/value 为聚合值，另附聚合函数、别名与命中的实际属性名
-            ports.add(port(BasicQueryOperator.PORT_RESULT, FunctionParamTypeEnum.DOUBLE, "聚合结果"));
-            ports.add(port(BasicQueryOperator.PORT_VALUE, FunctionParamTypeEnum.DOUBLE, "聚合值"));
-            ports.add(port("aggFunc", FunctionParamTypeEnum.STRING, "聚合函数"));
-            ports.add(port("alias", FunctionParamTypeEnum.STRING, "聚合别名"));
-            ports.add(port("targetProperty", FunctionParamTypeEnum.STRING, "聚合目标属性"));
-        } else {
-            // 查询模式：result/records 为分页记录，total 为总数
-            ports.add(port(BasicQueryOperator.PORT_RESULT, FunctionParamTypeEnum.LIST, "查询结果记录"));
-            ports.add(port(BasicQueryOperator.PORT_RECORDS, FunctionParamTypeEnum.LIST, "分页记录"));
-            ports.add(port(BasicQueryOperator.PORT_TOTAL, FunctionParamTypeEnum.LONG, "记录总数"));
-        }
-        return ports;
-    }
-
-    /** 构造一个画布端口（id 与 name 同参数名，保证“按参数名连线”成立）。 */
-    private CompositeParameter port(String name, FunctionParamTypeEnum paramType, String description) {
-        CompositeParameter port = new CompositeParameter();
-        port.setId(name);
-        port.setName(name);
-        port.setType(CompositeFunctionCatalog.toCanvasType(paramType));
-        port.setDescription(description);
-        return port;
-    }
-
-    /**
      * 参数定义转画布端口。
      * <p>原型侧函数节点的端口 id 形如 {@code {函数id}-out-confidence}，但连线、外部输入输出映射引用的都是
      * 编排配置里落库的同一份 id，服务端按 id 精确匹配即可，这里用参数名作为 id 保证与 {@code name} 一致，
      * 使"按参数名连线"这一最常见写法成立。</p>
      */
-    private List<CompositeParameter> toPorts(List<FunctionParamPO> params) {
+    private List<CompositeParameter> toPorts(List<FunctionParamPO> params, FunctionParamCategoryEnum category) {
+        return toPorts(params, category, Map.of());
+    }
+
+    /**
+     * @param declaredTypes 出参端口的声明类型覆盖（参数名 -&gt; 画布类型），来自脚本注解；未命中的仍按注册表类型
+     */
+    private List<CompositeParameter> toPorts(List<FunctionParamPO> params, FunctionParamCategoryEnum category,
+                                             Map<String, String> declaredTypes) {
         List<CompositeParameter> ports = new ArrayList<>();
         for (FunctionParamPO paramPO : params) {
             CompositeParameter port = new CompositeParameter();
             port.setId(paramPO.getParamName());
             port.setName(paramPO.getParamName());
-            port.setType(CompositeFunctionCatalog.toCanvasType(paramPO.getParamType()));
+            String declared = declaredTypes.get(paramPO.getParamName());
+            port.setType(declared != null ? declared : canvasType(paramPO));
             port.setDescription(paramPO.getDescription());
             ports.add(port);
         }
         return ports;
+    }
+
+    /**
+     * 解析脚本源码里的出参类型注解，还原 result 等 OBJECT 出参的真实类型。
+     * <p>支持三种写法：Python 风格 {@code # @result:number}、Groovy/JS 行注释
+     * {@code // @result:number}、以及块注释里的同名标记。注解只影响类型展示与连线比较，
+     * 不写注解时维持 OBJECT（需要下游加转换节桥接）。</p>
+     */
+    static Map<String, String> declaredScriptTypes(String code) {
+        Map<String, String> types = new LinkedHashMap<>();
+        if (code == null || code.trim().isEmpty()) {
+            return types;
+        }
+        java.util.regex.Matcher matcher = java.util.regex.Pattern
+                .compile("@([A-Za-z_]\\w*)\\s*:\\s*(string|number|boolean|object|array|list|integer|int|float|double|long)",
+                        java.util.regex.Pattern.CASE_INSENSITIVE)
+                .matcher(code);
+        while (matcher.find()) {
+            types.put(matcher.group(1), normalizeCanvasType(matcher.group(2)));
+        }
+        return types;
+    }
+
+    private static String normalizeCanvasType(String raw) {
+        switch (raw.toLowerCase()) {
+            case "integer", "int", "float", "double", "long":
+                return "number";
+            case "list":
+                return "array";
+            default:
+                return raw.toLowerCase();
+        }
+    }
+
+    /**
+     * 参数定义转画布端口（默认按注册表类型）。
+     */
+    private static String canvasType(FunctionParamPO param) {
+        return CompositeFunctionCatalog.toCanvasType(param.getParamType());
     }
 }

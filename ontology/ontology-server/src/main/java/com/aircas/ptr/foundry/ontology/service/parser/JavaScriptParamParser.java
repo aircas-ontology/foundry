@@ -16,7 +16,6 @@ import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
-import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -201,8 +200,4 @@ public class JavaScriptParamParser implements ScriptParamParser {
         return dot >= 0 ? s.substring(dot + 1) : s;
     }
 
-    /** 预留：NameExpr 场景（当前启发未使用，保留以便后续扩展变量引用追踪）。 */
-    private static String nameOf(NameExpr expr) {
-        return expr == null ? "" : expr.getNameAsString();
-    }
 }
