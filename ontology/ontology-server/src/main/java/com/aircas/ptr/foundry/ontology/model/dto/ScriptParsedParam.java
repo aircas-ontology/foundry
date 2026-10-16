@@ -7,6 +7,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 /**
  * 脚本参数解析出的单个参数定义（进程内 AST 解析与 runner /parse 回传的统一承接模型）。
  */
@@ -30,4 +32,7 @@ public class ScriptParsedParam {
 
     /** 来源：ANNOTATION-签名/类型声明可靠解析；INFERRED-函数体启发式推断 */
     private String source;
+
+    /** 子字段列表（参数类型为自定义类/接口时，展开其内部字段；标量参数为 null） */
+    private List<ScriptParsedParam> fields;
 }

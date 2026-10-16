@@ -26,7 +26,8 @@ import java.util.Set;
  * 远程 Runner 脚本参数解析器：Python/TypeScript 必须在对应语言运行时里做 AST 解析
  * （Python 用 {@code ast} 标准库、TS 用 typescript Compiler API），主应用 HTTP 调 runner 的 {@code /parse}。
  * <p>
- * runner 契约：{@code POST /parse} body={code} → {ok, params:[{name,type,category,source}]} | {ok:false,error}。
+ * runner 契约：{@code POST /parse} body={code} → {ok, params:[层级结构]} | {ok:false,error}。
+ * 层级结构：每个参数一个节点，含 name/type/category/source，可展开类型带 fields 数组。
  * runner 回传的 type 为语言原生类型文本（str/number/dict/interface 名等），主应用统一经 ScriptParamTypeMapper 归一。
  */
 @Slf4j
@@ -76,22 +77,41 @@ public class RunnerScriptParamParser implements ScriptParamParser {
         }
         Object rawParams = resp.get("params");
         List<ScriptParsedParam> result = new ArrayList<>();
-        if (rawParams instanceof List) {
-            for (Object item : (List<?>) rawParams) {
-                if (!(item instanceof Map)) {
+        if (rawParams instanceof List<?> rawList) {
+            for (Object item : rawList) {
+                if (!(item instanceof Map<?, ?> rawMap)) {
                     continue;
                 }
-                Map<String, Object> p = (Map<String, Object>) item;
+                Map<String, Object> p = (Map<String, Object>) rawMap;
+                String paramName = str(p.get("name"));
                 String category = str(p.get("category"));
                 String nativeType = str(p.get("type"));
-                result.add(ScriptParsedParam.builder()
-                        .name(str(p.get("name")))
-                        .type(ScriptParamTypeMapper.map(nativeType))
-                        .rawType(nativeType)
-                        .category("OUTPUT".equalsIgnoreCase(category)
-                                ? FunctionParamCategoryEnum.OUTPUT : FunctionParamCategoryEnum.INPUT)
-                        .source(str(p.get("source")))
-                        .build());
+                String source = str(p.get("source"));
+                FunctionParamCategoryEnum cat = "OUTPUT".equalsIgnoreCase(category)
+                        ? FunctionParamCategoryEnum.OUTPUT : FunctionParamCategoryEnum.INPUT;
+
+                // 检查是否有 fields（层级结构）
+                Object rawFields = p.get("fields");
+                if (rawFields instanceof List<?> fieldList && !fieldList.isEmpty()) {
+                    // 有 fields → 保留层级，递归解析子字段（支持嵌套对象）
+                    result.add(ScriptParsedParam.builder()
+                            .name(paramName)
+                            .type(ScriptParamTypeMapper.map(nativeType))
+                            .rawType(nativeType)
+                            .category(cat)
+                            .source(source)
+                            .fields(parseFields(fieldList, cat, source))
+                            .build());
+                } else {
+                    // 无 fields → 标量参数
+                    result.add(ScriptParsedParam.builder()
+                            .name(paramName)
+                            .type(ScriptParamTypeMapper.map(nativeType))
+                            .rawType(nativeType)
+                            .category(cat)
+                            .source(source)
+                            .build());
+                }
             }
         }
         return ScriptParseOutcome.ok(result);
@@ -99,5 +119,34 @@ public class RunnerScriptParamParser implements ScriptParamParser {
 
     private static String str(Object value) {
         return value == null ? "" : String.valueOf(value);
+    }
+
+    /**
+     * 递归解析字段列表：每个字段如果有自己的 fields 则继续递归展开（支持对象属性仍是对象的嵌套场景）。
+     */
+    @SuppressWarnings("unchecked")
+    private List<ScriptParsedParam> parseFields(List<?> fieldList, FunctionParamCategoryEnum category, String source) {
+        List<ScriptParsedParam> result = new ArrayList<>();
+        for (Object fieldItem : fieldList) {
+            if (!(fieldItem instanceof Map<?, ?> fieldMap)) {
+                continue;
+            }
+            Map<String, Object> f = (Map<String, Object>) fieldMap;
+            String fieldName = str(f.get("name"));
+            String fieldType = str(f.get("type"));
+            ScriptParsedParam.ScriptParsedParamBuilder fb = ScriptParsedParam.builder()
+                    .name(fieldName)
+                    .type(ScriptParamTypeMapper.map(fieldType))
+                    .rawType(fieldType)
+                    .category(category)
+                    .source(source);
+            // 递归：子字段本身也有 fields 时继续展开
+            Object nestedFields = f.get("fields");
+            if (nestedFields instanceof List<?> nestedList && !nestedList.isEmpty()) {
+                fb.fields(parseFields(nestedList, category, source));
+            }
+            result.add(fb.build());
+        }
+        return result;
     }
 }

@@ -95,35 +95,78 @@ def parse(code: str) -> list:
     classes = _collect_classes(tree, ast)
     params: list = []
 
+    def _extract_collection_element(type_text):
+        """从集合类型注解中提取元素类型名（如 'List[Admin]' → 'Admin'），非集合返回 None。"""
+        import re
+        m = re.match(r'^(?:list|List|set|Set|collection|Iterable)\[(.+)\]$', type_text)
+        if m:
+            return m.group(1).strip()
+        return None
+
+    def _expand_class(class_name, visited=None):
+        """递归展开类字段，字段类型本身也是类时嵌套 fields。visited 防循环引用。"""
+        if visited is None:
+            visited = set()
+        if class_name not in classes or class_name in visited:
+            return None
+        visited = visited | {class_name}
+        result = []
+        for fname, ftype in classes[class_name]:
+            field = {"name": fname, "type": ftype}
+            if ftype in classes and ftype not in visited:
+                # 字段类型本身也是自定义类 → 递归展开
+                nested = _expand_class(ftype, visited)
+                if nested:
+                    field["fields"] = nested
+            else:
+                # 集合泛型：List[Admin] → 提取元素类型递归展开
+                elem_type = _extract_collection_element(ftype)
+                if elem_type and elem_type in classes and elem_type not in visited:
+                    nested = _expand_class(elem_type, visited)
+                    if nested:
+                        field["fields"] = nested
+            result.append(field)
+        return result
+
     args = list(handle_fn.args.args)
-    annotated_single = len(args) == 1 and args[0].annotation is not None
-    if annotated_single:
-        ann = ast.unparse(args[0].annotation)
-        if ann in classes and classes[ann]:
-            for fname, ftype in classes[ann]:
-                params.append({"name": fname, "type": ftype, "category": "INPUT", "source": "ANNOTATION"})
-        elif ann in classes:
-            # 注解指向脚本内类但无可识别字段（仅方法/动态属性）→ 退化启发扫 body
-            for attr in _collect_input_attrs(handle_fn, args[0].arg, ast):
-                params.append({"name": attr, "type": "object", "category": "INPUT", "source": "INFERRED"})
+    for a in args:
+        param_node = {"name": a.arg, "category": "INPUT"}
+        if a.annotation is not None:
+            ann = ast.unparse(a.annotation)
+            if ann in classes and classes[ann]:
+                # 注解指向脚本内类且有字段 → 递归展开到 fields
+                param_node["type"] = ann
+                param_node["source"] = "ANNOTATION"
+                param_node["fields"] = _expand_class(ann)
+            elif ann in classes:
+                # 注解指向脚本内类但无字段 → 退化启发扫 body
+                param_node["type"] = "object"
+                param_node["source"] = "INFERRED"
+                attrs = _collect_input_attrs(handle_fn, a.arg, ast)
+                if attrs:
+                    param_node["fields"] = [{"name": attr, "type": "object"} for attr in attrs]
+            else:
+                # 标量类型（str/int/float 等）
+                param_node["type"] = ann
+                param_node["source"] = "ANNOTATION"
         else:
-            params.append({"name": args[0].arg, "type": ann, "category": "INPUT", "source": "ANNOTATION"})
-    elif args:
-        # 多参或无注解：多参逐个落 ANNOTATION（有类型）或退化到启发层（无类型）
-        for a in args:
-            if a.annotation is not None:
-                params.append({"name": a.arg, "type": ast.unparse(a.annotation), "category": "INPUT", "source": "ANNOTATION"})
-        if all(a.annotation is None for a in args):
-            for a in args:
-                for attr in _collect_input_attrs(handle_fn, a.arg, ast):
-                    params.append({"name": attr, "type": "object", "category": "INPUT", "source": "INFERRED"})
+            # 无注解 → 启发扫描该参数的 body 访问
+            param_node["type"] = "object"
+            param_node["source"] = "INFERRED"
+            attrs = _collect_input_attrs(handle_fn, a.arg, ast)
+            if attrs:
+                param_node["fields"] = [{"name": attr, "type": "object"} for attr in attrs]
+        params.append(param_node)
 
     rt = handle_fn.returns
     if rt is not None:
         rt_text = ast.unparse(rt)
         if rt_text in classes and classes[rt_text]:
-            for fname, ftype in classes[rt_text]:
-                params.append({"name": fname, "type": ftype, "category": "OUTPUT", "source": "ANNOTATION"})
+            # 返回类型为自定义类 → 层级结构：父参数带 fields
+            params.append({
+                "name": rt_text, "type": rt_text, "category": "OUTPUT", "source": "ANNOTATION",
+                "fields": _expand_class(rt_text)
+            })
         elif rt_text in classes:
             # 返回类型是脚本内类但无字段 → 退化启发 return 字面量
             for key in _collect_return_keys(handle_fn, ast):

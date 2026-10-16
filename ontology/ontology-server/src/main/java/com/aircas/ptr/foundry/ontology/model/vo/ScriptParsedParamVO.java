@@ -8,6 +8,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 /**
  * 脚本参数解析结果的单个参数。字段与创建/更新接口的参数元素（{@code FunctionParamDTO}）完全一致，
  * 前端拿到后可直接放进函数保存请求的 {@code parameters} 数组，无需转换。
@@ -39,4 +41,7 @@ public class ScriptParsedParamVO {
 
     @Schema(description = "参数描述（静态解析不产出，为 null；由用户保存前自行补充）")
     private String description;
+
+    @Schema(description = "子字段列表（参数类型为自定义类/接口时展开，标量参数为 null）")
+    private List<ScriptParsedParamVO> fields;
 }

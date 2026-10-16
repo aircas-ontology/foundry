@@ -10,6 +10,7 @@ import com.aircas.ptr.foundry.ontology.utils.ScriptParamTypeMapper;
 import groovy.lang.GroovyClassLoader;
 import lombok.extern.slf4j.Slf4j;
 import org.codehaus.groovy.ast.ClassNode;
+import org.codehaus.groovy.ast.GenericsType;
 import org.codehaus.groovy.ast.MethodNode;
 import org.codehaus.groovy.ast.ModuleNode;
 import org.codehaus.groovy.ast.Parameter;
@@ -57,6 +58,10 @@ import java.util.UUID;
 @Slf4j
 @Component
 public class GroovyScriptParamParser implements ScriptParamParser {
+
+    private static final Set<String> COLLECTION_LIKE = Set.of(
+            "list", "set", "collection", "iterable", "arraylist", "linkedlist", "hashset",
+            "java.util.list", "java.util.set", "java.util.collection");
 
     @Override
     public Set<FunctionLanguageEnum> supports() {
@@ -129,7 +134,17 @@ public class GroovyScriptParamParser implements ScriptParamParser {
                 ClassNode type = p.getType();
                 ClassNode userClass = resolveUserClass(type, classByName);
                 if (userClass != null) {
-                    expandFields(userClass, FunctionParamCategoryEnum.INPUT, "ANNOTATION", out);
+                    // 层级结构：父参数为自定义类型，字段放入 fields
+                    String typeText = typeNodeText(type);
+                    List<ScriptParsedParam> fields = expandFields(userClass, FunctionParamCategoryEnum.INPUT, "ANNOTATION", classByName, new LinkedHashSet<>());
+                    out.add(ScriptParsedParam.builder()
+                            .name(p.getName())
+                            .type(ScriptParamTypeMapper.map(typeText))
+                            .rawType(typeText)
+                            .category(FunctionParamCategoryEnum.INPUT)
+                            .source("ANNOTATION")
+                            .fields(fields)
+                            .build());
                     expanded = true;
                 } else if (!isObjectType(type)) {
                     String typeText = typeNodeText(type);
@@ -154,7 +169,17 @@ public class GroovyScriptParamParser implements ScriptParamParser {
         ClassNode returnType = handle.getReturnType();
         ClassNode userClass = resolveUserClass(returnType, classByName);
         if (userClass != null) {
-            expandFields(userClass, FunctionParamCategoryEnum.OUTPUT, "ANNOTATION", out);
+            // 层级结构：返回类型为自定义类时，父参数带 fields
+            String typeText = typeNodeText(returnType);
+            List<ScriptParsedParam> fields = expandFields(userClass, FunctionParamCategoryEnum.OUTPUT, "ANNOTATION", classByName, new LinkedHashSet<>());
+            out.add(ScriptParsedParam.builder()
+                    .name(typeText)
+                    .type(ScriptParamTypeMapper.map(typeText))
+                    .rawType(typeText)
+                    .category(FunctionParamCategoryEnum.OUTPUT)
+                    .source("ANNOTATION")
+                    .fields(fields)
+                    .build());
             return;
         }
         if (!isObjectType(returnType) && !"void".equals(returnType.getName())) {
@@ -173,22 +198,41 @@ public class GroovyScriptParamParser implements ScriptParamParser {
         inferOutputsFromBody(handle, out);
     }
 
-    private void expandFields(ClassNode userClass, FunctionParamCategoryEnum category, String source,
-                              List<ScriptParsedParam> out) {
+    private List<ScriptParsedParam> expandFields(ClassNode userClass, FunctionParamCategoryEnum category, String source,
+                                                    Map<String, ClassNode> classByName, Set<String> visited) {
+        List<ScriptParsedParam> fields = new ArrayList<>();
         Set<String> seen = new LinkedHashSet<>();
         userClass.getProperties().forEach(prop -> {
             String name = prop.getName();
             if (seen.add(name)) {
                 String propTypeText = typeNodeText(prop.getType());
-                out.add(ScriptParsedParam.builder()
+                ScriptParsedParam.ScriptParsedParamBuilder fb = ScriptParsedParam.builder()
                         .name(name)
                         .type(ScriptParamTypeMapper.map(propTypeText))
                         .rawType(propTypeText)
                         .category(category)
-                        .source(source)
-                        .build());
+                        .source(source);
+                // 字段类型本身也是自定义类 → 递归展开
+                ClassNode nestedClass = resolveUserClass(prop.getType(), classByName);
+                if (nestedClass != null && visited.add(propTypeText)) {
+                    fb.fields(expandFields(nestedClass, category, source, classByName, visited));
+                } else {
+                    // 集合泛型：List<Admin> → 提取泛型参数递归展开
+                    String elementType = extractCollectionElementType(prop.getType());
+                    if (elementType != null) {
+                        ClassNode elemNode = classByName.get(elementType);
+                        if (elemNode == null) {
+                            elemNode = classByName.get(simpleName(elementType));
+                        }
+                        if (elemNode != null && visited.add(elementType)) {
+                            fb.fields(expandFields(elemNode, category, source, classByName, visited));
+                        }
+                    }
+                }
+                fields.add(fb.build());
             }
         });
+        return fields;
     }
 
     private void inferInputsFromBody(MethodNode handle, List<ScriptParsedParam> out) {
@@ -276,6 +320,27 @@ public class GroovyScriptParamParser implements ScriptParamParser {
             return "array";
         }
         return simpleName(type.getName());
+    }
+
+    /** 从集合类型中提取泛型元素类型名（如 List<Admin> → "Admin"），非集合返回 null。 */
+    private String extractCollectionElementType(ClassNode type) {
+        if (type == null) {
+            return null;
+        }
+        // 数组类型：元素类型就是 componentType
+        if (type.isArray()) {
+            return typeNodeText(type.getComponentType());
+        }
+        String name = type.getName().toLowerCase();
+        boolean isCollection = COLLECTION_LIKE.stream().anyMatch(name::endsWith);
+        if (!isCollection) {
+            return null;
+        }
+        GenericsType[] generics = type.getGenericsTypes();
+        if (generics != null && generics.length > 0) {
+            return typeNodeText(generics[0].getType());
+        }
+        return null;
     }
 
     private boolean isObjectType(ClassNode type) {
