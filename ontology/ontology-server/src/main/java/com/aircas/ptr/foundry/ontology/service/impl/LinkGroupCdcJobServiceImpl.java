@@ -57,6 +57,7 @@ public class LinkGroupCdcJobServiceImpl implements LinkGroupCdcJobService {
         OntologySpace space = spaceMapper.selectById(dto.getOntologySpaceId().intValue());
         if (space != null) {
             dto.setSpaceName(space.getDisplayName());
+            dto.setSpaceType(space.getType());
         }
     }
 }

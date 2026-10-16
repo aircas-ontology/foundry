@@ -39,6 +39,7 @@ import java.util.Set;
 public class GlobalSearchServiceImpl implements GlobalSearchService {
 
     private static final String TYPE_SPACE = "空间";
+    private static final String TYPE_TOPIC = "主题";
     private static final String TYPE_META = "对象";
     private static final String TYPE_PROPERTY = "属性";
     private static final String TYPE_INSTANCE = "实例";
@@ -47,8 +48,11 @@ public class GlobalSearchServiceImpl implements GlobalSearchService {
     private static final int DEFAULT_SIZE = 100;
     private static final int MAX_SIZE = 1000;
 
+    /** ontology_space.type：0=空间，1=主题 */
+    private static final long SPACE_TYPE_TOPIC = 1L;
+
     private static final List<String> SOURCE_FIELDS = List.of(
-            "id", "display_name", "description", "name", "search_text",
+            "id", "display_name", "description", "name", "search_text", "type", "space_type",
             "ontology_space_id", "space_id", "pk", "ontology_uid", "ontology_unique_identifier",
             "unique_identifier", "api_name", "ontology_name", "space_name", "space_display_name");
 
@@ -95,10 +99,13 @@ public class GlobalSearchServiceImpl implements GlobalSearchService {
         int size = param.getSize() == null || param.getSize() <= 0 ? DEFAULT_SIZE
                 : Math.min(param.getSize(), MAX_SIZE);
         String escapedKeyword = escapeQuery(param.getKeyword());
-        // 当前用户配置了绑定空间时，仅检索该空间下的内容，未配置则检索全部空间
+        // 可见范围：未绑定空间的用户不限；绑定空间的用户 = 该空间 + 其本人创建的主题（及主题下内容）
         var userContext = UserContextHolder.get();
-        var bindSpaceId = userContext == null || userContext.getSpaceId() == null
+        String username = userContext == null ? null : userContext.getUsername();
+        Long bindSpaceId = userContext == null || userContext.getSpaceId() == null
                 ? null : userContext.getSpaceId().longValue();
+        List<FieldValue> scopeIds = bindSpaceId == null ? null
+                : resolveAccessibleSpaceIds(bindSpaceId, username).stream().map(FieldValue::of).toList();
         SearchRequest request = SearchRequest.of(b -> b
                 .index(SEARCH_INDICES)
                 .size(size)
@@ -111,9 +118,9 @@ public class GlobalSearchServiceImpl implements GlobalSearchService {
                                         .lenient(true)
                                         .defaultOperator(Operator.Or)
                                         .query(escapedKeyword)));
-                        String spaceField = bindSpaceId == null ? null : INDEX_SPACE_FIELD.get(index);
+                        String spaceField = scopeIds == null ? null : INDEX_SPACE_FIELD.get(index);
                         if (spaceField != null) {
-                            inner.filter(f -> f.term(t -> t.field(spaceField).value(bindSpaceId)));
+                            inner.filter(f -> f.terms(t -> t.field(spaceField).terms(v -> v.value(scopeIds))));
                         }
                         return inner;
                     })));
@@ -150,6 +157,40 @@ public class GlobalSearchServiceImpl implements GlobalSearchService {
         return result;
     }
 
+    /**
+     * 绑定空间用户的可见 space id 集合：绑定空间本身 + 该用户创建的全部主题。
+     * <p>
+     * 主题与空间同为 ontology_space 的行（type=1），无父子外键，只能按 username 圈定本人主题；
+     * 主题下的对象/属性/实例/关系分组按其 space id 字段（= 主题 id）归属，故并入同一集合过滤。
+     */
+    private List<Long> resolveAccessibleSpaceIds(long bindSpaceId, String username) {
+        List<Long> ids = new ArrayList<>();
+        ids.add(bindSpaceId);
+        if (username == null || username.isBlank()) {
+            return ids;
+        }
+        SearchRequest request = SearchRequest.of(b -> b
+                .index(indexNameOf(EsOntologySpaceDTO.class))
+                .size(MAX_SIZE)
+                .source(includeSource(List.of("id")))
+                .query(q -> q.bool(bool -> bool
+                        .filter(f -> f.term(t -> t.field("type").value(SPACE_TYPE_TOPIC)))
+                        .filter(f -> f.term(t -> t.field("username").value(username))))));
+        try {
+            SearchResponse<Map> response = elasticsearchClient.search(request, Map.class);
+            for (Hit<Map> hit : response.hits().hits()) {
+                Long topicId = hit.source() == null ? null : longOf(hit.source().get("id"));
+                if (topicId != null && !ids.contains(topicId)) {
+                    ids.add(topicId);
+                }
+            }
+        } catch (IOException e) {
+            log.error("检索用户可见主题失败, username={}", username, e);
+            throw new BusinessException("全局检索失败：" + e.getMessage(), ResultCode.ERROR);
+        }
+        return ids;
+    }
+
     private static boolean isPropertyIndex(String index) {
         return index.equals(indexNameOf(EsOntologyPropertyDTO.class));
     }
@@ -173,15 +214,20 @@ public class GlobalSearchServiceImpl implements GlobalSearchService {
             return null;
         }
         switch (type) {
-            case TYPE_SPACE -> vo.name(str(src.get("display_name")))
-                    .type(TYPE_SPACE)
-                    .desc(str(src.get("description")))
-                    .spaceId(docId)
-                    .spaceName(str(src.get("display_name")))
-                    .uniqueIdentifier(str(src.get("unique_identifier")) != null
-                            ? str(src.get("unique_identifier")) : str(src.get("api_name")));
+            case TYPE_SPACE -> {
+                Long spaceType = longOf(src.get("type"));
+                vo.name(str(src.get("display_name")))
+                        .type(spaceType != null && spaceType == SPACE_TYPE_TOPIC ? TYPE_TOPIC : TYPE_SPACE)
+                        .spaceType(spaceType == null ? null : spaceType.intValue())
+                        .desc(str(src.get("description")))
+                        .spaceId(docId)
+                        .spaceName(str(src.get("display_name")))
+                        .uniqueIdentifier(str(src.get("unique_identifier")) != null
+                                ? str(src.get("unique_identifier")) : str(src.get("api_name")));
+            }
             case TYPE_META -> vo.name(str(src.get("display_name")))
                     .type(TYPE_META)
+                    .spaceType(intOf(src.get("space_type")))
                     .desc(str(src.get("description")))
                     .spaceId(longOf(src.get("ontology_space_id")))
                     .spaceName(str(src.get("space_name")))
@@ -191,6 +237,7 @@ public class GlobalSearchServiceImpl implements GlobalSearchService {
                 MetaRef ref = metaByUid.get(str(src.get("ontology_unique_identifier")));
                 vo.name(str(src.get("display_name")))
                         .type(TYPE_PROPERTY)
+                        .spaceType(intOf(src.get("space_type")))
                         .desc(str(src.get("description")))
                         .spaceId(ref == null ? null : ref.spaceId())
                         .objectId(ref == null ? null : ref.metaId())
@@ -204,6 +251,7 @@ public class GlobalSearchServiceImpl implements GlobalSearchService {
                 MetaRef ref = metaByUid.get(str(src.get("ontology_uid")));
                 vo.name(str(src.get("name")))
                         .type(TYPE_INSTANCE)
+                        .spaceType(intOf(src.get("space_type")))
                         .desc(str(src.get("search_text")))
                         .spaceId(longOf(src.get("space_id")))
                         .spaceName(str(src.get("space_display_name")))
@@ -214,6 +262,7 @@ public class GlobalSearchServiceImpl implements GlobalSearchService {
             }
             case TYPE_LINK_GROUP -> vo.name(str(src.get("name")))
                     .type(TYPE_LINK_GROUP)
+                    .spaceType(intOf(src.get("space_type")))
                     .spaceId(longOf(src.get("ontology_space_id")))
                     .spaceName(str(src.get("space_name")))
                     .uniqueIdentifier(str(src.get("unique_identifier")));
@@ -275,6 +324,11 @@ public class GlobalSearchServiceImpl implements GlobalSearchService {
         } catch (NumberFormatException e) {
             return null;
         }
+    }
+
+    private static Integer intOf(Object v) {
+        Long value = longOf(v);
+        return value == null ? null : value.intValue();
     }
 
     private static String escapeQuery(String keyword) {

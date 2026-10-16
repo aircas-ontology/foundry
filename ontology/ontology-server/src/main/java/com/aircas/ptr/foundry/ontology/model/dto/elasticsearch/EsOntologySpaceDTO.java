@@ -28,6 +28,14 @@ public class EsOntologySpaceDTO {
     @Field(name = "display_name", type = FieldType.Text)
     private String displayName;
 
+    /** username：keyword，创建该空间/主题的用户名 */
+    @Field(name = "username", type = FieldType.Keyword)
+    private String username;
+
+    /** type：short，0=空间，1=主题 */
+    @Field(name = "type", type = FieldType.Short)
+    private Integer type;
+
     /** create_time：date，自定义多格式 */
     @Field(name = "create_time", type = FieldType.Date,
             format = {},

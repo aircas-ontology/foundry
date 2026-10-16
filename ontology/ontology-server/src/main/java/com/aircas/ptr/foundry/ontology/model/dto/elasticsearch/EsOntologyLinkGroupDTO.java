@@ -34,6 +34,10 @@ public class EsOntologyLinkGroupDTO {
     @Field(name = "space_name", type = FieldType.Text)
     private String spaceName;
 
+    /** space_type：short，所属空间类型，0=空间，1=主题 */
+    @Field(name = "space_type", type = FieldType.Short)
+    private Integer spaceType;
+
     @Field(name = "ontology_unique_identifier_from", type = FieldType.Keyword)
     private String ontologyUniqueIdentifierFrom;
 
