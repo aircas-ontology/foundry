@@ -80,6 +80,12 @@
             <artifactId>groovy-json</artifactId>
             <version>3.0.22</version>
         </dependency>
+        <!-- JavaParser：脚本参数解析接口对 Java 脚本做纯语法 AST 解析（不编译不执行） -->
+        <dependency>
+            <groupId>com.github.javaparser</groupId>
+            <artifactId>javaparser-symbol-solver-core</artifactId>
+            <version>3.25.10</version>
+        </dependency>
         <dependency>
             <groupId>org.codehaus.groovy.modules.http-builder</groupId>
             <artifactId>http-builder</artifactId>

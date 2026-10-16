@@ -588,19 +588,11 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         }
         collectFilterVariables(queryConfig.getFilters(), varTypeMap);
 
+        // 仅持久化用户在 queryConfig 里声明的变量（聚合目标 + 过滤条件）作为入参。
+        // 编排节点所需的「本体标识」入参与「结果」出参属于基础查询算子的内在校识，不入库，
+        // 改由编排侧（CompositeFunctionRefResolver）按查询配置动态推导，避免详情页把机制参数当成用户参数展示。
         List<FunctionParamPO> params = new ArrayList<>();
         int order = 1;
-        // 本体标识作为第一个入参：作为编排画布节点时，必须能从上游拿到查询的目标本体
-        params.add(FunctionParamPO.builder()
-                .functionId(functionId)
-                .paramName(BasicQueryOperator.PARAM_ONTOLOGY_IDENTIFIER)
-                .paramType(FunctionParamTypeEnum.STRING)
-                .category(FunctionParamCategoryEnum.INPUT)
-                .paramOrder(order++)
-                .description("查询目标本体标识")
-                .createTime(new Date())
-                .updateTime(new Date())
-                .build());
         for (var entry : varTypeMap.entrySet()) {
             String varName = entry.getKey();
             // 根据变量角色设置描述：聚合目标 vs 过滤条件
@@ -616,55 +608,9 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                     .updateTime(new Date())
                     .build());
         }
-        params.addAll(buildBasicQueryOutputParams(functionId, queryConfig));
         if (!params.isEmpty()) {
             functionParamService.saveBatch(params);
         }
-    }
-
-    /**
-     * 基础查询算子的输出参数：与 {@link BasicQueryOperator#runAsNode} 的端口名一一对应，
-     * 编排画布节点的端口完全由 function_param 推导，因此这里必须落库，否则下游无法连线取值。
-     */
-    private List<FunctionParamPO> buildBasicQueryOutputParams(Long functionId, BasicQueryConfig queryConfig) {
-        List<FunctionParamPO> outputs = new ArrayList<>();
-        int order = 1;
-        if (queryConfig.getAggFunc() != null) {
-            // 聚合模式：result/value 为聚合值，另附聚合函数、别名与命中的实际属性名
-            outputs.add(basicQueryOutput(functionId, BasicQueryOperator.PORT_RESULT, FunctionParamTypeEnum.DOUBLE,
-                    "聚合结果", order++));
-            outputs.add(basicQueryOutput(functionId, BasicQueryOperator.PORT_VALUE, FunctionParamTypeEnum.DOUBLE,
-                    "聚合值", order++));
-            outputs.add(basicQueryOutput(functionId, "aggFunc", FunctionParamTypeEnum.STRING,
-                    "聚合函数", order++));
-            outputs.add(basicQueryOutput(functionId, "alias", FunctionParamTypeEnum.STRING,
-                    "聚合别名", order++));
-            outputs.add(basicQueryOutput(functionId, "targetProperty", FunctionParamTypeEnum.STRING,
-                    "聚合目标属性", order));
-        } else {
-            // 查询模式：result/records 为分页记录，total 为总数
-            outputs.add(basicQueryOutput(functionId, BasicQueryOperator.PORT_RESULT, FunctionParamTypeEnum.LIST,
-                    "查询结果记录", order++));
-            outputs.add(basicQueryOutput(functionId, BasicQueryOperator.PORT_RECORDS, FunctionParamTypeEnum.LIST,
-                    "分页记录", order++));
-            outputs.add(basicQueryOutput(functionId, BasicQueryOperator.PORT_TOTAL, FunctionParamTypeEnum.LONG,
-                    "记录总数", order));
-        }
-        return outputs;
-    }
-
-    private FunctionParamPO basicQueryOutput(Long functionId, String name, FunctionParamTypeEnum paramType,
-                                             String description, int paramOrder) {
-        return FunctionParamPO.builder()
-                .functionId(functionId)
-                .paramName(name)
-                .paramType(paramType)
-                .category(FunctionParamCategoryEnum.OUTPUT)
-                .paramOrder(paramOrder)
-                .description(description)
-                .createTime(new Date())
-                .updateTime(new Date())
-                .build();
     }
 
     // ==================== 外部API函数算子 ====================

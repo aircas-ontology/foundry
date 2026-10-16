@@ -3,7 +3,9 @@ package com.aircas.ptr.foundry.ontology.composite;
 import com.aircas.ptr.foundry.common.constant.FunctionParamTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.bo.CompositeFunctionRefBO;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamCategoryEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.Status;
+import com.aircas.ptr.foundry.ontology.model.param.BasicQueryConfig;
 import com.aircas.ptr.foundry.ontology.model.param.CompositeConfig;
 import com.aircas.ptr.foundry.ontology.model.param.CompositeNode;
 import com.aircas.ptr.foundry.ontology.model.param.CompositeParameter;
@@ -33,6 +35,9 @@ import java.util.Map;
 public class CompositeFunctionRefResolver {
 
     private final CompositeFunctionCatalog catalog;
+
+    /** 基础查询算子：其画布端口的约定名与形态在此统一推导，与创建时落库的 function_param 解耦 */
+    private final BasicQueryOperator basicQueryOperator;
 
     /**
      * 建立"画布节点 id -&gt; 被引用函数快照"的映射。
@@ -94,14 +99,56 @@ public class CompositeFunctionRefResolver {
         }
         List<FunctionParamPO> inputParams = catalog.findParams(function.getId(), FunctionParamCategoryEnum.INPUT);
         List<FunctionParamPO> outputParams = catalog.findParams(function.getId(), FunctionParamCategoryEnum.OUTPUT);
+        List<CompositeParameter> inputs = toPorts(inputParams);
+        List<CompositeParameter> outputs = toPorts(outputParams);
+        // 基础查询算子的「本体标识」入参与「结果」出参属于算子内在校识，已不再写入 function_param，
+        // 这里按查询配置动态补齐，保证画布端口、连线校验与单独创建时一致。
+        if (function.getType() == FunctionTypeEnum.BASIC_QUERY) {
+            inputs.add(0, port(BasicQueryOperator.PARAM_ONTOLOGY_IDENTIFIER,
+                    FunctionParamTypeEnum.STRING, "查询目标本体标识"));
+            outputs = basicQueryOutputPorts(function);
+        }
         return CompositeFunctionRefBO.builder()
                 .functionApi(function.getApi())
                 .displayName(function.getDisplayName() == null ? function.getApi() : function.getDisplayName())
                 .published(function.getStatus() != null && function.getStatus() == Status.ENABLE.getValue())
                 .version(function.getReferenceName())
-                .inputs(toPorts(inputParams))
-                .outputs(toPorts(outputParams))
+                .inputs(inputs)
+                .outputs(outputs)
                 .build();
+    }
+
+    /**
+     * 基础查询算子的输出端口：与 {@link BasicQueryOperator#runAsNode} 返回值键一一对应，
+     * 聚合/查询两种模式端口集不同，根据 code 里的 queryConfig 推导。
+     */
+    private List<CompositeParameter> basicQueryOutputPorts(Function function) {
+        List<CompositeParameter> ports = new ArrayList<>();
+        BasicQueryConfig config = basicQueryOperator.parseConfig(function.getCode(), function.getApi());
+        if (config != null && config.getAggFunc() != null) {
+            // 聚合模式：result/value 为聚合值，另附聚合函数、别名与命中的实际属性名
+            ports.add(port(BasicQueryOperator.PORT_RESULT, FunctionParamTypeEnum.DOUBLE, "聚合结果"));
+            ports.add(port(BasicQueryOperator.PORT_VALUE, FunctionParamTypeEnum.DOUBLE, "聚合值"));
+            ports.add(port("aggFunc", FunctionParamTypeEnum.STRING, "聚合函数"));
+            ports.add(port("alias", FunctionParamTypeEnum.STRING, "聚合别名"));
+            ports.add(port("targetProperty", FunctionParamTypeEnum.STRING, "聚合目标属性"));
+        } else {
+            // 查询模式：result/records 为分页记录，total 为总数
+            ports.add(port(BasicQueryOperator.PORT_RESULT, FunctionParamTypeEnum.LIST, "查询结果记录"));
+            ports.add(port(BasicQueryOperator.PORT_RECORDS, FunctionParamTypeEnum.LIST, "分页记录"));
+            ports.add(port(BasicQueryOperator.PORT_TOTAL, FunctionParamTypeEnum.LONG, "记录总数"));
+        }
+        return ports;
+    }
+
+    /** 构造一个画布端口（id 与 name 同参数名，保证“按参数名连线”成立）。 */
+    private CompositeParameter port(String name, FunctionParamTypeEnum paramType, String description) {
+        CompositeParameter port = new CompositeParameter();
+        port.setId(name);
+        port.setName(name);
+        port.setType(CompositeFunctionCatalog.toCanvasType(paramType));
+        port.setDescription(description);
+        return port;
     }
 
     /**

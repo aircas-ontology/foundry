@@ -63,14 +63,29 @@ public class CompositeFunctionInvoker {
         return switch (function.getType()) {
             case CUSTOMIZE -> require(groovyService, "脚本算子执行引擎").invokeHandle(
                     function.getApi(), function.getCode(), paramMap, inputParams);
-            case BASIC_QUERY -> require(basicQueryOperator, "基础函数算子执行器").runAsNode(
-                    require(basicQueryOperator, "基础函数算子执行器")
-                            .parseConfig(function.getCode(), function.getApi()), paramMap);
+            case BASIC_QUERY -> {
+                // 本体标识/分页属于算子内在校识，不再写入 function_param，assembleParams 取不到，
+                // 这里从原始节点入参直接透传，保证 runAsNode 能拿到查询目标本体。
+                Map<String, Object> bqInputs = new LinkedHashMap<>(paramMap);
+                carryThrough(inputs, bqInputs, BasicQueryOperator.PARAM_ONTOLOGY_IDENTIFIER);
+                carryThrough(inputs, bqInputs, BasicQueryOperator.PARAM_PAGE_NUM);
+                carryThrough(inputs, bqInputs, BasicQueryOperator.PARAM_PAGE_SIZE);
+                BasicQueryOperator operator = require(basicQueryOperator, "基础函数算子执行器");
+                yield operator.runAsNode(operator.parseConfig(function.getCode(), function.getApi()), bqInputs);
+            }
             case EXTERNAL -> require(externalApiOperator, "外部API算子执行器")
                     .runAsNode(function, nodePlan, paramMap);
             case COMPOSITE -> throw new BusinessException("编排节点[" + labelOf(nodePlan) + "]不能引用函数编排算子："
                     + function.getApi(), HttpStatus.BAD_REQUEST);
         };
+    }
+
+    /** 把算子内在校识端口（不在 function_param 里）从原始节点入参透传到执行参数表（仅当有值时）。 */
+    private static void carryThrough(Map<String, Object> source, Map<String, Object> target, String key) {
+        Object value = source.get(key);
+        if (value != null) {
+            target.put(key, value);
+        }
     }
 
     /** 算子执行器缺失时给出可读文案，而不是空指针 */
