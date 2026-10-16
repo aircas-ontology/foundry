@@ -98,7 +98,7 @@ async def application(scope, receive, send):
             raise ScanError('INVALID_REQUEST')
         language, raw = validate(await body(receive))
         result = await engine.scan(language, raw, budget=max(0.01, 20 - (time.monotonic() - started)))
-        logging.info('scanId=%s verdict=%s', result['scanId'], result['verdict'])
+        logging.info('scanId=%s completed=%s', result['scanId'], 'error' not in result)
         await respond(send, 200, result)
     except (ScanError, TimeoutError) as exc:
         await respond(send, 400, error_result(exc.code if isinstance(exc, ScanError) else 'INVALID_REQUEST'))

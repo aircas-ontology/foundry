@@ -2,13 +2,12 @@ name: foundry-semgrep-scan
 services:
   semgrep-scan:
     image: ${SCAN_IMAGE:-foundry/semgrep-scan:local}
-    platform: linux/amd64
+    platform: ${SCAN_PLATFORM:?Use build.ps1 or build.sh to select amd64 or arm64}
     pull_policy: never
     build:
       context: .
       args:
         BASE_IMAGE: ${SEMGREP_BASE_IMAGE:?Use build.ps1 or build.sh to load base-image.json}
-    user: "10001:10001"
     read_only: true
     init: true
     cap_drop: [ALL]

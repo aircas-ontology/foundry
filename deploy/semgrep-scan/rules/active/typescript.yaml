@@ -12208,6 +12208,54 @@
       "metadata": {
         "category": "integrity"
       }
+    },
+    {
+      "id": "foundry.typescript.sql-injection",
+      "languages": [
+        "typescript"
+      ],
+      "severity": "WARNING",
+      "message": "SQL 执行参数包含字符串拼接或插值。",
+      "pattern-either": [
+        {
+          "pattern": "$DB.query($SQL + $INPUT, ...)"
+        },
+        {
+          "pattern": "$DB.query(`...${$INPUT}...`, ...)"
+        },
+        {
+          "pattern": "$DB.execute($SQL + $INPUT, ...)"
+        },
+        {
+          "pattern": "$DB.execute(`...${$INPUT}...`, ...)"
+        }
+      ],
+      "metadata": {
+        "category": "sql-injection",
+        "confidence": "MEDIUM",
+        "source": "Foundry standalone script audit"
+      }
+    },
+    {
+      "id": "foundry.typescript.resource-exhaustion",
+      "languages": [
+        "typescript"
+      ],
+      "severity": "WARNING",
+      "message": "检测到无条件循环。",
+      "pattern-either": [
+        {
+          "pattern": "while (true) { ... }"
+        },
+        {
+          "pattern": "for (;;) { ... }"
+        }
+      ],
+      "metadata": {
+        "category": "resource-exhaustion",
+        "confidence": "MEDIUM",
+        "source": "Foundry standalone script audit"
+      }
     }
   ]
 }

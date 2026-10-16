@@ -3,21 +3,24 @@
   "baseImage": {
     "reference": "semgrep/semgrep@sha256:529ee8a277ec8adc5b534d7c74eea0a47e9de21d62852b6ba7ac6ba9566845c3",
     "version": "1.180.0",
-    "platform": "linux/amd64"
+    "platforms": [
+      "linux/amd64",
+      "linux/arm64"
+    ]
   },
-  "rulesetVersion": "sha256:d4461c92487b31f7a67f5d6ac0e5c2c91fd00bd24e16fabaa60b324a36c83f04",
+  "rulesetVersion": "sha256:9165fb3ac97cf2bddb44499bc70703111ccb975c6b0a6313b0b235e3cea30138",
   "inputs": {
-    "Dockerfile": "9b201bbf18ee2f1dcbc9a0c47e420f6d80f81f63e7d60ee33b8beede8ac50602",
-    "app/engine.py": "f35813c1ef8502e211c5ba5062d4dddcb92511aa50999bd17d3f65d89fff104e",
-    "app/server.py": "d6c0c54f662773d43c803c672bb4f35a2b7e8e658b16cdafc783fcbd9731ea90",
+    "Dockerfile": "e23ef9f0dfea772ef92b7530083369a817b8bd852b6338cfdadcffdd36495ef7",
+    "app/engine.py": "ec9fdcd8c3984c3f2fefe3bbcfa74d884c632590b79b1c125168975ee04af881",
+    "app/server.py": "ae1bfec7a5a885c895739c752d4d5c9f08ae99232c5bca698cf9a333057b1c8b",
     "app/versioning.py": "d0d0ad9cae042ab9ee53c4fd944704edacc02d6f2897aea2882e808de48736b7",
-    "base-image.json": "e58392ea25b703ff82cb94113235d17ae7cd504f1312f3f4705525a4f858645b",
+    "base-image.json": "06359f7e9f146043fe9528461d060e2339c8ef4a211509d3fcd3e86e62958cb9",
     "requirements.txt": "36d7d19120ac918a541ac736eb6f70b715c0cc8615fb69a9f79f3991c8a3c825",
     "rules/LICENSE.semgrep-rules": "1a6466ae5f1c68631bbd13e3f1aa8f380d84219853c08f0456b853fccfacee1d",
-    "rules/active/java.yaml": "de9e9529aa37a7acfcd424972b14773d82a04e28975a9d08fae06601ddd5c412",
-    "rules/active/python.yaml": "06680244c3cc157268c491135def7002b9e2009865911dd3ec74838c938f8e1d",
-    "rules/active/typescript.yaml": "e830c5cf8673792dcbba9795decff6ec15f5b6910629caf802e10ce8d170ac59",
-    "rules/blocking.json": "db6104177f9823ef5fd6a0498dbbc69dd45ac7500700c6491f655ac2528d1a80",
+    "rules/active/java.yaml": "0ac3d3e8375467147440fbf537e0b56bfdc66cbe774abab3e2866fd22e84d001",
+    "rules/active/python.yaml": "9ffbd60cb99e19dc256e05034be131816fd7782728cba64d7a83ff92decfd38c",
+    "rules/active/typescript.yaml": "11a3545c2e11702d29f9cbab0c4e7f790cf1b656c10c5f52fce75d7c3fe685fd",
+    "rules/blocking.json": "fd1e7fb22bec204b35427a55a19a885a3a38eafb01e733e1d3d65838733f0dfe",
     "tools/prepare.py": "0d03981293e9c62f3ce71a650259dc6d013f716591915f476c73f0b1ce7c260c"
   },
   "selection": {
@@ -124,7 +127,9 @@
         "foundry.java.deserialization",
         "foundry.java.file-write",
         "foundry.java.network",
-        "foundry.java.parse-integrity"
+        "foundry.java.parse-integrity",
+        "foundry.java.sql-injection",
+        "foundry.java.resource-exhaustion"
       ]
     },
     "python": {
@@ -285,7 +290,9 @@
         "foundry.python.deserialization",
         "foundry.python.file-write",
         "foundry.python.network",
-        "foundry.python.parse-integrity"
+        "foundry.python.parse-integrity",
+        "foundry.python.sql-injection",
+        "foundry.python.resource-exhaustion"
       ]
     },
     "typescript": {
@@ -369,7 +376,9 @@
         "foundry.typescript.deserialization",
         "foundry.typescript.file-write",
         "foundry.typescript.network",
-        "foundry.typescript.parse-integrity"
+        "foundry.typescript.parse-integrity",
+        "foundry.typescript.sql-injection",
+        "foundry.typescript.resource-exhaustion"
       ]
     }
   },
@@ -384,5 +393,5 @@
     "diagnosticLines": 200,
     "findings": 200
   },
-  "buildId": "d4461c92487b31f7"
+  "buildId": "9165fb3ac97cf2bd"
 }

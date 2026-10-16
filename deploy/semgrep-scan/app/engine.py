@@ -5,6 +5,7 @@ import importlib.metadata
 import json
 import logging
 import os
+import platform
 from pathlib import Path
 import re
 import shutil
@@ -32,7 +33,7 @@ class ScanError(Exception):
 
 
 def error_result(code, scan_id=None, duration=0):
-    return {'scanId': scan_id, 'verdict': 'ERROR', 'durationMs': duration, 'cached': False,
+    return {'scanId': scan_id, 'durationMs': duration, 'cached': False,
             'findings': [], 'findingsTruncated': False,
             'error': {'code': code, 'message': code, 'retryable': code in RETRYABLE or code in {'SERVICE_BUSY', 'SERVICE_NOT_READY', 'SERVICE_FAILURE'}}}
 
@@ -109,25 +110,26 @@ def adapt(report, exit_code, target, raw, expected, blocking):
     if not isinstance(results, list):
         raise ScanError('REPORT_INVALID')
     findings = []
-    rejected = False
     for hit in results:
         if not isinstance(hit, dict) or hit.get('path') != str(target) or hit.get('check_id') not in expected:
             raise ScanError('REPORT_INVALID')
         rule_id = hit['check_id']
         block = blocking.get(rule_id)
-        rejected |= block is not None
         start_line, start_column = position(raw, hit.get('start'))
         end_line, end_column = position(raw, hit.get('end'))
         severity = hit.get('extra', {}).get('severity')
         if severity not in {'INFO', 'WARNING', 'ERROR'}:
             raise ScanError('REPORT_INVALID')
-        # Never pass engine messages: Registry messages may interpolate user code.
+        # Use bundled static descriptions, never interpolated engine messages/code.
         findings.append({'ruleId': rule_id, 'category': block['category'] if block else 'security',
-                         'severity': severity, 'message': block['message'] if block else '命中安全检查规则，请结合规则 ID 审核。',
+                         'severity': {'ERROR': 'HIGH', 'WARNING': 'MEDIUM', 'INFO': 'LOW'}[severity],
+                         'reason': block['reason'] if block else '静态规则匹配到潜在安全风险，需结合调用上下文审核；不代表漏洞已被证实。',
+                         'message': block['message'] if block else '命中安全检查规则，请结合规则 ID 审核。',
                          'startLine': start_line, 'startColumn': start_column,
                          'endLine': end_line, 'endColumn': end_column})
-    findings.sort(key=lambda f: (f['ruleId'] not in blocking, f['startLine'] or 0, f['startColumn'] or 0, f['ruleId']))
-    return {'verdict': 'REJECTED' if rejected else 'PASSED', 'findings': findings[:200], 'findingsTruncated': len(findings) > 200}
+    findings.sort(key=lambda f: ({'HIGH': 0, 'MEDIUM': 1, 'LOW': 2}[f['severity']],
+                                 f['startLine'] or 0, f['startColumn'] or 0, f['ruleId']))
+    return {'findings': findings[:200], 'findingsTruncated': len(findings) > 200}
 
 
 class Engine:
@@ -165,13 +167,25 @@ class Engine:
             ids = [r['id'] for r in rules]
             if not ids or set(ids) != set(info['applicableIds']) or not blocking[language] or not set(blocking[language]) <= set(ids):
                 raise ScanError('RULESET_INVALID')
+            # blocking.json is now a description override, not an admission policy.
+            for rule in rules:
+                metadata = rule.get('metadata', {})
+                cwe = metadata.get('cwe', [])
+                if isinstance(cwe, str):
+                    cwe = [cwe]
+                blocking[language].setdefault(rule['id'], {
+                    'category': metadata.get('category', 'security'),
+                    'message': rule['message'],
+                    'reason': '; '.join(cwe) if cwe else '规则识别到潜在不安全用法，需结合调用上下文审核。',
+                })
         self.manifest, self.blocking = manifest, blocking
 
     def capabilities(self):
         m = self.manifest
         return {'ready': self.ready, 'languages': {k: v[0] for k, v in LANGUAGES.items()},
                 'engine': 'Semgrep CE', 'engineVersion': m['baseImage']['version'],
-                'baseImageDigest': m['baseImage']['reference'].split('@')[1], 'platform': m['baseImage']['platform'],
+                'baseImageDigest': m['baseImage']['reference'].split('@')[1], 'platform': 'linux/' + {'x86_64': 'amd64', 'aarch64': 'arm64'}.get(platform.machine(), platform.machine()),
+                'supportedPlatforms': m['baseImage']['platforms'],
                 'serviceBuildId': m['buildId'], 'rulesetVersion': m['rulesetVersion'], 'limits': m['limits'],
                 'cached': False}
 
@@ -182,7 +196,7 @@ class Engine:
                    'TYPESCRIPT': b'require("child_process").execSync("id");\n'}
         for language, raw in samples.items():
             result = await self.scan(language, raw)
-            if result['verdict'] != 'REJECTED':
+            if 'error' in result or not result['findings']:
                 raise ScanError('RULESET_INVALID')
         self.ready = True
 

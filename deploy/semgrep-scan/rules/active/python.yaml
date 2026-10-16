@@ -19194,6 +19194,54 @@
       "metadata": {
         "category": "integrity"
       }
+    },
+    {
+      "id": "foundry.python.sql-injection",
+      "languages": [
+        "python"
+      ],
+      "severity": "WARNING",
+      "message": "SQL 执行参数包含字符串拼接或插值。",
+      "pattern-either": [
+        {
+          "pattern": "$DB.execute($SQL + $INPUT, ...)"
+        },
+        {
+          "pattern": "$DB.execute($SQL % $INPUT, ...)"
+        },
+        {
+          "pattern": "$DB.execute($SQL.format(...), ...)"
+        },
+        {
+          "pattern": "$DB.execute(f\"...\", ...)"
+        },
+        {
+          "pattern": "$DB.executemany(f\"...\", ...)"
+        }
+      ],
+      "metadata": {
+        "category": "sql-injection",
+        "confidence": "MEDIUM",
+        "source": "Foundry standalone script audit"
+      }
+    },
+    {
+      "id": "foundry.python.resource-exhaustion",
+      "languages": [
+        "python"
+      ],
+      "severity": "WARNING",
+      "message": "检测到无条件循环。",
+      "pattern-either": [
+        {
+          "pattern": "while True:\n  ..."
+        }
+      ],
+      "metadata": {
+        "category": "resource-exhaustion",
+        "confidence": "MEDIUM",
+        "source": "Foundry standalone script audit"
+      }
     }
   ]
 }

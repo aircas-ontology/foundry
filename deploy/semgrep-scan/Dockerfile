@@ -19,6 +19,6 @@ COPY app/ ./app/
 COPY tools/prepare.py ./tools/prepare.py
 COPY rules/ ./rules/
 RUN python -c "import json,os; assert json.load(open('base-image.json'))['reference']==os.environ['BASE_IMAGE']" && python tools/prepare.py --check && chmod -R a-w /app
-USER 10001:10001
+USER root
 EXPOSE 8080
 ENTRYPOINT ["python", "-m", "uvicorn", "app.server:application", "--host", "0.0.0.0", "--port", "8080", "--workers", "1", "--no-access-log", "--limit-concurrency", "64", "--timeout-graceful-shutdown", "25"]

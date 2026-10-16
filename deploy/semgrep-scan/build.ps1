@@ -1,4 +1,4 @@
-param([string]$Image = 'foundry/semgrep-scan:local', [switch]$Start)
+param([string]$Image = 'foundry/semgrep-scan:local', [switch]$Start, [ValidateSet("linux/amd64", "linux/arm64")][string]$Platform)
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 Push-Location $PSScriptRoot
@@ -10,11 +10,18 @@ try {
     $env:SCAN_IMAGE = $Image
     & docker version --format '{{.Server.Version}}'
     if ($LASTEXITCODE -ne 0) { throw 'Docker Engine unavailable' }
+    if (-not $Platform) {
+        $arch = & docker version --format '{{.Server.Arch}}'
+        if ($LASTEXITCODE -ne 0) { throw 'Cannot detect Docker architecture' }
+        $Platform = "linux/$arch"
+    }
+    if ($Platform -notin $base.platforms) { throw "Unsupported platform: $Platform" }
+    $env:SCAN_PLATFORM = $Platform
     & docker compose version
     if ($LASTEXITCODE -ne 0) { throw 'Docker Compose unavailable' }
     & docker compose config --quiet
     if ($LASTEXITCODE -ne 0) { throw 'Invalid Compose configuration' }
-    & docker pull --platform $base.platform $base.reference
+    & docker pull --platform $Platform $base.reference
     if ($LASTEXITCODE -ne 0) { throw 'Base image pull failed' }
     & docker compose build --pull=false semgrep-scan
     if ($LASTEXITCODE -ne 0) { throw 'Service image build failed' }
