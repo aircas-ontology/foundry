@@ -9,7 +9,6 @@ import com.aircas.ptr.foundry.ontology.engine.ScriptEngineRouter;
 import com.aircas.ptr.foundry.ontology.engine.ScriptExecutionContext;
 import com.aircas.ptr.foundry.ontology.composite.BasicQueryOperator;
 import com.aircas.ptr.foundry.ontology.composite.CompositeChainRegistry;
-import com.aircas.ptr.foundry.ontology.composite.CompositeFunctionCatalog;
 import com.aircas.ptr.foundry.ontology.composite.CompositeFunctionInvoker;
 import com.aircas.ptr.foundry.ontology.composite.ContainerOperatorInvoker;
 import com.aircas.ptr.foundry.ontology.composite.ExternalApiOperator;
@@ -39,6 +38,7 @@ import com.aircas.ptr.foundry.ontology.model.param.FilterGroupParam;
 import com.aircas.ptr.foundry.ontology.model.param.FilterNodeParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionListQueryParam;
+import com.aircas.ptr.foundry.ontology.model.param.FunctionParameter;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionExecuteParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionTestParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionUpdateParam;
@@ -63,6 +63,7 @@ import com.aircas.ptr.foundry.ontology.service.FunctionParamService;
 import com.aircas.ptr.foundry.ontology.service.FunctionService;
 import com.aircas.ptr.foundry.ontology.service.GroovyService;
 import com.aircas.ptr.foundry.ontology.utils.DockerCommandExecutor;
+import com.aircas.ptr.foundry.ontology.utils.OperatorFunctionFactory;
 import com.aircas.ptr.foundry.ontology.utils.SchemaHandleUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -441,19 +442,13 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
             //脚本函数落库前先做语法/编译校验（走对应 runner 的 /validate），失败即拒、不落库
             validateScript(language, param.getFunctionApi(), version, param.getCode());
         }
-        var func = Function.builder()
-                .api(param.getFunctionApi())
-                .version(version)
-                .publish(FunctionConstant.PUBLISH_UNPUBLISHED)
+        var func = OperatorFunctionFactory.operatorDefaults(
+                        param.getFunctionApi(), version, displayName, param.getType(),
+                        param.getOntologySpaceId(), model)
                 .description(param.getDescription())
-                .displayName(displayName)
                 .code(param.getCode())
-                .type(param.getType())
                 .language(language)
-                .model(model)
-                .status(Status.ENABLE.getValue())
                 .referenceName(param.getReferenceName())
-                .ontologySpaceId(param.getOntologySpaceId())
                 .build();
         save(func);
         //自定义函数需要解析函数参数
@@ -646,7 +641,12 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                         .orderByAsc(FunctionParamPO::getParamOrder));
         //参数取值
         Map<String, Object> funParamMap = CollectionUtils.isEmpty(param.getParameters()) ?
-                new HashMap<>() : param.getParameters().stream().collect(HashMap::new, (m, p) -> m.put(p.getParamName(), p.getParamValue()), HashMap::putAll);
+                new HashMap<>() : param.getParameters().stream().collect(HashMap::new, (m, p) -> {
+                    Object v = resolveParamValue(p);
+                    if (v != null) {
+                        m.put(p.getParamName(), v);
+                    }
+                }, HashMap::putAll);
 //函数编排：走 LiteFlow 执行链，不复用 groovy 脚本执行逻辑
         if (function.getType() == FunctionTypeEnum.COMPOSITE) {
             return executeCompositeFunction(function, funParamMap);
@@ -662,7 +662,17 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         }
         //脚本函数：按参数定义组装单对象入参（handle(input)），按语言路由到对应引擎执行
         Map<String, Object> inputMap = buildInputMap(executeInputParams, funParamMap);
-        String inputJson = objectMapper.writeValueAsString(inputMap);
+        // 单对象入参解包：当只有一个 OBJECT 入参时，直接将该对象的值作为 runner 的 input，
+        // 避免脚本里写 input.input.xxx 的双层嵌套（用户给参数起名 input/user/whatever 都能直接用 input.xxx）
+        String inputJson;
+        if (executeInputParams.size() == 1
+                && executeInputParams.get(0).getParamType() == FunctionParamTypeEnum.OBJECT
+                && inputMap.containsKey(executeInputParams.get(0).getParamName())) {
+            Object value = inputMap.get(executeInputParams.get(0).getParamName());
+            inputJson = objectMapper.writeValueAsString(value);
+        } else {
+            inputJson = objectMapper.writeValueAsString(inputMap);
+        }
         FunctionLanguageEnum language = function.getLanguage() == null ? FunctionLanguageEnum.GROOVY : function.getLanguage();
         ScriptExecutionContext ctx = ScriptExecutionContext.builder()
                 .language(language)
@@ -831,15 +841,8 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
 
     private FunctionParamPO externalParam(Long functionId, ExternalApiConfig.PortDefinition port,
                                           FunctionParamCategoryEnum category, int paramOrder) {
-        return FunctionParamPO.builder()
-                .functionId(functionId)
-                .paramName(port.getName())
-                .paramType(CompositeFunctionCatalog.toParamType(port.getType()))
-                .category(category)
-                .paramOrder(paramOrder)
-                .description(port.getDescription())
-                .createTime(new Date())
-                .updateTime(new Date())
+        return OperatorFunctionFactory.functionParamDefaults(
+                        functionId, port.getName(), port.getType(), category, paramOrder, port.getDescription())
                 .build();
     }
 
@@ -1020,6 +1023,34 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     }
 
     /**
+     * 把请求参数解析成执行/测试用的值，支持「按层级逐字段填、后端自动组装嵌套对象」：
+     * <ul>
+     *   <li>标量参数（或整包传入的对象）：直接取 {@code paramValue}；</li>
+     *   <li>对象参数按 {@code fields} 逐字段填：递归把子字段组装成 {@link LinkedHashMap}，
+     *       使脚本按 {@code input.<参数名>.<字段>} 即可取到嵌套结构；</li>
+     *   <li>{@code paramValue} 优先于 {@code fields}（兼容整包传值的老前端）；</li>
+     *   <li>缺值返回 {@code null}，由 {@link #buildInputMap} 省略该键，与各语言「缺值走脚本默认」一致。</li>
+     * </ul>
+     */
+    static Object resolveParamValue(FunctionParameter p) {
+        if (p.getParamValue() != null) {
+            return p.getParamValue();
+        }
+        List<FunctionParameter> fields = p.getFields();
+        if (CollectionUtils.isEmpty(fields)) {
+            return null;
+        }
+        Map<String, Object> nested = new LinkedHashMap<>();
+        for (FunctionParameter f : fields) {
+            Object v = resolveParamValue(f);
+            if (v != null) {
+                nested.put(f.getParamName(), v);
+            }
+        }
+        return nested.isEmpty() ? null : nested;
+    }
+
+    /**
      * 统一函数测试入口：根据函数类型分发到不同测试逻辑。
      * <p>支持两种模式：</p>
      * <ul>
@@ -1092,7 +1123,12 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         Map<String, Object> inputMap = CollectionUtils.isEmpty(param.getParameters())
                 ? new LinkedHashMap<>()
                 : param.getParameters().stream().collect(LinkedHashMap::new,
-                (m, p) -> m.put(p.getParamName(), p.getParamValue()), LinkedHashMap::putAll);
+                (m, p) -> {
+                    Object v = resolveParamValue(p);
+                    if (v != null) {
+                        m.put(p.getParamName(), v);
+                    }
+                }, LinkedHashMap::putAll);
 
         FunctionTypeEnum type = param.getType();
         switch (type) {
@@ -1101,7 +1137,17 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                         "脚本草稿测试必须提供 code", HttpStatus.BAD_REQUEST);
                 FunctionLanguageEnum language = param.getLanguage() == null
                         ? FunctionLanguageEnum.GROOVY : param.getLanguage();
-                String inputJson = objectMapper.writeValueAsString(inputMap);
+                // 草稿测试：单对象入参解包（与 executeFunction 一致）
+                String inputJson;
+                if (param.getParameters() != null && param.getParameters().size() == 1
+                        && param.getParameters().get(0).getFields() != null
+                        && !param.getParameters().get(0).getFields().isEmpty()
+                        && inputMap.containsKey(param.getParameters().get(0).getParamName())) {
+                    Object value = inputMap.get(param.getParameters().get(0).getParamName());
+                    inputJson = objectMapper.writeValueAsString(value);
+                } else {
+                    inputJson = objectMapper.writeValueAsString(inputMap);
+                }
                 ScriptExecutionContext ctx = ScriptExecutionContext.builder()
                         .language(language)
                         .functionApi("__draft__")
@@ -1316,15 +1362,8 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
      */
     private FunctionParamPO buildCompositeParam(Long functionId, CompositeParameter parameter,
                                                 FunctionParamCategoryEnum category, int paramOrder) {
-        return FunctionParamPO.builder()
-                .functionId(functionId)
-                .paramName(parameter.getName())
-                .paramType(CompositeFunctionCatalog.toParamType(parameter.getType()))
-                .category(category)
-                .paramOrder(paramOrder)
-                .description(parameter.getDescription())
-                .createTime(new Date())
-                .updateTime(new Date())
+        return OperatorFunctionFactory.functionParamDefaults(
+                        functionId, parameter.getName(), parameter.getType(), category, paramOrder, parameter.getDescription())
                 .build();
     }
 

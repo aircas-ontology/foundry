@@ -1,6 +1,5 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
-import com.aircas.ptr.foundry.common.constant.FunctionParamTypeEnum;
 import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.ontology.config.ContainerOperatorProperties;
@@ -13,7 +12,6 @@ import com.aircas.ptr.foundry.ontology.model.enums.FunctionModelEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.ContainerPhaseEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamCategoryEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
-import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import com.aircas.ptr.foundry.ontology.model.param.ContainerFunctionCreateParam;
 import com.aircas.ptr.foundry.ontology.model.po.Function;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionContainerInstance;
@@ -23,10 +21,10 @@ import com.aircas.ptr.foundry.ontology.repository.mainMapper.FunctionContainerIn
 import com.aircas.ptr.foundry.ontology.service.ContainerFunctionService;
 import com.aircas.ptr.foundry.ontology.service.FunctionParamService;
 import com.aircas.ptr.foundry.ontology.service.OpenApiProbeService;
-import com.aircas.ptr.foundry.ontology.constant.FunctionConstant;
 import com.aircas.ptr.foundry.ontology.utils.DockerImageInspector;
 import com.aircas.ptr.foundry.ontology.utils.DockerCommandExecutor;
 import com.aircas.ptr.foundry.ontology.utils.DockerRunCommandParser;
+import com.aircas.ptr.foundry.ontology.utils.OperatorFunctionFactory;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -219,17 +217,11 @@ public class ContainerFunctionServiceImpl implements ContainerFunctionService {
                     .interfaces(List.of(itf))
                     .build();
 
-            Function function = Function.builder()
-                    .api(derivedApi)
-                    .version(CONTAINER_VERSION)
-                    .publish(FunctionConstant.PUBLISH_UNPUBLISHED)
-                    .displayName(joinDash(param.getDisplayName(), itf.getName()))
+            Function function = OperatorFunctionFactory.operatorDefaults(
+                            derivedApi, CONTAINER_VERSION, joinDash(param.getDisplayName(), itf.getName()),
+                            FunctionTypeEnum.CONTAINER, param.getOntologySpaceId(), FunctionModelEnum.OTHER)
                     .description(joinDesc(param.getDescription(), itf.getDescription()))
-                    .type(FunctionTypeEnum.CONTAINER)
                     .containerKey(containerKey)
-                    .model(FunctionModelEnum.OTHER)
-                    .status(Status.ENABLE.getValue())
-                    .ontologySpaceId(param.getOntologySpaceId())
                     .dockerConfig(writeJson(config))
                     .build();
             functionMapper.insert(function);
@@ -312,32 +304,13 @@ public class ContainerFunctionServiceImpl implements ContainerFunctionService {
 
     private FunctionParamPO buildParam(Long functionId, ContainerInterfaceParam p,
                                        FunctionParamCategoryEnum category, int order) {
-        return FunctionParamPO.builder()
-                .functionId(functionId)
-                .paramName(p.getName())
-                .paramType(mapType(p.getType()))
-                .category(category)
-                .paramOrder(order)
-                .description(p.getDescription())
+        return OperatorFunctionFactory.functionParamDefaults(
+                        functionId, p.getName(), p.getType(), category, order, p.getDescription())
                 .paramSchema(writeJson(Map.of(
                         "in", p.getIn() == null ? "" : p.getIn(),
                         "required", Boolean.TRUE.equals(p.getRequired()),
                         "openapiType", p.getType() == null ? "object" : p.getType())))
-                .createTime(new Date())
-                .updateTime(new Date())
                 .build();
-    }
-
-    /** OpenAPI schema type → FunctionParamTypeEnum，未知归 OBJECT */
-    private FunctionParamTypeEnum mapType(String type) {
-        if (type == null) {
-            return FunctionParamTypeEnum.OBJECT;
-        }
-        try {
-            return FunctionParamTypeEnum.fromJson(type.toLowerCase(Locale.ROOT));
-        } catch (IllegalArgumentException e) {
-            return FunctionParamTypeEnum.OBJECT;
-        }
     }
 
     private String writeJson(Object obj) {

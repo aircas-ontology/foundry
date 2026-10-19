@@ -2,10 +2,10 @@ package com.aircas.ptr.foundry.ontology.config;
 
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.system.ApplicationHome;
 import org.springframework.stereotype.Component;
 
 import java.io.File;
-import java.net.URISyntaxException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
@@ -71,16 +71,20 @@ public class ContainerOperatorProperties {
 
     /**
      * 应用运行根目录：优先 jar 所在目录，取不到（如在 classes 目录里跑）回退 user.dir。
+     * <p>用 Spring Boot 的 {@link ApplicationHome} 解析：它能把 fat jar 的嵌套
+     * {@code jar:file:...!/...} URI 正确还原为外层 jar 所在目录；而 {@code new File(uri)}
+     * 对这种非层次化 URI 会抛 {@code IllegalArgumentException: URI is not hierarchical}。</p>
      */
     private static Path appHomeDir() {
         try {
-            File jarFile = new File(ContainerOperatorProperties.class.getProtectionDomain()
-                    .getCodeSource().getLocation().toURI());
-            File parent = jarFile.isFile() ? jarFile.getParentFile() : jarFile;
-            return parent.toPath();
-        } catch (URISyntaxException | IllegalStateException e) {
-            return Paths.get(System.getProperty("user.dir"));
+            File dir = new ApplicationHome(ContainerOperatorProperties.class).getDir();
+            if (dir != null) {
+                return dir.toPath();
+            }
+        } catch (RuntimeException e) {
+            // 解析失败则回退工作目录
         }
+        return Paths.get(System.getProperty("user.dir"));
     }
 
 }
