@@ -225,7 +225,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
             }
         }
 
-        // EXTERNAL 类型：解析接口定义，前端据此回显请求/响应映射
+        // EXTERNAL 类型：解析接口定义，前端据此回显 inputs/outputs
         ExternalApiConfig apiConfig = null;
         if (function.getType() == FunctionTypeEnum.EXTERNAL && StringUtils.isNotEmpty(function.getCode())) {
             try {
@@ -469,7 +469,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         if (param.getType().equals(FunctionTypeEnum.COMPOSITE)) {
             createCompositeParams(func.getId(), param.getFunctionApi(), param.getCompositeConfig());
         }
-        //外部API算子：序列化 apiConfig 到 code，并按请求/响应映射生成出入参，使其可接入编排工作流
+        //外部API算子：序列化 apiConfig 到 code，并按 inputs/outputs 生成出入参，使其可接入编排工作流
         if (param.getType().equals(FunctionTypeEnum.EXTERNAL)) {
             createExternalParams(func.getId(), param.getApiConfig());
         }
@@ -810,42 +810,23 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         }
     }
 
-    /** 入参端口：显式声明优先，否则从请求映射的 parameterId 推导（跳过 {@code literal:} 字面量） */
+    /** 入参端口：直接取 apiConfig.inputs */
     private List<ExternalApiConfig.PortDefinition> externalInputPorts(ExternalApiConfig apiConfig) {
-        if (!apiConfig.inputsOrEmpty().isEmpty()) {
-            return apiConfig.inputsOrEmpty();
-        }
-        Map<String, ExternalApiConfig.PortDefinition> ports = new java.util.LinkedHashMap<>();
-        for (ExternalApiConfig.RequestMapping mapping : apiConfig.requestMappingsOrEmpty()) {
-            String name = mapping.getParameterId();
-            if (StringUtils.isBlank(name) || name.startsWith(ExternalApiConfig.LITERAL_PREFIX)) {
-                continue;
-            }
-            ports.putIfAbsent(name.trim(), ExternalApiConfig.PortDefinition.builder().name(name.trim()).build());
-        }
-        return new ArrayList<>(ports.values());
+        return apiConfig.inputsOrEmpty();
     }
 
-    /** 出参端口：显式声明优先，否则从响应映射的 parameterId 推导；两者都为空时兜底 result/status */
+    /** 出参端口：直接取 apiConfig.outputs；为空时兜底 result/status */
     private List<ExternalApiConfig.PortDefinition> externalOutputPorts(ExternalApiConfig apiConfig) {
-        if (!apiConfig.outputsOrEmpty().isEmpty()) {
-            return apiConfig.outputsOrEmpty();
+        List<ExternalApiConfig.PortDefinition> outputs = apiConfig.outputsOrEmpty();
+        if (!outputs.isEmpty()) {
+            return outputs;
         }
-        Map<String, ExternalApiConfig.PortDefinition> ports = new java.util.LinkedHashMap<>();
-        for (ExternalApiConfig.ResponseMapping mapping : apiConfig.responseMappingsOrEmpty()) {
-            String name = mapping.getParameterId();
-            if (StringUtils.isBlank(name)) {
-                continue;
-            }
-            ports.putIfAbsent(name.trim(), ExternalApiConfig.PortDefinition.builder().name(name.trim()).build());
-        }
-        if (ports.isEmpty()) {
-            ports.put(ExternalApiOperator.PORT_RESULT, ExternalApiConfig.PortDefinition.builder()
-                    .name(ExternalApiOperator.PORT_RESULT).type("object").description("响应报文").build());
-            ports.put(ExternalApiOperator.PORT_STATUS, ExternalApiConfig.PortDefinition.builder()
-                    .name(ExternalApiOperator.PORT_STATUS).type("number").description("HTTP 状态码").build());
-        }
-        return new ArrayList<>(ports.values());
+        List<ExternalApiConfig.PortDefinition> defaults = new ArrayList<>();
+        defaults.add(ExternalApiConfig.PortDefinition.builder()
+                .name(ExternalApiOperator.PORT_RESULT).type("object").description("响应报文").build());
+        defaults.add(ExternalApiConfig.PortDefinition.builder()
+                .name(ExternalApiOperator.PORT_STATUS).type("number").description("HTTP 状态码").build());
+        return defaults;
     }
 
     private FunctionParamPO externalParam(Long functionId, ExternalApiConfig.PortDefinition port,

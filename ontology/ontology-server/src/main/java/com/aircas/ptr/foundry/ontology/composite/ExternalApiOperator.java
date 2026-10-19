@@ -18,7 +18,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * 外部API函数算子执行器：按接口定义组装 HTTP 请求、发起调用、再按响应映射抽取输出端口的值。
+ * 外部API函数算子执行器：按接口定义组装 HTTP 请求、发起调用、再按出参 name 抽取输出端口的值。
  *
  * <p>接口定义（{@link ExternalApiConfig}）序列化存放在 {@code function.code}，
  * 注册外部API算子与编排节点调用共用同一份定义，因此外部API算子可以直接接入编排工作流。</p>
@@ -62,7 +62,7 @@ public class ExternalApiOperator {
         Map<String, String> queryValues = new LinkedHashMap<>();
         Map<String, String> headerValues = new LinkedHashMap<>();
         Map<String, Object> bodyValues = new LinkedHashMap<>();
-        applyRequestMappings(config, inputs, pathValues, queryValues, headerValues, bodyValues);
+        applyInputs(config, inputs, pathValues, queryValues, headerValues, bodyValues);
 
         String url = buildUrl(config.getEndpoint(), pathValues, queryValues);
         Map<String, String> headers = buildHeaders(config, headerValues);
@@ -91,46 +91,35 @@ public class ExternalApiOperator {
         }
     }
 
-    /** 按请求映射把入参分发到 path/query/header/body 四个位置 */
-    private void applyRequestMappings(ExternalApiConfig config, Map<String, Object> inputs,
-                                      Map<String, String> pathValues, Map<String, String> queryValues,
-                                      Map<String, String> headerValues, Map<String, Object> bodyValues) {
-        List<ExternalApiConfig.RequestMapping> mappings = config.effectiveRequestMappings();
-        if (mappings.isEmpty()) {
-            // 未配置请求映射：入参整体作为 JSON 请求体
+    /** 按入参定义把值分发到 path/query/header/body 四个位置：报文键名即参数 name */
+    private void applyInputs(ExternalApiConfig config, Map<String, Object> inputs,
+                             Map<String, String> pathValues, Map<String, String> queryValues,
+                             Map<String, String> headerValues, Map<String, Object> bodyValues) {
+        if (config.inputsOrEmpty().isEmpty()) {
+            // 未声明入参：调用方传入的参数整体作为 JSON 请求体
             inputs.forEach((name, value) -> {
                 if (value != null) {
-                    bodyValues.put(name, value);
+                    bodyValues.put(name, jsonValue(value));
                 }
             });
             return;
         }
-        for (ExternalApiConfig.RequestMapping mapping : mappings) {
-            String parameterId = mapping.getParameterId();
-            if (StringUtils.isBlank(parameterId)) {
+        for (ExternalApiConfig.PortDefinition in : config.inputsOrEmpty()) {
+            if (in == null || StringUtils.isBlank(in.getName())) {
                 continue;
             }
-            String literal = null;
-            Object value;
-            if (parameterId.startsWith(ExternalApiConfig.LITERAL_PREFIX)) {
-                literal = parameterId.substring(ExternalApiConfig.LITERAL_PREFIX.length());
-                value = literal;
-            } else {
-                value = inputs.get(parameterId);
-            }
+            Object value = inputs == null ? null : inputs.get(in.getName());
             if (value == null) {
                 continue;
             }
-            String target = StringUtils.isBlank(mapping.getTargetName()) ? fallbackName(parameterId, literal)
-                    : mapping.getTargetName().trim();
-            String location = StringUtils.isBlank(mapping.getLocation()) ? ExternalApiConfig.LOCATION_BODY
-                    : mapping.getLocation().trim().toLowerCase();
+            String location = StringUtils.isBlank(in.getLocation()) ? ExternalApiConfig.LOCATION_BODY
+                    : in.getLocation().trim().toLowerCase();
             switch (location) {
-                case ExternalApiConfig.LOCATION_PATH -> pathValues.put(target, text(value));
-                case ExternalApiConfig.LOCATION_QUERY -> queryValues.put(target, text(value));
-                case ExternalApiConfig.LOCATION_HEADER -> headerValues.put(target, text(value));
-                case ExternalApiConfig.LOCATION_BODY -> bodyValues.put(target, jsonValue(value));
-                default -> throw new BusinessException("外部API请求映射位置非法：" + mapping.getLocation(),
+                case ExternalApiConfig.LOCATION_PATH -> pathValues.put(in.getName(), text(value));
+                case ExternalApiConfig.LOCATION_QUERY -> queryValues.put(in.getName(), text(value));
+                case ExternalApiConfig.LOCATION_HEADER -> headerValues.put(in.getName(), text(value));
+                case ExternalApiConfig.LOCATION_BODY -> bodyValues.put(in.getName(), jsonValue(value));
+                default -> throw new BusinessException("外部API入参位置非法：" + in.getLocation(),
                         HttpStatus.BAD_REQUEST);
             }
         }
@@ -180,7 +169,7 @@ public class ExternalApiOperator {
             return null;
         }
         if (bodyValues.isEmpty()) {
-            // 无请求映射且无入参时给一个空对象，避免部分服务端拒绝空体
+            // 无入参声明且无入参值时给一个空对象，避免部分服务端拒绝空体
             return "{}";
         }
         try {
@@ -190,24 +179,22 @@ public class ExternalApiOperator {
         }
     }
 
-    /** 按响应映射抽取输出端口值；未配置响应映射时给出整个报文 */
+    /** 按出参定义从响应报文取值：取值路径即出参 name；未声明出参时给出整个报文 */
     private Map<String, Object> bindResponse(ExternalApiConfig config, ExternalApiExecutor.HttpResult response,
                                              String label) {
         Map<String, Object> ports = new LinkedHashMap<>();
-        List<ExternalApiConfig.ResponseMapping> mappings = config.effectiveResponseMappings();
-        if (mappings.isEmpty()) {
+        List<ExternalApiConfig.PortDefinition> outputs = config.outputsOrEmpty();
+        if (outputs.isEmpty()) {
             ports.put(PORT_RESULT, parseBody(response.body(), label));
             ports.put(PORT_STATUS, response.status());
             return ports;
         }
         JsonNode root = readTree(response.body(), label);
-        for (ExternalApiConfig.ResponseMapping mapping : mappings) {
-            String parameterId = mapping.getParameterId();
-            if (StringUtils.isBlank(parameterId)) {
+        for (ExternalApiConfig.PortDefinition out : outputs) {
+            if (out == null || StringUtils.isBlank(out.getName())) {
                 continue;
             }
-            String path = StringUtils.isBlank(mapping.getSourcePath()) ? parameterId : mapping.getSourcePath().trim();
-            ports.put(parameterId, extract(root, path));
+            ports.put(out.getName(), extract(root, out.getName()));
         }
         return ports;
     }
@@ -330,14 +317,6 @@ public class ExternalApiOperator {
         return value instanceof CharSequence || value instanceof Number || value instanceof Boolean
                 ? String.valueOf(value)
                 : String.valueOf(value);
-    }
-
-    private static String fallbackName(String parameterId, String literal) {
-        if (literal != null) {
-            throw new BusinessException("外部API字面量映射必须指定 targetName", HttpStatus.BAD_REQUEST);
-        }
-        int colon = parameterId.indexOf(':');
-        return colon >= 0 ? parameterId.substring(colon + 1) : parameterId;
     }
 
     private static String urlEncode(String value) {
