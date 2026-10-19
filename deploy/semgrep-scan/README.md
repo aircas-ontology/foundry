@@ -99,19 +99,120 @@ docker compose down
 
 ## 接口
 
-| 接口 | 说明 |
-| --- | --- |
-| GET /api/v1/health | 存活检查 |
-| GET /api/v1/capabilities | 就绪状态、支持语言、引擎版本、规则版本和扫描限额 |
-| POST /api/v1/scan | 同步返回扫描结果 |
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | /api/v1/health | 存活检查 |
+| GET | /api/v1/capabilities | 就绪状态、支持语言、引擎版本、规则版本和扫描限额 |
+| POST | /api/v1/scan | 同步返回扫描结果 |
 
-扫描接口不返回 PASSED/REJECTED 等业务结论。本体服务依据 findings 的等级、类别和自身策略决定是否放行；响应包含 `error` 或 `findingsTruncated=true` 时也应由本体服务明确处理。
+### 通用约定
 
-扫描结论使用 HTTP 200；请求错误为 400，满载为 429，未就绪为 503，服务故障为 500。health 正常不代表扫描已就绪。
+- 请求和响应均为 `application/json; charset=utf-8`，响应带 `Cache-Control: no-store`。
+- JSON 字段使用小驼峰命名。
+- 下文示例中的 `//` 注释仅用于说明字段，实际请求和响应不包含注释。
+- health 正常不代表扫描已就绪；能否扫描以 capabilities 的 `ready` 为准。
 
-请求字段：`requestId`（追踪标识）、`scriptType`（`GROOVY` / `PYTHON` / `TYPESCRIPT`）、`code`、`codeHash`。hash 为原始代码 UTF-8 字节的 SHA-256 小写十六进制，不转换换行或空白。不接受自定义命令参数或规则路径。
+### GET /api/v1/health
 
-PowerShell 调用示例：
+- 请求：无参数、无请求体。
+- 用途：仅探测 HTTP 进程是否存活。
+
+请求示例：
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:18080/api/v1/health
+```
+
+```bash
+curl -s http://127.0.0.1:18080/api/v1/health
+```
+
+响应示例（HTTP 200）：
+
+```jsonc
+{
+  "status": "alive"   // string：固定为 "alive"，表示进程在响应；不代表规则或引擎已就绪
+}
+```
+
+### GET /api/v1/capabilities
+
+- 请求：无参数、无请求体。
+- 用途：获取就绪状态、支持语言、引擎/规则版本和扫描限额。
+- 客户端应等待 `ready=true` 后再调用扫描接口。
+
+请求示例：
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:18080/api/v1/capabilities
+```
+
+```bash
+curl -s http://127.0.0.1:18080/api/v1/capabilities
+```
+
+响应示例（HTTP 200，`ready=true`）：
+
+```jsonc
+{
+  "ready": true,                            // boolean：启动自检（manifest、规则、引擎冒烟扫描）全部通过；false 时 HTTP 503
+  "languages": {                            // object：支持的脚本类型 → 实际使用的解析器
+    "GROOVY": "java",                       // string：Groovy 由 Java 解析器处理
+    "PYTHON": "python",                     // string：Python 解析器
+    "TYPESCRIPT": "typescript"              // string：TypeScript 解析器
+  },
+  "engine": "Semgrep CE",                   // string：扫描引擎产品名
+  "engineVersion": "1.180.0",               // string：引擎版本，与 manifest 锁定值一致
+  "baseImageDigest": "sha256:529ee8a2...",  // string：基础镜像 digest（示例省略中间部分）
+  "platform": "linux/amd64",                // string：当前容器运行架构，取值为 linux/amd64 或 linux/arm64
+  "supportedPlatforms": [                   // array<string>：镜像支持的发布平台
+    "linux/amd64",
+    "linux/arm64"
+  ],
+  "serviceBuildId": "9165fb3ac97cf2bd",     // string：服务构建 ID
+  "rulesetVersion": "sha256:9165fb3a...",   // string：规则集指纹，规则/源码/依赖变化后会变化
+  "limits": {                               // object：运行时扫描限额
+    "slots": 2,                             // number：并发扫描槽位数，占满时返回 429
+    "jobs": 1,                              // number：每次扫描的引擎并发数
+    "engineTimeoutSeconds": 15,             // number：单次引擎超时（秒）
+    "totalTimeoutSeconds": 20,              // number：单次请求总预算（秒）
+    "codeBytes": 262144,                    // number：代码 UTF-8 字节上限（256 KiB）
+    "reportBytes": 4194304,                 // number：原始报告上限（4 MiB）
+    "diagnosticBytes": 1048576,             // number：诊断输出读取上限（1 MiB）
+    "diagnosticLines": 200,                 // number：诊断输出行数上限
+    "findings": 200                         // number：单次最多返回的 findings 数
+  },
+  "cached": false                           // boolean：固定为 false，缓存已关闭
+}
+```
+
+未就绪时的响应（HTTP 503）：
+
+- manifest 和规则已加载、自检未完成或失败：响应体仍是上面的 capabilities 结构，仅 `ready=false`。
+- manifest 尚未加载：响应体为扫描接口的错误结构，`error.code=SERVICE_NOT_READY`。
+
+### POST /api/v1/scan
+
+- 同步返回扫描结果；不返回 PASSED/REJECTED 等业务结论。
+- 是否放行由本体服务根据 `error`、`findings` 的等级/类别和自身策略决定。
+- 响应含 `error` 或 `findingsTruncated=true` 时，本体服务必须显式处理，不能视为"无问题"。
+- 必须使用 `Content-Type: application/json`；且只接受下列四个字段，不支持自定义命令参数或规则路径，重复 JSON 键会被拒绝。
+- HTTP 请求体上限为 2 MiB，读取超时为 5 秒。
+
+请求字段：
+
+```jsonc
+{
+  "requestId": "function-save-123",  // string，必填：追踪标识，1–128 位，仅允许 [A-Za-z0-9_.:-]
+  "scriptType": "GROOVY",            // string，必填：脚本类型，取值为 GROOVY / PYTHON / TYPESCRIPT
+  "code": "class A {}",              // string，必填：待扫描源码；不能为空或全空白、不能含 NUL（U+0000）字符、UTF-8 不超过 256 KiB
+  "codeHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+                                     // string，必填：code 原始 UTF-8 字节的 SHA-256，64 位小写十六进制；
+                                     //   必须与 code 实际 hash 一致，不转换换行或空白（示例值为占位）
+}
+```
+
+#### 请求示例（PowerShell）
 
 ```powershell
 Invoke-RestMethod http://127.0.0.1:18080/api/v1/capabilities
@@ -124,7 +225,7 @@ $body = @{requestId='example-1'; scriptType='PYTHON'; code=$code; codeHash=$hash
 Invoke-RestMethod http://127.0.0.1:18080/api/v1/scan -Method Post -ContentType 'application/json; charset=utf-8' -Body ([Text.Encoding]::UTF8.GetBytes($body))
 ```
 
-Linux 调用示例：
+#### 请求示例（Linux）
 
 ```bash
 python3 - <<'PY'
@@ -138,33 +239,82 @@ print(urllib.request.urlopen(req).read().decode())
 PY
 ```
 
-响应包含 `scanId`、`durationMs`、`cached`、`findings` 和 `findingsTruncated`；异常附 `error.code/message/retryable`。问题包含 `severity`（HIGH/MEDIUM/LOW，对应引擎 ERROR/WARNING/INFO）、`message`（描述）、`reason`（原因）和位置。等级表示风险提示，不等同于业务阻断。缓存关闭，`cached=false`。位置从 1 起算，列按 Unicode 字符计，end 为排他边界。
+#### 响应示例（有命中，HTTP 200）
 
-例如扫描 `while True:\n    pass\n` 的响应（ID、耗时为示意）：
+扫描 `while True:\n    pass\n`，`scanId` 和 `durationMs` 为示意值：
 
-```json
+```jsonc
 {
-  "scanId": "f1551d85a6a14d5b89660a80695190ac",
-  "durationMs": 850,
-  "cached": false,
-  "findings": [{
-    "ruleId": "foundry.python.resource-exhaustion",
-    "category": "resource-exhaustion",
-    "severity": "MEDIUM",
-    "message": "检测到无条件循环。",
-    "reason": "无条件循环可能持续消耗 CPU；需审核退出条件及运行时超时。存在 break 的循环也可能命中。",
-    "startLine": 1, "startColumn": 1,
-    "endLine": 2, "endColumn": 9
-  }],
-  "findingsTruncated": false
+  "scanId": "f1551d85a6a14d5b89660a80695190ac",  // string|null：扫描追踪 ID（UUID4 去连字符）；HTTP 层直接拒绝时为 null
+  "durationMs": 850,                             // number：扫描耗时（毫秒，向下取整）
+  "cached": false,                               // boolean：固定为 false，缓存已关闭
+  "findings": [                                  // array：命中列表，按严重度、起始位置、ruleId 排序，最多 200 条
+    {
+      "ruleId": "foundry.python.resource-exhaustion", // string：命中的规则 ID
+      "category": "resource-exhaustion",              // string：问题类别，如 resource-exhaustion、sql-injection、security
+      "severity": "MEDIUM",                           // string：HIGH / MEDIUM / LOW，对应引擎 ERROR / WARNING / INFO；仅风险提示，不等于业务阻断
+      "message": "检测到无条件循环。",                  // string：一句话描述，来自服务内置静态文案
+      "reason": "无条件循环可能持续消耗 CPU；需审核退出条件及运行时超时。存在 break 的循环也可能命中。",
+                                                      // string：原因与审核建议，来自规则说明或 CWE
+      "startLine": 1,                                 // number|null：起点行，从 1 起算；位置无法换算时为 null
+      "startColumn": 1,                               // number|null：起点列，从 1 起算，按 Unicode 字符计
+      "endLine": 2,                                   // number|null：终点行
+      "endColumn": 9                                  // number|null：终点列，排他边界（最后一个字符之后）
+    }
+  ],
+  "findingsTruncated": false                     // boolean：true 表示命中超过 200 条，findings 不是完整列表
 }
 ```
 
-无问题时返回 `findings=[]` 且不含 `error`；解析失败示例：
+无命中时 `findings` 为 `[]`，且响应中不含 `error`。
 
-```json
-{"scanId":"f1551d85a6a14d5b89660a80695190ac","durationMs":850,"cached":false,"findings":[],"findingsTruncated":false,"error":{"code":"PARSE_FAILED","message":"PARSE_FAILED","retryable":false}}
+#### 响应示例（扫描失败，HTTP 200）
+
+```jsonc
+{
+  "scanId": "f1551d85a6a14d5b89660a80695190ac",  // string|null：同上
+  "durationMs": 850,                             // number：同上
+  "cached": false,                               // boolean：固定为 false
+  "findings": [],                                // array：出错时恒为空，不能据此判断代码安全
+  "findingsTruncated": false,                    // boolean：出错时恒为 false
+  "error": {                                     // object：仅失败时出现
+    "code": "PARSE_FAILED",                      // string：错误码，见下表
+    "message": "PARSE_FAILED",                   // string：当前恒等于 code，保留为人读描述字段
+    "retryable": false                           // boolean：true 表示可以重试
+  }
+}
 ```
+
+错误码：
+
+| code | 含义 | retryable |
+| --- | --- | --- |
+| INVALID_REQUEST | 请求体、JSON、Content-Type 或字段不合法 | false |
+| UNSUPPORTED_LANGUAGE | `scriptType` 不在支持列表 | false |
+| CODE_HASH_MISMATCH | `codeHash` 与 `code` 的实际 SHA-256 不一致 | false |
+| PARSE_FAILED / PARTIAL_PARSE | 解析失败，或只解析了部分代码 | false |
+| TARGET_SKIPPED | 引擎跳过了目标文件 | false |
+| REPORT_INVALID / REPORT_MISSING / REPORT_TOO_LARGE | 引擎报告缺失、格式异常或超过 4 MiB | false |
+| RULESET_INVALID | 规则、版本或 manifest 校验失败（通常导致启动阶段不就绪） | false |
+| SCAN_TIMEOUT | 引擎超时或超出总预算 | true |
+| ENGINE_CRASHED | 引擎异常退出 | true |
+| RESOURCE_UNAVAILABLE | 内存、进程等资源不足 | true |
+| SERVICE_BUSY | 扫描槽位已满（HTTP 429） | true |
+| SERVICE_NOT_READY | 服务未就绪（HTTP 503） | true |
+| SERVICE_FAILURE | 服务内部异常（HTTP 500） | true |
+
+#### HTTP 状态码
+
+| 状态码 | 场景 | 响应体 |
+| --- | --- | --- |
+| 200 | 引擎完成扫描，包括 `PARSE_FAILED`、`SCAN_TIMEOUT` 等扫描内错误 | 扫描响应结构 |
+| 400 | 请求错误（JSON/Content-Type/字段、语言、hash、请求体超限或读取超时） | 扫描响应结构 + `error`，`scanId=null`、`durationMs=0` |
+| 404 | 路径或方法不存在 | `error.code=INVALID_REQUEST` |
+| 429 | 两个扫描槽位已占满 | `error.code=SERVICE_BUSY` |
+| 500 | 服务内部异常 | `error.code=SERVICE_FAILURE` |
+| 503 | 服务未就绪 | `error.code=SERVICE_NOT_READY` |
+
+调用方的判断顺序：先看 HTTP 状态码，再检查 `error` 是否存在，最后结合 `findings` 和 `findingsTruncated` 做业务决策。
 
 ### 当前 Spring Boot 项目的调用示例
 
@@ -197,7 +347,13 @@ Map<?, ?> report = client.post()
 // 本体服务根据 error、findings 和 findingsTruncated 决定是否保存或编译。
 ```
 
-本体服务在容器内运行时，将地址改为同网络的 `http://semgrep-scan:8080`。当前 `GroovyServiceImpl.parseGroovyCode()` 会调用 `compile(code)`；`executeGroovy()` 也可能编译并执行 DB 中的代码。若接入校验，应在这些操作之前及代码保存/更新入口调用，不应先编译再扫描。本示例不改变已有业务放行策略。HTTP 非 2xx、连接失败或读取超时应走扫描不可用分支，不能当作空 findings。
+接入注意事项：
+
+- 本体服务在容器内运行时，将地址改为同网络的 `http://semgrep-scan:8080`。
+- 当前 `GroovyServiceImpl.parseGroovyCode()` 会调用 `compile(code)`，`executeGroovy()` 也可能编译并执行数据库中的代码。
+- 若接入校验，应在上述编译/执行之前以及代码保存、更新入口调用，不能先编译再扫描。
+- 本示例不改变已有业务放行策略。
+- HTTP 非 2xx、连接失败或读取超时应走扫描不可用分支，不能当作空 findings。
 
 ## 规则与运行限制
 
