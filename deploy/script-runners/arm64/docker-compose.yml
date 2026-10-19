@@ -1,46 +1,10 @@
 version: '3.8'
 
-# ARM64 内网离线部署 —— 4 Runner 容器
+# ARM64 内网离线部署 —— 2 Runner 容器（python/ts）；Groovy/Java 在主程序进程内执行，无需容器
 # 前提：deploy.sh 已加载 images/ 下的 tar（或手动 docker load）
 # 本文件不会 pull 远程镜像
 
 services:
-  groovy-runner:
-    image: foundry/jvm-runner:offline
-    pull_policy: never
-    container_name: groovy-runner
-    restart: always
-    network_mode: "host"
-    environment:
-      - TZ=Asia/Shanghai
-      - RUNNER_LANGUAGE=groovy
-      - SERVER_PORT=39103
-    mem_limit: 1g
-    cpus: "1"
-    healthcheck:
-      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/39103' || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-
-  java-runner:
-    image: foundry/jvm-runner:offline
-    pull_policy: never
-    container_name: java-runner
-    restart: always
-    network_mode: "host"
-    environment:
-      - TZ=Asia/Shanghai
-      - RUNNER_LANGUAGE=java
-      - SERVER_PORT=39104
-    mem_limit: 1g
-    cpus: "1"
-    healthcheck:
-      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/39104' || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-
   python-runner:
     image: foundry/python-runner:offline
     pull_policy: never

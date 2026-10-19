@@ -42,7 +42,7 @@ public class RemoteRunnerScriptEngine implements ScriptEngine {
 
     @Override
     public Set<FunctionLanguageEnum> supports() {
-        return EnumSet.allOf(FunctionLanguageEnum.class);
+        return EnumSet.of(FunctionLanguageEnum.PYTHON, FunctionLanguageEnum.TYPESCRIPT);
     }
 
     /**

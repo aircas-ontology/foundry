@@ -9,9 +9,9 @@ import java.util.Map;
 /**
  * Groovy 代码参数解析 / 进程内执行服务。
  * <p>
- * 创建时用于反射解析 handle 签名建参数；脚本函数（CUSTOMIZE）的独立执行已统一下沉到
- * groovy-runner 容器（见 {@link com.aircas.ptr.foundry.ontology.engine.ScriptEngineRouter}），
- * 但函数编排（COMPOSITE）节点仍通过本服务进程内执行原子函数 handle。
+ * 创建时用于反射解析 handle 签名建参数；脚本函数（CUSTOMIZE）的 Groovy 执行由
+ * {@link com.aircas.ptr.foundry.ontology.engine.InProcessGroovyScriptEngine} 承载，本服务为其底座，
+ * 函数编排（COMPOSITE）节点也通过本服务进程内执行原子函数 handle。
  */
 public interface GroovyService {
 

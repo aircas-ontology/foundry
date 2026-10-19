@@ -3,7 +3,7 @@ version: '3.8'
 services:
   app:
     restart: always
-    image: bitnami/java:1.8
+    image: eclipse-temurin:17-jdk        # 必须 JDK 非 JRE：Java 脚本函数在主程序内动态编译依赖 javac
     container_name: ontology-backend
     network_mode: "host"
     #ports:
