@@ -10,34 +10,35 @@
 
 ## 0. 前置检查（一次性）
 
-### 0.1 四个 runner 容器健康
+### 0.1 Python / TS runner 容器健康
 
 | Runner | 端口 | 语言 | 健康检查 URL |
 |--------|------|------|-------------|
-| groovy-runner | 39103 | GROOVY | `http://172.16.18.58:39103/health` |
-| java-runner | 39104 | JAVA | `http://172.16.18.58:39104/health` |
 | python-runner | 39101 | PYTHON | `http://172.16.18.58:39101/health` |
 | ts-runner | 39102 | TYPESCRIPT | `http://172.16.18.58:39102/health` |
 
+> Groovy / Java 已改为主程序进程内执行，**无需 groovy-runner / java-runner 容器**。
+
 服务器上快速全检：
 ```bash
-for p in 39103 39104 39101 39102; do echo -n "$p -> "; curl -s http://127.0.0.1:$p/health; echo; done
+for p in 39101 39102; do echo -n "$p -> "; curl -s http://127.0.0.1:$p/health; echo; done
 ```
 期望每行都是 `{"status":"UP","language":"..."}`。
 
-### 0.2 ontology-server 的 runner 地址
+### 0.2 ontology-server 的配置
 
-`application-local.yml` 中 `script-runner.*` 必须是**服务器真实 IP**，不能是 `127.0.0.1`
+1. `application-local.yml` 中 `script-runner.*` 必须是**服务器真实 IP**，不能是 `127.0.0.1`
 （ontology-server 跑在容器里时，`127.0.0.1` 指向容器自身，会 `Failed to connect`）：
 
 ```yaml
 script-runner:
-  groovy: http://172.16.18.58:39103
-  java: http://172.16.18.58:39104
   python: http://172.16.18.58:39101
   typescript: http://172.16.18.58:39102
   timeout-ms: 10000
 ```
+
+2. **Java 脚本进程内动态编译需要 JDK**：ontology-server 必须用完整 JDK 17 启动（`eclipse-temurin:17-jdk`，
+   不能是 `-jre`），否则会报 `当前运行时不是 JDK，无法编译 Java 脚本`。
 
 ### 0.3 登录拿 token
 
@@ -136,7 +137,7 @@ script-runner:
 }
 ```
 - 期望：`{"code":200,"message":"success"}`
-- 背后动作：先 HTTP 调 `groovy-runner /validate` 编译校验 → 通过后落库（`publish=0`）→ 写 `function_param`
+- 背后动作：先进程内编译校验（Groovy 在主 JVM 内编译探测 handle）→ 通过后落库（`publish=0`）→ 写 `function_param`
 - 若提示 `函数版本已存在:smoke.hello 1.0.0`：先执行 §2.7 清理；若要保留旧版本则把 `version` 改成 `1.0.1`（必须大于已有最大版本）
 
 ### 2.2 查详情
@@ -239,7 +240,7 @@ DELETE /ontology/function/delete?functionApi=smoke.hello&version=1.0.0
 }
 ```
 - 期望：`{"code":200,"message":"success"}`
-- **Java 独有前置**：`java-runner` 镜像必须是 **JDK**（`eclipse-temurin:17-jdk`），只有 JRE 会报 `当前运行时不是 JDK，无法编译 Java 脚本`
+- **Java 独有前置**：ontology-server 主程序必须用 **JDK 17** 启动（进程内动态编译依赖 javac），只有 JRE 会报 `当前运行时不是 JDK，无法编译 Java 脚本`；Java 脚本里可直接 `import com.aircas.ptr.foundry.*` 引用主程序内部类
 
 ### 3.2 详情
 
@@ -479,8 +480,8 @@ POST /function/unpublish + DELETE /function/delete   ← 清理
 | 现象 | 定位 | 处置 |
 |------|------|------|
 | `401 Unauthorized` | 没带 / 过期 token | 重登，检查 `Authorization` 头 |
-| `Failed to connect to /127.0.0.1:39103` | `script-runner.*` 还是 `127.0.0.1` | 改成服务器真实 IP 并重启 ontology-server |
-| `当前运行时不是 JDK，无法编译 Java 脚本` | java-runner 用了 jre 镜像 | compose 改 `eclipse-temurin:17-jdk` |
+| `Failed to connect to /127.0.0.1:39101` | `script-runner.python/typescript` 还是 `127.0.0.1` | 改成服务器真实 IP 并重启 ontology-server（仅影响 Python/TS，Groovy/Java 不走容器） |
+| `当前运行时不是 JDK，无法编译 Java 脚本` | ontology-server 启动用了 JRE | 主程序镜像/启动 JVM 换成完整 JDK 17（进程内动态编译依赖 javac） |
 | 远程调用失败, code=400, body=`{"ok":false,"error":"..."}` | 脚本自身编译/运行错误 | 按 `error` 原文改脚本；上服务器 `docker-compose logs python-runner`（或对应语言）看堆栈 |
 | 创建成功但 `/test` 拿不到入参 | 非 JVM 语言没传 `parameters` | PUT 时带上完整 `parameters` 列表重建 |
 | `/test` 的 `data` 是字符串 | ontology-server 没重启，修复未生效 | 重新打包 + 上传 jar + `docker-compose restart` |
