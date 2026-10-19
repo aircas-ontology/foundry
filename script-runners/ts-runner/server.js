@@ -91,6 +91,11 @@ function runInSandbox(js, input) {
   if (typeof handle !== 'function') {
     throw new Error('函数 handle 方法不存在');
   }
+  // 多参数展开：handle 声明 >1 个形参时，把 input map 的值按序逐个传入；
+  // 单参数保持原行为（整包 map 传入），向后兼容已有脚本。
+  if (handle.length > 1 && input !== null && typeof input === 'object' && !Array.isArray(input)) {
+    return handle(...Object.values(input));
+  }
   return handle(input);
 }
 
