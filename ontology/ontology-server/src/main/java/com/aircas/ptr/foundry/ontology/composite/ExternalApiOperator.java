@@ -95,7 +95,7 @@ public class ExternalApiOperator {
     private void applyRequestMappings(ExternalApiConfig config, Map<String, Object> inputs,
                                       Map<String, String> pathValues, Map<String, String> queryValues,
                                       Map<String, String> headerValues, Map<String, Object> bodyValues) {
-        List<ExternalApiConfig.RequestMapping> mappings = config.requestMappingsOrEmpty();
+        List<ExternalApiConfig.RequestMapping> mappings = config.effectiveRequestMappings();
         if (mappings.isEmpty()) {
             // 未配置请求映射：入参整体作为 JSON 请求体
             inputs.forEach((name, value) -> {
@@ -194,7 +194,7 @@ public class ExternalApiOperator {
     private Map<String, Object> bindResponse(ExternalApiConfig config, ExternalApiExecutor.HttpResult response,
                                              String label) {
         Map<String, Object> ports = new LinkedHashMap<>();
-        List<ExternalApiConfig.ResponseMapping> mappings = config.responseMappingsOrEmpty();
+        List<ExternalApiConfig.ResponseMapping> mappings = config.effectiveResponseMappings();
         if (mappings.isEmpty()) {
             ports.put(PORT_RESULT, parseBody(response.body(), label));
             ports.put(PORT_STATUS, response.status());

@@ -109,6 +109,65 @@ public class ExternalApiConfig implements Serializable {
     }
 
     /**
+     * 有效请求映射（兼容合并形态）：
+     * <ul>
+     *   <li>显式 {@code requestMappings} 非空 → 直接采用（旧契约）；</li>
+     *   <li>否则从 {@code inputs} 的行级 {@code location/targetName} 合成（合并契约：参数声明与映射合一）；</li>
+     *   <li>两者都无 → 返回空，由执行器把入参整体作为请求体。</li>
+     * </ul>
+     */
+    public List<RequestMapping> effectiveRequestMappings() {
+        if (!requestMappingsOrEmpty().isEmpty()) {
+            return requestMappings;
+        }
+        List<RequestMapping> derived = new ArrayList<>();
+        for (PortDefinition in : inputsOrEmpty()) {
+            if (in == null || isBlank(in.getName())) {
+                continue;
+            }
+            if (isBlank(in.getLocation()) && isBlank(in.getTargetName())) {
+                continue;
+            }
+            RequestMapping mapping = new RequestMapping();
+            mapping.setParameterId(in.getName());
+            mapping.setLocation(isBlank(in.getLocation()) ? LOCATION_BODY : in.getLocation());
+            mapping.setTargetName(isBlank(in.getTargetName()) ? in.getName() : in.getTargetName());
+            derived.add(mapping);
+        }
+        return derived;
+    }
+
+    /**
+     * 有效响应映射（兼容合并形态）：
+     * <ul>
+     *   <li>显式 {@code responseMappings} 非空 → 直接采用（旧契约）；</li>
+     *   <li>否则从 {@code outputs} 合成；{@code sourcePath} 缺省时用出参名（平铺同名场景无需传）；</li>
+     *   <li>两者都无 → 返回空，由执行器兜底给出 result/status。</li>
+     * </ul>
+     */
+    public List<ResponseMapping> effectiveResponseMappings() {
+        if (!responseMappingsOrEmpty().isEmpty()) {
+            return responseMappings;
+        }
+        List<ResponseMapping> derived = new ArrayList<>();
+        for (PortDefinition out : outputsOrEmpty()) {
+            if (out == null || isBlank(out.getName())) {
+                continue;
+            }
+            ResponseMapping mapping = new ResponseMapping();
+            mapping.setParameterId(out.getName());
+            // 平铺同名时前端可省略 sourcePath，后端用出参名作为取值路径
+            mapping.setSourcePath(isBlank(out.getSourcePath()) ? out.getName() : out.getSourcePath());
+            derived.add(mapping);
+        }
+        return derived;
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
+    }
+
+    /**
      * 单条请求映射。
      *
      * <p>{@code parameterId} 支持两种写法：算子入参名（编排节点端口名），
@@ -179,5 +238,24 @@ public class ExternalApiConfig implements Serializable {
 
         @Schema(name = "required", description = "是否必填")
         private Boolean required;
+
+        /**
+         * 合并契约（入参用）：该参数打到 HTTP 报文的位置 path/query/header/body。
+         * 缺省且未显式提供 requestMappings 时，执行器据此合成请求映射。
+         */
+        @Schema(name = "location", description = "入参落点：path/query/header/body（合并形态可选）", example = "query")
+        private String location;
+
+        /**
+         * 合并契约（入参用）：在报文位置里用的名字，缺省=参数名。
+         */
+        @Schema(name = "targetName", description = "报文中的名字，缺省用参数名（合并形态可选）", example = "id")
+        private String targetName;
+
+        /**
+         * 合并契约（出参用）：从响应报文取值的路径，支持 a.b.c / a.b[0].c；缺省=参数名。
+         */
+        @Schema(name = "sourcePath", description = "响应取值路径，支持 a.b.c / a.b[0].c（合并形态可选）", example = "data.order.amount")
+        private String sourcePath;
     }
 }
