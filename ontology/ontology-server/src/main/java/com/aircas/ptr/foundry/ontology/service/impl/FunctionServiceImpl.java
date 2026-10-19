@@ -152,17 +152,27 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         PreconditionUtils.checkArgument(function != null, "函数api不存在：" + api, HttpStatus.BAD_REQUEST);
         var functionParams = functionParamService.list(
                 new LambdaQueryWrapper<FunctionParamPO>().eq(FunctionParamPO::getFunctionId, function.getId()));
-        var params = functionParams.stream().map(p ->
-                        FunctionParameterVO.builder()
-                                .paramId(p.getId())
-                                .paramName(p.getParamName())
-                                .category(p.getCategory())
-                                .paramOrder(p.getParamOrder())
-                                .paramSchema(p.getParamSchema())
-                                .paramType(p.getParamType())
-                                .description(p.getDescription())
-                                .build())
-                .collect(Collectors.toList());
+        var params = functionParams.stream().map(p -> {
+            FunctionParameterVO.FunctionParameterVOBuilder voBuilder = FunctionParameterVO.builder()
+                    .paramId(p.getId())
+                    .paramName(p.getParamName())
+                    .category(p.getCategory())
+                    .paramOrder(p.getParamOrder())
+                    .paramSchema(p.getParamSchema())
+                    .paramType(p.getParamType())
+                    .description(p.getDescription());
+            // 反序列化 fields JSON 为嵌套结构
+            if (StringUtils.isNotEmpty(p.getFields())) {
+                try {
+                    List<FunctionParameterVO> fieldVOs = objectMapper.readValue(
+                            p.getFields(), new TypeReference<List<FunctionParameterVO>>() {});
+                    voBuilder.fields(fieldVOs);
+                } catch (JsonProcessingException e) {
+                    log.warn("反序列化参数 fields 失败：paramName={}, cause={}", p.getParamName(), e.getMessage());
+                }
+            }
+            return voBuilder.build();
+        }).collect(Collectors.toList());
 
         // BASIC_QUERY 类型：解析 queryConfig，并根据 targetProperty 动态推导每个参数的角色
         BasicQueryConfig queryConfig = null;
@@ -818,6 +828,15 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         List<FunctionParamPO> params = functionParam.stream().map(p -> {
             int order = p.getParamOrder() != null ? p.getParamOrder()
                     : orderCounters.merge(p.getCategory(), 1, Integer::sum);
+            // 序列化 fields 为 JSON 存储
+            String fieldsJson = null;
+            if (p.getFields() != null && !p.getFields().isEmpty()) {
+                try {
+                    fieldsJson = objectMapper.writeValueAsString(p.getFields());
+                } catch (JsonProcessingException e) {
+                    log.warn("序列化参数 fields 失败：paramName={}, cause={}", p.getParamName(), e.getMessage());
+                }
+            }
             return FunctionParamPO.builder()
                     .functionId(functionId)
                     .paramName(p.getParamName())
@@ -827,6 +846,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                     .paramOrder(order)
                     .typeReferenceName(p.getReferenceType())
                     .description(p.getDescription())
+                    .fields(fieldsJson)
                     .createTime(new Date())
                     .updateTime(new Date())
                     .build();

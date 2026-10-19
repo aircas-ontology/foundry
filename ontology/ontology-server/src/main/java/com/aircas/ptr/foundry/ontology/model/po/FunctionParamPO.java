@@ -41,6 +41,9 @@ public class FunctionParamPO {
 
     private FunctionParamCategoryEnum category;
 
+    /** 子字段 JSON（参数类型为自定义类时存储嵌套字段结构，标量参数为 null） */
+    private String fields;
+
     /**
      * 记录创建时间
      */

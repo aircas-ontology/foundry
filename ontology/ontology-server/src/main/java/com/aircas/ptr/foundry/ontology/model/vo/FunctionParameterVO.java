@@ -10,6 +10,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 
+import java.util.List;
+
 @Data
 @Builder
 @Accessors(chain = true)
@@ -41,4 +43,7 @@ public class FunctionParameterVO {
 
     @Schema(name = "paramRole", description = "参数角色：AGGREGATION-聚合目标 / FILTER-过滤条件（仅 BASIC_QUERY 类型返回）")
     private FunctionParamRoleEnum paramRole;
+
+    @Schema(name = "fields", description = "子字段列表（参数类型为自定义类时展开，标量参数为 null）")
+    private List<FunctionParameterVO> fields;
 }
