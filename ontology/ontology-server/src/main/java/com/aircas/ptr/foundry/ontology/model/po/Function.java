@@ -116,4 +116,10 @@ public class Function {
      * 本体空间id
      */
     private Integer ontologySpaceId;
+
+    /**
+     * 容器算子配置 JSON（仅 type=CONTAINER 有值）：镜像信息 + 接口文档信息 + 选中接口定义，
+     * 结构见 {@link com.aircas.ptr.foundry.ontology.model.dto.container.ContainerOperatorConfig}
+     */
+    private String dockerConfig;
 }

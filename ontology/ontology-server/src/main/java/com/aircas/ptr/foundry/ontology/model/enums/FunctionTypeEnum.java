@@ -13,7 +13,8 @@ public enum FunctionTypeEnum {
     CUSTOMIZE(1, "自定义"),
     EXTERNAL(2, "外部"),
     BASIC_QUERY(3, "基础查询"),
-    COMPOSITE(4, "函数编排");
+    COMPOSITE(4, "函数编排"),
+    CONTAINER(5, "容器");
 
     private final int value;
 

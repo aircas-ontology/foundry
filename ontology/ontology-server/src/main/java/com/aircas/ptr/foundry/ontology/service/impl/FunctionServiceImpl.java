@@ -931,6 +931,9 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 return objectMapper.readValue(resultJson, new TypeReference<FunctionResultVO>() {
                 });
 
+            case CONTAINER:
+                throw new BusinessException("容器算子执行能力尚未开放：" + function.getApi(), HttpStatus.BAD_REQUEST);
+
             default:
                 throw new BusinessException("不支持的函数类型：" + function.getType());
         }
