@@ -45,7 +45,15 @@ def _worker(code: str, input_data: dict, q) -> None:
         if not callable(handle):
             q.put(("err", "函数 handle 方法不存在"))
             return
-        result = handle(input_data)
+        # 多参数展开：handle 声明 >1 个形参时，把 input dict 值按序逐个传入；
+        # 单参数保持原行为（整包 dict 传入），向后兼容已有脚本。
+        import inspect
+        sig = inspect.signature(handle)
+        params = list(sig.parameters.keys())
+        if len(params) > 1 and isinstance(input_data, dict):
+            result = handle(*input_data.values())
+        else:
+            result = handle(input_data)
         q.put(("ok", result))
     except Exception as e:  # noqa: BLE001 - 用户脚本任意异常都要回传
         q.put(("err", f"{type(e).__name__}: {e}"))
