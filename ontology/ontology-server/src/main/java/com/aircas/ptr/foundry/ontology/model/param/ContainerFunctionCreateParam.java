@@ -23,7 +23,7 @@ import java.util.List;
 @Schema(description = "容器算子保存请求")
 public class ContainerFunctionCreateParam {
 
-    @Schema(name = "functionApi", description = "容器算子基础 api（多个接口各自生成算子时，真实 api = 此值 + \"-\" + 接口 api）")
+    @Schema(name = "functionApi", description = "容器算子基础 api（多个接口各自生成算子时，真实 api = 此值 + \"_\" + 接口 api）")
     @NotBlank(message = "functionApi is empty")
     private String functionApi;
 
@@ -39,6 +39,10 @@ public class ContainerFunctionCreateParam {
 
     @Schema(name = "image", description = "上传镜像接口返回的镜像信息")
     private ContainerImageInfo image;
+
+    @Schema(name = "runCommand", description = "容器启动命令：完整的 docker run 命令字符串（端口映射、环境变量等均写在其中）。一个容器一条启动命令，多个接口算子共用")
+    @NotBlank(message = "启动命令不能为空")
+    private String runCommand;
 
     @Schema(name = "interfaceDoc", description = "上传接口文档接口返回的文档信息")
     private ContainerInterfaceDoc interfaceDoc;

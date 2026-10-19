@@ -31,7 +31,7 @@ public interface ContainerFunctionService {
 
     /**
      * 保存容器算子（设计 C）：每个勾选接口各生成一条独立 function（type=CONTAINER, version=1.0.0），
-     * 共用同一镜像与接口文档；api = baseApi + "-" + 接口 api，出入参按接口写入 function_param。
+     * 共用同一镜像与接口文档；api = baseApi + "_" + 接口 api，出入参按接口写入 function_param。
      *
      * @return 本批次生成的算子 api 列表
      */

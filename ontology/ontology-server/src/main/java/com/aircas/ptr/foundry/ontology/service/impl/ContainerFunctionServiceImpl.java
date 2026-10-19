@@ -10,18 +10,23 @@ import com.aircas.ptr.foundry.ontology.model.dto.container.ContainerInterfaceDoc
 import com.aircas.ptr.foundry.ontology.model.dto.container.ContainerInterfaceParam;
 import com.aircas.ptr.foundry.ontology.model.dto.container.ContainerOperatorConfig;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionModelEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.ContainerPhaseEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamCategoryEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import com.aircas.ptr.foundry.ontology.model.param.ContainerFunctionCreateParam;
 import com.aircas.ptr.foundry.ontology.model.po.Function;
+import com.aircas.ptr.foundry.ontology.model.po.FunctionContainerInstance;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionParamPO;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.FunctionMapper;
+import com.aircas.ptr.foundry.ontology.repository.mainMapper.FunctionContainerInstanceMapper;
 import com.aircas.ptr.foundry.ontology.service.ContainerFunctionService;
 import com.aircas.ptr.foundry.ontology.service.FunctionParamService;
 import com.aircas.ptr.foundry.ontology.service.OpenApiProbeService;
 import com.aircas.ptr.foundry.ontology.constant.FunctionConstant;
 import com.aircas.ptr.foundry.ontology.utils.DockerImageInspector;
+import com.aircas.ptr.foundry.ontology.utils.DockerCommandExecutor;
+import com.aircas.ptr.foundry.ontology.utils.DockerRunCommandParser;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -74,7 +79,12 @@ public class ContainerFunctionServiceImpl implements ContainerFunctionService {
     @Resource
     private FunctionParamService functionParamService;
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    @Resource
+    private FunctionContainerInstanceMapper containerInstanceMapper;
+
+    // 序列化入库时忽略 null：docker_config 只落接口级内容（{"interfaces":[...]}），不携带容器级空字段
+    private final ObjectMapper objectMapper = new ObjectMapper()
+            .setSerializationInclusion(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL);
 
     @Override
     public ContainerImageInfo uploadImage(MultipartFile file) {
@@ -156,14 +166,45 @@ public class ContainerFunctionServiceImpl implements ContainerFunctionService {
         PreconditionUtils.checkArgument(Files.exists(Path.of(param.getImage().getPath())),
                 "镜像文件不存在，请重新上传", HttpStatus.BAD_REQUEST);
 
+        // 从启动命令解析宿主端口并固化：解析不出显式端口映射则拒绝保存，
+        // 避免存入执行期无法定位调用地址的算子（执行时直接读 docker_config.hostPort，不再解析命令）
+        DockerRunCommandParser.PortMapping portMapping =
+                DockerRunCommandParser.parseFirstPublished(param.getRunCommand());
+        PreconditionUtils.checkArgument(portMapping != null && portMapping.getHostPort() != null,
+                "启动命令需包含明确的端口映射（-p 宿主端口:容器端口），无法从命令解析出宿主端口：" + param.getRunCommand(),
+                HttpStatus.BAD_REQUEST);
+
         // 设计 C：每个勾选接口各生成一条独立 function 记录（一行算子 = 一个接口），共用同一镜像与接口文档。
-        // api = 容器算子 baseApi + "-" + 探查接口 api；displayName/description = 第一步公共前缀 + 接口信息拼接。
+        // api = 容器算子 baseApi + "_" + 规整后的探查接口 api；displayName/description = 第一步公共前缀 + 接口信息拼接。
+        // 接口 api（形如 "POST /detect"）含空格/斜杠不利于路由与唯一性校验，先规整再拼接。
+        // containerKey 为本批次唯一归组键：N 条 function 的 docker_config 均携此值，并对应一条 function_container_instance（一容器）。
+        String containerKey = UUID.randomUUID().toString().replace("-", "");
+
+        // 容器级唯一性校验（一容器=一实例，保存期拦截，避免存入 start 才爆的算子）：
+        // 1) 容器名：用户 --name 优先，否则平台默认 foundry-ctr-<key>（UUID 天然唯一）；docker 容器名全局唯一，不得与已注册实例重名。
+        // 2) 宿主端口：一宿主端口=一容器算子，不得与任何已注册实例的 host_port 重复。
+        String userContainerName = DockerRunCommandParser.parseContainerName(param.getRunCommand());
+        String containerName = (userContainerName != null && !userContainerName.isBlank())
+                ? userContainerName
+                : DockerCommandExecutor.defaultContainerName(containerKey);
+        boolean portTaken = containerInstanceMapper.selectCount(new LambdaQueryWrapper<FunctionContainerInstance>()
+                .eq(FunctionContainerInstance::getHostPort, portMapping.getHostPort())) > 0;
+        PreconditionUtils.checkArgument(!portTaken,
+                "宿主端口 " + portMapping.getHostPort() + " 已被其他容器算子占用，请更换 -p 端口映射", HttpStatus.BAD_REQUEST);
+        boolean nameTaken = containerInstanceMapper.selectCount(new LambdaQueryWrapper<FunctionContainerInstance>()
+                .eq(FunctionContainerInstance::getContainerName, containerName)) > 0;
+        PreconditionUtils.checkArgument(!nameTaken,
+                "容器名与已注册容器算子重名：" + containerName + "，请在启动命令中更换 --name", HttpStatus.BAD_REQUEST);
+
         List<String> createdApis = new ArrayList<>();
         Set<String> batchApis = new HashSet<>();
         for (ContainerInterface itf : param.getSelectedInterfaces()) {
             String itfApi = itf.getApi() != null ? itf.getApi()
                     : (itf.getMethod() + " " + itf.getPath());
-            String derivedApi = param.getFunctionApi() + "-" + itfApi;
+            String itfSegment = sanitizeApiSegment(itfApi);
+            PreconditionUtils.checkArgument(!itfSegment.isEmpty(),
+                    "接口标识规整后为空，无法生成算子 api：" + itfApi, HttpStatus.BAD_REQUEST);
+            String derivedApi = param.getFunctionApi() + "_" + itfSegment;
             PreconditionUtils.checkArgument(batchApis.add(derivedApi),
                     "本批次存在重复接口标识：" + derivedApi, HttpStatus.BAD_REQUEST);
             // api 唯一：容器算子无版本迭代，派生 api 不能与任何已存在函数重复
@@ -172,10 +213,9 @@ public class ContainerFunctionServiceImpl implements ContainerFunctionService {
             PreconditionUtils.checkArgument(!apiExists,
                     "算子 api 已存在：" + derivedApi, HttpStatus.BAD_REQUEST);
 
-            // 该行算子的 docker_config 只存它自己这一个接口（list of 1），执行时取 interfaces[0]
+            // 设计去重：docker_config 只存本行接口级配置（list of 1），
+            // 镜像/接口文档/启动命令/端口等容器级字段只写一次到 function_container_instance。
             ContainerOperatorConfig config = ContainerOperatorConfig.builder()
-                    .image(param.getImage())
-                    .interfaceDoc(param.getInterfaceDoc())
                     .interfaces(List.of(itf))
                     .build();
 
@@ -186,6 +226,7 @@ public class ContainerFunctionServiceImpl implements ContainerFunctionService {
                     .displayName(joinDash(param.getDisplayName(), itf.getName()))
                     .description(joinDesc(param.getDescription(), itf.getDescription()))
                     .type(FunctionTypeEnum.CONTAINER)
+                    .containerKey(containerKey)
                     .model(FunctionModelEnum.OTHER)
                     .status(Status.ENABLE.getValue())
                     .ontologySpaceId(param.getOntologySpaceId())
@@ -196,6 +237,24 @@ public class ContainerFunctionServiceImpl implements ContainerFunctionService {
             saveInterfaceParams(function.getId(), itf);
             createdApis.add(derivedApi);
         }
+        // 生成一个运行实例行（一个容器算子=一个容器，设计 C 的 N 条 function 通过 containerKey 归组），初始态 CREATED
+        // 容器级信息（镜像/接口文档/启动命令/端口）在此仅存一份，为唯一权威来源
+        FunctionContainerInstance instance = FunctionContainerInstance.builder()
+                .containerKey(containerKey)
+                .ontologySpaceId(param.getOntologySpaceId())
+                .displayName(param.getDisplayName())
+                .containerName(containerName)
+                .image(param.getImage() != null ? writeJson(param.getImage()) : null)
+                .interfaceDoc(param.getInterfaceDoc() != null ? writeJson(param.getInterfaceDoc()) : null)
+                .runCommand(param.getRunCommand())
+                .hostPort(portMapping.getHostPort())
+                .containerPort(portMapping.getContainerPort())
+                .phase(ContainerPhaseEnum.CREATED)
+                .message("容器算子已创建，尚未启动")
+                .createTime(new Date())
+                .updateTime(new Date())
+                .build();
+        containerInstanceMapper.insert(instance);
         return createdApis;
     }
 
@@ -213,6 +272,22 @@ public class ContainerFunctionServiceImpl implements ContainerFunctionService {
         if (!params.isEmpty()) {
             functionParamService.saveBatch(params);
         }
+    }
+
+    /**
+     * 规整接口 api 片段用于拼接派生 api：
+     * 将 "/"、"\" 与连续空白统一替换为单个下划线，折叠连续下划线/连字符为单个，
+     * 并去掉首尾多余分隔符。形如 "POST /detect" -> "POST_detect"。
+     */
+    private String sanitizeApiSegment(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        return raw.trim()
+                .replaceAll("[/\\\\\\s]+", "_")     // 斜杠/反斜杠/空白 → 下划线
+                .replaceAll("_+", "_")             // 折叠连续下划线
+                .replaceAll("-+", "-")             // 折叠连续连字符
+                .replaceAll("^[-_]+|[-_]+$", "");  // 去掉首尾分隔符
     }
 
     /** 公共前缀 + 接口标识用 "-" 拼接（任一为空则取另一个，都空返回 null） */

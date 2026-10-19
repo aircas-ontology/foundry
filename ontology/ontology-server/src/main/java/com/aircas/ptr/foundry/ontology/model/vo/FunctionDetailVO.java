@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.ontology.model.vo;
 
 
+import com.aircas.ptr.foundry.ontology.model.dto.container.ContainerOperatorConfig;
 import com.aircas.ptr.foundry.ontology.model.param.BasicQueryConfig;
 import com.aircas.ptr.foundry.ontology.model.param.CompositeConfig;
 import com.aircas.ptr.foundry.ontology.model.param.ExternalApiConfig;
@@ -41,5 +42,8 @@ public class FunctionDetailVO extends FunctionInfoVO {
 
     @Schema(name = "apiConfig", description = "外部API算子配置：只有 EXTERNAL 类型会存在")
     private ExternalApiConfig apiConfig;
+
+    @Schema(name = "dockerConfig", description = "容器算子配置（镜像/接口文档/接口列表）：只有 CONTAINER 类型会存在")
+    private ContainerOperatorConfig dockerConfig;
 
 }

@@ -36,6 +36,15 @@ public class ContainerOperatorProperties {
     private boolean armCheckEnabled = true;
 
     /**
+     * 执行期访问容器映射端口的基地址（ontology-server 可达的宿主机地址）。
+     * 同宿主机默认 127.0.0.1；若 ontology-server 本身跑在容器内且非 host 网络，需改为宿主机 IP。
+     */
+    private String execHost = "127.0.0.1";
+
+    /** 容器接口 HTTP 调用超时秒数 */
+    private int execTimeoutSeconds = 30;
+
+    /**
      * 解析镜像存储目录（不存在则创建）。
      */
     public Path resolveImageDir() {
