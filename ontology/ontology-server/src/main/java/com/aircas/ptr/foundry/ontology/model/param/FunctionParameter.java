@@ -7,6 +7,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 
+import java.util.List;
+
 @Data
 @Builder
 @AllArgsConstructor
@@ -18,6 +20,9 @@ public class FunctionParameter {
     @Schema(name = "paramName", description = "参数名称")
     private String paramName;
 
-    @Schema(name = "paramValue", description = "参数值")
+    @Schema(name = "paramValue", description = "参数值（标量参数直接取值；对象参数若逐字段填写可不传，由 fields 组装）")
     private Object paramValue;
+
+    @Schema(name = "fields", description = "子字段列表（对象/复合参数按层级逐字段填值时使用，后端据此递归组装成嵌套对象）")
+    private List<FunctionParameter> fields;
 }
