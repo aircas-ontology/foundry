@@ -204,3 +204,15 @@ script-runner:
   python:
   typescript:
   timeout-ms: 5000
+
+# 容器算子：镜像 / 接口文档上传存储目录与大小限制。
+# image-dir / doc-dir 留空时默认落在 jar 包同级目录下的 container-images/ 与 interface-docs/。
+# arm-check-enabled 是否校验镜像为 ARM64 架构；无 ARM 环境本地测试可置 false 跳过校验。
+# exec-host 执行期访问容器映射端口的基地址（同宿主机默认 127.0.0.1，服务在容器内需改宿主机 IP）。
+container-operator:
+  image-dir:
+  doc-dir:
+  max-image-size-mb: 2048
+  arm-check-enabled: true
+  exec-host: 127.0.0.1
+  exec-timeout-seconds: 30

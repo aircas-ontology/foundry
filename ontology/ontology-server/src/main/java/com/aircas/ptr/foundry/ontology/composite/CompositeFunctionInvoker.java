@@ -74,6 +74,8 @@ public class CompositeFunctionInvoker {
                     .runAsNode(function, nodePlan, paramMap);
             case COMPOSITE -> throw new BusinessException("编排节点[" + labelOf(nodePlan) + "]不能引用函数编排算子："
                     + function.getApi(), HttpStatus.BAD_REQUEST);
+            case CONTAINER -> throw new BusinessException("编排节点[" + labelOf(nodePlan) + "]引用的容器算子执行能力尚未开放："
+                    + function.getApi(), HttpStatus.BAD_REQUEST);
         };
     }
 

@@ -11,11 +11,15 @@ import com.aircas.ptr.foundry.ontology.composite.BasicQueryOperator;
 import com.aircas.ptr.foundry.ontology.composite.CompositeChainRegistry;
 import com.aircas.ptr.foundry.ontology.composite.CompositeFunctionCatalog;
 import com.aircas.ptr.foundry.ontology.composite.CompositeFunctionInvoker;
+import com.aircas.ptr.foundry.ontology.composite.ContainerOperatorInvoker;
 import com.aircas.ptr.foundry.ontology.composite.ExternalApiOperator;
 import com.aircas.ptr.foundry.ontology.model.bo.CompositePlanBO;
 import com.aircas.ptr.foundry.ontology.model.bo.CompositeValidationBO;
 import com.aircas.ptr.foundry.ontology.model.dto.ActionContextInfoDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.FunctionParamDTO;
+import com.aircas.ptr.foundry.ontology.model.dto.container.ContainerOperatorConfig;
+import com.aircas.ptr.foundry.ontology.model.dto.container.ContainerImageInfo;
+import com.aircas.ptr.foundry.ontology.model.dto.container.ContainerInterfaceDoc;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamCategoryEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamRoleEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.TaskStatusEnum;
@@ -44,18 +48,21 @@ import com.aircas.ptr.foundry.ontology.model.enums.FilterNodeTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.vo.BasicQueryResultVO;
 import com.aircas.ptr.foundry.ontology.model.vo.EntityPropertyGenericQueryVO;
 import com.aircas.ptr.foundry.ontology.model.po.Function;
+import com.aircas.ptr.foundry.ontology.model.po.FunctionContainerInstance;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionExecuteResult;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionParamPO;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyAction;
 import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.FunctionExecuteResultMapper;
+import com.aircas.ptr.foundry.ontology.repository.mainMapper.FunctionContainerInstanceMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.FunctionMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyActionMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyPropertyMapper;
 import com.aircas.ptr.foundry.ontology.service.FunctionParamService;
 import com.aircas.ptr.foundry.ontology.service.FunctionService;
 import com.aircas.ptr.foundry.ontology.service.GroovyService;
+import com.aircas.ptr.foundry.ontology.utils.DockerCommandExecutor;
 import com.aircas.ptr.foundry.ontology.utils.SchemaHandleUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -76,6 +83,8 @@ import org.springframework.transaction.annotation.Transactional;
 import jakarta.annotation.Resource;
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Date;
@@ -83,6 +92,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -92,6 +102,14 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
 
     @Resource
     private OntologyActionMapper ontologyActionMapper;
+
+    /** 容器算子运行实例 Mapper：详情回显按 container_key 取容器级配置，删除按 key 引用计数 */
+    @Resource
+    private FunctionContainerInstanceMapper containerInstanceMapper;
+
+    /** docker 命令执行器：删除容器最后一个算子时停止并移除常驻容器 */
+    @Resource
+    private DockerCommandExecutor dockerCommandExecutor;
 
     @Resource
     private FunctionExecuteResultMapper executeResultMapper;
@@ -126,6 +144,10 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     /** 按函数类型分发执行的算子调用器（脚本/基础查询/外部API） */
     @Resource
     private CompositeFunctionInvoker compositeFunctionInvoker;
+
+    /** 容器算子执行器：独立执行/测试链路按 containerKey 定位运行中的容器并发起 HTTP 调用（编排引用暂未开放） */
+    @Resource
+    private ContainerOperatorInvoker containerOperatorInvoker;
 
     private ObjectMapper objectMapper = new ObjectMapper()
             // 存进库的 fields 是 FunctionParamDTO 序列化结果（含 referenceType 等 VO 没有的字段），
@@ -213,6 +235,13 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
             }
         }
 
+        // CONTAINER 类型：docker_config 只存接口级（interfaces），容器级字段在 function_container_instance，
+        // 按 container_key 查实例后重组为完整配置回显，保持前端契约不变
+        ContainerOperatorConfig dockerConfig = null;
+        if (function.getType() == FunctionTypeEnum.CONTAINER) {
+            dockerConfig = assembleContainerConfig(function);
+        }
+
         return FunctionDetailVO.builder()
                 .code(function.getCode())
                 .referenceName(function.getReferenceName())
@@ -220,6 +249,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 .queryConfig(queryConfig)
                 .compositeConfig(compositeConfig)
                 .apiConfig(apiConfig)
+                .dockerConfig(dockerConfig)
                 .functionApi(function.getApi())
                 .version(function.getVersion())
                 .publishStatus(function.getPublish())
@@ -264,6 +294,107 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         groovyService.invalidateCompiledClass(api);
         //卸载编排执行链，避免删除后仍命中旧的 LiteFlow 链定义
         compositeChainRegistry.evict(api);
+        // 容器算子：若引用同一镜像/接口文档文件的全部算子都已删除，清理磁盘文件
+        cleanupContainerFilesIfUnused(function);
+    }
+
+    /**
+     * 删除容器算子后按 container_key 引用计数清理：
+     * 若该 key 下已无任何存留 function（最后一个接口算子被删），则删除运行实例行、并清理镜像/接口文档磁盘文件。
+     * <p>一容器=多条 function 共用同一 container_key，故须等全部关联算子删完才动容器与文件。
+     * docker 容器本身的停止/移除随生命周期服务（t4/t8）接入，本处先保证实例行与磁盘文件不泄漏。</p>
+     */
+    private void cleanupContainerFilesIfUnused(Function deleted) {
+        if (deleted.getType() != FunctionTypeEnum.CONTAINER
+                || StringUtils.isEmpty(deleted.getContainerKey())) {
+            return;
+        }
+        String containerKey = deleted.getContainerKey();
+        // 该函数已从库中删除；统计同 key 下仍存留的接口算子数，仍有则不动容器与文件
+        long remaining = count(new LambdaQueryWrapper<Function>()
+                .eq(Function::getContainerKey, containerKey));
+        if (remaining > 0) {
+            return;
+        }
+        FunctionContainerInstance instance = findInstanceByKey(containerKey);
+        if (instance == null) {
+            return;
+        }
+        // 曾启动过（containerId 非空）则先停止并移除常驻容器，再释放镜像/文档文件（否则文件可能占用中）
+        if (StringUtils.isNotEmpty(instance.getContainerId())) {
+            stopAndRemoveContainerQuietly(instance.getContainerId());
+        }
+        deleteFileQuietly(pathOf(readJson(instance.getImage(), ContainerImageInfo.class), ContainerImageInfo::getPath), "镜像");
+        deleteFileQuietly(pathOf(readJson(instance.getInterfaceDoc(), ContainerInterfaceDoc.class), ContainerInterfaceDoc::getPath), "接口文档");
+        containerInstanceMapper.deleteById(instance.getId());
+    }
+
+    /** 停止并移除容器（docker stop + rm -f）：幂等且 best-effort，失败仅记日志，不影响 DB 删除与文件清理 */
+    private void stopAndRemoveContainerQuietly(String containerId) {
+        try {
+            dockerCommandExecutor.stop(containerId);
+            dockerCommandExecutor.remove(containerId);
+            log.info("容器算子已全部删除，已停止并移除容器：{}", containerId);
+        } catch (Exception e) {
+            log.warn("停止/移除容器失败（容器 ID：{}），继续清理：{}", containerId, e.getMessage());
+        }
+    }
+
+    /** 按 container_key 查运行实例；无则返回 null */
+    private FunctionContainerInstance findInstanceByKey(String containerKey) {
+        if (StringUtils.isEmpty(containerKey)) {
+            return null;
+        }
+        return containerInstanceMapper.selectOne(new LambdaQueryWrapper<FunctionContainerInstance>()
+                .eq(FunctionContainerInstance::getContainerKey, containerKey));
+    }
+
+    /** 详情回显：docker_config 仅含接口级，按 container_key 查实例补齐容器级字段，重组为完整 ContainerOperatorConfig */
+    private ContainerOperatorConfig assembleContainerConfig(Function function) {
+        ContainerOperatorConfig config = readJson(function.getDockerConfig(), ContainerOperatorConfig.class);
+        if (config == null) {
+            config = ContainerOperatorConfig.builder().build();
+        }
+        FunctionContainerInstance instance = findInstanceByKey(function.getContainerKey());
+        if (instance != null) {
+            config.setImage(readJson(instance.getImage(), ContainerImageInfo.class));
+            config.setInterfaceDoc(readJson(instance.getInterfaceDoc(), ContainerInterfaceDoc.class));
+            config.setRunCommand(instance.getRunCommand());
+            config.setHostPort(instance.getHostPort());
+            config.setContainerPort(instance.getContainerPort());
+        }
+        return config;
+    }
+
+    /** 取对象的路径字段；对象为 null 时返回 null */
+    private <T> String pathOf(T obj, java.util.function.Function<T, String> getter) {
+        return obj == null ? null : getter.apply(obj);
+    }
+
+    /** 删除磁盘文件，忽略不存在/IO 异常（不影响 DB 事务） */
+    private void deleteFileQuietly(String path, String kind) {
+        if (StringUtils.isEmpty(path)) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(Path.of(path));
+            log.info("容器算子已全部删除，清理{}文件：{}", kind, path);
+        } catch (IOException e) {
+            log.warn("清理容器算子{}文件失败：{}，cause={}", kind, path, e.getMessage());
+        }
+    }
+
+    /** 通用 JSON 读取；空串或解析失败返回 null */
+    private <T> T readJson(String json, Class<T> clazz) {
+        if (StringUtils.isEmpty(json)) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(json, clazz);
+        } catch (JsonProcessingException e) {
+            log.warn("解析容器算子 JSON 失败({})：{}", clazz.getSimpleName(), e.getMessage());
+            return null;
+        }
     }
 
 
@@ -350,6 +481,9 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         var function = resolveVersion(param.getFunctionApi(), param.getVersion());
         PreconditionUtils.checkArgument(function != null,
                 "函数版本不存在：" + param.getFunctionApi() + " " + param.getVersion(), HttpStatus.BAD_REQUEST);
+        // 容器算子不支持编辑：镜像/接口配置在注册时一次性确定，如需调整请删除后重新创建
+        PreconditionUtils.checkArgument(function.getType() != FunctionTypeEnum.CONTAINER,
+                "容器算子不支持编辑，请删除后重新创建：" + param.getFunctionApi(), HttpStatus.BAD_REQUEST);
         // 已发布版本一律禁止修改，需先下线（无“另存新版本”口子，需要新版本请走创建接口）
         PreconditionUtils.checkArgument(function.getPublish() == FunctionConstant.PUBLISH_UNPUBLISHED,
                 "已发布的函数不能修改，请先下线：" + param.getFunctionApi(), HttpStatus.BAD_REQUEST);
@@ -522,6 +656,10 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 || function.getType() == FunctionTypeEnum.EXTERNAL) {
             return executeOperatorFunction(function, funParamMap, executeInputParams);
         }
+        //容器算子：按 containerKey 定位运行中的常驻容器，按其接口定义发起 HTTP 调用
+        if (function.getType() == FunctionTypeEnum.CONTAINER) {
+            return executeContainerFunction(function, funParamMap);
+        }
         //脚本函数：按参数定义组装单对象入参（handle(input)），按语言路由到对应引擎执行
         Map<String, Object> inputMap = buildInputMap(executeInputParams, funParamMap);
         String inputJson = objectMapper.writeValueAsString(inputMap);
@@ -562,6 +700,22 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 .startTime(new Date())
                 .data(data)
                 .description("函数算子执行结果")
+                .build();
+        return objectMapper.writeValueAsString(result);
+    }
+
+    /**
+     * 执行容器算子：委托 {@link ContainerOperatorInvoker} 按 containerKey 定位运行容器并发起 HTTP 调用，
+     * 返回值统一包装成 FunctionResultVO 结构，与其它算子执行返回格式一致。
+     */
+    private String executeContainerFunction(Function function, Map<String, Object> funParamMap)
+            throws JsonProcessingException {
+        Object raw = containerOperatorInvoker.invoke(function, funParamMap);
+        Map<String, Object> data = raw instanceof Map<?, ?> map ? toStringKeyMap(map) : Map.of("result", raw);
+        var result = FunctionResultVO.builder()
+                .startTime(new Date())
+                .data(data)
+                .description("容器算子执行结果")
                 .build();
         return objectMapper.writeValueAsString(result);
     }
@@ -929,6 +1083,17 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                         .build();
                 var resultJson = executeFunction(executeParam);
                 return objectMapper.readValue(resultJson, new TypeReference<FunctionResultVO>() {
+                });
+
+            case CONTAINER:
+                // 容器算子测试：复用 executeFunction（按 containerKey 调常驻容器，未运行则报错引导手动启动）
+                var containerExecuteParam = FunctionExecuteParam.builder()
+                        .functionApi(param.getFunctionApi())
+                        .version(function.getVersion())
+                        .parameters(param.getParameters())
+                        .build();
+                var containerResultJson = executeFunction(containerExecuteParam);
+                return objectMapper.readValue(containerResultJson, new TypeReference<FunctionResultVO>() {
                 });
 
             default:
