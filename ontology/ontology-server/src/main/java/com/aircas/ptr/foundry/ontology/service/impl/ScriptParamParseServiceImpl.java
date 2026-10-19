@@ -106,14 +106,21 @@ public class ScriptParamParseServiceImpl implements ScriptParamParseService {
     private ScriptParsedParamVO toItemVO(ScriptParsedParam p, int order, FunctionLanguageEnum language) {
         FunctionParamCategoryEnum category =
                 p.getCategory() == null ? FunctionParamCategoryEnum.INPUT : p.getCategory();
-        return ScriptParsedParamVO.builder()
+        ScriptParsedParamVO.ScriptParsedParamVOBuilder builder = ScriptParsedParamVO.builder()
                 .paramName(p.getName())
                 .paramType(p.getType())
                 .category(category)
                 .paramOrder(order)
-                .referenceType(referenceType(p, language))
+                .referenceType(referenceType(p, language));
                 // paramSchema/description 不产出（null）：前端保存请求本就不传这两项，由用户自行补充
-                .build();
+        if (p.getFields() != null && !p.getFields().isEmpty()) {
+            List<ScriptParsedParamVO> fieldVOs = new ArrayList<>();
+            for (int i = 0; i < p.getFields().size(); i++) {
+                fieldVOs.add(toItemVO(p.getFields().get(i), i + 1, language));
+            }
+            builder.fields(fieldVOs);
+        }
+        return builder.build();
     }
 
     /**

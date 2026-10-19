@@ -6,8 +6,8 @@ import lombok.Getter;
 /**
  * 脚本函数（type=CUSTOMIZE / EXTERNAL）的脚本语言。
  * <p>
- * 所有语言统一通过独立的语言 Runner 容器执行，主应用不编译/执行任何用户代码；
- * 执行时按该枚举路由到对应 runner（{@code language → runner base URL} 严格一对一）。
+ * Groovy/Java 在主程序 ontology-server 进程内编译执行（脚本可引用主程序内部类）；
+ * Python/TypeScript 通过独立语言 Runner 容器执行，执行时按该枚举路由到对应 runner。
  */
 @AllArgsConstructor
 @Getter

@@ -187,7 +187,7 @@ function collectNamedTypes(src) {
       const fields = [];
       members.forEach((m) => {
         if (ts.isPropertySignature(m) && m.name && m.type) {
-          fields.push({ name: m.name.getText(src), type: normalizeTsType(m.type, src) });
+          fields.push({ name: m.name.getText(src), type: normalizeTsType(m.type, src), _rawType: m.type });
         }
       });
       map.set(typeName, fields);
@@ -198,12 +198,137 @@ function collectNamedTypes(src) {
   return map;
 }
 
-/** ref 命名字段降级为 object，其余保留标量文本。 */
-function memberToParam(name, typeText) {
-  if (typeText && typeText.startsWith('ref:')) {
-    return { name, type: 'object' };
+/** 从数组类型中提取元素类型节点（Admin[] → Admin 类型节点，Array<Admin> → Admin 类型节点）。 */
+function extractArrayElementType(node) {
+  if (!node) return null;
+  const target = ts.isParenthesizedTypeNode(node) ? node.type : node;
+  if (ts.isArrayTypeNode(target)) return target.elementType;
+  if (ts.isTypeReferenceNode(target)) {
+    const name = target.typeName.getText(src);
+    if (/^Array$/i.test(name) && target.typeArguments && target.typeArguments.length) {
+      return target.typeArguments[0];
+    }
   }
-  return { name, type: typeText || 'object' };
+  return null;
+}
+
+/** 递归展开一个类型节点为带嵌套 fields 的参数节点，无法展开返回 null。visited 防循环引用。 */
+function expandType(node, named, src, visited) {
+  if (!node) return null;
+  if (!visited) visited = new Set();
+  const target = ts.isParenthesizedTypeNode(node) ? node.type : node;
+  // 内联对象字面量 { x: number, y: string }
+  if (ts.isTypeLiteralNode(target)) {
+    const fields = [];
+    target.members.filter(ts.isPropertySignature).forEach((m) => {
+      if (m.name && m.type) {
+        const name = m.name.getText(src);
+        const typeText = normalizeTsType(m.type, src);
+        const field = { name, type: typeText.startsWith('ref:') ? typeText.slice(4) : (typeText || 'object') };
+        if (typeText.startsWith('ref:')) {
+          const refName = typeText.slice(4);
+          const nested = expandType(m.type, named, src, new Set(visited).add(refName));
+          if (nested && nested.fields) field.fields = nested.fields;
+        } else if (typeText === 'array') {
+          // 数组元素是自定义类 → 递归展开
+          const elemNode = extractArrayElementType(m.type);
+          if (elemNode) {
+            const elemTypeText = normalizeTsType(elemNode, src);
+            if (elemTypeText.startsWith('ref:')) {
+              const elemRef = elemTypeText.slice(4);
+              if (named.has(elemRef) && !visited.has(elemRef)) {
+                const nested = expandTypeByName(elemRef, named, src, visited);
+                if (nested && nested.fields) field.fields = nested.fields;
+              }
+            }
+          }
+        } else if (typeText === 'object' && ts.isTypeLiteralNode(m.type)) {
+          // 内联对象嵌套内联对象：a: { inner: { x: number } }
+          const nested = expandType(m.type, named, src, visited);
+          if (nested && nested.fields) field.fields = nested.fields;
+        }
+        fields.push(field);
+      }
+    });
+    return fields.length > 0 ? { type: 'object', fields } : null;
+  }
+  // 类型引用（interface / type alias）
+  if (ts.isTypeReferenceNode(target)) {
+    const refName = target.typeName.getText(src);
+    if (/^Promise$/i.test(refName) && target.typeArguments && target.typeArguments.length) {
+      return expandType(target.typeArguments[0], named, src, visited);
+    }
+    if (named.has(refName) && !visited.has(refName)) {
+      visited = new Set(visited).add(refName);
+      const fields = [];
+      for (const f of named.get(refName)) {
+        const field = { name: f.name, type: f.type.startsWith('ref:') ? f.type.slice(4) : (f.type || 'object') };
+        if (f.type.startsWith('ref:')) {
+          const nestedRef = f.type.slice(4);
+          if (named.has(nestedRef) && !visited.has(nestedRef)) {
+            const nested = expandTypeByName(nestedRef, named, src, visited);
+            if (nested && nested.fields) field.fields = nested.fields;
+          }
+        } else if (f.type === 'array' && f._rawType) {
+          const elemNode = extractArrayElementType(f._rawType);
+          if (elemNode) {
+            const elemTypeText = normalizeTsType(elemNode, src);
+            if (elemTypeText.startsWith('ref:')) {
+              const elemRef = elemTypeText.slice(4);
+              if (named.has(elemRef) && !visited.has(elemRef)) {
+                const nested = expandTypeByName(elemRef, named, src, visited);
+                if (nested && nested.fields) field.fields = nested.fields;
+              }
+            }
+          }
+        } else if (f.type === 'object' && f._rawType && ts.isTypeLiteralNode(f._rawType)) {
+          const inline = expandType(f._rawType, named, src, visited);
+          if (inline && inline.fields) field.fields = inline.fields;
+        }
+        fields.push(field);
+      }
+      return { type: refName, fields };
+    }
+    if (named.has(refName)) return { type: refName }; // 循环引用，只记类型不展开
+    return null;
+  }
+  return null;
+}
+
+/** 按类型名递归展开。 */
+function expandTypeByName(name, named, src, visited) {
+  if (!named.has(name) || visited.has(name)) return null;
+  visited = new Set(visited).add(name);
+  const fields = [];
+  for (const f of named.get(name)) {
+    const field = { name: f.name, type: f.type.startsWith('ref:') ? f.type.slice(4) : (f.type || 'object') };
+    if (f.type.startsWith('ref:')) {
+      const nestedRef = f.type.slice(4);
+      if (named.has(nestedRef) && !visited.has(nestedRef)) {
+        const nested = expandTypeByName(nestedRef, named, src, visited);
+        if (nested && nested.fields) field.fields = nested.fields;
+      }
+    } else if (f.type === 'array' && f._rawType) {
+      // 数组字段：通过原始类型节点提取元素类型并递归展开
+      const elemNode = extractArrayElementType(f._rawType);
+      if (elemNode) {
+        const elemTypeText = normalizeTsType(elemNode, src);
+        if (elemTypeText.startsWith('ref:')) {
+          const elemRef = elemTypeText.slice(4);
+          if (named.has(elemRef) && !visited.has(elemRef)) {
+            const nested = expandTypeByName(elemRef, named, src, visited);
+            if (nested && nested.fields) field.fields = nested.fields;
+          }
+        }
+      }
+    } else if (f.type === 'object' && f._rawType && ts.isTypeLiteralNode(f._rawType)) {
+      // 内联对象类型：a: { aa: string; data: string } → 递归展开字段
+      const inline = expandType(f._rawType, named, src, visited);
+      if (inline && inline.fields) field.fields = inline.fields;
+    }
+    fields.push(field);
+  }
+  return { type: name, fields };
 }
 
 /** 定位名为 handle 的入口（函数声明 或 const/let handle = 箭头/函数表达式），返回统一描述符。 */
@@ -225,23 +350,10 @@ function findHandle(src) {
   return null;
 }
 
-/** 展开一个类型节点为字段列表（ref 命中命名类型或内联对象字面量），不能展开返回 null。 */
+/** 展开一个类型节点为字段列表（递归展开嵌套类型），不能展开返回 null。 */
 function expandFields(node, named, src) {
-  if (!node) return null;
-  const target = ts.isParenthesizedTypeNode(node) ? node.type : node;
-  if (ts.isTypeLiteralNode(target)) {
-    return target.members
-      .filter(ts.isPropertySignature)
-      .map((m) => memberToParam(m.name.getText(src), normalizeTsType(m.type, src)));
-  }
-  if (ts.isTypeReferenceNode(target)) {
-    const refName = target.typeName.getText(src);
-    if (named.has(refName)) return named.get(refName).map((f) => ({ name: f.name, type: f.type }));
-    if (/^Promise$/i.test(refName) && target.typeArguments && target.typeArguments.length) {
-      return expandFields(target.typeArguments[0], named, src);
-    }
-  }
-  return null;
+  const result = expandType(node, named, src);
+  return result && result.fields ? result.fields : null;
 }
 
 /** 启发层：扫描函数体里 input.xxx 成员访问与 input["xxx"] 下标访问。 */
@@ -309,32 +421,55 @@ function parse(code) {
   const named = collectNamedTypes(src);
   const params = [];
 
-  const first = handle.parameters[0];
-  if (first) {
-    const fields = first.type ? expandFields(first.type, named, src) : null;
-    const paramName = first.name.getText(src);
+  // 遍历所有入参，返回层级结构：每个参数一个节点，展开类型时放 fields 数组
+  for (const param of handle.parameters) {
+    const paramName = param.name.getText(src);
+    const fields = param.type ? expandFields(param.type, named, src) : null;
+    const paramNode = { name: paramName, category: 'INPUT' };
+
     if (fields && fields.length > 0) {
-      fields.forEach((f) => params.push({ name: f.name, type: f.type, category: 'INPUT', source: 'ANNOTATION' }));
-    } else if (first.type) {
-      // 有类型但无法展开（any/object/未知 ref）→ 先试标量，否则启发扫 body
-      const scalar = normalizeTsType(first.type, src);
+      // 可展开的类/接口：保留原始类型名，字段放 fields
+      const typeText = param.type ? normalizeTsType(param.type, src) : 'object';
+      paramNode.type = typeText.startsWith('ref:') ? typeText.slice(4) : typeText;
+      paramNode.source = 'ANNOTATION';
+      paramNode.fields = fields;
+    } else if (param.type) {
+      // 有类型但无法展开
+      const scalar = normalizeTsType(param.type, src);
       if (scalar && scalar !== 'object' && !scalar.startsWith('ref:')) {
-        params.push({ name: paramName, type: scalar, category: 'INPUT', source: 'ANNOTATION' });
+        paramNode.type = scalar;
+        paramNode.source = 'ANNOTATION';
       } else {
-        collectBodyProps(handle, paramName).forEach((k) =>
-          params.push({ name: k, type: 'object', category: 'INPUT', source: 'INFERRED' }));
+        // 启发层：扫 body 收集字段
+        paramNode.type = 'object';
+        paramNode.source = 'INFERRED';
+        const bodyFields = collectBodyProps(handle, paramName);
+        if (bodyFields.length > 0) {
+          paramNode.fields = bodyFields.map((k) => ({ name: k, type: 'object' }));
+        }
       }
     } else {
-      // 无注解→启发扫描 input.xxx
-      collectBodyProps(handle, paramName).forEach((k) =>
-        params.push({ name: k, type: 'object', category: 'INPUT', source: 'INFERRED' }));
+      // 无注解→启发扫描
+      paramNode.type = 'object';
+      paramNode.source = 'INFERRED';
+      const bodyFields = collectBodyProps(handle, paramName);
+      if (bodyFields.length > 0) {
+        paramNode.fields = bodyFields.map((k) => ({ name: k, type: 'object' }));
+      }
     }
+    params.push(paramNode);
   }
 
   if (handle.type) {
-    const fields = expandFields(handle.type, named, src);
-    if (fields && fields.length > 0) {
-      fields.forEach((f) => params.push({ name: f.name, type: f.type, category: 'OUTPUT', source: 'ANNOTATION' }));
+    const expanded = expandType(handle.type, named, src);
+    if (expanded && expanded.fields && expanded.fields.length > 0) {
+      // 返回类型为自定义类 → 层级结构：父参数带 fields
+      const typeText = normalizeTsType(handle.type, src);
+      params.push({
+        name: typeText.startsWith('ref:') ? typeText.slice(4) : typeText,
+        type: expanded.type.startsWith('ref:') ? expanded.type.slice(4) : expanded.type,
+        category: 'OUTPUT', source: 'ANNOTATION', fields: expanded.fields
+      });
     } else {
       const scalar = normalizeTsType(handle.type, src);
       if (scalar && scalar !== 'object' && !scalar.startsWith('ref:')) {

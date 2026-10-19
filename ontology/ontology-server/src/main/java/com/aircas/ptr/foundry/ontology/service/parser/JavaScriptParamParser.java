@@ -17,6 +17,7 @@ import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -39,6 +40,7 @@ import java.util.Set;
 public class JavaScriptParamParser implements ScriptParamParser {
 
     private static final Set<String> MAP_LIKE = Set.of("map", "hashmap", "linkedhashmap", "object", "jsonobject", "jsonnode");
+    private static final Set<String> COLLECTION_LIKE = Set.of("list", "set", "collection", "iterable", "arraylist", "linkedlist", "hashset");
 
     @Override
     public Set<FunctionLanguageEnum> supports() {
@@ -82,16 +84,25 @@ public class JavaScriptParamParser implements ScriptParamParser {
         List<String> mapParamNames = new ArrayList<>();
         for (Parameter p : handle.getParameters()) {
             String typeText = p.getType().asString();
+            String paramName = p.getNameAsString();
             ClassOrInterfaceDeclaration userClass = resolveUserClass(typeText, classByName);
             if (userClass != null) {
-                expandFields(userClass, FunctionParamCategoryEnum.INPUT, "ANNOTATION", out);
+                // 层级结构：父参数为自定义类型，字段放入 fields
+                List<ScriptParsedParam> fields = expandFields(userClass, FunctionParamCategoryEnum.INPUT, "ANNOTATION", classByName, new LinkedHashSet<>());
+                out.add(ScriptParsedParam.builder()
+                        .name(paramName)
+                        .type(ScriptParamTypeMapper.map(typeText))
+                        .rawType(typeText)
+                        .category(FunctionParamCategoryEnum.INPUT)
+                        .source("ANNOTATION")
+                        .fields(fields)
+                        .build());
                 expanded = true;
             } else if (isMapLike(typeText)) {
-                mapParamNames.add(p.getNameAsString());
-                // Map 入参本身也记一个整体对象（前端可只取展开字段，此处不阻断启发）
+                mapParamNames.add(paramName);
             } else {
                 out.add(ScriptParsedParam.builder()
-                        .name(p.getNameAsString())
+                        .name(paramName)
                         .type(ScriptParamTypeMapper.map(typeText))
                         .rawType(typeText)
                         .category(FunctionParamCategoryEnum.INPUT)
@@ -110,7 +121,16 @@ public class JavaScriptParamParser implements ScriptParamParser {
         String returnType = handle.getType().asString();
         ClassOrInterfaceDeclaration userClass = resolveUserClass(returnType, classByName);
         if (userClass != null) {
-            expandFields(userClass, FunctionParamCategoryEnum.OUTPUT, "ANNOTATION", out);
+            // 层级结构：返回类型为自定义类时，父参数带 fields
+            List<ScriptParsedParam> fields = expandFields(userClass, FunctionParamCategoryEnum.OUTPUT, "ANNOTATION", classByName, new LinkedHashSet<>());
+            out.add(ScriptParsedParam.builder()
+                    .name(returnType)
+                    .type(ScriptParamTypeMapper.map(returnType))
+                    .rawType(returnType)
+                    .category(FunctionParamCategoryEnum.OUTPUT)
+                    .source("ANNOTATION")
+                    .fields(fields)
+                    .build());
             return;
         }
         if (!"void".equalsIgnoreCase(returnType) && !isMapLike(returnType)) {
@@ -125,8 +145,9 @@ public class JavaScriptParamParser implements ScriptParamParser {
         // Map/Object 返回：Java 无 map 字面量，静态不可知，留空由前端补充
     }
 
-    private void expandFields(ClassOrInterfaceDeclaration cls, FunctionParamCategoryEnum category, String source,
-                              List<ScriptParsedParam> out) {
+    private List<ScriptParsedParam> expandFields(ClassOrInterfaceDeclaration cls, FunctionParamCategoryEnum category, String source,
+                                                    Map<String, ClassOrInterfaceDeclaration> classByName, Set<String> visited) {
+        List<ScriptParsedParam> fields = new ArrayList<>();
         Set<String> seen = new LinkedHashSet<>();
         for (FieldDeclaration field : cls.getFields()) {
             // 跳过 static 字段（如 serialVersionUID/logger 常量），它们不是实例入参/出参
@@ -135,16 +156,32 @@ public class JavaScriptParamParser implements ScriptParamParser {
             }
             for (VariableDeclarator var : field.getVariables()) {
                 if (seen.add(var.getNameAsString())) {
-                    out.add(ScriptParsedParam.builder()
+                    String fieldTypeText = var.getType().asString();
+                    ScriptParsedParam.ScriptParsedParamBuilder fb = ScriptParsedParam.builder()
                             .name(var.getNameAsString())
-                            .type(ScriptParamTypeMapper.map(var.getType().asString()))
-                            .rawType(var.getType().asString())
+                            .type(ScriptParamTypeMapper.map(fieldTypeText))
+                            .rawType(fieldTypeText)
                             .category(category)
-                            .source(source)
-                            .build());
+                            .source(source);
+                    // 字段类型本身也是自定义类 → 递归展开
+                    ClassOrInterfaceDeclaration nestedClass = resolveUserClass(fieldTypeText, classByName);
+                    if (nestedClass != null && visited.add(fieldTypeText)) {
+                        fb.fields(expandFields(nestedClass, category, source, classByName, visited));
+                    } else {
+                        // 集合泛型：List<Admin> / Set<User> → 提取泛型参数递归展开
+                        String elementType = extractCollectionElementType(var.getType());
+                        if (elementType != null) {
+                            ClassOrInterfaceDeclaration elemClass = resolveUserClass(elementType, classByName);
+                            if (elemClass != null && visited.add(elementType)) {
+                                fb.fields(expandFields(elemClass, category, source, classByName, visited));
+                            }
+                        }
+                    }
+                    fields.add(fb.build());
                 }
             }
         }
+        return fields;
     }
 
     /** 启发层：扫描 handle 体内 {@code input.get("x")} 字面量键，作为入参。 */
@@ -180,6 +217,21 @@ public class JavaScriptParamParser implements ScriptParamParser {
         }
         // 首字母大写且非 JDK 类型才可能是用户类
         return classByName.get(base);
+    }
+
+    /** 从集合类型中提取泛型元素类型名（如 List<Admin> → "Admin"），非集合返回 null。 */
+    private String extractCollectionElementType(com.github.javaparser.ast.type.Type type) {
+        if (!(type instanceof ClassOrInterfaceType classType)) {
+            return null;
+        }
+        String baseName = baseName(classType.getName().getIdentifier());
+        if (!COLLECTION_LIKE.contains(baseName.toLowerCase())) {
+            return null;
+        }
+        return classType.getTypeArguments()
+                .filter(args -> !args.isEmpty())
+                .map(args -> args.get(0).asString())
+                .orElse(null);
     }
 
     private boolean isMapLike(String typeText) {

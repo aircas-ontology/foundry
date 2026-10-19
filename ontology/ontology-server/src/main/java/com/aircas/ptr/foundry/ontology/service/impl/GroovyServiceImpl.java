@@ -215,8 +215,8 @@ public class GroovyServiceImpl implements GroovyService {
 
     /**
      * 编译 Groovy 源码，在已加载类中查找含 handle 方法且返回 FunctionResultVO 的类。
-     * 用于创建时反射解析参数（parseGroovyCode）以及函数编排节点的进程内执行；
-     * 脚本函数（CUSTOMIZE）的独立执行已下沉 groovy-runner 容器。
+     * 用于创建时反射解析参数（parseGroovyCode）、脚本函数（CUSTOMIZE）的进程内执行
+     * （{@link com.aircas.ptr.foundry.ontology.engine.InProcessGroovyScriptEngine}）以及函数编排节点的进程内执行。
      */
     private CompiledScript compile(String code) {
         String codeHash = cacheKey(code);

@@ -18,16 +18,6 @@ import org.springframework.stereotype.Component;
 public class ScriptRunnerProperties {
 
     /**
-     * groovy-runner 基地址
-     */
-    private String groovy;
-
-    /**
-     * java-runner 基地址
-     */
-    private String java;
-
-    /**
      * python-runner 基地址
      */
     private String python;
@@ -63,10 +53,10 @@ public class ScriptRunnerProperties {
 
     private String rawUrl(FunctionLanguageEnum language) {
         return switch (language) {
-            case GROOVY -> groovy;
-            case JAVA -> java;
             case PYTHON -> python;
             case TYPESCRIPT -> typescript;
+            // Groovy/Java 在主程序进程内执行，不走远程 runner
+            default -> null;
         };
     }
 

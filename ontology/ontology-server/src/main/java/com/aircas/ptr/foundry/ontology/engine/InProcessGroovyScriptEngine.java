@@ -18,9 +18,9 @@ import java.util.Set;
 /**
  * Groovy 进程内引擎：复用 {@link GroovyService} 的编译缓存，按参数表顺序展开调用 handle。
  * <p>
- * groovy-runner 是独立容器，本地/离线开发常无该运行时；而编排里的函数节点本来就是进程内执行同一份
- * Groovy 代码。顶层执行若仍走远程 runner，会出现「编排版能跑、单独测试算子报语言运行时未配置」的矛盾，
- * 所以这里覆盖 GROOVY 路由，其余语言继续交给 runner。</p>
+ * Groovy 脚本函数需要引用主程序内部类，因此不再走独立的 groovy-runner 容器，
+ * 直接在主 JVM 内编译执行；脚本可访问应用全部类与 Bean。编排（COMPOSITE）节点
+ * 也复用同一套进程内执行能力，两端行为一致。</p>
  */
 @Component
 @RequiredArgsConstructor

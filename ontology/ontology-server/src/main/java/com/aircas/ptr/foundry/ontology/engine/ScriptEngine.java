@@ -7,8 +7,12 @@ import java.util.Set;
 /**
  * 脚本引擎抽象：屏蔽具体语言的执行方式，由 {@link ScriptEngineRouter} 按 {@link FunctionLanguageEnum} 选择实现。
  * <p>
- * 当前唯一实现是 {@link RemoteRunnerScriptEngine}（全部语言走远程 runner 容器）；
- * 后续若新增进程内引擎，只需再实现本接口并声明 {@link #supports()} 的语言即可，主流程零改动。
+ * 当前实现：
+ * <ul>
+ *   <li>{@link InProcessGroovyScriptEngine} - Groovy 进程内执行</li>
+ *   <li>{@link InProcessJavaScriptEngine} - Java 进程内编译执行（可引用主程序类）</li>
+ *   <li>{@link RemoteRunnerScriptEngine} - Python/TypeScript 远程 Runner 容器</li>
+ * </ul>
  */
 public interface ScriptEngine {
 
