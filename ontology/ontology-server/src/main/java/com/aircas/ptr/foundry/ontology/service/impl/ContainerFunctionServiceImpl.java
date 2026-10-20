@@ -106,8 +106,8 @@ public class ContainerFunctionServiceImpl implements ContainerFunctionService {
             meta = DockerImageInspector.inspect(target);
         } catch (RuntimeException e) {
             // 解析失败：仅启用校验时视为非法并清理；关闭校验时记录并放行（本地无 ARM 环境测试）
-            deleteQuietly(target);
             if (properties.isArmCheckEnabled()) {
+                deleteQuietly(target);
                 throw e;
             }
             log.warn("ARM 校验已关闭，镜像架构解析失败但放行：{}", e.getMessage());
