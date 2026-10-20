@@ -27,6 +27,10 @@
     <properties>
         <java.version>17</java.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <!-- 默认让归档条目与产物文件使用真实构建时刻（UTC），而非插件内置的 1980-02-01 纪元。
+             代价是同一份源码两次构建产物字节级不再相同，需要可重现构建时用 -Dproject.build.outputTimestamp= 覆盖。 -->
+        <maven.build.timestamp.format>yyyy-MM-dd'T'HH:mm:ss'Z'</maven.build.timestamp.format>
+        <project.build.outputTimestamp>${maven.build.timestamp}</project.build.outputTimestamp>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <!-- knife4j-next 社区 fork，适配 Spring Boot 3.4/3.5，groupId 从 com.github.xiaoymin 改为 com.baizhukui，
              包名、注解、配置键与官方 4.x 完全兼容，内部已管理匹配的 springdoc-openapi 版本 -->
