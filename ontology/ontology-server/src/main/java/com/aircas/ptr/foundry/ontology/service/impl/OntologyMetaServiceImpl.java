@@ -560,14 +560,28 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
 
 
     @Transactional(value = "mainTransactionManager")
-    public void importOntology(OntologyCreateDTO dto) {
+    public Map<String, Object> importOntology(OntologyCreateDTO dto) {
+        return importOntology(dto, null);
+    }
+
+    /**
+     * 导入单个本体到指定空间。
+     *
+     * @param targetSpaceId 目标空间 id，为 null 时按 {@code metadata.ontologySpaceName} 解析空间；
+     *                      空间导入已 createSpace 拿到新 id，必须直接落进该空间，否则文件里的空间名与
+     *                      既有空间重名时对象会写回旧空间并撞 ontology_meta 空间内重名唯一键
+     */
+    @Transactional(value = "mainTransactionManager")
+    public Map<String, Object> importOntology(OntologyCreateDTO dto, Integer targetSpaceId) {
 
         var metaData = dto.getMetadata();
         PreconditionUtils.checkNotNull(metaData, "ontology meta data is null");
         //保存基本信息
-        var space = spaceService.getOne(new LambdaQueryWrapper<OntologySpace>()
-                .eq(OntologySpace::getDisplayName, metaData.getOntologySpaceName()));
-        PreconditionUtils.checkNotNull(space, "invalid ontology space name:" + dto.getMetadata().getOntologySpaceName());
+        var space = targetSpaceId != null ? spaceService.getById(targetSpaceId)
+                : spaceService.getOne(new LambdaQueryWrapper<OntologySpace>()
+                        .eq(OntologySpace::getDisplayName, metaData.getOntologySpaceName()));
+        PreconditionUtils.checkNotNull(space, targetSpaceId != null ? "invalid ontology space id:" + targetSpaceId
+                : "invalid ontology space name:" + dto.getMetadata().getOntologySpaceName());
 
         //空间分组
         var groups = groupService.list(new LambdaQueryWrapper<OntologyGroup>()
@@ -751,7 +765,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
             });
         }
         //导入实例数据（若传递了 instances）：写数据湖物理表，id 由数据库重新生成；本体未绑定数据源或无实例时静默跳过
-        entityService.importInstances(meta.getUniqueIdentifier(), instances);
+        return entityService.importInstances(meta.getUniqueIdentifier(), instances);
     }
 
 

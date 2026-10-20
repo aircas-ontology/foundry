@@ -46,6 +46,7 @@ import com.aircas.ptr.foundry.ontology.service.TableMetadataService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Lists;
 import lombok.AllArgsConstructor;
@@ -72,6 +73,7 @@ import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.ontology.model.dto.EntityNodeExportDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.OntologyInstancesExportDTO;
+import com.aircas.ptr.foundry.ontology.model.dto.OntologyLinkDTO;
 import com.aircas.ptr.foundry.ontology.model.enums.QueryOpEnum;
 import com.aircas.ptr.foundry.ontology.model.param.OntologySubspaceCreateParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
@@ -84,8 +86,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Stream;
 
 
 @Service
@@ -131,7 +135,9 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
 
     private final SubspacePropertyFilterMapper subspacePropertyFilterMapper;
 
-    private final ObjectMapper jsonMapper = new ObjectMapper();
+    // 导入的是历史导出文件，字段会随版本增删，未知字段一律忽略
+    private final ObjectMapper jsonMapper = new ObjectMapper()
+            .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 
     @Lazy
     @Resource
@@ -518,18 +524,47 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                 categoryService.createCategory(category);
             }
         }
+        //import link category：关系分类同样挂到默认根分类"全部"下
+        var linkCategory = spaceCreateDTO.getLinkCategory();
+        if (linkCategory != null) {
+            var linkRootId = getLinkCategoryRoot(spaceId);
+            if ("全部".equals(linkCategory.getName())) {
+                // 导出文件的顶层就是自动创建的"全部"根，跳过它自身，只导入子节点，避免嵌套出"全部/全部"
+                if (CollectionUtils.isNotEmpty(linkCategory.getChildren())) {
+                    for (var child : linkCategory.getChildren()) {
+                        var childParam = new OntologyLinkCategoryCreateParam()
+                                .setName(child.getName())
+                                .setChildren(child.getChildren())
+                                .setParentId(linkRootId);
+                        childParam.setSpaceId(spaceId);
+                        ontologyLinkCategoryService.createCategory(childParam);
+                    }
+                }
+            } else {
+                linkCategory.setParentId(linkRootId);
+                linkCategory.setSpaceId(spaceId);
+                ontologyLinkCategoryService.createCategory(linkCategory);
+            }
+        }
         //import ontologies
         List<String> failedOntology = Lists.newArrayList();
+        //对象显示名称 -> 实例「导出主键 → 新主键」映射，实例关系边落位时据此还原到正确的实例对
+        Map<String, Map<String, Object>> pkMappingByOntologyName = new HashMap<>();
         if (CollectionUtils.isNotEmpty(spaceCreateDTO.getOntologies())) {
             spaceCreateDTO.getOntologies().forEach(dto -> {
                 try {
-                    ontologyMetaService.importOntology(dto);
+                    var pkMapping = ontologyMetaService.importOntology(dto, spaceId);
+                    if (pkMapping != null) {
+                        pkMappingByOntologyName.put(dto.getMetadata().getDisplayName(), pkMapping);
+                    }
                 } catch (Exception e) {
                     log.error("本体 {} 导入失败", dto.getMetadata().getDisplayName(), e);
                     failedOntology.add(dto.getMetadata().getDisplayName());
                 }
             });
         }
+        //import links：关系端点按对象显示名称解析为新对象id，必须在全部本体导入完成后创建
+        importOntologyLinks(spaceId, spaceCreateDTO.getLinks(), pkMappingByOntologyName);
         return failedOntology;
     }
 
@@ -551,11 +586,133 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
         //一次装配空间下全部本体
         var ontologies = ontologyMetaService.exportOntologies(space, exportType);
 
+        //空间下的对象关系：端点以对象显示名称表达，导入时据此解析新生成的对象id
+        var uidToDisplayName = metaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>()
+                        .eq(OntologyMeta::getOntologySpaceId, space.getId())
+                        .eq(OntologyMeta::getStatus, Status.ENABLE.getValue()))
+                .stream().collect(Collectors.toMap(OntologyMeta::getUniqueIdentifier, OntologyMeta::getDisplayName, (a, b) -> a));
+        var linkCategories = ontologyLinkCategoryService.list(new LambdaQueryWrapper<OntologyLinkCategory>()
+                .eq(OntologyLinkCategory::getOntologySpaceId, space.getId()));
+
         return OntologySpaceCreateDTO.builder()
                 .ontologySpace(ontologySpace)
                 .ontologyCategory(ontologyCategory)
+                .linkCategory(buildLinkCategoryTree(linkCategories))
+                .links(exportOntologyLinks(space, linkCategories, uidToDisplayName, exportType))
                 .ontologies(ontologies)
                 .build();
+    }
+
+    /**
+     * 导出空间内启用对象之间的关系（含关系分类路径与实例关系边）。
+     *
+     * <p>端点对象已停用/已删除的关系不导出，否则导入后无法还原。
+     * 实例关系边仅在 INSTANCE 导出模式下采集，SCHEMA 模式不查图库。</p>
+     */
+    private List<OntologyLinkDTO> exportOntologyLinks(OntologySpace space,
+                                                      List<OntologyLinkCategory> linkCategories,
+                                                      Map<String, String> uidToDisplayName,
+                                                      OntologyExportTypeEnum exportType) {
+        var links = linkMapper.selectList(new LambdaQueryWrapper<OntologyLinkGroup>()
+                .eq(OntologyLinkGroup::getOntologySpaceId, space.getId())
+                .eq(OntologyLinkGroup::getStatus, Status.ENABLE.getValue()));
+        if (CollectionUtils.isEmpty(links)) {
+            return Lists.newArrayList();
+        }
+        var categoryPathMap = linkCategories.stream()
+                .collect(Collectors.toMap(OntologyLinkCategory::getId, OntologyLinkCategory::getPath, (a, b) -> a));
+        var withInstances = exportType == OntologyExportTypeEnum.INSTANCE;
+        return links.stream()
+                .filter(link -> uidToDisplayName.containsKey(link.getOntologyUniqueIdentifierFrom())
+                        && uidToDisplayName.containsKey(link.getOntologyUniqueIdentifierTo()))
+                .map(link -> OntologyLinkDTO.builder()
+                        .name(link.getName())
+                        .apiName(link.getApiName())
+                        .description(link.getDescription())
+                        .type(link.getType())
+                        .ontologyNameFrom(uidToDisplayName.get(link.getOntologyUniqueIdentifierFrom()))
+                        .ontologyNameTo(uidToDisplayName.get(link.getOntologyUniqueIdentifierTo()))
+                        .categoryPath(link.getCategoryId() == null ? null : categoryPathMap.get(link.getCategoryId()))
+                        .entityRelations(withInstances
+                                ? entityService.exportEntityRelations(link.getUniqueIdentifier()) : null)
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    private OntologyLinkCategoryCreateParam buildLinkCategoryTree(List<OntologyLinkCategory> categories) {
+        if (CollectionUtils.isEmpty(categories)) {
+            return null;
+        }
+        var root = categories.stream()
+                .filter(c -> c.getParentId() != null && c.getParentId() == 0)
+                .findFirst().orElse(null);
+        if (root == null) {
+            return null;
+        }
+        return OntologyLinkCategoryCreateParam.builder()
+                .parentId(root.getParentId())
+                .name(root.getName())
+                .children(buildLinkCategoryChildren(root.getId(), categories))
+                .build();
+    }
+
+    private List<CategoryNode> buildLinkCategoryChildren(Integer parentId, List<OntologyLinkCategory> categories) {
+        return categories.stream()
+                .filter(c -> c.getParentId() != null && c.getParentId().equals(parentId))
+                .map(c -> CategoryNode.builder()
+                        .name(c.getName())
+                        .children(buildLinkCategoryChildren(c.getId(), categories))
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 导入空间下的对象关系：端点对象显示名称与关系分类路径均需在导入完成后才存在，故由导入流程最后调用。
+     *
+     * <p>先同步两端对象的图节点，createLink 据此生成默认 DELETE 的全笛卡尔积候选边；导出文件带了实例关系边时，
+     * 再把命中的实例对写成源状态，其余保持 DELETE。</p>
+     */
+    private void importOntologyLinks(Integer spaceId,
+                                     List<OntologyLinkDTO> links,
+                                     Map<String, Map<String, Object>> pkMappingByOntologyName) {
+        if (CollectionUtils.isEmpty(links)) {
+            return;
+        }
+        var uidByDisplayName = metaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>()
+                        .eq(OntologyMeta::getOntologySpaceId, spaceId)
+                        .eq(OntologyMeta::getStatus, Status.ENABLE.getValue()))
+                .stream().collect(Collectors.toMap(OntologyMeta::getDisplayName, OntologyMeta::getUniqueIdentifier, (a, b) -> a));
+        var categoryIdByPath = ontologyLinkCategoryService.list(new LambdaQueryWrapper<OntologyLinkCategory>()
+                        .eq(OntologyLinkCategory::getOntologySpaceId, spaceId))
+                .stream().collect(Collectors.toMap(OntologyLinkCategory::getPath, OntologyLinkCategory::getId, (a, b) -> a));
+        // 候选边依赖两端对象的图节点，同一对象的节点只同步一次
+        Set<String> nodeSynced = new HashSet<>();
+        for (var link : links) {
+            var fromUid = uidByDisplayName.get(link.getOntologyNameFrom());
+            var toUid = uidByDisplayName.get(link.getOntologyNameTo());
+            if (fromUid == null || toUid == null) {
+                log.warn("关系 {} 导入跳过：端点对象不存在，from={}, to={}", link.getName(), link.getOntologyNameFrom(), link.getOntologyNameTo());
+                continue;
+            }
+            //不带实例关系边也要同步节点：createLink 靠两端节点生成 DELETE 候选边，否则新空间一条候选边都不会有
+            Stream.of(fromUid, toUid).filter(nodeSynced::add).forEach(entityService::createEntityNodes);
+            var entityRelations = link.getEntityRelations();
+            var withEntityRelations = CollectionUtils.isNotEmpty(entityRelations);
+            var linkUid = ontologyLinkGroupService.createLink(new OntologyLinkCreateParam()
+                    .setName(link.getName())
+                    .setApiName(StringUtils.defaultIfBlank(link.getApiName(), "relation_" + IdGenerator.generateUUID()))
+                    .setDescription(link.getDescription())
+                    .setType(link.getType() == null ? OntologyLinkTypeEnum.OTHER : link.getType())
+                    .setOntologyUniqueIdentifierFrom(fromUid)
+                    .setOntologyUniqueIdentifierTo(toUid)
+                    .setCategoryId(StringUtils.isBlank(link.getCategoryPath()) ? null : categoryIdByPath.get(link.getCategoryPath()))
+                    .setSpaceId(spaceId));
+            if (withEntityRelations) {
+                entityService.importEntityRelations(linkUid, entityRelations,
+                        pkMappingByOntologyName.get(link.getOntologyNameFrom()),
+                        pkMappingByOntologyName.get(link.getOntologyNameTo()));
+            }
+        }
     }
 
     private OntologyCategoryCreateParam buildOntologyCategoryTree(List<OntologyCategory> categories) {

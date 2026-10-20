@@ -2,6 +2,7 @@ package com.aircas.ptr.foundry.ontology.service;
 
 import com.aircas.ptr.foundry.ontology.model.document.EntityNode;
 import com.aircas.ptr.foundry.ontology.model.dto.ActionContextInfoDTO;
+import com.aircas.ptr.foundry.ontology.model.dto.EntityRelationExportDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.OntologyInstancesExportDTO;
 import com.aircas.ptr.foundry.ontology.model.param.*;
 import com.aircas.ptr.foundry.ontology.model.vo.*;
@@ -112,8 +113,37 @@ public interface EntityService {
      *
      * @param ontologyUniqueIdentifier 本体唯一标识
      * @param instances                实例导出结构，为 null 或 nodes 为空时不做任何操作
+     * @return 导出主键（字符串归一化）到新主键的映射，供实例关系边重新落位；无实例时为空 map
      */
-    void importInstances(String ontologyUniqueIdentifier, OntologyInstancesExportDTO instances);
+    Map<String, Object> importInstances(String ontologyUniqueIdentifier, OntologyInstancesExportDTO instances);
+
+    /**
+     * 导出指定关系下图库 relation 中状态非 DELETE 的实例关系边。
+     *
+     * <p>平台会为关系的两端实例全量生成 Status.DELETE 的候选边，这类边不搬运：导入端按两端节点会重新生成
+     * 同样的笛卡尔积候选边，这里导出的那批据此点亮即可。单条关系超过上限时截断并告警。</p>
+     *
+     * @param linkUniqueIdentifier 关系唯一标识
+     * @return 实例关系边列表，端点节点缺失的边会被跳过
+     */
+    List<EntityRelationExportDTO> exportEntityRelations(String linkUniqueIdentifier);
+
+    /**
+     * 按导出的实例关系边精确落位到新建关系上。
+     *
+     * <p>候选边默认是 Status.DELETE 的全笛卡尔积，这里只把命中的实例对写成导出时的状态与时间窗，
+     * 其余保持 DELETE，从而还原源空间真实的实例关系图，而不是两端实例的完全图。
+     * 两端节点需已同步到图库。</p>
+     *
+     * @param linkUniqueIdentifier 新关系唯一标识
+     * @param relations            导出的实例关系边，端点主键为导出时的主键
+     * @param fromPkMapping        开始对象「导出主键 → 新主键」映射，来自 importInstances
+     * @param toPkMapping          结束对象「导出主键 → 新主键」映射，来自 importInstances
+     */
+    void importEntityRelations(String linkUniqueIdentifier,
+                               List<EntityRelationExportDTO> relations,
+                               Map<String, Object> fromPkMapping,
+                               Map<String, Object> toPkMapping);
 
     /**
      * 按本体空间 + 本体对象查询实例数据的指定属性值，支持可选过滤条件。

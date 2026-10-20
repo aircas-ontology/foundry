@@ -11,6 +11,7 @@ import com.aircas.ptr.foundry.ontology.model.document.EntityNode;
 import com.aircas.ptr.foundry.ontology.model.document.EntityRelation;
 import com.aircas.ptr.foundry.ontology.model.dto.ActionContextInfoDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.EntityNodeExportDTO;
+import com.aircas.ptr.foundry.ontology.model.dto.EntityRelationExportDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.OntologyInstancesExportDTO;
 import com.aircas.ptr.foundry.ontology.model.enums.*;
 import com.aircas.ptr.foundry.ontology.model.param.*;
@@ -71,6 +72,16 @@ import static com.aircas.ptr.foundry.ontology.converter.DataConverter.convert2Da
 @Slf4j
 @Service
 public class EntityServiceImpl implements EntityService {
+
+    /**
+     * 单条关系下实例关系边的导出上限，避免超大笛卡尔积把导出文件撑爆。
+     */
+    private static final int EXPORT_RELATION_LIMIT = 5000;
+
+    /**
+     * 图节点集合名，与 {@link EntityNode} 的 @Document 一致，用于拼接关系边的端点标识。
+     */
+    private static final String NODE_COLLECTION = "node";
 
     @Resource
     private OntologyMetaMapper metaMapper;
@@ -182,6 +193,127 @@ public class EntityServiceImpl implements EntityService {
         return relations.stream().anyMatch(r -> Status.ENABLE.equals(r.getStatus()));
     }
 
+    @Override
+    public List<EntityRelationExportDTO> exportEntityRelations(String linkUniqueIdentifier) {
+        var edges = relationRepository.queryNonDeletedRelationsByLinkIdWithLimit(linkUniqueIdentifier, EXPORT_RELATION_LIMIT);
+        if (edges.size() >= EXPORT_RELATION_LIMIT) {
+            log.warn("关系 {} 实例关系边数量达到导出上限 {}，结果已截断", linkUniqueIdentifier, EXPORT_RELATION_LIMIT);
+        }
+        var exported = Lists.<EntityRelationExportDTO>newArrayList();
+        edges.forEach(edge -> {
+            if (edge.getFrom() == null || edge.getTo() == null) {
+                log.warn("关系 {} 实例关系边 {} 导出跳过：端点节点已不存在", linkUniqueIdentifier, edge.getId());
+                return;
+            }
+            exported.add(EntityRelationExportDTO.builder()
+                    .entityPrimaryKeyFrom(pkKey(edge.getFrom().getPrimaryKey()))
+                    .entityPrimaryKeyTo(pkKey(edge.getTo().getPrimaryKey()))
+                    .status(edge.getStatus())
+                    .startTime(edge.getStartTime())
+                    .endTime(edge.getEndTime())
+                    .timeWindows(edge.getTimeWindows())
+                    .build());
+        });
+        return exported;
+    }
+
+    @Override
+    public void importEntityRelations(String linkUniqueIdentifier,
+                                      List<EntityRelationExportDTO> relations,
+                                      Map<String, Object> fromPkMapping,
+                                      Map<String, Object> toPkMapping) {
+        if (CollectionUtils.isEmpty(relations)) {
+            return;
+        }
+        var link = linkGroupMapper.selectOne(new LambdaQueryWrapper<OntologyLinkGroup>()
+                .eq(OntologyLinkGroup::getUniqueIdentifier, linkUniqueIdentifier));
+        PreconditionUtils.checkArgument(link != null, "本体关系不存在:" + linkUniqueIdentifier);
+
+        var fromNodes = nodesByPrimaryKey(link.getOntologyUniqueIdentifierFrom());
+        var toNodes = nodesByPrimaryKey(link.getOntologyUniqueIdentifierTo());
+        //先把导出边解析成新主键对应的图节点；候选边默认是笛卡尔积生成的 DELETE 边，只改命中的那些实例对
+        var pending = Lists.<EntityRelation>newArrayList();
+        var skipped = 0;
+        for (var relation : relations) {
+            var fromNode = fromNodes.get(mappedPkKey(fromPkMapping, relation.getEntityPrimaryKeyFrom()));
+            var toNode = toNodes.get(mappedPkKey(toPkMapping, relation.getEntityPrimaryKeyTo()));
+            if (fromNode == null || toNode == null) {
+                skipped++;
+                log.warn("关系 {} 实例关系边落位跳过：实例主键无对应图节点，from={}，to={}", linkUniqueIdentifier,
+                        relation.getEntityPrimaryKeyFrom(), relation.getEntityPrimaryKeyTo());
+                continue;
+            }
+            pending.add(EntityRelation.builder()
+                    .ontologyLinkId(linkUniqueIdentifier)
+                    .from(fromNode)
+                    .to(toNode)
+                    .status(relation.getStatus() == null ? Status.ENABLE : relation.getStatus())
+                    .startTime(relation.getStartTime())
+                    .endTime(relation.getEndTime())
+                    .timeWindows(relation.getTimeWindows() == null
+                            ? Lists.<VisibilityWindow>newArrayList() : relation.getTimeWindows())
+                    .createTime(new Date())
+                    .updateTime(new Date())
+                    .type(link.getType())
+                    .name(link.getName())
+                    .build());
+        }
+        if (CollectionUtils.isEmpty(pending)) {
+            log.warn("关系 {} 实例关系边落位跳过：导出的 {} 条边均无对应图节点", linkUniqueIdentifier, relations.size());
+            return;
+        }
+        //只取命中的候选边，未命中的实例对保持 DELETE，从而还原源空间真实的实例关系图
+        var nodePairs = pending.stream().map(this::nodePairKey).distinct().collect(Collectors.toList());
+        var candidateEdges = relationRepository.queryRelationsByNodePairs(linkUniqueIdentifier, nodePairs).stream()
+                .filter(edge -> edge.getFrom() != null && edge.getTo() != null)
+                .collect(Collectors.toMap(this::nodePairKey, edge -> edge, (a, b) -> a));
+        var newEdges = Lists.<EntityRelation>newArrayList();
+        for (var edge : pending) {
+            var candidate = candidateEdges.get(nodePairKey(edge));
+            if (candidate != null) {
+                relationRepository.updateRelation(edge.getStartTime(), edge.getEndTime(), edge.getTimeWindows(),
+                        edge.getStatus(), candidate.getId());
+            } else {
+                newEdges.add(edge);
+            }
+        }
+        if (CollectionUtils.isNotEmpty(newEdges)) {
+            relationRepository.batchSave(newEdges);
+        }
+        log.info("关系 {} 实例关系边落位完成：导出 {} 条，写入 {} 条，新建 {} 条，跳过 {} 条", linkUniqueIdentifier,
+                relations.size(), pending.size(), newEdges.size(), skipped);
+    }
+
+    /**
+     * 实例关系边的端点标识，形如 {@code node/1|node/2}，与 AQL 中 CONCAT(edge._from, '|', edge._to) 对齐。
+     */
+    private String nodePairKey(EntityRelation edge) {
+        return NODE_COLLECTION + "/" + edge.getFrom().getId() + "|" + NODE_COLLECTION + "/" + edge.getTo().getId();
+    }
+
+    /**
+     * 实例主键归一化：图库存 Long、JSON 反序列化可能是 Integer 或 String，统一按字符串比较。
+     */
+    private String pkKey(Object primaryKey) {
+        return primaryKey == null ? null : String.valueOf(primaryKey).trim();
+    }
+
+    /**
+     * 导出主键经映射换成新主键（归一化字符串），映射缺失或源主键为空时返回 null。
+     */
+    private String mappedPkKey(Map<String, Object> pkMapping, String sourcePrimaryKey) {
+        if (pkMapping == null || sourcePrimaryKey == null) {
+            return null;
+        }
+        return pkKey(pkMapping.get(sourcePrimaryKey));
+    }
+
+    private Map<String, EntityNode> nodesByPrimaryKey(String ontologyUniqueIdentifier) {
+        return getByByOntologyUniqIdentifier(ontologyUniqueIdentifier).stream()
+                .filter(node -> node.getPrimaryKey() != null)
+                .collect(Collectors.toMap(node -> pkKey(node.getPrimaryKey()), node -> node, (a, b) -> a));
+    }
+
 
     /**
      * 标题健需要和主键为同一个数据源
@@ -190,8 +322,10 @@ public class EntityServiceImpl implements EntityService {
     @Override
     public void syncNodes(String ontologyUniqueIdentifier, String schemaName, String datasourceId, String primaryKeyColumnName, String titleKeyColumnName) {
 
-        var existNodes = getByByOntologyUniqIdentifier(ontologyUniqueIdentifier);
-        var existNodesMap = existNodes.stream().collect(Collectors.toMap(v -> v.getPrimaryKey(), v -> v));
+        //图库回读的 Object 主键会退化成 Integer，与数据湖查出的类型不一致，统一按字符串比较，否则同一实例会被建出重复节点
+        var existNodesMap = getByByOntologyUniqIdentifier(ontologyUniqueIdentifier).stream()
+                .filter(v -> v.getPrimaryKey() != null)
+                .collect(Collectors.toMap(v -> pkKey(v.getPrimaryKey()), v -> v, (a, b) -> a));
 
         List<Map<String, Object>> allRows = objectMapper.queryPrimaryKeyAndTitleKeyValue(schemaName, datasourceId, primaryKeyColumnName, titleKeyColumnName);
         List<EntityNode> nodes = Lists.newArrayList();
@@ -201,8 +335,8 @@ public class EntityServiceImpl implements EntityService {
             if (primaryKeyValue instanceof Integer) {
                 primaryKeyValue = Long.parseLong(primaryKeyValue.toString());
             }
-            if (existNodesMap.containsKey(primaryKeyValue)) {
-                var exist = existNodesMap.get(primaryKeyValue);
+            var exist = existNodesMap.get(pkKey(primaryKeyValue));
+            if (exist != null) {
                 var oldDisplayName = exist.getDisplayName();
                 var newDisplayName = StringUtils.isEmpty(titleKeyColumnName) ? r.get(primaryKeyColumnName).toString() : r.get(titleKeyColumnName).toString();
                 if (!StringUtils.equals(oldDisplayName, newDisplayName)) {
@@ -212,7 +346,7 @@ public class EntityServiceImpl implements EntityService {
             } else {
                 nodes.add(EntityNode.builder()
                         .ontologyUniqIdentifier(ontologyUniqueIdentifier)
-                        .primaryKey(r.get(primaryKeyColumnName))
+                        .primaryKey(primaryKeyValue)
                         .tableName(datasourceId)
                         .displayName(StringUtils.isEmpty(titleKeyColumnName) ? r.get(primaryKeyColumnName).toString() : r.get(titleKeyColumnName).toString())
                         .build());
@@ -1891,15 +2025,16 @@ public class EntityServiceImpl implements EntityService {
 
     @Transactional(transactionManager = "datalakeTransactionManager")
     @Override
-    public void importInstances(String ontologyUniqueIdentifier, OntologyInstancesExportDTO instances) {
+    public Map<String, Object> importInstances(String ontologyUniqueIdentifier, OntologyInstancesExportDTO instances) {
+        var pkMapping = Maps.<String, Object>newLinkedHashMap();
         if (instances == null || CollectionUtils.isEmpty(instances.getNodes())) {
-            return;
+            return pkMapping;
         }
         var ontologyProperties = propertyMapper.selectList(new LambdaQueryWrapper<OntologyProperty>()
                 .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier));
         if (CollectionUtils.isEmpty(ontologyProperties)) {
             log.warn("导入本体 {} 实例数据跳过：本体无属性", ontologyUniqueIdentifier);
-            return;
+            return pkMapping;
         }
         //主键属性 apiName：物理主键为 id SERIAL，导入时丢弃原值，由数据库重新生成
         var pkApiName = ontologyProperties.stream()
@@ -1911,19 +2046,82 @@ public class EntityServiceImpl implements EntityService {
                 .filter(p -> StringUtils.isNotEmpty(p.getDatasourceColumnName()))
                 .collect(Collectors.toMap(OntologyProperty::getApiName, v -> v, (a, b) -> a));
 
-        var entities = instances.getNodes().stream()
-                .map(node -> buildEntityFromNode(node, propertyMap, pkApiName))
-                .filter(Objects::nonNull)
-                .collect(Collectors.toList());
+        //保留导出节点与实体的配对：createEntities 返回的主键与入参同序，据此回传导出主键到新主键的映射
+        var entities = Lists.<EntityCreateParam.Entity>newArrayList();
+        var sourceNodes = Lists.<EntityNodeExportDTO>newArrayList();
+        instances.getNodes().forEach(node -> {
+            var entity = buildEntityFromNode(node, propertyMap, pkApiName);
+            if (entity == null) {
+                return;
+            }
+            entities.add(entity);
+            sourceNodes.add(node);
+        });
         if (CollectionUtils.isEmpty(entities)) {
             log.warn("导入本体 {} 实例数据跳过：无有效节点（属性未绑定数据源或缺少主存储分组属性）", ontologyUniqueIdentifier);
-            return;
+            return pkMapping;
         }
-        //复用实体创建逻辑：写数据湖主表 + 关联表（id 由 SERIAL 生成，不建 ArangoDB 节点）
-        createEntities(EntityCreateParam.builder()
+        //复用实体创建逻辑：写数据湖主表 + 关联表（id 由 SERIAL 生成）
+        var newPrimaryKeys = createEntities(EntityCreateParam.builder()
                 .ontologyIdentifier(ontologyUniqueIdentifier)
                 .entityList(entities)
                 .build());
+        for (var i = 0; i < entities.size() && i < newPrimaryKeys.size(); i++) {
+            var sourceKey = pkKey(sourceNodes.get(i).getPrimaryKey());
+            if (sourceKey != null) {
+                pkMapping.put(sourceKey, newPrimaryKeys.get(i));
+            }
+        }
+        saveImportedEntityNodes(ontologyUniqueIdentifier, sourceNodes, newPrimaryKeys);
+        return pkMapping;
+    }
+
+    /**
+     * 实例落库后直接用新主键补齐图库节点，不等后续的 createEntityNodes 回查数据湖物理表。
+     *
+     * <p>实例关系边必须挂在图库已有的 {@code node} 上，而回查依赖数据湖可见性：同一次导入请求里刚写入的
+     * 实例行未必查得到，节点建不出来，边就全部跳过。主键类型与 {@code syncNodes} 对齐（Integer 归一为 Long），
+     * 避免两条路径为同一实例建出重复节点。</p>
+     */
+    private void saveImportedEntityNodes(String ontologyUniqueIdentifier,
+                                         List<EntityNodeExportDTO> sourceNodes,
+                                         List<Object> newPrimaryKeys) {
+        if (CollectionUtils.isEmpty(sourceNodes) || CollectionUtils.isEmpty(newPrimaryKeys)) {
+            return;
+        }
+        var primaryProperty = propertyMapper.selectOne(new LambdaQueryWrapper<OntologyProperty>()
+                .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier)
+                .eq(OntologyProperty::getIsPrimaryKey, 1));
+        if (primaryProperty == null || StringUtils.isEmpty(primaryProperty.getDatasourceId())) {
+            log.warn("导入本体 {} 图库节点跳过：主键属性未绑定数据源", ontologyUniqueIdentifier);
+            return;
+        }
+        var existPks = getByByOntologyUniqIdentifier(ontologyUniqueIdentifier).stream()
+                .map(node -> pkKey(node.getPrimaryKey())).collect(Collectors.toSet());
+        var nodes = Lists.<EntityNode>newArrayList();
+        var size = Math.min(sourceNodes.size(), newPrimaryKeys.size());
+        for (var i = 0; i < size; i++) {
+            var primaryKey = newPrimaryKeys.get(i);
+            if (primaryKey == null) {
+                continue;
+            }
+            if (primaryKey instanceof Integer) {
+                primaryKey = Long.parseLong(primaryKey.toString());
+            }
+            if (existPks.contains(pkKey(primaryKey))) {
+                continue;
+            }
+            nodes.add(EntityNode.builder()
+                    .ontologyUniqIdentifier(ontologyUniqueIdentifier)
+                    .primaryKey(primaryKey)
+                    .tableName(primaryProperty.getDatasourceId())
+                    .displayName(StringUtils.defaultIfBlank(sourceNodes.get(i).getDisplayName(), pkKey(primaryKey)))
+                    .build());
+        }
+        if (CollectionUtils.isNotEmpty(nodes)) {
+            nodeRepository.batchSave(nodes);
+        }
+        log.info("导入本体 {} 图库节点补齐：实例 {} 个，新建节点 {} 个", ontologyUniqueIdentifier, size, nodes.size());
     }
 
     /**
