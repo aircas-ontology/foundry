@@ -40,9 +40,9 @@ public class ExternalApiConfig implements Serializable {
     public static final String LOCATION_HEADER = "header";
     public static final String LOCATION_BODY = "body";
 
-    /** 鉴权方式 */
+    /** 鉴权方式（与前端契约一致，无历史兼容需求） */
     public static final String AUTH_NONE = "none";
-    public static final String AUTH_API_KEY = "api-key";
+    public static final String AUTH_API_KEY = "apiKey";
 
     @Schema(name = "endpoint", description = "接口地址，支持 {param} 路径占位符", example = "http://host/api/orders/{id}")
     private String endpoint;
@@ -50,13 +50,13 @@ public class ExternalApiConfig implements Serializable {
     @Schema(name = "method", description = "请求方法：GET/POST/PUT/DELETE，默认 POST")
     private String method;
 
-    @Schema(name = "authType", description = "鉴权方式：none/api-key，默认 none")
+    @Schema(name = "authType", description = "鉴权方式：none/apiKey，默认 none")
     private String authType;
 
-    @Schema(name = "apiKeyHeader", description = "api-key 模式的请求头名，默认 X-API-Key")
+    @Schema(name = "apiKeyHeader", description = "apiKey 模式的请求头名，默认 X-API-Key")
     private String apiKeyHeader;
 
-    @Schema(name = "apiKey", description = "api-key 模式的密钥")
+    @Schema(name = "apiKey", description = "apiKey 模式的密钥")
     private String apiKey;
 
     @Schema(name = "contentType", description = "请求体 Content-Type，默认 application/json")
@@ -93,15 +93,10 @@ public class ExternalApiConfig implements Serializable {
     }
 
     /**
-     * 宽松判定 api-key 鉴权：容忍前端/历史数据常见的驼峰/下划线写法
-     * （{@code apiKey} / {@code API_KEY} / {@code apikey}），避免因为 {@code api-key} 写错一字就默默失效。
+     * 判定 api-key 鉴权（与前端契约一致：{@code authType = "apiKey"}）。
      */
     public boolean isApiKeyAuth() {
-        if (authType == null) {
-            return false;
-        }
-        String normalized = authType.replaceAll("[\\-_\\s]", "").toLowerCase();
-        return "apikey".equals(normalized);
+        return AUTH_API_KEY.equals(authType);
     }
 
     /**
