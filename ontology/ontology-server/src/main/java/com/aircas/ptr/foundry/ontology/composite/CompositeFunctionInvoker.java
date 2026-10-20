@@ -39,13 +39,6 @@ public class CompositeFunctionInvoker {
 
     private final ScriptEngineRouter scriptEngineRouter;
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
-
-    public CompositeFunctionInvoker(GroovyService groovyService, BasicQueryOperator basicQueryOperator,
-                                    ExternalApiOperator externalApiOperator) {
-        this(groovyService, basicQueryOperator, externalApiOperator, null);
-    }
-
     public CompositeFunctionInvoker(GroovyService groovyService, BasicQueryOperator basicQueryOperator,
                                     ExternalApiOperator externalApiOperator, ScriptEngineRouter scriptEngineRouter) {
         this.groovyService = groovyService;
@@ -86,51 +79,6 @@ public class CompositeFunctionInvoker {
             case CONTAINER -> throw new BusinessException("编排节点[" + labelOf(nodePlan) + "]引用的容器算子执行能力尚未开放："
                     + function.getApi(), HttpStatus.BAD_REQUEST);
         };
-    }
-
-    /**
-     * 脚本算子统一经 {@link ScriptEngineRouter} 分发：配置了语言 runner 地址走远程容器
-     * （含官方 groovy-runner），未配置时路由器回落进程内引擎（仅 Groovy 有兜底）。
-     * <p>远程 runner 按参数表原值透传（Python/Java 的 handle 签名就是注册参数表，
-     * 不能按编排端口的 number/object 强转，否则 "3" 会被 coerce 成 Double 传进 String 形参）。</p>
-     */
-    private Object invokeScript(Function function, CompositeNodePlanBO nodePlan, Map<String, Object> rawParams,
-                                List<FunctionParamPO> inputParams) {
-        FunctionLanguageEnum language = function.getLanguage();
-        FunctionLanguageEnum lang = language == null ? FunctionLanguageEnum.GROOVY : language;
-        if (scriptEngineRouter == null) {
-            return require(groovyService, "脚本算子执行引擎").invokeHandle(
-                    function.getApi(), function.getCode(), assembleParams(inputParams, rawParams), inputParams);
-        }
-        try {
-            String resultJson = scriptEngineRouter.route(lang).execute(
-                    com.aircas.ptr.foundry.ontology.engine.ScriptExecutionContext.builder()
-                            .language(lang)
-                            .functionApi(function.getApi())
-                            .version(function.getVersion())
-                            .code(function.getCode())
-                            // 与 FunctionServiceImpl#buildInputJson 同一约定：按参数表转换后再序列化，
-                            // Groovy handle(Double) 收到 JSON 整数会签名不匹配，必须先转成声明类型
-                            .inputJson(objectMapper.writeValueAsString(assembleParams(inputParams, rawParams)))
-                            .inputParams(inputParams)
-                            .inputMap(rawParams)
-                            .build());
-            return unwrapRunnerResult(resultJson);
-        } catch (BusinessException e) {
-            throw new BusinessException("编排节点[" + labelOf(nodePlan) + "]" + e.getMessage(), HttpStatus.BAD_REQUEST);
-        } catch (Exception e) {
-            throw new BusinessException("编排节点[" + labelOf(nodePlan) + "]脚本算子执行失败：" + e.getMessage(),
-                    HttpStatus.BAD_REQUEST);
-        }
-    }
-
-    /** runner/引擎返回的是 FunctionResultVO 形态 JSON，解出 data 供端口绑定（引擎自己会再识别这层壳） */
-    private Object unwrapRunnerResult(String resultJson) throws com.fasterxml.jackson.core.JsonProcessingException {
-        if (resultJson == null || resultJson.isBlank()) {
-            return null;
-        }
-        Map<?, ?> parsed = objectMapper.readValue(resultJson, Map.class);
-        return parsed.containsKey("data") ? parsed.get("data") : parsed;
     }
 
     /** 算子执行器缺失时给出可读文案，而不是空指针 */
