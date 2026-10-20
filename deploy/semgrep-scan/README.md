@@ -2,14 +2,35 @@
 
 基于 Semgrep CE 的 HTTP 静态安全检测服务，支持 Groovy、Python 和 TypeScript。规则随镜像提供，扫描时不需要访问外网，不执行用户脚本。
 
+## 文档导航
+
+- [部署方式选择](#部署方式选择)
+- [外网环境：构建并启动](#外网环境构建并启动)
+- [配置说明](#配置说明)
+- [日常运维](#日常运维)
+- [内网环境：离线部署](#内网环境离线部署)
+- [接口](#接口)
+- [规则与运行限制](#规则与运行限制)
+- [更新规则与排障](#更新规则与排障)
+
+## 部署方式选择
+
+| 场景 | 镜像来源 | Compose 命令 | Compose 文件 |
+| --- | --- | --- | --- |
+| 可访问外网，Compose V2 | 在目标机拉取基础镜像并构建 | `docker compose` | `docker-compose.yml` |
+| 内网离线，Compose V2 | 导入已构建的应用镜像 tar 包 | `docker compose` | `docker-compose.yml` |
+| 内网离线，Compose v1.27 | 导入已构建的应用镜像 tar 包 | `docker-compose` | `docker-compose.v1.yml` |
+
+镜像支持 `linux/amd64` 和 `linux/arm64`，但离线 tar 包必须包含目标服务器对应的架构。Compose V1 专用文件移除了 v1.27 不支持的顶层 `name` 和 `pull_policy`；启动命令也不使用 V2 的 `--pull never` 参数。
+
 ## 环境要求
 
-- Docker Engine / Docker Desktop（Linux 容器）及 Docker Compose V2 或兼容版本。
+- Docker Engine / Docker Desktop（Linux 容器）。构建流程使用 Docker Compose V2；内网离线部署另支持 Docker Compose v1.27。
 - 平台：x86-64（`linux/amd64`）和 ARM64（`linux/arm64`）。固定 digest 是同时包含两种架构的 OCI index。
 - Linux 构建需要 Bash、Python 3；Windows 使用 PowerShell。
 - 基础镜像版本和 digest 固定在 `base-image.json`，首次构建需要拉取镜像。
 
-## 构建与启动
+## 外网环境：构建并启动
 
 在本目录执行：
 
@@ -43,15 +64,15 @@ SCAN_PLATFORM=linux/arm64 SCAN_IMAGE=foundry/semgrep-scan:arm64 bash ./build.sh
 docker buildx build --platform linux/amd64,linux/arm64 --build-arg BASE_IMAGE="$SEMGREP_BASE_IMAGE" -t registry.example.com/foundry/semgrep-scan:1.0 --push .
 ```
 
-默认地址：`http://127.0.0.1:18080`。启动后需要等待引擎和规则自检完成，通过 capabilities 接口确认就绪。
+默认监听所有宿主机网络接口（`0.0.0.0:18080`）。本机可通过 `http://localhost:18080` 访问，其他内网机器使用 `http://<服务器内网 IP>:18080`。启动后需要等待引擎和规则自检完成，通过 capabilities 接口确认就绪。
 
-## 配置
+## 配置说明
 
 按需复制 `.env.example` 为 `.env`：
 
 | 配置 | 默认值 | 说明 |
 | --- | --- | --- |
-| SCAN_BIND_ADDRESS | 127.0.0.1 | 宿主监听地址 |
+| SCAN_BIND_ADDRESS | 0.0.0.0 | 宿主监听地址；允许其他内网机器通过服务器内网 IP 访问 |
 | SCAN_PORT | 18080 | 宿主端口 |
 | SCAN_NETWORK_INTERNAL | false | 启用 Docker 内部网络，限制外网访问 |
 
@@ -67,7 +88,7 @@ docker buildx build --platform linux/amd64,linux/arm64 --build-arg BASE_IMAGE="$
 SCAN_IMAGE=foundry/semgrep-scan:1.0 bash ./build.sh --start
 ```
 
-## 常用命令
+## 日常运维
 
 在新终端使用 Compose 前，先加载基础镜像引用；自定义标签还需设置同名的 `SCAN_IMAGE`。
 
@@ -97,6 +118,148 @@ docker compose down
 
 启动现有镜像时使用 `--no-build --pull never`，不会隐式拉取或重建服务镜像。源文件或规则更新后重新运行构建脚本。
 
+## 内网环境：离线部署
+
+本节适用于无法访问公网或镜像仓库的 Linux 服务器。应用代码、依赖和规则已包含在应用镜像中，内网服务器不需要重新构建。
+
+### 1. 准备与目标架构一致的部署包
+
+先在内网服务器确认 Docker 架构和 Compose 版本：
+
+```bash
+docker version --format '{{.Server.Arch}}'
+docker compose version 2>/dev/null || docker-compose version
+```
+
+架构输出应为 `amd64` 或 `arm64`。根据结果选择对应镜像包，不能在 amd64 服务器上导入仅含 arm64 的镜像，反之亦然。
+
+| 服务器架构 | 镜像平台 | 建议 tar 文件名 |
+| --- | --- | --- |
+| x86-64 | `linux/amd64` | `semgrep-scan-linux-amd64.tar` |
+| ARM64 / AArch64 | `linux/arm64` | `semgrep-scan-linux-arm64.tar` |
+
+将以下文件复制到内网服务器的独立目录，例如 `/opt/semgrep-scan`：
+
+```text
+/opt/semgrep-scan/
+├── semgrep-scan-linux-amd64.tar  # 或 semgrep-scan-linux-arm64.tar
+├── docker-compose.yml            # Compose V2 使用
+├── docker-compose.v1.yml         # Compose v1.27 使用
+└── base-image.json
+```
+
+不需要复制 `Dockerfile`、`app/`、`rules/`、`requirements.txt` 或构建脚本。
+
+> 打包方应通过 `docker image inspect <镜像> --format '{{.Architecture}}'` 核对架构，再用 `docker save -o <tar文件> <镜像>` 导出。不要只根据 tar 文件名判断架构。
+
+### 2. 导入并核对镜像
+
+```bash
+cd /opt/semgrep-scan
+docker load -i semgrep-scan-linux-amd64.tar  # ARM64 时改为对应文件
+docker images --filter reference='*semgrep-scan*'
+docker image inspect foundry/semgrep-scan:local --format '{{.Architecture}}'
+```
+
+后续示例假定导入的镜像名为 `foundry/semgrep-scan:local`。如果 `docker load` 显示的名称或标签不同，按实际值设置 `SCAN_IMAGE`。
+
+### 3. 创建 `.env`
+
+在部署目录创建 `.env`：
+
+```bash
+cd /opt/semgrep-scan
+cat > .env <<EOF
+SCAN_IMAGE=foundry/semgrep-scan:local
+SCAN_PLATFORM=linux/$(docker version --format '{{.Server.Arch}}')
+SEMGREP_BASE_IMAGE=$(python3 -c 'import json; print(json.load(open("base-image.json"))["reference"])')
+SCAN_BIND_ADDRESS=0.0.0.0
+SCAN_PORT=18080
+SCAN_NETWORK_INTERNAL=false
+EOF
+```
+
+`SEMGREP_BASE_IMAGE` 只用于 Compose 解析 `build` 配置；使用下文的禁止构建参数启动时，不会拉取或运行该基础镜像。若服务器没有 Python 3，可读取 `base-image.json`，将 `reference` 的完整值手工填入 `.env`。
+
+默认监听所有宿主机网络接口，其他内网机器可通过服务器内网 IP 访问。请通过防火墙或内网网关仅允许可信业务服务器和调试机器访问 `SCAN_PORT`；服务本身不提供鉴权，不应将该端口直接暴露到公网。
+
+### 4. 启动服务
+
+Compose V2：
+
+```bash
+docker compose config --quiet
+docker compose up -d --no-build --pull never
+```
+
+Docker Compose v1.27：
+
+```bash
+docker-compose -f docker-compose.v1.yml config --quiet
+docker-compose -f docker-compose.v1.yml up -d --no-build
+```
+
+V1 启动前必须确认 `SCAN_IMAGE` 已导入且名称完全匹配。`--no-build` 禁止在内网服务器构建；v1.27 没有 `up --pull never`，因此专用 Compose 文件不声明镜像拉取策略。若镜像不存在，Compose V1 仍可能尝试从仓库拉取并失败，此时应修正 `SCAN_IMAGE` 或重新导入镜像。
+
+### 5. 验证服务
+
+```bash
+curl -fsS http://localhost:18080/api/v1/health
+curl -fsS http://localhost:18080/api/v1/capabilities
+```
+
+检查容器健康状态：
+
+```bash
+# Compose V2
+docker inspect --format '{{.State.Health.Status}}' "$(docker compose ps -q semgrep-scan)"
+
+# Compose v1.27
+docker inspect --format '{{.State.Health.Status}}' "$(docker-compose -f docker-compose.v1.yml ps -q semgrep-scan)"
+```
+
+`health` 成功只表示 HTTP 进程存活。只有 `capabilities` 中的 `ready` 为 `true` 且容器状态为 `healthy`，才表示引擎和规则已就绪。
+
+### 6. 内网环境日常操作与更新
+
+Compose V2：
+
+```bash
+docker compose ps
+docker compose logs -f semgrep-scan
+docker compose restart semgrep-scan
+docker compose down
+```
+
+Compose v1.27：
+
+```bash
+docker-compose -f docker-compose.v1.yml ps
+docker-compose -f docker-compose.v1.yml logs -f semgrep-scan
+docker-compose -f docker-compose.v1.yml restart semgrep-scan
+docker-compose -f docker-compose.v1.yml down
+```
+
+更新时先导入新 tar 包；若镜像标签改变，同时更新 `.env` 中的 `SCAN_IMAGE`。然后强制重建容器：
+
+```bash
+# Compose V2
+docker compose up -d --no-build --pull never --force-recreate
+
+# Compose v1.27
+docker-compose -f docker-compose.v1.yml up -d --no-build --force-recreate
+```
+
+更新完成后重新检查 health、capabilities 和容器健康状态。
+
+### 7. 内网部署常见问题
+
+- 提示 `SCAN_PLATFORM` 或 `SEMGREP_BASE_IMAGE` 未设置：确认 `.env` 和所用 Compose 文件位于同一目录，并从该目录执行命令。
+- Compose 尝试拉取镜像：确认 `docker images` 中的镜像名称、标签与 `.env` 的 `SCAN_IMAGE` 完全一致。V2 还应保留 `--pull never`。
+- 出现 `exec format error`：镜像架构与服务器不一致，分别用 `docker image inspect` 和 `docker version --format '{{.Server.Arch}}'` 核对。
+- 其他内网主机无法访问：确认 `SCAN_BIND_ADDRESS=0.0.0.0`，并检查宿主机防火墙、网关策略和 `SCAN_PORT`。
+- 容器启动后退出：使用对应 Compose 命令执行 `ps -a` 和 `logs --tail 200 semgrep-scan` 查看原因。
+
 ## 接口
 
 | 方法 | 路径 | 说明 |
@@ -120,11 +283,11 @@ docker compose down
 请求示例：
 
 ```powershell
-Invoke-RestMethod http://127.0.0.1:18080/api/v1/health
+Invoke-RestMethod http://localhost:18080/api/v1/health
 ```
 
 ```bash
-curl -s http://127.0.0.1:18080/api/v1/health
+curl -s http://localhost:18080/api/v1/health
 ```
 
 响应示例（HTTP 200）：
@@ -144,11 +307,11 @@ curl -s http://127.0.0.1:18080/api/v1/health
 请求示例：
 
 ```powershell
-Invoke-RestMethod http://127.0.0.1:18080/api/v1/capabilities
+Invoke-RestMethod http://localhost:18080/api/v1/capabilities
 ```
 
 ```bash
-curl -s http://127.0.0.1:18080/api/v1/capabilities
+curl -s http://localhost:18080/api/v1/capabilities
 ```
 
 响应示例（HTTP 200，`ready=true`）：
@@ -215,14 +378,14 @@ curl -s http://127.0.0.1:18080/api/v1/capabilities
 #### 请求示例（PowerShell）
 
 ```powershell
-Invoke-RestMethod http://127.0.0.1:18080/api/v1/capabilities
+Invoke-RestMethod http://localhost:18080/api/v1/capabilities
 $code = 'print("hello")'
 $sha = [Security.Cryptography.SHA256]::Create()
 try {
     $hash = ([BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($code)))).Replace('-', '').ToLowerInvariant()
 } finally { $sha.Dispose() }
 $body = @{requestId='example-1'; scriptType='PYTHON'; code=$code; codeHash=$hash} | ConvertTo-Json
-Invoke-RestMethod http://127.0.0.1:18080/api/v1/scan -Method Post -ContentType 'application/json; charset=utf-8' -Body ([Text.Encoding]::UTF8.GetBytes($body))
+Invoke-RestMethod http://localhost:18080/api/v1/scan -Method Post -ContentType 'application/json; charset=utf-8' -Body ([Text.Encoding]::UTF8.GetBytes($body))
 ```
 
 #### 请求示例（Linux）
@@ -233,7 +396,7 @@ import hashlib, json, urllib.request
 code = 'print("hello")'
 body = dict(requestId='example-1', scriptType='PYTHON', code=code,
             codeHash=hashlib.sha256(code.encode('utf-8')).hexdigest())
-req = urllib.request.Request('http://127.0.0.1:18080/api/v1/scan',
+req = urllib.request.Request('http://localhost:18080/api/v1/scan',
     data=json.dumps(body).encode(), headers={'Content-Type': 'application/json'})
 print(urllib.request.urlopen(req).read().decode())
 PY
@@ -328,7 +491,7 @@ import java.util.Map;
 import org.springframework.web.client.RestClient;
 
 RestClient client = RestClient.builder()
-    .baseUrl("http://127.0.0.1:18080")
+    .baseUrl("http://localhost:18080")
     .build();
 
 String codeHash = HexFormat.of().formatHex(
