@@ -740,35 +740,25 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     }
 
     /**
-     * 执行单算子（基础查询/外部API）：复用编排节点调用器，返回值统一包装成 FunctionResultVO 结构，
-     * 保证与脚本算子、函数编排的执行返回格式一致。
+     * 执行单算子（基础查询/外部API）：复用编排节点调用器，直接返回执行结果的数据体 JSON，
+     * 不再额外包一层 {@code FunctionResultVO}（历史包裹层中的 startTime / description 无业务价值）。
      */
     private String executeOperatorFunction(Function function, Map<String, Object> funParamMap,
                                            List<FunctionParamPO> inputParams) throws JsonProcessingException {
         Object raw = compositeFunctionInvoker.invoke(function, null, funParamMap, inputParams);
         Map<String, Object> data = raw instanceof Map<?, ?> map ? toStringKeyMap(map) : Map.of("result", raw);
-        var result = FunctionResultVO.builder()
-                .startTime(new Date())
-                .data(data)
-                .description("函数算子执行结果")
-                .build();
-        return objectMapper.writeValueAsString(result);
+        return objectMapper.writeValueAsString(data);
     }
 
     /**
      * 执行容器算子：委托 {@link ContainerOperatorInvoker} 按 containerKey 定位运行容器并发起 HTTP 调用，
-     * 返回值统一包装成 FunctionResultVO 结构，与其它算子执行返回格式一致。
+     * 直接返回容器接口响应的数据体 JSON，不再额外包一层 {@code FunctionResultVO}。
      */
     private String executeContainerFunction(Function function, Map<String, Object> funParamMap)
             throws JsonProcessingException {
         Object raw = containerOperatorInvoker.invoke(function, funParamMap);
         Map<String, Object> data = raw instanceof Map<?, ?> map ? toStringKeyMap(map) : Map.of("result", raw);
-        var result = FunctionResultVO.builder()
-                .startTime(new Date())
-                .data(data)
-                .description("容器算子执行结果")
-                .build();
-        return objectMapper.writeValueAsString(result);
+        return objectMapper.writeValueAsString(data);
     }
 
     /** 算子返回值可能带非字符串键，统一转成 JSON 可序列化的字符串键结构 */
@@ -1128,14 +1118,14 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
             case EXTERNAL:
             case COMPOSITE:
                 // 复用 executeFunction 逻辑：脚本走 runner 引擎，外部API走接口定义，编排走 LiteFlow 链
-                // 脚本自定义返回键由 FunctionResultVO.extra 承接并平铺回传，不会因未知字段报错
+                // 直接按原结构透传：CUSTOMIZE 保留脚本自己写的返回体，EXTERNAL/BASIC_QUERY/COMPOSITE 已不再包一层 VO
                 var executeParam = FunctionExecuteParam.builder()
                         .functionApi(param.getFunctionApi())
                         .version(function.getVersion())
                         .parameters(param.getParameters())
                         .build();
                 var resultJson = executeFunction(executeParam);
-                return objectMapper.readValue(resultJson, new TypeReference<FunctionResultVO>() {
+                return objectMapper.readValue(resultJson, new TypeReference<Map<String, Object>>() {
                 });
 
             case CONTAINER:
@@ -1146,7 +1136,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                         .parameters(param.getParameters())
                         .build();
                 var containerResultJson = executeFunction(containerExecuteParam);
-                return objectMapper.readValue(containerResultJson, new TypeReference<FunctionResultVO>() {
+                return objectMapper.readValue(containerResultJson, new TypeReference<Map<String, Object>>() {
                 });
 
             default:
@@ -1199,7 +1189,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                         .inputMap(inputMap)
                         .build();
                 String resultJsonStr = scriptEngineRouter.route(language).execute(ctx);
-                return objectMapper.readValue(resultJsonStr, new TypeReference<FunctionResultVO>() {
+                return objectMapper.readValue(resultJsonStr, new TypeReference<Map<String, Object>>() {
                 });
             }
             case EXTERNAL -> {
@@ -1216,11 +1206,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                         .code(apiConfigJson)
                         .build();
                 Map<String, Object> ports = externalApiOperator.runAsNode(tempFunction, null, inputMap);
-                return FunctionResultVO.builder()
-                        .startTime(new Date())
-                        .data(ports)
-                        .description("外部API草稿测试")
-                        .build();
+                return ports;
             }
             default -> throw new BusinessException("草稿测试仅支持 CUSTOMIZE / EXTERNAL 类型：" + type);
         }
@@ -1339,18 +1325,14 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     }
 
     /**
-     * 执行函数编排：把画布配置编译为 LiteFlow 链并驱动执行，返回值沿用 FunctionResultVO 结构。
+     * 执行函数编排：把画布配置编译为 LiteFlow 链并驱动执行，直接返回输出端口的数据体 JSON，
+     * 不再额外包一层 {@code FunctionResultVO}。
      */
     private String executeCompositeFunction(Function function, Map<String, Object> funParamMap) throws JsonProcessingException {
         CompositeConfig config = parseCompositeConfig(function.getCode());
         PreconditionUtils.checkArgument(config != null, "函数编排定义为空：" + function.getApi(), HttpStatus.BAD_REQUEST);
         Map<String, Object> outputs = compositeChainRegistry.execute(function.getApi(), config, funParamMap);
-        var result = FunctionResultVO.builder()
-                .startTime(new Date())
-                .data(outputs)
-                .description("函数编排执行结果")
-                .build();
-        return objectMapper.writeValueAsString(result);
+        return objectMapper.writeValueAsString(outputs);
     }
 
     /**
