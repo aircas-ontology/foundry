@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream;
@@ -27,10 +28,14 @@ import java.util.Map;
  * <p>
  * 兼容 {@code .tar} 与 {@code .tar.gz/.tgz}；层内容只做流式跳过不加载进内存，仅保留少量 JSON。</p>
  */
+@Slf4j
 public final class DockerImageInspector {
 
     private DockerImageInspector() {
     }
+
+    /** 架构解析失败时的兜底标识；上层 ARM 校验据此判定非法（本地关闭 ARM 校验时可放行） */
+    public static final String UNKNOWN_ARCH = "unknown";
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -75,7 +80,11 @@ public final class DockerImageInspector {
         throw new BusinessException("镜像包中未找到 manifest.json / index.json，无法识别架构");
     }
 
-    /** 经典 docker save：manifest.json = [{Config, RepoTags, Layers}] */
+    /**
+     * 经典 docker save：manifest.json = [{Config, RepoTags, Layers}]
+     * <p>RepoTags 与 architecture 解耦：架构解析失败仅返回 {@link #UNKNOWN_ARCH}，不影响 tag 落地，
+     * 避免运行期因 tag 缺失而跳过 {@code docker load}。</p>
+     */
     private static ImageMeta fromClassicManifest(byte[] manifest, Map<String, byte[]> jsonEntries) {
         try {
             JsonNode root = MAPPER.readTree(manifest);
@@ -84,17 +93,17 @@ public final class DockerImageInspector {
             String configName = text(first.get("Config"));
             // Config 可能是 blobs/sha256/xxx.json 形式，做 basename 匹配
             byte[] configBytes = lookupJson(jsonEntries, configName);
-            if (configBytes == null) {
-                throw new BusinessException("镜像包 manifest.json 指向的 config 文件缺失，无法识别架构");
-            }
-            String architecture = readArchitecture(configBytes);
+            String architecture = readArchitectureQuietly(configBytes, "manifest");
             return new ImageMeta(architecture, repoTags);
         } catch (IOException e) {
             throw new BusinessException("镜像 manifest.json 解析失败：" + e.getMessage());
         }
     }
 
-    /** OCI layout：index.json 的 manifests 指向 config blob（多平台时取首个） */
+    /**
+     * OCI layout：index.json 的 manifests 指向 config blob（多平台时取首个）。
+     * <p>同样解耦 tag 与架构：架构解析失败仅记 unknown。</p>
+     */
     private static ImageMeta fromOciIndex(byte[] index, Map<String, byte[]> jsonEntries) {
         try {
             JsonNode root = MAPPER.readTree(index);
@@ -116,12 +125,26 @@ public final class DockerImageInspector {
                 // config.digest 指向 blobs/sha256/<digest>，直接读该 blob 拿 architecture
                 JsonNode config = m.get("config");
                 String digest = config != null ? text(config.get("digest")) : null;
-                String arch = readArchitecture(lookupBlob(jsonEntries, digest));
+                String arch = readArchitectureQuietly(lookupBlob(jsonEntries, digest), "oci");
                 return new ImageMeta(arch, repoTags);
             }
             throw new BusinessException("OCI index.json 未找到镜像清单，无法识别架构");
         } catch (IOException e) {
             throw new BusinessException("OCI index.json 解析失败：" + e.getMessage());
+        }
+    }
+
+    /** 尽力读取架构；config 缺失或字段非法时返回 {@link #UNKNOWN_ARCH} 而非抛异常，保留 tag 落地 */
+    private static String readArchitectureQuietly(byte[] configBytes, String flavor) {
+        if (configBytes == null) {
+            log.warn("镜像 {} 清单指向的 config 缺失，架构按 unknown 处理", flavor);
+            return UNKNOWN_ARCH;
+        }
+        try {
+            return readArchitecture(configBytes);
+        } catch (Exception e) {
+            log.warn("镜像 {} config 架构解析失败（{}），架构按 unknown 处理", flavor, e.getMessage());
+            return UNKNOWN_ARCH;
         }
     }
 

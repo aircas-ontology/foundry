@@ -111,12 +111,16 @@ public class ContainerFunctionServiceImpl implements ContainerFunctionService {
                 throw e;
             }
             log.warn("ARM 校验已关闭，镜像架构解析失败但放行：{}", e.getMessage());
-            meta = new DockerImageInspector.ImageMeta("unknown", new ArrayList<>());
+            meta = new DockerImageInspector.ImageMeta(DockerImageInspector.UNKNOWN_ARCH, new ArrayList<>());
         }
 
         if (properties.isArmCheckEnabled() && !ARM64.equals(meta.getArchitecture())) {
             deleteQuietly(target);
-            throw new BusinessException("仅支持 ARM64 镜像，当前镜像架构为 " + meta.getArchitecture());
+            // UNKNOWN_ARCH 代表 config 缺失/解析失败，与“架构不对”同位拒绝但归因不同，文案区分便于运维定位
+            String message = DockerImageInspector.UNKNOWN_ARCH.equals(meta.getArchitecture())
+                    ? "镜像 config 缺失或解析失败，无法识别架构（请确认 tar 为 docker save 导出的完整镜像包）"
+                    : "仅支持 ARM64 镜像，当前镜像架构为 " + meta.getArchitecture();
+            throw new BusinessException(message);
         }
 
         return ContainerImageInfo.builder()
