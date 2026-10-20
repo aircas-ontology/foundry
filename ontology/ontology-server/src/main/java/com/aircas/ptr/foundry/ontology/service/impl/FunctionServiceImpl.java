@@ -21,6 +21,8 @@ import com.aircas.ptr.foundry.ontology.model.dto.container.ContainerImageInfo;
 import com.aircas.ptr.foundry.ontology.model.dto.container.ContainerInterfaceDoc;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamCategoryEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamRoleEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.FunctionRuntimeStatusEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.ContainerPhaseEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.TaskStatusEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionModelEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionLanguageEnum;
@@ -87,6 +89,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
@@ -94,6 +97,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -154,6 +159,9 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
             // 存进库的 fields 是 FunctionParamDTO 序列化结果（含 referenceType 等 VO 没有的字段），
             // 详情读回时反序列化为 FunctionParameterVO，需忽略未知字段，否则抛异常导致层级结构丢失
             .configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+
+    /** 内存级运行状态跟踪：正在执行的 functionApi 集合，列表查询时据此填充 runningStatus */
+    private final Set<String> runningFunctions = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
 
     @Override
@@ -616,8 +624,31 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                         .ontologySpaceId(func.getOntologySpaceId())
                         .createTime(func.getCreateTime())
                         .updateTime(func.getUpdateTime())
+                        .runningStatus(runningFunctions.contains(func.getApi())
+                                ? FunctionRuntimeStatusEnum.RUNNING
+                                : FunctionRuntimeStatusEnum.NOT_RUNNING)
+                        .containerKey(func.getContainerKey())
                         .build()
         ).collect(Collectors.toList());
+
+        // 容器算子：批量查运行实例 phase，回填 containerPhase
+        List<String> containerKeys = records.stream()
+                .filter(r -> r.getType() == FunctionTypeEnum.CONTAINER && r.getContainerKey() != null)
+                .map(FunctionInfoVO::getContainerKey)
+                .collect(Collectors.toList());
+        if (!containerKeys.isEmpty()) {
+            Map<String, ContainerPhaseEnum> phaseMap = containerInstanceMapper.selectList(
+                    new LambdaQueryWrapper<FunctionContainerInstance>()
+                            .in(FunctionContainerInstance::getContainerKey, containerKeys)
+                            .select(FunctionContainerInstance::getContainerKey, FunctionContainerInstance::getPhase)
+            ).stream().collect(Collectors.toMap(
+                    FunctionContainerInstance::getContainerKey,
+                    FunctionContainerInstance::getPhase,
+                    (a, b) -> a));
+            records.stream()
+                    .filter(r -> r.getType() == FunctionTypeEnum.CONTAINER && r.getContainerKey() != null)
+                    .forEach(r -> r.setContainerPhase(phaseMap.get(r.getContainerKey())));
+        }
 
         return new Page<FunctionInfoVO>()
                 .setRecords(records)
@@ -629,6 +660,16 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     @Override
     @SneakyThrows
     public String executeFunction(FunctionExecuteParam param) {
+        runningFunctions.add(param.getFunctionApi());
+        try {
+            return doExecuteFunction(param);
+        } finally {
+            runningFunctions.remove(param.getFunctionApi());
+        }
+    }
+
+    @SneakyThrows
+    private String doExecuteFunction(FunctionExecuteParam param) {
         //查询函数（指定版本，缺省取最新版本）
         var function = resolveVersion(param.getFunctionApi(), param.getVersion());
         PreconditionUtils.checkArgument(function != null,
@@ -1137,14 +1178,15 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                         "脚本草稿测试必须提供 code", HttpStatus.BAD_REQUEST);
                 FunctionLanguageEnum language = param.getLanguage() == null
                         ? FunctionLanguageEnum.GROOVY : param.getLanguage();
-                // 草稿测试：单对象入参解包（与 executeFunction 一致）
+                // 草稿测试：单对象入参解包（与 executeFunction 语义对齐——组装结果为 Map 时才解包）
                 String inputJson;
+                Object singleVal = null;
                 if (param.getParameters() != null && param.getParameters().size() == 1
-                        && param.getParameters().get(0).getFields() != null
-                        && !param.getParameters().get(0).getFields().isEmpty()
                         && inputMap.containsKey(param.getParameters().get(0).getParamName())) {
-                    Object value = inputMap.get(param.getParameters().get(0).getParamName());
-                    inputJson = objectMapper.writeValueAsString(value);
+                    singleVal = inputMap.get(param.getParameters().get(0).getParamName());
+                }
+                if (singleVal instanceof Map) {
+                    inputJson = objectMapper.writeValueAsString(singleVal);
                 } else {
                     inputJson = objectMapper.writeValueAsString(inputMap);
                 }
