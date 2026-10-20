@@ -93,6 +93,18 @@ public class ExternalApiConfig implements Serializable {
     }
 
     /**
+     * 宽松判定 api-key 鉴权：容忍前端/历史数据常见的驼峰/下划线写法
+     * （{@code apiKey} / {@code API_KEY} / {@code apikey}），避免因为 {@code api-key} 写错一字就默默失效。
+     */
+    public boolean isApiKeyAuth() {
+        if (authType == null) {
+            return false;
+        }
+        String normalized = authType.replaceAll("[\\-_\\s]", "").toLowerCase();
+        return "apikey".equals(normalized);
+    }
+
+    /**
      * 端口（参数）定义。
      *
      * <p>注册外部API算子时用于生成 {@code function_param} 行，编排画布节点的端口

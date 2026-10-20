@@ -153,7 +153,7 @@ public class ExternalApiOperator {
             }
         });
         headers.putAll(mapped);
-        if (ExternalApiConfig.AUTH_API_KEY.equalsIgnoreCase(StringUtils.trimToEmpty(config.getAuthType()))) {
+        if (config.isApiKeyAuth()) {
             if (StringUtils.isBlank(config.getApiKey())) {
                 throw new BusinessException("外部API配置了 api-key 鉴权但未填写密钥", HttpStatus.BAD_REQUEST);
             }
