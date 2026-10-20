@@ -18,7 +18,7 @@ public class FunctionListQueryParam {
     @Schema(name = "displayName", description = "函数名称（模糊搜索）")
     private String displayName;
 
-    @Schema(name = "type", description = "函数类型：CUSTOMIZE / EXTERNAL / BASIC_QUERY / COMPOSITE")
+    @Schema(name = "type", description = "函数类型：CUSTOMIZE / EXTERNAL / BASIC_QUERY / COMPOSITE / CONTAINER")
     private FunctionTypeEnum type;
 
     @Schema(name = "publishStatus", description = "发布状态：0 未发布，1 已发布")
