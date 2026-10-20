@@ -742,8 +742,22 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                     .functionParam(objectMapper.writeValueAsString(param.getParameters()))
                     .taskStatus(TaskStatusEnum.PENDING)
                     .build());
+            // 异步：保留包裹层与 taskId，供调用方后续轮询 /execute/result
+            return resultJsonStr;
         }
-        return resultJsonStr;
+        // 同步：剥离 FunctionResultVO 包裹层，仅透传 data 内容（与外部API/容器/编排 三类算子响应形状一致）
+        return unwrapFunctionResultVO(resultNode, resultJsonStr);
+    }
+
+    /**
+     * 剥离 {@code FunctionResultVO} 包裹层：仅取 {@code data} 字段内容重新序列化。
+     * <p>无 {@code data} 字段（脚本直接返回非 VO 结构）时原样透传。</p>
+     */
+    private String unwrapFunctionResultVO(com.fasterxml.jackson.databind.JsonNode root, String rawJson) throws JsonProcessingException {
+        if (root != null && root.has("data")) {
+            return objectMapper.writeValueAsString(root.get("data"));
+        }
+        return rawJson;
     }
 
     /**
@@ -1203,6 +1217,11 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                         .inputMap(inputMap)
                         .build();
                 String resultJsonStr = scriptEngineRouter.route(language).execute(ctx);
+                // 与同步正式执行同规则：剥离 FunctionResultVO 包裹层，直接返回 data 内容
+                var draftRoot = objectMapper.readTree(resultJsonStr);
+                if (draftRoot != null && draftRoot.has("data")) {
+                    return objectMapper.treeToValue(draftRoot.get("data"), Object.class);
+                }
                 return objectMapper.readValue(resultJsonStr, new TypeReference<Map<String, Object>>() {
                 });
             }
