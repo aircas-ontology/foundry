@@ -54,7 +54,7 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
 
     @Override
     @Transactional(value = "mainTransactionManager")
-    public void createLink(OntologyLinkCreateParam linkCreateParam) {
+    public String createLink(OntologyLinkCreateParam linkCreateParam) {
         // 关系分类选填：提供了才校验其存在，未提供则不入库
         var categoryId = linkCreateParam.getCategoryId();
         if (categoryId != null) {
@@ -83,6 +83,7 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
         save(link);
         //创建实体间关系
         entityService.createEntityRelations(link.getUniqueIdentifier());
+        return link.getUniqueIdentifier();
     }
 
     @Override
