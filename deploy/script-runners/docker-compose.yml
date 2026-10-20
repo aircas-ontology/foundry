@@ -1,53 +1,12 @@
 version: '3.8'
 
-# 脚本函数多语言 Runner 编排：四语言各一独立容器，language -> runner 严格一对一
-# 部署方式：现成基础镜像 + 挂 jar / 源码，主机无需装 JDK / Python / Node，仅需 Docker
-# 端口约定：python=39101、ts=39102、groovy=39103、java=39104
+# 脚本函数 Runner 编排：仅 Python / TypeScript 需要独立容器；
+# Groovy / Java 在主程序 ontology-server 进程内执行（脚本可引用主程序内部类），无需容器
+# 部署方式：现成基础镜像 + 挂 jar / 源码，主机无需装 Python / Node，仅需 Docker
+# 端口约定：python=39101、ts=39102
 # 与 ontology-server 同级部署（同 network_mode: host，主应用通过 127.0.0.1:<port> 调用）
 
 services:
-  groovy-runner:
-    image: eclipse-temurin:17-jdk           # jdk 非 jre，Java 脚本动态编译依赖 javac
-    container_name: groovy-runner
-    restart: always
-    network_mode: "host"
-    working_dir: /app
-    volumes:
-      - ./jvm-runner/jvm-runner.jar:/app/jvm-runner.jar:ro
-    environment:
-      - TZ=Asia/Shanghai
-    command: ["java","-jar","/app/jvm-runner.jar",
-              "--runner.language=groovy",
-              "--server.port=39103"]
-    mem_limit: 1g
-    cpus: "1"
-    healthcheck:
-      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/39103' || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-
-  java-runner:
-    image: eclipse-temurin:17-jdk
-    container_name: java-runner
-    restart: always
-    network_mode: "host"
-    working_dir: /app
-    volumes:
-      - ./jvm-runner/jvm-runner.jar:/app/jvm-runner.jar:ro
-    environment:
-      - TZ=Asia/Shanghai
-    command: ["java","-jar","/app/jvm-runner.jar",
-              "--runner.language=java",
-              "--server.port=39104"]
-    mem_limit: 1g
-    cpus: "1"
-    healthcheck:
-      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/39104' || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-
   python-runner:
     image: python:3.12-slim
     container_name: python-runner

@@ -3,10 +3,13 @@
 <mapper namespace="com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyLinkGroupMapper">
 
 
+    <!-- 口径与 /space/statistic、/link/graph 对齐：只统计有效关系（status=1，对应 Status.ENABLE）。
+         此前缺 WHERE 导致空间卡片的关系数比详情页统计、图谱、分类树都大（NULL/停用行被算进来）。 -->
     <select id="countGroupByOntologySpace" resultType="com.aircas.ptr.foundry.ontology.model.view.SpaceStatisticsCountView">
         SELECT ontology_space_id AS ontologySpaceId,
                COUNT(*) AS cnt
         FROM ontology_link_group
+        WHERE status = 1
         GROUP BY ontology_space_id
     </select>
 

@@ -1,6 +1,5 @@
 package com.aircas.ptr.foundry.ontology.composite;
 
-import com.aircas.ptr.foundry.common.constant.FunctionParamTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.bo.CompositeFunctionRefBO;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamCategoryEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.Status;
@@ -94,13 +93,20 @@ public class CompositeFunctionRefResolver {
         }
         List<FunctionParamPO> inputParams = catalog.findParams(function.getId(), FunctionParamCategoryEnum.INPUT);
         List<FunctionParamPO> outputParams = catalog.findParams(function.getId(), FunctionParamCategoryEnum.OUTPUT);
+        // 脚本算子（CUSTOMIZE）的 result 出参承载的是 FunctionResultVO.data，真实类型由用户代码决定，
+        // 注册表统一声明成 OBJECT；这里按声明类型还原（见 declaredScriptTypes），
+        // 基础查询/外部API 等结构化出参保持原样。
+        boolean scriptOperator = function.getType() != null && function.getType().name().equals("CUSTOMIZE");
+        List<CompositeParameter> inputs = toPorts(inputParams, FunctionParamCategoryEnum.INPUT);
+        List<CompositeParameter> outputs = toPorts(outputParams, FunctionParamCategoryEnum.OUTPUT,
+                scriptOperator ? declaredScriptTypes(function.getCode()) : Map.of());
         return CompositeFunctionRefBO.builder()
                 .functionApi(function.getApi())
                 .displayName(function.getDisplayName() == null ? function.getApi() : function.getDisplayName())
                 .published(function.getStatus() != null && function.getStatus() == Status.ENABLE.getValue())
                 .version(function.getReferenceName())
-                .inputs(toPorts(inputParams))
-                .outputs(toPorts(outputParams))
+                .inputs(inputs)
+                .outputs(outputs)
                 .build();
     }
 
@@ -110,16 +116,64 @@ public class CompositeFunctionRefResolver {
      * 编排配置里落库的同一份 id，服务端按 id 精确匹配即可，这里用参数名作为 id 保证与 {@code name} 一致，
      * 使"按参数名连线"这一最常见写法成立。</p>
      */
-    private List<CompositeParameter> toPorts(List<FunctionParamPO> params) {
+    private List<CompositeParameter> toPorts(List<FunctionParamPO> params, FunctionParamCategoryEnum category) {
+        return toPorts(params, category, Map.of());
+    }
+
+    /**
+     * @param declaredTypes 出参端口的声明类型覆盖（参数名 -&gt; 画布类型），来自脚本注解；未命中的仍按注册表类型
+     */
+    private List<CompositeParameter> toPorts(List<FunctionParamPO> params, FunctionParamCategoryEnum category,
+                                             Map<String, String> declaredTypes) {
         List<CompositeParameter> ports = new ArrayList<>();
         for (FunctionParamPO paramPO : params) {
             CompositeParameter port = new CompositeParameter();
             port.setId(paramPO.getParamName());
             port.setName(paramPO.getParamName());
-            port.setType(CompositeFunctionCatalog.toCanvasType(paramPO.getParamType()));
+            String declared = declaredTypes.get(paramPO.getParamName());
+            port.setType(declared != null ? declared : canvasType(paramPO));
             port.setDescription(paramPO.getDescription());
             ports.add(port);
         }
         return ports;
+    }
+
+    /**
+     * 解析脚本源码里的出参类型注解，还原 result 等 OBJECT 出参的真实类型。
+     * <p>支持三种写法：Python 风格 {@code # @result:number}、Groovy/JS 行注释
+     * {@code // @result:number}、以及块注释里的同名标记。注解只影响类型展示与连线比较，
+     * 不写注解时维持 OBJECT（需要下游加转换节桥接）。</p>
+     */
+    static Map<String, String> declaredScriptTypes(String code) {
+        Map<String, String> types = new LinkedHashMap<>();
+        if (code == null || code.trim().isEmpty()) {
+            return types;
+        }
+        java.util.regex.Matcher matcher = java.util.regex.Pattern
+                .compile("@([A-Za-z_]\\w*)\\s*:\\s*(string|number|boolean|object|array|list|integer|int|float|double|long)",
+                        java.util.regex.Pattern.CASE_INSENSITIVE)
+                .matcher(code);
+        while (matcher.find()) {
+            types.put(matcher.group(1), normalizeCanvasType(matcher.group(2)));
+        }
+        return types;
+    }
+
+    private static String normalizeCanvasType(String raw) {
+        switch (raw.toLowerCase()) {
+            case "integer", "int", "float", "double", "long":
+                return "number";
+            case "list":
+                return "array";
+            default:
+                return raw.toLowerCase();
+        }
+    }
+
+    /**
+     * 参数定义转画布端口（默认按注册表类型）。
+     */
+    private static String canvasType(FunctionParamPO param) {
+        return CompositeFunctionCatalog.toCanvasType(param.getParamType());
     }
 }

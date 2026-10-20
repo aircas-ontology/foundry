@@ -7,6 +7,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
@@ -26,4 +28,7 @@ public class FunctionParamDTO {
     private String referenceType;
 
     private String description;
+
+    /** 子字段列表（参数类型为自定义类/接口时展开，标量参数为 null） */
+    private List<FunctionParamDTO> fields;
 }

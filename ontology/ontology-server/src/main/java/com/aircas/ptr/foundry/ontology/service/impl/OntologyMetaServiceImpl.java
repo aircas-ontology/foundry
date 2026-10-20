@@ -242,7 +242,8 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                         .name(v.getName())
                         .ontologyUniqueIdentifierFrom(v.getOntologyUniqueIdentifierFrom().equals(parentIdentifier) ? childIdentifier : v.getOntologyUniqueIdentifierFrom())
                         .ontologyUniqueIdentifierTo(v.getOntologyUniqueIdentifierTo().equals(parentIdentifier) ? childIdentifier : v.getOntologyUniqueIdentifierTo())
-                        .status(v.getStatus())
+                        // 父关系 status 为历史 NULL 时不能继续往下传，否则子本体的关系同样查不到
+                        .status(v.getStatus() == null ? Status.ENABLE.getValue() : v.getStatus())
                         .uniqueIdentifier(childLinkId)
                         .ontologySpaceId(v.getOntologySpaceId())
                         .build();
@@ -412,18 +413,27 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 .eq(OntologyMeta::getUniqueIdentifier, uniqueIdentifier)
                 .eq(OntologyMeta::getStatus, Status.ENABLE.getValue()));
         PreconditionUtils.checkNotNull(meta, "本体不存在:" + uniqueIdentifier, HttpStatus.BAD_REQUEST);
-        return buildStatistic(uniqueIdentifier);
+        return buildStatistic(uniqueIdentifier, meta.getOntologySpaceId());
     }
 
     /**
      * 统计本体对象关联的核心资源数量：实例、属性、关系、行为
+     *
+     * @param ontologyIdentifier 本体对象唯一标识
+     * @param spaceId            本体所属空间 id；关系计数按该空间裁剪，与详情页图谱、分类树口径一致
      */
-    private OntologyMetaStatisticVO buildStatistic(String ontologyIdentifier) {
+    private OntologyMetaStatisticVO buildStatistic(String ontologyIdentifier, Integer spaceId) {
         var propCnt = ontologyPropertyService.count(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyIdentifier));
         var actionCnt = actionService.count(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getOntologyUniqueIdentifier, ontologyIdentifier));
-        var linkCnt = linkService.count(new LambdaQueryWrapper<OntologyLinkGroup>()
-                .eq(OntologyLinkGroup::getOntologyUniqueIdentifierFrom, ontologyIdentifier)
-                .or().eq(OntologyLinkGroup::getOntologyUniqueIdentifierTo, ontologyIdentifier));
+        // 关系口径：有效（status=1）+ 本空间 + 该对象在任意一端（源或目标）
+        var linkQuery = new LambdaQueryWrapper<OntologyLinkGroup>()
+                .eq(OntologyLinkGroup::getStatus, Status.ENABLE.getValue())
+                .and(w -> w.eq(OntologyLinkGroup::getOntologyUniqueIdentifierFrom, ontologyIdentifier)
+                        .or().eq(OntologyLinkGroup::getOntologyUniqueIdentifierTo, ontologyIdentifier));
+        if (spaceId != null) {
+            linkQuery.eq(OntologyLinkGroup::getOntologySpaceId, spaceId);
+        }
+        var linkCnt = linkService.count(linkQuery);
 
         //实例数量取自本体主键属性绑定的数据源表
         var pk = ontologyPropertyService.getOne(new LambdaQueryWrapper<OntologyProperty>()
@@ -448,7 +458,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
     }
 
     public void buildMetaInfoStatistic(OntologyMetaInfoVO metaInfoVO) {
-        var statistic = buildStatistic(metaInfoVO.getUniqueIdentifier());
+        var statistic = buildStatistic(metaInfoVO.getUniqueIdentifier(), metaInfoVO.getSpaceId());
         metaInfoVO.setEntityCount(statistic.getEntityCount())
                 .setPropertyCount(statistic.getPropertyCount())
                 .setRelationCount(statistic.getRelationCount())
@@ -672,6 +682,8 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 links.add(OntologyLinkGroup.builder()
                         .uniqueIdentifier(linkId)
                         .name(r.getName())
+                        // 必须显式置为有效：status 列可空且无默认值，漏设会让关系被所有 status=1 的查询静默过滤掉
+                        .status(Status.ENABLE.getValue())
                         .type(r.getType())
                         .ontologyUniqueIdentifierFrom(fromMeta.getUniqueIdentifier())
                         .ontologyUniqueIdentifierTo(toMeta.getUniqueIdentifier())

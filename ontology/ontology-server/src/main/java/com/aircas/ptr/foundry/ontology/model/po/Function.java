@@ -116,4 +116,17 @@ public class Function {
      * 本体空间id
      */
     private Integer ontologySpaceId;
+
+    /**
+     * 容器算子关联的运行实例分组键（外键，= function_container_instance.container_key），仅 type=CONTAINER 有值。
+     * 一容器 : 多接口算子 = 1:N：同一容器算子拆出的多条 function 共用同一 container_key。
+     * 容器级配置（镜像/接口文档/启动命令/端口）与运行态均存于 function_container_instance，本列仅作为关联指针。
+     */
+    private String containerKey;
+
+    /**
+     * 容器算子接口级配置 JSON（仅 type=CONTAINER 有值）：只存选中接口的定义，
+     * 结构见 {@link com.aircas.ptr.foundry.ontology.model.dto.container.ContainerOperatorConfig} 的 interfaces 字段
+     */
+    private String dockerConfig;
 }

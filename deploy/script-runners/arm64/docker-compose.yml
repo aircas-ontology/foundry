@@ -1,0 +1,42 @@
+version: '3.8'
+
+# ARM64 内网离线部署 —— 2 Runner 容器（python/ts）；Groovy/Java 在主程序进程内执行，无需容器
+# 前提：deploy.sh 已加载 images/ 下的 tar（或手动 docker load）
+# 本文件不会 pull 远程镜像
+
+services:
+  python-runner:
+    image: foundry/python-runner:offline
+    pull_policy: never
+    container_name: python-runner
+    restart: always
+    network_mode: "host"
+    environment:
+      - TZ=Asia/Shanghai
+      - SERVER_PORT=39101
+      - RUNNER_TIMEOUT_MS=5000
+    mem_limit: 512m
+    cpus: "1"
+    healthcheck:
+      test: ["CMD","python","-c","import urllib.request,sys,os; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:'+os.environ.get('SERVER_PORT','39101')+'/health').status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  ts-runner:
+    image: foundry/ts-runner:offline
+    pull_policy: never
+    container_name: ts-runner
+    restart: always
+    network_mode: "host"
+    environment:
+      - TZ=Asia/Shanghai
+      - SERVER_PORT=39102
+      - RUNNER_TIMEOUT_MS=5000
+    mem_limit: 512m
+    cpus: "1"
+    healthcheck:
+      test: ["CMD","node","-e","require('http').get('http://127.0.0.1:'+process.env.SERVER_PORT+'/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5

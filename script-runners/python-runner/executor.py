@@ -45,7 +45,15 @@ def _worker(code: str, input_data: dict, q) -> None:
         if not callable(handle):
             q.put(("err", "函数 handle 方法不存在"))
             return
-        result = handle(input_data)
+        # 多参数展开：handle 声明 >1 个形参时，把 input dict 值按序逐个传入；
+        # 单参数保持原行为（整包 dict 传入），向后兼容已有脚本。
+        import inspect
+        sig = inspect.signature(handle)
+        params = list(sig.parameters.keys())
+        if len(params) > 1 and isinstance(input_data, dict):
+            result = handle(*input_data.values())
+        else:
+            result = handle(input_data)
         q.put(("ok", result))
     except Exception as e:  # noqa: BLE001 - 用户脚本任意异常都要回传
         q.put(("err", f"{type(e).__name__}: {e}"))
@@ -69,3 +77,183 @@ def execute(code: str, input_data: dict, timeout_ms: int = 5000) -> object:
     if status == "err":
         raise ScriptError(payload)
     return payload
+
+
+def parse(code: str) -> list:
+    """静态解析脚本参数。
+
+    与主应用约定的回传形态：[{name, type, category, source}, ...]；
+    type 为语言原生类型文本（str/int/list/dict/interface 名），主应用侧统一归一。
+
+    解析层级：
+      1) ANNOTATION：handle 形参/返回值为 TypedDict/dataclass/类时展开字段；
+      2) INFERRED：无类型时扫描函数体 input.attr / input["k"] / return dict 字面量。
+    """
+    import ast
+
+    tree = ast.parse(code)
+    handle_fn = None
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "handle":
+            handle_fn = node
+            break
+    if handle_fn is None:
+        return []
+
+    classes = _collect_classes(tree, ast)
+    params: list = []
+
+    def _extract_collection_element(type_text):
+        """从集合类型注解中提取元素类型名（如 'List[Admin]' → 'Admin'），非集合返回 None。"""
+        import re
+        m = re.match(r'^(?:list|List|set|Set|collection|Iterable)\[(.+)\]$', type_text)
+        if m:
+            return m.group(1).strip()
+        return None
+
+    def _expand_class(class_name, visited=None):
+        """递归展开类字段，字段类型本身也是类时嵌套 fields。visited 防循环引用。"""
+        if visited is None:
+            visited = set()
+        if class_name not in classes or class_name in visited:
+            return None
+        visited = visited | {class_name}
+        result = []
+        for fname, ftype in classes[class_name]:
+            field = {"name": fname, "type": ftype}
+            if ftype in classes and ftype not in visited:
+                # 字段类型本身也是自定义类 → 递归展开
+                nested = _expand_class(ftype, visited)
+                if nested:
+                    field["fields"] = nested
+            else:
+                # 集合泛型：List[Admin] → 提取元素类型递归展开
+                elem_type = _extract_collection_element(ftype)
+                if elem_type and elem_type in classes and elem_type not in visited:
+                    nested = _expand_class(elem_type, visited)
+                    if nested:
+                        field["fields"] = nested
+            result.append(field)
+        return result
+
+    args = list(handle_fn.args.args)
+    for a in args:
+        param_node = {"name": a.arg, "category": "INPUT"}
+        if a.annotation is not None:
+            ann = ast.unparse(a.annotation)
+            if ann in classes and classes[ann]:
+                # 注解指向脚本内类且有字段 → 递归展开到 fields
+                param_node["type"] = ann
+                param_node["source"] = "ANNOTATION"
+                param_node["fields"] = _expand_class(ann)
+            elif ann in classes:
+                # 注解指向脚本内类但无字段 → 退化启发扫 body
+                param_node["type"] = "object"
+                param_node["source"] = "INFERRED"
+                attrs = _collect_input_attrs(handle_fn, a.arg, ast)
+                if attrs:
+                    param_node["fields"] = [{"name": attr, "type": "object"} for attr in attrs]
+            else:
+                # 标量类型（str/int/float 等）
+                param_node["type"] = ann
+                param_node["source"] = "ANNOTATION"
+        else:
+            # 无注解 → 启发扫描该参数的 body 访问
+            param_node["type"] = "object"
+            param_node["source"] = "INFERRED"
+            attrs = _collect_input_attrs(handle_fn, a.arg, ast)
+            if attrs:
+                param_node["fields"] = [{"name": attr, "type": "object"} for attr in attrs]
+        params.append(param_node)
+
+    rt = handle_fn.returns
+    if rt is not None:
+        rt_text = ast.unparse(rt)
+        if rt_text in classes and classes[rt_text]:
+            # 返回类型为自定义类 → 层级结构：父参数带 fields
+            params.append({
+                "name": rt_text, "type": rt_text, "category": "OUTPUT", "source": "ANNOTATION",
+                "fields": _expand_class(rt_text)
+            })
+        elif rt_text in classes:
+            # 返回类型是脚本内类但无字段 → 退化启发 return 字面量
+            for key in _collect_return_keys(handle_fn, ast):
+                params.append({"name": key, "type": "object", "category": "OUTPUT", "source": "INFERRED"})
+        elif rt_text != "None":
+            params.append({"name": "result", "type": rt_text, "category": "OUTPUT", "source": "ANNOTATION"})
+    else:
+        for key in _collect_return_keys(handle_fn, ast):
+            params.append({"name": key, "type": "object", "category": "OUTPUT", "source": "INFERRED"})
+
+    return params
+
+
+def _collect_classes(tree, ast_mod) -> dict:
+    """收集脚本内定义的类及其字段 (name, type_text)，用于 handle 形参/返回值的展开。
+
+    覆盖三种常见写法：
+      1) 类级注解字段（dataclass / TypedDict）：`name: str`；
+      2) 方法内 self 注解字段：`self.name: str = ...`；
+      3) __init__ 里普通赋值（类型未知，记 object）：`self.name = ...`。
+    下划线开头的私有字段不纳入（非对外参数）。
+    """
+    out: dict = {}
+    for cls in ast_mod.walk(tree):
+        if not isinstance(cls, ast_mod.ClassDef):
+            continue
+        fields: list = []
+        seen: set = set()
+
+        def add(name, type_text):
+            if name and not name.startswith("_") and name not in seen:
+                seen.add(name)
+                fields.append((name, type_text))
+
+        for stmt in cls.body:
+            # 类级注解字段（dataclass / TypedDict）
+            if isinstance(stmt, ast_mod.AnnAssign) and isinstance(stmt.target, ast_mod.Name):
+                add(stmt.target.id, ast_mod.unparse(stmt.annotation))
+            # 方法（含 __init__）里的 self.x 实例字段
+            elif isinstance(stmt, (ast_mod.FunctionDef, ast_mod.AsyncFunctionDef)):
+                for node in ast_mod.walk(stmt):
+                    if isinstance(node, ast_mod.AnnAssign) and isinstance(node.target, ast_mod.Attribute) \
+                            and isinstance(node.target.value, ast_mod.Name) and node.target.value.id == "self":
+                        add(node.target.attr, ast_mod.unparse(node.annotation))
+                    elif isinstance(node, ast_mod.Assign):
+                        for tgt in node.targets:
+                            if isinstance(tgt, ast_mod.Attribute) and isinstance(tgt.value, ast_mod.Name) \
+                                    and tgt.value.id == "self":
+                                add(tgt.attr, "object")
+        out[cls.name] = fields
+    return out
+
+
+def _collect_input_attrs(fn, var_name: str, ast_mod) -> list:
+    """启发层：扫描 handle 体内 input.attr / input["k"] / input.get("k") 使用。"""
+    seen: list = []
+    for node in ast_mod.walk(fn):
+        if isinstance(node, ast_mod.Attribute) and isinstance(node.value, ast_mod.Name) and node.value.id == var_name:
+            if node.attr not in seen:
+                seen.append(node.attr)
+        elif isinstance(node, ast_mod.Subscript) and isinstance(node.value, ast_mod.Name) and node.value.id == var_name:
+            sl = node.slice
+            if isinstance(sl, ast_mod.Constant) and isinstance(sl.value, str) and sl.value not in seen:
+                seen.append(sl.value)
+        elif isinstance(node, ast_mod.Call) and isinstance(node.func, ast_mod.Attribute) \
+                and isinstance(node.func.value, ast_mod.Name) and node.func.value.id == var_name \
+                and node.func.attr in ("get", "pop") and len(node.args) >= 1:
+            arg = node.args[0]
+            if isinstance(arg, ast_mod.Constant) and isinstance(arg.value, str) and arg.value not in seen:
+                seen.append(arg.value)
+    return seen
+
+
+def _collect_return_keys(fn, ast_mod) -> list:
+    """启发层：扫描函数体内 return dict 字面量的键。"""
+    seen: list = []
+    for node in ast_mod.walk(fn):
+        if isinstance(node, ast_mod.Return) and isinstance(node.value, ast_mod.Dict):
+            for k in node.value.keys:
+                if isinstance(k, ast_mod.Constant) and isinstance(k.value, str) and k.value not in seen:
+                    seen.append(k.value)
+    return seen

@@ -174,20 +174,21 @@ public class OntologyLinkCategoryServiceImpl extends ServiceImpl<OntologyLinkCat
         if (CollectionUtils.isEmpty(roots)) {
             return null;
         }
-        // 查询该空间下所有挂载到分类的关系（status=1 有效），按分类id分组
-        var categoryIds = categories.stream().map(OntologyLinkCategory::getId).collect(Collectors.toList());
+        // 查询该空间下所有有效关系（status=1）；未挂分类或分类已删除的关系并入根分类，避免统计里有、树里查不到
+        var rootCategoryId = roots.get(0).getId();
         var linkQuery = new LambdaQueryWrapper<OntologyLinkGroup>()
-                .eq(OntologyLinkGroup::getStatus, 1)
-                .eq(OntologyLinkGroup::getOntologySpaceId, spaceId)
-                .in(OntologyLinkGroup::getCategoryId, categoryIds);
-        // 可选过滤：前端传递了本体唯一标识时，仅返回该本体关联的关系
+                .eq(OntologyLinkGroup::getStatus, Status.ENABLE.getValue())
+                .eq(OntologyLinkGroup::getOntologySpaceId, spaceId);
+        // 可选过滤：前端传了本体唯一标识时，返回该对象在任一端（源或目标）的关系，与 /link/graph 的双向口径一致
         if (ontologyUniqueIdentifierFrom != null && !ontologyUniqueIdentifierFrom.isBlank()) {
-            linkQuery.eq(OntologyLinkGroup::getOntologyUniqueIdentifierFrom, ontologyUniqueIdentifierFrom);
+            linkQuery.and(w -> w.eq(OntologyLinkGroup::getOntologyUniqueIdentifierFrom, ontologyUniqueIdentifierFrom)
+                    .or().eq(OntologyLinkGroup::getOntologyUniqueIdentifierTo, ontologyUniqueIdentifierFrom));
         }
         var links = ontologyLinkGroupMapper.selectList(linkQuery);
+        var knownCategoryIds = categories.stream().map(OntologyLinkCategory::getId).collect(Collectors.toSet());
         Map<Integer, List<OntologyLinkGroup>> linkMap = links.stream()
-                .filter(l -> l.getCategoryId() != null)
-                .collect(Collectors.groupingBy(OntologyLinkGroup::getCategoryId));
+                .collect(Collectors.groupingBy(l -> l.getCategoryId() != null && knownCategoryIds.contains(l.getCategoryId())
+                        ? l.getCategoryId() : rootCategoryId));
 
         // 收集关系两端本体的 uniqueIdentifier，一次性查出本体名称，供 linkVO 填充 ontologyNameFrom/To
         Set<String> uidSet = new HashSet<>();
@@ -225,7 +226,8 @@ public class OntologyLinkCategoryServiceImpl extends ServiceImpl<OntologyLinkCat
                         .uniqueIdentifier(v.getUniqueIdentifier())
                         .name(v.getName())
                         .type(v.getType() == null ? null : v.getType().name())
-                        .categoryId(v.getCategoryId())
+                        // 回显挂载节点 id：未分类关系已并入根分类，若原样返回 null 前端会把这条关系丢掉
+                        .categoryId(category.getId())
                         .ontologyUniqueIdentifierFrom(v.getOntologyUniqueIdentifierFrom())
                         .ontologyNameFrom(from != null ? from.getDisplayName() : null)
                         .ontologyUniqueIdentifierTo(v.getOntologyUniqueIdentifierTo())

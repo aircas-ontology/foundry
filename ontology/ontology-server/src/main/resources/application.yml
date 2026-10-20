@@ -198,11 +198,21 @@ threadpool:
   keep-alive-seconds: 60
   thread-name-prefix: ontology-thread-
 
-# 脚本函数多语言执行：每种语言对应一个独立 Runner 容器（language -> base URL 严格一对一）。
-# 地址 value 属环境相关，写在 application-local.yml 覆盖；主应用不编译/执行任何用户代码。
+# 脚本函数多语言执行：Python/TypeScript 走独立 Runner 容器；Groovy/Java 在主程序进程内执行。
+# 地址 value 属环境相关，写在 application-local.yml 覆盖。
 script-runner:
-  groovy:
-  java:
   python:
   typescript:
   timeout-ms: 5000
+
+# 容器算子：镜像 / 接口文档上传存储目录与大小限制。
+# image-dir / doc-dir 留空时默认落在 jar 包同级目录下的 container-images/ 与 interface-docs/。
+# arm-check-enabled 是否校验镜像为 ARM64 架构；无 ARM 环境本地测试可置 false 跳过校验。
+# exec-host 执行期访问容器映射端口的基地址（同宿主机默认 127.0.0.1，服务在容器内需改宿主机 IP）。
+container-operator:
+  image-dir:
+  doc-dir:
+  max-image-size-mb: 2048
+  arm-check-enabled: true
+  exec-host: 127.0.0.1
+  exec-timeout-seconds: 30

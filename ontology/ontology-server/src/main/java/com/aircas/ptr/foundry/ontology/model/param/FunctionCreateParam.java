@@ -84,7 +84,7 @@ public class FunctionCreateParam {
 
     /**
      * 外部API算子的接口定义，仅 type=EXTERNAL 时传递。
-     * 后端将其序列化为 JSON 存入 code 字段，并根据请求/响应映射自动生成 function_param，
+     * 后端将其序列化为 JSON 存入 code 字段，并根据 inputs/outputs 自动生成 function_param，
      * 使外部API算子既能单独调用，也能作为函数编排画布节点接入工作流。
      */
     @Schema(name = "apiConfig", description = "外部API算子配置（仅 type=EXTERNAL 时必填）")

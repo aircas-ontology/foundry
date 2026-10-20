@@ -3,7 +3,7 @@ version: '3.8'
 services:
   app:
     restart: always
-    image: bitnami/java:1.8
+    image: eclipse-temurin:17-jdk        # 必须 JDK 非 JRE：Java 脚本函数在主程序内动态编译依赖 javac
     container_name: ontology-backend
     network_mode: "host"
     #ports:
@@ -14,6 +14,8 @@ services:
       - ./logs:/app/logs  # 挂载日志文件目录
       - ./orekit-data:/app/orekit-data
       - ./license.lic:/app/license.lic
+      - ./container-images:/app/container-images  # 容器算子镜像 tar：落到宿主机 jar 同级，持久且可见
+      - ./interface-docs:/app/interface-docs  # 容器算子接口文档：同上
     command: java -javaagent:/app/app.jar='-pwd iecas`12'  -Dspring.config.location=file:/app/application.yml -jar /app/app.jar
 
 

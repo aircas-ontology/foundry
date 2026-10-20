@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1
 # ts-runner：TypeScript 语言脚本 Runner。契约与 jvm/python runner 一致。
 FROM node:20-slim AS runtime
 WORKDIR /app

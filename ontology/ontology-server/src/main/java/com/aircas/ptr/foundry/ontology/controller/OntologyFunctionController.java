@@ -10,11 +10,14 @@ import com.aircas.ptr.foundry.ontology.model.param.FunctionExecuteParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionListQueryParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionTestParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionUpdateParam;
+import com.aircas.ptr.foundry.ontology.model.param.ScriptParseParam;
 import com.aircas.ptr.foundry.ontology.model.vo.FunctionDetailVO;
 import com.aircas.ptr.foundry.ontology.model.vo.FunctionExecuteResultVO;
 import com.aircas.ptr.foundry.ontology.model.vo.FunctionInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.FunctionResultVO;
+import com.aircas.ptr.foundry.ontology.model.vo.ScriptParseResultVO;
 import com.aircas.ptr.foundry.ontology.service.FunctionService;
+import com.aircas.ptr.foundry.ontology.service.ScriptParamParseService;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.Operation;
@@ -34,6 +37,9 @@ public class OntologyFunctionController {
 
     @Resource
     private FunctionService functionService;
+
+    @Resource
+    private ScriptParamParseService scriptParamParseService;
 
 
     @PostMapping("/execute")
@@ -108,6 +114,12 @@ public class OntologyFunctionController {
         return RestResult.success();
     }
 
+
+    @PostMapping("/parse_params")
+    @Operation(summary = "解析脚本输入/输出参数（后端 AST 解析，Java/Groovy 进程内、Python/TS 走 runner）")
+    public RestResult<ScriptParseResultVO> parseParams(@RequestBody @Valid ScriptParseParam param) {
+        return RestResult.ofData(scriptParamParseService.parseParams(param));
+    }
 
     @PostMapping("/callback")
     @Operation(summary = "异步函数执行结果回调")
