@@ -27,6 +27,9 @@ public class CdcFullSyncParam {
     @Schema(name = "syncInstance", description = "是否同步数据湖实例索引 ontology_instance，缺省 true")
     private Boolean syncInstance;
 
+    @Schema(name = "syncGraph", description = "实例同步时是否同步 ArangoDB 图库（节点 + 候选关系边 + 孤儿节点清理），缺省 true；仅在实例同步范围内生效")
+    private Boolean syncGraph;
+
     @Schema(name = "syncLinkGroup", description = "是否同步关系索引 ontology_link_group，缺省 true")
     private Boolean syncLinkGroup;
 

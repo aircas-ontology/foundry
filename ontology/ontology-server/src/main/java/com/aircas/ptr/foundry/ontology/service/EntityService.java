@@ -9,6 +9,7 @@ import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 
 import jakarta.validation.Valid;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
@@ -21,7 +22,12 @@ import java.util.Map;
  */
 public interface EntityService {
 
-    void createEntityRelations(String linkUniqueIdentifier);
+    /**
+     * 为指定关系的两端节点补建候选关系边（状态 DELETE，已存在的端点对跳过，重复执行不产生第二份边）。
+     *
+     * @return 本次新建的候选边数
+     */
+    int createEntityRelations(String linkUniqueIdentifier);
 
     /**
      * 将指定关系下的全部实体关系边置为 ENABLE。
@@ -73,6 +79,45 @@ public interface EntityService {
     void completeEntityNodeAndRelations(String ontologyUniqueIdentifier, Map<String, Object> entityPropertyMap);
 
     void deleteEntityNodeAndRelations(String ontologyUniqueIdentifier, Object entityPrimaryKey);
+
+    /**
+     * 单行实例数据 -> 图库节点（upsert，按「本体 + 归一化主键」定位已存在节点，仅名称变化时覆盖）。
+     *
+     * @return true 表示本次新建了节点，调用方据此决定是否为其铺候选关系边
+     */
+    boolean upsertEntityNode(String ontologyUniqueIdentifier, String tableName, Object primaryKeyValue, String displayName);
+
+    /**
+     * 批量实例数据 -> 图库节点，语义同 {@link #upsertEntityNode}，用于全量同步按页写入。
+     *
+     * @param pkToDisplayName 主键值 -> 展示名，同一主键只写一次
+     * @return 本次写入（新建 + 改名）的节点数
+     */
+    int upsertEntityNodes(String ontologyUniqueIdentifier, String tableName, Map<Object, String> pkToDisplayName);
+
+    /**
+     * 为指定主键的节点铺候选关系边：遍历两端命中该本体的全部关系，与对侧全部节点配对，
+     * 已存在的 {@code (link, from, to)} 跳过不重复创建，新建边状态为 DELETE（未激活的候选边）。
+     *
+     * @return 本次新建的候选边数
+     */
+    int createCandidateRelationsForNodes(String ontologyUniqueIdentifier, List<Object> primaryKeyValues);
+
+    /**
+     * 按主键批量删除图库节点及其相邻关系边（含已激活的边），节点不存在时静默跳过。
+     *
+     * @return 实际删除的节点数
+     */
+    int deleteEntityNodesAndRelations(String ontologyUniqueIdentifier, List<Object> primaryKeyValues);
+
+    /**
+     * 清理该本体的图库孤儿节点：删除主键不在 {@code keepPrimaryKeyValues} 中的节点及其相邻关系边，
+     * 用于全量同步以数据湖当前内容为准收敛图库。主键为空的节点不参与清理。
+     *
+     * @param keepPrimaryKeyValues 本次同步到的全部主键值
+     * @return 实际删除的节点数
+     */
+    int deleteEntityNodeOrphans(String ontologyUniqueIdentifier, Collection<Object> keepPrimaryKeyValues);
 
     void generateEntities(EntityGenerateParam param);
 

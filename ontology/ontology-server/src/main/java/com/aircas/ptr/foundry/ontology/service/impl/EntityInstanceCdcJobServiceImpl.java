@@ -11,10 +11,12 @@ import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyMetaMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyPropertyMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologySpaceMapper;
 import com.aircas.ptr.foundry.ontology.service.EntityInstanceCdcJobService;
+import com.aircas.ptr.foundry.ontology.service.EntityService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.elasticsearch.client.elc.NativeQuery;
 import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
 import org.springframework.data.elasticsearch.core.query.DeleteQuery;
@@ -29,12 +31,15 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * 数据湖（entity_datasource 库）DML CDC -> ontology_instance 索引同步。
+ * 数据湖（entity_datasource 库）DML CDC -> ontology_instance 索引 + ArangoDB 图库同步。
  * <p>
  * 主表/从表判定：某表若是至少一个本体"主键属性"的数据源表
  * （ontology_property 中 datasource_schema + datasource_id 命中该表且 is_primary_key=1），
  * 则为主表，行数据同步为实例文档；否则视为从表（关联属性表），暂不同步。
  * 一条记录可能同时是多个本体的主表（如继承场景），逐一同步。
+ * <p>
+ * 图库侧同步的是实例节点（{@code node}）与候选关系边（{@code relation}，状态 DELETE）：
+ * ES 与图库各自独立成段处理，图库失败只记录日志、不影响实例文档写入。
  */
 @Slf4j
 @Service
@@ -50,6 +55,12 @@ public class EntityInstanceCdcJobServiceImpl implements EntityInstanceCdcJobServ
     OntologyInstanceRepository ontologyInstanceRepository;
     @Autowired
     ElasticsearchOperations elasticsearchOperations;
+    @Autowired
+    EntityService entityService;
+
+    /** 图库未启用时（foundry.integration.arangodb.enabled=false）跳过全部图同步 */
+    @Value("${foundry.integration.arangodb.enabled:true}")
+    boolean graphEnabled;
 
     @Override
     public boolean handleCreateCdc(String schema, String table, Map<String, Object> after) {
@@ -62,7 +73,7 @@ public class EntityInstanceCdcJobServiceImpl implements EntityInstanceCdcJobServ
             log.debug("表[{}.{}]非本体主表（从表），跳过实例同步", schema, table);
             return true;
         }
-        pkProps.forEach(pkProp -> syncInstance(schema, table, after, pkProp));
+        pkProps.forEach(pkProp -> syncInstance(schema, table, after, pkProp, true));
         return true;
     }
 
@@ -81,12 +92,15 @@ public class EntityInstanceCdcJobServiceImpl implements EntityInstanceCdcJobServ
             Object newPkValue = OntologyInstanceConverter.getColumnValue(after, pkColumn);
             Object oldPkValue = before == null ? null : OntologyInstanceConverter.getColumnValue(before, pkColumn);
             // 主键值被修改：旧 _id 的文档已无法定位更新，删除旧文档后按新主键重建
-            if (oldPkValue != null && newPkValue != null
-                    && !Objects.equals(oldPkValue.toString(), newPkValue.toString())) {
+            boolean pkChanged = oldPkValue != null && newPkValue != null
+                    && !Objects.equals(oldPkValue.toString(), newPkValue.toString());
+            if (pkChanged) {
                 deleteInstanceByPk(OntologyInstanceConverter.buildPk(
                         schema, table, pkProp.getOntologyUniqueIdentifier(), oldPkValue));
+                deleteGraphNode(pkProp.getOntologyUniqueIdentifier(), oldPkValue);
             }
-            syncInstance(schema, table, after, pkProp);
+            // 主键变更等同于新增实例：旧节点及相邻边已删，候选边必须重铺
+            syncInstance(schema, table, after, pkProp, pkChanged);
         }
         return true;
     }
@@ -108,6 +122,7 @@ public class EntityInstanceCdcJobServiceImpl implements EntityInstanceCdcJobServ
             }
             deleteInstanceByPk(OntologyInstanceConverter.buildPk(
                     schema, table, pkProp.getOntologyUniqueIdentifier(), pkValue));
+            deleteGraphNode(pkProp.getOntologyUniqueIdentifier(), pkValue);
         }
         return true;
     }
@@ -115,8 +130,11 @@ public class EntityInstanceCdcJobServiceImpl implements EntityInstanceCdcJobServ
     /**
      * 将一行主表数据写入（upsert）ontology_instance 索引。
      * save 走实体索引路径，routing 由 @Routing("pk") 从文档 pk 自动解析，满足 _routing.required。
+     *
+     * @param ensureRelations 是否无条件补齐该实例的候选关系边（湖侧新增行 / 主键变更重建传 true）
      */
-    private void syncInstance(String schema, String table, Map<String, Object> row, OntologyProperty pkProp) {
+    private void syncInstance(String schema, String table, Map<String, Object> row, OntologyProperty pkProp,
+                              boolean ensureRelations) {
         String pkColumn = pkProp.getDatasourceColumnName();
         Object pkValue = OntologyInstanceConverter.getColumnValue(row, pkColumn);
         if (pkValue == null) {
@@ -149,6 +167,49 @@ public class EntityInstanceCdcJobServiceImpl implements EntityInstanceCdcJobServ
         if (dto != null) {
             ontologyInstanceRepository.save(dto);
             log.info("数据湖[{}.{}]实例文档同步成功, pk={}", schema, table, dto.getPk());
+            syncGraphNode(meta.getUniqueIdentifier(), table, pkValue, dto.getName(), ensureRelations);
+        }
+    }
+
+    /**
+     * 单行实例 -> 图节点（展示名与实例文档 name 同口径，避免检索与图两侧名称不一致）。
+     * <p>
+     * 候选关系边在节点为本次新建、或 {@code ensureRelations} 为真（湖侧新增行 / 主键变更重建）时补齐：
+     * 属性绑定主键时 {@code syncNodes} 已整表建过节点，这些老节点当时可能还没有任何关系，
+     * 只按"本次新建"铺边会漏掉它们；{@code createCandidateRelationsForNodes} 按 (link, from, to) 判存，
+     * 重复执行只补缺失对，不产生第二份边。普通字段更新只刷 displayName，不铺边。
+     */
+    private void syncGraphNode(String ontologyUid, String table, Object pkValue, String displayName,
+                               boolean ensureRelations) {
+        if (!graphEnabled) {
+            return;
+        }
+        try {
+            boolean created = entityService.upsertEntityNode(ontologyUid, table, pkValue, displayName);
+            if (created || ensureRelations) {
+                int edges = entityService.createCandidateRelationsForNodes(ontologyUid, List.of(pkValue));
+                log.info("数据湖实例图节点同步, ontology={}, pk={}, 节点{}, 候选关系边新建 {} 条",
+                        ontologyUid, pkValue, created ? "新建" : "已存在", edges);
+            }
+        } catch (Exception e) {
+            log.error("数据湖实例图节点同步失败, ontology={}, pk={}", ontologyUid, pkValue, e);
+        }
+    }
+
+    /**
+     * 删除图节点及其相邻关系边（湖行被删或主键变更时与实例文档保持同生同灭）。
+     */
+    private void deleteGraphNode(String ontologyUid, Object pkValue) {
+        if (!graphEnabled) {
+            return;
+        }
+        try {
+            int deleted = entityService.deleteEntityNodesAndRelations(ontologyUid, List.of(pkValue));
+            if (deleted > 0) {
+                log.info("数据湖实例图节点删除, ontology={}, pk={}", ontologyUid, pkValue);
+            }
+        } catch (Exception e) {
+            log.error("数据湖实例图节点删除失败, ontology={}, pk={}", ontologyUid, pkValue, e);
         }
     }
 

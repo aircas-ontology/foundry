@@ -83,6 +83,11 @@ public class EntityServiceImpl implements EntityService {
      */
     private static final String NODE_COLLECTION = "node";
 
+    /**
+     * 校验候选关系边是否已存在时，单次 AQL 传入的端点对上限。
+     */
+    private static final int RELATION_PAIR_QUERY_CHUNK = 1000;
+
     @Resource
     private OntologyMetaMapper metaMapper;
 
@@ -133,7 +138,7 @@ public class EntityServiceImpl implements EntityService {
 
 
     @Override
-    public void createEntityRelations(String linkUniqueIdentifier) {
+    public int createEntityRelations(String linkUniqueIdentifier) {
         var link = linkGroupMapper.selectOne(new LambdaQueryWrapper<OntologyLinkGroup>().eq(OntologyLinkGroup::getUniqueIdentifier, linkUniqueIdentifier));
         PreconditionUtils.checkArgument(link != null, "本体关系不存在");
         var existRelations = relationRepository.queryRelationsByLinkId(link.getUniqueIdentifier());
@@ -144,10 +149,10 @@ public class EntityServiceImpl implements EntityService {
         var fromNodes = nodeRepository.findByOntologyUniqIdentifier(link.getOntologyUniqueIdentifierFrom());
         var toNodes = nodeRepository.findByOntologyUniqIdentifier(link.getOntologyUniqueIdentifierTo());
 
-        if (CollectionUtils.isNotEmpty(fromNodes) && CollectionUtils.isNotEmpty(toNodes)) {
-            var relations = new ArrayList<EntityRelation>();
-            var windows = new ArrayList<VisibilityWindow>();
+        var relations = new ArrayList<EntityRelation>();
+        var windows = new ArrayList<VisibilityWindow>();
 
+        if (CollectionUtils.isNotEmpty(fromNodes) && CollectionUtils.isNotEmpty(toNodes)) {
 
             fromNodes.forEach(from ->
                     toNodes.forEach(to -> {
@@ -175,6 +180,7 @@ public class EntityServiceImpl implements EntityService {
                 relationRepository.batchSave(relations);
             }
         }
+        return relations.size();
     }
 
     @Override
@@ -1398,13 +1404,191 @@ public class EntityServiceImpl implements EntityService {
     public void deleteEntityNodeAndRelations(String ontologyUniqueIdentifier, Object entityPrimaryKey) {
         var relations = relationRepository.queryAllRelationsByEntities(ontologyUniqueIdentifier, Lists.newArrayList(entityPrimaryKey));
         if (CollectionUtils.isNotEmpty(relations)) {
-            relationRepository.deleteByIds(relations.stream().map(EntityRelation::getId).collect(Collectors.toList()));
+            // deleteByIds 过滤的是 _id，取 getId()（映射 _key）会一条都删不掉
+            relationRepository.deleteByIds(relations.stream().map(EntityRelation::getArangoId).collect(Collectors.toList()));
         }
 
         var node = nodeRepository.findByOntologyUniqIdentifierAndPrimaryKey(ontologyUniqueIdentifier, entityPrimaryKey);
         if (node != null) {
             nodeRepository.delete(node);
         }
+    }
+
+    @Override
+    public boolean upsertEntityNode(String ontologyUniqueIdentifier, String tableName,
+                                    Object primaryKeyValue, String displayName) {
+        if (primaryKeyValue == null) {
+            return false;
+        }
+        var normalizedPk = normalizePrimaryKey(primaryKeyValue);
+        var exist = nodeRepository.findByOntologyUniqIdentifierAndPrimaryKey(ontologyUniqueIdentifier, normalizedPk);
+        if (exist != null) {
+            if (!StringUtils.equals(exist.getDisplayName(), displayName)) {
+                exist.setDisplayName(displayName);
+                exist.setUpdateTime(new Date());
+                nodeRepository.save(exist);
+            }
+            return false;
+        }
+        nodeRepository.save(buildEntityNode(ontologyUniqueIdentifier, tableName, normalizedPk, displayName));
+        return true;
+    }
+
+    @Override
+    public int upsertEntityNodes(String ontologyUniqueIdentifier, String tableName, Map<Object, String> pkToDisplayName) {
+        if (MapUtils.isEmpty(pkToDisplayName)) {
+            return 0;
+        }
+        // 一次捞该本体现存节点建索引，避免逐行回读图库
+        var existNodes = getByByOntologyUniqIdentifier(ontologyUniqueIdentifier).stream()
+                .filter(v -> v.getPrimaryKey() != null)
+                .collect(Collectors.toMap(v -> pkKey(v.getPrimaryKey()), v -> v, (a, b) -> a));
+        var staged = Lists.<EntityNode>newArrayList();
+        for (var entry : pkToDisplayName.entrySet()) {
+            if (entry.getKey() == null) {
+                continue;
+            }
+            var normalizedPk = normalizePrimaryKey(entry.getKey());
+            var existNodeKey = pkKey(normalizedPk);
+            var exist = existNodes.get(existNodeKey);
+            if (exist != null) {
+                if (!StringUtils.equals(exist.getDisplayName(), entry.getValue())) {
+                    exist.setDisplayName(entry.getValue());
+                    exist.setUpdateTime(new Date());
+                    staged.add(exist);
+                }
+                continue;
+            }
+            var created = buildEntityNode(ontologyUniqueIdentifier, tableName, normalizedPk, entry.getValue());
+            existNodes.put(existNodeKey, created);
+            staged.add(created);
+        }
+        if (CollectionUtils.isNotEmpty(staged)) {
+            nodeRepository.batchSave(staged);
+        }
+        return staged.size();
+    }
+
+    @Override
+    public int createCandidateRelationsForNodes(String ontologyUniqueIdentifier, List<Object> primaryKeyValues) {
+        var nodes = findGraphNodes(ontologyUniqueIdentifier, primaryKeyValues);
+        if (CollectionUtils.isEmpty(nodes)) {
+            return 0;
+        }
+        var links = linkGroupMapper.selectList(new LambdaQueryWrapper<OntologyLinkGroup>()
+                .and(w -> w.eq(OntologyLinkGroup::getOntologyUniqueIdentifierFrom, ontologyUniqueIdentifier)
+                        .or().eq(OntologyLinkGroup::getOntologyUniqueIdentifierTo, ontologyUniqueIdentifier))
+                .ne(OntologyLinkGroup::getStatus, Status.DELETE.getValue()));
+
+        var created = 0;
+        for (var link : links) {
+            var fromSide = Objects.equals(link.getOntologyUniqueIdentifierFrom(), ontologyUniqueIdentifier);
+            var targetOntology = fromSide ? link.getOntologyUniqueIdentifierTo() : link.getOntologyUniqueIdentifierFrom();
+            var targetNodes = nodeRepository.findByOntologyUniqIdentifier(targetOntology);
+            if (CollectionUtils.isEmpty(targetNodes)) {
+                continue;
+            }
+            var pending = Lists.<EntityRelation>newArrayList();
+            for (var node : nodes) {
+                for (var target : targetNodes) {
+                    if (Objects.equals(node.getId(), target.getId())) {
+                        continue;
+                    }
+                    pending.add(EntityRelation.builder()
+                            .ontologyLinkId(link.getUniqueIdentifier())
+                            .from(fromSide ? node : target)
+                            .to(fromSide ? target : node)
+                            .status(Status.DELETE)
+                            .startTime(null)
+                            .endTime(null)
+                            .timeWindows(Lists.newArrayList())
+                            .createTime(new Date())
+                            .updateTime(new Date())
+                            .type(link.getType())
+                            .name(link.getName())
+                            .build());
+                }
+            }
+            // 只补图库中还不存在的端点对，重复执行不产生第二份边
+            var existPairs = Sets.<String>newHashSet();
+            var nodePairs = pending.stream().map(this::nodePairKey).distinct().collect(Collectors.toList());
+            for (var chunk : Lists.partition(nodePairs, RELATION_PAIR_QUERY_CHUNK)) {
+                relationRepository.queryRelationsByNodePairs(link.getUniqueIdentifier(), chunk)
+                        .forEach(edge -> existPairs.add(nodePairKey(edge)));
+            }
+            var missing = pending.stream().filter(edge -> !existPairs.contains(nodePairKey(edge))).collect(Collectors.toList());
+            if (CollectionUtils.isNotEmpty(missing)) {
+                relationRepository.batchSave(missing);
+                created += missing.size();
+            }
+        }
+        return created;
+    }
+
+    @Override
+    public int deleteEntityNodesAndRelations(String ontologyUniqueIdentifier, List<Object> primaryKeyValues) {
+        return deleteGraphNodes(findGraphNodes(ontologyUniqueIdentifier, primaryKeyValues));
+    }
+
+    @Override
+    public int deleteEntityNodeOrphans(String ontologyUniqueIdentifier, Collection<Object> keepPrimaryKeyValues) {
+        var keepPkKeys = keepPrimaryKeyValues == null ? Sets.<String>newHashSet()
+                : keepPrimaryKeyValues.stream().filter(Objects::nonNull)
+                        .map(pk -> pkKey(normalizePrimaryKey(pk))).collect(Collectors.toSet());
+        var orphans = getByByOntologyUniqIdentifier(ontologyUniqueIdentifier).stream()
+                .filter(node -> node.getPrimaryKey() != null && !keepPkKeys.contains(pkKey(node.getPrimaryKey())))
+                .collect(Collectors.toList());
+        return deleteGraphNodes(orphans);
+    }
+
+    /**
+     * 删除给定节点及其全部相邻关系边（含已激活的边），先删边再删节点，避免留下悬空边。
+     */
+    private int deleteGraphNodes(List<EntityNode> nodes) {
+        if (CollectionUtils.isEmpty(nodes)) {
+            return 0;
+        }
+        var relations = relationRepository.findByFrom(nodes);
+        relations.addAll(relationRepository.findByTo(nodes));
+        if (CollectionUtils.isNotEmpty(relations)) {
+            relationRepository.deleteByIds(relations.stream().map(EntityRelation::getArangoId).collect(Collectors.toList()));
+        }
+        nodeRepository.deleteByIds(nodes.stream().map(EntityNode::getArangoId).collect(Collectors.toList()));
+        return nodes.size();
+    }
+
+    /**
+     * 图库主键归一化：数据湖 bigint 经 JDBC 是 Long、经 Debezium JSON 可能是 Integer，
+     * 与 {@link #syncNodes} 的转换口径保持一致，否则同一实例会被建出重复节点。
+     */
+    private Object normalizePrimaryKey(Object primaryKeyValue) {
+        return primaryKeyValue instanceof Integer ? Long.parseLong(primaryKeyValue.toString()) : primaryKeyValue;
+    }
+
+    private EntityNode buildEntityNode(String ontologyUniqueIdentifier, String tableName,
+                                       Object primaryKeyValue, String displayName) {
+        var now = new Date();
+        return EntityNode.builder()
+                .ontologyUniqIdentifier(ontologyUniqueIdentifier)
+                .primaryKey(primaryKeyValue)
+                .tableName(tableName)
+                .displayName(displayName)
+                .createTime(now)
+                .updateTime(now)
+                .build();
+    }
+
+    private List<EntityNode> findGraphNodes(String ontologyUniqueIdentifier, List<Object> primaryKeyValues) {
+        if (CollectionUtils.isEmpty(primaryKeyValues)) {
+            return Lists.newArrayList();
+        }
+        return primaryKeyValues.stream()
+                .filter(Objects::nonNull)
+                .map(pk -> nodeRepository.findByOntologyUniqIdentifierAndPrimaryKey(
+                        ontologyUniqueIdentifier, normalizePrimaryKey(pk)))
+                .filter(Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList());
     }
 
     @Transactional(value = "datalakeTransactionManager")

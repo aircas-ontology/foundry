@@ -34,12 +34,14 @@ import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyMetaMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyPropertyMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologySpaceMapper;
 import com.aircas.ptr.foundry.ontology.service.CdcFullSyncService;
+import com.aircas.ptr.foundry.ontology.service.EntityService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.elasticsearch.client.elc.NativeQuery;
 import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
 import org.springframework.data.elasticsearch.core.IndexOperations;
@@ -74,6 +76,10 @@ import java.util.stream.Collectors;
  *       重建结果与逐条快照写入等价；</li>
  *   <li>孤儿清理：以"数据库当前内容"为准对 ES 存量求差集删除（行被物理删除、表被删除、
  *       本体被禁用、空间 apiName 变更等场景均收敛），保证同步后 ES 与 DB 一致；</li>
+ *   <li>图库（ArangoDB {@code node}/{@code relation}）：实例段复用同一批分页读结果，按
+ *       「本体 + 归一化主键」覆盖写节点、按本体维度对湖内当前主键求差集清理孤儿节点，候选关系边按
+ *       「关系 + 起终点节点」判存后只补缺失对，重复执行不产生第二份数据；{@code syncGraph=false}
+ *       或图库未启用时整段跳过，图库异常只记录日志、不影响 ES 结果；</li>
  *   <li>并发保护：AtomicBoolean 互斥，同一实例同时只允许一个全量同步在跑，重复触发直接 409。</li>
  * </ul>
  * 同步直接读库写 ES，不经过 Kafka，与 CDC 消费组无关，可安全地与实时增量交错执行
@@ -117,6 +123,12 @@ public class CdcFullSyncServiceImpl implements CdcFullSyncService {
     private OntologyInstanceRepository instanceRepository;
     @Autowired
     private ElasticsearchOperations elasticsearchOperations;
+    @Autowired
+    private EntityService entityService;
+
+    /** 图库未启用时（foundry.integration.arangodb.enabled=false）跳过全部图同步 */
+    @Value("${foundry.integration.arangodb.enabled:true}")
+    private boolean graphEnabled;
 
     @Override
     public CdcFullSyncResultVO fullSync(CdcFullSyncParam param) {
@@ -209,8 +221,11 @@ public class CdcFullSyncServiceImpl implements CdcFullSyncService {
             }
 
             if (!Boolean.FALSE.equals(options.getSyncInstance())) {
-                long[] r = syncInstanceIndex(options.getOntologyUids());
-                result.instanceSynced(r[0]).instanceDeleted(r[1]);
+                // 图库段可单独关闭：图节点与候选关系边量大时可先只跑 ES
+                boolean syncGraph = graphEnabled && !Boolean.FALSE.equals(options.getSyncGraph());
+                long[] r = syncInstanceIndex(options.getOntologyUids(), syncGraph);
+                result.instanceSynced(r[0]).instanceDeleted(r[1])
+                        .graphNodeSynced(r[2]).graphNodeDeleted(r[3]).graphEdgeCreated(r[4]);
             }
 
             refreshAllIndices();
@@ -292,9 +307,10 @@ public class CdcFullSyncServiceImpl implements CdcFullSyncService {
     // ------------------------------------------------------------------
 
     /**
-     * @return [写入文档数, 清理孤儿文档数]
+     * @param syncGraph 是否同步 ArangoDB 图节点与候选关系边
+     * @return [实例写入, 实例孤儿清理, 图节点写入, 图孤儿节点清理, 图候选边新建]
      */
-    private long[] syncInstanceIndex(List<String> ontologyUidFilter) {
+    private long[] syncInstanceIndex(List<String> ontologyUidFilter, boolean syncGraph) {
         // 启用中的本体：uid -> meta（实例同步范围，与 CDC 消费端 syncInstance 的过滤口径一致）
         Map<String, OntologyMeta> enabledMetas = metaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>()
                         .eq(OntologyMeta::getStatus, Status.ENABLE.getValue()))
@@ -323,6 +339,9 @@ public class CdcFullSyncServiceImpl implements CdcFullSyncService {
 
         long synced = 0;
         long deleted = 0;
+        long nodeSynced = 0;
+        long nodeDeleted = 0;
+        Set<String> syncedOntologyUids = new HashSet<>();
         for (OntologyMeta meta : enabledMetas.values()) {
             OntologySpace space = meta.getOntologySpaceId() == null
                     ? null : spaceById.get(meta.getOntologySpaceId());
@@ -331,29 +350,67 @@ public class CdcFullSyncServiceImpl implements CdcFullSyncService {
                 log.warn("本体[{}]未关联空间或缺少 apiName，跳过其实例同步", meta.getUniqueIdentifier());
                 continue;
             }
-            long[] tableResult = syncInstancesForOntology(meta, space, schema);
+            long[] tableResult = syncInstancesForOntology(meta, space, schema, syncGraph);
             synced += tableResult[0];
             deleted += tableResult[1];
+            nodeSynced += tableResult[2];
+            nodeDeleted += tableResult[3];
+            if (syncGraph) {
+                syncedOntologyUids.add(meta.getUniqueIdentifier());
+            }
         }
+
+        // 候选关系边在所有节点落库后统一铺：先同步的本体若当场铺边，对侧本体节点还没建出来会漏配
+        long edgeCreated = syncGraph ? createCandidateRelations(syncedOntologyUids) : 0;
 
         // 全局孤儿清理：本体被禁用/删除、空间 apiName 变更等导致"按本体维度已无法覆盖"的残留文档
         if (!filtered) {
             deleted += sweepGlobalInstanceOrphans(enabledMetas, spaceById);
         }
-        return new long[]{synced, deleted};
+        return new long[]{synced, deleted, nodeSynced, nodeDeleted, edgeCreated};
+    }
+
+    /**
+     * 为本次同步到的本体涉及的全部关系补候选边（状态 DELETE）。
+     * <p>{@code createEntityRelations} 内部按端点对跳过已存在的边，重复执行只补新对、不产生第二份边。</p>
+     */
+    private long createCandidateRelations(Set<String> ontologyUids) {
+        if (CollectionUtils.isEmpty(ontologyUids)) {
+            return 0;
+        }
+        List<OntologyLinkGroup> links = linkGroupMapper.selectList(new LambdaQueryWrapper<OntologyLinkGroup>()
+                .and(w -> w.in(OntologyLinkGroup::getOntologyUniqueIdentifierFrom, ontologyUids)
+                        .or().in(OntologyLinkGroup::getOntologyUniqueIdentifierTo, ontologyUids))
+                .ne(OntologyLinkGroup::getStatus, Status.DELETE.getValue()));
+        long created = 0;
+        Set<String> handledLinks = new HashSet<>();
+        for (OntologyLinkGroup link : links) {
+            if (!handledLinks.add(link.getUniqueIdentifier())) {
+                continue;
+            }
+            try {
+                created += entityService.createEntityRelations(link.getUniqueIdentifier());
+            } catch (Exception e) {
+                log.error("全量同步候选关系边生成失败, link={}", link.getUniqueIdentifier(), e);
+            }
+        }
+        log.info("全量同步候选关系边: 处理关系 {} 条, 新建边 {} 条", handledLinks.size(), created);
+        return created;
     }
 
     /**
      * 单个本体维度：找出其全部主表（主键属性数据源表），分页读取行数据 upsert 实例文档，
      * 再按"该本体现有文档 pk 集合 vs 本次期望 pk 集合"差集清理孤儿。
      * <p>
+     * syncGraph 为真时，同一次分页读的结果顺带按表 upsert 图节点，并在本体内按主键集合差集清理图库孤儿节点。
+     * <p>
      * 注意：不能按 {@code ontology_property.datasource_schema} 过滤（自动绑定路径不回填该列，
      * 停留在默认值 'public' 与真实 schema 不符），真实 schema 以所属空间 apiName 为准——
      * 与 {@code EntityInstanceCdcJobServiceImpl#findPrimaryKeyProps} 的判定口径一致。
      *
-     * @return [写入文档数, 清理孤儿文档数]
+     * @return [实例写入, 实例孤儿清理, 图节点写入, 图孤儿节点清理]
      */
-    private long[] syncInstancesForOntology(OntologyMeta meta, OntologySpace space, String schema) {
+    private long[] syncInstancesForOntology(OntologyMeta meta, OntologySpace space, String schema, boolean syncGraph) {
         List<OntologyProperty> pkProps = propertyMapper.selectList(new LambdaQueryWrapper<OntologyProperty>()
                 .eq(OntologyProperty::getOntologyUniqueIdentifier, meta.getUniqueIdentifier())
                 .eq(OntologyProperty::getIsPrimaryKey, 1)
@@ -365,7 +422,9 @@ public class CdcFullSyncServiceImpl implements CdcFullSyncService {
                         Collectors.toList()));
 
         long synced = 0;
+        long nodeSynced = 0;
         Set<String> expectedPks = new HashSet<>();
+        Set<Object> expectedNodePks = new HashSet<>();
         for (Map.Entry<String, List<OntologyProperty>> entry : propsByTable.entrySet()) {
             String table = entry.getKey();
             if (!Boolean.TRUE.equals(tableMetadataMapper.isTableExist(schema, table))) {
@@ -382,11 +441,32 @@ public class CdcFullSyncServiceImpl implements CdcFullSyncService {
                     .stream().findFirst().orElse(null);
             // 同表配置多个主键属性时取其一（_id 含 ontology_uid，不同属性定位的是同一行，不会冲突）
             String pkColumn = entry.getValue().get(0).getDatasourceColumnName();
-            synced += pageAndUpsertRows(meta, space, schema, table, pkColumn, titleProp, expectedPks);
+            // 图库节点复用同一次分页读的结果：syncNodes 会不带 is_deleted 过滤地重扫全表，
+            // 既是大表内存风险，又会让图库与 ES 的实例集合口径不一致
+            Map<Object, String> pkToDisplayName = new LinkedHashMap<>();
+            synced += pageAndUpsertRows(meta, space, schema, table, pkColumn, titleProp, expectedPks, pkToDisplayName);
+            if (syncGraph && !pkToDisplayName.isEmpty()) {
+                try {
+                    nodeSynced += entityService.upsertEntityNodes(meta.getUniqueIdentifier(), table, pkToDisplayName);
+                } catch (Exception e) {
+                    log.error("全量同步图节点失败, ontology={}, table=[{}.{}]",
+                            meta.getUniqueIdentifier(), schema, table, e);
+                }
+                expectedNodePks.addAll(pkToDisplayName.keySet());
+            }
         }
 
         long deleted = deleteInstanceOrphans(meta.getUniqueIdentifier(), expectedPks);
-        return new long[]{synced, deleted};
+        long nodeDeleted = 0;
+        // 本轮一条实例都没同步到（表缺失或被清空）时不动图库：边上有用户激活的状态，误删不可恢复
+        if (syncGraph && !expectedNodePks.isEmpty()) {
+            try {
+                nodeDeleted = entityService.deleteEntityNodeOrphans(meta.getUniqueIdentifier(), expectedNodePks);
+            } catch (Exception e) {
+                log.error("全量同步图库孤儿节点清理失败, ontology={}", meta.getUniqueIdentifier(), e);
+            }
+        }
+        return new long[]{synced, deleted, nodeSynced, nodeDeleted};
     }
 
     /**
@@ -394,10 +474,12 @@ public class CdcFullSyncServiceImpl implements CdcFullSyncService {
      * 无 ORDER BY 的分页在并发写入下理论上可能漏读/重读：重读因按 _id upsert 无害；
      * 漏读行由全局孤儿清理兜底（下次触发全量同步即可收敛）。
      *
+     * @param pkToDisplayName 出参，与实例文档同批收集「主键值 -> 展示名」，供调用方按表批量 upsert 图节点
      * @return 写入文档数
      */
     private long pageAndUpsertRows(OntologyMeta meta, OntologySpace space, String schema, String table,
-                                   String pkColumn, OntologyProperty titleProp, Set<String> expectedPks) {
+                                   String pkColumn, OntologyProperty titleProp, Set<String> expectedPks,
+                                   Map<Object, String> pkToDisplayName) {
         // 与 CDC 消费端（EntityDatasourceDMLListener 链路）一致：表含 is_deleted 软删列时只同步未删除行
         boolean hasDeletedField = Boolean.TRUE.equals(
                 tableMetadataMapper.isColumnExist(schema, table, "is_deleted"));
@@ -425,6 +507,7 @@ public class CdcFullSyncServiceImpl implements CdcFullSyncService {
                 }
                 batch.add(dto);
                 expectedPks.add(dto.getPk());
+                pkToDisplayName.put(pkValue, dto.getName());
             }
             if (!batch.isEmpty()) {
                 instanceRepository.saveAll(batch);
