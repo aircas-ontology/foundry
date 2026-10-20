@@ -476,6 +476,9 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
         PreconditionUtils.checkArgument(CollectionUtils.isEmpty(metaList), "该空间下存在本体，不能删除", HttpStatus.BAD_REQUEST);
         //delete ontology category
         categoryMapper.delete(new LambdaQueryWrapper<OntologyCategory>().eq(OntologyCategory::getOntologySpaceId, spaceId));
+        //delete links and link categories：不清理会留下指向已删空间的孤儿关系，使全局概览数大于各空间之和
+        linkMapper.delete(new LambdaQueryWrapper<OntologyLinkGroup>().eq(OntologyLinkGroup::getOntologySpaceId, spaceId));
+        ontologyLinkCategoryMapper.delete(new LambdaQueryWrapper<OntologyLinkCategory>().eq(OntologyLinkCategory::getOntologySpaceId, spaceId));
         //delete space
         removeById(spaceId);
     }

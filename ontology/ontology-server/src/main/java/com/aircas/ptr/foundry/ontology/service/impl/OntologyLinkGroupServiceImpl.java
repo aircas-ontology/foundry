@@ -232,19 +232,23 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
 
     @Override
     public List<OntologyLinkInfoVO> getLinksByOntologyUniqueIdentifier(String ontologyUniqueIdentifier, OntologyLinkDirectionEnum direction) {
-        List<OntologyLinkGroup> links = Lists.newArrayList();
+        // 口径与 /link/graph 一致：只取有效关系；ALL 用 and(or) 包住两端匹配，避免 or 与其它条件混淆优先级
+        var query = new LambdaQueryWrapper<OntologyLinkGroup>()
+                .eq(OntologyLinkGroup::getStatus, Status.ENABLE.getValue());
         switch (direction) {
             case ALL:
-                links = list(new LambdaQueryWrapper<OntologyLinkGroup>().eq(OntologyLinkGroup::getOntologyUniqueIdentifierFrom, ontologyUniqueIdentifier)
+                query.and(w -> w.eq(OntologyLinkGroup::getOntologyUniqueIdentifierFrom, ontologyUniqueIdentifier)
                         .or().eq(OntologyLinkGroup::getOntologyUniqueIdentifierTo, ontologyUniqueIdentifier));
                 break;
             case FROM:
-                links = list(new LambdaQueryWrapper<OntologyLinkGroup>().eq(OntologyLinkGroup::getOntologyUniqueIdentifierFrom, ontologyUniqueIdentifier));
+                query.eq(OntologyLinkGroup::getOntologyUniqueIdentifierFrom, ontologyUniqueIdentifier);
                 break;
             case TO:
-                links = list(new LambdaQueryWrapper<OntologyLinkGroup>().eq(OntologyLinkGroup::getOntologyUniqueIdentifierTo, ontologyUniqueIdentifier));
+                query.eq(OntologyLinkGroup::getOntologyUniqueIdentifierTo, ontologyUniqueIdentifier);
                 break;
         }
+
+        var links = list(query);
 
         if (CollectionUtils.isEmpty(links)) {
             return Lists.newArrayList();

@@ -177,11 +177,6 @@
     </dependency>
     <dependency>
         <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-web</artifactId>
-        <version>${spring-boot.version}</version>
-    </dependency>
-    <dependency>
-        <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-aop</artifactId>
         <version>${spring-boot.version}</version>
     </dependency>
@@ -194,11 +189,6 @@
     <dependency>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-actuator</artifactId>
-        <version>${spring-boot.version}</version>
-    </dependency>
-    <dependency>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-validation</artifactId>
         <version>${spring-boot.version}</version>
     </dependency>
 
@@ -300,6 +290,7 @@
                     <executable>true</executable>
                     <mainClass>com.aircas.ptr.foundry.ontology.OntologyServerApplication</mainClass>
                     <jvmArguments>--add-opens java.base/java.lang=ALL-UNNAMED</jvmArguments>
+                    <loaderImplementation>CLASSIC</loaderImplementation>
                 </configuration>
                 <executions>
                     <execution>
@@ -310,12 +301,13 @@
                 </executions>
             </plugin>
             <plugin>
-                <groupId>net.roseboy</groupId>
+                <groupId>io.github.ygqygq2</groupId>
                 <artifactId>classfinal-maven-plugin</artifactId>
-                <version>1.2.1</version>
+                <version>2.0.2</version>
                 <configuration>
                     <password>iecas`12</password>
                     <packages>com.aircas.ptr.foundry</packages>
+                    <excludes>com.aircas.ptr.foundry.ontology.config.MainDataSourceConfiguration,com.aircas.ptr.foundry.ontology.config.DatalakeDataSourceConfiguration</excludes>
                     <!--<cfgfiles>*.yml,*.xml,*.properties</cfgfiles>-->
                 </configuration>
                 <executions>
