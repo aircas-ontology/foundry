@@ -214,17 +214,16 @@ public class ChatClientConfig {
         var clientBuilder = builder
                 .defaultSystem(DEFAULT_SYSTEM_PROMPT);
 
-        // 仅当有实际 MCP 工具时才注册，避免发出空 tools 数组导致内网 FastAPI 校验报错
+        // MCP 工具：仅当有实际 MCP 工具时才注册，避免发出空 tools 数组导致内网 FastAPI 校验报错
         if (rawCallbacks != null && rawCallbacks.length > 0) {
             ToolCallback[] eventEmittingCallbacks = Arrays.stream(rawCallbacks)
                     .map(cb -> new EventEmittingToolCallback(cb, objectMapper))
                     .toArray(ToolCallback[]::new);
             clientBuilder = clientBuilder.defaultToolCallbacks(eventEmittingCallbacks);
-            // 本地非 MCP 工具：conversationTools —— 清空上下文（需操作本进程 ChatMemory/SessionStateStore）。
-            // 选择卡片不再靠本地 presentSelection 工具：已改为后端 SelectionResolver 根据模型的
-            // request_selection 标记确定性生成，既降低对模型 function-calling 的依赖，也避免重复推卡。
-            clientBuilder = clientBuilder.defaultTools(conversationTools);
         }
+
+        // 本地工具：始终注册（不依赖 MCP 工具，确保内网部署时清空上下文等功能可用）
+        clientBuilder = clientBuilder.defaultTools(conversationTools);
 
         return clientBuilder
                 .defaultAdvisors(
