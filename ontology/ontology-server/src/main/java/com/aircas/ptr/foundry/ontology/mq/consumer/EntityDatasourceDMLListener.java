@@ -30,7 +30,9 @@ public class EntityDatasourceDMLListener {
     @Autowired
     EntityInstanceCdcJobService entityInstanceCdcJobService;
 
-    @KafkaListener(topicPattern = "entity_datasource_server\\..*", groupId = "${cdc.consumer-group:cdc-monitor-group}")
+    @KafkaListener(id = EntityDatasourceCdcTopics.LISTENER_ID,
+            topicPattern = EntityDatasourceCdcTopics.TOPIC_PATTERN,
+            groupId = "${cdc.consumer-group:cdc-monitor-group}")
     public void consumeAllTables(ConsumerRecord<String, String> record) {
         log.info("Key: {}", record.key());
         log.info("Value: {}", record.value());

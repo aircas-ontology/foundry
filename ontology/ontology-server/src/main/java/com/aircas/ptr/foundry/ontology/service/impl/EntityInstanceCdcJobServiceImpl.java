@@ -167,29 +167,35 @@ public class EntityInstanceCdcJobServiceImpl implements EntityInstanceCdcJobServ
         if (dto != null) {
             ontologyInstanceRepository.save(dto);
             log.info("数据湖[{}.{}]实例文档同步成功, pk={}", schema, table, dto.getPk());
-            syncGraphNode(meta.getUniqueIdentifier(), table, pkValue, dto.getName(), ensureRelations);
+            syncGraphNode(meta.getUniqueIdentifier(), table, row, pkValue, dto.getName(), ensureRelations);
         }
     }
 
     /**
-     * 单行实例 -> 图节点（展示名与实例文档 name 同口径，避免检索与图两侧名称不一致）。
+     * 单行实例 -> 图节点与候选关系边（展示名与实例文档 name 同口径，避免检索与图两侧名称不一致）。
      * <p>
-     * 候选关系边在节点为本次新建、或 {@code ensureRelations} 为真（湖侧新增行 / 主键变更重建）时补齐：
-     * 属性绑定主键时 {@code syncNodes} 已整表建过节点，这些老节点当时可能还没有任何关系，
-     * 只按"本次新建"铺边会漏掉它们；{@code createCandidateRelationsForNodes} 按 (link, from, to) 判存，
-     * 重复执行只补缺失对，不产生第二份边。普通字段更新只刷 displayName，不铺边。
+     * 湖侧新增行 / 主键变更重建复用既有接口 {@code completeEntityNodeAndRelations}：它按本体主键属性取主键、
+     * 按名称键属性取展示名，建（覆盖）节点后按 From/To 命中该本体的全部关系补候选边，
+     * 且按 (link, from, to) 判存、只补缺失对，与 API 建关系时的铺边和全量同步铺边交错执行都不会产生第二份边。
+     * 普通字段更新只刷展示名——既有接口会无条件补边，每条 update 都要回读对端全部节点，代价过高；
+     * 但若刷名时发现图库里其实没有该节点（例如图库被清过），仍补一次边，避免留下无边节点。
      */
-    private void syncGraphNode(String ontologyUid, String table, Object pkValue, String displayName,
-                               boolean ensureRelations) {
+    private void syncGraphNode(String ontologyUid, String table, Map<String, Object> row,
+                               Object pkValue, String displayName, boolean ensureRelations) {
         if (!graphEnabled) {
             return;
         }
         try {
-            boolean created = entityService.upsertEntityNode(ontologyUid, table, pkValue, displayName);
-            if (created || ensureRelations) {
-                int edges = entityService.createCandidateRelationsForNodes(ontologyUid, List.of(pkValue));
-                log.info("数据湖实例图节点同步, ontology={}, pk={}, 节点{}, 候选关系边新建 {} 条",
-                        ontologyUid, pkValue, created ? "新建" : "已存在", edges);
+            if (ensureRelations) {
+                // 既有接口：按本体的主键属性/名称键属性回查后建节点并补候选边
+                entityService.completeEntityNodeAndRelations(ontologyUid, row);
+                log.info("数据湖实例图节点与候选关系边补全, ontology={}, pk={}", ontologyUid, pkValue);
+                return;
+            }
+            // 普通字段更新只刷展示名；补边交给上面的新增路径
+            if (entityService.upsertEntityNode(ontologyUid, table, pkValue, displayName)) {
+                entityService.createCandidateRelationsForNodes(ontologyUid, List.of(pkValue));
+                log.info("数据湖实例图节点补建（图库此前无此节点）, ontology={}, pk={}", ontologyUid, pkValue);
             }
         } catch (Exception e) {
             log.error("数据湖实例图节点同步失败, ontology={}, pk={}", ontologyUid, pkValue, e);
@@ -204,10 +210,8 @@ public class EntityInstanceCdcJobServiceImpl implements EntityInstanceCdcJobServ
             return;
         }
         try {
-            int deleted = entityService.deleteEntityNodesAndRelations(ontologyUid, List.of(pkValue));
-            if (deleted > 0) {
-                log.info("数据湖实例图节点删除, ontology={}, pk={}", ontologyUid, pkValue);
-            }
+            entityService.deleteEntityNodeAndRelations(ontologyUid, pkValue);
+            log.info("数据湖实例图节点及相邻关系边删除, ontology={}, pk={}", ontologyUid, pkValue);
         } catch (Exception e) {
             log.error("数据湖实例图节点删除失败, ontology={}, pk={}", ontologyUid, pkValue, e);
         }
