@@ -21,7 +21,7 @@
 | 内网离线，Compose V2 | 导入已构建的应用镜像 tar 包 | `docker compose` | `docker-compose.yml` |
 | 内网离线，Compose v1.27 | 导入已构建的应用镜像 tar 包 | `docker-compose` | `docker-compose.v1.yml` |
 
-镜像支持 `linux/amd64` 和 `linux/arm64`，但离线 tar 包必须包含目标服务器对应的架构。Compose V1 专用文件移除了 v1.27 不支持的顶层 `name` 和 `pull_policy`；启动命令也不使用 V2 的 `--pull never` 参数。
+镜像支持 `linux/amd64` 和 `linux/arm64`，但离线 tar 包必须包含目标服务器对应的架构。Compose V1 专用文件移除了 v1.27 不支持的顶层 `name`、`pull_policy` 以及 Engine 20.10 以下不可用的 `platform`；启动命令也不使用 V2 的 `--pull never` 参数。离线导入时镜像架构已由 tar 包决定，不需要 `platform` 声明。
 
 ## 环境要求
 
@@ -179,9 +179,11 @@ docker image inspect foundry/semgrep-scan:local --format '{{.Architecture}}'
 
 后续示例假定导入的镜像名为 `foundry/semgrep-scan:local`。如果 `docker load` 显示的名称或标签不同，按实际值设置 `SCAN_IMAGE`。
 
+> 架构校验要以镜像为准：`docker image inspect` 的对象名就是上一步 `docker load` 输出的那个名称和标签，不要沿用示例里的 `:local`。
+
 ### 3. 创建 `.env`
 
-在部署目录创建 `.env`：
+在部署目录创建 `.env`。其中 `SCAN_IMAGE` **必须与 tar 包内镜像的名称和完整标签逐字一致**，而不是与 tar 文件名一致。
 
 ```bash
 cd /opt/semgrep-scan
@@ -195,7 +197,27 @@ SCAN_NETWORK_INTERNAL=false
 EOF
 ```
 
+`docker save` 只会保留导出时镜像的名称和标签，tar 文件名是打包者自行命名的，二者可以完全不同。例如：
+
+```bash
+# 打包方导出的是 foundry/semgrep-scan:arm64，保存成了 semgrep-scan-arm64.tar
+docker save -o semgrep-scan-arm64.tar foundry/semgrep-scan:arm64
+```
+
+该 tar 在内网导入后仍然叫 `foundry/semgrep-scan:arm64`，因此 `.env` 必须写 `SCAN_IMAGE=foundry/semgrep-scan:arm64`，而不是根据文件名推测的 `semgrep-scan-arm64` 或其他标签。填错时 `docker compose up` 会直接报镜像不存在（启动命令带 `--pull never`，不会回退到拉取仓库）。
+
+两种对齐方式任选其一：
+
+- 按实际导入的名称和标签填写 `SCAN_IMAGE`；
+- 或在内网机器上重打标签，保持默认值不变：
+
+```bash
+docker tag foundry/semgrep-scan:arm64 foundry/semgrep-scan:local
+```
+
 `SEMGREP_BASE_IMAGE` 只用于 Compose 解析 `build` 配置；使用下文的禁止构建参数启动时，不会拉取或运行该基础镜像。若服务器没有 Python 3，可读取 `base-image.json`，将 `reference` 的完整值手工填入 `.env`。
+
+`SCAN_PLATFORM` 只被 `docker-compose.yml`（V2）使用；`docker-compose.v1.yml` 不声明 `platform`，使用它时该行可省略。Docker Engine 20.10（API 1.41）以下不支持 `platform` 字段，此时不要使用 V2 文件。
 
 默认监听所有宿主机网络接口，其他内网机器可通过服务器内网 IP 访问。请通过防火墙或内网网关仅允许可信业务服务器和调试机器访问 `SCAN_PORT`；服务本身不提供鉴权，不应将该端口直接暴露到公网。
 
@@ -270,7 +292,9 @@ docker-compose -f docker-compose.v1.yml up -d --no-build --force-recreate
 
 ### 7. 内网部署常见问题
 
-- 提示 `SCAN_PLATFORM` 或 `SEMGREP_BASE_IMAGE` 未设置：确认 `.env` 和所用 Compose 文件位于同一目录，并从该目录执行命令。
+- 提示 `SCAN_PLATFORM` 或 `SEMGREP_BASE_IMAGE` 未设置：确认 `.env` 和所用 Compose 文件位于同一目录，并从该目录执行命令。`SCAN_PLATFORM` 仅 V2 文件引用，`docker-compose.v1.yml` 不需要它。
+- `docker compose config --quiet` 或 `docker compose up -d` 提示 `unknown flag: --quiet` / `unknown flag: -d`：目标机的 `docker compose` 实际不是 Compose V2。Docker CLI 19.03 起才支持 cli-plugins，18.09 下 `docker compose` 只会去 PATH 里找 `docker-compose` 外部命令执行。先用 `docker-compose version` 确认真正被调用的是哪个二进制，再改用 `docker-compose -f docker-compose.v1.yml ...` 的 v1 命令。Compose V2 要求 Docker Engine 19.03 及以上。
+- 提示 `"platform" requires API version 1.41, but the Docker daemon API version is 1.39`：Docker Engine 低于 20.10，不支持 Compose 的 `platform` 字段。改用 `docker-compose.v1.yml`（已不含 `platform`）；若必须使用 V2 文件，删除其中的 `platform` 行，离线导入时镜像架构已由 tar 包决定。
 - Compose 尝试拉取镜像：确认 `docker images` 中的镜像名称、标签与 `.env` 的 `SCAN_IMAGE` 完全一致。V2 还应保留 `--pull never`。
 - 出现 `exec format error`：镜像架构与服务器不一致，分别用 `docker image inspect` 和 `docker version --format '{{.Server.Arch}}'` 核对。
 - 其他内网主机无法访问：确认 `SCAN_BIND_ADDRESS=0.0.0.0`，并检查宿主机防火墙、网关策略和 `SCAN_PORT`。

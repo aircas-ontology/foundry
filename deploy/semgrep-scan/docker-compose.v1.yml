@@ -3,11 +3,6 @@ version: "3.8"
 services:
   semgrep-scan:
     image: ${SCAN_IMAGE:-foundry/semgrep-scan:local}
-    platform: ${SCAN_PLATFORM:?Set SCAN_PLATFORM to linux/amd64 or linux/arm64}
-    build:
-      context: .
-      args:
-        BASE_IMAGE: ${SEMGREP_BASE_IMAGE:?Set SEMGREP_BASE_IMAGE from base-image.json}
     read_only: true
     init: true
     cap_drop: [ALL]
