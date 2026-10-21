@@ -5,6 +5,7 @@ import com.aircas.ptr.foundry.agent.server.tool.ConversationTools;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
+import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.InMemoryChatMemoryRepository;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
@@ -65,6 +66,7 @@ public class ChatClientConfig {
             1. 每次只做当前这一步，做完后告知下一步并等用户回应。输出确认类 stage JSON 后必须紧接着引导下一步，不得只丢 JSON 就停。
             2. 依据上下文 spaceId / datasourceId 及系统注入的【已记录的对象构建状态】定位当前阶段；该状态跨轮持久，与短期记忆冲突时以它为准。第1步语义定义不落盘，无 object_defined 时看近期对话，皆无视为未走第1步。
             3. 前置缺失时友好引导补齐，不硬推进：spaceId 空→先第0步；无定义→先第1步；datasourceId 空且要进第3/4步→先第2步。
+               **前端上下文携带的 spaceId/datasourceId 视为已选定**：若上下文写了"当前空间 id=87"，直接进入第1步，无需再输出 space_selected JSON 或引导用户选空间。datasourceId 同理。
             4. 每步开头用【第X步/共11步】标记进度。
             5. 用户可修改上一步结果，回到对应步骤重新输出覆盖。
             6. 用户可跳过可选步（如关系），但选空间、第1步定义、落库不可跳。
@@ -90,10 +92,11 @@ public class ChatClientConfig {
 
             第1步「定义对象」：
             触发：空间已选定，且用户表达构建意图。
-            1. 纯语义澄清，不扫表、不输出 stage JSON；唯一可调工具是 searchOntologyMeta 用于查重。
+            1. 纯语义澄清，不扫表、不输出 stage JSON；唯一可调工具是 searchOntologyMeta 用于查重。**禁止调用 listOntologySpaces / searchDatasources 等无关工具。**
             2. 用一句话确立基本定义及领域归属。怀疑同名对象时调搜索工具核对。
             3. 向用户复述 { 名称、标识（英文驼峰/下划线）、定义、领域 } 草案，邀请确认或修改。描述笼统时最多提一个澄清问题。
-            4. 用户认可后，告知下一步是第2步导入资料。本步定义是第3步选表匹配的语义依据，后续步骤一律与本步对齐。
+            4. 用户认可（如"确认/好的/没问题/可以"）后，**直接输出【第2步/共11步】横幅 + "请在上方卡片中选择数据源"，结束本轮。不要重复输出定义草案，不要调用任何工具。**
+               本步定义是第3步选表匹配的语义依据，后续步骤一律与本步对齐。
                **第1步和第2步绝不输出 object_defined。**
 
             第2步「导入资料（选择数据源）」：
@@ -207,18 +210,27 @@ public class ChatClientConfig {
         // 取出回调后用装饰器包装，以在调用前后推送 tool_call/tool_result 流式事件；
         // ObjectMapper 用于装饰器内部将 list 工具的 JSON 数组返回降级为一句话计数，避免与 selection_request 重复
         ToolCallback[] rawCallbacks = mcpToolCallbackProvider.getToolCallbacks();
-        ToolCallback[] eventEmittingCallbacks = Arrays.stream(rawCallbacks)
-                .map(cb -> new EventEmittingToolCallback(cb, objectMapper))
-                .toArray(ToolCallback[]::new);
 
-        return builder
-                .defaultSystem(DEFAULT_SYSTEM_PROMPT)
-                .defaultToolCallbacks(eventEmittingCallbacks)
-                // 本地非 MCP 工具：conversationTools —— 清空上下文（需操作本进程 ChatMemory/SessionStateStore）。
-                // 选择卡片不再靠本地 presentSelection 工具：已改为后端 SelectionResolver 根据模型的
-                // request_selection 标记确定性生成，既降低对模型 function-calling 的依赖，也避免重复推卡。
-                .defaultTools(conversationTools)
-                .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
+        var clientBuilder = builder
+                .defaultSystem(DEFAULT_SYSTEM_PROMPT);
+
+        // 仅当有实际 MCP 工具时才注册，避免发出空 tools 数组导致内网 FastAPI 校验报错
+        if (rawCallbacks != null && rawCallbacks.length > 0) {
+            ToolCallback[] eventEmittingCallbacks = Arrays.stream(rawCallbacks)
+                    .map(cb -> new EventEmittingToolCallback(cb, objectMapper))
+                    .toArray(ToolCallback[]::new);
+            clientBuilder = clientBuilder.defaultToolCallbacks(eventEmittingCallbacks);
+            // 本地非 MCP 工具：conversationTools —— 清空上下文（需操作本进程 ChatMemory/SessionStateStore）。
+            // 选择卡片不再靠本地 presentSelection 工具：已改为后端 SelectionResolver 根据模型的
+            // request_selection 标记确定性生成，既降低对模型 function-calling 的依赖，也避免重复推卡。
+            clientBuilder = clientBuilder.defaultTools(conversationTools);
+        }
+
+        return clientBuilder
+                .defaultAdvisors(
+                        MessageChatMemoryAdvisor.builder(chatMemory).build(),
+                        new SimpleLoggerAdvisor()
+                )
                 .build();
     }
 }
