@@ -62,7 +62,9 @@ powershell -ExecutionPolicy Bypass -File .\build.ps1 -Platform linux/arm64 -Imag
 
 本方式只影响这一次进程，不会改变系统或用户的执行策略设置；后文出现的 `./build.ps1` 调用均可按此替换。
 
-默认按 Docker 服务端架构构建。交叉构建需 Docker Desktop/QEMU 支持目标架构：
+默认构建与 Docker 所在机器同架构的镜像：在 x86-64 机器上得到 `linux/amd64`，在 ARM 机器上得到 `linux/arm64`。
+
+需要构建另一种架构的镜像时称为交叉构建，例如在 x86-64 机器上构建 `linux/arm64` 镜像，供 ARM 服务器使用。Docker 构建过程需要执行目标架构的程序，所以必须借助 QEMU 模拟：Docker Desktop 已内置并在设置中默认启用；原生 Linux 上需要额外安装 QEMU 用户态模拟（`binfmt_misc`），否则构建会因架构不匹配失败。交叉构建比本机构建慢很多，适合只用于生成离线部署包；有条件时仍在目标架构机器上构建。
 
 ```powershell
 ./build.ps1 -Platform linux/arm64 -Image foundry/semgrep-scan:arm64
