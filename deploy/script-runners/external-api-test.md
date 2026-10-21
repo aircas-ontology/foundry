@@ -16,6 +16,7 @@
 | `method` | `GET` / `POST` / `PUT` / `DELETE`，不传默认 `POST` |
 | `requestMappings[].location` | `path`（路径占位符）/ `query`（URL 参数）/ `header`（请求头）/ `body`（请求体），不传默认 `body` |
 | `inputs[].type` / `outputs[].type` | `string` / `int` / `double` / `bool` / `object` / `list`，不传默认 `string` |
+| `inputs[].fields` / `outputs[].fields` | 子字段数组，结构与端口本身同构（`name`/`type`/`description`/`fields`），仅 `object`/`list` 使用；子字段不填 `location` |
 | `version` | 字符串 `x.y.z`，如 `1.0.0`；同 api 下必须递增且唯一 |
 
 ---
@@ -225,6 +226,87 @@
 - `version` 缺失 / 非 `x.y.z` → `版本号格式必须为 x.y.z`。
 - `functionApi` 或 `displayName` 为空 → `functionApi is empty` / `displayName is empty`。
 - 新创建的记录初始均为**未发布**（`publishStatus=0`）。
+
+---
+
+### 1.7 OBJECT / LIST 端口的子字段层级（`fields`）
+
+> 与脚本函数同一套层级能力：`object` 端口用 `fields` 描述属性结构，`list` 端口用 `fields` 描述**元素对象**的结构（可继续下钻）。
+> **子字段只是层级描述，不改变取值语义**：出参的值仍是按端口 `name` 路径取到的整个对象/数组（下游按属性取值），入参仍整体作为一个报文键写入 body。
+> 落库位置：`function_param.fields`（JSON，形状与脚本函数参数完全一致），`GET {BASE}/function/detail` 的 `parameters[].fields` 原样返回层级。
+
+```json
+{
+  "functionApi": "ext.order.detail",
+  "version": "1.0.0",
+  "displayName": "订单详情（含子字段层级）",
+  "description": "object/list 端口声明 fields",
+  "type": "EXTERNAL",
+  "ontologySpaceId": 1,
+  "apiConfig": {
+    "endpoint": "https://example.com/api/orders/detail",
+    "method": "POST",
+    "authType": "none",
+    "inputs": [
+      {
+        "name": "orderQuery",
+        "type": "object",
+        "location": "body",
+        "description": "查询条件",
+        "fields": [
+          { "name": "orderId", "type": "string", "description": "订单号" },
+          { "name": "paging", "type": "object", "description": "分页",
+            "fields": [
+              { "name": "page", "type": "int", "description": "页码" },
+              { "name": "size", "type": "int", "description": "每页条数" }
+            ]
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "data.order",
+        "type": "object",
+        "description": "订单对象",
+        "fields": [
+          { "name": "id", "type": "string", "description": "订单号" },
+          { "name": "amount", "type": "double", "description": "订单金额" },
+          { "name": "items", "type": "list", "description": "明细列表（元素结构）",
+            "fields": [
+              { "name": "sku", "type": "string", "description": "商品编码" },
+              { "name": "qty", "type": "int", "description": "数量" }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+**预期校验**
+- 创建成功后 `function_param` 里 `data.order` 那一行的 `fields` 列存有上面整棵子字段树（`paramName`/`paramType`/`description`/`paramOrder` 嵌套）。
+- `GET {BASE}/function/detail` 返回的 `parameters` 中，`data.order` 带 `fields`，`items` 再带一层 `fields`，与脚本函数的层级展示一致。
+- 执行时该出参的值是响应里 `data.order` 的**整个对象**，不会拆成 `id`/`amount` 多个端口。
+- 入参可按层级逐字段填值（后端递归组装成嵌套对象再落 body）：
+
+```json
+{
+  "functionApi": "ext.order.detail",
+  "parameters": [
+    { "paramName": "orderQuery", "fields": [
+      { "paramName": "orderId", "paramValue": "A-1" },
+      { "paramName": "paging", "fields": [ { "paramName": "page", "paramValue": 1 } ] }
+    ] }
+  ]
+}
+```
+- 上例请求体为 `{"orderQuery":{"orderId":"A-1","paging":{"page":1}}}`；`paramValue` 整包传值优先于 `fields`。
+
+**负例（落库前拦截，HTTP 400）**
+- 子字段缺 `name` → `外部API出参.data.order 下存在未命名参数`（顶层缺名则为 `外部API入参 下存在未命名参数`）。
+- 同级重名（同一层两个 `id`）→ `外部API出参.data.order 下参数重名：id`。
 
 ---
 

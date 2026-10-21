@@ -27,6 +27,12 @@
                 <if test="type != null">
                     and f.type = #{type}
                 </if>
+                <if test="excludeTypes != null and excludeTypes.size() > 0">
+                    and f.type not in
+                    <foreach collection="excludeTypes" item="et" open="(" separator="," close=")">
+                        #{et}
+                    </foreach>
+                </if>
                 <if test="publishStatus != null">
                     and f.publish = #{publishStatus}
                 </if>

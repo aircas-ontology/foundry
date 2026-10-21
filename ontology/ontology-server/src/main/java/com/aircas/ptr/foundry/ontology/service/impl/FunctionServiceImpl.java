@@ -9,6 +9,7 @@ import com.aircas.ptr.foundry.ontology.engine.ScriptEngineRouter;
 import com.aircas.ptr.foundry.ontology.engine.ScriptExecutionContext;
 import com.aircas.ptr.foundry.ontology.composite.BasicQueryOperator;
 import com.aircas.ptr.foundry.ontology.composite.CompositeChainRegistry;
+import com.aircas.ptr.foundry.ontology.composite.CompositeFunctionCatalog;
 import com.aircas.ptr.foundry.ontology.composite.CompositeFunctionInvoker;
 import com.aircas.ptr.foundry.ontology.composite.ContainerOperatorInvoker;
 import com.aircas.ptr.foundry.ontology.composite.ExternalApiOperator;
@@ -98,6 +99,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -685,7 +687,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         var pageInfo = new Page<Function>(param.getPageNum(), param.getPageSize());
         // 版本分组分页：按 api 分组，每组仅展示版本号最大的一条（XML 内按 x.y.z 语义化比较）
         var functionPage = getBaseMapper().pageLatestVersion(pageInfo, param.getOntologySpaceId(), param.getDisplayName(),
-                param.getType(), param.getPublishStatus(), param.getStartDate(), param.getEndDate());
+                param.getType(), param.getExcludeTypes(), param.getPublishStatus(), param.getStartDate(), param.getEndDate());
         var records = functionPage.getRecords().stream().<FunctionInfoVO>map(func ->
                 FunctionInfoVO.builder()
                         .functionApi(func.getApi())
@@ -927,11 +929,15 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
 
         List<FunctionParamPO> params = new ArrayList<>();
         int order = 1;
-        for (ExternalApiConfig.PortDefinition port : externalInputPorts(apiConfig)) {
+        List<ExternalApiConfig.PortDefinition> inputs = externalInputPorts(apiConfig);
+        List<ExternalApiConfig.PortDefinition> outputs = externalOutputPorts(apiConfig);
+        validateExternalPorts(inputs, "入参");
+        validateExternalPorts(outputs, "出参");
+        for (ExternalApiConfig.PortDefinition port : inputs) {
             params.add(externalParam(functionId, port, FunctionParamCategoryEnum.INPUT, order++));
         }
         int outputOrder = 1;
-        for (ExternalApiConfig.PortDefinition port : externalOutputPorts(apiConfig)) {
+        for (ExternalApiConfig.PortDefinition port : outputs) {
             params.add(externalParam(functionId, port, FunctionParamCategoryEnum.OUTPUT, outputOrder++));
         }
         if (!params.isEmpty()) {
@@ -958,11 +964,82 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         return defaults;
     }
 
+    /**
+     * 端口层级校验：name 必填、同级不可重名。
+     * <p>创建与更新共用（更新时沿用库中定义也会走这里），把脏层级拦在落库前，
+     * 否则详情接口回显的子字段树会让前端渲染异常。</p>
+     *
+     * @param scope 顶层端口所属范围，用作错误文案与路径前缀（入参/出参）
+     */
+    private void validateExternalPorts(List<ExternalApiConfig.PortDefinition> ports, String scope) {
+        validatePortTree(ports, scope);
+    }
+
+    /** {@code path} 为当前这批子字段的父路径，顶层即 {@code scope} 本身 */
+    private void validatePortTree(List<ExternalApiConfig.PortDefinition> ports, String path) {
+        if (CollectionUtils.isEmpty(ports)) {
+            return;
+        }
+        Set<String> names = new HashSet<>();
+        for (ExternalApiConfig.PortDefinition port : ports) {
+            if (port == null) {
+                continue;
+            }
+            String name = StringUtils.trimToNull(port.getName());
+            if (name == null) {
+                throw new BusinessException("外部API" + path + " 下存在未命名参数", HttpStatus.BAD_REQUEST);
+            }
+            if (!names.add(name)) {
+                throw new BusinessException("外部API" + path + " 下参数重名：" + name, HttpStatus.BAD_REQUEST);
+            }
+            validatePortTree(port.getFields(), path + "." + name);
+        }
+    }
+
     private FunctionParamPO externalParam(Long functionId, ExternalApiConfig.PortDefinition port,
                                           FunctionParamCategoryEnum category, int paramOrder) {
         return OperatorFunctionFactory.functionParamDefaults(
                         functionId, port.getName(), port.getType(), category, paramOrder, port.getDescription())
+                // OBJECT/LIST 端口的子字段与脚本函数同一套层级结构，共用 saveParams 那条序列化口径
+                .fields(portFieldsJson(port.getFields()))
                 .build();
+    }
+
+    /**
+     * 端口子字段序列化：形状与脚本函数参数的 {@code function_param.fields} 完全一致
+     * （{@link FunctionParamDTO} 树），详情接口才能用同一个 {@code FunctionParameterVO} 读回层级。
+     * <p>子字段不带 {@code location}，也不参与 HTTP 报文映射。</p>
+     */
+    private String portFieldsJson(List<ExternalApiConfig.PortDefinition> fields) {
+        if (CollectionUtils.isEmpty(fields)) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(toPortParamDTOs(fields));
+        } catch (JsonProcessingException e) {
+            log.warn("序列化外部API端口子字段失败：cause={}", e.getMessage());
+            return null;
+        }
+    }
+
+    private List<FunctionParamDTO> toPortParamDTOs(List<ExternalApiConfig.PortDefinition> ports) {
+        List<FunctionParamDTO> params = new ArrayList<>();
+        int order = 1;
+        for (ExternalApiConfig.PortDefinition port : ports) {
+            if (port == null) {
+                continue;
+            }
+            List<FunctionParamDTO> children = port.getFields() == null
+                    ? null : toPortParamDTOs(port.getFields());
+            params.add(FunctionParamDTO.builder()
+                    .paramName(port.getName())
+                    .paramType(CompositeFunctionCatalog.toParamType(port.getType()))
+                    .paramOrder(order++)
+                    .description(port.getDescription())
+                    .fields(children == null || children.isEmpty() ? null : children)
+                    .build());
+        }
+        return params;
     }
 
     /** 解析 function.code 中的外部API接口定义 */
