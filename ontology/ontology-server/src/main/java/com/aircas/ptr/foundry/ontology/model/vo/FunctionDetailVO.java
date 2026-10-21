@@ -5,7 +5,6 @@ import com.aircas.ptr.foundry.ontology.model.dto.container.ContainerOperatorConf
 import com.aircas.ptr.foundry.ontology.model.param.BasicQueryConfig;
 import com.aircas.ptr.foundry.ontology.model.param.CompositeConfig;
 import com.aircas.ptr.foundry.ontology.model.param.ExternalApiConfig;
-import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -20,7 +19,6 @@ import java.util.List;
 @Data
 @SuperBuilder
 @Accessors(chain = true)
-@JsonInclude(JsonInclude.Include.NON_NULL)
 @Schema(description = "函数详细信息VO")
 public class FunctionDetailVO extends FunctionInfoVO {
 

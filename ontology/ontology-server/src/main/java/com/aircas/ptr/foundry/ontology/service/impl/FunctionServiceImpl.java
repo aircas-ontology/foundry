@@ -205,7 +205,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                     .paramOrder(p.getParamOrder())
                     .paramSchema(p.getParamSchema())
                     .paramType(p.getParamType())
-                    .description(p.getDescription());
+                    .description(p.getDescription() == null ? "" : p.getDescription());
             // 反序列化 fields JSON 为嵌套结构
             if (StringUtils.isNotEmpty(p.getFields())) {
                 try {
@@ -274,7 +274,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 .version(function.getVersion())
                 .publishStatus(function.getPublish())
                 .displayName(function.getDisplayName())
-                .description(function.getDescription())
+                .description(function.getDescription() == null ? "" : function.getDescription())
                 .type(function.getType())
                 .language(function.getLanguage())
                 .model(function.getModel())
