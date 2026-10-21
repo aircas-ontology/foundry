@@ -130,5 +130,8 @@ public class ExternalApiConfig implements Serializable {
 
         @Schema(name = "location", description = "入参落点：path/query/header/body，缺省 body（出参忽略此字段）", example = "query")
         private String location;
+
+        @Schema(name = "fields", description = "子字段列表（object 的属性层级 / array 的元素结构；数组仍整体作为一个端口取值，子字段只描述层级结构）")
+        private List<PortDefinition> fields;
     }
 }

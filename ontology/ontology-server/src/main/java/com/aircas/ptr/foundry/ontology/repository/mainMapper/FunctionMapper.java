@@ -7,6 +7,8 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.util.List;
+
 @Mapper
 public interface FunctionMapper extends BaseMapper<Function> {
 
@@ -17,6 +19,7 @@ public interface FunctionMapper extends BaseMapper<Function> {
      * @param ontologySpaceId 本体空间 id，可空
      * @param displayName     函数名称模糊搜索，可空
      * @param type            函数类型，可空
+     * @param excludeTypes    排除的函数类型列表，可空
      * @param publishStatus   发布状态（0 未发布 / 1 已发布），可空
      * @param startDate       创建开始日期 yyyy-MM-dd，可空
      * @param endDate         创建结束日期 yyyy-MM-dd，可空
@@ -26,6 +29,7 @@ public interface FunctionMapper extends BaseMapper<Function> {
                                      @Param("ontologySpaceId") Integer ontologySpaceId,
                                      @Param("displayName") String displayName,
                                      @Param("type") FunctionTypeEnum type,
+                                     @Param("excludeTypes") List<FunctionTypeEnum> excludeTypes,
                                      @Param("publishStatus") Integer publishStatus,
                                      @Param("startDate") String startDate,
                                      @Param("endDate") String endDate);
