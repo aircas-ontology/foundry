@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
+import com.aircas.ptr.foundry.common.constant.FunctionParamTypeEnum;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -19,6 +20,9 @@ public class FunctionParameter {
 
     @Schema(name = "paramName", description = "参数名称")
     private String paramName;
+
+    @Schema(name = "paramType", description = "参数类型（LIST 类型时后端据此把 fields 组装为数组而非对象）")
+    private FunctionParamTypeEnum paramType;
 
     @Schema(name = "paramValue", description = "参数值（标量参数直接取值；对象参数若逐字段填写可不传，由 fields 组装）")
     private Object paramValue;
