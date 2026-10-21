@@ -48,6 +48,20 @@ bash ./build.sh --start
 
 脚本拉取固定基础镜像，构建本地镜像 `foundry/semgrep-scan:local` 并启动容器；任何步骤失败立即停止。只构建时省略 `-Start` / `--start`。
 
+Windows 的执行策略（可能由系统组策略统一设定）默认会禁止直接运行 `.ps1`，此时命令报错类似"无法加载文件 …build.ps1，因为在此系统上禁止运行脚本"。若本机策略无法调整，可在单次调用中绕过执行策略：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\build.ps1 -Start
+```
+
+带参数的构建同样适用，参数直接跟在脚本路径之后：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\build.ps1 -Platform linux/arm64 -Image foundry/semgrep-scan:arm64
+```
+
+本方式只影响这一次进程，不会改变系统或用户的执行策略设置；后文出现的 `./build.ps1` 调用均可按此替换。
+
 默认按 Docker 服务端架构构建。交叉构建需 Docker Desktop/QEMU 支持目标架构：
 
 ```powershell
