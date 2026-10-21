@@ -6,6 +6,7 @@ import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.ontology.converter.DataConverter;
+import com.aircas.ptr.foundry.ontology.converter.OntologyInstanceConverter;
 import com.aircas.ptr.foundry.ontology.model.common.VisibilityWindow;
 import com.aircas.ptr.foundry.ontology.model.document.EntityNode;
 import com.aircas.ptr.foundry.ontology.model.document.EntityRelation;
@@ -1313,9 +1314,13 @@ public class EntityServiceImpl implements EntityService {
 
     /**
      * 新增实体节点和实体关系：适用于实体增量同步场景
+     * <p>
+     * 与数据湖 CDC 链路共用 {@link #upsertEntityNode} 与 {@link #createCandidateRelationsForNodes}：
+     * 节点按归一化主键判存（命中则只刷新展示名），候选边按 (link, from, to) 判存后只补缺失对，
+     * 因此重复调用同一入参只覆盖、不会产生第二份数据；老节点此前漏掉的 To 端关系边也会在本次补齐。
      *
      * @param ontologyUniqueIdentifier 本体id
-     * @param entityPropertyMap        实体属性
+     * @param entityPropertyMap        实体属性（列名 -> 列值，列名大小写不敏感）
      */
     @Override
     public void completeEntityNodeAndRelations(String ontologyUniqueIdentifier, Map<String, Object> entityPropertyMap) {
@@ -1324,80 +1329,37 @@ public class EntityServiceImpl implements EntityService {
                 .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier)
                 .eq(OntologyProperty::getIsPrimaryKey, 1));
 
-        var titleProperty = propertyMapper.selectOne(new LambdaQueryWrapper<OntologyProperty>()
-                .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier)
-                .eq(OntologyProperty::getIsTitleKey, 1));
-
-        var titleColumn = "";
-        if (titleProperty != null
-                && primaryProperty != null
-                && StringUtils.equals(titleProperty.getDatasourceId(), primaryProperty.getDatasourceId())) {
-            titleColumn = titleProperty.getDatasourceColumnName();
-        }
-
         //未绑定主键数据源
         if (primaryProperty == null || StringUtils.isEmpty(primaryProperty.getDatasourceId())) {
             return;
         }
 
-        var entityPrimaryKeyValue = entityPropertyMap.get(primaryProperty.getDatasourceColumnName());
-        var node = nodeRepository.findByOntologyUniqIdentifierAndPrimaryKey(ontologyUniqueIdentifier, entityPrimaryKeyValue);
-        //已存在的实体节点不再创建关系
-        if (node != null) {
+        var entityPrimaryKeyValue = OntologyInstanceConverter.getColumnValue(
+                entityPropertyMap, primaryProperty.getDatasourceColumnName());
+        if (entityPrimaryKeyValue == null) {
+            log.warn("本体[{}]补全实体节点失败：主键列[{}]在入参中取值为空",
+                    ontologyUniqueIdentifier, primaryProperty.getDatasourceColumnName());
             return;
         }
-        var newEntityNode = EntityNode.builder()
-                .ontologyUniqIdentifier(ontologyUniqueIdentifier)
-                .primaryKey(entityPrimaryKeyValue)
-                .tableName(primaryProperty.getDatasourceId())
-                .displayName(StringUtils.isEmpty(titleColumn) ? entityPrimaryKeyValue.toString() : entityPropertyMap.get(titleColumn).toString())
-                .build();
-        nodeRepository.save(newEntityNode);
 
-        //创建实体关系
-        var links = linkGroupMapper.selectList(new LambdaQueryWrapper<OntologyLinkGroup>()
-                .eq(OntologyLinkGroup::getOntologyUniqueIdentifierFrom, ontologyUniqueIdentifier)
-                .or().eq(OntologyLinkGroup::getOntologyUniqueIdentifierFrom, ontologyUniqueIdentifier));
-
-
-        var relations = new ArrayList<EntityRelation>();
-
-        links.forEach(link -> {
-            if (link.getOntologyUniqueIdentifierFrom().equals(ontologyUniqueIdentifier)) {
-                var targetOntology = link.getOntologyUniqueIdentifierTo();
-                var nodes = nodeRepository.findByOntologyUniqIdentifier(targetOntology);
-                nodes.forEach(n -> relations.add(EntityRelation.builder()
-                        .ontologyLinkId(link.getUniqueIdentifier())
-                        .from(newEntityNode)
-                        .to(n)
-                        .status(Status.DELETE)
-                        .timeWindows(Lists.newArrayList())
-                        .createTime(new Date())
-                        .updateTime(new Date())
-                        .type(link.getType())
-                        .name(link.getName())
-                        .build()));
-            } else {
-                var fromOntology = link.getOntologyUniqueIdentifierFrom();
-                var nodes = nodeRepository.findByOntologyUniqIdentifier(fromOntology);
-                nodes.forEach(n -> relations.add(EntityRelation.builder()
-                        .ontologyLinkId(link.getUniqueIdentifier())
-                        .from(n)
-                        .to(newEntityNode)
-                        .status(Status.DELETE)
-                        .timeWindows(Lists.newArrayList())
-                        .createTime(new Date())
-                        .updateTime(new Date())
-                        .type(link.getType())
-                        .name(link.getName())
-                        .build()));
+        // 名称键与主键同表时才取名称列，缺省回退主键值，与实例文档 name 同口径
+        var displayName = entityPrimaryKeyValue.toString();
+        var titleProperty = propertyMapper.selectOne(new LambdaQueryWrapper<OntologyProperty>()
+                .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier)
+                .eq(OntologyProperty::getIsTitleKey, 1));
+        if (titleProperty != null
+                && StringUtils.equals(titleProperty.getDatasourceId(), primaryProperty.getDatasourceId())) {
+            var titleValue = OntologyInstanceConverter.getColumnValue(
+                    entityPropertyMap, titleProperty.getDatasourceColumnName());
+            if (titleValue != null) {
+                displayName = titleValue.toString();
             }
-        });
-
-        if (CollectionUtils.isNotEmpty(relations)) {
-            relationRepository.batchSave(relations);
         }
 
+        upsertEntityNode(ontologyUniqueIdentifier, primaryProperty.getDatasourceId(),
+                entityPrimaryKeyValue, displayName);
+        //创建实体关系
+        createCandidateRelationsForNodes(ontologyUniqueIdentifier, List.of(entityPrimaryKeyValue));
     }
 
     @Override
@@ -1526,11 +1488,6 @@ public class EntityServiceImpl implements EntityService {
     }
 
     @Override
-    public int deleteEntityNodesAndRelations(String ontologyUniqueIdentifier, List<Object> primaryKeyValues) {
-        return deleteGraphNodes(findGraphNodes(ontologyUniqueIdentifier, primaryKeyValues));
-    }
-
-    @Override
     public int deleteEntityNodeOrphans(String ontologyUniqueIdentifier, Collection<Object> keepPrimaryKeyValues) {
         var keepPkKeys = keepPrimaryKeyValues == null ? Sets.<String>newHashSet()
                 : keepPrimaryKeyValues.stream().filter(Objects::nonNull)
@@ -1635,6 +1592,9 @@ public class EntityServiceImpl implements EntityService {
             // 使用 new HashMap<>(map) 实现浅复制，避免引用同一对象
             columnValues.add(new HashMap<>(columnValueMap));
         }
+
+
+
 
         var generateIds = objectMapper.batchInsertObjectReturnKey(pkProp.getDatasourceSchema(), pkProp.getDatasourceId(), columnValues, pkProp.getDatasourceColumnName());
         // 插入关联属性表

@@ -104,13 +104,6 @@ public interface EntityService {
     int createCandidateRelationsForNodes(String ontologyUniqueIdentifier, List<Object> primaryKeyValues);
 
     /**
-     * 按主键批量删除图库节点及其相邻关系边（含已激活的边），节点不存在时静默跳过。
-     *
-     * @return 实际删除的节点数
-     */
-    int deleteEntityNodesAndRelations(String ontologyUniqueIdentifier, List<Object> primaryKeyValues);
-
-    /**
      * 清理该本体的图库孤儿节点：删除主键不在 {@code keepPrimaryKeyValues} 中的节点及其相邻关系边，
      * 用于全量同步以数据湖当前内容为准收敛图库。主键为空的节点不参与清理。
      *
