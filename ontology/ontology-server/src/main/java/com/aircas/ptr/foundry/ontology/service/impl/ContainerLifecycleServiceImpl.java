@@ -7,6 +7,7 @@ import com.aircas.ptr.foundry.ontology.model.po.FunctionContainerInstance;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.FunctionContainerInstanceMapper;
 import com.aircas.ptr.foundry.ontology.service.ContainerLifecycleService;
 import com.aircas.ptr.foundry.ontology.utils.DockerCommandExecutor;
+import com.aircas.ptr.foundry.ontology.utils.DockerRunCommandParser;
 import com.aircas.ptr.foundry.ontology.model.dto.container.ContainerImageInfo;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -195,20 +196,31 @@ public class ContainerLifecycleServiceImpl implements ContainerLifecycleService 
     }
 
     /**
-     * 启动前确保镜像已在本地：解析实例 image JSON 取首个 repoTag，
-     * 若 {@code docker image inspect} 不存在则 {@code docker load -i <tarPath>}。
-     * 无 repoTag（早期解析不到镜像元数据）时跳过预加载，交给 docker run 自行处理。
+     * 启动前确保镜像已在本地：优先取 {@code image.repoTags[0]}，缺失时从 {@code runCommand} 解析镜像引用。
+     * <p>任一拿到后：{@code docker image inspect} 不存在则 {@code docker load -i <tarPath>}；
+     * 两者都拿不到时（镜像信息丢失且命令不可解析）交给 docker run 自行处理。</p>
+     * <p>回退到 runCommand 解析旨在为 {@code repoTags} 因历史镜像元数据解析失败而缺失的实例提供兼容，
+     * 无需修改启动行为即可自动 load。</p>
      */
     private void ensureImageLoaded(FunctionContainerInstance instance) {
         ContainerImageInfo info = readImage(instance.getImage());
-        if (info == null || info.getRepoTags() == null || info.getRepoTags().isEmpty()) {
+        String imageRef = (info != null && info.getRepoTags() != null && !info.getRepoTags().isEmpty())
+                ? info.getRepoTags().get(0)
+                : DockerRunCommandParser.parseImageRef(instance.getRunCommand());
+        if (StringUtils.isBlank(imageRef)) {
+            log.warn("容器启动前无法确定镜像引用（repoTags 与 runCommand 均无），交给 docker run 自行处理：{}",
+                    instance.getContainerKey());
             return;
         }
-        String tag = info.getRepoTags().get(0);
-        if (!dockerCommandExecutor.isImagePresent(tag)) {
-            log.info("容器启动前本地无镜像 {}，执行 docker load：{}", tag, info.getPath());
-            dockerCommandExecutor.loadImage(info.getPath());
+        if (dockerCommandExecutor.isImagePresent(imageRef)) {
+            return;
         }
+        if (info == null || StringUtils.isBlank(info.getPath())) {
+            log.warn("本地无镜像 {}，且无 tar 路径可 load（镜像信息缺失）：{}", imageRef, instance.getContainerKey());
+            return;
+        }
+        log.info("容器启动前本地无镜像 {}，执行 docker load：{}", imageRef, info.getPath());
+        dockerCommandExecutor.loadImage(info.getPath());
     }
 
     /** 解析镜像 JSON；失败返回 null */

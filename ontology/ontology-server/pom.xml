@@ -93,10 +93,25 @@
             <version>3.25.10</version>
         </dependency>
         <!-- swagger-parser：容器算子接口文档探查，兼容 OpenAPI 3.x / Swagger 2.0，自动展开 $ref -->
+        <!-- 排除旧版 swagger-core/swagger-models（javax 版），统一由 knife4j/springdoc 的 *-jakarta 版提供，避免类加载顺序冲突 -->
         <dependency>
             <groupId>io.swagger.parser.v3</groupId>
             <artifactId>swagger-parser</artifactId>
             <version>2.1.22</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>io.swagger.core.v3</groupId>
+                    <artifactId>swagger-core</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>io.swagger.core.v3</groupId>
+                    <artifactId>swagger-models</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>io.swagger.core.v3</groupId>
+                    <artifactId>swagger-annotations</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.codehaus.groovy.modules.http-builder</groupId>

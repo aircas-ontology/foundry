@@ -33,6 +33,9 @@ public class ScriptParsedParam {
     /** 来源：ANNOTATION-签名/类型声明可靠解析；INFERRED-函数体启发式推断 */
     private String source;
 
+    /** 参数描述（由脚本注释提取，见 ScriptParamDescriptionExtractor；脚本未写注释时为 null） */
+    private String description;
+
     /** 子字段列表（参数类型为自定义类/接口时，展开其内部字段；标量参数为 null） */
     private List<ScriptParsedParam> fields;
 }

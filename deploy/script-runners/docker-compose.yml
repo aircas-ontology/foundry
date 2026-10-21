@@ -2,9 +2,19 @@ version: '3.8'
 
 # 脚本函数 Runner 编排：仅 Python / TypeScript 需要独立容器；
 # Groovy / Java 在主程序 ontology-server 进程内执行（脚本可引用主程序内部类），无需容器
-# 部署方式：现成基础镜像 + 挂 jar / 源码，主机无需装 Python / Node，仅需 Docker
+#
+# 部署方式：官方基础镜像（服务器可直连外网自动 pull）+ 宿主目录挂载，主机无需装 Python / Node，仅需 Docker
+# 镜像不承载业务代码：Runner 代码就在 ./python-runner、./ts-runner 目录里，
+#   更新代码只需替换目录内文件 → docker compose restart <服务名>，无需构建/加载任何镜像
+# 依赖缓存：pip / npm 装在命名卷里，代码更新 restart 不重装依赖；改 requirements.txt / package.json 后才重新安装
 # 端口约定：python=39101、ts=39102
 # 与 ontology-server 同级部署（同 network_mode: host，主应用通过 127.0.0.1:<port> 调用）
+#
+# 服务器上的目录布局（把本文件与两个代码目录放在同一层即可）：
+#   deploy/
+#   ├── docker-compose.yml   （本文件）
+#   ├── python-runner/       （app.py、executor.py、requirements.txt）
+#   └── ts-runner/           （server.js、package.json）
 
 services:
   python-runner:
@@ -14,17 +24,18 @@ services:
     network_mode: "host"
     working_dir: /app
     volumes:
-      - ./python-runner:/app:ro
+      - ./python-runner:/app
       - python-site-packages:/root/.local/lib/python3.12/site-packages
     environment:
       - TZ=Asia/Shanghai
+      - SERVER_PORT=39101
       - RUNNER_TIMEOUT_MS=5000
     command: sh -c "pip install --user -r requirements.txt &&
-                    exec python -m uvicorn app:app --host 0.0.0.0 --port 39101 --workers 1"
+                    exec python -m uvicorn app:app --app-dir /app --host 0.0.0.0 --port 39101 --workers 1"
     mem_limit: 512m
     cpus: "1"
     healthcheck:
-      test: ["CMD","python","-c","import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:39101/health').status==200 else 1)"]
+      test: ["CMD","python","-c","import urllib.request,sys,os; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:'+os.environ.get('SERVER_PORT','39101')+'/health').status==200 else 1)"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -37,6 +48,7 @@ services:
     working_dir: /app
     volumes:
       - ./ts-runner:/app
+      - ts-node-modules:/app/node_modules
     environment:
       - TZ=Asia/Shanghai
       - SERVER_PORT=39102
@@ -45,10 +57,11 @@ services:
     mem_limit: 512m
     cpus: "1"
     healthcheck:
-      test: ["CMD","node","-e","require('http').get('http://127.0.0.1:39102/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      test: ["CMD","node","-e","require('http').get('http://127.0.0.1:'+process.env.SERVER_PORT+'/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
       interval: 15s
       timeout: 5s
       retries: 5
 
 volumes:
   python-site-packages:
+  ts-node-modules:

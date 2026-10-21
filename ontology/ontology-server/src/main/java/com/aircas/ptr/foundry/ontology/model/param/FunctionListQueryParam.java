@@ -6,6 +6,8 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
@@ -18,8 +20,11 @@ public class FunctionListQueryParam {
     @Schema(name = "displayName", description = "函数名称（模糊搜索）")
     private String displayName;
 
-    @Schema(name = "type", description = "函数类型：CUSTOMIZE / EXTERNAL / BASIC_QUERY / COMPOSITE")
+    @Schema(name = "type", description = "函数类型：CUSTOMIZE / EXTERNAL / BASIC_QUERY / COMPOSITE / CONTAINER")
     private FunctionTypeEnum type;
+
+    @Schema(name = "excludeTypes", description = "排除的函数类型列表（逗号分隔），如 BASIC_QUERY,CONTAINER")
+    private List<FunctionTypeEnum> excludeTypes;
 
     @Schema(name = "publishStatus", description = "发布状态：0 未发布，1 已发布")
     private Integer publishStatus;

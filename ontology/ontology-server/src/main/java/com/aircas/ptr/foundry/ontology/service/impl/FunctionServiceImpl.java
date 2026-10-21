@@ -9,6 +9,7 @@ import com.aircas.ptr.foundry.ontology.engine.ScriptEngineRouter;
 import com.aircas.ptr.foundry.ontology.engine.ScriptExecutionContext;
 import com.aircas.ptr.foundry.ontology.composite.BasicQueryOperator;
 import com.aircas.ptr.foundry.ontology.composite.CompositeChainRegistry;
+import com.aircas.ptr.foundry.ontology.composite.CompositeFunctionCatalog;
 import com.aircas.ptr.foundry.ontology.composite.CompositeFunctionInvoker;
 import com.aircas.ptr.foundry.ontology.composite.ContainerOperatorInvoker;
 import com.aircas.ptr.foundry.ontology.composite.ExternalApiOperator;
@@ -21,6 +22,8 @@ import com.aircas.ptr.foundry.ontology.model.dto.container.ContainerImageInfo;
 import com.aircas.ptr.foundry.ontology.model.dto.container.ContainerInterfaceDoc;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamCategoryEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamRoleEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.FunctionRuntimeStatusEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.ContainerPhaseEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.TaskStatusEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionModelEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionLanguageEnum;
@@ -28,6 +31,8 @@ import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import com.aircas.ptr.foundry.ontology.model.param.BasicQueryConfig;
 import com.aircas.ptr.foundry.ontology.model.param.BasicQueryTestParam;
+import com.aircas.ptr.foundry.ontology.model.param.ContainerConfig;
+import com.aircas.ptr.foundry.ontology.model.param.ContainerFunctionCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.CompositeConfig;
 import com.aircas.ptr.foundry.ontology.model.param.CompositeNode;
 import com.aircas.ptr.foundry.ontology.model.param.CompositeParameter;
@@ -59,11 +64,14 @@ import com.aircas.ptr.foundry.ontology.repository.mainMapper.FunctionContainerIn
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.FunctionMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyActionMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyPropertyMapper;
+import com.aircas.ptr.foundry.ontology.service.ContainerFunctionService;
 import com.aircas.ptr.foundry.ontology.service.FunctionParamService;
 import com.aircas.ptr.foundry.ontology.service.FunctionService;
 import com.aircas.ptr.foundry.ontology.service.GroovyService;
 import com.aircas.ptr.foundry.ontology.utils.DockerCommandExecutor;
 import com.aircas.ptr.foundry.ontology.utils.OperatorFunctionFactory;
+import com.aircas.ptr.foundry.ontology.utils.ScriptParamDescriptionExtractor;
+import com.aircas.ptr.foundry.ontology.utils.ScriptParamDescriptionExtractor.Descriptions;
 import com.aircas.ptr.foundry.ontology.utils.SchemaHandleUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -87,13 +95,17 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -150,10 +162,17 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     @Resource
     private ContainerOperatorInvoker containerOperatorInvoker;
 
+    /** 容器算子注册服务：统一创建入口在 type=CONTAINER 时分发到此处，落 N 条接口算子 + 1 运行实例 */
+    @Resource
+    private ContainerFunctionService containerFunctionService;
+
     private ObjectMapper objectMapper = new ObjectMapper()
             // 存进库的 fields 是 FunctionParamDTO 序列化结果（含 referenceType 等 VO 没有的字段），
             // 详情读回时反序列化为 FunctionParameterVO，需忽略未知字段，否则抛异常导致层级结构丢失
             .configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+
+    /** 内存级运行状态跟踪：正在执行的 functionApi 集合，列表查询时据此填充 runningStatus */
+    private final Set<String> runningFunctions = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
 
     @Override
@@ -407,14 +426,38 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 "functionApi is empty", HttpStatus.BAD_REQUEST);
         PreconditionUtils.checkArgument(StringUtils.isNotEmpty(param.getDisplayName()),
                 "displayName is empty", HttpStatus.BAD_REQUEST);
-        // 自动填充 model：未传时根据 type 推断
-        FunctionModelEnum model = param.getModel();
-        if (model == null) {
-            model = (param.getType() == FunctionTypeEnum.BASIC_QUERY) 
-                    ? FunctionModelEnum.BASIC 
-                    : FunctionModelEnum.OTHER;
+        // 容器算子：统一创建入口按类型分发——委托容器注册服务（1 请求 → N 条派生算子 + 1 运行实例），
+        // 不走下方脚本/查询/编排算子的版本管理与参数解析逻辑
+        if (param.getType() == FunctionTypeEnum.CONTAINER) {
+            containerFunctionService.createContainerFunction(buildContainerCreateParam(param));
+            return;
         }
-        String displayName = param.getDisplayName();
+        // 非容器算子：校验 → 落一行 Function → 按类型建参数（编排骨架）
+        FunctionModelEnum model = resolveModel(param);
+        String version = checkVersionAndApiUnique(param);
+        FunctionLanguageEnum language = resolveLanguageAndValidate(param, version);
+        Function func = buildAndSaveFunction(param, model, version, language);
+        saveTypedParams(func, param, language);
+    }
+
+    /**
+     * 自动填充 model：未传时按 type 推断（BASIC_QUERY→BASIC，其他→OTHER）。
+     */
+    private FunctionModelEnum resolveModel(FunctionCreateParam param) {
+        if (param.getModel() != null) {
+            return param.getModel();
+        }
+        return param.getType() == FunctionTypeEnum.BASIC_QUERY ? FunctionModelEnum.BASIC : FunctionModelEnum.OTHER;
+    }
+
+    /**
+     * 版本与 api 唯一性校验，返回规范化后的版本号：
+     * <ul>
+     *   <li>版本号格式 x.y.z；同 api 下不得重复，且必须大于已有最大版本号；</li>
+     *   <li>全新创建（basedOnOldVersion 非 true）：api 不能与任何已存在函数重复；基于旧版本创建则允许同 api。</li>
+     * </ul>
+     */
+    private String checkVersionAndApiUnique(FunctionCreateParam param) {
         // 版本管理：版本号必须大于同 api 下已有最大版本号（首次创建无此限制）
         String version = requireValidVersion(param.getVersion());
         List<Function> existVersions = listVersions(param.getFunctionApi());
@@ -434,40 +477,86 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                     "函数 api 已存在:" + param.getFunctionApi() + "，全新创建请使用不同的 api 名称", HttpStatus.BAD_REQUEST);
         }
         // 如果 basedOnOldVersion = true，则允许相同 api，只校验 api + version 不重复（已在上面校验）
-        //函数插入，新增版本默认为未发布状态
-        //language 仅 CUSTOMIZE 脚本算子有意义；基础查询/外部/容器算子存 NULL（EXTERNAL 执行链路待定，开发时再评估）
-        FunctionLanguageEnum language = null;
-        if (param.getType() == FunctionTypeEnum.CUSTOMIZE) {
-            language = param.getLanguage() == null ? FunctionLanguageEnum.GROOVY : param.getLanguage();
-            //脚本函数落库前先做语法/编译校验（走对应 runner 的 /validate），失败即拒、不落库
-            validateScript(language, param.getFunctionApi(), version, param.getCode());
+        return version;
+    }
+
+    /**
+     * 解析脚本语言并做落库前语法/编译校验：仅 CUSTOMIZE 脚本算子有意义，其他类型返回 null（存 NULL）。
+     */
+    private FunctionLanguageEnum resolveLanguageAndValidate(FunctionCreateParam param, String version) {
+        if (param.getType() != FunctionTypeEnum.CUSTOMIZE) {
+            return null;
         }
+        FunctionLanguageEnum language = param.getLanguage() == null ? FunctionLanguageEnum.GROOVY : param.getLanguage();
+        //脚本函数落库前先做语法/编译校验（走对应 runner 的 /validate），失败即拒、不落库
+        validateScript(language, param.getFunctionApi(), version, param.getCode());
+        return language;
+    }
+
+    /**
+     * 组装并保存 Function 主记录：新增版本默认未发布、状态启用（公共默认值统一走 OperatorFunctionFactory）。
+     * <p>language 仅 CUSTOMIZE 脚本算子有意义；基础查询/外部/容器算子存 NULL。</p>
+     */
+    private Function buildAndSaveFunction(FunctionCreateParam param, FunctionModelEnum model, String version, FunctionLanguageEnum language) {
         var func = OperatorFunctionFactory.operatorDefaults(
-                        param.getFunctionApi(), version, displayName, param.getType(),
+                        param.getFunctionApi(), version, param.getDisplayName(), param.getType(),
                         param.getOntologySpaceId(), model)
                 .description(param.getDescription())
+                .displayName(param.getDisplayName())
                 .code(param.getCode())
+                .type(param.getType())
                 .language(language)
+                .model(model)
+                .status(Status.ENABLE.getValue())
                 .referenceName(param.getReferenceName())
+                .ontologySpaceId(param.getOntologySpaceId())
                 .build();
         save(func);
-        //自定义函数需要解析函数参数
+        return func;
+    }
+
+    /**
+     * 按算子类型解析并写入 function_param（各类型互斥）：
+     * <ul>
+     *   <li>CUSTOMIZE：前端 IDE 声明优先，Groovy 未声明回退后端反射解析；</li>
+     *   <li>BASIC_QUERY：序列化 queryConfig 到 code，提取变量存参；</li>
+     *   <li>COMPOSITE：校验画布配置，序列化到 code，写画布出入参；</li>
+     *   <li>EXTERNAL：序列化 apiConfig，按 inputs/outputs 生成出入参。</li>
+     * </ul>
+     */
+    private void saveTypedParams(Function func, FunctionCreateParam param, FunctionLanguageEnum language) {
         if (param.getType().equals(FunctionTypeEnum.CUSTOMIZE)) {
             //参数入库：前端 IDE 声明优先，Groovy 未声明时回退后端反射解析
             buildCustomizeParams(param.getFunctionApi(), func.getId(), language, param.getCode(), param.getParameters());
         }
-        //基础查询算子：序列化 queryConfig 到 code，提取变量存入 function_param
         if (param.getType().equals(FunctionTypeEnum.BASIC_QUERY)) {
             createBasicQueryParams(func.getId(), param.getQueryConfig());
         }
-        //函数编排：校验画布配置，序列化到 code，并把画布出入参写入 function_param
         if (param.getType().equals(FunctionTypeEnum.COMPOSITE)) {
             createCompositeParams(func.getId(), param.getFunctionApi(), param.getCompositeConfig());
         }
-        //外部API算子：序列化 apiConfig 到 code，并按 inputs/outputs 生成出入参，使其可接入编排工作流
         if (param.getType().equals(FunctionTypeEnum.EXTERNAL)) {
             createExternalParams(func.getId(), param.getApiConfig());
         }
+    }
+
+    /**
+     * 统一创建入口 → 容器算子入参适配：把 {@link FunctionCreateParam} 的公共字段与嵌套 {@link ContainerConfig}
+     * 组装成容器注册服务入参。容器专属校验（镜像存在、勾选接口非空、端口 / 容器名唯一等）在容器服务内完成。
+     */
+    private ContainerFunctionCreateParam buildContainerCreateParam(FunctionCreateParam param) {
+        ContainerConfig cc = param.getContainerConfig();
+        PreconditionUtils.checkArgument(cc != null, "容器算子缺少 containerConfig 配置", HttpStatus.BAD_REQUEST);
+        ContainerFunctionCreateParam cp = new ContainerFunctionCreateParam();
+        cp.setFunctionApi(param.getFunctionApi());
+        cp.setDisplayName(param.getDisplayName());
+        cp.setDescription(param.getDescription());
+        cp.setOntologySpaceId(param.getOntologySpaceId());
+        cp.setImage(cc.getImage());
+        cp.setInterfaceDoc(cc.getInterfaceDoc());
+        cp.setRunCommand(cc.getRunCommand());
+        cp.setSelectedInterfaces(cc.getSelectedInterfaces());
+        return cp;
     }
 
     @Override
@@ -603,7 +692,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         var pageInfo = new Page<Function>(param.getPageNum(), param.getPageSize());
         // 版本分组分页：按 api 分组，每组仅展示版本号最大的一条（XML 内按 x.y.z 语义化比较）
         var functionPage = getBaseMapper().pageLatestVersion(pageInfo, param.getOntologySpaceId(), param.getDisplayName(),
-                param.getType(), param.getPublishStatus(), param.getStartDate(), param.getEndDate());
+                param.getType(), param.getExcludeTypes(), param.getPublishStatus(), param.getStartDate(), param.getEndDate());
         var records = functionPage.getRecords().stream().<FunctionInfoVO>map(func ->
                 FunctionInfoVO.builder()
                         .functionApi(func.getApi())
@@ -616,8 +705,31 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                         .ontologySpaceId(func.getOntologySpaceId())
                         .createTime(func.getCreateTime())
                         .updateTime(func.getUpdateTime())
+                        .runningStatus(runningFunctions.contains(func.getApi())
+                                ? FunctionRuntimeStatusEnum.RUNNING
+                                : FunctionRuntimeStatusEnum.NOT_RUNNING)
+                        .containerKey(func.getContainerKey())
                         .build()
         ).collect(Collectors.toList());
+
+        // 容器算子：批量查运行实例 phase，回填 containerPhase
+        List<String> containerKeys = records.stream()
+                .filter(r -> r.getType() == FunctionTypeEnum.CONTAINER && r.getContainerKey() != null)
+                .map(FunctionInfoVO::getContainerKey)
+                .collect(Collectors.toList());
+        if (!containerKeys.isEmpty()) {
+            Map<String, ContainerPhaseEnum> phaseMap = containerInstanceMapper.selectList(
+                    new LambdaQueryWrapper<FunctionContainerInstance>()
+                            .in(FunctionContainerInstance::getContainerKey, containerKeys)
+                            .select(FunctionContainerInstance::getContainerKey, FunctionContainerInstance::getPhase)
+            ).stream().collect(Collectors.toMap(
+                    FunctionContainerInstance::getContainerKey,
+                    FunctionContainerInstance::getPhase,
+                    (a, b) -> a));
+            records.stream()
+                    .filter(r -> r.getType() == FunctionTypeEnum.CONTAINER && r.getContainerKey() != null)
+                    .forEach(r -> r.setContainerPhase(phaseMap.get(r.getContainerKey())));
+        }
 
         return new Page<FunctionInfoVO>()
                 .setRecords(records)
@@ -629,6 +741,16 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     @Override
     @SneakyThrows
     public String executeFunction(FunctionExecuteParam param) {
+        runningFunctions.add(param.getFunctionApi());
+        try {
+            return doExecuteFunction(param);
+        } finally {
+            runningFunctions.remove(param.getFunctionApi());
+        }
+    }
+
+    @SneakyThrows
+    private String doExecuteFunction(FunctionExecuteParam param) {
         //查询函数（指定版本，缺省取最新版本）
         var function = resolveVersion(param.getFunctionApi(), param.getVersion());
         PreconditionUtils.checkArgument(function != null,
@@ -694,40 +816,44 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                     .functionParam(objectMapper.writeValueAsString(param.getParameters()))
                     .taskStatus(TaskStatusEnum.PENDING)
                     .build());
+            // 异步：保留包裹层与 taskId，供调用方后续轮询 /execute/result
+            return resultJsonStr;
         }
-        return resultJsonStr;
+        // 同步：剥离 FunctionResultVO 包裹层，仅透传 data 内容（与外部API/容器/编排 三类算子响应形状一致）
+        return unwrapFunctionResultVO(resultNode, resultJsonStr);
     }
 
     /**
-     * 执行单算子（基础查询/外部API）：复用编排节点调用器，返回值统一包装成 FunctionResultVO 结构，
-     * 保证与脚本算子、函数编排的执行返回格式一致。
+     * 剥离 {@code FunctionResultVO} 包裹层：仅取 {@code data} 字段内容重新序列化。
+     * <p>无 {@code data} 字段（脚本直接返回非 VO 结构）时原样透传。</p>
+     */
+    private String unwrapFunctionResultVO(com.fasterxml.jackson.databind.JsonNode root, String rawJson) throws JsonProcessingException {
+        if (root != null && root.has("data")) {
+            return objectMapper.writeValueAsString(root.get("data"));
+        }
+        return rawJson;
+    }
+
+    /**
+     * 执行单算子（基础查询/外部API）：复用编排节点调用器，直接返回执行结果的数据体 JSON，
+     * 不再额外包一层 {@code FunctionResultVO}（历史包裹层中的 startTime / description 无业务价值）。
      */
     private String executeOperatorFunction(Function function, Map<String, Object> funParamMap,
                                            List<FunctionParamPO> inputParams) throws JsonProcessingException {
         Object raw = compositeFunctionInvoker.invoke(function, null, funParamMap, inputParams);
         Map<String, Object> data = raw instanceof Map<?, ?> map ? toStringKeyMap(map) : Map.of("result", raw);
-        var result = FunctionResultVO.builder()
-                .startTime(new Date())
-                .data(data)
-                .description("函数算子执行结果")
-                .build();
-        return objectMapper.writeValueAsString(result);
+        return objectMapper.writeValueAsString(data);
     }
 
     /**
      * 执行容器算子：委托 {@link ContainerOperatorInvoker} 按 containerKey 定位运行容器并发起 HTTP 调用，
-     * 返回值统一包装成 FunctionResultVO 结构，与其它算子执行返回格式一致。
+     * 直接返回容器接口响应的数据体 JSON，不再额外包一层 {@code FunctionResultVO}。
      */
     private String executeContainerFunction(Function function, Map<String, Object> funParamMap)
             throws JsonProcessingException {
         Object raw = containerOperatorInvoker.invoke(function, funParamMap);
         Map<String, Object> data = raw instanceof Map<?, ?> map ? toStringKeyMap(map) : Map.of("result", raw);
-        var result = FunctionResultVO.builder()
-                .startTime(new Date())
-                .data(data)
-                .description("容器算子执行结果")
-                .build();
-        return objectMapper.writeValueAsString(result);
+        return objectMapper.writeValueAsString(data);
     }
 
     /** 算子返回值可能带非字符串键，统一转成 JSON 可序列化的字符串键结构 */
@@ -808,11 +934,15 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
 
         List<FunctionParamPO> params = new ArrayList<>();
         int order = 1;
-        for (ExternalApiConfig.PortDefinition port : externalInputPorts(apiConfig)) {
+        List<ExternalApiConfig.PortDefinition> inputs = externalInputPorts(apiConfig);
+        List<ExternalApiConfig.PortDefinition> outputs = externalOutputPorts(apiConfig);
+        validateExternalPorts(inputs, "入参");
+        validateExternalPorts(outputs, "出参");
+        for (ExternalApiConfig.PortDefinition port : inputs) {
             params.add(externalParam(functionId, port, FunctionParamCategoryEnum.INPUT, order++));
         }
         int outputOrder = 1;
-        for (ExternalApiConfig.PortDefinition port : externalOutputPorts(apiConfig)) {
+        for (ExternalApiConfig.PortDefinition port : outputs) {
             params.add(externalParam(functionId, port, FunctionParamCategoryEnum.OUTPUT, outputOrder++));
         }
         if (!params.isEmpty()) {
@@ -839,11 +969,82 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         return defaults;
     }
 
+    /**
+     * 端口层级校验：name 必填、同级不可重名。
+     * <p>创建与更新共用（更新时沿用库中定义也会走这里），把脏层级拦在落库前，
+     * 否则详情接口回显的子字段树会让前端渲染异常。</p>
+     *
+     * @param scope 顶层端口所属范围，用作错误文案与路径前缀（入参/出参）
+     */
+    private void validateExternalPorts(List<ExternalApiConfig.PortDefinition> ports, String scope) {
+        validatePortTree(ports, scope);
+    }
+
+    /** {@code path} 为当前这批子字段的父路径，顶层即 {@code scope} 本身 */
+    private void validatePortTree(List<ExternalApiConfig.PortDefinition> ports, String path) {
+        if (CollectionUtils.isEmpty(ports)) {
+            return;
+        }
+        Set<String> names = new HashSet<>();
+        for (ExternalApiConfig.PortDefinition port : ports) {
+            if (port == null) {
+                continue;
+            }
+            String name = StringUtils.trimToNull(port.getName());
+            if (name == null) {
+                throw new BusinessException("外部API" + path + " 下存在未命名参数", HttpStatus.BAD_REQUEST);
+            }
+            if (!names.add(name)) {
+                throw new BusinessException("外部API" + path + " 下参数重名：" + name, HttpStatus.BAD_REQUEST);
+            }
+            validatePortTree(port.getFields(), path + "." + name);
+        }
+    }
+
     private FunctionParamPO externalParam(Long functionId, ExternalApiConfig.PortDefinition port,
                                           FunctionParamCategoryEnum category, int paramOrder) {
         return OperatorFunctionFactory.functionParamDefaults(
                         functionId, port.getName(), port.getType(), category, paramOrder, port.getDescription())
+                // OBJECT/LIST 端口的子字段与脚本函数同一套层级结构，共用 saveParams 那条序列化口径
+                .fields(portFieldsJson(port.getFields()))
                 .build();
+    }
+
+    /**
+     * 端口子字段序列化：形状与脚本函数参数的 {@code function_param.fields} 完全一致
+     * （{@link FunctionParamDTO} 树），详情接口才能用同一个 {@code FunctionParameterVO} 读回层级。
+     * <p>子字段不带 {@code location}，也不参与 HTTP 报文映射。</p>
+     */
+    private String portFieldsJson(List<ExternalApiConfig.PortDefinition> fields) {
+        if (CollectionUtils.isEmpty(fields)) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(toPortParamDTOs(fields));
+        } catch (JsonProcessingException e) {
+            log.warn("序列化外部API端口子字段失败：cause={}", e.getMessage());
+            return null;
+        }
+    }
+
+    private List<FunctionParamDTO> toPortParamDTOs(List<ExternalApiConfig.PortDefinition> ports) {
+        List<FunctionParamDTO> params = new ArrayList<>();
+        int order = 1;
+        for (ExternalApiConfig.PortDefinition port : ports) {
+            if (port == null) {
+                continue;
+            }
+            List<FunctionParamDTO> children = port.getFields() == null
+                    ? null : toPortParamDTOs(port.getFields());
+            params.add(FunctionParamDTO.builder()
+                    .paramName(port.getName())
+                    .paramType(CompositeFunctionCatalog.toParamType(port.getType()))
+                    .paramOrder(order++)
+                    .description(port.getDescription())
+                    .fields(children == null || children.isEmpty() ? null : children)
+                    .build());
+        }
+        return params;
     }
 
     /** 解析 function.code 中的外部API接口定义 */
@@ -940,19 +1141,52 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
      *   2) Groovy 未声明时回退后端反射解析，且仅老契约脚本（handle 返回 FunctionResultVO）能解析成功；
      *   3) 新契约脚本 handle(input) 为单对象入参，反射拿不到字段名，返回 null 表示“无法确定”，
      *      由调用方决定创建时不建参数 / 更新时保留原参数。
+     * <p>两条来源都缺描述的参数，统一用脚本注释兜底补齐（与解析接口同一套提取规则）。
      */
     private List<FunctionParamDTO> resolveCustomizeParams(FunctionLanguageEnum language, String code, List<FunctionParamDTO> declared) {
         if (CollectionUtils.isNotEmpty(declared)) {
+            fillMissingDescriptions(declared, language, code);
             return declared;
         }
         if (language != null && language != FunctionLanguageEnum.GROOVY) {
             return null;
         }
         try {
-            return groovyService.parseGroovyCode(code);
+            List<FunctionParamDTO> parsed = groovyService.parseGroovyCode(code);
+            fillMissingDescriptions(parsed, language, code);
+            return parsed;
         } catch (Exception e) {
             log.warn("Groovy 反射解析参数失败（新契约脚本属正常现象）：{}", e.getMessage());
             return null;
+        }
+    }
+
+    /**
+     * 参数未携带描述时，从脚本注释里提取补齐（前端 IDE 面板常常只填名称与类型）。
+     * <p>已有描述的参数不覆盖，用户在界面上手写的说明优先级最高。</p>
+     */
+    private void fillMissingDescriptions(List<FunctionParamDTO> params, FunctionLanguageEnum language, String code) {
+        if (CollectionUtils.isEmpty(params)) {
+            return;
+        }
+        Descriptions descriptions = ScriptParamDescriptionExtractor.extract(language, code);
+        if (descriptions.byName().isEmpty() && descriptions.returnValue() == null) {
+            return;
+        }
+        long outputCount = params.stream().filter(p -> p.getCategory() == FunctionParamCategoryEnum.OUTPUT).count();
+        params.forEach(p -> applyDescription(p, descriptions, outputCount, true));
+    }
+
+    private void applyDescription(FunctionParamDTO p, Descriptions descriptions, long outputCount, boolean topLevel) {
+        if (StringUtils.isBlank(p.getDescription())) {
+            String description = descriptions.describe(
+                    p.getParamName(), p.getCategory() == FunctionParamCategoryEnum.OUTPUT, topLevel, outputCount);
+            if (description != null) {
+                p.setDescription(description);
+            }
+        }
+        if (CollectionUtils.isNotEmpty(p.getFields())) {
+            p.getFields().forEach(field -> applyDescription(field, descriptions, outputCount, false));
         }
     }
 
@@ -1087,14 +1321,14 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
             case EXTERNAL:
             case COMPOSITE:
                 // 复用 executeFunction 逻辑：脚本走 runner 引擎，外部API走接口定义，编排走 LiteFlow 链
-                // 脚本自定义返回键由 FunctionResultVO.extra 承接并平铺回传，不会因未知字段报错
+                // 直接按原结构透传：CUSTOMIZE 保留脚本自己写的返回体，EXTERNAL/BASIC_QUERY/COMPOSITE 已不再包一层 VO
                 var executeParam = FunctionExecuteParam.builder()
                         .functionApi(param.getFunctionApi())
                         .version(function.getVersion())
                         .parameters(param.getParameters())
                         .build();
                 var resultJson = executeFunction(executeParam);
-                return objectMapper.readValue(resultJson, new TypeReference<FunctionResultVO>() {
+                return objectMapper.readValue(resultJson, new TypeReference<Map<String, Object>>() {
                 });
 
             case CONTAINER:
@@ -1105,7 +1339,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                         .parameters(param.getParameters())
                         .build();
                 var containerResultJson = executeFunction(containerExecuteParam);
-                return objectMapper.readValue(containerResultJson, new TypeReference<FunctionResultVO>() {
+                return objectMapper.readValue(containerResultJson, new TypeReference<Map<String, Object>>() {
                 });
 
             default:
@@ -1137,14 +1371,15 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                         "脚本草稿测试必须提供 code", HttpStatus.BAD_REQUEST);
                 FunctionLanguageEnum language = param.getLanguage() == null
                         ? FunctionLanguageEnum.GROOVY : param.getLanguage();
-                // 草稿测试：单对象入参解包（与 executeFunction 一致）
+                // 草稿测试：单对象入参解包（与 executeFunction 语义对齐——组装结果为 Map 时才解包）
                 String inputJson;
+                Object singleVal = null;
                 if (param.getParameters() != null && param.getParameters().size() == 1
-                        && param.getParameters().get(0).getFields() != null
-                        && !param.getParameters().get(0).getFields().isEmpty()
                         && inputMap.containsKey(param.getParameters().get(0).getParamName())) {
-                    Object value = inputMap.get(param.getParameters().get(0).getParamName());
-                    inputJson = objectMapper.writeValueAsString(value);
+                    singleVal = inputMap.get(param.getParameters().get(0).getParamName());
+                }
+                if (singleVal instanceof Map) {
+                    inputJson = objectMapper.writeValueAsString(singleVal);
                 } else {
                     inputJson = objectMapper.writeValueAsString(inputMap);
                 }
@@ -1157,7 +1392,12 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                         .inputMap(inputMap)
                         .build();
                 String resultJsonStr = scriptEngineRouter.route(language).execute(ctx);
-                return objectMapper.readValue(resultJsonStr, new TypeReference<FunctionResultVO>() {
+                // 与同步正式执行同规则：剥离 FunctionResultVO 包裹层，直接返回 data 内容
+                var draftRoot = objectMapper.readTree(resultJsonStr);
+                if (draftRoot != null && draftRoot.has("data")) {
+                    return objectMapper.treeToValue(draftRoot.get("data"), Object.class);
+                }
+                return objectMapper.readValue(resultJsonStr, new TypeReference<Map<String, Object>>() {
                 });
             }
             case EXTERNAL -> {
@@ -1174,11 +1414,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                         .code(apiConfigJson)
                         .build();
                 Map<String, Object> ports = externalApiOperator.runAsNode(tempFunction, null, inputMap);
-                return FunctionResultVO.builder()
-                        .startTime(new Date())
-                        .data(ports)
-                        .description("外部API草稿测试")
-                        .build();
+                return ports;
             }
             default -> throw new BusinessException("草稿测试仅支持 CUSTOMIZE / EXTERNAL 类型：" + type);
         }
@@ -1297,18 +1533,14 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     }
 
     /**
-     * 执行函数编排：把画布配置编译为 LiteFlow 链并驱动执行，返回值沿用 FunctionResultVO 结构。
+     * 执行函数编排：把画布配置编译为 LiteFlow 链并驱动执行，直接返回输出端口的数据体 JSON，
+     * 不再额外包一层 {@code FunctionResultVO}。
      */
     private String executeCompositeFunction(Function function, Map<String, Object> funParamMap) throws JsonProcessingException {
         CompositeConfig config = parseCompositeConfig(function.getCode());
         PreconditionUtils.checkArgument(config != null, "函数编排定义为空：" + function.getApi(), HttpStatus.BAD_REQUEST);
         Map<String, Object> outputs = compositeChainRegistry.execute(function.getApi(), config, funParamMap);
-        var result = FunctionResultVO.builder()
-                .startTime(new Date())
-                .data(outputs)
-                .description("函数编排执行结果")
-                .build();
-        return objectMapper.writeValueAsString(result);
+        return objectMapper.writeValueAsString(outputs);
     }
 
     /**
@@ -1362,8 +1594,15 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
      */
     private FunctionParamPO buildCompositeParam(Long functionId, CompositeParameter parameter,
                                                 FunctionParamCategoryEnum category, int paramOrder) {
-        return OperatorFunctionFactory.functionParamDefaults(
-                        functionId, parameter.getName(), parameter.getType(), category, paramOrder, parameter.getDescription())
+        return FunctionParamPO.builder()
+                .functionId(functionId)
+                .paramName(parameter.getName())
+                .paramType(CompositeFunctionCatalog.toParamType(parameter.getType()))
+                .category(category)
+                .paramOrder(paramOrder)
+                .description(parameter.getDescription())
+                .createTime(new Date())
+                .updateTime(new Date())
                 .build();
     }
 

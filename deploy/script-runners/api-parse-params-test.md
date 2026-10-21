@@ -52,7 +52,7 @@
 | `paramType` | 归一化枚举：`STRING`/`INTEGER`/`LONG`/`FLOAT`/`DOUBLE`/`BOOL`/`BYTE`/`SHORT`/`CHAR`/`LIST`/`DATE`/`OBJECT` |
 | `referenceType` | 全限定类名：**Java/Groovy** 按声明类型自动填充（`String`→`java.lang.String`、`int`→`java.lang.Integer`、`List<T>` 保留泛型、启发推断项兜底 `java.lang.Object`），执行链路用它做类型转换；**Python/TS** 固定为 `""`（无 Java 类概念，执行时按原始 JSON 透传） |
 | `paramSchema` | 静态解析不产出，为 null（与前端保存请求一致：本来就不传此字段） |
-| `description` | 静态解析不产出，为 null（业务语义由用户保存前自行填写） |
+| `description` | 由脚本注释自动提取（写法与规则见第七节）；脚本未写注释时为 null，业务语义仍可由用户自行补充 |
 | `message` | 失败/dynamic 时的提示；成功解析出参数时为 null |
 
 > 解析可靠性分两档：**类型签名可解**（referenceType 按声明推导）与**启发推断**（paramType=OBJECT、referenceType 兜底 java.lang.Object，供参考）；最差为 `parsed=false`，手动补。
@@ -227,6 +227,59 @@
 - 把 python/ts runner 容器停掉，再发一条 `PYTHON`/`TYPESCRIPT` 解析请求。
 - 期望：`status=RUNNER_ERROR`（连不上）或 base-url 未配时 `RUNNER_NOT_CONFIGURED`；Java/Groovy 不受影响（进程内）。
 - 恢复：`docker compose start python-runner ts-runner`。
+
+---
+
+## 七、参数描述（description）注释提取
+
+提取在主应用侧完成（`ScriptParamDescriptionExtractor`），四语言共用一套纯文本扫描，**Python/TS 无需改动 runner**。
+
+### 7.1 支持的注释写法
+| 形式 | 示例 | 适用语言 |
+|------|------|---------|
+| Javadoc/JSDoc 标签 | `@param name 用户姓名`、`@param {string} name - 用户姓名` | Java / Groovy / TS |
+| Sphinx 标签 | `:param name: 用户姓名` | Python |
+| Google 风格 docstring | `Args:` 段内 `name (str): 用户姓名` | Python |
+| 就近注释 | 声明行上一行的整段注释，或声明行同行尾部注释 | 四语言 |
+| 返回值 | `@return` / `@returns` / `@result` / `:returns:` / `Returns:` 段 | 四语言 |
+
+### 7.2 取值规则
+- 标签式优先于就近式；同一名字命中多条时取注释里先出现的一条。
+- 按名字匹配：顶层参数名与展开后的子字段名共用一张表（不同类里的同名字段共用一条描述）。
+- 顶层出参没写注释时，若脚本**只有一个出参**（或出参名为 `result`），沿用返回值注释——注释里通常只写 `@return`，不会再给唯一出参单独命名。
+- 单条描述超过 200 字符截断，避免整段注释入库。
+- 创建/更新函数（`/function/create`、`/function/update`）时同样按这套规则兜底：请求里已带 `description` 的参数不覆盖，仅补齐空描述。
+
+### 7.3 Groovy（Javadoc + 唯一出参沿用 @return）
+- Body:
+```json
+{
+  "language": "GROOVY",
+  "code": "/**\n * 打招呼\n * @param name 用户姓名\n * @return 问候语\n */\ndef handle(input) { return [greeting: 'hi ' + input.name] }"
+}
+```
+- 期望：INPUT `name` 的 `description=用户姓名`；OUTPUT `greeting` 的 `description=问候语`（唯一出参兜底）
+
+### 7.4 Python（Sphinx / Google 风格）
+- Body（Google）:
+```json
+{
+  "language": "PYTHON",
+  "code": "def handle(input):\n    \"\"\"计算总额。\n\n    Args:\n        price (float): 单价\n        count (int): 数量\n\n    Returns:\n        float: 总额\n    \"\"\"\n    return {'total': input['price'] * input['count']}\n"
+}
+```
+- 期望：INPUT `price=单价`、`count=数量`；OUTPUT `total=总额`
+- Sphinx 写法同理：docstring 里用 `:param price: 单价`、`:returns: 总额`。
+
+### 7.5 TypeScript（JSDoc + 就近注释）
+- Body:
+```json
+{
+  "language": "TYPESCRIPT",
+  "code": "interface In {\n  // 用户姓名\n  name: string;\n}\n/**\n * 查询\n * @param input 入参\n * @returns 结果\n */\nfunction handle(input: In): string { return 'hi ' + input.name; }"
+}
+```
+- 期望：`name` 由就近行注释得到 `description=用户姓名`；`@param`/`@returns` 命中的名字同样产出描述
 
 ---
 
