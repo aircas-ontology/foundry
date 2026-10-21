@@ -35,6 +35,9 @@ public final class ScriptParamDescriptionExtractor {
     /** 单条描述的最大长度，超出截断，避免注释长段落整体入库。 */
     private static final int MAX_DESC_LENGTH = 200;
 
+    /** 各语言标量返回值在解析结果里的统一出参名。 */
+    private static final String RESULT_PARAM_NAME = "result";
+
     /** Javadoc/JSDoc：{@code @param name 描述} / {@code @param {string} name - 描述}。 */
     private static final Pattern PARAM_TAG = Pattern.compile(
             "^@(?:param|parameter)\\s+(?:\\{[^}]*}\\s*)?([\\w$.]+)\\s*(?:[-:：]\\s*)?(.*)$");
@@ -48,9 +51,12 @@ public final class ScriptParamDescriptionExtractor {
     /** Google 风格入参段起始。 */
     private static final Pattern ARGS_SECTION = Pattern.compile("^(?:args|arguments|parameters|参数)\\s*[:：]\\s*$",
             Pattern.CASE_INSENSITIVE);
-    /** Google 风格出参段起始。 */
-    private static final Pattern RETURNS_SECTION = Pattern.compile("^(?:returns?|返回(?:值)?|出参)\\s*[:：]\\s*$",
+    /** Google 风格出参段起始（允许同行直接跟描述），捕获组为同行描述正文。 */
+    private static final Pattern RETURNS_SECTION = Pattern.compile("^(?:returns?|返回(?:值)?|出参)\\s*[:：]\\s*(.*)$",
             Pattern.CASE_INSENSITIVE);
+    /** Google 风格出参描述的类型前缀：{@code float: 总额}、{@code List[str]: 名称列表}，只留冒号后的正文。 */
+    private static final Pattern RETURNS_TYPE_PREFIX = Pattern.compile(
+            "^[A-Za-z_$][\\w$.]*(?:<[^>]*>)?(?:\\[[^\\]]*\\])?(?:\\.\\.\\.)?\\s*[:：]\\s*(.+)$");
     /** 其他 docstring 段落起始：遇到即结束 Args/Returns 上下文。 */
     private static final Pattern OTHER_SECTION = Pattern.compile(
             "^(?:raises?|yields?|example|examples|note|notes|attributes?|see also|异常|注意|示例)\\s*[:：]\\s*$",
@@ -108,6 +114,24 @@ public final class ScriptParamDescriptionExtractor {
         /** 按参数名取描述，未命中返回 null。 */
         public String describe(String name) {
             return name == null ? null : byName.get(name);
+        }
+
+        /**
+         * 取参数描述：优先按名字命中注释；顶层出参命中不到时，若脚本只有一个出参（或统一命名为 {@code result}），
+         * 沿用返回值注释——注释里通常只写 {@code @return}，不会再给唯一出参单独命名。
+         *
+         * @param name        参数/字段名
+         * @param output      该参数是否出参
+         * @param topLevel    是否顶层参数，嵌套字段不参与返回值兜底
+         * @param outputCount 顶层出参数量
+         */
+        public String describe(String name, boolean output, boolean topLevel, long outputCount) {
+            String description = describe(name);
+            if (description != null) {
+                return description;
+            }
+            boolean reuseReturn = output && topLevel && (outputCount <= 1 || RESULT_PARAM_NAME.equals(name));
+            return reuseReturn ? returnValue : null;
         }
 
         public static Descriptions empty() {
@@ -336,10 +360,15 @@ public final class ScriptParamDescriptionExtractor {
                     lastKey = null;
                     continue;
                 }
-                if (RETURNS_SECTION.matcher(line).matches()) {
+                Matcher retSection = RETURNS_SECTION.matcher(line);
+                if (retSection.matches()) {
                     inReturns = true;
                     inArgs = false;
                     lastKey = null;
+                    String inline = retSection.group(1).trim();
+                    if (!inline.isEmpty()) {
+                        returnValue = append(returnValue, stripReturnTypePrefix(inline));
+                    }
                     continue;
                 }
                 if (OTHER_SECTION.matcher(line).matches()) {
@@ -357,7 +386,7 @@ public final class ScriptParamDescriptionExtractor {
                     }
                 }
                 if (inReturns) {
-                    returnValue = append(returnValue, line);
+                    returnValue = append(returnValue, stripReturnTypePrefix(line));
                     continue;
                 }
                 // 标签描述的换行续行
@@ -372,6 +401,12 @@ public final class ScriptParamDescriptionExtractor {
         }
         tagged.values().removeIf(v -> v == null || v.isBlank());
         return returnValue == null || returnValue.isBlank() ? null : returnValue;
+    }
+
+    /** 去掉出参描述的类型前缀（{@code float: 总额} → {@code 总额}），无类型前缀时原样返回。 */
+    private static String stripReturnTypePrefix(String line) {
+        Matcher typed = RETURNS_TYPE_PREFIX.matcher(line);
+        return typed.matches() ? typed.group(1) : line;
     }
 
     private static void put(Map<String, String> map, String name, String desc) {

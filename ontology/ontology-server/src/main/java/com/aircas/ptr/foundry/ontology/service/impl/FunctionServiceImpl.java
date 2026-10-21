@@ -69,6 +69,8 @@ import com.aircas.ptr.foundry.ontology.service.FunctionService;
 import com.aircas.ptr.foundry.ontology.service.GroovyService;
 import com.aircas.ptr.foundry.ontology.utils.DockerCommandExecutor;
 import com.aircas.ptr.foundry.ontology.utils.OperatorFunctionFactory;
+import com.aircas.ptr.foundry.ontology.utils.ScriptParamDescriptionExtractor;
+import com.aircas.ptr.foundry.ontology.utils.ScriptParamDescriptionExtractor.Descriptions;
 import com.aircas.ptr.foundry.ontology.utils.SchemaHandleUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -1057,19 +1059,52 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
      *   2) Groovy 未声明时回退后端反射解析，且仅老契约脚本（handle 返回 FunctionResultVO）能解析成功；
      *   3) 新契约脚本 handle(input) 为单对象入参，反射拿不到字段名，返回 null 表示“无法确定”，
      *      由调用方决定创建时不建参数 / 更新时保留原参数。
+     * <p>两条来源都缺描述的参数，统一用脚本注释兜底补齐（与解析接口同一套提取规则）。
      */
     private List<FunctionParamDTO> resolveCustomizeParams(FunctionLanguageEnum language, String code, List<FunctionParamDTO> declared) {
         if (CollectionUtils.isNotEmpty(declared)) {
+            fillMissingDescriptions(declared, language, code);
             return declared;
         }
         if (language != null && language != FunctionLanguageEnum.GROOVY) {
             return null;
         }
         try {
-            return groovyService.parseGroovyCode(code);
+            List<FunctionParamDTO> parsed = groovyService.parseGroovyCode(code);
+            fillMissingDescriptions(parsed, language, code);
+            return parsed;
         } catch (Exception e) {
             log.warn("Groovy 反射解析参数失败（新契约脚本属正常现象）：{}", e.getMessage());
             return null;
+        }
+    }
+
+    /**
+     * 参数未携带描述时，从脚本注释里提取补齐（前端 IDE 面板常常只填名称与类型）。
+     * <p>已有描述的参数不覆盖，用户在界面上手写的说明优先级最高。</p>
+     */
+    private void fillMissingDescriptions(List<FunctionParamDTO> params, FunctionLanguageEnum language, String code) {
+        if (CollectionUtils.isEmpty(params)) {
+            return;
+        }
+        Descriptions descriptions = ScriptParamDescriptionExtractor.extract(language, code);
+        if (descriptions.byName().isEmpty() && descriptions.returnValue() == null) {
+            return;
+        }
+        long outputCount = params.stream().filter(p -> p.getCategory() == FunctionParamCategoryEnum.OUTPUT).count();
+        params.forEach(p -> applyDescription(p, descriptions, outputCount, true));
+    }
+
+    private void applyDescription(FunctionParamDTO p, Descriptions descriptions, long outputCount, boolean topLevel) {
+        if (StringUtils.isBlank(p.getDescription())) {
+            String description = descriptions.describe(
+                    p.getParamName(), p.getCategory() == FunctionParamCategoryEnum.OUTPUT, topLevel, outputCount);
+            if (description != null) {
+                p.setDescription(description);
+            }
+        }
+        if (CollectionUtils.isNotEmpty(p.getFields())) {
+            p.getFields().forEach(field -> applyDescription(field, descriptions, outputCount, false));
         }
     }
 

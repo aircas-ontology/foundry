@@ -147,11 +147,8 @@ public class ScriptParamParseServiceImpl implements ScriptParamParseService {
     }
 
     private void applyDescription(ScriptParsedParam p, Descriptions descriptions, long outputCount, boolean topLevel) {
-        String description = descriptions.describe(p.getName());
-        if (description == null && topLevel && p.getCategory() == FunctionParamCategoryEnum.OUTPUT
-                && (outputCount <= 1 || "result".equals(p.getName()))) {
-            description = descriptions.returnValue();
-        }
+        String description = descriptions.describe(
+                p.getName(), p.getCategory() == FunctionParamCategoryEnum.OUTPUT, topLevel, outputCount);
         if (description != null) {
             p.setDescription(description);
         }
