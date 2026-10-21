@@ -1262,6 +1262,8 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
      *   <li>标量参数（或整包传入的对象）：直接取 {@code paramValue}；</li>
      *   <li>对象参数按 {@code fields} 逐字段填：递归把子字段组装成 {@link LinkedHashMap}，
      *       使脚本按 {@code input.<参数名>.<字段>} 即可取到嵌套结构；</li>
+     *   <li>列表参数按 {@code fields} 逐项填：递归把子字段组装成 {@link java.util.ArrayList}，
+     *       使脚本按 {@code input.<参数名>[0].<字段>} 即可取到数组结构；</li>
      *   <li>{@code paramValue} 优先于 {@code fields}（兼容整包传值的老前端）；</li>
      *   <li>缺值返回 {@code null}，由 {@link #buildInputMap} 省略该键，与各语言「缺值走脚本默认」一致。</li>
      * </ul>
@@ -1274,6 +1276,18 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         if (CollectionUtils.isEmpty(fields)) {
             return null;
         }
+        // LIST 类型：把 fields 组装为数组
+        if (p.getParamType() == FunctionParamTypeEnum.LIST) {
+            List<Object> list = new ArrayList<>();
+            for (FunctionParameter f : fields) {
+                Object v = resolveParamValue(f);
+                if (v != null) {
+                    list.add(v);
+                }
+            }
+            return list.isEmpty() ? null : list;
+        }
+        // OBJECT 类型或其他类型：把 fields 组装为对象（默认行为）
         Map<String, Object> nested = new LinkedHashMap<>();
         for (FunctionParameter f : fields) {
             Object v = resolveParamValue(f);
