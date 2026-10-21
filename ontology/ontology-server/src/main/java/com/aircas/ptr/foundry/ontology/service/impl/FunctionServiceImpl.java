@@ -30,6 +30,8 @@ import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import com.aircas.ptr.foundry.ontology.model.param.BasicQueryConfig;
 import com.aircas.ptr.foundry.ontology.model.param.BasicQueryTestParam;
+import com.aircas.ptr.foundry.ontology.model.param.ContainerConfig;
+import com.aircas.ptr.foundry.ontology.model.param.ContainerFunctionCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.CompositeConfig;
 import com.aircas.ptr.foundry.ontology.model.param.CompositeNode;
 import com.aircas.ptr.foundry.ontology.model.param.CompositeParameter;
@@ -61,6 +63,7 @@ import com.aircas.ptr.foundry.ontology.repository.mainMapper.FunctionContainerIn
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.FunctionMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyActionMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyPropertyMapper;
+import com.aircas.ptr.foundry.ontology.service.ContainerFunctionService;
 import com.aircas.ptr.foundry.ontology.service.FunctionParamService;
 import com.aircas.ptr.foundry.ontology.service.FunctionService;
 import com.aircas.ptr.foundry.ontology.service.GroovyService;
@@ -154,6 +157,10 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     /** 容器算子执行器：独立执行/测试链路按 containerKey 定位运行中的容器并发起 HTTP 调用（编排引用暂未开放） */
     @Resource
     private ContainerOperatorInvoker containerOperatorInvoker;
+
+    /** 容器算子注册服务：统一创建入口在 type=CONTAINER 时分发到此处，落 N 条接口算子 + 1 运行实例 */
+    @Resource
+    private ContainerFunctionService containerFunctionService;
 
     private ObjectMapper objectMapper = new ObjectMapper()
             // 存进库的 fields 是 FunctionParamDTO 序列化结果（含 referenceType 等 VO 没有的字段），
@@ -415,14 +422,38 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 "functionApi is empty", HttpStatus.BAD_REQUEST);
         PreconditionUtils.checkArgument(StringUtils.isNotEmpty(param.getDisplayName()),
                 "displayName is empty", HttpStatus.BAD_REQUEST);
-        // 自动填充 model：未传时根据 type 推断
-        FunctionModelEnum model = param.getModel();
-        if (model == null) {
-            model = (param.getType() == FunctionTypeEnum.BASIC_QUERY) 
-                    ? FunctionModelEnum.BASIC 
-                    : FunctionModelEnum.OTHER;
+        // 容器算子：统一创建入口按类型分发——委托容器注册服务（1 请求 → N 条派生算子 + 1 运行实例），
+        // 不走下方脚本/查询/编排算子的版本管理与参数解析逻辑
+        if (param.getType() == FunctionTypeEnum.CONTAINER) {
+            containerFunctionService.createContainerFunction(buildContainerCreateParam(param));
+            return;
         }
-        String displayName = param.getDisplayName();
+        // 非容器算子：校验 → 落一行 Function → 按类型建参数（编排骨架）
+        FunctionModelEnum model = resolveModel(param);
+        String version = checkVersionAndApiUnique(param);
+        FunctionLanguageEnum language = resolveLanguageAndValidate(param, version);
+        Function func = buildAndSaveFunction(param, model, version, language);
+        saveTypedParams(func, param, language);
+    }
+
+    /**
+     * 自动填充 model：未传时按 type 推断（BASIC_QUERY→BASIC，其他→OTHER）。
+     */
+    private FunctionModelEnum resolveModel(FunctionCreateParam param) {
+        if (param.getModel() != null) {
+            return param.getModel();
+        }
+        return param.getType() == FunctionTypeEnum.BASIC_QUERY ? FunctionModelEnum.BASIC : FunctionModelEnum.OTHER;
+    }
+
+    /**
+     * 版本与 api 唯一性校验，返回规范化后的版本号：
+     * <ul>
+     *   <li>版本号格式 x.y.z；同 api 下不得重复，且必须大于已有最大版本号；</li>
+     *   <li>全新创建（basedOnOldVersion 非 true）：api 不能与任何已存在函数重复；基于旧版本创建则允许同 api。</li>
+     * </ul>
+     */
+    private String checkVersionAndApiUnique(FunctionCreateParam param) {
         // 版本管理：版本号必须大于同 api 下已有最大版本号（首次创建无此限制）
         String version = requireValidVersion(param.getVersion());
         List<Function> existVersions = listVersions(param.getFunctionApi());
@@ -442,16 +473,29 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                     "函数 api 已存在:" + param.getFunctionApi() + "，全新创建请使用不同的 api 名称", HttpStatus.BAD_REQUEST);
         }
         // 如果 basedOnOldVersion = true，则允许相同 api，只校验 api + version 不重复（已在上面校验）
-        //函数插入，新增版本默认为未发布状态
-        //language 仅 CUSTOMIZE 脚本算子有意义；基础查询/外部/容器算子存 NULL（EXTERNAL 执行链路待定，开发时再评估）
-        FunctionLanguageEnum language = null;
-        if (param.getType() == FunctionTypeEnum.CUSTOMIZE) {
-            language = param.getLanguage() == null ? FunctionLanguageEnum.GROOVY : param.getLanguage();
-            //脚本函数落库前先做语法/编译校验（走对应 runner 的 /validate），失败即拒、不落库
-            validateScript(language, param.getFunctionApi(), version, param.getCode());
+        return version;
+    }
+
+    /**
+     * 解析脚本语言并做落库前语法/编译校验：仅 CUSTOMIZE 脚本算子有意义，其他类型返回 null（存 NULL）。
+     */
+    private FunctionLanguageEnum resolveLanguageAndValidate(FunctionCreateParam param, String version) {
+        if (param.getType() != FunctionTypeEnum.CUSTOMIZE) {
+            return null;
         }
+        FunctionLanguageEnum language = param.getLanguage() == null ? FunctionLanguageEnum.GROOVY : param.getLanguage();
+        //脚本函数落库前先做语法/编译校验（走对应 runner 的 /validate），失败即拒、不落库
+        validateScript(language, param.getFunctionApi(), version, param.getCode());
+        return language;
+    }
+
+    /**
+     * 组装并保存 Function 主记录：新增版本默认未发布、状态启用（公共默认值统一走 OperatorFunctionFactory）。
+     * <p>language 仅 CUSTOMIZE 脚本算子有意义；基础查询/外部/容器算子存 NULL。</p>
+     */
+    private Function buildAndSaveFunction(FunctionCreateParam param, FunctionModelEnum model, String version, FunctionLanguageEnum language) {
         var func = OperatorFunctionFactory.operatorDefaults(
-                        param.getFunctionApi(), version, displayName, param.getType(),
+                        param.getFunctionApi(), version, param.getDisplayName(), param.getType(),
                         param.getOntologySpaceId(), model)
                 .description(param.getDescription())
                 .code(param.getCode())
@@ -459,23 +503,51 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 .referenceName(param.getReferenceName())
                 .build();
         save(func);
-        //自定义函数需要解析函数参数
+        return func;
+    }
+
+    /**
+     * 按算子类型解析并写入 function_param（各类型互斥）：
+     * <ul>
+     *   <li>CUSTOMIZE：前端 IDE 声明优先，Groovy 未声明回退后端反射解析；</li>
+     *   <li>BASIC_QUERY：序列化 queryConfig 到 code，提取变量存参；</li>
+     *   <li>COMPOSITE：校验画布配置，序列化到 code，写画布出入参；</li>
+     *   <li>EXTERNAL：序列化 apiConfig，按 inputs/outputs 生成出入参。</li>
+     * </ul>
+     */
+    private void saveTypedParams(Function func, FunctionCreateParam param, FunctionLanguageEnum language) {
         if (param.getType().equals(FunctionTypeEnum.CUSTOMIZE)) {
             //参数入库：前端 IDE 声明优先，Groovy 未声明时回退后端反射解析
             buildCustomizeParams(param.getFunctionApi(), func.getId(), language, param.getCode(), param.getParameters());
         }
-        //基础查询算子：序列化 queryConfig 到 code，提取变量存入 function_param
         if (param.getType().equals(FunctionTypeEnum.BASIC_QUERY)) {
             createBasicQueryParams(func.getId(), param.getQueryConfig());
         }
-        //函数编排：校验画布配置，序列化到 code，并把画布出入参写入 function_param
         if (param.getType().equals(FunctionTypeEnum.COMPOSITE)) {
             createCompositeParams(func.getId(), param.getFunctionApi(), param.getCompositeConfig());
         }
-        //外部API算子：序列化 apiConfig 到 code，并按 inputs/outputs 生成出入参，使其可接入编排工作流
         if (param.getType().equals(FunctionTypeEnum.EXTERNAL)) {
             createExternalParams(func.getId(), param.getApiConfig());
         }
+    }
+
+    /**
+     * 统一创建入口 → 容器算子入参适配：把 {@link FunctionCreateParam} 的公共字段与嵌套 {@link ContainerConfig}
+     * 组装成容器注册服务入参。容器专属校验（镜像存在、勾选接口非空、端口 / 容器名唯一等）在容器服务内完成。
+     */
+    private ContainerFunctionCreateParam buildContainerCreateParam(FunctionCreateParam param) {
+        ContainerConfig cc = param.getContainerConfig();
+        PreconditionUtils.checkArgument(cc != null, "容器算子缺少 containerConfig 配置", HttpStatus.BAD_REQUEST);
+        ContainerFunctionCreateParam cp = new ContainerFunctionCreateParam();
+        cp.setFunctionApi(param.getFunctionApi());
+        cp.setDisplayName(param.getDisplayName());
+        cp.setDescription(param.getDescription());
+        cp.setOntologySpaceId(param.getOntologySpaceId());
+        cp.setImage(cc.getImage());
+        cp.setInterfaceDoc(cc.getInterfaceDoc());
+        cp.setRunCommand(cc.getRunCommand());
+        cp.setSelectedInterfaces(cc.getSelectedInterfaces());
+        return cp;
     }
 
     @Override

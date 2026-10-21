@@ -30,7 +30,7 @@ public class FunctionCreateParam {
     @NotBlank(message = "functionApi is empty")
     private String functionApi;
 
-    @Schema(name = "version", description = "版本号，格式 x.y.z（如 1.0.0），同一 api 下不可重复且必须大于已有最大版本号", required = true)
+    @Schema(name = "version", description = "版本号，格式 x.y.z（如 1.0.0），同一 api 下不可重复且必须大于已有最大版本号；容器算子恒为 1.0.0（前端仍需传入）", required = true)
     @NotBlank(message = "version is empty")
     @Pattern(regexp = VERSION_PATTERN, message = "版本号格式必须为 x.y.z（如 1.0.0）")
     private String version;
@@ -97,4 +97,11 @@ public class FunctionCreateParam {
      */
     @Schema(name = "basedOnOldVersion", description = "是否基于旧版本创建函数（true: 允许相同 api 但 api+version 不重复；false/null: 全新创建，api 不能重复）")
     private Boolean basedOnOldVersion;
+
+    /**
+     * 容器算子专属配置，仅 type=CONTAINER 时传递。
+     * 统一创建入口按类型分发：容器分支据此生成 N 条接口算子 + 1 条运行实例。
+     */
+    @Schema(name = "containerConfig", description = "容器算子配置（仅 type=CONTAINER 时必填）")
+    private ContainerConfig containerConfig;
 }
