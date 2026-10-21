@@ -11,6 +11,8 @@ import com.aircas.ptr.foundry.ontology.model.vo.ScriptParseResultVO;
 import com.aircas.ptr.foundry.ontology.model.vo.ScriptParsedParamVO;
 import com.aircas.ptr.foundry.ontology.service.ScriptParamParseService;
 import com.aircas.ptr.foundry.ontology.service.parser.ScriptParamParser;
+import com.aircas.ptr.foundry.ontology.utils.ScriptParamDescriptionExtractor;
+import com.aircas.ptr.foundry.ontology.utils.ScriptParamDescriptionExtractor.Descriptions;
 import com.aircas.ptr.foundry.ontology.utils.ScriptParamSchemaUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -23,7 +25,7 @@ import java.util.Map;
 
 /**
  * 脚本参数解析服务实现：按语言路由到对应解析器（Java/Groovy 进程内 AST，Python/TS 走 runner），
- * 解析结果按 category 分组、组内自动编号后返回。
+ * 解析结果按 category 分组、组内自动编号后返回；参数描述统一由脚本注释提取。
  */
 @Slf4j
 @Service
@@ -64,6 +66,7 @@ public class ScriptParamParseServiceImpl implements ScriptParamParseService {
             log.warn("脚本参数解析异常：language={}, cause={}", language.getCode(), e.getMessage(), e);
             outcome = ScriptParseOutcome.of(ScriptParseStatus.PARSE_EXCEPTION, e.getMessage());
         }
+        enrichDescriptions(outcome, language, code);
         return toVO(outcome, language);
     }
 
@@ -111,8 +114,9 @@ public class ScriptParamParseServiceImpl implements ScriptParamParseService {
                 .paramType(p.getType())
                 .category(category)
                 .paramOrder(order)
-                .referenceType(referenceType(p, language));
-                // paramSchema/description 不产出（null）：前端保存请求本就不传这两项，由用户自行补充
+                .referenceType(referenceType(p, language))
+                .description(p.getDescription());
+                // paramSchema 不产出（null）：静态解析拿不到结构 JSON，由用户保存前自行补充
         if (p.getFields() != null && !p.getFields().isEmpty()) {
             List<ScriptParsedParamVO> fieldVOs = new ArrayList<>();
             for (int i = 0; i < p.getFields().size(); i++) {
@@ -121,6 +125,41 @@ public class ScriptParamParseServiceImpl implements ScriptParamParseService {
             builder.fields(fieldVOs);
         }
         return builder.build();
+    }
+
+    /**
+     * 用脚本注释补全解析结果的参数描述（四语言共用，Python/TS 无需改 runner）。
+     * <p>按参数名/字段名命中注释；命中不到时，顶层唯一出参（各语言标量返回统一命名 result）沿用返回值注释。</p>
+     */
+    private void enrichDescriptions(ScriptParseOutcome outcome, FunctionLanguageEnum language, String code) {
+        List<ScriptParsedParam> params = outcome.getParams();
+        if (params == null || params.isEmpty()) {
+            return;
+        }
+        Descriptions descriptions = ScriptParamDescriptionExtractor.extract(language, code);
+        if (descriptions.byName().isEmpty() && descriptions.returnValue() == null) {
+            return;
+        }
+        long outputCount = params.stream().filter(p -> p.getCategory() == FunctionParamCategoryEnum.OUTPUT).count();
+        for (ScriptParsedParam p : params) {
+            applyDescription(p, descriptions, outputCount, true);
+        }
+    }
+
+    private void applyDescription(ScriptParsedParam p, Descriptions descriptions, long outputCount, boolean topLevel) {
+        String description = descriptions.describe(p.getName());
+        if (description == null && topLevel && p.getCategory() == FunctionParamCategoryEnum.OUTPUT
+                && (outputCount <= 1 || "result".equals(p.getName()))) {
+            description = descriptions.returnValue();
+        }
+        if (description != null) {
+            p.setDescription(description);
+        }
+        if (p.getFields() != null) {
+            for (ScriptParsedParam field : p.getFields()) {
+                applyDescription(field, descriptions, outputCount, false);
+            }
+        }
     }
 
     /**
