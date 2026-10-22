@@ -1,0 +1,113 @@
+{
+  "java": {
+    "foundry.java.process": {
+      "category": "process",
+      "message": "脚本调用进程或命令执行 API。",
+      "reason": "Explicit direct API policy for untrusted standalone scripts; review against allowed business APIs before production."
+    },
+    "foundry.java.dynamic-code": {
+      "category": "dynamic-code",
+      "message": "脚本调用动态代码执行 API。",
+      "reason": "Explicit direct API policy for untrusted standalone scripts; review against allowed business APIs before production."
+    },
+    "foundry.java.deserialization": {
+      "category": "deserialization",
+      "message": "脚本调用危险反序列化 API。",
+      "reason": "Explicit direct API policy for untrusted standalone scripts; review against allowed business APIs before production."
+    },
+    "foundry.java.file-write": {
+      "category": "file-write",
+      "message": "脚本调用直接文件写入 API。",
+      "reason": "Explicit direct API policy for untrusted standalone scripts; review against allowed business APIs before production."
+    },
+    "foundry.java.network": {
+      "category": "network",
+      "message": "脚本调用直接网络访问 API。",
+      "reason": "Explicit direct API policy for untrusted standalone scripts; review against allowed business APIs before production."
+    },
+    "foundry.java.sql-injection": {
+      "category": "sql-injection",
+      "message": "SQL 执行参数包含字符串拼接或插值。",
+      "reason": "动态 SQL 可能将输入解释为 SQL 语法；请改用参数绑定。"
+    },
+    "foundry.java.resource-exhaustion": {
+      "category": "resource-exhaustion",
+      "message": "检测到无条件循环。",
+      "reason": "无条件循环可能持续消耗 CPU；需审核退出条件及运行时超时。存在 break 的循环也可能命中。"
+    }
+  },
+  "python": {
+    "foundry.python.process": {
+      "category": "process",
+      "message": "脚本调用进程或命令执行 API。",
+      "reason": "Explicit direct API policy for untrusted standalone scripts; review against allowed business APIs before production."
+    },
+    "foundry.python.dynamic-code": {
+      "category": "dynamic-code",
+      "message": "脚本调用动态代码执行 API。",
+      "reason": "Explicit direct API policy for untrusted standalone scripts; review against allowed business APIs before production."
+    },
+    "foundry.python.deserialization": {
+      "category": "deserialization",
+      "message": "脚本调用危险反序列化 API。",
+      "reason": "Explicit direct API policy for untrusted standalone scripts; review against allowed business APIs before production."
+    },
+    "foundry.python.file-write": {
+      "category": "file-write",
+      "message": "脚本调用直接文件写入 API。",
+      "reason": "Explicit direct API policy for untrusted standalone scripts; review against allowed business APIs before production."
+    },
+    "foundry.python.network": {
+      "category": "network",
+      "message": "脚本调用直接网络访问 API。",
+      "reason": "Explicit direct API policy for untrusted standalone scripts; review against allowed business APIs before production."
+    },
+    "foundry.python.sql-injection": {
+      "category": "sql-injection",
+      "message": "SQL 执行参数包含字符串拼接或插值。",
+      "reason": "动态 SQL 可能将输入解释为 SQL 语法；请改用参数绑定。"
+    },
+    "foundry.python.resource-exhaustion": {
+      "category": "resource-exhaustion",
+      "message": "检测到无条件循环。",
+      "reason": "无条件循环可能持续消耗 CPU；需审核退出条件及运行时超时。存在 break 的循环也可能命中。"
+    }
+  },
+  "typescript": {
+    "foundry.typescript.process": {
+      "category": "process",
+      "message": "脚本调用进程或命令执行 API。",
+      "reason": "Explicit direct API policy for untrusted standalone scripts; review against allowed business APIs before production."
+    },
+    "foundry.typescript.dynamic-code": {
+      "category": "dynamic-code",
+      "message": "脚本调用动态代码执行 API。",
+      "reason": "Explicit direct API policy for untrusted standalone scripts; review against allowed business APIs before production."
+    },
+    "foundry.typescript.deserialization": {
+      "category": "deserialization",
+      "message": "脚本调用危险反序列化 API。",
+      "reason": "Explicit direct API policy for untrusted standalone scripts; review against allowed business APIs before production."
+    },
+    "foundry.typescript.file-write": {
+      "category": "file-write",
+      "message": "脚本调用直接文件写入 API。",
+      "reason": "Explicit direct API policy for untrusted standalone scripts; review against allowed business APIs before production."
+    },
+    "foundry.typescript.network": {
+      "category": "network",
+      "message": "脚本调用直接网络访问 API。",
+      "reason": "Explicit direct API policy for untrusted standalone scripts; review against allowed business APIs before production."
+    },
+    "foundry.typescript.sql-injection": {
+      "category": "sql-injection",
+      "message": "SQL 执行参数包含字符串拼接或插值。",
+      "reason": "动态 SQL 可能将输入解释为 SQL 语法；请改用参数绑定。"
+    },
+    "foundry.typescript.resource-exhaustion": {
+      "category": "resource-exhaustion",
+      "message": "检测到无条件循环。",
+      "reason": "无条件循环可能持续消耗 CPU；需审核退出条件及运行时超时。存在 break 的循环也可能命中。"
+    }
+  }
+}
