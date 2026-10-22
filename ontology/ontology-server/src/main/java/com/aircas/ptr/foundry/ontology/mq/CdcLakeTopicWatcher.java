@@ -1,6 +1,8 @@
 package com.aircas.ptr.foundry.ontology.mq;
 
 import com.aircas.ptr.foundry.ontology.mq.consumer.EntityDatasourceCdcTopics;
+import com.aircas.ptr.foundry.ontology.model.common.Constants;
+import com.xxl.job.core.handler.annotation.XxlJob;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.admin.AdminClient;
@@ -10,7 +12,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.listener.MessageListenerContainer;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.util.HashMap;
@@ -33,6 +34,10 @@ import java.util.regex.Pattern;
  * <p>
  * 只处理消费端：若新表连 topic 都没建出来（Debezium 侧没捕获该表），本组件不会触发，那种情况仍需重启服务
  * 让 {@code CdcTaskBuilder} 重新下发连接器配置。
+ * <p>
+ * 由 xxl-job 调度（JobHandler = DISCOVER_CDC_LAKE_TOPIC），多实例部署下路由策略必须选「广播执行」：
+ * 这里重启的是当前 JVM 内的监听容器，只路由到一台 executor 时其余实例的 pattern 依旧不会刷新，
+ * 等于退回"新增表要重启服务"的老问题。
  */
 @Slf4j
 @Component
@@ -55,8 +60,7 @@ public class CdcLakeTopicWatcher {
     private boolean primed;
     private AdminClient adminClient;
 
-    @Scheduled(initialDelayString = "${cdc.kafka.topic-check-initial-delay-ms:30000}",
-            fixedDelayString = "${cdc.kafka.topic-check-interval-ms:30000}")
+    @XxlJob(Constants.DISCOVER_CDC_LAKE_TOPIC_JOB_NAME)
     public void discoverNewLakeTopics() {
         Set<String> current = listLakeTopics();
         if (current == null) {

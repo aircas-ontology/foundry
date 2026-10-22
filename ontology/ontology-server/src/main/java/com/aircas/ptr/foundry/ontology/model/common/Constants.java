@@ -5,6 +5,8 @@ public interface Constants {
 
     String ACTION_EXECUTE_JOB_NAME = "EXECUTE_ACTION";
 
+    String DISCOVER_CDC_LAKE_TOPIC_JOB_NAME = "DISCOVER_CDC_LAKE_TOPIC";
+
     String ACCESS_TOKEN_HEADER = "access-token";
 
     String REFRESH_TOKEN_HEADER = "refresh-token";
