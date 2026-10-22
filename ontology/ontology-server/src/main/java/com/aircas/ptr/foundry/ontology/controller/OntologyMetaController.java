@@ -2,17 +2,21 @@ package com.aircas.ptr.foundry.ontology.controller;
 
 import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.common.base.ResultCode;
+import com.aircas.ptr.foundry.common.util.DownloadUtil;
 import com.aircas.ptr.foundry.ontology.controller.validator.OntologyIdVerify;
+import com.aircas.ptr.foundry.ontology.model.enums.OntologyExportTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyOrderByEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.QuerySortEnum;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyMetaCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.vo.IdentifierVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyGroupMetaVO;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaBriefVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaNodeVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaStatisticVO;
 import com.aircas.ptr.foundry.ontology.service.OntologyMetaService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -22,6 +26,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import jakarta.annotation.Resource;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import java.util.List;
 
@@ -34,6 +39,25 @@ public class OntologyMetaController {
 
     @Resource
     private OntologyMetaService ontologyMetaService;
+
+    @Resource
+    private ObjectMapper jacksonObjectMapper;
+
+
+    @GetMapping("/export")
+    @Operation(summary = "导出单个本体（含 schema，可选是否含实例数据）")
+    public void exportOntology(@RequestParam(name = "uniqueIdentifier") @OntologyIdVerify String uniqueIdentifier,
+                               @RequestParam(name = "exportType", defaultValue = "INSTANCE")
+                               @Parameter(description = "导出类型：SCHEMA=仅结构, INSTANCE=含实例数据（默认）")
+                               OntologyExportTypeEnum exportType,
+                               HttpServletResponse response) throws Exception {
+        var dtos = ontologyMetaService.exportOntology(uniqueIdentifier, exportType);
+        var apiName = CollectionUtils.isNotEmpty(dtos) && dtos.get(0).getMetadata() != null
+                ? dtos.get(0).getMetadata().getApiName() : null;
+        var suffix = exportType == OntologyExportTypeEnum.SCHEMA ? "_schema" : "";
+        var fileName = (apiName == null || apiName.isEmpty() ? "ontology_" + uniqueIdentifier : apiName) + suffix + ".json";
+        DownloadUtil.writeJsonAttachment(response, jacksonObjectMapper, fileName, dtos);
+    }
 
 
     @PostMapping("/import")
@@ -71,6 +95,13 @@ public class OntologyMetaController {
     @Operation(summary = "根据unique identifier查询一个本体元数据")
     public RestResult<OntologyMetaInfoVO> getMetaByUniqueIdentifier(@RequestParam(name = "uniqueIdentifier", required = true) @Parameter(description = "本体unique identifer") @OntologyIdVerify String uniqueIdentifier) {
         return RestResult.ofData(ontologyMetaService.getMetaByUniqueIdentifier(uniqueIdentifier));
+    }
+
+
+    @GetMapping("/{id}")
+    @Operation(summary = "根据对象id查询对象简要信息（id、对象名称、空间名称、uniqueIdentifier）")
+    public RestResult<OntologyMetaBriefVO> getMetaById(@PathVariable(name = "id", required = true) @Parameter(description = "本地对象id（ontology_meta 主键）") Long id) {
+        return RestResult.ofData(ontologyMetaService.getMetaById(id));
     }
 
 

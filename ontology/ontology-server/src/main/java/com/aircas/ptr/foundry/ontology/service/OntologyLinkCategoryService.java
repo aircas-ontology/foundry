@@ -15,5 +15,5 @@ public interface OntologyLinkCategoryService extends IService<OntologyLinkCatego
 
     void deleteCategory(OntologyLinkCategoryDeleteParam param);
 
-    OntologyLinkCategoryVO getCategoryTree(Integer spaceId);
+    OntologyLinkCategoryVO getCategoryTree(Integer spaceId, String ontologyUniqueIdentifierFrom);
 }

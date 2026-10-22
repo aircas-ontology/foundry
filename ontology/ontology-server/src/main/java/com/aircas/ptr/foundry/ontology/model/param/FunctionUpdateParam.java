@@ -42,4 +42,11 @@ public class FunctionUpdateParam {
     @Schema(name = "type", description = "函数模型")
     @NotNull(message = "model is null")
     private FunctionModelEnum model;
+
+    /**
+     * 基础查询算子的查询模板配置，仅 type=BASIC_QUERY 时传递。
+     * 后端将其序列化为 JSON 存入 code 字段，并自动提取变量存入 function_param。
+     */
+    @Schema(name = "queryConfig", description = "基础查询算子配置（仅 type=BASIC_QUERY 时必填）")
+    private BasicQueryConfig queryConfig;
 }

@@ -1,6 +1,8 @@
 package com.aircas.ptr.foundry.ontology.model.po;
 
 import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
+import com.aircas.ptr.foundry.common.util.DebeziumDateReader;
+import com.alibaba.fastjson2.annotation.JSONField;
 import com.baomidou.mybatisplus.annotation.*;
 import com.aircas.ptr.foundry.ontology.repository.handler.JsonbTypeHandler;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -45,12 +47,14 @@ public class OntologyProperty implements Serializable {
     /**
      * 记录创建时间
      */
+    @JSONField(deserializeUsing = DebeziumDateReader.class)
     @TableField(fill = FieldFill.INSERT)
     private Date createTime;
 
     /**
      * 记录修改时间
      */
+    @JSONField(deserializeUsing = DebeziumDateReader.class)
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private Date updateTime;
 

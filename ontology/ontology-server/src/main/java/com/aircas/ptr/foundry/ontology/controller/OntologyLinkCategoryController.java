@@ -52,10 +52,14 @@ public class OntologyLinkCategoryController {
 
     @GetMapping("/tree")
     @Operation(summary = "查询关系分类体系树")
-    public RestResult<OntologyLinkCategoryVO> getLinkCategoryTree(@RequestParam(required = true, name = "spaceId")
-                                                                 @Parameter(description = "本体空间id")
-                                                                 @SpaceIdVerify Integer spaceId) {
-        OntologyLinkCategoryVO res = ontologyLinkCategoryService.getCategoryTree(spaceId);
+    public RestResult<OntologyLinkCategoryVO> getLinkCategoryTree(
+            @RequestParam(required = true, name = "spaceId")
+            @Parameter(description = "本体空间id")
+            @SpaceIdVerify Integer spaceId,
+            @RequestParam(required = false, name = "ontologyUniqueIdentifierFrom")
+            @Parameter(description = "本体对象唯一标识，选填；传入时仅返回该本体关联的关系")
+            String ontologyUniqueIdentifierFrom) {
+        OntologyLinkCategoryVO res = ontologyLinkCategoryService.getCategoryTree(spaceId, ontologyUniqueIdentifierFrom);
         return RestResult.ofData(res);
     }
 }

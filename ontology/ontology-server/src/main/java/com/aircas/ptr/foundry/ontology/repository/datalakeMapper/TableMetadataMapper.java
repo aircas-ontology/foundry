@@ -13,7 +13,7 @@ public interface TableMetadataMapper {
 
     List<TableColumnDesc> queryColumnMetadata(@Param("schemaName") String schemaName, @Param("tableName") String tableName);
 
-    List<DatasourceTable> listTables(@Param("schemaName") String schemaName);
+    List<DatasourceTable> listTables(@Param("schemaName") String schemaName, @Param("keyword") String keyword);
 
     List<DatasourceTable> listTablesPage(@Param("schemaName") String schemaName,
                                          @Param("keyword") String keyword,

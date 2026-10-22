@@ -349,7 +349,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         //get schema name
         var schemaName = resolveSchemaName(ontologyUniqueIdentifier);
         var props = list(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier));
-        var tableMap = tableMetadataMapper.listTables(schemaName).stream().collect(Collectors.toMap(v -> v.getTableName(), v -> v.getDescription() != null ? v.getDescription() : ""));
+        var tableMap = tableMetadataMapper.listTables(schemaName, null).stream().collect(Collectors.toMap(v -> v.getTableName(), v -> v.getDescription() != null ? v.getDescription() : ""));
 
         return props.stream().map(v -> DataConverter.convert(v).setDatasourceDescription(tableMap.get(v.getDatasourceId())))
                 .collect(Collectors.toList());
@@ -903,7 +903,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                     notifyEntityTableSchemaChange(ontologyIdentifier, schemaName, mainDS, true, columns, null, null, DatasourceEventTypeEnum.ADD_COLUMN);
                 }
                 //更新数据源属性
-                list.forEach(p -> p.setDatasourceId(mainDS).setDatasourceColumnName(p.getApiName()));
+                list.forEach(p -> p.setDatasourceId(mainDS).setDatasourceColumnName(p.getApiName()).setDatasourceSchema(schemaName));
             }
             // 其他属性关联表
             else {
@@ -948,7 +948,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                     notifyEntityTableSchemaChange(ontologyIdentifier, schemaName, ds, false, columns, pkColumnName, relatedColumn, DatasourceEventTypeEnum.ADD_COLUMN);
                 }
                 //更新数据源属性
-                list.forEach(p -> p.setDatasourceId(ds).setDatasourceColumnName(p.getApiName()));
+                list.forEach(p -> p.setDatasourceId(ds).setDatasourceColumnName(p.getApiName()).setDatasourceSchema(schemaName));
             }
         });
         //批量更新本体属性数据源
