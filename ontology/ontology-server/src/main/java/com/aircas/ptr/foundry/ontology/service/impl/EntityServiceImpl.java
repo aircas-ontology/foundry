@@ -1453,6 +1453,11 @@ public class EntityServiceImpl implements EntityService {
             joinedTables.add(dsId);
         }
         // 5. 构建 WHERE 部分
+        // 先校验过滤值类型（属性存在性 + 数值/布尔/日期可解析），拦截空串等脏值，
+        // 否则数值型空串会在 formatSqlValue 拼出 "col = " 残缺 SQL，抛数据库层语法错误
+        if (param.getFilters() != null) {
+            validateFilterGroup(param.getFilters(), propMap);
+        }
         var whereBuilder = new StringBuilder();
         if (param.getFilters() != null && CollectionUtils.isNotEmpty(param.getFilters().getChildren())) {
             var whereClause = buildWhereClause(param.getFilters(), propMap);
@@ -1708,7 +1713,11 @@ public class EntityServiceImpl implements EntityService {
         }
         if (type == OntologyDataTypeEnum.Float || type == OntologyDataTypeEnum.Double
                 || type == OntologyDataTypeEnum.Long || type == OntologyDataTypeEnum.Int) {
-            return String.valueOf(value);
+            String strVal = value.toString();
+            if (StringUtils.isBlank(strVal)) {
+                throw new BusinessException("数值型过滤值不能为空", HttpStatus.BAD_REQUEST);
+            }
+            return strVal;
         }
         if (type == OntologyDataTypeEnum.Bool) {
             return Boolean.TRUE.equals(value) ? "TRUE" : "FALSE";
