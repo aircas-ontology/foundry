@@ -1,13 +1,16 @@
 package com.aircas.ptr.foundry.ontology.repository.mainMapper;
 
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.ScanStatus;
 import com.aircas.ptr.foundry.ontology.model.po.Function;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
+import java.sql.Timestamp;
 
 @Mapper
 public interface FunctionMapper extends BaseMapper<Function> {
@@ -33,4 +36,13 @@ public interface FunctionMapper extends BaseMapper<Function> {
                                      @Param("publishStatus") Integer publishStatus,
                                      @Param("startDate") String startDate,
                                      @Param("endDate") String endDate);
+
+    int updateDraftFunction(@Param("function") Function function,
+                            @Param("originalUpdateTime") Timestamp originalUpdateTime);
+
+    int updateDraftScanAndPublish(@Param("id") Long id,
+                                  @Param("originalUpdateTime") Timestamp originalUpdateTime,
+                                  @Param("publish") Integer publish,
+                                  @Param("scanStatus") ScanStatus scanStatus,
+                                  @Param("scanResult") JsonNode scanResult);
 }

@@ -5,6 +5,8 @@ import com.aircas.ptr.foundry.ontology.model.enums.FunctionLanguageEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionModelEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionRuntimeStatusEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.ScanStatus;
+import com.aircas.ptr.foundry.ontology.model.dto.scan.FunctionScanSummary;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
@@ -33,20 +35,26 @@ public class FunctionInfoVO {
     @Schema(name = "publishStatus", description = "发布状态：0 未发布，1 已发布")
     private Integer publishStatus;
 
+    @Schema(name = "scanStatus", description = "安全扫描状态", requiredMode = Schema.RequiredMode.REQUIRED)
+    private ScanStatus scanStatus;
+
+    @Schema(name = "scanResult", description = "精简扫描结果，仅包含 summary", requiredMode = Schema.RequiredMode.REQUIRED)
+    private FunctionScanSummary scanResult;
+
     @Schema(name = "displayName", description = "函数名称", required = true)
     private String displayName;
 
     @Schema(name = "description", description = "描述")
     private String description;
 
-    @Schema(name = "type", description = "函数模型")
+    @Schema(name = "model", description = "函数模型")
     @NotNull(message = "model is null")
     private FunctionModelEnum model;
 
     @Schema(name = "type", description = "函数类型")
     private FunctionTypeEnum type;
 
-    @Schema(name = "language", description = "脚本语言（仅 CUSTOMIZE/EXTERNAL 有意义）")
+    @Schema(name = "language", description = "脚本语言（仅 CUSTOMIZE 有意义）")
     private FunctionLanguageEnum language;
 
     @Schema(name = "ontologySpaceId", description = "所属本体空间 id")
