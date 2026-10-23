@@ -46,7 +46,7 @@ public class SemgrepScanClient {
     private static final Pattern REQUEST_ID_PATTERN = Pattern.compile("[A-Za-z0-9_.:-]{1,128}");
     private static final Pattern HASH_PATTERN = Pattern.compile("[0-9a-f]{64}");
     private static final Set<String> REQUIRED_RESPONSE_FIELDS = Set.of(
-            "requestId", "scanId", "durationMs", "findingsTruncated", "findings", "error");
+            "scanId", "durationMs", "cached", "findingsTruncated", "findings");
 
     private final SemgrepScanProperties properties;
     private final ObjectMapper objectMapper;
@@ -93,7 +93,7 @@ public class SemgrepScanClient {
             try (Response response = httpClient.newCall(request).execute()) {
                 byte[] body = readBounded(response.body());
                 handleHttpStatus(response.code(), body);
-                SemgrepScanResponse scanResponse = parseSuccess(body, requestId);
+                SemgrepScanResponse scanResponse = parseSuccess(body);
                 OffsetDateTime scannedAt = OffsetDateTime.now(clock);
                 log.info("Semgrep scan completed requestId={} scanId={} codeHash={} durationMs={}",
                         requestId, scanResponse.scanId(), codeHash, scanResponse.durationMs());
@@ -193,12 +193,12 @@ public class SemgrepScanClient {
         }
     }
 
-    private SemgrepScanResponse parseSuccess(byte[] body, String expectedRequestId) {
+    private SemgrepScanResponse parseSuccess(byte[] body) {
         try {
             JsonNode root = objectMapper.readTree(body);
-            validateResponseShape(root, expectedRequestId);
+            validateResponseShape(root);
             SemgrepScanResponse response = objectMapper.treeToValue(root, SemgrepScanResponse.class);
-            validateResponseValues(response, expectedRequestId);
+            validateResponseValues(response);
             return response;
         } catch (SemgrepScanException exception) {
             throw exception;
@@ -207,7 +207,7 @@ public class SemgrepScanClient {
         }
     }
 
-    private void validateResponseShape(JsonNode root, String expectedRequestId) {
+    private void validateResponseShape(JsonNode root) {
         if (root == null || !root.isObject()) {
             throw new SemgrepScanException(ScanErrorCode.INVALID_SCAN_RESPONSE);
         }
@@ -216,21 +216,21 @@ public class SemgrepScanClient {
                 throw new SemgrepScanException(ScanErrorCode.INVALID_SCAN_RESPONSE);
             }
         }
-        if (!root.path("requestId").isTextual()
-                || !root.path("scanId").isTextual()
+        JsonNode error = root.get("error");
+        if (!root.path("scanId").isTextual()
                 || !root.path("durationMs").canConvertToLong()
+                || !root.path("cached").isBoolean()
                 || !root.path("findingsTruncated").isBoolean()
                 || !root.path("findings").isArray()
-                || !(root.get("error").isNull() || root.get("error").isObject())
-                || !expectedRequestId.equals(root.path("requestId").textValue())) {
+                || error != null && !(error.isNull() || error.isObject())) {
             throw new SemgrepScanException(ScanErrorCode.INVALID_SCAN_RESPONSE);
         }
     }
 
-    private void validateResponseValues(SemgrepScanResponse response, String expectedRequestId) {
-        if (!expectedRequestId.equals(response.requestId())
-                || response.scanId() == null || response.scanId().isBlank()
+    private void validateResponseValues(SemgrepScanResponse response) {
+        if (response.scanId() == null || response.scanId().isBlank()
                 || response.durationMs() == null || response.durationMs() < 0
+                || response.cached() == null || response.cached()
                 || response.findingsTruncated() == null
                 || response.findings() == null || response.findings().size() > 200
                 || response.error() != null

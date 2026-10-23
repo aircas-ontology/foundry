@@ -7,9 +7,9 @@ import java.util.List;
 /** 扫描服务成功 HTTP 响应。字段存在性由客户端在反序列化前校验。 */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record SemgrepScanResponse(
-        String requestId,
         String scanId,
         Long durationMs,
+        Boolean cached,
         Boolean findingsTruncated,
         List<SemgrepFindingResponse> findings,
         SemgrepErrorResponse error) {
