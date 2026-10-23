@@ -16,24 +16,34 @@ import javax.tools.SimpleJavaFileObject;
 import javax.tools.StandardJavaFileManager;
 import javax.tools.ToolProvider;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.net.URI;
+import java.net.URL;
+import java.net.URLClassLoader;
+import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.security.CodeSource;
 import java.security.MessageDigest;
+import java.security.ProtectionDomain;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.jar.Attributes;
+import java.util.jar.JarFile;
+import java.util.jar.Manifest;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -127,9 +137,10 @@ public class InProcessJavaScriptEngine implements ScriptEngine {
 
             JavaFileObject source = new StringSource(simpleName, code);
             // 传入应用 classpath，使脚本能 import 项目内部类
+            String classpath = getClasspath();
             List<String> options = new ArrayList<>();
             options.add("-classpath");
-            options.add(getClasspath());
+            options.add(classpath);
             options.add("-parameters");
 
             JavaCompiler.CompilationTask task = compiler.getTask(null, fm, diagnostics, options, null, List.of(source));
@@ -141,6 +152,7 @@ public class InProcessJavaScriptEngine implements ScriptEngine {
                         sb.append(d.getMessage(null)).append("; ");
                     }
                 }
+                logClasspathDiagnostics(classpath);
                 throw new BusinessException("Java 编译失败：" + sb);
             }
         } catch (BusinessException e) {
@@ -164,17 +176,153 @@ public class InProcessJavaScriptEngine implements ScriptEngine {
         return new CompiledJava(className, loader);
     }
 
-    /**
-     * 获取应用 classpath。优先用系统属性 java.class.path（开发环境），
-     * 若为 fat jar 则回退到 ClassLoader 的 URL 列表。
-     */
+    /** 同一进程内 classpath 不变，首次拼好即缓存，避免每次编译都扫一遍 jar。 */
+    private volatile String cachedClasspath;
+
     private String getClasspath() {
-        String cp = System.getProperty("java.class.path");
-        if (cp != null && !cp.isBlank()) {
-            return cp;
+        String cached = cachedClasspath;
+        if (cached != null) {
+            return cached;
         }
-        // fat jar 场景：从 ClassLoader 拼接
-        return cp == null ? "." : cp;
+        String classpath = buildClasspath();
+        cachedClasspath = classpath;
+        return classpath;
+    }
+
+    /**
+     * 拼 javac 用的应用 classpath，使脚本能 import 主程序自己的类。
+     * <p>只取 {@code java.class.path} 不够：IDE「缩短命令行＝JAR manifest / classpath file」与 {@code java -jar}
+     * 启动下该属性只剩一两项，脚本会报 {@code package com.aircas... does not exist}。
+     * 这里三路合并：系统属性（条目极少时才展开中间 jar 的 manifest Class-Path）+ 本类 CodeSource + ClassLoader 链上的 URL。</p>
+     */
+    private String buildClasspath() {
+        Set<String> entries = new LinkedHashSet<>();
+        List<String> fromProperty = splitPath(System.getProperty("java.class.path"));
+        entries.addAll(fromProperty);
+        // 只在属性看起来被「缩短」成少数条目时才读清单，否则要为每个依赖 jar 打开一次 JarFile
+        if (fromProperty.size() <= 3) {
+            for (String entry : fromProperty) {
+                addManifestClassPath(entries, entry);
+            }
+        }
+        addCodeSource(entries, InProcessJavaScriptEngine.class);
+        ClassLoader current = getClass().getClassLoader();
+        while (current != null) {
+            if (current instanceof URLClassLoader urlClassLoader) {
+                for (URL url : urlClassLoader.getURLs()) {
+                    addLocation(entries, url);
+                }
+            }
+            current = current.getParent();
+        }
+        return String.join(File.pathSeparator, entries);
+    }
+
+    /**
+     * 编译失败自检：输出应用自身类的运行时来源与 javac 实际拿到的 classpath。
+     * <p>来源是 {@code file:.../target/classes} 而 classpath 里没有它 ⇒ classpath 取漏了；
+     * 来源是 jar 内嵌套路径（fat jar）⇒ 嵌套 jar javac 读不了，需要展开目录或先抽取 BOOT-INF。</p>
+     */
+    private void logClasspathDiagnostics(String classpath) {
+        int count = classpath.isBlank() ? 0 : classpath.split(Pattern.quote(File.pathSeparator)).length;
+        log.warn("Java 脚本编译失败自检：本类运行时来源={}，classpath 条目数={}，classpath={}",
+                InProcessJavaScriptEngine.class.getResource("InProcessJavaScriptEngine.class"), count, classpath);
+    }
+
+    private static List<String> splitPath(String path) {
+        List<String> items = new ArrayList<>();
+        if (path == null || path.isBlank()) {
+            return items;
+        }
+        for (String entry : path.split(Pattern.quote(File.pathSeparator))) {
+            if (!entry.isBlank()) {
+                items.add(entry.trim());
+            }
+        }
+        return items;
+    }
+
+    /** 展开中间 jar 的 manifest Class-Path（相对路径按该 jar 所在目录解析）。 */
+    private static void addManifestClassPath(Set<String> entries, String entry) {
+        if (entry == null || !entry.toLowerCase().endsWith(".jar")) {
+            return;
+        }
+        File jar = new File(entry);
+        if (!jar.isFile()) {
+            return;
+        }
+        try (JarFile jarFile = new JarFile(jar)) {
+            Manifest manifest = jarFile.getManifest();
+            String classPath = manifest == null
+                    ? null : manifest.getMainAttributes().getValue(Attributes.Name.CLASS_PATH);
+            if (classPath == null || classPath.isBlank()) {
+                return;
+            }
+            File baseDir = jar.getParentFile();
+            for (String relative : classPath.split("\\s+")) {
+                if (relative.isBlank()) {
+                    continue;
+                }
+                File resolved = toLocalFile(URLDecoder.decode(relative, StandardCharsets.UTF_8), baseDir);
+                if (resolved != null && resolved.exists()) {
+                    entries.add(resolved.getAbsolutePath());
+                }
+            }
+        } catch (IOException e) {
+            log.debug("读取 classpath 项 manifest 失败：{}（{}）", entry, e.getMessage());
+        }
+    }
+
+    /**
+     * manifest Class-Path 的值是 URL 写法：可能是 {@code file:/D:/x}、{@code /D:/x}，也可能是相对该中间 jar 的路径。
+     * Windows 下 {@code new File("/D:/x")} 会被当成「当前盘根目录」而非 D 盘，所以要先剥掉盘符前的斜杠。
+     */
+    private static File toLocalFile(String raw, File baseDir) {
+        String path = raw.startsWith("file:") ? raw.substring("file:".length()) : raw;
+        if (path.length() > 2 && path.charAt(0) == '/' && Character.isLetter(path.charAt(1)) && path.charAt(2) == ':') {
+            path = path.substring(1);
+        }
+        if (path.isBlank()) {
+            return null;
+        }
+        File direct = new File(path);
+        if (direct.isAbsolute() || baseDir == null) {
+            return direct;
+        }
+        return new File(baseDir, path);
+    }
+
+    private static void addCodeSource(Set<String> entries, Class<?> clazz) {
+        try {
+            ProtectionDomain domain = clazz.getProtectionDomain();
+            addLocation(entries, domain == null ? null : domain.getCodeSource());
+        } catch (SecurityException | IllegalArgumentException e) {
+            log.debug("取本类 CodeSource 失败：{}", e.getMessage());
+        }
+    }
+
+    private static void addLocation(Set<String> entries, CodeSource source) {
+        if (source != null) {
+            addLocation(entries, source.getLocation());
+        }
+    }
+
+    /** 只收 {@code file:} 协议且磁盘上真实存在的条目；{@code jar:} 等嵌套协议 javac 读不了。 */
+    private static void addLocation(Set<String> entries, URL url) {
+        if (url == null || !"file".equalsIgnoreCase(url.getProtocol())) {
+            return;
+        }
+        try {
+            File file = new File(url.toURI());
+            if (file.exists()) {
+                entries.add(file.getAbsolutePath());
+            }
+        } catch (Exception e) {
+            String decoded = URLDecoder.decode(url.getPath(), StandardCharsets.UTF_8);
+            if (new File(decoded).exists()) {
+                entries.add(decoded);
+            }
+        }
     }
 
     private String detectClassName(String code) {

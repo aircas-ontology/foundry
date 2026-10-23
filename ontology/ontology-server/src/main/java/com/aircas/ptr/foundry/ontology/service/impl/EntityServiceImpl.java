@@ -47,6 +47,7 @@ import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.context.expression.MapAccessor;
+import org.springframework.dao.DataAccessException;
 import org.springframework.expression.Expression;
 import org.springframework.expression.ExpressionParser;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
@@ -1677,12 +1678,15 @@ public class EntityServiceImpl implements EntityService {
                 hasAggregation = true;
                 switch (selectProp.getAggFunc()) {
                     case COUNT:
-                    case SUM:
-                    case AVG:
                     case MAX:
                     case MIN:
                     case DISTINCT:
                         selectBuilder.append(selectProp.getAggFunc().getValue()).append("(").append(columnRef).append(")");
+                        break;
+                    case SUM:
+                    case AVG:
+                        selectBuilder.append(selectProp.getAggFunc().getValue()).append("(")
+                                .append(toNumericExpr(columnRef, prop.getPropertyType())).append(")");
                         break;
                     default:
                         selectBuilder.append(columnRef);
@@ -1796,7 +1800,17 @@ public class EntityServiceImpl implements EntityService {
             // 数据SQL
             dataSql = baseSql + " LIMIT " + pageSize + " OFFSET " + offset;
         }
-        var resultMaps = objectMapper.queryBySql(dataSql);
+        List<Map<String, Object>> resultMaps;
+        try {
+            resultMaps = objectMapper.queryBySql(dataSql);
+        } catch (DataAccessException e) {
+            log.error("通用查询执行失败, sql: {}", dataSql, e);
+            if (StringUtils.defaultString(e.getMostSpecificCause().getMessage())
+                    .contains("invalid input syntax for type numeric")) {
+                throw new BusinessException("聚合列存在非数字数据，无法转换为数值类型", HttpStatus.BAD_REQUEST);
+            }
+            throw e;
+        }
         // 9. 转换结果
         List<List<EntityPropertyGenericQueryVO>> resultVOs = Lists.newArrayList();
         for (var row : resultMaps) {
@@ -1835,6 +1849,21 @@ public class EntityServiceImpl implements EntityService {
 
     private static String wrapColumnRef(String schema, String tableName, String columnName) {
         return wrapTableRef(schema, tableName) + "." + wrapWithDoubleQuotes(columnName);
+    }
+
+    /**
+     * SUM/AVG 可直接下推到数据库的数值属性类型。
+     */
+    private static final Set<OntologyDataTypeEnum> NUMERIC_PROPERTY_TYPES = EnumSet.of(
+            OntologyDataTypeEnum.Byte, OntologyDataTypeEnum.Short, OntologyDataTypeEnum.Int,
+            OntologyDataTypeEnum.Long, OntologyDataTypeEnum.Float, OntologyDataTypeEnum.Double,
+            OntologyDataTypeEnum.Decimal);
+
+    private static String toNumericExpr(String columnRef, OntologyDataTypeEnum propType) {
+        if (propType != null && NUMERIC_PROPERTY_TYPES.contains(propType)) {
+            return columnRef;
+        }
+        return "(NULLIF((" + columnRef + ")::text, '')::numeric)";
     }
 
     private String buildWhereClause(FilterGroupParam group, Map<String, OntologyProperty> propMap) {

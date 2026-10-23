@@ -7,6 +7,7 @@ import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.Operation;
 import io.swagger.v3.oas.models.PathItem;
 import io.swagger.v3.oas.models.media.ArraySchema;
+import io.swagger.v3.oas.models.media.ComposedSchema;
 import io.swagger.v3.oas.models.media.Content;
 import io.swagger.v3.oas.models.media.MediaType;
 import io.swagger.v3.oas.models.media.ObjectSchema;
@@ -25,9 +26,13 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 容器算子接口文档探查服务：用 swagger-parser 解析 OpenAPI 3.x / Swagger 2.0 文档，
@@ -37,6 +42,9 @@ import java.util.Map;
 @Slf4j
 @Service
 public class OpenApiProbeService {
+
+    /** 子字段最多下探的层数：兜住自引用 schema（如 Student.children 仍是 Student）与 resolveFully 展开出的超深结构 */
+    private static final int MAX_FIELD_DEPTH = 5;
 
     /**
      * 探查文档，返回接口列表。
@@ -142,34 +150,97 @@ public class OpenApiProbeService {
                 .build();
     }
 
-    /** 把 schema 展开一层：对象取其 properties，数组取 items 的 properties，其余作为单个类型占位 */
+    /**
+     * 把 schema 展开为参数列表并逐层递归：对象取 properties，数组取 items 的 properties，
+     * 子字段挂在父参数的 {@code fields} 上。
+     * <p>字段名保持文档中的原始名（{@code id}、{@code name}），不拼成 {@code student.id}：
+     * 执行期按顶层参数名组装请求体，扁平名会让容器收到字面量键 {@code "student.id"}。</p>
+     */
     private void flattenSchemaInto(Schema<?> schema, String in, List<ContainerInterfaceParam> target) {
-        if (schema == null) {
-            return;
+        target.addAll(describeFields(schema, in, 0, Collections.newSetFromMap(new IdentityHashMap<>())));
+    }
+
+    /** 列出 schema 的字段，并递归填充每个字段的 fields；depth 从 0 起算 */
+    private List<ContainerInterfaceParam> describeFields(Schema<?> schema, String in, int depth, Set<Schema<?>> path) {
+        List<ContainerInterfaceParam> fields = new ArrayList<>();
+        Schema<?> carrier = fieldCarrier(schema);
+        if (carrier == null || depth >= MAX_FIELD_DEPTH || !path.add(carrier)) {
+            return fields;
         }
-        Schema<?> effective = schema;
-        if (schema instanceof ArraySchema) {
-            effective = ((ArraySchema) schema).getItems();
-            if (effective == null) {
-                return;
-            }
+        Map<String, Schema> props = carrier.getProperties();
+        if (props == null || props.isEmpty()) {
+            path.remove(carrier);
+            return fields;
         }
-        if (effective instanceof ObjectSchema || "object".equals(effective.getType())) {
-            Map<String, Schema> props = effective.getProperties();
-            if (props == null || props.isEmpty()) {
-                return;
-            }
-            List<String> required = effective.getRequired() == null ? new ArrayList<>() : effective.getRequired();
-            for (Map.Entry<String, Schema> prop : props.entrySet()) {
-                target.add(ContainerInterfaceParam.builder()
-                        .name(prop.getKey())
+        List<String> required = carrier.getRequired() == null ? Collections.emptyList() : carrier.getRequired();
+        try {
+            for (Map.Entry<String, Schema> entry : props.entrySet()) {
+                Schema<?> prop = entry.getValue();
+                List<ContainerInterfaceParam> children = describeFields(prop, in, depth + 1, path);
+                fields.add(ContainerInterfaceParam.builder()
+                        .name(entry.getKey())
                         .in(in)
-                        .required(required.contains(prop.getKey()))
-                        .type(schemaType(prop.getValue()))
-                        .description(firstNonBlank(prop.getValue().getDescription(), ""))
+                        .required(required.contains(entry.getKey()))
+                        .type(schemaType(prop))
+                        .description(firstNonBlank(prop == null ? null : prop.getDescription(), ""))
+                        .fields(children.isEmpty() ? null : children)
                         .build());
             }
+        } finally {
+            path.remove(carrier);
         }
+        return fields;
+    }
+
+    /**
+     * 取 schema 的「字段承载体」：先合并组合 schema，数组再下探到 items。
+     * <p>items 只在 {@link ArraySchema} 上提供，非该实例的 array（解析器未归类）按无子字段处理。</p>
+     */
+    private Schema<?> fieldCarrier(Schema<?> schema) {
+        if (schema == null) {
+            return null;
+        }
+        Schema<?> merged = mergeComposed(schema);
+        if (merged instanceof ArraySchema arraySchema) {
+            return arraySchema.getItems();
+        }
+        return merged;
+    }
+
+    /**
+     * 合并 {@code allOf}（退化时取 {@code oneOf} / {@code anyOf}）成员的 properties 与 required。
+     * <p>文档常用 {@code allOf: [$ref]} 包一层，{@code resolveFully} 不保证已展平为普通对象 schema。</p>
+     */
+    private Schema<?> mergeComposed(Schema<?> schema) {
+        if (!(schema instanceof ComposedSchema composed)) {
+            return schema;
+        }
+        List<Schema> members = composed.getAllOf() != null ? composed.getAllOf()
+                : (composed.getOneOf() != null ? composed.getOneOf() : composed.getAnyOf());
+        Map<String, Schema> props = new LinkedHashMap<>();
+        List<String> required = new ArrayList<>();
+        if (members != null) {
+            for (Schema<?> member : members) {
+                Schema<?> carrier = fieldCarrier(member);
+                if (carrier == null) {
+                    continue;
+                }
+                if (carrier.getProperties() != null) {
+                    props.putAll(carrier.getProperties());
+                }
+                if (carrier.getRequired() != null) {
+                    required.addAll(carrier.getRequired());
+                }
+            }
+        }
+        if (composed.getProperties() != null) {
+            props.putAll(composed.getProperties());
+        }
+        ObjectSchema merged = new ObjectSchema();
+        merged.setDescription(composed.getDescription());
+        merged.setProperties(props);
+        merged.setRequired(required);
+        return merged;
     }
 
     private Schema<?> pickJsonSchema(Content content) {

@@ -208,6 +208,24 @@ public class SchemaHandleUtil {
         return fields;
     }
 
+    /**
+     * 取实例字段（含父类，跳过 static 与编译器合成字段），与 {@link #describePojo} 的字段口径一致。
+     * 供脚本参数解析按类反射展开下一级结构复用，避免两处各写一份筛选规则。
+     */
+    public static List<Field> getInstanceFields(Class<?> clazz) {
+        if (clazz == null) {
+            return new ArrayList<>();
+        }
+        List<Field> fields = new ArrayList<>();
+        for (Field field : getAllFields(clazz)) {
+            if (Modifier.isStatic(field.getModifiers()) || field.isSynthetic()) {
+                continue;
+            }
+            fields.add(field);
+        }
+        return fields;
+    }
+
     private static List<Field> getAllFields(Class<?> type) {
         List<Field> fields = new ArrayList<>();
         Class<?> current = type;

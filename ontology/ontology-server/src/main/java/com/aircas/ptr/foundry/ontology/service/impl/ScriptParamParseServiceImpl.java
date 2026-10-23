@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
+import com.aircas.ptr.foundry.common.constant.FunctionParamTypeEnum;
 import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.ontology.model.dto.ScriptParseOutcome;
 import com.aircas.ptr.foundry.ontology.model.dto.ScriptParsedParam;
@@ -14,6 +15,7 @@ import com.aircas.ptr.foundry.ontology.service.parser.ScriptParamParser;
 import com.aircas.ptr.foundry.ontology.utils.ScriptParamDescriptionExtractor;
 import com.aircas.ptr.foundry.ontology.utils.ScriptParamDescriptionExtractor.Descriptions;
 import com.aircas.ptr.foundry.ontology.utils.ScriptParamSchemaUtil;
+import com.aircas.ptr.foundry.ontology.utils.ScriptParamTypeMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -25,11 +27,15 @@ import java.util.Map;
 
 /**
  * 脚本参数解析服务实现：按语言路由到对应解析器（Java/Groovy 进程内 AST，Python/TS 走 runner），
- * 解析结果按 category 分组、组内自动编号后返回；参数描述统一由脚本注释提取。
+ * 解析结果按 category 分组、组内自动编号后返回；参数描述统一由脚本注释提取，
+ * 泛型擦除后拿不到的返回载荷类型由注释指令 {@code @result:类型} 补齐。
  */
 @Slf4j
 @Service
 public class ScriptParamParseServiceImpl implements ScriptParamParseService {
+
+    /** 工程内返回信封（{@code FunctionResultVO}）的载荷字段名，{@code @result:类型} 指令优先覆盖它。 */
+    private static final String PAYLOAD_FIELD_NAME = "data";
 
     private final Map<FunctionLanguageEnum, ScriptParamParser> router = new EnumMap<>(FunctionLanguageEnum.class);
 
@@ -66,6 +72,7 @@ public class ScriptParamParseServiceImpl implements ScriptParamParseService {
             log.warn("脚本参数解析异常：language={}, cause={}", language.getCode(), e.getMessage(), e);
             outcome = ScriptParseOutcome.of(ScriptParseStatus.PARSE_EXCEPTION, e.getMessage());
         }
+        applyResultTypeDirective(outcome, language, code);
         enrichDescriptions(outcome, language, code);
         return toVO(outcome, language);
     }
@@ -125,6 +132,53 @@ public class ScriptParamParseServiceImpl implements ScriptParamParseService {
             builder.fields(fieldVOs);
         }
         return builder.build();
+    }
+
+    /**
+     * 应用脚本注释里的返回值载荷类型指令（{@code // @result:integer}）。
+     * <p>泛型擦除后反射只能把 {@code FunctionResultVO<T>} 的 {@code data} 认成 object，具体类型由脚本声明。</p>
+     * <p>口径：仅顶层只有一个出参时生效——优先覆盖其展开字段里的 {@code data}（VO 是信封，载荷才是业务结果）；
+     * 没有 {@code data} 字段时覆盖出参自身，并清掉已展开的子字段（类型已降为标量，下一级结构不再成立）。</p>
+     */
+    private void applyResultTypeDirective(ScriptParseOutcome outcome, FunctionLanguageEnum language, String code) {
+        List<ScriptParsedParam> params = outcome.getParams();
+        if (params == null || params.isEmpty()) {
+            return;
+        }
+        String typeText = ScriptParamDescriptionExtractor.extractResultTypeDirective(language, code);
+        if (typeText == null) {
+            return;
+        }
+        List<ScriptParsedParam> outputs = new ArrayList<>();
+        for (ScriptParsedParam p : params) {
+            if (p.getCategory() == FunctionParamCategoryEnum.OUTPUT) {
+                outputs.add(p);
+            }
+        }
+        if (outputs.size() != 1) {
+            return;
+        }
+        FunctionParamTypeEnum type = ScriptParamTypeMapper.map(typeText);
+        ScriptParsedParam payload = findPayloadField(outputs.get(0));
+        ScriptParsedParam target = payload != null ? payload : outputs.get(0);
+        target.setType(type);
+        target.setRawType(typeText);
+        if (payload == null) {
+            target.setFields(null);
+        }
+    }
+
+    /** 出参展开字段里的载荷字段（{@code FunctionResultVO.data}），没有则 null。 */
+    private ScriptParsedParam findPayloadField(ScriptParsedParam output) {
+        if (output.getFields() == null) {
+            return null;
+        }
+        for (ScriptParsedParam field : output.getFields()) {
+            if (PAYLOAD_FIELD_NAME.equals(field.getName())) {
+                return field;
+            }
+        }
+        return null;
     }
 
     /**

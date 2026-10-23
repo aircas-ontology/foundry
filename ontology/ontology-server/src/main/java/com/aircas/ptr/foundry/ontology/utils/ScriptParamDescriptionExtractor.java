@@ -26,6 +26,8 @@ import java.util.regex.Pattern;
  *   <li>就近注释：声明行上一行的整段注释，或声明行同行尾部注释，作为该参数/字段描述；</li>
  *   <li>返回值：{@code @return}/{@code @returns}/{@code @result}/{@code :returns:}/{@code Returns:} 段，
  *       用于唯一的标量出参（各语言解析器统一命名为 {@code result}）。</li>
+ *   <li>返回值载荷类型：{@code @result:integer} 这类整行只写类型的写法，由
+ *       {@link #extractResultTypeDirective} 单独提取用于覆盖出参类型，不作为描述使用。</li>
  * </ol>
  * 提取按名字匹配、尽力而为：不同类里的同名字段共用一条描述；超长描述截断到
  * {@value ScriptParamDescriptionExtractor#MAX_DESC_LENGTH} 字符。
@@ -46,6 +48,12 @@ public final class ScriptParamDescriptionExtractor {
             "^:param\\s+(?:[\\w$.]+\\s+)?([\\w$.]+)\\s*:\\s*(.*)$");
     /** 返回值标签：{@code @return 描述} / {@code @result 描述}。 */
     private static final Pattern RETURN_TAG = Pattern.compile("^@(?:returns?|result)\\s+(?:\\{[^}]*}\\s*)?(.*)$");
+    /**
+     * 返回值载荷类型指令：{@code @result:integer}、{@code @return:List<String>}、{@code @result:{double}}。
+     * 要求整行除标签与类型外没有别的文字，避免把 {@code @return 解析出的整数} 这类自然语言描述误判成类型。
+     */
+    private static final Pattern RESULT_TYPE_TAG = Pattern.compile(
+            "^@(?:result|returns?)\\s*[:：]\\s*\\{?\\s*([A-Za-z][\\w$.]*(?:<[^>]*>)?(?:\\[\\])?)\\s*}?\\s*$");
     /** Sphinx 返回值标签：{@code :returns: 描述}。 */
     private static final Pattern SPHINX_RETURN = Pattern.compile("^:returns?\\s*:\\s*(.*)$");
     /** Google 风格入参段起始。 */
@@ -157,6 +165,31 @@ public final class ScriptParamDescriptionExtractor {
         Map<String, String> byName = collectAdjacent(scan, lang, tagged.keySet());
         byName.putAll(tagged);
         return new Descriptions(byName, returnValue);
+    }
+
+    /**
+     * 提取返回值载荷类型指令（如 {@code // @result:integer}）。
+     * <p>泛型擦除后反射只能看到 {@code FunctionResultVO<T>} 的 {@code T} 是 Object，载荷类型只能由脚本自己声明；
+     * 与 {@code @return 描述} 的区别是本指令只声明类型、不作为描述使用。</p>
+     *
+     * @param language 脚本语言（决定注释符号），null 按 Groovy 处理
+     * @param code     脚本源码
+     * @return 类型文本（integer/list/String 等源码写法），未写或非标量族时返回 null
+     */
+    public static String extractResultTypeDirective(FunctionLanguageEnum language, String code) {
+        if (code == null || code.isBlank()) {
+            return null;
+        }
+        FunctionLanguageEnum lang = language == null ? FunctionLanguageEnum.GROOVY : language;
+        for (Region region : scan(lang, code).regions()) {
+            for (String line : region.lines()) {
+                Matcher matcher = RESULT_TYPE_TAG.matcher(line);
+                if (matcher.matches() && ScriptParamTypeMapper.isScalarType(matcher.group(1))) {
+                    return matcher.group(1);
+                }
+            }
+        }
+        return null;
     }
 
     // ==================== 注释区域扫描 ====================

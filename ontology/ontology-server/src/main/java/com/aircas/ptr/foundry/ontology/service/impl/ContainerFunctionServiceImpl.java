@@ -2,6 +2,7 @@ package com.aircas.ptr.foundry.ontology.service.impl;
 
 import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
+import com.aircas.ptr.foundry.ontology.composite.CompositeFunctionCatalog;
 import com.aircas.ptr.foundry.ontology.config.ContainerOperatorProperties;
 import com.aircas.ptr.foundry.ontology.model.dto.container.ContainerImageInfo;
 import com.aircas.ptr.foundry.ontology.model.dto.container.ContainerInterface;
@@ -16,6 +17,7 @@ import com.aircas.ptr.foundry.ontology.model.param.ContainerFunctionCreateParam;
 import com.aircas.ptr.foundry.ontology.model.po.Function;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionContainerInstance;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionParamPO;
+import com.aircas.ptr.foundry.ontology.model.vo.FunctionParameterVO;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.FunctionMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.FunctionContainerInstanceMapper;
 import com.aircas.ptr.foundry.ontology.service.ContainerFunctionService;
@@ -314,7 +316,46 @@ public class ContainerFunctionServiceImpl implements ContainerFunctionService {
                         "in", p.getIn() == null ? "" : p.getIn(),
                         "required", Boolean.TRUE.equals(p.getRequired()),
                         "openapiType", p.getType() == null ? "object" : p.getType())))
+                .fields(toFieldsJson(p.getFields()))
                 .build();
+    }
+
+    /**
+     * 子字段落 {@code function_param.fields}：形状必须是 {@link FunctionParameterVO} 列表，
+     * 因为 {@code getFunctionDetailByApi} 按该类型反序列化此列（键为 paramName/paramType），
+     * 直接序列化探查 DTO 的 name/type 会让详情页子字段读不出名字。
+     */
+    private String toFieldsJson(List<ContainerInterfaceParam> fields) {
+        if (CollectionUtils.isEmpty(fields)) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(toFieldVOs(fields));
+        } catch (Exception e) {
+            log.warn("序列化参数 fields 失败：cause={}", e.getMessage());
+            return null;
+        }
+    }
+
+    private List<FunctionParameterVO> toFieldVOs(List<ContainerInterfaceParam> fields) {
+        List<FunctionParameterVO> vos = new ArrayList<>();
+        int order = 0;
+        for (ContainerInterfaceParam f : fields) {
+            List<FunctionParameterVO> children = CollectionUtils.isEmpty(f.getFields())
+                    ? null : toFieldVOs(f.getFields());
+            vos.add(FunctionParameterVO.builder()
+                    .paramName(f.getName())
+                    .paramType(CompositeFunctionCatalog.toParamType(f.getType()))
+                    .paramOrder(order++)
+                    .description(f.getDescription())
+                    .paramSchema(writeJson(Map.of(
+                            "in", f.getIn() == null ? "" : f.getIn(),
+                            "required", Boolean.TRUE.equals(f.getRequired()),
+                            "openapiType", f.getType() == null ? "object" : f.getType())))
+                    .fields(children)
+                    .build());
+        }
+        return vos;
     }
 
     private String writeJson(Object obj) {

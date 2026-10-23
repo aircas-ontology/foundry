@@ -33,7 +33,9 @@ import java.util.Set;
  * Java 脚本参数解析器（主应用进程内，基于 JavaParser 纯语法 AST 解析，不编译不执行）。
  * <p>
  * 口径同 Groovy 解析器：优先展开 handle 形参/返回值的自定义类型字段（ANNOTATION），
+ * 类型是脚本 {@code import} 进来的工程类（如 {@code FunctionResultVO}）时按 import 补全全限定名后反射展开下一级，
  * 形参为 Map/Object 时启发式收集 {@code input.get("x")} 字面量键（INFERRED）。
+ * 工程内类展开统一委托给 {@link ProjectClassExpander}。
  */
 @Slf4j
 @Component
@@ -73,13 +75,14 @@ public class JavaScriptParamParser implements ScriptParamParser {
             return ScriptParseOutcome.of(ScriptParseStatus.NO_HANDLE, "脚本未定义 handle 入口方法");
         }
         List<ScriptParsedParam> result = new ArrayList<>();
-        collectInputs(handle.get(), classByName, result);
-        collectOutputs(handle.get(), classByName, result);
+        ProjectClassExpander expander = new ProjectClassExpander(code);
+        collectInputs(handle.get(), classByName, expander, result);
+        collectOutputs(handle.get(), classByName, expander, result);
         return ScriptParseOutcome.ok(result);
     }
 
     private void collectInputs(MethodDeclaration handle, Map<String, ClassOrInterfaceDeclaration> classByName,
-                               List<ScriptParsedParam> out) {
+                               ProjectClassExpander expander, List<ScriptParsedParam> out) {
         boolean expanded = false;
         List<String> mapParamNames = new ArrayList<>();
         for (Parameter p : handle.getParameters()) {
@@ -88,7 +91,8 @@ public class JavaScriptParamParser implements ScriptParamParser {
             ClassOrInterfaceDeclaration userClass = resolveUserClass(typeText, classByName);
             if (userClass != null) {
                 // 层级结构：父参数为自定义类型，字段放入 fields
-                List<ScriptParsedParam> fields = expandFields(userClass, FunctionParamCategoryEnum.INPUT, "ANNOTATION", classByName, new LinkedHashSet<>());
+                List<ScriptParsedParam> fields = expandFields(userClass, FunctionParamCategoryEnum.INPUT, "ANNOTATION",
+                        classByName, expander, new LinkedHashSet<>(), 1);
                 out.add(ScriptParsedParam.builder()
                         .name(paramName)
                         .type(ScriptParamTypeMapper.map(typeText))
@@ -101,13 +105,27 @@ public class JavaScriptParamParser implements ScriptParamParser {
             } else if (isMapLike(typeText)) {
                 mapParamNames.add(paramName);
             } else {
-                out.add(ScriptParsedParam.builder()
-                        .name(paramName)
-                        .type(ScriptParamTypeMapper.map(typeText))
-                        .rawType(typeText)
-                        .category(FunctionParamCategoryEnum.INPUT)
-                        .source("ANNOTATION")
-                        .build());
+                Class<?> projectClass = expander.resolve(typeText);
+                if (projectClass != null) {
+                    // 工程内类（脚本 import 进来的 VO/DTO）：rawType 用真实全限定名，字段反射展开下一级
+                    out.add(ScriptParsedParam.builder()
+                            .name(paramName)
+                            .type(ScriptParamTypeMapper.map(typeText))
+                            .rawType(projectClass.getName())
+                            .category(FunctionParamCategoryEnum.INPUT)
+                            .source("ANNOTATION")
+                            .fields(expander.expandFields(projectClass, FunctionParamCategoryEnum.INPUT,
+                                    new LinkedHashSet<>(), 1))
+                            .build());
+                } else {
+                    out.add(ScriptParsedParam.builder()
+                            .name(paramName)
+                            .type(ScriptParamTypeMapper.map(typeText))
+                            .rawType(typeText)
+                            .category(FunctionParamCategoryEnum.INPUT)
+                            .source("ANNOTATION")
+                            .build());
+                }
                 expanded = true;
             }
         }
@@ -117,12 +135,13 @@ public class JavaScriptParamParser implements ScriptParamParser {
     }
 
     private void collectOutputs(MethodDeclaration handle, Map<String, ClassOrInterfaceDeclaration> classByName,
-                                List<ScriptParsedParam> out) {
+                                ProjectClassExpander expander, List<ScriptParsedParam> out) {
         String returnType = handle.getType().asString();
         ClassOrInterfaceDeclaration userClass = resolveUserClass(returnType, classByName);
         if (userClass != null) {
             // 层级结构：返回类型为自定义类时，父参数带 fields
-            List<ScriptParsedParam> fields = expandFields(userClass, FunctionParamCategoryEnum.OUTPUT, "ANNOTATION", classByName, new LinkedHashSet<>());
+            List<ScriptParsedParam> fields = expandFields(userClass, FunctionParamCategoryEnum.OUTPUT, "ANNOTATION",
+                    classByName, expander, new LinkedHashSet<>(), 1);
             out.add(ScriptParsedParam.builder()
                     .name(returnType)
                     .type(ScriptParamTypeMapper.map(returnType))
@@ -130,6 +149,20 @@ public class JavaScriptParamParser implements ScriptParamParser {
                     .category(FunctionParamCategoryEnum.OUTPUT)
                     .source("ANNOTATION")
                     .fields(fields)
+                    .build());
+            return;
+        }
+        Class<?> projectClass = expander.resolve(returnType);
+        if (projectClass != null) {
+            // 老契约：返回工程内 VO（如 FunctionResultVO），出参统一命名 result，字段反射展开下一级
+            out.add(ScriptParsedParam.builder()
+                    .name("result")
+                    .type(ScriptParamTypeMapper.map(returnType))
+                    .rawType(projectClass.getName())
+                    .category(FunctionParamCategoryEnum.OUTPUT)
+                    .source("ANNOTATION")
+                    .fields(expander.expandFields(projectClass, FunctionParamCategoryEnum.OUTPUT,
+                            new LinkedHashSet<>(), 1))
                     .build());
             return;
         }
@@ -146,8 +179,12 @@ public class JavaScriptParamParser implements ScriptParamParser {
     }
 
     private List<ScriptParsedParam> expandFields(ClassOrInterfaceDeclaration cls, FunctionParamCategoryEnum category, String source,
-                                                    Map<String, ClassOrInterfaceDeclaration> classByName, Set<String> visited) {
+                                                    Map<String, ClassOrInterfaceDeclaration> classByName,
+                                                    ProjectClassExpander expander, Set<String> visited, int depth) {
         List<ScriptParsedParam> fields = new ArrayList<>();
+        if (depth > ProjectClassExpander.MAX_FIELD_DEPTH) {
+            return fields;
+        }
         Set<String> seen = new LinkedHashSet<>();
         for (FieldDeclaration field : cls.getFields()) {
             // 跳过 static 字段（如 serialVersionUID/logger 常量），它们不是实例入参/出参
@@ -166,15 +203,17 @@ public class JavaScriptParamParser implements ScriptParamParser {
                     // 字段类型本身也是自定义类 → 递归展开
                     ClassOrInterfaceDeclaration nestedClass = resolveUserClass(fieldTypeText, classByName);
                     if (nestedClass != null && visited.add(fieldTypeText)) {
-                        fb.fields(expandFields(nestedClass, category, source, classByName, visited));
+                        fb.fields(expandFields(nestedClass, category, source, classByName, expander, visited, depth + 1));
                     } else {
                         // 集合泛型：List<Admin> / Set<User> → 提取泛型参数递归展开
                         String elementType = extractCollectionElementType(var.getType());
-                        if (elementType != null) {
-                            ClassOrInterfaceDeclaration elemClass = resolveUserClass(elementType, classByName);
-                            if (elemClass != null && visited.add(elementType)) {
-                                fb.fields(expandFields(elemClass, category, source, classByName, visited));
-                            }
+                        String probeType = elementType == null ? fieldTypeText : elementType;
+                        ClassOrInterfaceDeclaration elemClass = resolveUserClass(probeType, classByName);
+                        if (elemClass != null && visited.add(probeType)) {
+                            fb.fields(expandFields(elemClass, category, source, classByName, expander, visited, depth + 1));
+                        } else {
+                            // 脚本内类没命中 → 试工程内类（import 进来的 VO/DTO），反射展开下一级
+                            fb.fields(expander.expandFieldsByName(probeType, category, visited, depth + 1));
                         }
                     }
                     fields.add(fb.build());
