@@ -396,8 +396,21 @@ public class CompositeRuntimeRequest {
                 continue;
             }
             for (Map.Entry<String, String> mapping : nodePlan.getExternalOutputs().entrySet()) {
-                if (plan.getOutputParameterNames().contains(mapping.getValue())) {
-                    result.put(mapping.getValue(), outputs.get(mapping.getKey()));
+                String externalName = mapping.getValue();
+                if (!plan.getOutputParameterNames().contains(externalName)) {
+                    continue;
+                }
+                // mapping.getKey() 是端口 UUID，produced 以端口名为键，需要翻译
+                String portId = mapping.getKey();
+                String portName = nodePlan.getInputParams().get(portId);
+                if (portName == null) {
+                    portName = nodePlan.getOutputParams().get(portId);
+                }
+                if (portName == null) {
+                    portName = portId;
+                }
+                if (outputs.containsKey(portName)) {
+                    result.put(externalName, outputs.get(portName));
                 }
             }
         }
