@@ -78,4 +78,7 @@ public class FunctionUpdateParam {
      */
     @Schema(name = "apiConfig", description = "外部API算子配置（仅 type=EXTERNAL 时必填）")
     private ExternalApiConfig apiConfig;
+
+    @Schema(name = "rateLimitTemplateId", description = "限流配置模板 ID（不传则不修改；修改后同一 api 的所有版本同步更新）")
+    private Long rateLimitTemplateId;
 }

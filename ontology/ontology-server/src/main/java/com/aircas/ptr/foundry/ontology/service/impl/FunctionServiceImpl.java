@@ -488,7 +488,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 "functionApi is empty", HttpStatus.BAD_REQUEST);
         PreconditionUtils.checkArgument(StringUtils.isNotEmpty(param.getDisplayName()),
                 "displayName is empty", HttpStatus.BAD_REQUEST);
-        // 限流模板：所有算子类型通用，创建时选定后快照入库，不可修改
+        // 限流模板：所有算子类型通用，创建时选定；同一 api 的所有版本共用同一个模板
         FunctionRateLimitTemplate rateLimitTemplate = resolveRateLimitTemplate(param.getRateLimitTemplateId());
         // 容器算子：统一创建入口按类型分发——委托容器注册服务（1 请求 → N 条派生算子 + 1 运行实例），
         // 不走下方脚本/查询/编排算子的版本管理与参数解析逻辑
@@ -512,6 +512,8 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         FunctionLanguageEnum language = resolveLanguageAndValidate(param, version);
         Function func = buildAndSaveFunction(param, model, version, language);
         applyRateLimitToFunction(func, rateLimitTemplate);
+        // 同一 api 的所有版本共用同一个模板：新版本选定后，旧版本也同步更新
+        syncRateLimitTemplateToAllVersions(func.getApi(), rateLimitTemplate.getId());
         saveTypedParams(func, param, language);
     }
 
@@ -610,7 +612,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     }
 
     /**
-     * 将限流模板配置快照写入 Function 并更新：模板 ID 与配置 JSON 均为创建后不可变字段。
+     * 将限流模板配置快照写入 Function 并更新。
      */
     private void applyRateLimitToFunction(Function func, FunctionRateLimitTemplate template) {
         RateLimitConfig config = RateLimitConfig.builder()
@@ -628,6 +630,34 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         } catch (JsonProcessingException e) {
             log.error("限流配置序列化失败：{}", e.getMessage());
             throw new BusinessException("限流配置序列化失败：" + e.getMessage());
+        }
+    }
+
+    /**
+     * 切换限流模板并同步到同一 api 的所有版本：模板 ID 与配置快照一并覆盖。
+     */
+    private void syncRateLimitTemplateToAllVersions(String api, Long newTemplateId) {
+        FunctionRateLimitTemplate template = resolveRateLimitTemplate(newTemplateId);
+        String configJson;
+        try {
+            RateLimitConfig config = RateLimitConfig.builder()
+                    .timeoutMs(template.getTimeoutMs())
+                    .retryCount(template.getRetryCount())
+                    .retryIntervalMs(template.getRetryIntervalMs())
+                    .tpsLimit(template.getTpsLimit())
+                    .maxConcurrency(template.getMaxConcurrency())
+                    .enabled(template.getEnabled())
+                    .build();
+            configJson = objectMapper.writeValueAsString(config);
+        } catch (JsonProcessingException e) {
+            log.error("限流配置序列化失败：{}", e.getMessage());
+            throw new BusinessException("限流配置序列化失败：" + e.getMessage());
+        }
+        List<Function> allVersions = listVersions(api);
+        for (Function f : allVersions) {
+            f.setRateLimitTemplateId(template.getId());
+            f.setRateLimitConfig(configJson);
+            updateById(f);
         }
     }
 
@@ -704,6 +734,10 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         }
         applyEditableFields(function, param);
         updateById(function);
+        // 限流模板变更：同一 api 的所有版本同步更新
+        if (param.getRateLimitTemplateId() != null) {
+            syncRateLimitTemplateToAllVersions(function.getApi(), param.getRateLimitTemplateId());
+        }
         // 参数重建：CUSTOMIZE 解析成功才删旧建新（解析失败保留原定义）；BASIC_QUERY/COMPOSITE/EXTERNAL 先删后建
         if (function.getType() == FunctionTypeEnum.CUSTOMIZE) {
             rebuildCustomizeParams(function.getApi(), function.getId(), function.getLanguage(), param.getCode(), param.getParameters());
