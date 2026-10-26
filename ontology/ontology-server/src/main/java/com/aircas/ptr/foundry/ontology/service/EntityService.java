@@ -22,32 +22,6 @@ import java.util.Map;
  */
 public interface EntityService {
 
-    /**
-     * 为指定关系的两端节点补建候选关系边（状态 DELETE，已存在的端点对跳过，重复执行不产生第二份边）。
-     *
-     * @return 本次新建的候选边数
-     */
-    int createEntityRelations(String linkUniqueIdentifier);
-
-    /**
-     * 将指定关系下的全部实体关系边置为 ENABLE。
-     * <p>平台 {@code createEntityRelations} 默认生成 Status.DELETE 的边（启用过滤查询看不到），
-     * 子空间等一次性全量复制场景调用此方法将其激活为可见可用的关系。</p>
-     *
-     * @param linkUniqueIdentifier 关系唯一标识
-     */
-    void activateLinkRelations(String linkUniqueIdentifier);
-
-    /**
-     * 判断指定关系在 ArangoDB 中是否已存在 ENABLE 的实体关系边。
-     * <p>用于子空间复制时镜像源关系的可见状态：源边为 ENABLE 则子空间新边也应 ENABLE，
-     * 源边为 DELETE（或无边）则保持默认 DELETE，避免子空间关系与源不一致。</p>
-     *
-     * @param linkUniqueIdentifier 关系唯一标识
-     * @return 是否存在 ENABLE 的关系边
-     */
-    boolean hasEnabledRelations(String linkUniqueIdentifier);
-
     void syncNodes(String ontologyUniqueIdentifier, String schemaName, String datasourceId, String primaryKeyColumnName, String titleKeyColumnName);
 
     void deleteRelationsByLinkId(String linkId);
@@ -76,14 +50,14 @@ public interface EntityService {
 
     void updateEntityPropertyAndRelation(String jsonString, ActionContextInfoDTO actionContext);
 
-    void completeEntityNodeAndRelations(String ontologyUniqueIdentifier, Map<String, Object> entityPropertyMap);
+    void completeEntityNode(String ontologyUniqueIdentifier, Map<String, Object> entityPropertyMap);
 
     void deleteEntityNodeAndRelations(String ontologyUniqueIdentifier, Object entityPrimaryKey);
 
     /**
      * 单行实例数据 -> 图库节点（upsert，按「本体 + 归一化主键」定位已存在节点，仅名称变化时覆盖）。
      *
-     * @return true 表示本次新建了节点，调用方据此决定是否为其铺候选关系边
+     * @return true 表示本次新建了节点（图库此前无该实例节点）
      */
     boolean upsertEntityNode(String ontologyUniqueIdentifier, String tableName, Object primaryKeyValue, String displayName);
 
@@ -94,14 +68,6 @@ public interface EntityService {
      * @return 本次写入（新建 + 改名）的节点数
      */
     int upsertEntityNodes(String ontologyUniqueIdentifier, String tableName, Map<Object, String> pkToDisplayName);
-
-    /**
-     * 为指定主键的节点铺候选关系边：遍历两端命中该本体的全部关系，与对侧全部节点配对，
-     * 已存在的 {@code (link, from, to)} 跳过不重复创建，新建边状态为 DELETE（未激活的候选边）。
-     *
-     * @return 本次新建的候选边数
-     */
-    int createCandidateRelationsForNodes(String ontologyUniqueIdentifier, List<Object> primaryKeyValues);
 
     /**
      * 清理该本体的图库孤儿节点：删除主键不在 {@code keepPrimaryKeyValues} 中的节点及其相邻关系边，
@@ -158,8 +124,8 @@ public interface EntityService {
     /**
      * 导出指定关系下图库 relation 中状态非 DELETE 的实例关系边。
      *
-     * <p>平台会为关系的两端实例全量生成 Status.DELETE 的候选边，这类边不搬运：导入端按两端节点会重新生成
-     * 同样的笛卡尔积候选边，这里导出的那批据此点亮即可。单条关系超过上限时截断并告警。</p>
+     * <p>图库里只保留真实成立的关系边，未点亮的实例对没有边，因此导出即所得。
+     * 单条关系超过上限时截断并告警。</p>
      *
      * @param linkUniqueIdentifier 关系唯一标识
      * @return 实例关系边列表，端点节点缺失的边会被跳过
@@ -169,9 +135,8 @@ public interface EntityService {
     /**
      * 按导出的实例关系边精确落位到新建关系上。
      *
-     * <p>候选边默认是 Status.DELETE 的全笛卡尔积，这里只把命中的实例对写成导出时的状态与时间窗，
-     * 其余保持 DELETE，从而还原源空间真实的实例关系图，而不是两端实例的完全图。
-     * 两端节点需已同步到图库。</p>
+     * <p>只写导出文件里的那些实例对（状态与时间窗原样搬运），端点对已存在则覆盖，
+     * 不会为未点亮的实例对补边。两端节点需已同步到图库。</p>
      *
      * @param linkUniqueIdentifier 新关系唯一标识
      * @param relations            导出的实例关系边，端点主键为导出时的主键

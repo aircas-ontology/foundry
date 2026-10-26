@@ -77,8 +77,8 @@ import java.util.stream.Collectors;
  *   <li>孤儿清理：以"数据库当前内容"为准对 ES 存量求差集删除（行被物理删除、表被删除、
  *       本体被禁用、空间 apiName 变更等场景均收敛），保证同步后 ES 与 DB 一致；</li>
  *   <li>图库（ArangoDB {@code node}/{@code relation}）：实例段复用同一批分页读结果，按
- *       「本体 + 归一化主键」覆盖写节点、按本体维度对湖内当前主键求差集清理孤儿节点，候选关系边按
- *       「关系 + 起终点节点」判存后只补缺失对，重复执行不产生第二份数据；{@code syncGraph=false}
+ *       「本体 + 归一化主键」覆盖写节点、按本体维度对湖内当前主键求差集清理孤儿节点（连带其相邻边），
+ *       重复执行不产生第二份节点；实例关系边不在这里生成；{@code syncGraph=false}
  *       或图库未启用时整段跳过，图库异常只记录日志、不影响 ES 结果；</li>
  *   <li>并发保护：AtomicBoolean 互斥，同一实例同时只允许一个全量同步在跑，重复触发直接 409。</li>
  * </ul>
@@ -221,11 +221,11 @@ public class CdcFullSyncServiceImpl implements CdcFullSyncService {
             }
 
             if (!Boolean.FALSE.equals(options.getSyncInstance())) {
-                // 图库段可单独关闭：图节点与候选关系边量大时可先只跑 ES
+                // 图库段可单独关闭：图节点量大时可先只跑 ES
                 boolean syncGraph = graphEnabled && !Boolean.FALSE.equals(options.getSyncGraph());
                 long[] r = syncInstanceIndex(options.getOntologyUids(), syncGraph);
                 result.instanceSynced(r[0]).instanceDeleted(r[1])
-                        .graphNodeSynced(r[2]).graphNodeDeleted(r[3]).graphEdgeCreated(r[4]);
+                        .graphNodeSynced(r[2]).graphNodeDeleted(r[3]);
             }
 
             refreshAllIndices();
@@ -307,8 +307,8 @@ public class CdcFullSyncServiceImpl implements CdcFullSyncService {
     // ------------------------------------------------------------------
 
     /**
-     * @param syncGraph 是否同步 ArangoDB 图节点与候选关系边
-     * @return [实例写入, 实例孤儿清理, 图节点写入, 图孤儿节点清理, 图候选边新建]
+     * @param syncGraph 是否同步 ArangoDB 图节点
+     * @return [实例写入, 实例孤儿清理, 图节点写入, 图孤儿节点清理]
      */
     private long[] syncInstanceIndex(List<String> ontologyUidFilter, boolean syncGraph) {
         // 启用中的本体：uid -> meta（实例同步范围，与 CDC 消费端 syncInstance 的过滤口径一致）
@@ -341,7 +341,6 @@ public class CdcFullSyncServiceImpl implements CdcFullSyncService {
         long deleted = 0;
         long nodeSynced = 0;
         long nodeDeleted = 0;
-        Set<String> syncedOntologyUids = new HashSet<>();
         for (OntologyMeta meta : enabledMetas.values()) {
             OntologySpace space = meta.getOntologySpaceId() == null
                     ? null : spaceById.get(meta.getOntologySpaceId());
@@ -355,47 +354,13 @@ public class CdcFullSyncServiceImpl implements CdcFullSyncService {
             deleted += tableResult[1];
             nodeSynced += tableResult[2];
             nodeDeleted += tableResult[3];
-            if (syncGraph) {
-                syncedOntologyUids.add(meta.getUniqueIdentifier());
-            }
         }
-
-        // 候选关系边在所有节点落库后统一铺：先同步的本体若当场铺边，对侧本体节点还没建出来会漏配
-        long edgeCreated = syncGraph ? createCandidateRelations(syncedOntologyUids) : 0;
 
         // 全局孤儿清理：本体被禁用/删除、空间 apiName 变更等导致"按本体维度已无法覆盖"的残留文档
         if (!filtered) {
             deleted += sweepGlobalInstanceOrphans(enabledMetas, spaceById);
         }
-        return new long[]{synced, deleted, nodeSynced, nodeDeleted, edgeCreated};
-    }
-
-    /**
-     * 为本次同步到的本体涉及的全部关系补候选边（状态 DELETE）。
-     * <p>{@code createEntityRelations} 内部按端点对跳过已存在的边，重复执行只补新对、不产生第二份边。</p>
-     */
-    private long createCandidateRelations(Set<String> ontologyUids) {
-        if (CollectionUtils.isEmpty(ontologyUids)) {
-            return 0;
-        }
-        List<OntologyLinkGroup> links = linkGroupMapper.selectList(new LambdaQueryWrapper<OntologyLinkGroup>()
-                .and(w -> w.in(OntologyLinkGroup::getOntologyUniqueIdentifierFrom, ontologyUids)
-                        .or().in(OntologyLinkGroup::getOntologyUniqueIdentifierTo, ontologyUids))
-                .ne(OntologyLinkGroup::getStatus, Status.DELETE.getValue()));
-        long created = 0;
-        Set<String> handledLinks = new HashSet<>();
-        for (OntologyLinkGroup link : links) {
-            if (!handledLinks.add(link.getUniqueIdentifier())) {
-                continue;
-            }
-            try {
-                created += entityService.createEntityRelations(link.getUniqueIdentifier());
-            } catch (Exception e) {
-                log.error("全量同步候选关系边生成失败, link={}", link.getUniqueIdentifier(), e);
-            }
-        }
-        log.info("全量同步候选关系边: 处理关系 {} 条, 新建边 {} 条", handledLinks.size(), created);
-        return created;
+        return new long[]{synced, deleted, nodeSynced, nodeDeleted};
     }
 
     /**
