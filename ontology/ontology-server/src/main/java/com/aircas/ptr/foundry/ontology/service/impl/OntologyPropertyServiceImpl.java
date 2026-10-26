@@ -53,8 +53,6 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
 
     private final EntityService entityService;
 
-    private final OntologyLinkGroupMapper linkMapper;
-
     private final OntologyActionMappingInMapper mappingInMapper;
 
     private final OntologyMetaMapper metaMapper;
@@ -1139,7 +1137,6 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
             if (StringUtils.isNotEmpty(primaryProperty.getDatasourceId())
                     && StringUtils.isNotEmpty(primaryProperty.getDatasourceSchema())) {
                 entityService.syncNodes(ontologyIdentifier, primaryProperty.getDatasourceSchema(), primaryProperty.getDatasourceId(), primaryProperty.getDatasourceColumnName(), titleColumn);
-                createRelationsByLink(ontologyIdentifier);
             }
         }
         //主键字段设置为false
@@ -1151,7 +1148,6 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                 if (!primaryProperty.getDatasourceId().equals(anyNode.getTableName())) {
                     entityService.deleteNodesAndRelationsByOntologyId(ontologyIdentifier);
                     entityService.syncNodes(ontologyIdentifier, primaryProperty.getDatasourceSchema(), primaryProperty.getDatasourceId(), primaryProperty.getDatasourceColumnName(), titleColumn);
-                    createRelationsByLink(ontologyIdentifier);
                 }
                 //仅名称键变更时同步 displayName，避免普通属性更新触发全量 query
                 else if (titleKeyChanged) {
@@ -1163,13 +1159,6 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                 entityService.deleteNodesAndRelationsByOntologyId(ontologyIdentifier);
             }
         }
-    }
-
-    private void createRelationsByLink(String ontologyIdentifier) {
-        var links = linkMapper.selectList(new LambdaQueryWrapper<OntologyLinkGroup>()
-                .eq(OntologyLinkGroup::getOntologyUniqueIdentifierFrom, ontologyIdentifier)
-                .or().eq(OntologyLinkGroup::getOntologyUniqueIdentifierTo, ontologyIdentifier));
-        links.stream().forEach(link -> entityService.createEntityRelations(link.getUniqueIdentifier()));
     }
 
     private void validateMetadataAgainstSchema(JsonNode metadata, JsonNode schema, String path) {

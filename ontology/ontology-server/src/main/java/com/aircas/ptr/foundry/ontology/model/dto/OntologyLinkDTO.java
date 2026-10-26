@@ -58,9 +58,9 @@ public class OntologyLinkDTO {
     private String categoryPath;
 
     /**
-     * 该关系下已使用的实例关系边（图库 relation 中该关系状态非 DELETE 的边及其状态、可见时间窗），
-     * 仅 INSTANCE 模式导出时填充；未点亮的 DELETE 候选边不导出，由导入端按两端节点重新生成，
-     * 导入时据此按实例主键映射精确点亮
+     * 该关系下的实例关系边（图库 relation 中该关系状态非 DELETE 的边及其状态、可见时间窗），
+     * 仅 INSTANCE 模式导出时填充；未点亮的实例对在图库里没有边，因此这里就是需要搬运的全部边，
+     * 导入时据此按实例主键映射精确落位
      */
     private List<EntityRelationExportDTO> entityRelations;
 }

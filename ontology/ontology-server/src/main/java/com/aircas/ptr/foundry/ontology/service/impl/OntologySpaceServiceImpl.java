@@ -672,8 +672,8 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
     /**
      * 导入空间下的对象关系：端点对象显示名称与关系分类路径均需在导入完成后才存在，故由导入流程最后调用。
      *
-     * <p>先同步两端对象的图节点，createLink 据此生成默认 DELETE 的全笛卡尔积候选边；导出文件带了实例关系边时，
-     * 再把命中的实例对写成源状态，其余保持 DELETE。</p>
+     * <p>先同步两端对象的图节点，实例关系边需要有节点才能落位；导出文件带了实例关系边时，
+     * 按「导出主键 → 新主键」映射把这些边原样写到新关系上（状态与时间窗不变），未点亮的实例对不建边。</p>
      */
     private void importOntologyLinks(Integer spaceId,
                                      List<OntologyLinkDTO> links,
@@ -688,7 +688,7 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
         var categoryIdByPath = ontologyLinkCategoryService.list(new LambdaQueryWrapper<OntologyLinkCategory>()
                         .eq(OntologyLinkCategory::getOntologySpaceId, spaceId))
                 .stream().collect(Collectors.toMap(OntologyLinkCategory::getPath, OntologyLinkCategory::getId, (a, b) -> a));
-        // 候选边依赖两端对象的图节点，同一对象的节点只同步一次
+        // 实例关系边以两端节点为端点，同一对象的节点只同步一次
         Set<String> nodeSynced = new HashSet<>();
         for (var link : links) {
             var fromUid = uidByDisplayName.get(link.getOntologyNameFrom());
@@ -697,7 +697,7 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                 log.warn("关系 {} 导入跳过：端点对象不存在，from={}, to={}", link.getName(), link.getOntologyNameFrom(), link.getOntologyNameTo());
                 continue;
             }
-            //不带实例关系边也要同步节点：createLink 靠两端节点生成 DELETE 候选边，否则新空间一条候选边都不会有
+            //无论导入文件是否带实例关系边都同步节点：后续行为函数与手动激活落边都要有节点可做端点
             Stream.of(fromUid, toUid).filter(nodeSynced::add).forEach(entityService::createEntityNodes);
             var entityRelations = link.getEntityRelations();
             var withEntityRelations = CollectionUtils.isNotEmpty(entityRelations);
@@ -821,6 +821,8 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
 
         // 5. 复制对象、属性、实例
         Map<String, String> ontologyMapping = new HashMap<>();
+        //新对象唯一标识 -> 「导出主键 → 新主键」映射，第 6 步复制关系边时落位用
+        Map<String, Map<String, Object>> pkMappingByNewOntologyUid = new HashMap<>();
         for (var ontologySelection : param.getSelectedOntologies()) {
             var sourceMeta = sourceMetaMap.get(ontologySelection.getSourceOntologyUniqueIdentifier());
             var targetOntCat = resolveCategory(ontologyCatMap, sourceMeta.getOntologyCategoryId(), newOntologyCatRoot);
@@ -858,12 +860,11 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
             ontologyPropertyService.autoBindDatasource(newOntologyId);
 
             // 导入实例（先按显式勾选主键过滤，再按属性筛选条件过滤实例；筛选条件元数据仍由 savePropertyFilter 写入新表）
-            importInstances(sourceMeta.getUniqueIdentifier(), newOntologyId,
-                    ontologySelection.getSelectedInstancePrimaryKeys(), instanceFilters);
+            pkMappingByNewOntologyUid.put(newOntologyId, importInstances(sourceMeta.getUniqueIdentifier(), newOntologyId,
+                    ontologySelection.getSelectedInstancePrimaryKeys(), instanceFilters));
 
-            // 同步导入的实例到 ArangoDB 图（node 集合）：本步补齐“实例数据”。
-            // 否则子空间 ArangoDB 里既无实例节点，下面第 6 步 createLink 调用
-            // createEntityRelations 生成 relation 边时也会因找不到两端节点而落空（即“关系数据”缺失）。
+            // 同步导入的实例到 ArangoDB 图（node 集合）：本步补齐“实例数据”，
+            // 第 6 步复制的实例关系边以两端节点为端点，后续行为函数与手动激活落边同样依赖节点存在。
             entityService.createEntityNodes(newOntologyId);
 
         }
@@ -892,7 +893,8 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                         "关系两端对象未被选中：" + sourceLink.getUniqueIdentifier(), HttpStatus.BAD_REQUEST);
 
                 var targetLinkCat = resolveCategory(linkCatMap, sourceLink.getCategoryId(), newLinkCatRoot);
-                var newLinkId = createLinkInSubspace(spaceId, sourceLink, newFromId, newToId, linkSelection, targetLinkCat);
+                var newLinkId = createLinkInSubspace(spaceId, sourceLink, newFromId, newToId, linkSelection,
+                        targetLinkCat, pkMappingByNewOntologyUid);
                 linkMapping.put(sourceLink.getUniqueIdentifier(), newLinkId);
             }
         }
@@ -981,12 +983,17 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
         subspacePropertyFilterMapper.insert(entity);
     }
 
-    private void importInstances(String sourceOntologyId, String newOntologyId,
-                                 List<Object> selectedPrimaryKeys,
-                                 List<InstancePropertyFilter> propertyFilters) {
+    /**
+     * 按勾选主键与属性筛选条件导入父空间实例。
+     *
+     * @return 导出主键到新主键的映射，供关系边落位；无实例导入时为空 map
+     */
+    private Map<String, Object> importInstances(String sourceOntologyId, String newOntologyId,
+                                                List<Object> selectedPrimaryKeys,
+                                                List<InstancePropertyFilter> propertyFilters) {
         var exported = entityService.exportInstances(sourceOntologyId);
         if (CollectionUtils.isEmpty(exported.getNodes())) {
-            return;
+            return new HashMap<>();
         }
         var nodes = exported.getNodes();
 
@@ -1011,11 +1018,11 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
 
         if (CollectionUtils.isEmpty(nodes)) {
             log.info("子空间实例导入：过滤后无匹配实例，sourceOntologyId={}", sourceOntologyId);
-            return;
+            return new HashMap<>();
         }
 
         var instances = OntologyInstancesExportDTO.builder().nodes(nodes).build();
-        entityService.importInstances(newOntologyId, instances);
+        return entityService.importInstances(newOntologyId, instances);
     }
 
     private boolean matchesFilters(EntityNodeExportDTO node, List<InstancePropertyFilter> filters) {
@@ -1208,10 +1215,19 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
         private final OntologySubspaceCreateParam.PropertyFilterConfig filter;
     }
 
+    /**
+     * 在子空间创建关系，并复制父关系下已成立的实例关系边。
+     * <p>
+     * 图库里未点亮的实例对没有边，父关系导出为空时新关系同样一条边都不建，
+     * 后续由行为函数、手动激活或再次导入产生。
+     *
+     * @param pkMappingByNewOntologyUid 新对象唯一标识 -> 「导出主键 → 新主键」映射
+     */
     private String createLinkInSubspace(Integer spaceId, OntologyLinkGroup sourceLink,
                                         String fromId, String toId,
                                         OntologySubspaceCreateParam.LinkSelection selection,
-                                        Integer targetCategoryId) {
+                                        Integer targetCategoryId,
+                                        Map<String, Map<String, Object>> pkMappingByNewOntologyUid) {
         var linkApiName = StringUtils.defaultString(selection.getApiName(), "relation_" + IdGenerator.generateUUID());
         var linkParam = new OntologyLinkCreateParam()
                 .setSpaceId(spaceId)
@@ -1232,8 +1248,10 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                         .eq(OntologyLinkGroup::getApiName, linkApiName));
         PreconditionUtils.checkNotNull(newLink, "关系创建失败", HttpStatus.INTERNAL_SERVER_ERROR);
 
-        if (entityService.hasEnabledRelations(sourceLink.getUniqueIdentifier())) {
-            entityService.activateLinkRelations(newLink.getUniqueIdentifier());
+        var sourceRelations = entityService.exportEntityRelations(sourceLink.getUniqueIdentifier());
+        if (CollectionUtils.isNotEmpty(sourceRelations)) {
+            entityService.importEntityRelations(newLink.getUniqueIdentifier(), sourceRelations,
+                    pkMappingByNewOntologyUid.get(fromId), pkMappingByNewOntologyUid.get(toId));
         }
         return newLink.getUniqueIdentifier();
     }

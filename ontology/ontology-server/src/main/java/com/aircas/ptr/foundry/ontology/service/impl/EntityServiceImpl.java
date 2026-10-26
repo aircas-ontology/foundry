@@ -76,7 +76,7 @@ import static com.aircas.ptr.foundry.ontology.converter.DataConverter.convert2Da
 public class EntityServiceImpl implements EntityService {
 
     /**
-     * 单条关系下实例关系边的导出上限，避免超大笛卡尔积把导出文件撑爆。
+     * 单条关系下实例关系边的导出上限，避免边量过大把导出文件撑爆。
      */
     private static final int EXPORT_RELATION_LIMIT = 5000;
 
@@ -84,11 +84,6 @@ public class EntityServiceImpl implements EntityService {
      * 图节点集合名，与 {@link EntityNode} 的 @Document 一致，用于拼接关系边的端点标识。
      */
     private static final String NODE_COLLECTION = "node";
-
-    /**
-     * 校验候选关系边是否已存在时，单次 AQL 传入的端点对上限。
-     */
-    private static final int RELATION_PAIR_QUERY_CHUNK = 1000;
 
     @Resource
     private OntologyMetaMapper metaMapper;
@@ -140,68 +135,6 @@ public class EntityServiceImpl implements EntityService {
 
 
     @Override
-    public int createEntityRelations(String linkUniqueIdentifier) {
-        var link = linkGroupMapper.selectOne(new LambdaQueryWrapper<OntologyLinkGroup>().eq(OntologyLinkGroup::getUniqueIdentifier, linkUniqueIdentifier));
-        PreconditionUtils.checkArgument(link != null, "本体关系不存在");
-        var existRelations = relationRepository.queryRelationsByLinkId(link.getUniqueIdentifier());
-        var existRelationSet = existRelations.stream()
-                .map(v -> v.getFrom().getId() + v.getTo().getId())
-                .collect(Collectors.toSet());
-
-        var fromNodes = nodeRepository.findByOntologyUniqIdentifier(link.getOntologyUniqueIdentifierFrom());
-        var toNodes = nodeRepository.findByOntologyUniqIdentifier(link.getOntologyUniqueIdentifierTo());
-
-        var relations = new ArrayList<EntityRelation>();
-        var windows = new ArrayList<VisibilityWindow>();
-
-        if (CollectionUtils.isNotEmpty(fromNodes) && CollectionUtils.isNotEmpty(toNodes)) {
-
-            fromNodes.forEach(from ->
-                    toNodes.forEach(to -> {
-                                if (existRelationSet.contains(from.getId() + to.getId())) {
-                                    return;
-                                }
-                                relations.add(EntityRelation.builder()
-                                        .ontologyLinkId(link.getUniqueIdentifier())
-                                        .from(from)
-                                        .to(to)
-                                        .status(Status.DELETE)
-                                        .timeWindows(windows)
-                                        .startTime(null)
-                                        .endTime(null)
-                                        .createTime(new Date())
-                                        .updateTime(new Date())
-                                        .type(link.getType())
-                                        .name(link.getName())
-                                        .build());
-                            }
-                    )
-            );
-
-            if (CollectionUtils.isNotEmpty(relations)) {
-                relationRepository.batchSave(relations);
-            }
-        }
-        return relations.size();
-    }
-
-    @Override
-    public void activateLinkRelations(String linkUniqueIdentifier) {
-        var relations = relationRepository.queryRelationsByLinkId(linkUniqueIdentifier);
-        if (CollectionUtils.isEmpty(relations)) {
-            return;
-        }
-        relations.forEach(r -> relationRepository.updateRelation(
-                r.getStartTime(), r.getEndTime(), r.getTimeWindows(), Status.ENABLE, r.getId()));
-    }
-
-    @Override
-    public boolean hasEnabledRelations(String linkUniqueIdentifier) {
-        var relations = relationRepository.queryRelationsByLinkId(linkUniqueIdentifier);
-        return relations.stream().anyMatch(r -> Status.ENABLE.equals(r.getStatus()));
-    }
-
-    @Override
     public List<EntityRelationExportDTO> exportEntityRelations(String linkUniqueIdentifier) {
         var edges = relationRepository.queryNonDeletedRelationsByLinkIdWithLimit(linkUniqueIdentifier, EXPORT_RELATION_LIMIT);
         if (edges.size() >= EXPORT_RELATION_LIMIT) {
@@ -239,7 +172,7 @@ public class EntityServiceImpl implements EntityService {
 
         var fromNodes = nodesByPrimaryKey(link.getOntologyUniqueIdentifierFrom());
         var toNodes = nodesByPrimaryKey(link.getOntologyUniqueIdentifierTo());
-        //先把导出边解析成新主键对应的图节点；候选边默认是笛卡尔积生成的 DELETE 边，只改命中的那些实例对
+        //先把导出边解析成新主键对应的图节点；图库里未点亮的实例对没有边，命中的按状态覆盖、缺失的直建
         var pending = Lists.<EntityRelation>newArrayList();
         var skipped = 0;
         for (var relation : relations) {
@@ -270,17 +203,17 @@ public class EntityServiceImpl implements EntityService {
             log.warn("关系 {} 实例关系边落位跳过：导出的 {} 条边均无对应图节点", linkUniqueIdentifier, relations.size());
             return;
         }
-        //只取命中的候选边，未命中的实例对保持 DELETE，从而还原源空间真实的实例关系图
+        //已存在的端点对按导出状态覆盖，图库里没有的直建；不会为未点亮的实例对补边
         var nodePairs = pending.stream().map(this::nodePairKey).distinct().collect(Collectors.toList());
-        var candidateEdges = relationRepository.queryRelationsByNodePairs(linkUniqueIdentifier, nodePairs).stream()
+        var existEdges = relationRepository.queryRelationsByNodePairs(linkUniqueIdentifier, nodePairs).stream()
                 .filter(edge -> edge.getFrom() != null && edge.getTo() != null)
                 .collect(Collectors.toMap(this::nodePairKey, edge -> edge, (a, b) -> a));
         var newEdges = Lists.<EntityRelation>newArrayList();
         for (var edge : pending) {
-            var candidate = candidateEdges.get(nodePairKey(edge));
-            if (candidate != null) {
+            var exist = existEdges.get(nodePairKey(edge));
+            if (exist != null) {
                 relationRepository.updateRelation(edge.getStartTime(), edge.getEndTime(), edge.getTimeWindows(),
-                        edge.getStatus(), candidate.getId());
+                        edge.getStatus(), exist.getId());
             } else {
                 newEdges.add(edge);
             }
@@ -1280,51 +1213,68 @@ public class EntityServiceImpl implements EntityService {
                     actionContext.getLinkEntityPrimaryKey(),
                     actionContext.getLink().getOntologyLinkUniqIdentifier());
 
-            if (relation == null) {
-                var link = linkGroupMapper.selectOne(new LambdaQueryWrapper<OntologyLinkGroup>().eq(OntologyLinkGroup::getUniqueIdentifier, actionContext.getLink().getOntologyLinkUniqIdentifier()));
-
-                var fromNode = nodeRepository.findByOntologyUniqIdentifierAndPrimaryKey(link.getOntologyUniqueIdentifierFrom(), actionContext.getEntityActionExecuteParam().getEntityPrimaryKey());
-                var toNode = nodeRepository.findByOntologyUniqIdentifierAndPrimaryKey(link.getOntologyUniqueIdentifierTo(), actionContext.getLinkEntityPrimaryKey());
-
-                relation = EntityRelation.builder()
-                        .ontologyLinkId(link.getUniqueIdentifier())
-                        .from(fromNode)
-                        .to(toNode)
-                        .status(Status.DELETE)
-                        .timeWindows(Lists.newArrayList())
-                        .createTime(new Date())
-                        .updateTime(new Date())
-                        .type(link.getType())
-                        .name(link.getName())
-                        .build();
-                relationRepository.save(relation);
-            }
             FunctionResultVO resultVO = jsonMapper.readValue(jsonString, new TypeReference<FunctionResultVO>() {
             });
-            //返回结果有可见窗口，直接更新relation startTime/endTime
+            Date startTime = null;
+            Date endTime = null;
+            Status status;
             if (resultVO.getStartTime() != null && resultVO.getEndTime() != null) {
-                relationRepository.updateRelation(resultVO.getStartTime(), resultVO.getEndTime(), resultVO.getTimeWindows(), Status.ENABLE, relation.getId());
+                //返回结果有可见窗口，直接生效
+                startTime = resultVO.getStartTime();
+                endTime = resultVO.getEndTime();
+                status = Status.ENABLE;
             } else {
-                //无可见窗口时，解析spel表达式,更新relation enable
+                //无可见窗口时，解析spel表达式判定关系是否成立
                 Boolean expResult = evaluateJsonCondition(jsonString, actionContext.getLink().getOntologyLinkFunctionParamExpression());
-                relationRepository.updateRelation(null, null, resultVO.getTimeWindows(), expResult ? Status.ENABLE : Status.DELETE, relation.getId());
+                status = expResult ? Status.ENABLE : Status.DELETE;
+            }
+
+            if (relation == null) {
+                //关系不成立时不建边：图库里只留真实成立的关系
+                if (status == Status.ENABLE) {
+                    var link = linkGroupMapper.selectOne(new LambdaQueryWrapper<OntologyLinkGroup>().eq(OntologyLinkGroup::getUniqueIdentifier, actionContext.getLink().getOntologyLinkUniqIdentifier()));
+
+                    var fromNode = nodeRepository.findByOntologyUniqIdentifierAndPrimaryKey(link.getOntologyUniqueIdentifierFrom(), actionContext.getEntityActionExecuteParam().getEntityPrimaryKey());
+                    var toNode = nodeRepository.findByOntologyUniqIdentifierAndPrimaryKey(link.getOntologyUniqueIdentifierTo(), actionContext.getLinkEntityPrimaryKey());
+                    if (fromNode == null || toNode == null) {
+                        //图库里的节点可能被清理过，缺端点时无法建边
+                        log.warn("行为函数实例关系边落位跳过：端点节点不存在，link={}, fromPk={}, toPk={}",
+                                link.getUniqueIdentifier(), actionContext.getEntityActionExecuteParam().getEntityPrimaryKey(),
+                                actionContext.getLinkEntityPrimaryKey());
+                    } else {
+                        relationRepository.save(EntityRelation.builder()
+                                .ontologyLinkId(link.getUniqueIdentifier())
+                                .from(fromNode)
+                                .to(toNode)
+                                .status(Status.ENABLE)
+                                .startTime(startTime)
+                                .endTime(endTime)
+                                .timeWindows(resultVO.getTimeWindows() == null ? Lists.<VisibilityWindow>newArrayList() : resultVO.getTimeWindows())
+                                .createTime(new Date())
+                                .updateTime(new Date())
+                                .type(link.getType())
+                                .name(link.getName())
+                                .build());
+                    }
+                }
+            } else {
+                relationRepository.updateRelation(startTime, endTime, resultVO.getTimeWindows(), status, relation.getId());
             }
 
         }
     }
 
     /**
-     * 新增实体节点和实体关系：适用于实体增量同步场景
+     * 新增实体节点：适用于实体增量同步场景
      * <p>
-     * 与数据湖 CDC 链路共用 {@link #upsertEntityNode} 与 {@link #createCandidateRelationsForNodes}：
-     * 节点按归一化主键判存（命中则只刷新展示名），候选边按 (link, from, to) 判存后只补缺失对，
-     * 因此重复调用同一入参只覆盖、不会产生第二份数据；老节点此前漏掉的 To 端关系边也会在本次补齐。
+     * 与数据湖 CDC 链路共用 {@link #upsertEntityNode}：节点按归一化主键判存，命中则只刷新展示名，
+     * 因此重复调用同一入参只覆盖、不会产生第二份节点。实例关系边不在这里生成，只在关系真实成立或人工激活时落库。
      *
      * @param ontologyUniqueIdentifier 本体id
      * @param entityPropertyMap        实体属性（列名 -> 列值，列名大小写不敏感）
      */
     @Override
-    public void completeEntityNodeAndRelations(String ontologyUniqueIdentifier, Map<String, Object> entityPropertyMap) {
+    public void completeEntityNode(String ontologyUniqueIdentifier, Map<String, Object> entityPropertyMap) {
         //创建实体节点
         var primaryProperty = propertyMapper.selectOne(new LambdaQueryWrapper<OntologyProperty>()
                 .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier)
@@ -1359,8 +1309,6 @@ public class EntityServiceImpl implements EntityService {
 
         upsertEntityNode(ontologyUniqueIdentifier, primaryProperty.getDatasourceId(),
                 entityPrimaryKeyValue, displayName);
-        //创建实体关系
-        createCandidateRelationsForNodes(ontologyUniqueIdentifier, List.of(entityPrimaryKeyValue));
     }
 
     @Override
@@ -1433,62 +1381,6 @@ public class EntityServiceImpl implements EntityService {
     }
 
     @Override
-    public int createCandidateRelationsForNodes(String ontologyUniqueIdentifier, List<Object> primaryKeyValues) {
-        var nodes = findGraphNodes(ontologyUniqueIdentifier, primaryKeyValues);
-        if (CollectionUtils.isEmpty(nodes)) {
-            return 0;
-        }
-        var links = linkGroupMapper.selectList(new LambdaQueryWrapper<OntologyLinkGroup>()
-                .and(w -> w.eq(OntologyLinkGroup::getOntologyUniqueIdentifierFrom, ontologyUniqueIdentifier)
-                        .or().eq(OntologyLinkGroup::getOntologyUniqueIdentifierTo, ontologyUniqueIdentifier))
-                .ne(OntologyLinkGroup::getStatus, Status.DELETE.getValue()));
-
-        var created = 0;
-        for (var link : links) {
-            var fromSide = Objects.equals(link.getOntologyUniqueIdentifierFrom(), ontologyUniqueIdentifier);
-            var targetOntology = fromSide ? link.getOntologyUniqueIdentifierTo() : link.getOntologyUniqueIdentifierFrom();
-            var targetNodes = nodeRepository.findByOntologyUniqIdentifier(targetOntology);
-            if (CollectionUtils.isEmpty(targetNodes)) {
-                continue;
-            }
-            var pending = Lists.<EntityRelation>newArrayList();
-            for (var node : nodes) {
-                for (var target : targetNodes) {
-                    if (Objects.equals(node.getId(), target.getId())) {
-                        continue;
-                    }
-                    pending.add(EntityRelation.builder()
-                            .ontologyLinkId(link.getUniqueIdentifier())
-                            .from(fromSide ? node : target)
-                            .to(fromSide ? target : node)
-                            .status(Status.DELETE)
-                            .startTime(null)
-                            .endTime(null)
-                            .timeWindows(Lists.newArrayList())
-                            .createTime(new Date())
-                            .updateTime(new Date())
-                            .type(link.getType())
-                            .name(link.getName())
-                            .build());
-                }
-            }
-            // 只补图库中还不存在的端点对，重复执行不产生第二份边
-            var existPairs = Sets.<String>newHashSet();
-            var nodePairs = pending.stream().map(this::nodePairKey).distinct().collect(Collectors.toList());
-            for (var chunk : Lists.partition(nodePairs, RELATION_PAIR_QUERY_CHUNK)) {
-                relationRepository.queryRelationsByNodePairs(link.getUniqueIdentifier(), chunk)
-                        .forEach(edge -> existPairs.add(nodePairKey(edge)));
-            }
-            var missing = pending.stream().filter(edge -> !existPairs.contains(nodePairKey(edge))).collect(Collectors.toList());
-            if (CollectionUtils.isNotEmpty(missing)) {
-                relationRepository.batchSave(missing);
-                created += missing.size();
-            }
-        }
-        return created;
-    }
-
-    @Override
     public int deleteEntityNodeOrphans(String ontologyUniqueIdentifier, Collection<Object> keepPrimaryKeyValues) {
         var keepPkKeys = keepPrimaryKeyValues == null ? Sets.<String>newHashSet()
                 : keepPrimaryKeyValues.stream().filter(Objects::nonNull)
@@ -1534,19 +1426,6 @@ public class EntityServiceImpl implements EntityService {
                 .createTime(now)
                 .updateTime(now)
                 .build();
-    }
-
-    private List<EntityNode> findGraphNodes(String ontologyUniqueIdentifier, List<Object> primaryKeyValues) {
-        if (CollectionUtils.isEmpty(primaryKeyValues)) {
-            return Lists.newArrayList();
-        }
-        return primaryKeyValues.stream()
-                .filter(Objects::nonNull)
-                .map(pk -> nodeRepository.findByOntologyUniqIdentifierAndPrimaryKey(
-                        ontologyUniqueIdentifier, normalizePrimaryKey(pk)))
-                .filter(Objects::nonNull)
-                .distinct()
-                .collect(Collectors.toList());
     }
 
     @Transactional(value = "datalakeTransactionManager")
@@ -1628,12 +1507,12 @@ public class EntityServiceImpl implements EntityService {
                     }
                 }
         );
-        // 补全实体节点和关系
+        // 补全实体节点
         for (int i = 0; i < param.getCount(); i++) {
             var pkValue = generateIds.get(i);
             var entityPropertyMap = columnValues.get(i);
             entityPropertyMap.put(pkProp.getDatasourceColumnName(), pkValue);
-            completeEntityNodeAndRelations(param.getOntologyIdentifier(), entityPropertyMap);
+            completeEntityNode(param.getOntologyIdentifier(), entityPropertyMap);
         }
     }
 
@@ -1648,6 +1527,8 @@ public class EntityServiceImpl implements EntityService {
         // 校验 schema 不为空
         PreconditionUtils.checkArgument(StringUtils.isNotEmpty(pkProp.getDatasourceSchema()), 
                 "本体数据源 schema 为空，请检查数据源配置", HttpStatus.BAD_REQUEST);
+        // 同一本体的所有数据源表都在本体所属空间的 schema 下，属性行的 datasource_schema 不可靠（可能为空串或残留 'public'），统一以主表 schema 为准
+        var mainSchema = pkProp.getDatasourceSchema();
         // 校验返回属性是否存在或者是否关联了数据源
         var propMap = props.stream().collect(Collectors.toMap(OntologyProperty::getApiName, v -> v));
         param.getSelectProperties().forEach(p -> {
@@ -1672,7 +1553,7 @@ public class EntityServiceImpl implements EntityService {
             var prop = propMap.get(selectProp.getPropertyApiName());
             var aliasKey = StringUtils.isNotEmpty(selectProp.getAlias()) ? selectProp.getAlias() : selectProp.getPropertyApiName();
             selectParamMap.put(aliasKey, selectProp);
-            var columnRef = wrapColumnRef(prop.getDatasourceSchema(), prop.getDatasourceId(), prop.getDatasourceColumnName());
+            var columnRef = wrapColumnRef(mainSchema, prop.getDatasourceId(), prop.getDatasourceColumnName());
 
             if (selectProp.getAggFunc() != null) {
                 hasAggregation = true;
@@ -1700,7 +1581,7 @@ public class EntityServiceImpl implements EntityService {
         }
         // 4. 构建 FROM 和 LEFT JOIN
         var fromBuilder = new StringBuilder();
-        fromBuilder.append(wrapTableRef(pkProp.getDatasourceSchema(), mainDs));
+        fromBuilder.append(wrapTableRef(mainSchema, mainDs));
         var joinedTables = Sets.newHashSet();
         joinedTables.add(mainDs);
         // 收集所有涉及的属性API名称
@@ -1733,9 +1614,9 @@ public class EntityServiceImpl implements EntityService {
             }
             var mapping = tableMappingMap.get(dsId);
             PreconditionUtils.checkArgument(mapping != null, "未找到数据源表 " + dsId + " 与主表 " + mainDs + " 的关联关系", HttpStatus.BAD_REQUEST);
-            fromBuilder.append(" LEFT JOIN ").append(wrapTableRef(prop.getDatasourceSchema(), dsId))
-                    .append(" ON ").append(wrapColumnRef(pkProp.getDatasourceSchema(), mainDs, mapping.getSourceColumnName())).append(" = ")
-                    .append(wrapColumnRef(prop.getDatasourceSchema(), dsId, mapping.getTargetColumnName()));
+            fromBuilder.append(" LEFT JOIN ").append(wrapTableRef(mainSchema, dsId))
+                    .append(" ON ").append(wrapColumnRef(mainSchema, mainDs, mapping.getSourceColumnName())).append(" = ")
+                    .append(wrapColumnRef(mainSchema, dsId, mapping.getTargetColumnName()));
             joinedTables.add(dsId);
         }
         // 5. 构建 WHERE 部分
@@ -1746,7 +1627,7 @@ public class EntityServiceImpl implements EntityService {
         }
         var whereBuilder = new StringBuilder();
         if (param.getFilters() != null && CollectionUtils.isNotEmpty(param.getFilters().getChildren())) {
-            var whereClause = buildWhereClause(param.getFilters(), propMap);
+            var whereClause = buildWhereClause(param.getFilters(), propMap, mainSchema);
             if (StringUtils.isNotEmpty(whereClause)) {
                 whereBuilder.append(" WHERE ").append(whereClause);
             }
@@ -1763,7 +1644,7 @@ public class EntityServiceImpl implements EntityService {
                 var prop = propMap.get(groupByProp);
                 PreconditionUtils.checkArgument(prop != null && StringUtils.isNotEmpty(prop.getDatasourceId()),
                         "分组属性" + groupByProp + "不存在或未关联数据源", HttpStatus.BAD_REQUEST);
-                groupByBuilder.append(wrapColumnRef(prop.getDatasourceSchema(), prop.getDatasourceId(), prop.getDatasourceColumnName()));
+                groupByBuilder.append(wrapColumnRef(mainSchema, prop.getDatasourceId(), prop.getDatasourceColumnName()));
                 first = false;
             }
         }
@@ -1779,7 +1660,7 @@ public class EntityServiceImpl implements EntityService {
                 var prop = propMap.get(orderBy.getPropertyApiName());
                 PreconditionUtils.checkArgument(prop != null && StringUtils.isNotEmpty(prop.getDatasourceId()),
                         "排序属性" + orderBy.getPropertyApiName() + "不存在或未关联数据源", HttpStatus.BAD_REQUEST);
-                orderByBuilder.append(wrapColumnRef(prop.getDatasourceSchema(), prop.getDatasourceId(), prop.getDatasourceColumnName())).append(" ").append(orderBy.getSort().name());
+                orderByBuilder.append(wrapColumnRef(mainSchema, prop.getDatasourceId(), prop.getDatasourceColumnName())).append(" ").append(orderBy.getSort().name());
                 first = false;
             }
         }
@@ -1871,7 +1752,7 @@ public class EntityServiceImpl implements EntityService {
         return "(NULLIF((" + columnRef + ")::text, '')::numeric)";
     }
 
-    private String buildWhereClause(FilterGroupParam group, Map<String, OntologyProperty> propMap) {
+    private String buildWhereClause(FilterGroupParam group, Map<String, OntologyProperty> propMap, String schema) {
         if (CollectionUtils.isEmpty(group.getChildren())) {
             return "";
         }
@@ -1883,12 +1764,12 @@ public class EntityServiceImpl implements EntityService {
                 sb.append(" ").append(logic).append(" ");
             }
             if (node.getType() == FilterNodeTypeEnum.FILTER && node.getFilter() != null) {
-                String filterClause = buildFilterClause(node.getFilter(), propMap);
+                String filterClause = buildFilterClause(node.getFilter(), propMap, schema);
                 if (StringUtils.isNotEmpty(filterClause)) {
                     sb.append(filterClause);
                 }
             } else if (node.getType() == FilterNodeTypeEnum.GROUP && node.getGroup() != null) {
-                String subGroup = buildWhereClause(node.getGroup(), propMap);
+                String subGroup = buildWhereClause(node.getGroup(), propMap, schema);
                 if (StringUtils.isNotEmpty(subGroup)) {
                     sb.append("(").append(subGroup).append(")");
                 }
@@ -1913,12 +1794,12 @@ public class EntityServiceImpl implements EntityService {
         return result;
     }
 
-    private String buildFilterClause(PropertyFilterParam filter, Map<String, OntologyProperty> propMap) {
+    private String buildFilterClause(PropertyFilterParam filter, Map<String, OntologyProperty> propMap, String schema) {
         OntologyProperty prop = propMap.get(filter.getPropertyApiName());
         PreconditionUtils.checkArgument(prop != null && StringUtils.isNotEmpty(prop.getDatasourceId()),
                 "过滤属性" + filter.getPropertyApiName() + "不存在或未关联数据源", HttpStatus.BAD_REQUEST);
 
-        String columnRef = wrapColumnRef(prop.getDatasourceSchema(), prop.getDatasourceId(), prop.getDatasourceColumnName());
+        String columnRef = wrapColumnRef(schema, prop.getDatasourceId(), prop.getDatasourceColumnName());
         QueryOpEnum op = filter.getOp() != null ? filter.getOp() : QueryOpEnum.EQ;
         
         // 优先使用 filter 声明的 dataType，否则使用属性定义的类型

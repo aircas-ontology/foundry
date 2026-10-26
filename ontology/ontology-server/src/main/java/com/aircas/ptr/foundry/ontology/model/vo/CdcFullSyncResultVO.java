@@ -43,9 +43,6 @@ public class CdcFullSyncResultVO {
     @Schema(name = "graphNodeDeleted", description = "ArangoDB 清理的孤儿实例节点数（含其相邻关系边）")
     private long graphNodeDeleted;
 
-    @Schema(name = "graphEdgeCreated", description = "ArangoDB 新建的候选关系边数（状态 DELETE）")
-    private long graphEdgeCreated;
-
     @Schema(name = "linkGroupSynced", description = "关系索引写入文档数")
     private long linkGroupSynced;
 
