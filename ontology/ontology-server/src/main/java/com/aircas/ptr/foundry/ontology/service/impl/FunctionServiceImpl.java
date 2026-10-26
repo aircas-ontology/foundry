@@ -23,6 +23,7 @@ import com.aircas.ptr.foundry.ontology.model.dto.container.ContainerInterfaceDoc
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamCategoryEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamRoleEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionRuntimeStatusEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.ContainerSourceEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.TaskStatusEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionModelEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionLanguageEnum;
@@ -354,6 +355,10 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         }
         FunctionContainerInstance instance = findInstanceByKey(containerKey);
         if (instance == null) {
+            return;
+        }
+        if (instance.getContainerSource() == ContainerSourceEnum.SYSTEM) {
+            log.warn("系统预置容器不允许删除（containerKey={}）", containerKey);
             return;
         }
         if (!containerNodeIdentity.isSelf(instance.getNodeIp())) {

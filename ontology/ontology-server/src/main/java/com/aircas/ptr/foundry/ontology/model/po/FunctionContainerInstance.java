@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.ontology.model.po;
 
 import com.aircas.ptr.foundry.ontology.model.enums.ContainerPhaseEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.ContainerSourceEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.HeartbeatStatusEnum;
 import com.baomidou.mybatisplus.annotation.FieldFill;
 import com.baomidou.mybatisplus.annotation.IdType;
@@ -83,6 +84,9 @@ public class FunctionContainerInstance {
 
     /** 最后一次心跳探测时间 */
     private Date lastHeartbeatAt;
+
+    /** 容器来源：USER 为用户创建（可编辑/启停/删除），SYSTEM 为系统预置（只读，禁止操作） */
+    private ContainerSourceEnum containerSource;
 
     @TableField(fill = FieldFill.INSERT)
     private Date createTime;

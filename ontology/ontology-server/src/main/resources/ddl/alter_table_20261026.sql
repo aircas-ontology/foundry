@@ -10,3 +10,6 @@ create unique index if not exists uk_ctr_instance_node_port
 -- 心跳监测：TCP 探活结果与最后探测时间
 alter table function_container_instance add column if not exists heartbeat_status varchar(20);
 alter table function_container_instance add column if not exists last_heartbeat_at timestamp;
+
+-- 容器来源：USER（用户创建，可操作）/ SYSTEM（系统预置，只读）
+alter table function_container_instance add column if not exists container_source varchar(20) default 'USER';
