@@ -5,6 +5,7 @@ import com.aircas.ptr.foundry.ontology.model.enums.ContainerPhaseEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.ContainerSourceEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.HeartbeatStatusEnum;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionContainerInstance;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
@@ -22,6 +23,7 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@JsonInclude(JsonInclude.Include.ALWAYS)
 @Schema(description = "容器算子运行实例")
 public class ContainerRuntimeVO {
 
