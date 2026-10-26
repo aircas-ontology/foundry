@@ -11,7 +11,6 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
-import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
 
 import java.util.Date;
@@ -20,7 +19,6 @@ import java.util.Date;
 @AllArgsConstructor
 @Data
 @SuperBuilder
-@Accessors(chain = true)
 @Schema(description = "函数基本信息VO")
 public class FunctionInfoVO {
 

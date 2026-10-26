@@ -34,6 +34,7 @@ import com.aircas.ptr.foundry.ontology.model.param.BasicQueryTestParam;
 import com.aircas.ptr.foundry.ontology.model.param.ContainerConfig;
 import com.aircas.ptr.foundry.ontology.model.param.ContainerFunctionCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.CompositeConfig;
+import com.aircas.ptr.foundry.ontology.model.param.CompositeEdge;
 import com.aircas.ptr.foundry.ontology.model.param.CompositeNode;
 import com.aircas.ptr.foundry.ontology.model.param.CompositeParameter;
 import com.aircas.ptr.foundry.ontology.model.param.CompositeValidateParam;
@@ -70,14 +71,15 @@ import com.aircas.ptr.foundry.ontology.service.ContainerFunctionService;
 import com.aircas.ptr.foundry.ontology.service.FunctionParamService;
 import com.aircas.ptr.foundry.ontology.service.FunctionService;
 import com.aircas.ptr.foundry.ontology.service.GroovyService;
-import com.aircas.ptr.foundry.ontology.utils.ContainerNodeForwarder;
-import com.aircas.ptr.foundry.ontology.utils.ContainerNodeIdentity;
-import com.aircas.ptr.foundry.ontology.utils.ContainerUploadRegistry;
 import com.aircas.ptr.foundry.ontology.utils.DockerCommandExecutor;
 import com.aircas.ptr.foundry.ontology.utils.OperatorFunctionFactory;
 import com.aircas.ptr.foundry.ontology.utils.ScriptParamDescriptionExtractor;
 import com.aircas.ptr.foundry.ontology.utils.ScriptParamDescriptionExtractor.Descriptions;
 import com.aircas.ptr.foundry.ontology.utils.SchemaHandleUtil;
+import com.aircas.ptr.foundry.ontology.utils.ContainerNodeForwarder;
+import com.aircas.ptr.foundry.ontology.utils.ContainerNodeIdentity;
+import com.aircas.ptr.foundry.ontology.utils.ContainerUploadRegistry;
+import com.aircas.ptr.foundry.ontology.utils.CompositeValidator;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -183,6 +185,10 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     /** 容器算子注册服务：统一创建入口在 type=CONTAINER 时分发到此处，落 N 条接口算子 + 1 运行实例 */
     @Resource
     private ContainerFunctionService containerFunctionService;
+
+    /** 编排函数定义读取入口：详情回显入口节点入参与执行链路共用同一查询口径 */
+    @Resource
+    private CompositeFunctionCatalog compositeFunctionCatalog;
 
     private ObjectMapper objectMapper = new ObjectMapper()
             // 存进库的 fields 是 FunctionParamDTO 序列化结果（含 referenceType 等 VO 没有的字段），
@@ -825,18 +831,16 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         }
         //脚本函数：按参数定义组装单对象入参（handle(input)），按语言路由到对应引擎执行
         Map<String, Object> inputMap = buildInputMap(executeInputParams, funParamMap);
-        // 单对象入参解包：当只有一个 OBJECT 入参时，直接将该对象的值作为 runner 的 input，
-        // 避免脚本里写 input.input.xxx 的双层嵌套（用户给参数起名 input/user/whatever 都能直接用 input.xxx）
+        // 单对象入参解包：当只有一个入参时，直接将该参数的值作为 runner 的 input，
+        // 避免脚本里写 input.input.xxx 的双层嵌套（用户给参数起名 input/user/whatever 都能直接用 input.xxx 或 input）
         String inputJson;
-        if (executeInputParams.size() == 1
-                && executeInputParams.get(0).getParamType() == FunctionParamTypeEnum.OBJECT
-                && inputMap.containsKey(executeInputParams.get(0).getParamName())) {
+        if (executeInputParams.size() == 1 && inputMap.containsKey(executeInputParams.get(0).getParamName())) {
             Object value = inputMap.get(executeInputParams.get(0).getParamName());
             inputJson = objectMapper.writeValueAsString(value);
         } else {
             inputJson = objectMapper.writeValueAsString(inputMap);
         }
-        FunctionLanguageEnum language = function.getLanguage() == null ? FunctionLanguageEnum.GROOVY : function.getLanguage();
+        FunctionLanguageEnum language = function.getLanguage() == null ? inferLanguageFromCode(function.getCode()) : function.getLanguage();
         ScriptExecutionContext ctx = ScriptExecutionContext.builder()
                 .language(language)
                 .functionApi(param.getFunctionApi())
@@ -1466,8 +1470,14 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                         .parameters(param.getParameters())
                         .build();
                 var resultJson = executeFunction(executeParam);
-                return objectMapper.readValue(resultJson, new TypeReference<Map<String, Object>>() {
-                });
+                // 尝试解析为 Map，失败则包装成 Map（支持数字、字符串等非对象返回值）
+                try {
+                    return objectMapper.readValue(resultJson, new TypeReference<Map<String, Object>>() {
+                    });
+                } catch (com.fasterxml.jackson.databind.exc.MismatchedInputException e) {
+                    Object value = objectMapper.readValue(resultJson, Object.class);
+                    return Map.of("result", value);
+                }
 
             case CONTAINER:
                 // 容器算子测试：复用 executeFunction（按 containerKey 调常驻容器，未运行则报错引导手动启动）
@@ -1508,7 +1518,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 PreconditionUtils.checkArgument(StringUtils.isNotEmpty(param.getCode()),
                         "脚本草稿测试必须提供 code", HttpStatus.BAD_REQUEST);
                 FunctionLanguageEnum language = param.getLanguage() == null
-                        ? FunctionLanguageEnum.GROOVY : param.getLanguage();
+                        ? inferLanguageFromCode(param.getCode()) : param.getLanguage();
                 // 草稿测试：单对象入参解包（与 executeFunction 语义对齐——组装结果为 Map 时才解包）
                 String inputJson;
                 Object singleVal = null;
@@ -1744,6 +1754,68 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 .build();
     }
 
+    /**
+     * 编排入口节点的入参转成详情参数列表，仅用于详情回显，不落 {@code function_param}。
+     * <p>函数节点的端口由被引用函数的入参表决定（与执行链路同一份 {@link CompositeFunctionCatalog}
+     * 查询口径，保证详情与执行看到的入参一致）；loop/branch/transform 等逻辑节点取节点自身声明的
+     * {@code inputParameters}。</p>
+     *
+     * @param config         编排配置
+     * @param paramOrderBase 追加参数的起始顺序，接在编排自身参数之后
+     * @return 入口节点入参对应的详情参数
+     */
+    private List<FunctionParameterVO> resolveCompositeEntryParams(CompositeConfig config, int paramOrderBase) {
+        CompositeNode entry = CompositeValidator.resolveEntryNode(config);
+        if (entry == null) {
+            return new ArrayList<>();
+        }
+        List<FunctionParameterVO> entryParams = new ArrayList<>();
+        int paramOrder = paramOrderBase;
+        if (CompositeValidator.isLogicNode(entry)) {
+            if (entry.getInputParameters() == null) {
+                return entryParams;
+            }
+            for (CompositeParameter port : entry.getInputParameters()) {
+                if (port == null || StringUtils.isBlank(port.getName())) {
+                    continue;
+                }
+                entryParams.add(FunctionParameterVO.builder()
+                        .paramName(port.getName())
+                        .paramType(CompositeFunctionCatalog.toParamType(port.getType()))
+                        .category(FunctionParamCategoryEnum.INPUT)
+                        .paramOrder(paramOrder++)
+                        .description(port.getDescription() == null ? "" : port.getDescription())
+                        .build());
+            }
+            return entryParams;
+        }
+        Function referenced = compositeFunctionCatalog.findFunction(entry.getFunctionId());
+        if (referenced == null) {
+            log.warn("编排入口节点引用的函数不存在：nodeId={}, functionId={}", entry.getId(), entry.getFunctionId());
+            return entryParams;
+        }
+        for (FunctionParamPO paramPO : compositeFunctionCatalog.findInputParams(referenced.getId())) {
+            FunctionParameterVO.FunctionParameterVOBuilder voBuilder = FunctionParameterVO.builder()
+                    .paramName(paramPO.getParamName())
+                    .paramType(paramPO.getParamType())
+                    .category(FunctionParamCategoryEnum.INPUT)
+                    .paramOrder(paramOrder++)
+                    .paramSchema(paramPO.getParamSchema())
+                    .description(paramPO.getDescription() == null ? "" : paramPO.getDescription());
+            if (StringUtils.isNotEmpty(paramPO.getFields())) {
+                try {
+                    voBuilder.fields(objectMapper.readValue(
+                            paramPO.getFields(), new TypeReference<List<FunctionParameterVO>>() {}));
+                } catch (JsonProcessingException e) {
+                    log.warn("反序列化编排入口节点参数 fields 失败：paramName={}, cause={}",
+                            paramPO.getParamName(), e.getMessage());
+                }
+            }
+            entryParams.add(voBuilder.build());
+        }
+        return entryParams;
+    }
+
     private CompositeConfig loadStoredCompositeConfig(String functionApi) {
         var function = loadCompositeFunction(functionApi);
         CompositeConfig config = parseCompositeConfig(function.getCode());
@@ -1771,5 +1843,35 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                     && node.getFunctionId().trim().equals(functionApi.trim());
             PreconditionUtils.checkArgument(!selfReference, "函数编排不能引用自身：" + functionApi, HttpStatus.BAD_REQUEST);
         }
+    }
+
+    /**
+     * 从代码内容推断脚本语言：仅用于兼容旧数据（language 字段为 null 的历史记录）。
+     * <p>新创建的函数必须在前端明确选择语言并落库，此方法不作为主路径。</p>
+     */
+    private FunctionLanguageEnum inferLanguageFromCode(String code) {
+        if (StringUtils.isEmpty(code)) {
+            return FunctionLanguageEnum.GROOVY;
+        }
+        String trimmed = code.trim();
+        // TypeScript: export function / interface / type 声明 / 类型注解 (: number, : string)
+        if (trimmed.contains("export function") || trimmed.contains("export async function")
+                || trimmed.matches("(?s).*\\binterface\\s+\\w+.*")
+                || trimmed.matches("(?s).*:\\s*(number|string|boolean|any|unknown)\\b.*")) {
+            return FunctionLanguageEnum.TYPESCRIPT;
+        }
+        // Python: def handle / import / from ... import
+        if (trimmed.matches("(?s).*\\bdef\\s+handle\\s*\\(.*")
+                || trimmed.matches("(?s).*\\bfrom\\s+\\w+\\s+import\\b.*")
+                || trimmed.matches("(?s).*\\bimport\\s+\\w+\\b.*")) {
+            return FunctionLanguageEnum.PYTHON;
+        }
+        // Java: public class / package 声明
+        if (trimmed.matches("(?s).*\\bpackage\\s+[\\w.]+;.*")
+                || trimmed.matches("(?s).*\\bpublic\\s+class\\s+\\w+.*")) {
+            return FunctionLanguageEnum.JAVA;
+        }
+        // 默认回落 Groovy
+        return FunctionLanguageEnum.GROOVY;
     }
 }

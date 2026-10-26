@@ -5,7 +5,6 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.experimental.Accessors;
 
 /**
  * 函数编排校验请求。
@@ -14,7 +13,7 @@ import lombok.experimental.Accessors;
  */
 @Data
 @Builder
-@Accessors(chain = true)
+
 @AllArgsConstructor
 @NoArgsConstructor
 @Schema(description = "函数编排校验请求")

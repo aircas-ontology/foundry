@@ -425,11 +425,39 @@ public class SchemaHandleUtil {
                 return MAPPER.convertValue(value, new TypeReference<List<?>>() {
                 });
             }
+            // 数值类型之间的转换：上游产出的数值类型与下游声明不一致时做窄化/宽化
+            if (value instanceof Number number) {
+                if (clazz == Integer.class || clazz == int.class) {
+                    return number.intValue();
+                }
+                if (clazz == Long.class || clazz == long.class) {
+                    return number.longValue();
+                }
+                if (clazz == Double.class || clazz == double.class) {
+                    return number.doubleValue();
+                }
+                if (clazz == Float.class || clazz == float.class) {
+                    return number.floatValue();
+                }
+                if (clazz == Short.class || clazz == short.class) {
+                    return number.shortValue();
+                }
+                if (clazz == Byte.class || clazz == byte.class) {
+                    return number.byteValue();
+                }
+            }
             String valueStr = value.toString();
             if (clazz == Integer.class || clazz == int.class) {
+                // 兼容浮点数形式的字符串（如 "100.0"）
+                if (valueStr.contains(".")) {
+                    return (int) Double.parseDouble(valueStr);
+                }
                 return Integer.parseInt(valueStr);
             }
             if (clazz == Long.class || clazz == long.class) {
+                if (valueStr.contains(".")) {
+                    return (long) Double.parseDouble(valueStr);
+                }
                 return Long.parseLong(valueStr);
             }
             if (clazz == Double.class || clazz == double.class) {

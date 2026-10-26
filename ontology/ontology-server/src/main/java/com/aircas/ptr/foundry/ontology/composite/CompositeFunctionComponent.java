@@ -59,6 +59,7 @@ public class CompositeFunctionComponent extends CompositeDataComponent {
     /**
      * 把函数返回值映射到画布输出端口：能拆成键值对的结果按端口名取值，
      * 只有一个输出端口时直接给整个返回值，其余情况置空。
+     * <p>输出 Map 以端口名（portName）为 key，与数据边的 sourceParameterId 对齐。</p>
      */
     private Map<String, Object> bindOutputs(CompositeNodePlanBO nodePlan, Object result) {
         Map<String, Object> outputs = new LinkedHashMap<>();
@@ -67,9 +68,9 @@ public class CompositeFunctionComponent extends CompositeDataComponent {
         for (Map.Entry<String, String> port : nodePlan.getOutputParams().entrySet()) {
             String name = port.getValue();
             if (fields != null && fields.containsKey(name)) {
-                outputs.put(port.getKey(), fields.get(name));
+                outputs.put(name, fields.get(name));
             } else {
-                outputs.put(port.getKey(), singlePort ? result : null);
+                outputs.put(name, singlePort ? result : null);
             }
         }
         return outputs;

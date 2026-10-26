@@ -212,6 +212,13 @@ public class CompositeChainRegistry {
                 instance = new CompositeBranchComponent();
             } else if (kind == CompositeNodeKindEnum.TRANSFORM) {
                 instance = new CompositeTransformComponent(transformExecutor);
+            } else if (kind == CompositeNodeKindEnum.START || kind == CompositeNodeKindEnum.END) {
+                // 开始节点需要把外部输入传递给下游，结束节点需要收集输入并产生输出
+                if (kind == CompositeNodeKindEnum.START) {
+                    instance = new CompositeStartComponent();
+                } else {
+                    instance = new CompositeEndComponent();
+                }
             } else {
                 instance = new CompositeFunctionComponent(catalog, functionInvoker, objectMapper);
             }

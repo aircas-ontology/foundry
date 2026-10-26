@@ -31,9 +31,9 @@ public class CompositeTransformComponent extends CompositeDataComponent {
         for (Map.Entry<String, String> port : nodePlan.getOutputParams().entrySet()) {
             String name = port.getValue();
             if (fields != null && fields.containsKey(name)) {
-                outputs.put(port.getKey(), fields.get(name));
+                outputs.put(name, fields.get(name));
             } else {
-                outputs.put(port.getKey(), singlePort ? scriptResult : null);
+                outputs.put(name, singlePort ? scriptResult : null);
             }
         }
         return outputs;

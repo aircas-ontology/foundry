@@ -14,7 +14,9 @@ public enum CompositeNodeKindEnum {
     FUNCTION(1, "函数节点"),
     LOOP(2, "循环节点"),
     BRANCH(3, "分支节点"),
-    TRANSFORM(4, "转换节点");
+    TRANSFORM(4, "转换节点"),
+    START(5, "开始节点"),
+    END(6, "结束节点");
 
     private final int value;
 

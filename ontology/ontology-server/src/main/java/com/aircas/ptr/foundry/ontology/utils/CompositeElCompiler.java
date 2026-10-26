@@ -269,12 +269,14 @@ public final class CompositeElCompiler {
             } else if (kind == CompositeNodeKindEnum.BRANCH) {
                 CompositeBranchConfig branchConfig = node.getBranchConfig();
                 plan.setBranchExpression(branchConfig == null ? null : branchConfig.getExpression());
-            } else {
+            } else if (kind == CompositeNodeKindEnum.TRANSFORM) {
                 CompositeTransformConfig transformConfig = node.getTransformConfig();
                 if (transformConfig != null) {
                     plan.setTransformLanguage(transformConfig.getLanguage());
                     plan.setTransformScript(transformConfig.getScript());
                 }
+            } else if (kind == CompositeNodeKindEnum.START || kind == CompositeNodeKindEnum.END) {
+                // start/end 节点无需额外配置，端口由 inputParameters/outputParameters 定义
             }
             planByElId.put(elId, plan);
             return plan;
@@ -293,9 +295,66 @@ public final class CompositeElCompiler {
                     externalNames.putIfAbsent(parameter.getId(), parameter.getName());
                 }
             }
+            
+            // 处理开始节点：将编排输入参数映射到开始节点的输出端口
+            for (CompositeNode node : config.getNodes()) {
+                if (node == null || CompositeValidator.resolveKind(node) != CompositeNodeKindEnum.START) {
+                    continue;
+                }
+                CompositeNodePlanBO startPlan = planOfCanvas(node.getId());
+                if (startPlan == null) {
+                    continue;
+                }
+                // 开始节点的输出端口对应编排的输入参数
+                for (CompositeParameter inputParam : config.getInputParameters()) {
+                    if (inputParam != null && !isBlank(inputParam.getId())) {
+                        String paramName = inputParam.getName();
+                        if (isBlank(paramName)) {
+                            paramName = inputParam.getId();
+                        }
+                        // 开始节点的"外部输入"就是编排的输入参数名
+                        startPlan.getExternalInputs().put(inputParam.getId(), paramName);
+                        if (!plan.getInputParameterNames().contains(paramName)) {
+                            plan.getInputParameterNames().add(paramName);
+                        }
+                    }
+                }
+            }
+            
+            // 处理结束节点：将结束节点的输入端口映射到编排的输出参数
+            for (CompositeNode node : config.getNodes()) {
+                if (node == null || CompositeValidator.resolveKind(node) != CompositeNodeKindEnum.END) {
+                    continue;
+                }
+                CompositeNodePlanBO endPlan = planOfCanvas(node.getId());
+                if (endPlan == null) {
+                    continue;
+                }
+                // 结束节点的输入端口对应编排的输出参数
+                for (CompositeParameter outputParam : config.getOutputParameters()) {
+                    if (outputParam != null && !isBlank(outputParam.getId())) {
+                        String paramName = outputParam.getName();
+                        if (isBlank(paramName)) {
+                            paramName = outputParam.getId();
+                        }
+                        // 结束节点的"外部输出"就是编排的输出参数名
+                        endPlan.getExternalOutputs().put(outputParam.getId(), paramName);
+                        if (!plan.getOutputParameterNames().contains(paramName)) {
+                            plan.getOutputParameterNames().add(paramName);
+                        }
+                    }
+                }
+            }
+            
+            // 处理普通节点的输入映射（非开始节点）
             for (CompositePortMapping mapping : config.getInputMappings()) {
                 CompositeNodePlanBO nodePlan = planOfCanvas(mapping == null ? null : mapping.getNodeId());
                 if (nodePlan == null || isBlank(mapping.getNodeParameterId())) {
+                    continue;
+                }
+                CompositeNode node = nodeByCanvasId.get(mapping.getNodeId());
+                if (node != null && CompositeValidator.resolveKind(node) == CompositeNodeKindEnum.START) {
+                    // 开始节点的映射已在上面处理
                     continue;
                 }
                 String name = externalNames.getOrDefault(mapping.getExternalParameterId(), mapping.getExternalParameterId());
@@ -304,9 +363,53 @@ public final class CompositeElCompiler {
                     plan.getInputParameterNames().add(name);
                 }
             }
+            // 兜底：编排未声明 inputMappings 时，全部拓扑入口（无入边的函数节点）的端口按端口名登记为外部入参，
+            // 调用方传同名参数即覆盖 inputDefaults，不传则仍回落默认值；多入口编排每个入口都登记。
+            // 逻辑节点（loop/branch/transform）的虚拟端口不参与自动登记，避免误覆盖 collection/value 等控制语义端口。
+            Set<String> nodesWithIncoming = new LinkedHashSet<>();
+            for (CompositeNode node : config.getNodes()) {
+                if (node == null || node.getId() == null) {
+                    continue;
+                }
+                nodesWithIncoming.add(node.getId());
+            }
+            for (CompositeEdge edge : config.getEdges()) {
+                if (edge == null || edge.getTargetNodeId() == null) {
+                    continue;
+                }
+                nodesWithIncoming.remove(edge.getTargetNodeId());
+            }
+            for (CompositeNode node : config.getNodes()) {
+                if (node == null || node.getId() == null || !nodesWithIncoming.contains(node.getId())
+                        || CompositeValidator.isLogicNode(node)) {
+                    continue;
+                }
+                CompositeNodePlanBO entryPlan = planOfCanvas(node.getId());
+                if (entryPlan == null) {
+                    continue;
+                }
+                for (Map.Entry<String, String> port : entryPlan.getInputParams().entrySet()) {
+                    String portId = port.getKey();
+                    if (entryPlan.getExternalInputs().containsKey(portId)) {
+                        continue;
+                    }
+                    String name = port.getValue();
+                    if (isBlank(name)) {
+                        continue;
+                    }
+                    entryPlan.getExternalInputs().put(portId, name);
+                    plan.getInputParameterNames().add(name);
+                }
+            }
+            // 处理普通节点的输出映射（非结束节点）
             for (CompositePortMapping mapping : config.getOutputMappings()) {
                 CompositeNodePlanBO nodePlan = planOfCanvas(mapping == null ? null : mapping.getNodeId());
                 if (nodePlan == null || isBlank(mapping.getNodeParameterId())) {
+                    continue;
+                }
+                CompositeNode node = nodeByCanvasId.get(mapping.getNodeId());
+                if (node != null && CompositeValidator.resolveKind(node) == CompositeNodeKindEnum.END) {
+                    // 结束节点的映射已在上面处理
                     continue;
                 }
                 String name = externalNames.getOrDefault(mapping.getExternalParameterId(), mapping.getExternalParameterId());

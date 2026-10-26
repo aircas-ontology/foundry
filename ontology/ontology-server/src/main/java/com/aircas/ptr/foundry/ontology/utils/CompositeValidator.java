@@ -74,13 +74,29 @@ public final class CompositeValidator {
             }
         }
         List<CompositeNode> functionNodes = new ArrayList<>();
+        long startNodeCount = 0;
+        long endNodeCount = 0;
         for (CompositeNode node : nodeMap.values()) {
             if (!isLogicNode(node)) {
                 functionNodes.add(node);
             }
+            CompositeNodeKindEnum kind = resolveKind(node);
+            if (kind == CompositeNodeKindEnum.START) {
+                startNodeCount++;
+            } else if (kind == CompositeNodeKindEnum.END) {
+                endNodeCount++;
+            }
         }
         if (functionNodes.isEmpty()) {
             errors.add("函数编排至少需要一个函数节点");
+            return finish(errors, warnings);
+        }
+        if (startNodeCount != 1) {
+            errors.add("函数编排必须有且仅有一个开始节点");
+            return finish(errors, warnings);
+        }
+        if (endNodeCount != 1) {
+            errors.add("函数编排必须有且仅有一个结束节点");
             return finish(errors, warnings);
         }
         if (!duplicates.isEmpty()) {
@@ -152,7 +168,14 @@ public final class CompositeValidator {
             CompositeParameter sourceParameter = findPort(nodePorts(sourceNode, refs, false), edge.getSourceParameterId());
             CompositeParameter targetParameter = findPort(nodePorts(targetNode, refs, true), edge.getTargetParameterId());
             if (sourceParameter == null || targetParameter == null) {
-                errors.add("函数编排连线引用了不存在的输入输出参数");
+                String detail = "函数编排连线引用了不存在的输入输出参数";
+                if (sourceParameter == null) {
+                    detail += "：源节点[" + edge.getSourceNodeId() + "]不存在输出端口[" + edge.getSourceParameterId() + "]";
+                }
+                if (targetParameter == null) {
+                    detail += "；目标节点[" + edge.getTargetNodeId() + "]不存在输入端口[" + edge.getTargetParameterId() + "]";
+                }
+                errors.add(detail);
                 return finish(errors, warnings);
             }
             if (!typeEquals(sourceParameter.getType(), targetParameter.getType())) {
@@ -209,6 +232,33 @@ public final class CompositeValidator {
      */
     public static boolean isLogicNode(String kind) {
         return CompositeNodeKindEnum.fromKind(kind) != CompositeNodeKindEnum.FUNCTION;
+    }
+
+    /**
+     * 编排入口节点：拓扑上没有入边的节点，按 {@code nodes} 顺序取第一个；
+     * 全部有入边（成环）时回退 {@code nodes[0]}；空编排返回 null。
+     * <p>用于详情回显（补首节点入参）与编译期兜底（未映射端口按端口名登记为外部入参）。</p>
+     */
+    public static CompositeNode resolveEntryNode(CompositeConfig config) {
+        if (config == null) {
+            return null;
+        }
+        List<CompositeNode> nodes = config.getNodes();
+        if (nodes == null || nodes.isEmpty()) {
+            return null;
+        }
+        Set<String> nodesWithIncoming = new HashSet<>();
+        for (CompositeEdge edge : config.getEdges()) {
+            if (edge != null && edge.getTargetNodeId() != null) {
+                nodesWithIncoming.add(edge.getTargetNodeId());
+            }
+        }
+        for (CompositeNode node : nodes) {
+            if (node != null && node.getId() != null && !nodesWithIncoming.contains(node.getId())) {
+                return node;
+            }
+        }
+        return nodes.get(0);
     }
 
     /**
@@ -271,6 +321,12 @@ public final class CompositeValidator {
     /** 逻辑节点虚拟端口，与原型 logicCompositeNodePorts 对齐 */
     public static List<CompositeParameter> defaultLogicPorts(CompositeNodeKindEnum kind, CompositeNode node, boolean inputDirection) {
         switch (kind) {
+            case START:
+                // 开始节点：无输入端口，输出端口由编排 inputParameters 决定（此处返回空，实际映射时从 config 取）
+                return inputDirection ? List.of() : List.of();
+            case END:
+                // 结束节点：输入端口由编排 outputParameters 决定，无输出端口
+                return inputDirection ? List.of() : List.of();
             case LOOP:
                 return inputDirection
                         ? List.of(port("collection", "collection", "array"))
@@ -416,7 +472,28 @@ public final class CompositeValidator {
                 continue;
             }
             if (isLogicNode(node)) {
-                errors.add("函数编排" + label + "映射不能指向逻辑节点");
+                // 开始/结束节点是特殊的逻辑节点，允许映射指向
+                CompositeNodeKindEnum nodeKind = resolveKind(node);
+                if (nodeKind != CompositeNodeKindEnum.START && nodeKind != CompositeNodeKindEnum.END) {
+                    errors.add("函数编排" + label + "映射不能指向逻辑节点");
+                    continue;
+                }
+                // 开始节点的输入映射：检查其输出端口；结束节点的输出映射：检查其输入端口
+                boolean checkOutputPorts = (nodeKind == CompositeNodeKindEnum.START && isInput);
+                boolean checkInputPorts = (nodeKind == CompositeNodeKindEnum.END && !isInput);
+                List<CompositeParameter> nodePorts = checkOutputPorts 
+                    ? (node.getOutputParameters() != null ? node.getOutputParameters() : List.of())
+                    : checkInputPorts 
+                        ? (node.getInputParameters() != null ? node.getInputParameters() : List.of())
+                        : List.of();
+                CompositeParameter nodeParameter = findPort(nodePorts, mapping.getNodeParameterId());
+                if (nodeParameter == null) {
+                    errors.add("函数编排" + label + "映射引用了无效参数");
+                    continue;
+                }
+                if (!typeEquals(externalParameter.getType(), nodeParameter.getType())) {
+                    errors.add("函数编排" + label + "映射参数类型不匹配");
+                }
                 continue;
             }
             CompositeParameter nodeParameter = findPort(nodePorts(node, refs, isInput), mapping.getNodeParameterId());
@@ -441,7 +518,9 @@ public final class CompositeValidator {
     private static boolean typeEquals(String source, String target) {
         String s = isBlank(source) ? "object" : source.trim().toLowerCase();
         String t = isBlank(target) ? "object" : target.trim().toLowerCase();
-        return s.equals(t);
+        // 脚本算子的 result 出参运行期是 OBJECT 装箱（真实类型由用户代码决定），
+        // 对外参数声明为 object 表示"不限定具体类型"，视为通配而不是类型冲突。
+        return s.equals(t) || "object".equals(s);
     }
 
     private static String displayName(CompositeParameter parameter) {
@@ -449,7 +528,12 @@ public final class CompositeValidator {
     }
 
     private static CompositeParameter port(String id, String name, String type) {
-        return CompositeParameter.builder().id(id).name(name).type(type).description("").build();
+        CompositeParameter param = new CompositeParameter();
+        param.setId(id);
+        param.setName(name);
+        param.setType(type);
+        param.setDescription("");
+        return param;
     }
 
     private static boolean isBlank(String value) {

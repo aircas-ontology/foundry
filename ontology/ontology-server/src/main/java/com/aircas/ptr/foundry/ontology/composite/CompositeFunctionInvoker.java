@@ -67,8 +67,7 @@ public class CompositeFunctionInvoker {
         }
         Map<String, Object> paramMap = assembleParams(inputParams, inputs);
         return switch (function.getType()) {
-            case CUSTOMIZE -> require(groovyService, "脚本算子执行引擎").invokeHandle(
-                    function.getApi(), function.getCode(), paramMap, inputParams);
+            case CUSTOMIZE -> executeScriptFunction(function, paramMap, inputParams);
             case BASIC_QUERY -> require(basicQueryOperator, "基础函数算子执行器").runAsNode(
                     require(basicQueryOperator, "基础函数算子执行器")
                             .parseConfig(function.getCode(), function.getApi()), paramMap);
@@ -79,6 +78,73 @@ public class CompositeFunctionInvoker {
             case CONTAINER -> throw new BusinessException("编排节点[" + labelOf(nodePlan) + "]引用的容器算子执行能力尚未开放："
                     + function.getApi(), HttpStatus.BAD_REQUEST);
         };
+    }
+
+    /**
+     * 执行脚本算子：根据 language 字段路由到对应执行器（Groovy/TypeScript/Python/Java）。
+     * <p>language 为 null 时从代码内容推断（兼容旧数据）。</p>
+     */
+    private Object executeScriptFunction(Function function, Map<String, Object> paramMap,
+                                         List<FunctionParamPO> inputParams) {
+        FunctionLanguageEnum language = function.getLanguage();
+        if (language == null) {
+            language = inferLanguageFromCode(function.getCode());
+        }
+        // 构造执行上下文
+        String inputJson;
+        try {
+            ObjectMapper objectMapper = new ObjectMapper();
+            inputJson = objectMapper.writeValueAsString(paramMap);
+        } catch (Exception e) {
+            throw new BusinessException("脚本算子入参序列化失败：" + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+        com.aircas.ptr.foundry.ontology.engine.ScriptExecutionContext ctx =
+                com.aircas.ptr.foundry.ontology.engine.ScriptExecutionContext.builder()
+                        .language(language)
+                        .functionApi(function.getApi())
+                        .version(function.getVersion())
+                        .code(function.getCode())
+                        .inputJson(inputJson)
+                        .inputMap(paramMap)
+                        .inputParams(inputParams)
+                        .build();
+        String resultJsonStr = scriptEngineRouter.route(language).execute(ctx);
+        // 解析结果：脚本返回 FunctionResultVO 结构，取 data 字段
+        try {
+            ObjectMapper objectMapper = new ObjectMapper();
+            var resultNode = objectMapper.readTree(resultJsonStr);
+            if (resultNode != null && resultNode.has("data")) {
+                return objectMapper.readValue(resultNode.get("data").traverse(), Object.class);
+            }
+            return objectMapper.readValue(resultJsonStr, Object.class);
+        } catch (Exception e) {
+            throw new BusinessException("脚本算子返回值解析失败：" + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    /**
+     * 从代码内容推断脚本语言（兼容旧数据 language 为 null）。
+     */
+    private FunctionLanguageEnum inferLanguageFromCode(String code) {
+        if (code == null || code.trim().isEmpty()) {
+            return FunctionLanguageEnum.GROOVY;
+        }
+        String trimmed = code.trim();
+        if (trimmed.contains("export function") || trimmed.contains("export async function")
+                || trimmed.matches("(?s).*\\binterface\\s+\\w+.*")
+                || trimmed.matches("(?s).*:\\s*(number|string|boolean|any|unknown)\\b.*")) {
+            return FunctionLanguageEnum.TYPESCRIPT;
+        }
+        if (trimmed.matches("(?s).*\\bdef\\s+handle\\s*\\(.*")
+                || trimmed.matches("(?s).*\\bfrom\\s+\\w+\\s+import\\b.*")
+                || trimmed.matches("(?s).*\\bimport\\s+\\w+\\b.*")) {
+            return FunctionLanguageEnum.PYTHON;
+        }
+        if (trimmed.matches("(?s).*\\bpackage\\s+[\\w.]+;.*")
+                || trimmed.matches("(?s).*\\bpublic\\s+class\\s+\\w+.*")) {
+            return FunctionLanguageEnum.JAVA;
+        }
+        return FunctionLanguageEnum.GROOVY;
     }
 
     /** 算子执行器缺失时给出可读文案，而不是空指针 */
