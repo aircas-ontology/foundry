@@ -266,7 +266,11 @@ public class ContainerLifecycleServiceImpl implements ContainerLifecycleService 
         instance.setLastActionAt(new Date());
     }
 
-    private FunctionContainerInstance requireInstance(String containerKey) {
+    /**
+     * 按 containerKey 定位实例（不存在报错）。除内部启停逻辑外，也供控制器先读归属节点决定本地执行还是转发。
+     */
+    @Override
+    public FunctionContainerInstance requireInstance(String containerKey) {
         PreconditionUtils.checkArgument(StringUtils.isNotBlank(containerKey),
                 "containerKey 不能为空", HttpStatus.BAD_REQUEST);
         FunctionContainerInstance instance = containerInstanceMapper.selectOne(

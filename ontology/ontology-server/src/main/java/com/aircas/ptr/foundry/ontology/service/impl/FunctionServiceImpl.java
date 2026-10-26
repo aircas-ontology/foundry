@@ -54,6 +54,7 @@ import com.aircas.ptr.foundry.ontology.model.vo.BasicQueryResultVO;
 import com.aircas.ptr.foundry.ontology.model.vo.EntityPropertyGenericQueryVO;
 import com.aircas.ptr.foundry.ontology.model.po.Function;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionContainerInstance;
+import com.aircas.ptr.foundry.ontology.model.po.FunctionContainerUpload;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionExecuteResult;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionParamPO;
@@ -68,6 +69,9 @@ import com.aircas.ptr.foundry.ontology.service.ContainerFunctionService;
 import com.aircas.ptr.foundry.ontology.service.FunctionParamService;
 import com.aircas.ptr.foundry.ontology.service.FunctionService;
 import com.aircas.ptr.foundry.ontology.service.GroovyService;
+import com.aircas.ptr.foundry.ontology.utils.ContainerNodeForwarder;
+import com.aircas.ptr.foundry.ontology.utils.ContainerNodeIdentity;
+import com.aircas.ptr.foundry.ontology.utils.ContainerUploadRegistry;
 import com.aircas.ptr.foundry.ontology.utils.DockerCommandExecutor;
 import com.aircas.ptr.foundry.ontology.utils.OperatorFunctionFactory;
 import com.aircas.ptr.foundry.ontology.utils.ScriptParamDescriptionExtractor;
@@ -123,6 +127,19 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     /** docker 命令执行器：删除容器最后一个算子时停止并移除常驻容器 */
     @Resource
     private DockerCommandExecutor dockerCommandExecutor;
+
+    /**
+     * 容器算子跨节点路由：镜像 tar 只落在收到上传请求那台机器的本地磁盘上，
+     * 创建算子时若镜像归属兄弟节点，须整单转发过去，否则对端 {@code Files.exists} 必然失败。
+     */
+    @Resource
+    private ContainerUploadRegistry containerUploadRegistry;
+
+    @Resource
+    private ContainerNodeIdentity containerNodeIdentity;
+
+    @Resource
+    private ContainerNodeForwarder containerNodeForwarder;
 
     @Resource
     private FunctionExecuteResultMapper executeResultMapper;
@@ -340,6 +357,15 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         if (instance == null) {
             return;
         }
+        // 归属是兄弟节点：本端的 docker stop / 文件删除都只会空转（容器在那台机器上跑着，
+        // 其容器名与宿主端口在 docker 侧继续被占用，而 DB 已释放 → 后续同端口创建要到 docker run 才爆）。
+        // 本次不把清理纳入转发链路，故明确点名归属节点，供运维手工处理；实例行仍照常删除。
+        if (!containerNodeIdentity.isSelf(instance.getNodeIp())) {
+            log.warn("容器算子实例归属节点 {}，本端无法停容器与清理文件：请到该节点执行 docker rm -f {}，"
+                            + "并删除镜像 tar 与接口文档后手工确认（containerKey={}）",
+                    instance.getNodeIp(), StringUtils.defaultIfBlank(instance.getContainerId(),
+                            instance.getContainerName()), containerKey);
+        }
         // 曾启动过（containerId 非空）则先停止并移除常驻容器，再释放镜像/文档文件（否则文件可能占用中）
         if (StringUtils.isNotEmpty(instance.getContainerId())) {
             stopAndRemoveContainerQuietly(instance.getContainerId());
@@ -429,6 +455,14 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         // 容器算子：统一创建入口按类型分发——委托容器注册服务（1 请求 → N 条派生算子 + 1 运行实例），
         // 不走下方脚本/查询/编排算子的版本管理与参数解析逻辑
         if (param.getType() == FunctionTypeEnum.CONTAINER) {
+            // 镜像 tar 只落在收到上传请求那台机器的磁盘上：归属是兄弟节点时整单转发过去，
+            // 对端跑同一个 POST /function（含 @Valid 与全部校验），本端不会因 Files.exists 失败
+            FunctionContainerUpload owner = containerUploadRegistry.findOwner(imagePathOf(param));
+            if (owner != null && !containerNodeIdentity.isSelf(owner.getNodeIp())
+                    && !containerNodeForwarder.isForwardedRequest()) {
+                containerNodeForwarder.forward(owner.getNodeIp(), owner.getNodePort(), param, "创建");
+                return;
+            }
             containerFunctionService.createContainerFunction(buildContainerCreateParam(param));
             return;
         }
@@ -557,6 +591,12 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         cp.setRunCommand(cc.getRunCommand());
         cp.setSelectedInterfaces(cc.getSelectedInterfaces());
         return cp;
+    }
+
+    /** 取镜像 tar 的节点本地绝对路径（缺失时返回 null，由创建校验给出「缺少 containerConfig」等准确报错） */
+    private String imagePathOf(FunctionCreateParam param) {
+        ContainerConfig cc = param.getContainerConfig();
+        return cc == null || cc.getImage() == null ? null : cc.getImage().getPath();
     }
 
     @Override

@@ -56,6 +56,12 @@ public class FunctionContainerInstance {
     /** 容器端口（仅供记录） */
     private Integer containerPort;
 
+    /** 归属节点 IP：镜像 tar 与 docker 容器只在此节点上；执行期访问 hostPort 的地址，也是启停请求的转发目标。为空视为本节点（单节点部署/历史数据） */
+    private String nodeIp;
+
+    /** 归属节点 ontology-server 的 HTTP 端口：启停/刷新控制请求转发到此进程 */
+    private Integer nodePort;
+
     /** 运行状态 */
     private ContainerPhaseEnum phase;
 

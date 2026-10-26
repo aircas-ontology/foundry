@@ -28,4 +28,10 @@ public interface ContainerLifecycleService {
 
     /** 按本体空间列出全部容器实例（启停管理页数据源；spaceId 为空则列全部）。 */
     List<FunctionContainerInstance> listBySpace(Integer spaceId);
+
+    /**
+     * 按 containerKey 取运行实例（不存在报错）。
+     * <p>供启停入口先读归属节点 {@code node_ip/node_port}，决定本地执行还是转发到归属节点。</p>
+     */
+    FunctionContainerInstance requireInstance(String containerKey);
 }

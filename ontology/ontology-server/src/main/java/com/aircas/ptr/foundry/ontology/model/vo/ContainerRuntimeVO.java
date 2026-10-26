@@ -44,6 +44,12 @@ public class ContainerRuntimeVO {
     @Schema(description = "容器端口")
     private Integer containerPort;
 
+    @Schema(description = "归属节点 IP（镜像 tar 与容器只在此节点上；为空表示单节点部署或历史数据）")
+    private String nodeIp;
+
+    @Schema(description = "归属节点 ontology-server 端口（启停/刷新请求自动转发到此进程）")
+    private Integer nodePort;
+
     @Schema(description = "docker 容器 ID（未启动为空）")
     private String containerId;
 
@@ -71,6 +77,8 @@ public class ContainerRuntimeVO {
                 .phaseLabel(phase == null ? null : phase.getLabel())
                 .hostPort(po.getHostPort())
                 .containerPort(po.getContainerPort())
+                .nodeIp(po.getNodeIp())
+                .nodePort(po.getNodePort())
                 .containerId(po.getContainerId())
                 .lastAction(po.getLastAction())
                 .lastActionAt(po.getLastActionAt())

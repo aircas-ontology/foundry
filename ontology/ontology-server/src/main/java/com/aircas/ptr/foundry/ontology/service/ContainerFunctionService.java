@@ -9,13 +9,13 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
 
 /**
- * 容器算子注册服务：镜像上传（含 ARM 校验）、接口文档上传、接口探查、算子保存。
+ * 容器算子注册服务：镜像上传（含架构校验）、接口文档上传、接口探查、算子保存。
  * <p>本期只做元数据注册，不做容器部署与执行。</p>
  */
 public interface ContainerFunctionService {
 
     /**
-     * 上传镜像 tar/tar.gz：保存到镜像目录，按开关校验 ARM64 架构，返回镜像信息。
+     * 上传镜像 tar/tar.gz：保存到镜像目录，按开关校验镜像架构是否在允许清单内，返回镜像信息。
      */
     ContainerImageInfo uploadImage(MultipartFile file);
 

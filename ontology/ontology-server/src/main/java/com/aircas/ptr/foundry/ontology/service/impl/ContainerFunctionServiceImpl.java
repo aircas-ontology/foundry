@@ -14,8 +14,10 @@ import com.aircas.ptr.foundry.ontology.model.enums.ContainerPhaseEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamCategoryEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.param.ContainerFunctionCreateParam;
+import com.aircas.ptr.foundry.ontology.model.param.ContainerProbeParam;
 import com.aircas.ptr.foundry.ontology.model.po.Function;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionContainerInstance;
+import com.aircas.ptr.foundry.ontology.model.po.FunctionContainerUpload;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionParamPO;
 import com.aircas.ptr.foundry.ontology.model.vo.FunctionParameterVO;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.FunctionMapper;
@@ -23,6 +25,9 @@ import com.aircas.ptr.foundry.ontology.repository.mainMapper.FunctionContainerIn
 import com.aircas.ptr.foundry.ontology.service.ContainerFunctionService;
 import com.aircas.ptr.foundry.ontology.service.FunctionParamService;
 import com.aircas.ptr.foundry.ontology.service.OpenApiProbeService;
+import com.aircas.ptr.foundry.ontology.utils.ContainerNodeForwarder;
+import com.aircas.ptr.foundry.ontology.utils.ContainerNodeIdentity;
+import com.aircas.ptr.foundry.ontology.utils.ContainerUploadRegistry;
 import com.aircas.ptr.foundry.ontology.utils.DockerImageInspector;
 import com.aircas.ptr.foundry.ontology.utils.DockerCommandExecutor;
 import com.aircas.ptr.foundry.ontology.utils.DockerRunCommandParser;
@@ -67,8 +72,6 @@ public class ContainerFunctionServiceImpl implements ContainerFunctionService {
     private static final Set<String> IMAGE_EXTENSIONS = Set.of(".tar", ".tar.gz", ".tgz");
     /** 允许的接口文档扩展名 */
     private static final Set<String> DOC_EXTENSIONS = Set.of(".json", ".yaml", ".yml");
-    /** ARM 架构标识 */
-    private static final String ARM64 = "arm64";
 
     private final ContainerOperatorProperties properties;
     private final OpenApiProbeService openApiProbeService;
@@ -81,6 +84,20 @@ public class ContainerFunctionServiceImpl implements ContainerFunctionService {
 
     @Resource
     private FunctionContainerInstanceMapper containerInstanceMapper;
+
+    /**
+     * 多实例部署下的节点归属三件套：镜像 tar 与 docker 容器只落在收到上传请求那台机器上，
+     * 上传时登记归属（{@link ContainerUploadRegistry}）→ 探查/启停据此判定归属（{@link ContainerNodeIdentity}）
+     * → 非本节点则把同一请求转发到归属节点（{@link ContainerNodeForwarder}）。
+     */
+    @Resource
+    private ContainerUploadRegistry containerUploadRegistry;
+
+    @Resource
+    private ContainerNodeIdentity containerNodeIdentity;
+
+    @Resource
+    private ContainerNodeForwarder containerNodeForwarder;
 
     // 序列化入库时忽略 null：docker_config 只落接口级内容（{"interfaces":[...]}），不携带容器级空字段
     private final ObjectMapper objectMapper = new ObjectMapper()
@@ -107,31 +124,36 @@ public class ContainerFunctionServiceImpl implements ContainerFunctionService {
         try {
             meta = DockerImageInspector.inspect(target);
         } catch (RuntimeException e) {
-            // 解析失败：仅启用校验时视为非法并清理；关闭校验时记录并放行（本地无 ARM 环境测试）
+            // 解析失败：仅启用校验时视为非法并清理；关闭校验时记录并放行（本地无法解析镜像包时测试用）
             if (properties.isArmCheckEnabled()) {
                 deleteQuietly(target);
                 throw e;
             }
-            log.warn("ARM 校验已关闭，镜像架构解析失败但放行：{}", e.getMessage());
+            log.warn("架构校验已关闭，镜像架构解析失败但放行：{}", e.getMessage());
             meta = new DockerImageInspector.ImageMeta(DockerImageInspector.UNKNOWN_ARCH, new ArrayList<>());
         }
 
-        if (properties.isArmCheckEnabled() && !ARM64.equals(meta.getArchitecture())) {
+        String architecture = meta.getArchitecture();
+        if (properties.isArmCheckEnabled() && !isArchitectureAllowed(architecture)) {
             deleteQuietly(target);
             // UNKNOWN_ARCH 代表 config 缺失/解析失败，与“架构不对”同位拒绝但归因不同，文案区分便于运维定位
-            String message = DockerImageInspector.UNKNOWN_ARCH.equals(meta.getArchitecture())
+            String message = DockerImageInspector.UNKNOWN_ARCH.equals(architecture)
                     ? "镜像 config 缺失或解析失败，无法识别架构（请确认 tar 为 docker save 导出的完整镜像包）"
-                    : "仅支持 ARM64 镜像，当前镜像架构为 " + meta.getArchitecture();
+                    : "镜像架构不受支持，当前镜像架构为 " + architecture + "，允许的架构："
+                            + String.join("/", properties.getAllowedArchitectures());
             throw new BusinessException(message);
         }
 
-        return ContainerImageInfo.builder()
+        ContainerImageInfo imageInfo = ContainerImageInfo.builder()
                 .fileName(fileName)
                 .path(target.toAbsolutePath().toString())
                 .size(file.getSize())
                 .architecture(meta.getArchitecture())
                 .repoTags(meta.getRepoTags())
                 .build();
+        // tar 只落在本节点磁盘：登记归属，后续的探查/创建/启停据此把请求指回这里
+        containerUploadRegistry.record(imageInfo.getPath(), FunctionContainerUpload.KIND_IMAGE);
+        return imageInfo;
     }
 
     @Override
@@ -148,15 +170,26 @@ public class ContainerFunctionServiceImpl implements ContainerFunctionService {
             throw new BusinessException("接口文档保存失败：" + e.getMessage());
         }
 
-        return ContainerInterfaceDoc.builder()
+        ContainerInterfaceDoc docInfo = ContainerInterfaceDoc.builder()
                 .fileName(fileName)
                 .path(target.toAbsolutePath().toString())
                 .format(openApiProbeService.detectFormat(target.toAbsolutePath().toString()))
                 .build();
+        // 文档同样只落在本节点磁盘：探查接口时要读它，故一并登记归属
+        containerUploadRegistry.record(docInfo.getPath(), FunctionContainerUpload.KIND_DOC);
+        return docInfo;
     }
 
     @Override
     public List<ContainerInterface> probeInterfaces(String docPath) {
+        // 文档可能在兄弟节点上（上传与探查是两次独立请求，会被负载到不同实例）：按登记反查归属并转发，
+        // 对端跑同一个端点、读它自己磁盘上的文件，前端无需感知 node.ip
+        FunctionContainerUpload owner = containerUploadRegistry.findOwner(docPath);
+        if (owner != null && !containerNodeIdentity.isSelf(owner.getNodeIp())
+                && !containerNodeForwarder.isForwardedRequest()) {
+            return containerNodeForwarder.forwardList(owner.getNodeIp(), owner.getNodePort(),
+                    new ContainerProbeParam(docPath), ContainerInterface.class, "接口探查");
+        }
         return openApiProbeService.probe(docPath);
     }
 
@@ -237,6 +270,7 @@ public class ContainerFunctionServiceImpl implements ContainerFunctionService {
         }
         // 生成一个运行实例行（一个容器算子=一个容器，设计 C 的 N 条 function 通过 containerKey 归组），初始态 CREATED
         // 容器级信息（镜像/接口文档/启动命令/端口）在此仅存一份，为唯一权威来源
+        boolean multiNode = containerNodeIdentity.isMultiNode();
         FunctionContainerInstance instance = FunctionContainerInstance.builder()
                 .containerKey(containerKey)
                 .ontologySpaceId(param.getOntologySpaceId())
@@ -247,12 +281,19 @@ public class ContainerFunctionServiceImpl implements ContainerFunctionService {
                 .runCommand(param.getRunCommand())
                 .hostPort(portMapping.getHostPort())
                 .containerPort(portMapping.getContainerPort())
+                // 归属节点 = 实际执行创建的节点（创建请求已按镜像归属转发到这里）：
+                // 启停/刷新据此转发，执行期也据此拼容器调用地址；单节点模式留空，保持原行为
+                .nodeIp(multiNode ? containerNodeIdentity.nodeIp() : null)
+                .nodePort(multiNode ? containerNodeIdentity.nodePort() : null)
                 .phase(ContainerPhaseEnum.CREATED)
                 .message("容器算子已创建，尚未启动")
                 .createTime(new Date())
                 .updateTime(new Date())
                 .build();
         containerInstanceMapper.insert(instance);
+        // 归属已固化到实例行，向导期的上传登记不再需要
+        containerUploadRegistry.remove(param.getImage().getPath(),
+                param.getInterfaceDoc() != null ? param.getInterfaceDoc().getPath() : null);
         return createdApis;
     }
 
@@ -390,6 +431,15 @@ public class ContainerFunctionServiceImpl implements ContainerFunctionService {
     private boolean hasDocExtension(String name) {
         String lower = name.toLowerCase(Locale.ROOT);
         return DOC_EXTENSIONS.stream().anyMatch(lower::endsWith);
+    }
+
+    /** 架构是否落在 {@code container-operator.allowed-architectures} 内（大小写不敏感）；清单为空视为不限制 */
+    private boolean isArchitectureAllowed(String architecture) {
+        List<String> allowed = properties.getAllowedArchitectures();
+        if (allowed == null || allowed.isEmpty()) {
+            return true;
+        }
+        return allowed.stream().anyMatch(item -> item != null && item.trim().equalsIgnoreCase(architecture));
     }
 
     private void deleteQuietly(Path path) {
