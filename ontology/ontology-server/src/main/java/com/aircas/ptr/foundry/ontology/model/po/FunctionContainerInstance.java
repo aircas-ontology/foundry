@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.ontology.model.po;
 
 import com.aircas.ptr.foundry.ontology.model.enums.ContainerPhaseEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.HeartbeatStatusEnum;
 import com.baomidou.mybatisplus.annotation.FieldFill;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
@@ -76,6 +77,12 @@ public class FunctionContainerInstance {
 
     /** 状态描述/失败原因 */
     private String message;
+
+    /** 心跳状态：TCP 探活结果（HEALTHY/UNHEALTHY），仅 phase=RUNNING 时有意义 */
+    private HeartbeatStatusEnum heartbeatStatus;
+
+    /** 最后一次心跳探测时间 */
+    private Date lastHeartbeatAt;
 
     @TableField(fill = FieldFill.INSERT)
     private Date createTime;

@@ -2,6 +2,7 @@ package com.aircas.ptr.foundry.ontology.model.vo;
 
 import com.aircas.ptr.foundry.ontology.model.dto.container.ContainerImageInfo;
 import com.aircas.ptr.foundry.ontology.model.enums.ContainerPhaseEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.HeartbeatStatusEnum;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionContainerInstance;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -70,12 +71,22 @@ public class ContainerRuntimeVO {
     @Schema(description = "状态描述/失败原因")
     private String message;
 
-    /** PO → VO：容器级/运行态字段直拷；phase 同时给出枚举名与中文标签；镜像地址从 image JSON 提取 repoTags 首条 */
+    @Schema(description = "心跳状态：HEALTHY/UNHEALTHY（仅 phase=RUNNING 时有意义）")
+    private String heartbeatStatus;
+
+    @Schema(description = "心跳状态中文标签")
+    private String heartbeatLabel;
+
+    @Schema(description = "最后一次心跳探测时间")
+    private Date lastHeartbeatAt;
+
+    /** PO → VO：容器级/运行态字段直拷；phase 同时给出枚举名与中文标签；镜像地址从 image JSON 提取 repoTags 首条；心跳状态同理 */
     public static ContainerRuntimeVO from(FunctionContainerInstance po) {
         if (po == null) {
             return null;
         }
         ContainerPhaseEnum phase = po.getPhase();
+        HeartbeatStatusEnum heartbeat = po.getHeartbeatStatus();
         return ContainerRuntimeVO.builder()
                 .containerKey(po.getContainerKey())
                 .ontologySpaceId(po.getOntologySpaceId())
@@ -92,6 +103,9 @@ public class ContainerRuntimeVO {
                 .lastAction(po.getLastAction())
                 .lastActionAt(po.getLastActionAt())
                 .message(po.getMessage())
+                .heartbeatStatus(heartbeat == null ? null : heartbeat.name())
+                .heartbeatLabel(heartbeat == null ? null : heartbeat.getLabel())
+                .lastHeartbeatAt(po.getLastHeartbeatAt())
                 .build();
     }
 

@@ -7,6 +7,8 @@ public interface Constants {
 
     String DISCOVER_CDC_LAKE_TOPIC_JOB_NAME = "DISCOVER_CDC_LAKE_TOPIC";
 
+    String CONTAINER_HEARTBEAT_JOB_NAME = "CONTAINER_HEARTBEAT";
+
     String ACCESS_TOKEN_HEADER = "access-token";
 
     String REFRESH_TOKEN_HEADER = "refresh-token";

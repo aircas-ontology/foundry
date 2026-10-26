@@ -6,3 +6,7 @@ create unique index if not exists uk_ctr_instance_node_name
     on function_container_instance (coalesce(node_ip, ''), container_name);
 create unique index if not exists uk_ctr_instance_node_port
     on function_container_instance (coalesce(node_ip, ''), host_port);
+
+-- 心跳监测：TCP 探活结果与最后探测时间
+alter table function_container_instance add column if not exists heartbeat_status varchar(20);
+alter table function_container_instance add column if not exists last_heartbeat_at timestamp;
