@@ -50,6 +50,7 @@ import com.aircas.ptr.foundry.ontology.model.param.FunctionUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologySelectPropertyParam;
 import com.aircas.ptr.foundry.ontology.model.param.PropertyFilterParam;
 import com.aircas.ptr.foundry.ontology.model.enums.FilterNodeTypeEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.QueryOpEnum;
 import com.aircas.ptr.foundry.ontology.model.vo.BasicQueryResultVO;
 import com.aircas.ptr.foundry.ontology.model.vo.EntityPropertyGenericQueryVO;
 import com.aircas.ptr.foundry.ontology.model.po.Function;
@@ -917,19 +918,24 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         if (queryConfig.getAggFunc() != null && StringUtils.isEmpty(queryConfig.getTargetProperty())) {
             PreconditionUtils.checkArgument(false, "聚合函数必须提供 targetProperty（聚合目标字段）", HttpStatus.BAD_REQUEST);
         }
+        // 落库前拦截脏配置：空变量名会执行成 "过滤变量 未绑定"，空/非法数值布尔值会执行成残缺 SQL
+        validateBasicQueryVariables(queryConfig);
 
         // 更新 code 字段为 queryConfig JSON
         var func = getById(functionId);
         func.setCode(objectMapper.writeValueAsString(queryConfig));
         updateById(func);
 
-        // 收集变量名 → 数据类型映射
-        Map<String, String> varTypeMap = new HashMap<>();
+        // 收集变量名 → 数据类型映射：先登记过滤变量（携带声明的真实 dataType），
+        // 聚合目标用 putIfAbsent 补登记，避免同名时把过滤变量的真实类型覆盖成硬编码 STRING
+        Map<String, String> varTypeMap = new LinkedHashMap<>();
+        collectFilterVariables(queryConfig.getFilters(), varTypeMap);
+        // 此刻 keySet 即过滤变量集合，用于后续识别"目标变量同时作为过滤条件"的双角色
+        Set<String> filterVars = new HashSet<>(varTypeMap.keySet());
         String targetVar = queryConfig.getTargetProperty();
         if (StringUtils.isNotEmpty(targetVar)) {
-            varTypeMap.put(targetVar, "STRING");
+            varTypeMap.putIfAbsent(targetVar, "STRING");
         }
-        collectFilterVariables(queryConfig.getFilters(), varTypeMap);
 
         // 仅持久化用户在 queryConfig 里声明的变量（聚合目标 + 过滤条件）作为入参，
         // 不追加编排机制参数（本体标识、结果出参等），避免详情页把机制参数当成用户参数展示。
@@ -937,8 +943,11 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         int order = 1;
         for (var entry : varTypeMap.entrySet()) {
             String varName = entry.getKey();
-            // 根据变量角色设置描述：聚合目标 vs 过滤条件
-            String description = varName.equals(targetVar) ? "聚合目标" : "过滤条件";
+            // 角色描述：同名既做聚合目标又做过滤条件时如实标注，避免丢失过滤角色
+            boolean isTarget = varName.equals(targetVar);
+            boolean isFilter = filterVars.contains(varName);
+            String description = isTarget && isFilter ? "聚合目标/过滤条件"
+                    : isTarget ? "聚合目标" : "过滤条件";
             params.add(FunctionParamPO.builder()
                     .functionId(functionId)
                     .paramName(varName)
@@ -953,6 +962,81 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         if (!params.isEmpty()) {
             functionParamService.saveBatch(params);
         }
+    }
+
+    /**
+     * 落库前校验基础查询算子的变量名与过滤取值：
+     * <ul>
+     *   <li>过滤节点变量名（propertyApiName）空白 → 执行期 {@code bindings.get("")} 命中不到，报"过滤变量 未绑定"；</li>
+     *   <li>NUMBER/BOOLEAN 型过滤值空白或非法 → 执行期 {@code formatSqlValue} 拼出 {@code col = } 残缺 SQL。</li>
+     * </ul>
+     * 与创建/更新共用同一入口 {@link #createBasicQueryParams}，两条路径都会被拦。
+     */
+    private void validateBasicQueryVariables(BasicQueryConfig queryConfig) {
+        if (StringUtils.isNotEmpty(queryConfig.getTargetProperty())) {
+            PreconditionUtils.checkArgument(StringUtils.isNotBlank(queryConfig.getTargetProperty()),
+                    "聚合目标变量名不能为空", HttpStatus.BAD_REQUEST);
+        }
+        validateFilterVariables(queryConfig.getFilters());
+    }
+
+    private void validateFilterVariables(FilterGroupParam group) {
+        if (group == null || CollectionUtils.isEmpty(group.getChildren())) {
+            return;
+        }
+        for (FilterNodeParam node : group.getChildren()) {
+            if (node.getType() == FilterNodeTypeEnum.FILTER && node.getFilter() != null) {
+                PropertyFilterParam filter = node.getFilter();
+                PreconditionUtils.checkArgument(StringUtils.isNotBlank(filter.getPropertyApiName()),
+                        "过滤条件变量名不能为空", HttpStatus.BAD_REQUEST);
+                validateFilterValues(filter);
+            } else if (node.getType() == FilterNodeTypeEnum.GROUP && node.getGroup() != null) {
+                validateFilterVariables(node.getGroup());
+            }
+        }
+    }
+
+    private void validateFilterValues(PropertyFilterParam filter) {
+        QueryOpEnum op = filter.getOp() != null ? filter.getOp() : QueryOpEnum.EQ;
+        // IS_NULL/IS_NOT_NULL 无值，APPLY 的 value 是模板串，均不校验具体取值
+        if (op == QueryOpEnum.IS_NULL || op == QueryOpEnum.IS_NOT_NULL || op == QueryOpEnum.APPLY) {
+            return;
+        }
+        String dataType = filter.getDataType();
+        if (op == QueryOpEnum.IN || op == QueryOpEnum.NOT_IN
+                || op == QueryOpEnum.BETWEEN || op == QueryOpEnum.NOT_BETWEEN) {
+            PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(filter.getValues()),
+                    "过滤变量 " + filter.getPropertyApiName() + " 的取值列表不能为空", HttpStatus.BAD_REQUEST);
+            for (Object v : filter.getValues()) {
+                checkValueCompatible(filter.getPropertyApiName(), v, dataType);
+            }
+            return;
+        }
+        checkValueCompatible(filter.getPropertyApiName(), filter.getValue(), dataType);
+    }
+
+    private void checkValueCompatible(String varName, Object value, String dataType) {
+        if (StringUtils.isEmpty(dataType)) {
+            return;
+        }
+        String upper = dataType.toUpperCase();
+        String strVal = value == null ? null : value.toString().trim();
+        if ("NUMBER".equals(upper)) {
+            PreconditionUtils.checkArgument(StringUtils.isNotBlank(strVal),
+                    "数值型过滤变量 " + varName + " 的取值不能为空", HttpStatus.BAD_REQUEST);
+            try {
+                Double.parseDouble(strVal);
+            } catch (NumberFormatException e) {
+                PreconditionUtils.checkArgument(false,
+                        "数值型过滤变量 " + varName + " 的取值 \"" + strVal + "\" 不是合法数字", HttpStatus.BAD_REQUEST);
+            }
+        } else if ("BOOLEAN".equals(upper)) {
+            PreconditionUtils.checkArgument(StringUtils.isNotBlank(strVal),
+                    "布尔型过滤变量 " + varName + " 的取值不能为空", HttpStatus.BAD_REQUEST);
+            PreconditionUtils.checkArgument("true".equalsIgnoreCase(strVal) || "false".equalsIgnoreCase(strVal),
+                    "布尔型过滤变量 " + varName + " 的取值 \"" + strVal + "\" 应为 true 或 false", HttpStatus.BAD_REQUEST);
+        }
+        // STRING 允许空串（如 LIKE '%%'、EQ '' 是合法 SQL），不做非空拦截
     }
 
     // ==================== 外部API函数算子 ====================
