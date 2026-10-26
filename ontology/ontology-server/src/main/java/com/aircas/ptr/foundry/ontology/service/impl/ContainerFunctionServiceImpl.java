@@ -218,17 +218,31 @@ public class ContainerFunctionServiceImpl implements ContainerFunctionService {
         String containerKey = UUID.randomUUID().toString().replace("-", "");
 
         // 容器级唯一性校验（一容器=一实例，保存期拦截，避免存入 start 才爆的算子）：
+        // 多节点部署下端口与容器名按节点隔离（每台机器各有独立 docker daemon），故校验范围限定在本节点；
+        // 单节点模式 node_ip 为空，查同为空的历史记录，保持原行为。
         // 1) 容器名：用户 --name 优先，否则平台默认 foundry-ctr-<key>（UUID 天然唯一）；docker 容器名全局唯一，不得与已注册实例重名。
         // 2) 宿主端口：一宿主端口=一容器算子，不得与任何已注册实例的 host_port 重复。
         String userContainerName = DockerRunCommandParser.parseContainerName(param.getRunCommand());
         String containerName = (userContainerName != null && !userContainerName.isBlank())
                 ? userContainerName
                 : DockerCommandExecutor.defaultContainerName(containerKey);
-        boolean portTaken = containerInstanceMapper.selectCount(new LambdaQueryWrapper<FunctionContainerInstance>()
+        LambdaQueryWrapper<FunctionContainerInstance> nodeScope = new LambdaQueryWrapper<>();
+        if (containerNodeIdentity.isMultiNode()) {
+            nodeScope.eq(FunctionContainerInstance::getNodeIp, containerNodeIdentity.nodeIp());
+        } else {
+            nodeScope.isNull(FunctionContainerInstance::getNodeIp);
+        }
+        boolean portTaken = containerInstanceMapper.selectCount(nodeScope
                 .eq(FunctionContainerInstance::getHostPort, portMapping.getHostPort())) > 0;
         PreconditionUtils.checkArgument(!portTaken,
                 "宿主端口 " + portMapping.getHostPort() + " 已被其他容器算子占用，请更换 -p 端口映射", HttpStatus.BAD_REQUEST);
-        boolean nameTaken = containerInstanceMapper.selectCount(new LambdaQueryWrapper<FunctionContainerInstance>()
+        LambdaQueryWrapper<FunctionContainerInstance> nameScope = new LambdaQueryWrapper<>();
+        if (containerNodeIdentity.isMultiNode()) {
+            nameScope.eq(FunctionContainerInstance::getNodeIp, containerNodeIdentity.nodeIp());
+        } else {
+            nameScope.isNull(FunctionContainerInstance::getNodeIp);
+        }
+        boolean nameTaken = containerInstanceMapper.selectCount(nameScope
                 .eq(FunctionContainerInstance::getContainerName, containerName)) > 0;
         PreconditionUtils.checkArgument(!nameTaken,
                 "容器名与已注册容器算子重名：" + containerName + "，请在启动命令中更换 --name", HttpStatus.BAD_REQUEST);

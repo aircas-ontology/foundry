@@ -64,7 +64,7 @@ public class ContainerNodeForwarder {
 
     /** 转发并取回返回体中的 data（对端为有返回值的接口） */
     public <T> T forwardFor(String nodeIp, Integer nodePort, Object body, Class<T> dataType, String action) {
-        JsonNode data = post(nodeIp, nodePort, body, action);
+        JsonNode data = post(nodeIp, nodePort, requestUri(), body, action);
         if (data == null || data.isNull()) {
             return null;
         }
@@ -73,7 +73,7 @@ public class ContainerNodeForwarder {
 
     /** 转发并取回返回体中的 data（对端返回数组，如探查接口列表） */
     public <T> List<T> forwardList(String nodeIp, Integer nodePort, Object body, Class<T> elementType, String action) {
-        JsonNode data = post(nodeIp, nodePort, body, action);
+        JsonNode data = post(nodeIp, nodePort, requestUri(), body, action);
         if (data == null || data.isNull()) {
             return new ArrayList<>();
         }
@@ -83,25 +83,37 @@ public class ContainerNodeForwarder {
 
     /** 转发且不取返回值（对端为 void 接口，如创建算子） */
     public void forward(String nodeIp, Integer nodePort, Object body, String action) {
-        post(nodeIp, nodePort, body, action);
+        post(nodeIp, nodePort, requestUri(), body, action);
+    }
+
+    /**
+     * 转发到归属节点的指定 URI（非当前请求 URI），用于副作用转发场景：
+     * 如删除算子时的文件清理，原始请求 URI 是 DELETE /function/delete，但清理端点是独立的 POST 路径。
+     */
+    public void forwardTo(String nodeIp, Integer nodePort, String uri, Object body, String action) {
+        post(nodeIp, nodePort, uri, body, action);
     }
 
     /**
      * 实际发起转发：拼目标地址与头、调用、判定成功与否，失败统一转成带归属节点地址的 BusinessException。
      *
+     * @param uri 目标端点 URI（由调用方传入：同端点转发传当前请求 URI，跨端点转发传指定路径）
      * @return 返回体中的 data 节点，可能为 null
      */
-    private JsonNode post(String nodeIp, Integer nodePort, Object body, String action) {
+    private JsonNode post(String nodeIp, Integer nodePort, String uri, Object body, String action) {
         if (StringUtils.isBlank(nodeIp) || nodePort == null || nodePort <= 0) {
             throw new BusinessException("容器算子" + action + "的归属节点地址不完整（" + nodeIp + ":" + nodePort
                     + "），请到该节点上操作", HttpStatus.BAD_REQUEST);
         }
         HttpServletRequest request = currentRequest(action);
         String target = nodeIp.trim() + ":" + nodePort;
-        String url = "http://" + target + request.getRequestURI();
-        String query = request.getQueryString();
-        if (StringUtils.isNotBlank(query)) {
-            url = url + "?" + query;
+        String url = "http://" + target + uri;
+        // 同端点转发时 URI 不带 query，需从原请求透传；跨端点转发时 URI 已自带完整 query，不再拼接原请求的
+        if (!uri.contains("?")) {
+            String query = request.getQueryString();
+            if (StringUtils.isNotBlank(query)) {
+                url = url + "?" + query;
+            }
         }
         ExternalApiExecutor.requireValidUrl(url);
 
@@ -180,5 +192,14 @@ public class ContainerNodeForwarder {
                     + "（定时任务等无请求上下文的入口不能触发转发）", HttpStatus.BAD_REQUEST);
         }
         return ((ServletRequestAttributes) attributes).getRequest();
+    }
+
+    /** 取当前请求的 URI（同端点转发用） */
+    private String requestUri() {
+        RequestAttributes attributes = RequestContextHolder.getRequestAttributes();
+        if (!(attributes instanceof ServletRequestAttributes)) {
+            throw new BusinessException("容器算子跨节点转发只能在 HTTP 请求线程内发起", HttpStatus.BAD_REQUEST);
+        }
+        return ((ServletRequestAttributes) attributes).getRequest().getRequestURI();
     }
 }

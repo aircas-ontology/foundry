@@ -339,8 +339,8 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     /**
      * 删除容器算子后按 container_key 引用计数清理：
      * 若该 key 下已无任何存留 function（最后一个接口算子被删），则删除运行实例行、并清理镜像/接口文档磁盘文件。
-     * <p>一容器=多条 function 共用同一 container_key，故须等全部关联算子删完才动容器与文件。
-     * docker 容器本身的停止/移除随生命周期服务（t4/t8）接入，本处先保证实例行与磁盘文件不泄漏。</p>
+     * <p>一容器=多条 function 共用同一 container_key，故须等全部关联算子删完才动容器与文件。</p>
+     * <p>多节点部署下，容器与文件在归属节点上：本节点只做引用计数判定，实际清理转发到归属节点执行。</p>
      */
     private void cleanupContainerFilesIfUnused(Function deleted) {
         if (deleted.getType() != FunctionTypeEnum.CONTAINER
@@ -348,7 +348,6 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
             return;
         }
         String containerKey = deleted.getContainerKey();
-        // 该函数已从库中删除；统计同 key 下仍存留的接口算子数，仍有则不动容器与文件
         long remaining = count(new LambdaQueryWrapper<Function>()
                 .eq(Function::getContainerKey, containerKey));
         if (remaining > 0) {
@@ -358,16 +357,35 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         if (instance == null) {
             return;
         }
-        // 归属是兄弟节点：本端的 docker stop / 文件删除都只会空转（容器在那台机器上跑着，
-        // 其容器名与宿主端口在 docker 侧继续被占用，而 DB 已释放 → 后续同端口创建要到 docker run 才爆）。
-        // 本次不把清理纳入转发链路，故明确点名归属节点，供运维手工处理；实例行仍照常删除。
         if (!containerNodeIdentity.isSelf(instance.getNodeIp())) {
-            log.warn("容器算子实例归属节点 {}，本端无法停容器与清理文件：请到该节点执行 docker rm -f {}，"
-                            + "并删除镜像 tar 与接口文档后手工确认（containerKey={}）",
-                    instance.getNodeIp(), StringUtils.defaultIfBlank(instance.getContainerId(),
-                            instance.getContainerName()), containerKey);
+            try {
+                containerNodeForwarder.forwardTo(instance.getNodeIp(), instance.getNodePort(),
+                        "/function/container/runtime/cleanup_files?containerKey=" + containerKey,
+                        null, "删除清理");
+                log.info("容器算子删除清理已转发至归属节点 {}:{}（containerKey={}）",
+                        instance.getNodeIp(), instance.getNodePort(), containerKey);
+            } catch (Exception e) {
+                log.warn("转发容器算子删除清理到归属节点 {} 失败（containerKey={}），"
+                                + "请到该节点手工执行 docker rm -f {} 并清理文件：{}",
+                        instance.getNodeIp(), containerKey,
+                        StringUtils.defaultIfBlank(instance.getContainerId(), instance.getContainerName()),
+                        e.getMessage());
+            }
+            return;
         }
-        // 曾启动过（containerId 非空）则先停止并移除常驻容器，再释放镜像/文档文件（否则文件可能占用中）
+        cleanupContainerLocalInternal(containerKey);
+    }
+
+    @Override
+    public void cleanupContainerLocal(String containerKey) {
+        cleanupContainerLocalInternal(containerKey);
+    }
+
+    private void cleanupContainerLocalInternal(String containerKey) {
+        FunctionContainerInstance instance = findInstanceByKey(containerKey);
+        if (instance == null) {
+            return;
+        }
         if (StringUtils.isNotEmpty(instance.getContainerId())) {
             stopAndRemoveContainerQuietly(instance.getContainerId());
         }
