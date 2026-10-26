@@ -23,7 +23,6 @@ import com.aircas.ptr.foundry.ontology.model.dto.container.ContainerInterfaceDoc
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamCategoryEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamRoleEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionRuntimeStatusEnum;
-import com.aircas.ptr.foundry.ontology.model.enums.ContainerPhaseEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.TaskStatusEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionModelEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionLanguageEnum;
@@ -767,28 +766,8 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                         .runningStatus(runningFunctions.contains(func.getApi())
                                 ? FunctionRuntimeStatusEnum.RUNNING
                                 : FunctionRuntimeStatusEnum.NOT_RUNNING)
-                        .containerKey(func.getContainerKey())
                         .build()
         ).collect(Collectors.toList());
-
-        // 容器算子：批量查运行实例 phase，回填 containerPhase
-        List<String> containerKeys = records.stream()
-                .filter(r -> r.getType() == FunctionTypeEnum.CONTAINER && r.getContainerKey() != null)
-                .map(FunctionInfoVO::getContainerKey)
-                .collect(Collectors.toList());
-        if (!containerKeys.isEmpty()) {
-            Map<String, ContainerPhaseEnum> phaseMap = containerInstanceMapper.selectList(
-                    new LambdaQueryWrapper<FunctionContainerInstance>()
-                            .in(FunctionContainerInstance::getContainerKey, containerKeys)
-                            .select(FunctionContainerInstance::getContainerKey, FunctionContainerInstance::getPhase)
-            ).stream().collect(Collectors.toMap(
-                    FunctionContainerInstance::getContainerKey,
-                    FunctionContainerInstance::getPhase,
-                    (a, b) -> a));
-            records.stream()
-                    .filter(r -> r.getType() == FunctionTypeEnum.CONTAINER && r.getContainerKey() != null)
-                    .forEach(r -> r.setContainerPhase(phaseMap.get(r.getContainerKey())));
-        }
 
         return new Page<FunctionInfoVO>()
                 .setRecords(records)

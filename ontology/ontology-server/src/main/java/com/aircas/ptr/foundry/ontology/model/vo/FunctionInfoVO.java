@@ -1,6 +1,5 @@
 package com.aircas.ptr.foundry.ontology.model.vo;
 
-import com.aircas.ptr.foundry.ontology.model.enums.ContainerPhaseEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionLanguageEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionModelEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionRuntimeStatusEnum;
@@ -60,10 +59,4 @@ public class FunctionInfoVO {
 
     @Schema(name = "runningStatus", description = "运行状态：RUNNING 运行中 / NOT_RUNNING 未运行")
     private FunctionRuntimeStatusEnum runningStatus;
-
-    @Schema(name = "containerKey", description = "容器算子实例键（仅 type=CONTAINER 有值，前端凭此调启动/停止 API）")
-    private String containerKey;
-
-    @Schema(name = "containerPhase", description = "容器运行阶段（仅 type=CONTAINER 有值）：CREATED/RUNNING/STOPPED/FAILED 等")
-    private ContainerPhaseEnum containerPhase;
 }
