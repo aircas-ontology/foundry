@@ -5,6 +5,7 @@ import com.aircas.ptr.foundry.ontology.model.enums.FunctionModelEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.ScanStatus;
 import com.aircas.ptr.foundry.ontology.repository.handler.JsonbTypeHandler;
+import com.aircas.ptr.foundry.ontology.repository.handler.PreciseDateTypeHandler;
 import com.baomidou.mybatisplus.annotation.*;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.AllArgsConstructor;
@@ -39,7 +40,7 @@ public class Function {
     /**
      * 记录更新时间
      */
-    @TableField(fill = FieldFill.INSERT_UPDATE)
+    @TableField(fill = FieldFill.INSERT_UPDATE, typeHandler = PreciseDateTypeHandler.class)
     private Date updateTime;
 
     /**
