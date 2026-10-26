@@ -17,6 +17,7 @@ import com.aircas.ptr.foundry.ontology.model.bo.CompositePlanBO;
 import com.aircas.ptr.foundry.ontology.model.bo.CompositeValidationBO;
 import com.aircas.ptr.foundry.ontology.model.dto.ActionContextInfoDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.FunctionParamDTO;
+import com.aircas.ptr.foundry.ontology.model.dto.RateLimitConfig;
 import com.aircas.ptr.foundry.ontology.model.dto.container.ContainerOperatorConfig;
 import com.aircas.ptr.foundry.ontology.model.dto.container.ContainerImageInfo;
 import com.aircas.ptr.foundry.ontology.model.dto.container.ContainerInterfaceDoc;
@@ -56,6 +57,7 @@ import com.aircas.ptr.foundry.ontology.model.vo.EntityPropertyGenericQueryVO;
 import com.aircas.ptr.foundry.ontology.model.po.Function;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionContainerInstance;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionContainerUpload;
+import com.aircas.ptr.foundry.ontology.model.po.FunctionRateLimitTemplate;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionExecuteResult;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionParamPO;
@@ -68,6 +70,7 @@ import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyActionMappe
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyPropertyMapper;
 import com.aircas.ptr.foundry.ontology.service.ContainerFunctionService;
 import com.aircas.ptr.foundry.ontology.service.FunctionParamService;
+import com.aircas.ptr.foundry.ontology.service.FunctionRateLimitTemplateService;
 import com.aircas.ptr.foundry.ontology.service.FunctionService;
 import com.aircas.ptr.foundry.ontology.service.GroovyService;
 import com.aircas.ptr.foundry.ontology.utils.ContainerNodeForwarder;
@@ -183,6 +186,10 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     /** 容器算子注册服务：统一创建入口在 type=CONTAINER 时分发到此处，落 N 条接口算子 + 1 运行实例 */
     @Resource
     private ContainerFunctionService containerFunctionService;
+
+    /** 限流配置模板服务：创建函数时按 ID 取模板，复制配置快照写入 function 表 */
+    @Resource
+    private FunctionRateLimitTemplateService rateLimitTemplateService;
 
     private ObjectMapper objectMapper = new ObjectMapper()
             // 存进库的 fields 是 FunctionParamDTO 序列化结果（含 referenceType 等 VO 没有的字段），
@@ -475,6 +482,8 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 "functionApi is empty", HttpStatus.BAD_REQUEST);
         PreconditionUtils.checkArgument(StringUtils.isNotEmpty(param.getDisplayName()),
                 "displayName is empty", HttpStatus.BAD_REQUEST);
+        // 限流模板：所有算子类型通用，创建时选定后快照入库，不可修改
+        FunctionRateLimitTemplate rateLimitTemplate = resolveRateLimitTemplate(param.getRateLimitTemplateId());
         // 容器算子：统一创建入口按类型分发——委托容器注册服务（1 请求 → N 条派生算子 + 1 运行实例），
         // 不走下方脚本/查询/编排算子的版本管理与参数解析逻辑
         if (param.getType() == FunctionTypeEnum.CONTAINER) {
@@ -486,7 +495,9 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 containerNodeForwarder.forward(owner.getNodeIp(), owner.getNodePort(), param, "创建");
                 return;
             }
-            containerFunctionService.createContainerFunction(buildContainerCreateParam(param));
+            ContainerFunctionCreateParam cp = buildContainerCreateParam(param);
+            cp.setRateLimitTemplateId(rateLimitTemplate.getId());
+            containerFunctionService.createContainerFunction(cp);
             return;
         }
         // 非容器算子：校验 → 落一行 Function → 按类型建参数（编排骨架）
@@ -494,6 +505,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         String version = checkVersionAndApiUnique(param);
         FunctionLanguageEnum language = resolveLanguageAndValidate(param, version);
         Function func = buildAndSaveFunction(param, model, version, language);
+        applyRateLimitToFunction(func, rateLimitTemplate);
         saveTypedParams(func, param, language);
     }
 
@@ -570,6 +582,47 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 .build();
         save(func);
         return func;
+    }
+
+    /**
+     * 解析限流模板：指定 ID 则按 ID 查找，未指定则取默认模板（ID 最小）；模板不存在或已禁用时拒绝创建。
+     */
+    private FunctionRateLimitTemplate resolveRateLimitTemplate(Long templateId) {
+        FunctionRateLimitTemplate template;
+        if (templateId != null) {
+            template = rateLimitTemplateService.getById(templateId);
+            PreconditionUtils.checkArgument(template != null,
+                    "限流模板不存在：" + templateId, HttpStatus.BAD_REQUEST);
+        } else {
+            template = rateLimitTemplateService.getDefaultTemplate();
+            PreconditionUtils.checkArgument(template != null,
+                    "系统未配置限流默认模板，请联系管理员", HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+        PreconditionUtils.checkArgument(template.getEnabled() != null && template.getEnabled() == 1,
+                "限流模板已禁用：" + template.getName(), HttpStatus.BAD_REQUEST);
+        return template;
+    }
+
+    /**
+     * 将限流模板配置快照写入 Function 并更新：模板 ID 与配置 JSON 均为创建后不可变字段。
+     */
+    private void applyRateLimitToFunction(Function func, FunctionRateLimitTemplate template) {
+        RateLimitConfig config = RateLimitConfig.builder()
+                .timeoutMs(template.getTimeoutMs())
+                .retryCount(template.getRetryCount())
+                .retryIntervalMs(template.getRetryIntervalMs())
+                .tpsLimit(template.getTpsLimit())
+                .maxConcurrency(template.getMaxConcurrency())
+                .enabled(template.getEnabled())
+                .build();
+        try {
+            func.setRateLimitTemplateId(template.getId());
+            func.setRateLimitConfig(objectMapper.writeValueAsString(config));
+            updateById(func);
+        } catch (JsonProcessingException e) {
+            log.error("限流配置序列化失败：{}", e.getMessage());
+            throw new BusinessException("限流配置序列化失败：" + e.getMessage());
+        }
     }
 
     /**

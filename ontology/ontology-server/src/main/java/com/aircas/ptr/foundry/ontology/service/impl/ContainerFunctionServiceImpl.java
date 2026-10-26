@@ -4,6 +4,7 @@ import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.ontology.composite.CompositeFunctionCatalog;
 import com.aircas.ptr.foundry.ontology.config.ContainerOperatorProperties;
+import com.aircas.ptr.foundry.ontology.model.dto.RateLimitConfig;
 import com.aircas.ptr.foundry.ontology.model.dto.container.ContainerImageInfo;
 import com.aircas.ptr.foundry.ontology.model.dto.container.ContainerInterface;
 import com.aircas.ptr.foundry.ontology.model.dto.container.ContainerInterfaceDoc;
@@ -19,11 +20,13 @@ import com.aircas.ptr.foundry.ontology.model.po.Function;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionContainerInstance;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionContainerUpload;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionParamPO;
+import com.aircas.ptr.foundry.ontology.model.po.FunctionRateLimitTemplate;
 import com.aircas.ptr.foundry.ontology.model.vo.FunctionParameterVO;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.FunctionMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.FunctionContainerInstanceMapper;
 import com.aircas.ptr.foundry.ontology.service.ContainerFunctionService;
 import com.aircas.ptr.foundry.ontology.service.FunctionParamService;
+import com.aircas.ptr.foundry.ontology.service.FunctionRateLimitTemplateService;
 import com.aircas.ptr.foundry.ontology.service.OpenApiProbeService;
 import com.aircas.ptr.foundry.ontology.utils.ContainerNodeForwarder;
 import com.aircas.ptr.foundry.ontology.utils.ContainerNodeIdentity;
@@ -98,6 +101,10 @@ public class ContainerFunctionServiceImpl implements ContainerFunctionService {
 
     @Resource
     private ContainerNodeForwarder containerNodeForwarder;
+
+    /** 限流配置模板服务：容器算子每条派生 function 均需写入模板快照 */
+    @Resource
+    private FunctionRateLimitTemplateService rateLimitTemplateService;
 
     // 序列化入库时忽略 null：docker_config 只落接口级内容（{"interfaces":[...]}），不携带容器级空字段
     private final ObjectMapper objectMapper = new ObjectMapper()
@@ -249,6 +256,11 @@ public class ContainerFunctionServiceImpl implements ContainerFunctionService {
 
         List<String> createdApis = new ArrayList<>();
         Set<String> batchApis = new HashSet<>();
+        // 限流模板快照：容器算子每条派生 function 均写入同一份配置快照
+        FunctionRateLimitTemplate rateLimitTemplate = rateLimitTemplateService.getById(param.getRateLimitTemplateId());
+        PreconditionUtils.checkArgument(rateLimitTemplate != null,
+                "限流模板不存在：" + param.getRateLimitTemplateId(), HttpStatus.BAD_REQUEST);
+        String rateLimitConfigJson = buildRateLimitConfigJson(rateLimitTemplate);
         for (ContainerInterface itf : param.getSelectedInterfaces()) {
             String itfApi = itf.getApi() != null ? itf.getApi()
                     : (itf.getMethod() + " " + itf.getPath());
@@ -276,6 +288,8 @@ public class ContainerFunctionServiceImpl implements ContainerFunctionService {
                     .description(joinDesc(param.getDescription(), itf.getDescription()))
                     .containerKey(containerKey)
                     .dockerConfig(writeJson(config))
+                    .rateLimitTemplateId(rateLimitTemplate.getId())
+                    .rateLimitConfig(rateLimitConfigJson)
                     .build();
             functionMapper.insert(function);
 
@@ -419,6 +433,21 @@ public class ContainerFunctionServiceImpl implements ContainerFunctionService {
         } catch (Exception e) {
             throw new BusinessException("容器算子配置序列化失败：" + e.getMessage());
         }
+    }
+
+    private String buildRateLimitConfigJson(FunctionRateLimitTemplate template) {
+        if (template == null) {
+            return null;
+        }
+        RateLimitConfig config = RateLimitConfig.builder()
+                .timeoutMs(template.getTimeoutMs())
+                .retryCount(template.getRetryCount())
+                .retryIntervalMs(template.getRetryIntervalMs())
+                .tpsLimit(template.getTpsLimit())
+                .maxConcurrency(template.getMaxConcurrency())
+                .enabled(template.getEnabled())
+                .build();
+        return writeJson(config);
     }
 
     private List<ContainerInterfaceParam> nullSafe(List<ContainerInterfaceParam> list) {
