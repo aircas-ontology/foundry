@@ -1466,8 +1466,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                         .parameters(param.getParameters())
                         .build();
                 var resultJson = executeFunction(executeParam);
-                return objectMapper.readValue(resultJson, new TypeReference<Map<String, Object>>() {
-                });
+                return objectMapper.readValue(resultJson, Object.class);
 
             case CONTAINER:
                 // 容器算子测试：复用 executeFunction（按 containerKey 调常驻容器，未运行则报错引导手动启动）
@@ -1477,8 +1476,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                         .parameters(param.getParameters())
                         .build();
                 var containerResultJson = executeFunction(containerExecuteParam);
-                return objectMapper.readValue(containerResultJson, new TypeReference<Map<String, Object>>() {
-                });
+                return objectMapper.readValue(containerResultJson, Object.class);
 
             default:
                 throw new BusinessException("不支持的函数类型：" + function.getType());
