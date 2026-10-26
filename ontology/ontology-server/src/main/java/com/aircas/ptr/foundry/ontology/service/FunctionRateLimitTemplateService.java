@@ -9,8 +9,8 @@ import java.util.List;
  */
 public interface FunctionRateLimitTemplateService {
 
-    /** 列出全部启用的模板（创建函数时下拉选择用） */
-    List<FunctionRateLimitTemplate> listEnabled();
+    /** 查询模板列表；enabled 为 null 查全部，0 查停用，1 查启用 */
+    List<FunctionRateLimitTemplate> listTemplates(Integer enabled);
 
     /** 按 ID 获取模板（创建函数时复制配置快照用） */
     FunctionRateLimitTemplate getById(Long id);

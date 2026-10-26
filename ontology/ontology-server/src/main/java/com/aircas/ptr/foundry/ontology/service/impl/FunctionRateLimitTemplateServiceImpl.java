@@ -24,11 +24,13 @@ public class FunctionRateLimitTemplateServiceImpl implements FunctionRateLimitTe
     private final FunctionRateLimitTemplateMapper templateMapper;
 
     @Override
-    public List<FunctionRateLimitTemplate> listEnabled() {
-        return templateMapper.selectList(
-                new LambdaQueryWrapper<FunctionRateLimitTemplate>()
-                        .eq(FunctionRateLimitTemplate::getEnabled, 1)
-                        .orderByAsc(FunctionRateLimitTemplate::getId));
+    public List<FunctionRateLimitTemplate> listTemplates(Integer enabled) {
+        LambdaQueryWrapper<FunctionRateLimitTemplate> wrapper = new LambdaQueryWrapper<>();
+        if (enabled != null) {
+            wrapper.eq(FunctionRateLimitTemplate::getEnabled, enabled);
+        }
+        wrapper.orderByAsc(FunctionRateLimitTemplate::getId);
+        return templateMapper.selectList(wrapper);
     }
 
     @Override

@@ -28,10 +28,11 @@ public class FunctionRateLimitTemplateController {
     @Resource
     private FunctionRateLimitTemplateService templateService;
 
-    @Operation(summary = "列出全部启用的限流配置模板（创建函数时选用）")
+    @Operation(summary = "查询限流配置模板列表（enabled 不传查全部，0 停用，1 启用）")
     @GetMapping("/list")
-    public RestResult<List<FunctionRateLimitTemplate>> list() {
-        return RestResult.ofData(templateService.listEnabled());
+    public RestResult<List<FunctionRateLimitTemplate>> listTemplates(
+            @RequestParam(required = false) Integer enabled) {
+        return RestResult.ofData(templateService.listTemplates(enabled));
     }
 
     @Operation(summary = "创建限流配置模板")
