@@ -202,8 +202,8 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
             // 详情读回时反序列化为 FunctionParameterVO，需忽略未知字段，否则抛异常导致层级结构丢失
             .configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
-    /** 内存级运行状态跟踪：正在执行的 functionApi 集合，列表查询时据此填充 runningStatus */
-    private final Set<String> runningFunctions = Collections.newSetFromMap(new ConcurrentHashMap<>());
+    /** 内存级运行状态跟踪：正在执行的 functionApi → 并发计数，列表查询时据此填充 runningStatus */
+    private final ConcurrentHashMap<String, java.util.concurrent.atomic.AtomicInteger> runningFunctions = new ConcurrentHashMap<>();
 
 
     @Override
@@ -564,6 +564,8 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         if (param.getType() != FunctionTypeEnum.CUSTOMIZE) {
             return null;
         }
+        PreconditionUtils.checkArgument(StringUtils.isNotBlank(param.getCode()),
+                "脚本算子必须提供 code", HttpStatus.BAD_REQUEST);
         FunctionLanguageEnum language = param.getLanguage() == null ? FunctionLanguageEnum.GROOVY : param.getLanguage();
         //脚本函数落库前先做语法/编译校验（走对应 runner 的 /validate），失败即拒、不落库
         validateScript(language, param.getFunctionApi(), version, param.getCode());
@@ -730,6 +732,8 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         // 未发布：原地更新（版本号不可改，param.version 仅作定位）
         //脚本函数更新前先校验新代码（语言锁定不可改，取 function.language）
         if (function.getType() == FunctionTypeEnum.CUSTOMIZE) {
+            PreconditionUtils.checkArgument(StringUtils.isNotBlank(param.getCode()),
+                    "脚本算子更新必须提供 code", HttpStatus.BAD_REQUEST);
             validateScript(function.getLanguage(), function.getApi(), function.getVersion(), param.getCode());
         }
         applyEditableFields(function, param);
@@ -792,7 +796,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
      * 仅 CUSTOMIZE 脚本函数需要；无代码时跳过（BASIC_QUERY/EXTERNAL 不走脚本校验）。
      */
     private void validateScript(FunctionLanguageEnum language, String functionApi, String version, String code) {
-        if (StringUtils.isEmpty(code)) {
+        if (StringUtils.isBlank(code)) {
             return;
         }
         FunctionLanguageEnum lang = language == null ? FunctionLanguageEnum.GROOVY : language;
@@ -861,7 +865,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                         .ontologySpaceId(func.getOntologySpaceId())
                         .createTime(func.getCreateTime())
                         .updateTime(func.getUpdateTime())
-                        .runningStatus(runningFunctions.contains(func.getApi())
+                        .runningStatus(runningFunctions.containsKey(func.getApi())
                                 ? FunctionRuntimeStatusEnum.RUNNING
                                 : FunctionRuntimeStatusEnum.NOT_RUNNING)
                         .build()
@@ -877,11 +881,14 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     @Override
     @SneakyThrows
     public String executeFunction(FunctionExecuteParam param) {
-        runningFunctions.add(param.getFunctionApi());
+        runningFunctions.computeIfAbsent(param.getFunctionApi(), k -> new java.util.concurrent.atomic.AtomicInteger(0)).incrementAndGet();
         try {
             return doExecuteFunction(param);
         } finally {
-            runningFunctions.remove(param.getFunctionApi());
+            java.util.concurrent.atomic.AtomicInteger count = runningFunctions.get(param.getFunctionApi());
+            if (count != null && count.decrementAndGet() <= 0) {
+                runningFunctions.remove(param.getFunctionApi());
+            }
         }
     }
 
@@ -1008,7 +1015,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     private void createBasicQueryParams(Long functionId, BasicQueryConfig queryConfig) {
         PreconditionUtils.checkArgument(queryConfig != null, "基础查询算子必须提供 queryConfig", HttpStatus.BAD_REQUEST);
         // 聚合操作：targetProperty 必须由前端传入（作为变量名），执行时通过 variableBindings 映射到实际属性 apiName
-        if (queryConfig.getAggFunc() != null && StringUtils.isEmpty(queryConfig.getTargetProperty())) {
+        if (queryConfig.getAggFunc() != null && StringUtils.isBlank(queryConfig.getTargetProperty())) {
             PreconditionUtils.checkArgument(false, "聚合函数必须提供 targetProperty（聚合目标字段）", HttpStatus.BAD_REQUEST);
         }
         // 落库前拦截脏配置：空变量名会执行成 "过滤变量 未绑定"，空/非法数值布尔值会执行成残缺 SQL
@@ -1286,7 +1293,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         }
         for (var node : group.getChildren()) {
             if (node.getType() == FilterNodeTypeEnum.FILTER && node.getFilter() != null) {
-                if (StringUtils.isNotEmpty(node.getFilter().getPropertyApiName())) {
+                if (StringUtils.isNotBlank(node.getFilter().getPropertyApiName())) {
                     result.put(node.getFilter().getPropertyApiName(), node.getFilter().getDataType());
                 }
             } else if (node.getType() == FilterNodeTypeEnum.GROUP && node.getGroup() != null) {
@@ -1466,7 +1473,13 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                         || StringUtils.isEmpty(p.getTypeReferenceName())) {
                     input.put(p.getParamName(), value);
                 } else {
-                    input.put(p.getParamName(), SchemaHandleUtil.convertValue(value, p.getTypeReferenceName()));
+                    try {
+                        input.put(p.getParamName(), SchemaHandleUtil.convertValue(value, p.getTypeReferenceName()));
+                    } catch (RuntimeException e) {
+                        log.warn("参数 {} 类型转换失败（{} → {}），透传原值：{}",
+                                p.getParamName(), value, p.getTypeReferenceName(), e.getMessage());
+                        input.put(p.getParamName(), value);
+                    }
                 }
             }
         }
@@ -1490,10 +1503,10 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
             return p.getParamValue();
         }
         List<FunctionParameter> fields = p.getFields();
-        if (CollectionUtils.isEmpty(fields)) {
+        if (fields == null) {
             return null;
         }
-        // LIST 类型：把 fields 组装为数组
+        // LIST 类型：把 fields 组装为数组（空列表返回 [] 而非 null，保留用户显式传入空数组的语义）
         if (p.getParamType() == FunctionParamTypeEnum.LIST) {
             List<Object> list = new ArrayList<>();
             for (FunctionParameter f : fields) {
@@ -1502,9 +1515,9 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                     list.add(v);
                 }
             }
-            return list.isEmpty() ? null : list;
+            return list;
         }
-        // OBJECT 类型或其他类型：把 fields 组装为对象（默认行为）
+        // OBJECT 类型或其他类型：把 fields 组装为对象（空对象返回 {} 而非 null，保留用户显式传入空对象的语义）
         Map<String, Object> nested = new LinkedHashMap<>();
         for (FunctionParameter f : fields) {
             Object v = resolveParamValue(f);
@@ -1512,7 +1525,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 nested.put(f.getParamName(), v);
             }
         }
-        return nested.isEmpty() ? null : nested;
+        return nested;
     }
 
     /**
@@ -1633,8 +1646,12 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 if (draftRoot != null && draftRoot.has("data")) {
                     return objectMapper.treeToValue(draftRoot.get("data"), Object.class);
                 }
-                return objectMapper.readValue(resultJsonStr, new TypeReference<Map<String, Object>>() {
-                });
+                try {
+                    return objectMapper.readValue(resultJsonStr, new TypeReference<Map<String, Object>>() {
+                    });
+                } catch (com.fasterxml.jackson.databind.exc.MismatchedInputException e) {
+                    return Map.of("result", objectMapper.readValue(resultJsonStr, Object.class));
+                }
             }
             case EXTERNAL -> {
                 PreconditionUtils.checkArgument(param.getApiConfig() != null,
@@ -1752,7 +1769,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         var config = param.getCompositeConfig();
         var functionApi = param.getFunctionApi();
         if (config == null) {
-            PreconditionUtils.checkArgument(StringUtils.isNotEmpty(functionApi), "必须提供 compositeConfig 或 functionApi", HttpStatus.BAD_REQUEST);
+            PreconditionUtils.checkArgument(StringUtils.isNotBlank(functionApi), "必须提供 compositeConfig 或 functionApi", HttpStatus.BAD_REQUEST);
             config = loadStoredCompositeConfig(functionApi);
         }
         checkNoSelfReference(config, functionApi);
@@ -1912,7 +1929,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     }
 
     private Function loadCompositeFunction(String functionApi) {
-        var function = getOne(new LambdaQueryWrapper<Function>().eq(Function::getApi, functionApi));
+        var function = resolveVersion(functionApi, null);
         PreconditionUtils.checkArgument(function != null, "函数api不存在：" + functionApi, HttpStatus.BAD_REQUEST);
         PreconditionUtils.checkArgument(function.getType() == FunctionTypeEnum.COMPOSITE,
                 "该函数不是函数编排类型：" + functionApi, HttpStatus.BAD_REQUEST);

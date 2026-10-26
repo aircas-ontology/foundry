@@ -7,10 +7,14 @@ import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
 
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.util.Map;
+
+import static com.aircas.ptr.foundry.ontology.constant.FunctionConstant.VERSION_PATTERN;
 
 /**
  * 基础查询算子测试执行请求。
@@ -29,6 +33,7 @@ public class BasicQueryTestParam {
     private String functionApi;
 
     @Schema(name = "version", description = "版本号；缺省时测试该 api 的最新版本")
+    @Pattern(regexp = VERSION_PATTERN, message = "版本号格式必须为 x.y.z（如 1.0.0）")
     private String version;
 
     @Schema(name = "ontologyIdentifier", description = "测试本体 id", required = true)
@@ -44,8 +49,10 @@ public class BasicQueryTestParam {
     private Map<String, String> variableBindings;
 
     @Schema(name = "pageNum", description = "分页号，默认 1（仅 query 模式有效，聚合操作忽略）")
+    @Min(value = 1, message = "pageNum 必须大于 0")
     private Integer pageNum = 1;
 
     @Schema(name = "pageSize", description = "每页条数，默认 10（仅 query 模式有效，聚合操作忽略）")
+    @Min(value = 1, message = "pageSize 必须大于 0")
     private Integer pageSize = 10;
 }

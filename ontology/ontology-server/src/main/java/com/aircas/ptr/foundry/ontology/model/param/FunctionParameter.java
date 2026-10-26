@@ -8,6 +8,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 
+import jakarta.validation.constraints.NotBlank;
 import java.util.List;
 
 @Data
@@ -19,6 +20,7 @@ import java.util.List;
 public class FunctionParameter {
 
     @Schema(name = "paramName", description = "参数名称")
+    @NotBlank(message = "paramName is empty")
     private String paramName;
 
     @Schema(name = "paramType", description = "参数类型（LIST 类型时后端据此把 fields 组装为数组而非对象）")

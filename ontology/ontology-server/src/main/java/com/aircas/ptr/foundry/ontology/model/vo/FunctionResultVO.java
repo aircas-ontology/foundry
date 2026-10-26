@@ -12,6 +12,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 
+import jakarta.validation.constraints.NotBlank;
 import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -50,6 +51,7 @@ public class FunctionResultVO<T> {
      * 异步处理任务id
      */
     @Schema(name = "taskId",description = "异步处理任务id",example = "task_1769585745344")
+    @NotBlank(message = "taskId is empty")
     private String taskId;
 
     /**

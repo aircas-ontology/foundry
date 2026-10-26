@@ -8,7 +8,10 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import java.util.List;
+
+import static com.aircas.ptr.foundry.ontology.constant.FunctionConstant.VERSION_PATTERN;
 
 @Data
 @Builder
@@ -24,6 +27,7 @@ public class FunctionExecuteParam {
 
     @Schema(name = "version", description = "版本号（必填，格式 x.y.z）", required = true)
     @NotBlank(message = "version is empty")
+    @Pattern(regexp = VERSION_PATTERN, message = "版本号格式必须为 x.y.z（如 1.0.0）")
     private String version;
 
     @Schema(name = "parameters", description = "参数列表", required = true)

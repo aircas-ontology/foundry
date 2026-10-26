@@ -9,8 +9,11 @@ import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
 
+import jakarta.validation.constraints.Pattern;
 import java.util.List;
 import java.util.Map;
+
+import static com.aircas.ptr.foundry.ontology.constant.FunctionConstant.VERSION_PATTERN;
 
 /**
  * 函数算子统一测试请求（同时支持「已存库测试」和「草稿测试」两种模式）。
@@ -39,6 +42,7 @@ public class FunctionTestParam {
     private String functionApi;
 
     @Schema(name = "version", description = "版本号（已存库测试必填，格式 x.y.z；草稿测试时不传）")
+    @Pattern(regexp = VERSION_PATTERN, message = "版本号格式必须为 x.y.z（如 1.0.0）")
     private String version;
 
     // ========== 草稿测试专用 ==========
@@ -66,9 +70,12 @@ public class FunctionTestParam {
     private Map<String, String> variableBindings;
 
     @Schema(name = "pageNum", description = "分页号，默认 1（BASIC_QUERY query 模式有效）")
+    @jakarta.validation.constraints.Min(value = 1, message = "pageNum 必须大于 0")
     private Integer pageNum = 1;
 
     @Schema(name = "pageSize", description = "每页条数，默认 10（BASIC_QUERY query 模式有效）")
+    @jakarta.validation.constraints.Min(value = 1, message = "pageSize 必须大于 0")
+    @jakarta.validation.constraints.Max(value = 1000, message = "pageSize 不能超过 1000")
     private Integer pageSize = 10;
 
     // ========== CUSTOMIZE/EXTERNAL 类型专用 ==========
