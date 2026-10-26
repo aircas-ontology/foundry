@@ -81,8 +81,6 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
                 .build();
         //创建本体间关系
         save(link);
-        //创建实体间关系
-        entityService.createEntityRelations(link.getUniqueIdentifier());
         return link.getUniqueIdentifier();
     }
 

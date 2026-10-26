@@ -17,13 +17,14 @@ import com.aircas.ptr.foundry.ontology.model.bo.CompositePlanBO;
 import com.aircas.ptr.foundry.ontology.model.bo.CompositeValidationBO;
 import com.aircas.ptr.foundry.ontology.model.dto.ActionContextInfoDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.FunctionParamDTO;
+import com.aircas.ptr.foundry.ontology.model.dto.RateLimitConfig;
 import com.aircas.ptr.foundry.ontology.model.dto.container.ContainerOperatorConfig;
 import com.aircas.ptr.foundry.ontology.model.dto.container.ContainerImageInfo;
 import com.aircas.ptr.foundry.ontology.model.dto.container.ContainerInterfaceDoc;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamCategoryEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamRoleEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionRuntimeStatusEnum;
-import com.aircas.ptr.foundry.ontology.model.enums.ContainerPhaseEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.ContainerSourceEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.TaskStatusEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionModelEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionLanguageEnum;
@@ -57,6 +58,7 @@ import com.aircas.ptr.foundry.ontology.model.vo.EntityPropertyGenericQueryVO;
 import com.aircas.ptr.foundry.ontology.model.po.Function;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionContainerInstance;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionContainerUpload;
+import com.aircas.ptr.foundry.ontology.model.po.FunctionRateLimitTemplate;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionExecuteResult;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionParamPO;
@@ -69,6 +71,7 @@ import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyActionMappe
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyPropertyMapper;
 import com.aircas.ptr.foundry.ontology.service.ContainerFunctionService;
 import com.aircas.ptr.foundry.ontology.service.FunctionParamService;
+import com.aircas.ptr.foundry.ontology.service.FunctionRateLimitTemplateService;
 import com.aircas.ptr.foundry.ontology.service.FunctionService;
 import com.aircas.ptr.foundry.ontology.service.GroovyService;
 import com.aircas.ptr.foundry.ontology.utils.DockerCommandExecutor;
@@ -189,6 +192,10 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     /** 编排函数定义读取入口：详情回显入口节点入参与执行链路共用同一查询口径 */
     @Resource
     private CompositeFunctionCatalog compositeFunctionCatalog;
+
+    /** 限流配置模板服务：创建函数时按 ID 取模板，复制配置快照写入 function 表 */
+    @Resource
+    private FunctionRateLimitTemplateService rateLimitTemplateService;
 
     private ObjectMapper objectMapper = new ObjectMapper()
             // 存进库的 fields 是 FunctionParamDTO 序列化结果（含 referenceType 等 VO 没有的字段），
@@ -345,8 +352,8 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     /**
      * 删除容器算子后按 container_key 引用计数清理：
      * 若该 key 下已无任何存留 function（最后一个接口算子被删），则删除运行实例行、并清理镜像/接口文档磁盘文件。
-     * <p>一容器=多条 function 共用同一 container_key，故须等全部关联算子删完才动容器与文件。
-     * docker 容器本身的停止/移除随生命周期服务（t4/t8）接入，本处先保证实例行与磁盘文件不泄漏。</p>
+     * <p>一容器=多条 function 共用同一 container_key，故须等全部关联算子删完才动容器与文件。</p>
+     * <p>多节点部署下，容器与文件在归属节点上：本节点只做引用计数判定，实际清理转发到归属节点执行。</p>
      */
     private void cleanupContainerFilesIfUnused(Function deleted) {
         if (deleted.getType() != FunctionTypeEnum.CONTAINER
@@ -354,7 +361,6 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
             return;
         }
         String containerKey = deleted.getContainerKey();
-        // 该函数已从库中删除；统计同 key 下仍存留的接口算子数，仍有则不动容器与文件
         long remaining = count(new LambdaQueryWrapper<Function>()
                 .eq(Function::getContainerKey, containerKey));
         if (remaining > 0) {
@@ -364,16 +370,39 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         if (instance == null) {
             return;
         }
-        // 归属是兄弟节点：本端的 docker stop / 文件删除都只会空转（容器在那台机器上跑着，
-        // 其容器名与宿主端口在 docker 侧继续被占用，而 DB 已释放 → 后续同端口创建要到 docker run 才爆）。
-        // 本次不把清理纳入转发链路，故明确点名归属节点，供运维手工处理；实例行仍照常删除。
-        if (!containerNodeIdentity.isSelf(instance.getNodeIp())) {
-            log.warn("容器算子实例归属节点 {}，本端无法停容器与清理文件：请到该节点执行 docker rm -f {}，"
-                            + "并删除镜像 tar 与接口文档后手工确认（containerKey={}）",
-                    instance.getNodeIp(), StringUtils.defaultIfBlank(instance.getContainerId(),
-                            instance.getContainerName()), containerKey);
+        if (instance.getContainerSource() == ContainerSourceEnum.SYSTEM) {
+            log.warn("系统预置容器不允许删除（containerKey={}）", containerKey);
+            return;
         }
-        // 曾启动过（containerId 非空）则先停止并移除常驻容器，再释放镜像/文档文件（否则文件可能占用中）
+        if (!containerNodeIdentity.isSelf(instance.getNodeIp())) {
+            try {
+                containerNodeForwarder.forwardTo(instance.getNodeIp(), instance.getNodePort(),
+                        "/function/container/runtime/cleanup_files?containerKey=" + containerKey,
+                        null, "删除清理");
+                log.info("容器算子删除清理已转发至归属节点 {}:{}（containerKey={}）",
+                        instance.getNodeIp(), instance.getNodePort(), containerKey);
+            } catch (Exception e) {
+                log.warn("转发容器算子删除清理到归属节点 {} 失败（containerKey={}），"
+                                + "请到该节点手工执行 docker rm -f {} 并清理文件：{}",
+                        instance.getNodeIp(), containerKey,
+                        StringUtils.defaultIfBlank(instance.getContainerId(), instance.getContainerName()),
+                        e.getMessage());
+            }
+            return;
+        }
+        cleanupContainerLocalInternal(containerKey);
+    }
+
+    @Override
+    public void cleanupContainerLocal(String containerKey) {
+        cleanupContainerLocalInternal(containerKey);
+    }
+
+    private void cleanupContainerLocalInternal(String containerKey) {
+        FunctionContainerInstance instance = findInstanceByKey(containerKey);
+        if (instance == null) {
+            return;
+        }
         if (StringUtils.isNotEmpty(instance.getContainerId())) {
             stopAndRemoveContainerQuietly(instance.getContainerId());
         }
@@ -459,6 +488,8 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 "functionApi is empty", HttpStatus.BAD_REQUEST);
         PreconditionUtils.checkArgument(StringUtils.isNotEmpty(param.getDisplayName()),
                 "displayName is empty", HttpStatus.BAD_REQUEST);
+        // 限流模板：所有算子类型通用，创建时选定后快照入库，不可修改
+        FunctionRateLimitTemplate rateLimitTemplate = resolveRateLimitTemplate(param.getRateLimitTemplateId());
         // 容器算子：统一创建入口按类型分发——委托容器注册服务（1 请求 → N 条派生算子 + 1 运行实例），
         // 不走下方脚本/查询/编排算子的版本管理与参数解析逻辑
         if (param.getType() == FunctionTypeEnum.CONTAINER) {
@@ -470,7 +501,9 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 containerNodeForwarder.forward(owner.getNodeIp(), owner.getNodePort(), param, "创建");
                 return;
             }
-            containerFunctionService.createContainerFunction(buildContainerCreateParam(param));
+            ContainerFunctionCreateParam cp = buildContainerCreateParam(param);
+            cp.setRateLimitTemplateId(rateLimitTemplate.getId());
+            containerFunctionService.createContainerFunction(cp);
             return;
         }
         // 非容器算子：校验 → 落一行 Function → 按类型建参数（编排骨架）
@@ -478,6 +511,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         String version = checkVersionAndApiUnique(param);
         FunctionLanguageEnum language = resolveLanguageAndValidate(param, version);
         Function func = buildAndSaveFunction(param, model, version, language);
+        applyRateLimitToFunction(func, rateLimitTemplate);
         saveTypedParams(func, param, language);
     }
 
@@ -554,6 +588,47 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 .build();
         save(func);
         return func;
+    }
+
+    /**
+     * 解析限流模板：指定 ID 则按 ID 查找，未指定则取默认模板（ID 最小）；模板不存在或已禁用时拒绝创建。
+     */
+    private FunctionRateLimitTemplate resolveRateLimitTemplate(Long templateId) {
+        FunctionRateLimitTemplate template;
+        if (templateId != null) {
+            template = rateLimitTemplateService.getById(templateId);
+            PreconditionUtils.checkArgument(template != null,
+                    "限流模板不存在：" + templateId, HttpStatus.BAD_REQUEST);
+        } else {
+            template = rateLimitTemplateService.getDefaultTemplate();
+            PreconditionUtils.checkArgument(template != null,
+                    "系统未配置限流默认模板，请联系管理员", HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+        PreconditionUtils.checkArgument(template.getEnabled() != null && template.getEnabled() == 1,
+                "限流模板已禁用：" + template.getName(), HttpStatus.BAD_REQUEST);
+        return template;
+    }
+
+    /**
+     * 将限流模板配置快照写入 Function 并更新：模板 ID 与配置 JSON 均为创建后不可变字段。
+     */
+    private void applyRateLimitToFunction(Function func, FunctionRateLimitTemplate template) {
+        RateLimitConfig config = RateLimitConfig.builder()
+                .timeoutMs(template.getTimeoutMs())
+                .retryCount(template.getRetryCount())
+                .retryIntervalMs(template.getRetryIntervalMs())
+                .tpsLimit(template.getTpsLimit())
+                .maxConcurrency(template.getMaxConcurrency())
+                .enabled(template.getEnabled())
+                .build();
+        try {
+            func.setRateLimitTemplateId(template.getId());
+            func.setRateLimitConfig(objectMapper.writeValueAsString(config));
+            updateById(func);
+        } catch (JsonProcessingException e) {
+            log.error("限流配置序列化失败：{}", e.getMessage());
+            throw new BusinessException("限流配置序列化失败：" + e.getMessage());
+        }
     }
 
     /**
@@ -755,28 +830,8 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                         .runningStatus(runningFunctions.contains(func.getApi())
                                 ? FunctionRuntimeStatusEnum.RUNNING
                                 : FunctionRuntimeStatusEnum.NOT_RUNNING)
-                        .containerKey(func.getContainerKey())
                         .build()
         ).collect(Collectors.toList());
-
-        // 容器算子：批量查运行实例 phase，回填 containerPhase
-        List<String> containerKeys = records.stream()
-                .filter(r -> r.getType() == FunctionTypeEnum.CONTAINER && r.getContainerKey() != null)
-                .map(FunctionInfoVO::getContainerKey)
-                .collect(Collectors.toList());
-        if (!containerKeys.isEmpty()) {
-            Map<String, ContainerPhaseEnum> phaseMap = containerInstanceMapper.selectList(
-                    new LambdaQueryWrapper<FunctionContainerInstance>()
-                            .in(FunctionContainerInstance::getContainerKey, containerKeys)
-                            .select(FunctionContainerInstance::getContainerKey, FunctionContainerInstance::getPhase)
-            ).stream().collect(Collectors.toMap(
-                    FunctionContainerInstance::getContainerKey,
-                    FunctionContainerInstance::getPhase,
-                    (a, b) -> a));
-            records.stream()
-                    .filter(r -> r.getType() == FunctionTypeEnum.CONTAINER && r.getContainerKey() != null)
-                    .forEach(r -> r.setContainerPhase(phaseMap.get(r.getContainerKey())));
-        }
 
         return new Page<FunctionInfoVO>()
                 .setRecords(records)
@@ -1487,8 +1542,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                         .parameters(param.getParameters())
                         .build();
                 var containerResultJson = executeFunction(containerExecuteParam);
-                return objectMapper.readValue(containerResultJson, new TypeReference<Map<String, Object>>() {
-                });
+                return objectMapper.readValue(containerResultJson, Object.class);
 
             default:
                 throw new BusinessException("不支持的函数类型：" + function.getType());

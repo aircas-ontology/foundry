@@ -4,6 +4,7 @@ import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.ontology.composite.CompositeFunctionCatalog;
 import com.aircas.ptr.foundry.ontology.config.ContainerOperatorProperties;
+import com.aircas.ptr.foundry.ontology.model.dto.RateLimitConfig;
 import com.aircas.ptr.foundry.ontology.model.dto.container.ContainerImageInfo;
 import com.aircas.ptr.foundry.ontology.model.dto.container.ContainerInterface;
 import com.aircas.ptr.foundry.ontology.model.dto.container.ContainerInterfaceDoc;
@@ -19,11 +20,13 @@ import com.aircas.ptr.foundry.ontology.model.po.Function;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionContainerInstance;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionContainerUpload;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionParamPO;
+import com.aircas.ptr.foundry.ontology.model.po.FunctionRateLimitTemplate;
 import com.aircas.ptr.foundry.ontology.model.vo.FunctionParameterVO;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.FunctionMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.FunctionContainerInstanceMapper;
 import com.aircas.ptr.foundry.ontology.service.ContainerFunctionService;
 import com.aircas.ptr.foundry.ontology.service.FunctionParamService;
+import com.aircas.ptr.foundry.ontology.service.FunctionRateLimitTemplateService;
 import com.aircas.ptr.foundry.ontology.service.OpenApiProbeService;
 import com.aircas.ptr.foundry.ontology.utils.ContainerNodeForwarder;
 import com.aircas.ptr.foundry.ontology.utils.ContainerNodeIdentity;
@@ -98,6 +101,10 @@ public class ContainerFunctionServiceImpl implements ContainerFunctionService {
 
     @Resource
     private ContainerNodeForwarder containerNodeForwarder;
+
+    /** 限流配置模板服务：容器算子每条派生 function 均需写入模板快照 */
+    @Resource
+    private FunctionRateLimitTemplateService rateLimitTemplateService;
 
     // 序列化入库时忽略 null：docker_config 只落接口级内容（{"interfaces":[...]}），不携带容器级空字段
     private final ObjectMapper objectMapper = new ObjectMapper()
@@ -218,23 +225,42 @@ public class ContainerFunctionServiceImpl implements ContainerFunctionService {
         String containerKey = UUID.randomUUID().toString().replace("-", "");
 
         // 容器级唯一性校验（一容器=一实例，保存期拦截，避免存入 start 才爆的算子）：
+        // 多节点部署下端口与容器名按节点隔离（每台机器各有独立 docker daemon），故校验范围限定在本节点；
+        // 单节点模式 node_ip 为空，查同为空的历史记录，保持原行为。
         // 1) 容器名：用户 --name 优先，否则平台默认 foundry-ctr-<key>（UUID 天然唯一）；docker 容器名全局唯一，不得与已注册实例重名。
         // 2) 宿主端口：一宿主端口=一容器算子，不得与任何已注册实例的 host_port 重复。
         String userContainerName = DockerRunCommandParser.parseContainerName(param.getRunCommand());
         String containerName = (userContainerName != null && !userContainerName.isBlank())
                 ? userContainerName
                 : DockerCommandExecutor.defaultContainerName(containerKey);
-        boolean portTaken = containerInstanceMapper.selectCount(new LambdaQueryWrapper<FunctionContainerInstance>()
+        LambdaQueryWrapper<FunctionContainerInstance> nodeScope = new LambdaQueryWrapper<>();
+        if (containerNodeIdentity.isMultiNode()) {
+            nodeScope.eq(FunctionContainerInstance::getNodeIp, containerNodeIdentity.nodeIp());
+        } else {
+            nodeScope.isNull(FunctionContainerInstance::getNodeIp);
+        }
+        boolean portTaken = containerInstanceMapper.selectCount(nodeScope
                 .eq(FunctionContainerInstance::getHostPort, portMapping.getHostPort())) > 0;
         PreconditionUtils.checkArgument(!portTaken,
                 "宿主端口 " + portMapping.getHostPort() + " 已被其他容器算子占用，请更换 -p 端口映射", HttpStatus.BAD_REQUEST);
-        boolean nameTaken = containerInstanceMapper.selectCount(new LambdaQueryWrapper<FunctionContainerInstance>()
+        LambdaQueryWrapper<FunctionContainerInstance> nameScope = new LambdaQueryWrapper<>();
+        if (containerNodeIdentity.isMultiNode()) {
+            nameScope.eq(FunctionContainerInstance::getNodeIp, containerNodeIdentity.nodeIp());
+        } else {
+            nameScope.isNull(FunctionContainerInstance::getNodeIp);
+        }
+        boolean nameTaken = containerInstanceMapper.selectCount(nameScope
                 .eq(FunctionContainerInstance::getContainerName, containerName)) > 0;
         PreconditionUtils.checkArgument(!nameTaken,
                 "容器名与已注册容器算子重名：" + containerName + "，请在启动命令中更换 --name", HttpStatus.BAD_REQUEST);
 
         List<String> createdApis = new ArrayList<>();
         Set<String> batchApis = new HashSet<>();
+        // 限流模板快照：容器算子每条派生 function 均写入同一份配置快照
+        FunctionRateLimitTemplate rateLimitTemplate = rateLimitTemplateService.getById(param.getRateLimitTemplateId());
+        PreconditionUtils.checkArgument(rateLimitTemplate != null,
+                "限流模板不存在：" + param.getRateLimitTemplateId(), HttpStatus.BAD_REQUEST);
+        String rateLimitConfigJson = buildRateLimitConfigJson(rateLimitTemplate);
         for (ContainerInterface itf : param.getSelectedInterfaces()) {
             String itfApi = itf.getApi() != null ? itf.getApi()
                     : (itf.getMethod() + " " + itf.getPath());
@@ -262,6 +288,8 @@ public class ContainerFunctionServiceImpl implements ContainerFunctionService {
                     .description(joinDesc(param.getDescription(), itf.getDescription()))
                     .containerKey(containerKey)
                     .dockerConfig(writeJson(config))
+                    .rateLimitTemplateId(rateLimitTemplate.getId())
+                    .rateLimitConfig(rateLimitConfigJson)
                     .build();
             functionMapper.insert(function);
 
@@ -405,6 +433,21 @@ public class ContainerFunctionServiceImpl implements ContainerFunctionService {
         } catch (Exception e) {
             throw new BusinessException("容器算子配置序列化失败：" + e.getMessage());
         }
+    }
+
+    private String buildRateLimitConfigJson(FunctionRateLimitTemplate template) {
+        if (template == null) {
+            return null;
+        }
+        RateLimitConfig config = RateLimitConfig.builder()
+                .timeoutMs(template.getTimeoutMs())
+                .retryCount(template.getRetryCount())
+                .retryIntervalMs(template.getRetryIntervalMs())
+                .tpsLimit(template.getTpsLimit())
+                .maxConcurrency(template.getMaxConcurrency())
+                .enabled(template.getEnabled())
+                .build();
+        return writeJson(config);
     }
 
     private List<ContainerInterfaceParam> nullSafe(List<ContainerInterfaceParam> list) {

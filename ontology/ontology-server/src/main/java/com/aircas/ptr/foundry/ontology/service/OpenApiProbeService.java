@@ -3,6 +3,8 @@ package com.aircas.ptr.foundry.ontology.service;
 import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.ontology.model.dto.container.ContainerInterface;
 import com.aircas.ptr.foundry.ontology.model.dto.container.ContainerInterfaceParam;
+import com.aircas.ptr.foundry.ontology.model.param.ExternalApiConfig;
+import com.aircas.ptr.foundry.ontology.model.param.ExternalApiConfig.PortDefinition;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.Operation;
 import io.swagger.v3.oas.models.PathItem;
@@ -290,5 +292,91 @@ public class OpenApiProbeService {
             }
         }
         return "";
+    }
+
+    /**
+     * 将探查到的单个接口转换为外部API算子配置（{@link ExternalApiConfig}），
+     * 前端据此一键填充 endpoint、method、inputs、outputs，免去手工逐个添加端口。
+     *
+     * @param iface   探查返回的接口定义
+     * @param baseUrl 用户提供的接口基地址（如 http://host:port），与 iface.path 拼接为完整 endpoint
+     */
+    public ExternalApiConfig toExternalApiConfig(ContainerInterface iface, String baseUrl) {
+        String base = baseUrl != null ? baseUrl.trim() : "";
+        if (base.endsWith("/")) {
+            base = base.substring(0, base.length() - 1);
+        }
+        String endpoint = base + (iface.getPath() != null ? iface.getPath() : "");
+
+        List<PortDefinition> inputs = new ArrayList<>();
+        if (iface.getInputParameters() != null) {
+            for (ContainerInterfaceParam p : iface.getInputParameters()) {
+                inputs.add(toPortDefinition(p));
+            }
+        }
+
+        List<PortDefinition> outputs = new ArrayList<>();
+        if (iface.getOutputParameters() != null) {
+            for (ContainerInterfaceParam p : iface.getOutputParameters()) {
+                outputs.add(toPortDefinition(p));
+            }
+        }
+
+        return ExternalApiConfig.builder()
+                .endpoint(endpoint)
+                .method(iface.getMethod())
+                .inputs(inputs)
+                .outputs(outputs)
+                .build();
+    }
+
+    /**
+     * OpenAPI 参数 → 外部API端口定义：映射类型名（integer→int、number→double、boolean→bool、array→list），
+     * 映射位置（in → location），递归转换子字段。
+     */
+    private PortDefinition toPortDefinition(ContainerInterfaceParam p) {
+        List<PortDefinition> childFields = null;
+        if (p.getFields() != null && !p.getFields().isEmpty()) {
+            childFields = new ArrayList<>();
+            for (ContainerInterfaceParam child : p.getFields()) {
+                childFields.add(toPortDefinition(child));
+            }
+        }
+        return PortDefinition.builder()
+                .name(p.getName())
+                .type(mapOpenApiType(p.getType()))
+                .description(p.getDescription())
+                .required(p.getRequired())
+                .location(mapLocation(p.getIn()))
+                .fields(childFields)
+                .build();
+    }
+
+    /** OpenAPI 类型 → 平台类型 */
+    private String mapOpenApiType(String openApiType) {
+        if (openApiType == null) {
+            return "string";
+        }
+        return switch (openApiType.toLowerCase(Locale.ROOT)) {
+            case "integer" -> "int";
+            case "number" -> "double";
+            case "boolean" -> "bool";
+            case "array" -> "list";
+            case "object" -> "object";
+            default -> "string";
+        };
+    }
+
+    /** OpenAPI 参数位置 → 外部API落点 */
+    private String mapLocation(String in) {
+        if (in == null) {
+            return ExternalApiConfig.LOCATION_BODY;
+        }
+        return switch (in.toLowerCase(Locale.ROOT)) {
+            case "query" -> ExternalApiConfig.LOCATION_QUERY;
+            case "header" -> ExternalApiConfig.LOCATION_HEADER;
+            case "path" -> ExternalApiConfig.LOCATION_PATH;
+            default -> ExternalApiConfig.LOCATION_BODY;
+        };
     }
 }

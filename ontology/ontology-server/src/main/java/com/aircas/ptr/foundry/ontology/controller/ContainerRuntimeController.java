@@ -4,6 +4,7 @@ import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionContainerInstance;
 import com.aircas.ptr.foundry.ontology.model.vo.ContainerRuntimeVO;
 import com.aircas.ptr.foundry.ontology.service.ContainerLifecycleService;
+import com.aircas.ptr.foundry.ontology.service.FunctionService;
 import com.aircas.ptr.foundry.ontology.utils.ContainerNodeForwarder;
 import com.aircas.ptr.foundry.ontology.utils.ContainerNodeIdentity;
 import io.swagger.v3.oas.annotations.Operation;
@@ -32,6 +33,9 @@ public class ContainerRuntimeController {
 
     @Resource
     private ContainerLifecycleService containerLifecycleService;
+
+    @Resource
+    private FunctionService functionService;
 
     @Resource
     private ContainerNodeIdentity containerNodeIdentity;
@@ -72,6 +76,13 @@ public class ContainerRuntimeController {
     public RestResult<ContainerRuntimeVO> refresh(@RequestParam String containerKey) {
         return RestResult.ofData(control(containerKey, "状态刷新",
                 key -> ContainerRuntimeVO.from(containerLifecycleService.refresh(key))));
+    }
+
+    @Operation(summary = "清理容器算子磁盘文件与实例记录（多节点删除转发入口，归属节点本地执行）")
+    @PostMapping("/cleanup_files")
+    public RestResult<Void> cleanupFiles(@RequestParam String containerKey) {
+        functionService.cleanupContainerLocal(containerKey);
+        return RestResult.success();
     }
 
     /**

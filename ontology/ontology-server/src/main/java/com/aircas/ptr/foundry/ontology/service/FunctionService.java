@@ -56,6 +56,13 @@ public interface FunctionService extends IService<Function> {
     void deleteByApi(String api, String version);
 
     /**
+     * 多节点部署下，删除容器算子最后一个接口后，归属节点本地执行的清理：
+     * 停止 docker 容器、删除镜像 tar 与接口文档磁盘文件、删除实例记录。
+     * 由清理转发端点调用，不再做二次转发。
+     */
+    void cleanupContainerLocal(String containerKey);
+
+    /**
      * 创建函数版本：新版本号必须大于同 api 下已有最大版本号，初始为未发布状态
      */
     void createFunction(FunctionCreateParam param);

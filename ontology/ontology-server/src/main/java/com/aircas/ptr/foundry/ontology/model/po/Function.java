@@ -129,4 +129,19 @@ public class Function {
      * 结构见 {@link com.aircas.ptr.foundry.ontology.model.dto.container.ContainerOperatorConfig} 的 interfaces 字段
      */
     private String dockerConfig;
+
+    /**
+     * 选用的限流配置模板 ID（创建时选定，不可修改）；为 NULL 表示使用系统默认模板。
+     * 创建后锁定（updateStrategy=NEVER），换模板请走新版本。
+     */
+    @TableField(updateStrategy = FieldStrategy.NEVER)
+    private Long rateLimitTemplateId;
+
+    /**
+     * 限流配置快照 JSON（从模板复制，创建后不可修改）。
+     * 结构：{"timeoutMs":10000,"retryCount":2,"retryIntervalMs":500,"tpsLimit":50,"maxConcurrency":20,"enabled":1}
+     * 创建后锁定（updateStrategy=NEVER），与模板解耦，模板修改不影响历史函数。
+     */
+    @TableField(updateStrategy = FieldStrategy.NEVER)
+    private String rateLimitConfig;
 }

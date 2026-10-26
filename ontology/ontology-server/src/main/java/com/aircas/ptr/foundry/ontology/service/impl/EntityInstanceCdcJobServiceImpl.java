@@ -38,7 +38,8 @@ import java.util.stream.Collectors;
  * 则为主表，行数据同步为实例文档；否则视为从表（关联属性表），暂不同步。
  * 一条记录可能同时是多个本体的主表（如继承场景），逐一同步。
  * <p>
- * 图库侧同步的是实例节点（{@code node}）与候选关系边（{@code relation}，状态 DELETE）：
+ * 图库侧同步的是实例节点（{@code node}）：实例关系边（{@code relation}）不由这里生成，
+ * 图库只保留真实成立的边，由行为函数判定、手动激活或导入导出写入。
  * ES 与图库各自独立成段处理，图库失败只记录日志、不影响实例文档写入。
  */
 @Slf4j
@@ -99,7 +100,7 @@ public class EntityInstanceCdcJobServiceImpl implements EntityInstanceCdcJobServ
                         schema, table, pkProp.getOntologyUniqueIdentifier(), oldPkValue));
                 deleteGraphNode(pkProp.getOntologyUniqueIdentifier(), oldPkValue);
             }
-            // 主键变更等同于新增实例：旧节点及相邻边已删，候选边必须重铺
+            // 主键变更等同于新增实例：旧节点及相邻边已删，按新主键重建节点
             syncInstance(schema, table, after, pkProp, pkChanged);
         }
         return true;
@@ -131,10 +132,10 @@ public class EntityInstanceCdcJobServiceImpl implements EntityInstanceCdcJobServ
      * 将一行主表数据写入（upsert）ontology_instance 索引。
      * save 走实体索引路径，routing 由 @Routing("pk") 从文档 pk 自动解析，满足 _routing.required。
      *
-     * @param ensureRelations 是否无条件补齐该实例的候选关系边（湖侧新增行 / 主键变更重建传 true）
+     * @param rebuildNode 是否按本体属性回查后完整重建图节点（湖侧新增行 / 主键变更重建传 true）
      */
     private void syncInstance(String schema, String table, Map<String, Object> row, OntologyProperty pkProp,
-                              boolean ensureRelations) {
+                              boolean rebuildNode) {
         String pkColumn = pkProp.getDatasourceColumnName();
         Object pkValue = OntologyInstanceConverter.getColumnValue(row, pkColumn);
         if (pkValue == null) {
@@ -167,34 +168,35 @@ public class EntityInstanceCdcJobServiceImpl implements EntityInstanceCdcJobServ
         if (dto != null) {
             ontologyInstanceRepository.save(dto);
             log.info("数据湖[{}.{}]实例文档同步成功, pk={}", schema, table, dto.getPk());
-            syncGraphNode(meta.getUniqueIdentifier(), table, row, pkValue, dto.getName(), ensureRelations);
+            syncGraphNode(meta.getUniqueIdentifier(), table, row, pkValue, dto.getName(), rebuildNode);
         }
     }
 
     /**
-     * 单行实例 -> 图节点与候选关系边（展示名与实例文档 name 同口径，避免检索与图两侧名称不一致）。
+     * 单行实例 -> 图节点（展示名与实例文档 name 同口径，避免检索与图两侧名称不一致）。
      * <p>
-     * 湖侧新增行 / 主键变更重建复用既有接口 {@code completeEntityNodeAndRelations}：它按本体主键属性取主键、
-     * 按名称键属性取展示名，建（覆盖）节点后按 From/To 命中该本体的全部关系补候选边，
-     * 且按 (link, from, to) 判存、只补缺失对，与 API 建关系时的铺边和全量同步铺边交错执行都不会产生第二份边。
-     * 普通字段更新只刷展示名——既有接口会无条件补边，每条 update 都要回读对端全部节点，代价过高；
-     * 但若刷名时发现图库里其实没有该节点（例如图库被清过），仍补一次边，避免留下无边节点。
+     * 湖侧新增行 / 主键变更重建走 {@code completeEntityNode}：它按本体主键属性取主键、按名称键属性取展示名，
+     * 建（覆盖）节点。实例关系边不在这里生成——图库里只保留真实成立（ENABLE/DISABLE）的边，
+     * 由行为函数判定、手动激活或导入导出点亮。
+     * 普通字段更新只刷展示名，不回查本体属性；若刷名时发现图库里其实没有该节点（例如图库被清过），
+     * {@code upsertEntityNode} 会直接建出来。
+     *
+     * @param rebuildNode 是否按本体属性回查后完整重建节点（湖侧新增行 / 主键变更重建传 true）
      */
     private void syncGraphNode(String ontologyUid, String table, Map<String, Object> row,
-                               Object pkValue, String displayName, boolean ensureRelations) {
+                               Object pkValue, String displayName, boolean rebuildNode) {
         if (!graphEnabled) {
             return;
         }
         try {
-            if (ensureRelations) {
-                // 既有接口：按本体的主键属性/名称键属性回查后建节点并补候选边
-                entityService.completeEntityNodeAndRelations(ontologyUid, row);
-                log.info("数据湖实例图节点与候选关系边补全, ontology={}, pk={}", ontologyUid, pkValue);
+            if (rebuildNode) {
+                // 既有接口：按本体的主键属性/名称键属性回查后建（覆盖）节点
+                entityService.completeEntityNode(ontologyUid, row);
+                log.info("数据湖实例图节点同步, ontology={}, pk={}", ontologyUid, pkValue);
                 return;
             }
-            // 普通字段更新只刷展示名；补边交给上面的新增路径
+            // 普通字段更新只刷展示名
             if (entityService.upsertEntityNode(ontologyUid, table, pkValue, displayName)) {
-                entityService.createCandidateRelationsForNodes(ontologyUid, List.of(pkValue));
                 log.info("数据湖实例图节点补建（图库此前无此节点）, ontology={}, pk={}", ontologyUid, pkValue);
             }
         } catch (Exception e) {
