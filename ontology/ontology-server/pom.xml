@@ -46,6 +46,12 @@
             <artifactId>spring-boot-starter-amqp</artifactId>
         </dependency>
 
+        <!-- Spring Data Redis（分布式限流） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+
         <!-- LiteFlow 规则引擎（函数编排），脚本组件使用 Groovy -->
         <dependency>
             <groupId>com.yomahub</groupId>

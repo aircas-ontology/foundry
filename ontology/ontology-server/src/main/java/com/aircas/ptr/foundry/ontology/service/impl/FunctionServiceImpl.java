@@ -72,6 +72,7 @@ import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyPropertyMap
 import com.aircas.ptr.foundry.ontology.service.ContainerFunctionService;
 import com.aircas.ptr.foundry.ontology.service.FunctionParamService;
 import com.aircas.ptr.foundry.ontology.service.FunctionRateLimitTemplateService;
+import com.aircas.ptr.foundry.ontology.service.RateLimitService;
 import com.aircas.ptr.foundry.ontology.service.FunctionService;
 import com.aircas.ptr.foundry.ontology.service.GroovyService;
 import com.aircas.ptr.foundry.ontology.utils.DockerCommandExecutor;
@@ -196,6 +197,10 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     /** 限流配置模板服务：创建函数时按 ID 取模板，复制配置快照写入 function 表 */
     @Resource
     private FunctionRateLimitTemplateService rateLimitTemplateService;
+
+    /** 分布式限流执行服务：Redis + Lua，跨实例 TPS + 并发检查 */
+    @Resource
+    private RateLimitService rateLimitService;
 
     private ObjectMapper objectMapper = new ObjectMapper()
             // 存进库的 fields 是 FunctionParamDTO 序列化结果（含 referenceType 等 VO 没有的字段），
@@ -664,6 +669,34 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     }
 
     /**
+     * 读取指定 api+version 的限流参数（tpsLimit, maxConcurrency）。
+     * 返回 [tpsLimit, maxConcurrency]，未启用或解析失败返回 [0, 0]。
+     */
+    private int[] resolveRateLimit(String functionApi, String version) {
+        var function = getOne(new LambdaQueryWrapper<Function>()
+                .select(Function::getRateLimitConfig)
+                .eq(Function::getApi, functionApi)
+                .eq(Function::getVersion, version)
+                .last("LIMIT 1"));
+        if (function == null || StringUtils.isEmpty(function.getRateLimitConfig())) {
+            return new int[]{0, 0};
+        }
+        try {
+            RateLimitConfig config = objectMapper.readValue(function.getRateLimitConfig(), RateLimitConfig.class);
+            if (config.getEnabled() == null || config.getEnabled() != 1) {
+                return new int[]{0, 0};
+            }
+            return new int[]{
+                    config.getTpsLimit() != null ? config.getTpsLimit() : 0,
+                    config.getMaxConcurrency() != null ? config.getMaxConcurrency() : 0
+            };
+        } catch (Exception e) {
+            log.warn("解析 rateLimitConfig 失败（api={}, version={}），跳过限流: {}", functionApi, version, e.getMessage());
+            return new int[]{0, 0};
+        }
+    }
+
+    /**
      * 按算子类型解析并写入 function_param（各类型互斥）：
      * <ul>
      *   <li>CUSTOMIZE：前端 IDE 声明优先，Groovy 未声明回退后端反射解析；</li>
@@ -881,6 +914,16 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     @Override
     @SneakyThrows
     public String executeFunction(FunctionExecuteParam param) {
+        // ---- 分布式限流检查（跨实例，Redis，按 api+version 粒度） ----
+        String rateLimitKey = param.getFunctionApi() + ":" + param.getVersion();
+        int[] limits = resolveRateLimit(param.getFunctionApi(), param.getVersion());
+        int tpsLimit = limits[0], maxConcurrency = limits[1];
+        if (tpsLimit > 0 || maxConcurrency > 0) {
+            boolean acquired = rateLimitService.acquire(rateLimitKey, tpsLimit, maxConcurrency);
+            if (!acquired) {
+                throw new BusinessException("算子调用频率超限，请稍后重试", HttpStatus.TOO_MANY_REQUESTS);
+            }
+        }
         runningFunctions.computeIfAbsent(param.getFunctionApi(), k -> new java.util.concurrent.atomic.AtomicInteger(0)).incrementAndGet();
         try {
             return doExecuteFunction(param);
@@ -888,6 +931,9 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
             java.util.concurrent.atomic.AtomicInteger count = runningFunctions.get(param.getFunctionApi());
             if (count != null && count.decrementAndGet() <= 0) {
                 runningFunctions.remove(param.getFunctionApi());
+            }
+            if (tpsLimit > 0 || maxConcurrency > 0) {
+                rateLimitService.release(rateLimitKey);
             }
         }
     }
