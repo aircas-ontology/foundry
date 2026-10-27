@@ -533,6 +533,28 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
     }
 
     @Override
+    public List<OntologyMetaInfoVO> queryMetaBySpaceAndName(String spaceName, String objectName) {
+        if (StringUtils.isEmpty(spaceName) || StringUtils.isEmpty(objectName)) {
+            return Lists.newArrayList();
+        }
+        var spaces = spaceService.list(new LambdaQueryWrapper<OntologySpace>()
+                .eq(OntologySpace::getApiName, spaceName)
+                .or().eq(OntologySpace::getDisplayName, spaceName));
+        if (CollectionUtils.isEmpty(spaces)) {
+            return Lists.newArrayList();
+        }
+        var spaceIds = spaces.stream().map(OntologySpace::getId).collect(Collectors.toList());
+        var metaList = list(new LambdaQueryWrapper<OntologyMeta>()
+                .eq(OntologyMeta::getStatus, Status.ENABLE.getValue())
+                .in(OntologyMeta::getOntologySpaceId, spaceIds)
+                .and(w -> w.eq(OntologyMeta::getApiName, objectName)
+                        .or().eq(OntologyMeta::getDisplayName, objectName)));
+        return metaList.stream()
+                .map(DataConverter::convert)
+                .collect(Collectors.toList());
+    }
+
+    @Override
     public List<OntologyMetaNodeVO> getOntologyTreeByByGroupId(String groupId) {
         LambdaQueryWrapper<OntologyMeta> queryWrapper;
         if (StringUtils.isEmpty(groupId)) {
