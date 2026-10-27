@@ -55,4 +55,16 @@ public class OntologyMetaMcpTools implements McpTools {
             @ToolParam(description = "本体空间 id（ontology_space 主键）") Integer spaceId) {
         return ontologyMetaService.listBySpaceId(spaceId);
     }
+
+    @Tool(description = """
+            按空间名称 + 对象名称精确查询本体。
+            当用户已知空间名称和对象名称（apiName 或 displayName），需要查找该对象的详细信息时使用。
+            先按空间名定位空间，再在该空间内按对象名精确匹配，返回匹配的本体列表。
+            无匹配时返回空列表。
+            """)
+    public List<OntologyMetaInfoVO> queryOntologyMetaBySpace(
+            @ToolParam(description = "空间名称（apiName 或 displayName）") String spaceName,
+            @ToolParam(description = "对象名称（apiName 或 displayName）") String objectName) {
+        return ontologyMetaService.queryMetaBySpaceAndName(spaceName, objectName);
+    }
 }

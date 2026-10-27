@@ -371,6 +371,58 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
     }
 
     @Override
+    public List<OntologySpaceVO> querySpaceByName(String name) {
+        if (StringUtils.isEmpty(name)) {
+            return Lists.newArrayList();
+        }
+        var spaces = list(new LambdaQueryWrapper<OntologySpace>()
+                .eq(OntologySpace::getApiName, name)
+                .or().eq(OntologySpace::getDisplayName, name));
+        if (CollectionUtils.isEmpty(spaces)) {
+            return Lists.newArrayList();
+        }
+        var spaceMap = spaces.stream().collect(Collectors.toMap(OntologySpace::getId, v -> v));
+        var metaMap = metaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>()
+                        .in(OntologyMeta::getOntologySpaceId, spaceMap.keySet()))
+                .stream().collect(Collectors.groupingBy(OntologyMeta::getOntologySpaceId));
+        Map<String, Integer> actionMap = actionMapper.countGroupByOntology().stream()
+                .collect(Collectors.toMap(OntologyStatisticsCountView::getOntologyUniqueIdentifier, OntologyStatisticsCountView::getCnt));
+        Map<String, Integer> propertyMap = propertyMapper.countGroupByOntology().stream()
+                .collect(Collectors.toMap(OntologyStatisticsCountView::getOntologyUniqueIdentifier, OntologyStatisticsCountView::getCnt));
+        Map<Integer, Integer> linkMap = linkMapper.countGroupByOntologySpace().stream()
+                .collect(Collectors.toMap(SpaceStatisticsCountView::getOntologySpaceId, SpaceStatisticsCountView::getCnt));
+
+        return spaceMap.values().stream()
+                .<OntologySpaceVO>map(space -> {
+                    int ontologyCnt = 0, actionCnt = 0, propertyCnt = 0, linkCnt = 0;
+                    var metaList = metaMap.get(space.getId());
+                    if (CollectionUtils.isNotEmpty(metaList)) {
+                        ontologyCnt = metaList.size();
+                        for (OntologyMeta meta : metaList) {
+                            var ontologyId = meta.getUniqueIdentifier();
+                            propertyCnt += propertyMap.getOrDefault(ontologyId, 0);
+                            actionCnt += actionMap.getOrDefault(ontologyId, 0);
+                        }
+                        linkCnt = linkMap.getOrDefault(space.getId(), 0);
+                    }
+                    return OntologySpaceVO.builder()
+                            .iconUrl(space.getIcon())
+                            .apiName(space.getApiName())
+                            .spaceId(space.getId())
+                            .displayName(space.getDisplayName())
+                            .description(space.getDescription())
+                            .ontologyCount(ontologyCnt)
+                            .actionCount(actionCnt)
+                            .propertyCount(propertyCnt)
+                            .linkCount(linkCnt)
+                            .createTime(space.getCreateTime())
+                            .updateTime(space.getUpdateTime())
+                            .build();
+                })
+                .collect(Collectors.toList());
+    }
+
+    @Override
     public OntologySpaceStatisticVO getStatistic(Integer spaceId) {
         //check space
         var space = spaceMapper.selectById(spaceId);

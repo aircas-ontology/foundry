@@ -24,6 +24,14 @@ public interface OntologySpaceService extends IService<OntologySpace> {
 
     List<OntologySpaceVO> querySpace();
 
+    /**
+     * 按名称精确查询空间（同时匹配 apiName 和 displayName，OR 关系）。
+     *
+     * @param name 空间名称（apiName 或 displayName）
+     * @return 匹配的空间列表，无匹配时返回空列表
+     */
+    List<OntologySpaceVO> querySpaceByName(String name);
+
     OntologySpaceStatisticVO getStatistic(Integer spaceId);
 
     void deleteSpace(Integer spaceId);

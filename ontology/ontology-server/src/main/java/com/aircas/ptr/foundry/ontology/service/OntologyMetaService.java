@@ -48,6 +48,18 @@ public interface OntologyMetaService extends IService<OntologyMeta> {
     List<OntologyMetaInfoVO> listBySpaceId(Integer spaceId);
 
     /**
+     * 按空间名称 + 对象名称精确查询本体。
+     *
+     * <p>先按 spaceName（匹配 apiName 或 displayName）定位空间，
+     * 再在该空间内按 objectName（匹配 apiName 或 displayName）精确查找本体。</p>
+     *
+     * @param spaceName  空间名称（apiName 或 displayName）
+     * @param objectName 对象名称（apiName 或 displayName）
+     * @return 匹配的本体列表，无匹配时返回空列表
+     */
+    List<OntologyMetaInfoVO> queryMetaBySpaceAndName(String spaceName, String objectName);
+
+    /**
      * 根据本地对象id（ontology_meta 主键）查询对象简要信息。
      *
      * @param id 本地对象id
