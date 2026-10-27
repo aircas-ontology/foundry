@@ -669,14 +669,14 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     }
 
     /**
-     * 读取指定 api 的限流参数（tpsLimit, maxConcurrency）。
-     * 同 api 所有版本共用同一配置，取任意一条即可。
+     * 读取指定 api+version 的限流参数（tpsLimit, maxConcurrency）。
      * 返回 [tpsLimit, maxConcurrency]，未启用或解析失败返回 [0, 0]。
      */
-    private int[] resolveRateLimitForApi(String functionApi) {
+    private int[] resolveRateLimit(String functionApi, String version) {
         var function = getOne(new LambdaQueryWrapper<Function>()
                 .select(Function::getRateLimitConfig)
                 .eq(Function::getApi, functionApi)
+                .eq(Function::getVersion, version)
                 .last("LIMIT 1"));
         if (function == null || StringUtils.isEmpty(function.getRateLimitConfig())) {
             return new int[]{0, 0};
@@ -691,7 +691,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                     config.getMaxConcurrency() != null ? config.getMaxConcurrency() : 0
             };
         } catch (Exception e) {
-            log.warn("解析 rateLimitConfig 失败（api={}），跳过限流: {}", functionApi, e.getMessage());
+            log.warn("解析 rateLimitConfig 失败（api={}, version={}），跳过限流: {}", functionApi, version, e.getMessage());
             return new int[]{0, 0};
         }
     }
@@ -914,11 +914,12 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     @Override
     @SneakyThrows
     public String executeFunction(FunctionExecuteParam param) {
-        // ---- 分布式限流检查（跨实例，Redis） ----
-        int[] limits = resolveRateLimitForApi(param.getFunctionApi());
+        // ---- 分布式限流检查（跨实例，Redis，按 api+version 粒度） ----
+        String rateLimitKey = param.getFunctionApi() + ":" + param.getVersion();
+        int[] limits = resolveRateLimit(param.getFunctionApi(), param.getVersion());
         int tpsLimit = limits[0], maxConcurrency = limits[1];
         if (tpsLimit > 0 || maxConcurrency > 0) {
-            boolean acquired = rateLimitService.acquire(param.getFunctionApi(), tpsLimit, maxConcurrency);
+            boolean acquired = rateLimitService.acquire(rateLimitKey, tpsLimit, maxConcurrency);
             if (!acquired) {
                 throw new BusinessException("算子调用频率超限，请稍后重试", HttpStatus.TOO_MANY_REQUESTS);
             }
@@ -932,7 +933,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 runningFunctions.remove(param.getFunctionApi());
             }
             if (tpsLimit > 0 || maxConcurrency > 0) {
-                rateLimitService.release(param.getFunctionApi());
+                rateLimitService.release(rateLimitKey);
             }
         }
     }
