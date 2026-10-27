@@ -140,9 +140,10 @@ public class AgentChatService {
                     String reply = replyBuffer.toString();
                     // 先落盘本轮 stage 状态（properties_proposed / relations_proposed 等），供下面确定性回查取数
                     sessionStageCollector.collectAndStore(sessionId, reply);
-                    // 再由状态机确定性判断是否推选择卡片（不依赖模型调工具/输出标记，在 done 之前推）
-                    // 传入当前请求的 datasourceId/spaceId，使解析器能感知前端已选状态，避免重复推卡
-                    selectionResolver.resolveForRound(sessionId, reply, param.getDatasourceId(), param.getSpaceId(), sink);
+                    // 再由状态机确定性判断是否推选择卡片（横幅 + 用户消息意图双信号，done 之前推）
+                    // 传入本轮用户消息与 datasourceId/spaceId，支持短确认推进、拒选/要选数据源的意图识别与推卡去重
+                    selectionResolver.resolveForRound(sessionId, param.getMessage(), reply,
+                            param.getDatasourceId(), param.getSpaceId(), sink);
                     sink.tryEmitComplete();
                 })
                 .doOnError(e -> sink.tryEmitComplete())
