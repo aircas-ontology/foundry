@@ -47,22 +47,44 @@ public class SessionStateStore {
     /** 会话参考文档 stage：由文档上传接口写入（非模型输出），正文经上下文单独渲染，不进状态块。 */
     public static final String STAGE_DOCUMENT_UPLOADED = "document_uploaded";
 
+    /** 第1步定义已被用户确认：后端在横幅/短确认消息时补录，等价于"定义已确立"，模型据此不再重复索要确认。 */
+    public static final String STAGE_OBJECT_CONFIRMED = "object_confirmed";
+
+    /** 用户明确表示不选数据源（走文档-only 或稍后上传）：存在时系统不再推数据源卡，模型不得再提及该卡片。 */
+    public static final String STAGE_DATASOURCE_SKIPPED = "datasource_skipped";
+
+    /**
+     * 内部 marker：数据源/空间卡片本轮"未选择"状态下已推过，避免每轮重复推同一张卡。
+     * 不渲染进 system 状态块；用户显式要求再选/换数据源时由 {@code SelectionResolver} 调 {@link #remove} 清除后重推。
+     */
+    public static final String STAGE_DATASOURCE_CARD_PUSHED = "datasource_card_pushed";
+    public static final String STAGE_SPACE_CARD_PUSHED = "space_card_pushed";
+
     /**
      * 需要跨轮持久化并按此固定顺序渲染的 stage。
      * 除构建阶段状态外，还包含用户在对话中选定的空间（space_selected）与数据源（datasource_selected），
      * 以免长对话下滑动窗口淘汰后丢失选择；persisted / persist_failed 为终态信号，不在此列。
      * document_uploaded 在此列表中仅为复用 record 的持久化/清理机制，其正文很长且含换行，
      * 由 {@code AgentChatService} 以【参考文档】纯文本段单独注入，{@link #renderState} 渲染时排除。
+     * *_card_pushed 为后端内部推卡去重 marker，同样只借用持久化/清理机制，不渲染给模型。
      */
     private static final List<String> PERSISTED_STAGES = List.of(
             "space_selected",
+            STAGE_OBJECT_CONFIRMED,
             "datasource_selected",
+            STAGE_DATASOURCE_SKIPPED,
             STAGE_DOCUMENT_UPLOADED,
             "object_defined",
             "properties_proposed",
             "properties_selected",
             "relations_proposed",
-            "relations_selected");
+            "relations_selected",
+            STAGE_DATASOURCE_CARD_PUSHED,
+            STAGE_SPACE_CARD_PUSHED);
+
+    /** 渲染状态块时排除的 stage：文档正文（单独成段注入）与内部推卡 marker。 */
+    private static final List<String> NON_RENDERED_STAGES =
+            List.of(STAGE_DOCUMENT_UPLOADED, STAGE_DATASOURCE_CARD_PUSHED, STAGE_SPACE_CARD_PUSHED);
 
     /**
      * sessionId -> (stage -> 原始 JSON 字符串)。Caffeine 提供容量与访问 TTL 双重回收；
@@ -115,8 +137,8 @@ public class SessionStateStore {
         }
         ObjectNode root = objectMapper.createObjectNode();
         for (String stage : PERSISTED_STAGES) {
-            // 文档正文不随状态块渲染（过长且已转义难读），由 AgentChatService 以【参考文档】段单独注入
-            if (STAGE_DOCUMENT_UPLOADED.equals(stage)) {
+            // 文档正文由 AgentChatService 以【参考文档】段单独注入；内部推卡 marker 对模型无意义，均不渲染
+            if (NON_RENDERED_STAGES.contains(stage)) {
                 continue;
             }
             String raw = stageMap.get(stage);
@@ -149,6 +171,19 @@ public class SessionStateStore {
         }
         Map<String, String> stageMap = states.getIfPresent(sessionId);
         return stageMap == null ? null : stageMap.get(stage);
+    }
+
+    /**
+     * 删除指定会话某个 stage 的记录（如用户改变主意时清除 datasource_skipped / 推卡 marker）。
+     */
+    public void remove(String sessionId, String stage) {
+        if (sessionId == null || stage == null) {
+            return;
+        }
+        Map<String, String> stageMap = states.getIfPresent(sessionId);
+        if (stageMap != null) {
+            stageMap.remove(stage);
+        }
     }
 
     /**
