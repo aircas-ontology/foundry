@@ -8,7 +8,10 @@ import com.aircas.ptr.foundry.agent.server.session.SessionStageCollector;
 import com.aircas.ptr.foundry.agent.server.session.SessionStateStore;
 import com.aircas.ptr.foundry.agent.server.stream.AgentStreamEvents;
 import com.aircas.ptr.foundry.agent.server.stream.SelectionResolver;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -39,6 +42,7 @@ import org.reactivestreams.Subscription;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AgentChatService {
 
     /**
@@ -61,6 +65,9 @@ public class AgentChatService {
 
     /** 确定性选择卡片解析器：识别模型输出的 request_selection 标记，程序化取数推 selection_request。 */
     private final SelectionResolver selectionResolver;
+
+    /** 复用 Spring Boot 自动装配的统一 ObjectMapper Bean，用于回读 document_uploaded 状态块中的文档正文。 */
+    private final ObjectMapper objectMapper;
 
     /** 活跃流订阅注册表：sessionId → Subscription，供中断接口取消模型 token 流。 */
     private final Map<String, Subscription> activeSubscriptions = new ConcurrentHashMap<>();
@@ -210,7 +217,38 @@ public class AgentChatService {
             sb.append("\n【已记录的对象构建状态】（跨轮持久，优先于短期记忆；当上方前端入参未提供 spaceId/datasourceId 时，以本块中的 space_selected/datasource_selected 为准）：")
               .append(state);
         }
+        // 注入会话参考文档正文（第2步上传，document_uploaded 状态块；正文不随状态块渲染，单独成段）
+        String documentSection = renderDocumentSection(sessionId);
+        if (documentSection != null) {
+            sb.append(documentSection);
+        }
         return sb.toString();
+    }
+
+    /**
+     * 把 {@code document_uploaded} 状态块渲染为【参考文档】上下文段；无文档或解析失败返回 null（不阻断对话）。
+     */
+    private String renderDocumentSection(String sessionId) {
+        String raw = sessionStateStore.getStage(sessionId, SessionStateStore.STAGE_DOCUMENT_UPLOADED);
+        if (raw == null) {
+            return null;
+        }
+        try {
+            JsonNode doc = objectMapper.readTree(raw);
+            String fileName = doc.path("fileName").asText("");
+            String content = doc.path("content").asText("");
+            if (content.isBlank()) {
+                return null;
+            }
+            boolean truncated = doc.path("truncated").asBoolean(false);
+            return "\n【参考文档】（" + fileName + "，用户在第2步上传"
+                    + (truncated ? "，超长已截断" : "")
+                    + "；第1步定义草案、第3步对象定义、第4步属性推导都必须结合本文档内容，禁止声称没有文档或无法读取文档）：\n"
+                    + content + "\n";
+        } catch (Exception e) {
+            log.warn("[AgentChat] document_uploaded 状态块解析失败，跳过文档注入 sessionId={}", sessionId, e);
+            return null;
+        }
     }
 
     /**

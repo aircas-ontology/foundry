@@ -27,7 +27,8 @@ import java.util.regex.Pattern;
  * <p>可依赖的稳定信号有二：
  * <ol>
  *   <li><b>步骤横幅</b>：提示词工作原则#4 要求每步开头输出 {@code 【第N步/共11步】}，模型对此遵从度极高。
- *       第0步→space_select、第2步或第3步→datasource_select。本类扫描回复中<b>全部</b>横幅编号（而非只看第一个），
+ *       第0步→space_select、第2步或第3步→datasource_select（已上传参考文档时第3步不再强制推数据源卡，支持
+ *       文档-only 构建）。本类扫描回复中<b>全部</b>横幅编号（而非只看第一个），
  *       以覆盖"确认上一步 + 提及下一步"同轮出现多个横幅的场景。</li>
  *   <li><b>已持久化的 proposed 状态块</b>：第4/5步模型会稳定输出 {@code properties_proposed} /
  *       {@code relations_proposed} 的 JSON（纯文本产出），本类据此推 properties_select / relations_select。</li>
@@ -125,16 +126,19 @@ public class SelectionResolver {
         if (steps.contains(0) && sessionStateStore.getStage(sessionId, "space_selected") == null && spaceId == null) {
             return SCENE_SPACE;
         }
-        // 数据源：横幅含第2步（数据源选择步）或第3步（扫表步，兜底模型跳过了第2步横幅的情况）；
+        // 数据源：横幅含第2步（资料导入步）或第3步（扫表步，兜底模型跳过了第2步横幅的情况）；
         // 均需 space 已选定（状态块或前端入参）、datasource 尚未选中（状态块和前端入参皆无），避免误推
         // 额外检查：若已进入属性/关系阶段（properties_proposed/relations_proposed 存在），则不再回退推数据源
+        // 文档-only 模式：已上传参考文档时，第3步横幅不再强制推数据源卡（用户可只用文档构建对象）；
+        // 第2步横幅仍推，保留"文档+数据源"同时使用的入口，用户可忽略卡片
         // 注意：不再使用 replyText.contains("数据源") 等关键词兜底——模型在任意步骤提及"数据源"都会误触发推卡
         boolean spaceSelected = sessionStateStore.getStage(sessionId, "space_selected") != null || spaceId != null;
         boolean datasourceSelected = sessionStateStore.getStage(sessionId, "datasource_selected") != null || datasourceId != null;
+        boolean documentUploaded = sessionStateStore.getStage(sessionId, SessionStateStore.STAGE_DOCUMENT_UPLOADED) != null;
         boolean inPropertiesOrLater = sessionStateStore.getStage(sessionId, "properties_proposed") != null
                 || sessionStateStore.getStage(sessionId, "relations_proposed") != null;
         if (spaceSelected && !datasourceSelected && !inPropertiesOrLater
-                && (steps.contains(2) || steps.contains(3))) {
+                && (steps.contains(2) || (steps.contains(3) && !documentUploaded))) {
             return SCENE_DATASOURCE;
         }
         return null;
