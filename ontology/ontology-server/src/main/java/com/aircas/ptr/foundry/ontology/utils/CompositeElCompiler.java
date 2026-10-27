@@ -14,6 +14,8 @@ import com.aircas.ptr.foundry.ontology.model.param.CompositeNode;
 import com.aircas.ptr.foundry.ontology.model.param.CompositeParameter;
 import com.aircas.ptr.foundry.ontology.model.param.CompositePortMapping;
 import com.aircas.ptr.foundry.ontology.model.param.CompositeTransformConfig;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -40,6 +42,7 @@ import java.util.Set;
  * 不做任何解析或归一化。</p>
  * <p>本类不依赖 Spring 容器与 LiteFlow 运行时，便于单元测试。</p>
  */
+@Slf4j
 public final class CompositeElCompiler {
 
     /** 空支路/空循环体占位节点 id，由运行期注册为普通组件 */
@@ -56,6 +59,9 @@ public final class CompositeElCompiler {
 
     /** 分支节点假支路端口 */
     private static final String PORT_FALSE = "false";
+
+    /** JSON 序列化工具 */
+    private static final ObjectMapper objectMapper = new ObjectMapper();
 
     private CompositeElCompiler() {
     }
@@ -272,6 +278,14 @@ public final class CompositeElCompiler {
             } else if (kind == CompositeNodeKindEnum.TRANSFORM) {
                 CompositeTransformConfig transformConfig = node.getTransformConfig();
                 if (transformConfig != null) {
+                    plan.setTransformMappingMode(transformConfig.getMappingMode());
+                    if ("json".equals(transformConfig.getMappingMode()) && transformConfig.getMappings() != null) {
+                        try {
+                            plan.setTransformMappings(objectMapper.writeValueAsString(transformConfig.getMappings()));
+                        } catch (Exception e) {
+                            log.warn("转换节点[{}] JSON 映射序列化失败", elId, e);
+                        }
+                    }
                     plan.setTransformLanguage(transformConfig.getLanguage());
                     plan.setTransformScript(transformConfig.getScript());
                 }

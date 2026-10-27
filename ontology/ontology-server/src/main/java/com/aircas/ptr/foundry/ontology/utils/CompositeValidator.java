@@ -518,9 +518,8 @@ public final class CompositeValidator {
     private static boolean typeEquals(String source, String target) {
         String s = isBlank(source) ? "object" : source.trim().toLowerCase();
         String t = isBlank(target) ? "object" : target.trim().toLowerCase();
-        // 脚本算子的 result 出参运行期是 OBJECT 装箱（真实类型由用户代码决定），
-        // 对外参数声明为 object 表示"不限定具体类型"，视为通配而不是类型冲突。
-        return s.equals(t) || "object".equals(s);
+        // object 表示"不限定具体类型"，作为通配符可以匹配任何类型（双向）
+        return s.equals(t) || "object".equals(s) || "object".equals(t);
     }
 
     private static String displayName(CompositeParameter parameter) {

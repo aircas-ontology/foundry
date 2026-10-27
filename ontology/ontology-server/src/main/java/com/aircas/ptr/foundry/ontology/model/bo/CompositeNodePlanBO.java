@@ -73,6 +73,12 @@ public class CompositeNodePlanBO {
     @Schema(description = "转换节点脚本")
     private String transformScript;
 
+    @Schema(description = "转换节点映射模式：json/script")
+    private String transformMappingMode;
+
+    @Schema(description = "转换节点 JSON 映射规则（JSON 字符串）")
+    private String transformMappings;
+
     public Map<String, String> getInputParams() {
         return inputParams == null ? inputParams = new LinkedHashMap<>() : inputParams;
     }

@@ -23,8 +23,14 @@ public class CompositeTransformComponent extends CompositeDataComponent {
     @Override
     protected Map<String, Object> produce(CompositeRuntimeRequest request, CompositeNodePlanBO nodePlan,
                                           Map<String, Object> inputs) {
-        Object scriptResult = transformExecutor.execute(nodePlan.getTransformLanguage(),
-                nodePlan.getTransformScript(), inputs);
+        Object scriptResult;
+        // 根据映射模式选择执行方式
+        if ("json".equals(nodePlan.getTransformMappingMode()) && nodePlan.getTransformMappings() != null) {
+            scriptResult = transformExecutor.executeJsonMapping(nodePlan.getTransformMappings(), inputs);
+        } else {
+            scriptResult = transformExecutor.execute(nodePlan.getTransformLanguage(),
+                    nodePlan.getTransformScript(), inputs);
+        }
         Map<String, Object> outputs = new LinkedHashMap<>();
         Map<String, Object> fields = toFieldMap(scriptResult);
         boolean singlePort = nodePlan.getOutputParams().size() == 1;

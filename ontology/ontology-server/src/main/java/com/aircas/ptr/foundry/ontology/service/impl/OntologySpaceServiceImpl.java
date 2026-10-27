@@ -408,21 +408,26 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                         linkCnt = linkMap.getOrDefault(space.getId(), 0);
                     }
 
-                    return OntologySpaceVO.builder()
-                            .iconUrl(space.getIcon())
-                            .apiName(space.getApiName())
-                            .spaceId(space.getId())
-                            .type(space.getType())
-                            .username(space.getUsername())
-                            .displayName(space.getDisplayName())
-                            .description(space.getDescription())
-                            .ontologyCount(ontologyCnt)
-                            .actionCount(actionCnt)
-                            .propertyCount(propertyCnt)
-                            .linkCount(linkCnt)
-                            .createTime(space.getCreateTime())
-                            .updateTime(space.getUpdateTime())
-                            .build();
+                    String iconUrl = space.getIcon();
+                    if (iconUrl == null) {
+                        iconUrl = "";
+                    }
+                    
+                    OntologySpaceVO vo = new OntologySpaceVO();
+                    vo.setIconUrl(iconUrl);
+                    vo.setApiName(space.getApiName());
+                    vo.setSpaceId(space.getId());
+                    vo.setType(space.getType());
+                    vo.setUsername(space.getUsername());
+                    vo.setDisplayName(space.getDisplayName());
+                    vo.setDescription(space.getDescription());
+                    vo.setOntologyCount(ontologyCnt);
+                    vo.setActionCount(actionCnt);
+                    vo.setPropertyCount(propertyCnt);
+                    vo.setLinkCount(linkCnt);
+                    vo.setCreateTime(space.getCreateTime());
+                    vo.setUpdateTime(space.getUpdateTime());
+                    return vo;
                 })
                 .collect(Collectors.toList());
 
