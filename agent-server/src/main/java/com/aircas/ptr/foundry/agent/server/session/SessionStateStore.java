@@ -44,14 +44,20 @@ public class SessionStateStore {
     /** 落库成功标记：捕获到该 stage 时清除整个会话的构建状态。 */
     private static final String STAGE_PERSISTED = "persisted";
 
+    /** 会话参考文档 stage：由文档上传接口写入（非模型输出），正文经上下文单独渲染，不进状态块。 */
+    public static final String STAGE_DOCUMENT_UPLOADED = "document_uploaded";
+
     /**
      * 需要跨轮持久化并按此固定顺序渲染的 stage。
      * 除构建阶段状态外，还包含用户在对话中选定的空间（space_selected）与数据源（datasource_selected），
      * 以免长对话下滑动窗口淘汰后丢失选择；persisted / persist_failed 为终态信号，不在此列。
+     * document_uploaded 在此列表中仅为复用 record 的持久化/清理机制，其正文很长且含换行，
+     * 由 {@code AgentChatService} 以【参考文档】纯文本段单独注入，{@link #renderState} 渲染时排除。
      */
     private static final List<String> PERSISTED_STAGES = List.of(
             "space_selected",
             "datasource_selected",
+            STAGE_DOCUMENT_UPLOADED,
             "object_defined",
             "properties_proposed",
             "properties_selected",
@@ -109,6 +115,10 @@ public class SessionStateStore {
         }
         ObjectNode root = objectMapper.createObjectNode();
         for (String stage : PERSISTED_STAGES) {
+            // 文档正文不随状态块渲染（过长且已转义难读），由 AgentChatService 以【参考文档】段单独注入
+            if (STAGE_DOCUMENT_UPLOADED.equals(stage)) {
+                continue;
+            }
             String raw = stageMap.get(stage);
             if (raw == null) {
                 continue;
