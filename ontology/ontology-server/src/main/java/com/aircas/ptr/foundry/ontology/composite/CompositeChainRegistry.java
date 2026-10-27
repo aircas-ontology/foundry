@@ -122,6 +122,7 @@ public class CompositeChainRegistry {
      * @return 编排的外部出参
      */
     public Map<String, Object> execute(String functionApi, CompositeConfig config, Map<String, Object> inputs) {
+        applyManualInputBindings(config);
         CompositePlanBO plan = compile(chainNameOf(functionApi), config);
         CompositeRuntimeRequest request = new CompositeRuntimeRequest(plan, inputs);
         synchronized (this) {
@@ -138,6 +139,104 @@ public class CompositeChainRegistry {
         Map<String, Object> result = request.assembleOutput();
         log.info("函数编排[{}]执行完成，节点轨迹={}，出参={}", functionApi, request.getInvocations(), result);
         return result;
+    }
+
+    /**
+     * 从画布 graph 中提取手动输入绑定（mode=manual），合并到对应节点的 inputDefaults。
+     * <p>前端在编排画布上为节点配置"手动输入"时，固定值存储在 graph.nodes[].properties.inputBindings 中，
+     * 而执行引擎使用的是 nodes[].inputDefaults。此方法在编译前将两者对齐，使手动输入值生效。</p>
+     * <p>绑定可能指向嵌套字段（paramPath 长度 &gt; 1），此时需按路径构建嵌套 Map。</p>
+     */
+    @SuppressWarnings("unchecked")
+    private void applyManualInputBindings(CompositeConfig config) {
+        if (config == null || config.getGraph() == null || config.getNodes() == null) {
+            return;
+        }
+        Object graphObj = config.getGraph();
+        Map<String, Object> graph;
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            graph = mapper.convertValue(graphObj, Map.class);
+        } catch (Exception e) {
+            log.warn("编排 graph 解析失败，跳出手动输入绑定提取", e);
+            return;
+        }
+        List<Map<String, Object>> graphNodes = (List<Map<String, Object>>) graph.get("nodes");
+        if (graphNodes == null) {
+            return;
+        }
+        Map<String, com.aircas.ptr.foundry.ontology.model.param.CompositeNode> nodeById = new java.util.HashMap<>();
+        for (com.aircas.ptr.foundry.ontology.model.param.CompositeNode node : config.getNodes()) {
+            if (node != null && node.getId() != null) {
+                nodeById.put(node.getId(), node);
+            }
+        }
+        for (Map<String, Object> graphNode : graphNodes) {
+            String nodeId = graphNode == null ? null : String.valueOf(graphNode.get("id"));
+            if (nodeId == null || nodeId.equals("null")) {
+                continue;
+            }
+            Map<String, Object> properties = (Map<String, Object>) graphNode.get("properties");
+            if (properties == null) {
+                continue;
+            }
+            List<Map<String, Object>> bindings = (List<Map<String, Object>>) properties.get("inputBindings");
+            if (bindings == null) {
+                continue;
+            }
+            com.aircas.ptr.foundry.ontology.model.param.CompositeNode node = nodeById.get(nodeId);
+            if (node == null) {
+                continue;
+            }
+            Map<String, Object> defaults = node.getInputDefaults();
+            if (defaults == null) {
+                defaults = new java.util.LinkedHashMap<>();
+                node.setInputDefaults(defaults);
+            }
+            for (Map<String, Object> binding : bindings) {
+                if (binding == null || !"manual".equals(String.valueOf(binding.get("mode")))) {
+                    continue;
+                }
+                Object value = binding.get("value");
+                if (value == null) {
+                    continue;
+                }
+                List<String> paramPath = (List<String>) binding.get("paramPath");
+                if (paramPath != null && paramPath.size() > 1) {
+                    // 嵌套路径：按 path 逐层构建 Map，最后一层放 value
+                    setNestedValue(defaults, paramPath, value);
+                } else {
+                    String paramName = String.valueOf(binding.get("paramName"));
+                    if (paramName != null && !paramName.equals("null")) {
+                        defaults.put(paramName, value);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * 按嵌套路径写入值到 defaults Map 中。
+     * <p>例如 path=["input","userName"], value="5" → defaults={"input": {"userName": "5"}}</p>
+     */
+    @SuppressWarnings("unchecked")
+    private static void setNestedValue(Map<String, Object> defaults, List<String> path, Object value) {
+        if (path == null || path.isEmpty()) {
+            return;
+        }
+        Map<String, Object> current = defaults;
+        for (int i = 0; i < path.size() - 1; i++) {
+            String key = path.get(i);
+            Object existing = current.get(key);
+            if (existing instanceof Map) {
+                current = (Map<String, Object>) existing;
+            } else {
+                Map<String, Object> nested = new java.util.LinkedHashMap<>();
+                current.put(key, nested);
+                current = nested;
+            }
+        }
+        current.put(path.get(path.size() - 1), value);
     }
 
     /**

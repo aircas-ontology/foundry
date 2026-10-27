@@ -511,7 +511,11 @@ public final class CompositeValidator {
         if (ports == null || isBlank(id)) {
             return null;
         }
-        return ports.stream().filter(item -> item != null && id.equals(item.getId())).findFirst().orElse(null);
+        // 优先按端口 id 精确匹配，未命中时回落按端口 name 匹配（前端画布连线可能使用 name 而非 id）
+        return ports.stream()
+                .filter(item -> item != null && (id.equals(item.getId()) || id.equals(item.getName())))
+                .findFirst()
+                .orElse(null);
     }
 
     /** 端口类型比较，空类型按 object 处理（与原型默认值一致） */

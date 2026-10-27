@@ -37,8 +37,8 @@ public class CompositeNodePlanBO {
     @Schema(description = "出参：参数 id -> 参数名")
     private Map<String, String> outputParams = new LinkedHashMap<>();
 
-    @Schema(description = "入参默认值：参数 id -> 原始表达式")
-    private Map<String, String> inputDefaults = new LinkedHashMap<>();
+    @Schema(description = "入参默认值：参数 id -> 值（支持嵌套 Map 等复杂类型）")
+    private Map<String, Object> inputDefaults = new LinkedHashMap<>();
 
     @Schema(description = "外部输入映射：目标入参 id -> 外部参数名")
     private Map<String, String> externalInputs = new LinkedHashMap<>();

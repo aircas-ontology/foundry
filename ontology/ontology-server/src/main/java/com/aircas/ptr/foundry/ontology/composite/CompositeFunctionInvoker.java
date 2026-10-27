@@ -90,11 +90,16 @@ public class CompositeFunctionInvoker {
         if (language == null) {
             language = inferLanguageFromCode(function.getCode());
         }
-        // 构造执行上下文
+        // 单对象入参解包：与非编排路径（FunctionServiceImpl#doExecuteFunction）对齐，
+        // 只有一个入参时直接传值，避免 runner 端收到 {"input": 10} 而脚本期望 10
         String inputJson;
         try {
             ObjectMapper objectMapper = new ObjectMapper();
-            inputJson = objectMapper.writeValueAsString(paramMap);
+            if (inputParams.size() == 1 && paramMap.containsKey(inputParams.get(0).getParamName())) {
+                inputJson = objectMapper.writeValueAsString(paramMap.get(inputParams.get(0).getParamName()));
+            } else {
+                inputJson = objectMapper.writeValueAsString(paramMap);
+            }
         } catch (Exception e) {
             throw new BusinessException("脚本算子入参序列化失败：" + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
         }

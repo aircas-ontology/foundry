@@ -203,9 +203,29 @@ public final class CompositeElCompiler {
                 return;
             }
             CompositeNodePlanBO targetPlan = planByElId.get(targetElId);
-            String targetParamName = targetPlan == null ? targetParamId
-                    : targetPlan.getInputParams().getOrDefault(targetParamId, targetParamId);
-            sourcePlan.getEdgeTargets().add(new CompositeEdgeTargetBO(targetElId, targetParamName, sourceParamId));
+            String targetParamName;
+            if (targetPlan == null) {
+                targetParamName = targetParamId;
+            } else {
+                // 优先按端口 id 查找，未命中时按端口 name 查找（前端画布连线可能使用 name 而非 id）
+                targetParamName = targetPlan.getInputParams().get(targetParamId);
+                if (targetParamName == null) {
+                    targetParamName = targetPlan.getInputParams().entrySet().stream()
+                            .filter(e -> targetParamId.equals(e.getValue()))
+                            .map(Map.Entry::getKey)
+                            .findFirst()
+                            .orElse(targetParamId);
+                }
+            }
+            // 源端口同样做 name/id 双向解析
+            String resolvedSourceParamId = sourcePlan.getOutputParams().containsKey(sourceParamId)
+                    ? sourceParamId
+                    : sourcePlan.getOutputParams().entrySet().stream()
+                            .filter(e -> sourceParamId.equals(e.getValue()))
+                            .map(Map.Entry::getKey)
+                            .findFirst()
+                            .orElse(sourceParamId);
+            sourcePlan.getEdgeTargets().add(new CompositeEdgeTargetBO(targetElId, targetParamName, resolvedSourceParamId));
         }
 
         /** Kahn 算法求控制流拓扑序，存在环路时（校验器已拦截，此处兜底）按画布顺序追加 */
@@ -261,9 +281,27 @@ public final class CompositeElCompiler {
                     plan.getOutputParams().put(parameter.getId(), parameter.getName());
                 }
             }
+            // END 节点：若无显式输入端口，用编排的 outputParameters 作为输入端口（接收上游数据）
+            if (kind == CompositeNodeKindEnum.END && plan.getInputParams().isEmpty()) {
+                for (CompositeParameter outputParam : config.getOutputParameters()) {
+                    if (outputParam != null && !isBlank(outputParam.getId())) {
+                        String name = isBlank(outputParam.getName()) ? outputParam.getId() : outputParam.getName();
+                        plan.getInputParams().put(outputParam.getId(), name);
+                    }
+                }
+            }
+            // START 节点：若无显式输出端口，用编排的 inputParameters 作为输出端口（向下游推送数据）
+            if (kind == CompositeNodeKindEnum.START && plan.getOutputParams().isEmpty()) {
+                for (CompositeParameter inputParam : config.getInputParameters()) {
+                    if (inputParam != null && !isBlank(inputParam.getId())) {
+                        String name = isBlank(inputParam.getName()) ? inputParam.getId() : inputParam.getName();
+                        plan.getOutputParams().put(inputParam.getId(), name);
+                    }
+                }
+            }
             if (node.getInputDefaults() != null) {
                 node.getInputDefaults().forEach((portId, value) ->
-                        plan.getInputDefaults().put(portId, value == null ? null : String.valueOf(value)));
+                        plan.getInputDefaults().put(portId, value));
             }
 
             if (kind == CompositeNodeKindEnum.FUNCTION) {
