@@ -40,6 +40,10 @@ public class CompositeNodePlanBO {
     @Schema(description = "入参默认值：参数 id -> 原始表达式")
     private Map<String, String> inputDefaults = new LinkedHashMap<>();
 
+    @Schema(description = "子字段默认值：顶层入参端口名 -> 归位后的默认对象；"
+            + "画布把子字段绑定的默认值按叶子字段名登记，与按端口 id 登记的 inputDefaults 分开存放")
+    private Map<String, Map<String, Object>> nestedInputDefaults = new LinkedHashMap<>();
+
     @Schema(description = "外部输入映射：目标入参 id -> 外部参数名")
     private Map<String, String> externalInputs = new LinkedHashMap<>();
 
@@ -75,6 +79,10 @@ public class CompositeNodePlanBO {
 
     public Map<String, String> getInputParams() {
         return inputParams == null ? inputParams = new LinkedHashMap<>() : inputParams;
+    }
+
+    public Map<String, Map<String, Object>> getNestedInputDefaults() {
+        return nestedInputDefaults == null ? nestedInputDefaults = new LinkedHashMap<>() : nestedInputDefaults;
     }
 
     public List<String> getLoopBody() {
