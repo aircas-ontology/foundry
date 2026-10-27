@@ -232,7 +232,10 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 .collect(Collectors.toList());
         ontologyPropertyService.saveBatch(childProps);
         // 属性自动关联数据源
-        ontologyPropertyService.autoBindDatasource(childIdentifier);
+        var childBindResult = ontologyPropertyService.autoBindDatasource(childIdentifier);
+        if (childBindResult != null && CollectionUtils.isNotEmpty(childBindResult.getBlockedItems())) {
+            log.warn("子本体{}属性自动关联数据源部分跳过：{}", childIdentifier, childBindResult.getMessage());
+        }
         // 创建关系
         Map<String, String> parentChildLinkMap = Maps.newHashMap();
         var parentLinks = linkService.list(new LambdaUpdateWrapper<OntologyLinkGroup>()
@@ -665,7 +668,11 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         //自动建实体表以及关联属性数据源：仅当导入了实例数据时才执行，无实例数据则跳过（避免无谓建表/绑定数据源及主键校验失败）
         var instances = dto.getInstances();
         if (instances != null && CollectionUtils.isNotEmpty(instances.getNodes())) {
-            ontologyPropertyService.autoBindDatasource(meta.getUniqueIdentifier());
+            var importBindResult = ontologyPropertyService.autoBindDatasource(meta.getUniqueIdentifier());
+            if (importBindResult != null && CollectionUtils.isNotEmpty(importBindResult.getBlockedItems())) {
+                log.warn("导入本体{}属性自动关联数据源部分跳过，未绑定属性的实例值不会写入实体表：{}",
+                        meta.getUniqueIdentifier(), importBindResult.getMessage());
+            }
         }
         //保存关系：端点以显示名称解析，目标空间缺少另一端对象时跳过该关系；关系统一挂到关系分类树根节点
         var relations = dto.getRelations();

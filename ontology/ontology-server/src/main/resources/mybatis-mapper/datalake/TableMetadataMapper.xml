@@ -98,6 +98,14 @@
                    )
     </select>
 
+    <!-- 实体表是否已有数据行（EXISTS 探测，不做 count(*) 全扫） -->
+    <select id="hasAnyRow" resultType="boolean">
+        SELECT EXISTS(
+                       SELECT 1
+                       FROM "${schemaName}"."${tableName}"
+                   )
+    </select>
+
 
     <insert id="createTable">
         <!-- Create table: id SERIAL PRIMARY KEY + filtered columns -->

@@ -26,6 +26,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.github.jsonldjava.shaded.com.google.common.collect.Sets;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -836,13 +837,15 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
      * <p>
      * 说明：1 只针对未关联数据源的属性
      * 2 实体表列的数据只做增量更新，删除属性不会同步删除实体表的列，需要人工确认后通过后门接口删除
-     * 3 修改数据源表的列的数据类型：先解绑属性已有数据源，再修改属性类型，最后重新绑定数据源（若已有实体数据可能会报错）
+     * 3 修改属性数据类型：先解绑属性已有数据源，再修改属性类型，最后重新绑定数据源
+     * 4 重新绑定时若目标列已存在且列类型与属性映射类型冲突：实体表无数据则直接修改列类型后绑定；
+     * 实体表已有实例数据则该属性不绑定、不改动该列，明细在返回结果的blockedItems中给出；主键id冲突时整单失败
      *
      * @param ontologyIdentifier
      */
     @Transactional(transactionManager = "datalakeTransactionManager")
     @Override
-    public void autoBindDatasource(String ontologyIdentifier) {
+    public AutoBindDatasourceResultVO autoBindDatasource(String ontologyIdentifier) {
         var ontology = metaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, ontologyIdentifier));
         // 获取schemaName
         var schemaName = resolveSchemaName(ontologyIdentifier);
@@ -850,7 +853,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         var props = list(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyIdentifier));
         if (CollectionUtils.isEmpty(props)) {
             log.warn("本体{}没有属性", ontologyIdentifier);
-            return;
+            return autoBindResult(0, 0, Lists.newArrayList(), "本体" + ontologyIdentifier + "没有属性，无需关联数据源");
         }
         String pkColumnName = "id";
         String mainStorageGroup = "main";
@@ -866,19 +869,76 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                 .filter(p -> StringUtils.isEmpty(p.getDatasourceId()) && StringUtils.isEmpty(p.getDatasourceColumnName()))
                 .collect(Collectors.toList());
         if (CollectionUtils.isEmpty(notBindProps)) {
+            var totalBoundCount = autoBindBoundTotal(props);
             log.warn("本体{}所有属性已关联数据源", ontologyIdentifier);
-            return;
+            return autoBindResult(0, totalBoundCount, Lists.newArrayList(), autoBindMessage(0, totalBoundCount, Lists.newArrayList()));
         }
         // 处理未绑定数据源的属性
         var notBindPropsMap = notBindProps.stream().collect(Collectors.groupingBy(v -> v.getStorageGroup()));
         var pkDS = pk.get().getDatasourceId();
         var mainDS = StringUtils.isEmpty(pkDS) ? ontology.getApiName() : pkDS;
 
-        notBindPropsMap.forEach((ds, list) -> {
+        // 先判定再执行DDL：实体表已有实例数据时，类型冲突的列不绑定也不改动；空表则交由addColumns改列类型
+        Map<String, List<OntologyProperty>> bindablePropsMap = Maps.newLinkedHashMap();
+        Map<String, Boolean> tableExistMap = Maps.newHashMap();
+        List<AutoBindDatasourceResultVO.BlockedItem> blockedItems = Lists.newArrayList();
+        for (var entry : notBindPropsMap.entrySet()) {
+            var storageGroup = entry.getKey();
+            var tableName = mainStorageGroup.equals(storageGroup) ? mainDS : storageGroup;
+            tableExistMap.computeIfAbsent(tableName, name -> Boolean.TRUE.equals(tableMetadataMapper.isTableExist(schemaName, name)));
+            Map<String, String> columnTypes = Maps.newHashMap();
+            tableMetadataMapper.queryColumnMetadata(schemaName, tableName)
+                    .forEach(column -> columnTypes.put(column.getColumnName(), StringUtils.defaultString(column.getType())));
+            List<OntologyProperty> bindableProps = Lists.newArrayList();
+            Boolean tableHasData = null;
+            for (var prop : entry.getValue()) {
+                var propertyType = prop.getPropertyType();
+                var expectedType = OntologyDataTypeEnum.transfer2Pg(propertyType);
+                if (StringUtils.isEmpty(expectedType)) {
+                    blockedItems.add(autoBindBlockedItem(prop, storageGroup, tableName, null, null,
+                            "属性类型【" + (propertyType == null ? "空" : propertyType.getValue()) + "】暂不支持映射数据源列类型"));
+                    continue;
+                }
+                var actualType = columnTypes.get(prop.getApiName());
+                if (actualType == null || isColumnTypeEquivalent(actualType, expectedType)) {
+                    bindableProps.add(prop);
+                    continue;
+                }
+                if (tableHasData == null) {
+                    tableHasData = Boolean.TRUE.equals(tableMetadataMapper.hasAnyRow(schemaName, tableName));
+                }
+                if (tableHasData) {
+                    blockedItems.add(autoBindBlockedItem(prop, storageGroup, tableName, actualType, expectedType,
+                            "实体表【" + tableName + "】已有实例数据，列【" + prop.getApiName() + "】当前类型【" + actualType
+                                    + "】与属性映射类型【" + expectedType + "】冲突，跳过绑定以保留已有数据"));
+                } else {
+                    bindableProps.add(prop);
+                }
+            }
+            if (CollectionUtils.isNotEmpty(bindableProps)) {
+                bindablePropsMap.put(storageGroup, bindableProps);
+            }
+        }
+        // 主键绑不上时实体节点同步与数据管道都无法建立，不做部分绑定
+        var blockedPk = blockedItems.stream()
+                .filter(v -> mainStorageGroup.equals(v.getStorageGroup()) && pkColumnName.equals(v.getPropertyApiName()))
+                .findFirst();
+        if (blockedPk.isPresent()) {
+            throw new BusinessException("本体" + ontologyIdentifier + "主键属性" + pkColumnName + "无法关联数据源："
+                    + blockedPk.get().getReason(), HttpStatus.BAD_REQUEST);
+        }
+        if (bindablePropsMap.isEmpty()) {
+            var totalBoundCount = autoBindBoundTotal(props);
+            var blockedMessage = autoBindMessage(0, totalBoundCount, blockedItems);
+            log.warn("本体{}属性自动关联数据源未绑定任何属性：{}", ontologyIdentifier, blockedMessage);
+            return autoBindResult(0, totalBoundCount, blockedItems, blockedMessage);
+        }
+
+        bindablePropsMap.forEach((ds, list) -> {
             //主属性表
             if (ds.equals(mainStorageGroup)) {
                 //检查表名是否存在：不存在创建新表，存在添加列
-                var exist = tableMetadataMapper.isTableExist(schemaName, mainDS);
+                var exist = Boolean.TRUE.equals(tableExistMap.get(mainDS));
                 var columns = list.stream().map(p -> TableColumnDesc.builder()
                         .columnName(p.getApiName())
                         .type(OntologyDataTypeEnum.transfer2Pg(p.getPropertyType()))
@@ -906,7 +966,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
             // 其他属性关联表
             else {
                 //检查表名是否存在：不存在创建新表，存在添加列
-                var exist = tableMetadataMapper.isTableExist(schemaName, ds);
+                var exist = Boolean.TRUE.equals(tableExistMap.get(ds));
                 var columns = list.stream().map(p -> TableColumnDesc.builder()
                         .columnName(p.getApiName())
                         .type(OntologyDataTypeEnum.transfer2Pg(p.getPropertyType()))
@@ -950,8 +1010,15 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
             }
         });
         //批量更新本体属性数据源
-        var bindDsProps = notBindPropsMap.values().stream().flatMap(List::stream).collect(Collectors.toList());
+        var bindDsProps = bindablePropsMap.values().stream().flatMap(List::stream).collect(Collectors.toList());
         updateBatchById(bindDsProps);
+        // props与bindDsProps是同一批对象实例，DDL阶段已就地回填datasource字段，可直接统计累计已绑定数
+        var totalBoundCount = autoBindBoundTotal(props);
+        var message = autoBindMessage(bindDsProps.size(), totalBoundCount, blockedItems);
+        if (CollectionUtils.isNotEmpty(blockedItems)) {
+            log.warn("本体{}属性自动关联数据源部分跳过：{}", ontologyIdentifier, message);
+        }
+        return autoBindResult(bindDsProps.size(), totalBoundCount, blockedItems, message);
     }
 
 
@@ -1192,6 +1259,81 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         PreconditionUtils.checkArgument(StringUtils.isNotEmpty(space.getApiName()),
                 "本体空间apiName为空", HttpStatus.BAD_REQUEST);
         return space.getApiName();
+    }
+
+    private AutoBindDatasourceResultVO.BlockedItem autoBindBlockedItem(OntologyProperty prop, String storageGroup, String tableName,
+                                                                      String actualType, String expectedType, String reason) {
+        return AutoBindDatasourceResultVO.BlockedItem.builder()
+                .propertyApiName(prop.getApiName())
+                .propertyDisplayName(prop.getDisplayName())
+                .storageGroup(storageGroup)
+                .tableName(tableName)
+                .columnName(prop.getApiName())
+                .actualColumnType(actualType)
+                .expectedColumnType(expectedType)
+                .reason(reason)
+                .build();
+    }
+
+    private AutoBindDatasourceResultVO autoBindResult(int boundCount, int totalBoundCount, List<AutoBindDatasourceResultVO.BlockedItem> blockedItems, String message) {
+        return AutoBindDatasourceResultVO.builder()
+                .boundCount(boundCount)
+                .totalBoundCount(totalBoundCount)
+                .blockedItems(blockedItems)
+                .message(message)
+                .build();
+    }
+
+    /**
+     * 本体下已关联数据源的属性总数（含本次新关联），判定口径与未绑定属性筛选互补：
+     * datasourceId与datasourceColumnName都非空才算已关联。
+     */
+    private int autoBindBoundTotal(List<OntologyProperty> props) {
+        if (CollectionUtils.isEmpty(props)) {
+            return 0;
+        }
+        return (int) props.stream()
+                .filter(p -> StringUtils.isNotEmpty(p.getDatasourceId()) && StringUtils.isNotEmpty(p.getDatasourceColumnName()))
+                .count();
+    }
+
+    private String autoBindMessage(int boundCount, int totalBoundCount, List<AutoBindDatasourceResultVO.BlockedItem> blockedItems) {
+        var message = "本次新关联 " + boundCount + " 个属性，共 " + totalBoundCount + " 个属性已关联数据源";
+        if (CollectionUtils.isEmpty(blockedItems)) {
+            return message;
+        }
+        var names = blockedItems.stream()
+                .map(AutoBindDatasourceResultVO.BlockedItem::getPropertyApiName)
+                .collect(Collectors.joining("、"));
+        return message + "，" + blockedItems.size() + " 个属性未关联数据源：" + names;
+    }
+
+    private boolean isColumnTypeEquivalent(String actualType, String expectedType) {
+        var actualFamily = pgTypeFamily(actualType);
+        return actualFamily != null && actualFamily.equals(pgTypeFamily(expectedType));
+    }
+
+    /**
+     * PG列类型归族：忽略长度/精度修饰与写法别名（int4=integer、text=character varying、numeric=decimal）。
+     * 识别不了的类型（jsonb、uuid、bytea、geometry、数组、自定义类型等）返回null表示不可比较，按类型冲突处理。
+     */
+    private String pgTypeFamily(String pgType) {
+        if (StringUtils.isEmpty(pgType)) {
+            return null;
+        }
+        return switch (StringUtils.substringBefore(pgType, "(").trim().toLowerCase()) {
+            case "bool", "boolean" -> "bool";
+            case "int2", "smallint", "int4", "integer", "serial" -> "int";
+            case "int8", "bigint", "bigserial" -> "bigint";
+            case "real", "float4" -> "float";
+            case "float8", "double precision" -> "double";
+            case "numeric", "decimal" -> "decimal";
+            case "text", "varchar", "character varying", "character", "char", "bpchar", "name" -> "string";
+            case "date" -> "date";
+            case "timestamp", "timestamptz", "timestamp without time zone", "timestamp with time zone", "datetime" -> "timestamp";
+            case "time", "timetz", "time without time zone", "time with time zone" -> "time";
+            default -> null;
+        };
     }
 
 }

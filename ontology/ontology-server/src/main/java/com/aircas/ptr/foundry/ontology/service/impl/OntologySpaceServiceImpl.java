@@ -857,7 +857,11 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
             }
 
             // 自动绑定数据源并创建实体表
-            ontologyPropertyService.autoBindDatasource(newOntologyId);
+            var bindResult = ontologyPropertyService.autoBindDatasource(newOntologyId);
+            if (bindResult != null && CollectionUtils.isNotEmpty(bindResult.getBlockedItems())) {
+                // 未绑定数据源的属性不会建列，下一步 importInstances 会直接丢弃这些属性的实例值
+                log.warn("子空间本体{}属性自动关联数据源部分跳过，未绑定属性的实例值不会写入实体表：{}", newOntologyId, bindResult.getMessage());
+            }
 
             // 导入实例（先按显式勾选主键过滤，再按属性筛选条件过滤实例；筛选条件元数据仍由 savePropertyFilter 写入新表）
             pkMappingByNewOntologyUid.put(newOntologyId, importInstances(sourceMeta.getUniqueIdentifier(), newOntologyId,
