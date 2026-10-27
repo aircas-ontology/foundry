@@ -883,9 +883,15 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     @Override
     public Page<FunctionInfoVO> getFunctions(FunctionListQueryParam param) {
         var pageInfo = new Page<Function>(param.getPageNum(), param.getPageSize());
+        // 函数编排不在列表展示
+        List<FunctionTypeEnum> excludeTypes = param.getExcludeTypes() != null
+                ? new ArrayList<>(param.getExcludeTypes()) : new ArrayList<>();
+        if (!excludeTypes.contains(FunctionTypeEnum.COMPOSITE)) {
+            excludeTypes.add(FunctionTypeEnum.COMPOSITE);
+        }
         // 版本分组分页：按 api 分组，每组仅展示版本号最大的一条（XML 内按 x.y.z 语义化比较）
         var functionPage = getBaseMapper().pageLatestVersion(pageInfo, param.getOntologySpaceId(), param.getDisplayName(),
-                param.getType(), param.getExcludeTypes(), param.getPublishStatus(), param.getStartDate(), param.getEndDate());
+                param.getType(), excludeTypes, param.getPublishStatus(), param.getStartDate(), param.getEndDate());
         var records = functionPage.getRecords().stream().<FunctionInfoVO>map(func ->
                 FunctionInfoVO.builder()
                         .functionApi(func.getApi())
