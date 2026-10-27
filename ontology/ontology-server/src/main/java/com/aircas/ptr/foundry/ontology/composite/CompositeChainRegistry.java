@@ -94,7 +94,7 @@ public class CompositeChainRegistry {
      * @return 校验结果，含错误与告警文案
      */
     public CompositeValidationBO validate(CompositeConfig config) {
-        return CompositeValidator.validate(config, refResolver.byFunctionApi());
+        return CompositeValidator.validate(config, refResolver.byFunctionRef());
     }
 
     /**

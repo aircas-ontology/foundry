@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.utils;
 
+import com.aircas.ptr.foundry.ontology.composite.CompositeFunctionRefQuery;
 import com.aircas.ptr.foundry.ontology.model.bo.CompositeFunctionRefBO;
 import com.aircas.ptr.foundry.ontology.model.bo.CompositeValidationBO;
 import com.aircas.ptr.foundry.ontology.model.enums.CompositeNodeKindEnum;
@@ -45,9 +46,9 @@ public final class CompositeValidator {
      * 校验编排定义。
      *
      * @param config   编排定义
-     * @param resolver 根据函数 api 解析被引用函数（不存在返回 null）
+     * @param resolver 根据函数标识（api 或显示名）+ 版本解析被引用函数（不存在返回 null）
      */
-    public static CompositeValidationBO validate(CompositeConfig config, Function<String, CompositeFunctionRefBO> resolver) {
+    public static CompositeValidationBO validate(CompositeConfig config, Function<CompositeFunctionRefQuery, CompositeFunctionRefBO> resolver) {
         List<String> errors = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
         if (config == null) {
@@ -113,7 +114,8 @@ public final class CompositeValidator {
                 missing = true;
                 continue;
             }
-            CompositeFunctionRefBO ref = resolver == null ? null : resolver.apply(node.getFunctionId());
+            CompositeFunctionRefBO ref = resolver == null ? null
+                    : resolver.apply(CompositeFunctionRefQuery.of(node.getFunctionId(), node.getFunctionVersion()));
             if (ref == null) {
                 missing = true;
                 continue;

@@ -27,8 +27,8 @@ import java.util.Map;
  * <p>{@code CompositeValidator} 与 {@code CompositeElCompiler} 需要两类视角的被引用函数信息：</p>
  * <ul>
  *   <li>按<b>画布节点 id</b> 索引的 {@code Map}（校验器端口推导与编译器的 {@code refs} 参数）；</li>
- *   <li>按<b>函数 api</b> 求值的 {@code java.util.function.Function}（校验器的 {@code resolver} 参数，
- *       校验器传入的是节点的 {@code functionId}）。</li>
+ *   <li>按<b>函数标识（api 或显示名）+ 版本</b> 求值的 {@code java.util.function.Function}
+ *       （校验器的 {@code resolver} 参数，解析器优先按 api 精确匹配，未命中时回退按显示名+版本匹配）。</li>
  * </ul>
  * <p>两者的键不同，容易混用，因此这里一次性提供两个视图，并把函数入参/出参定义转换成画布端口类型。</p>
  */
@@ -52,7 +52,7 @@ public class CompositeFunctionRefResolver {
         if (config == null) {
             return refs;
         }
-        Map<String, CompositeFunctionRefBO> byApi = new LinkedHashMap<>();
+        Map<String, CompositeFunctionRefBO> byQuery = new LinkedHashMap<>();
         for (CompositeNode node : config.getNodes()) {
             if (node == null || node.getId() == null || node.getFunctionId() == null
                     || node.getFunctionId().trim().isEmpty()) {
@@ -61,14 +61,16 @@ public class CompositeFunctionRefResolver {
             if (CompositeValidator.isLogicNode(node)) {
                 continue;
             }
-            String api = node.getFunctionId().trim();
+            CompositeFunctionRefQuery query = CompositeFunctionRefQuery.of(node.getFunctionId().trim(),
+                    node.getFunctionVersion());
+            String key = queryKey(query);
             // computeIfAbsent 不会缓存 null，函数不存在时每次都会重新查库，这里显式记忆未命中结果
             CompositeFunctionRefBO ref;
-            if (byApi.containsKey(api)) {
-                ref = byApi.get(api);
+            if (byQuery.containsKey(key)) {
+                ref = byQuery.get(key);
             } else {
-                ref = loadByApi(api);
-                byApi.put(api, ref);
+                ref = loadByQuery(query);
+                byQuery.put(key, ref);
             }
             if (ref != null) {
                 refs.put(node.getId(), ref);
@@ -77,27 +79,37 @@ public class CompositeFunctionRefResolver {
         return refs;
     }
 
-    /** 校验器使用的解析器：按函数 api 取快照，不存在返回 null */
-    public java.util.function.Function<String, CompositeFunctionRefBO> byFunctionApi() {
+    /** 校验器使用的解析器：优先按 api 取快照，未命中时按显示名+版本回退，不存在返回 null */
+    public java.util.function.Function<CompositeFunctionRefQuery, CompositeFunctionRefBO> byFunctionRef() {
         Map<String, CompositeFunctionRefBO> cache = new LinkedHashMap<>();
-        return api -> {
-            if (api == null || api.trim().isEmpty()) {
+        return query -> {
+            if (query == null || query.getFunctionId() == null || query.getFunctionId().trim().isEmpty()) {
                 return null;
             }
-            String key = api.trim();
+            String key = queryKey(query);
             // 未命中同样要记忆，否则每次校验都重复查库
             if (cache.containsKey(key)) {
                 return cache.get(key);
             }
-            CompositeFunctionRefBO ref = loadByApi(key);
+            CompositeFunctionRefBO ref = loadByQuery(query);
             cache.put(key, ref);
             return ref;
         };
     }
 
+    private static String queryKey(CompositeFunctionRefQuery query) {
+        String version = query.getFunctionVersion() == null ? "" : query.getFunctionVersion().trim();
+        return query.getFunctionId().trim() + "|" + version;
+    }
+
     /** 查询函数定义并组装端口信息，函数不存在返回 null */
-    private CompositeFunctionRefBO loadByApi(String functionApi) {
-        Function function = catalog.findFunction(functionApi);
+    private CompositeFunctionRefBO loadByQuery(CompositeFunctionRefQuery query) {
+        String functionId = query.getFunctionId().trim();
+        Function function = catalog.findFunction(functionId);
+        if (function == null) {
+            // 按 api 未命中时，回退按显示名+版本匹配（前端可能用名称引用函数）
+            function = catalog.findFunctionByNameAndVersion(functionId, query.getFunctionVersion());
+        }
         if (function == null) {
             return null;
         }

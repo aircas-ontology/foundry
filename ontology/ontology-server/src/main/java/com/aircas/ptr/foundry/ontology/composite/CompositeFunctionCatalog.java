@@ -42,6 +42,19 @@ public class CompositeFunctionCatalog {
                 .last("limit 1"));
     }
 
+    /** 按函数显示名+版本取函数定义，不存在返回 null */
+    public Function findFunctionByNameAndVersion(String displayName, String version) {
+        if (displayName == null || displayName.trim().isEmpty()) {
+            return null;
+        }
+        var query = Wrappers.<Function>lambdaQuery()
+                .eq(Function::getDisplayName, displayName.trim());
+        if (version != null && !version.trim().isEmpty()) {
+            query.eq(Function::getVersion, version.trim());
+        }
+        return functionMapper.selectOne(query.last("limit 1"));
+    }
+
     /** 按函数 id 取入参定义（按 paramOrder 升序，与 {@code executeFunction} 一致） */
     public List<FunctionParamPO> findInputParams(Long functionId) {
         if (functionId == null) {
