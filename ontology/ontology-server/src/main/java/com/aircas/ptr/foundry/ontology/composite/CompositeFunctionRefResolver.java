@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.composite;
 
+import com.aircas.ptr.foundry.common.constant.FunctionParamTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.bo.CompositeFunctionRefBO;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamCategoryEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.Status;
@@ -39,6 +40,8 @@ public class CompositeFunctionRefResolver {
     private final CompositeFunctionCatalog catalog;
 
     private final ObjectMapper objectMapper;
+
+    private static final ObjectMapper fieldMapper = new ObjectMapper();
 
     /**
      * 建立"画布节点 id -&gt; 被引用函数快照"的映射。
@@ -133,17 +136,78 @@ public class CompositeFunctionRefResolver {
     private List<CompositeParameter> toPorts(List<FunctionParamPO> params, FunctionParamCategoryEnum category,
                                              Map<String, String> declaredTypes) {
         List<CompositeParameter> ports = new ArrayList<>();
+        boolean flattenObject = category == FunctionParamCategoryEnum.INPUT;
         for (FunctionParamPO paramPO : params) {
-            CompositeParameter port = new CompositeParameter();
-            port.setId(paramPO.getParamName());
-            port.setName(paramPO.getParamName());
-            String declared = declaredTypes.get(paramPO.getParamName());
-            port.setType(declared != null ? declared : canvasType(paramPO));
-            port.setDescription(paramPO.getDescription());
-            port.setChildren(parseChildPorts(paramPO.getFields(), paramPO.getParamName()));
-            ports.add(port);
+            List<Map<String, Object>> nestedFields = parseFields(paramPO.getFields());
+            if (flattenObject && paramPO.getParamType() == FunctionParamTypeEnum.OBJECT
+                    && nestedFields != null && !nestedFields.isEmpty()) {
+                // 入参 OBJECT 类型含嵌套字段时，展开为叶子字段端口（前端画布连线引用的是叶子字段名）
+                addLeafPorts(ports, nestedFields, declaredTypes);
+            } else {
+                CompositeParameter port = new CompositeParameter();
+                port.setId(paramPO.getParamName());
+                port.setName(paramPO.getParamName());
+                String declared = declaredTypes.get(paramPO.getParamName());
+                port.setType(declared != null ? declared : canvasType(paramPO));
+                port.setDescription(paramPO.getDescription());
+                port.setChildren(parseChildPorts(paramPO.getFields(), paramPO.getParamName()));
+                ports.add(port);
+            }
         }
         return ports;
+    }
+
+    /** 解析 fields JSON 为嵌套字段列表 */
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> parseFields(String fieldsJson) {
+        if (fieldsJson == null || fieldsJson.trim().isEmpty()) {
+            return null;
+        }
+        try {
+            return fieldMapper.readValue(fieldsJson, new TypeReference<List<Map<String, Object>>>() {});
+        } catch (Exception e) {
+            log.warn("函数字段定义解析失败: {}", fieldsJson, e);
+            return null;
+        }
+    }
+
+    /** 递归提取叶子字段端口：跳过有子字段的中间 OBJECT 节点，只保留叶子 */
+    private void addLeafPorts(List<CompositeParameter> ports, List<Map<String, Object>> fields,
+                              Map<String, String> declaredTypes) {
+        for (Map<String, Object> field : fields) {
+            String fieldName = field == null ? null : String.valueOf(field.get("paramName"));
+            if (fieldName == null || fieldName.equals("null")) {
+                continue;
+            }
+            String fieldType = String.valueOf(field.get("paramType"));
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> children = (List<Map<String, Object>>) field.get("fields");
+            if ("OBJECT".equalsIgnoreCase(fieldType) && children != null && !children.isEmpty()) {
+                addLeafPorts(ports, children, declaredTypes);
+            } else {
+                CompositeParameter port = new CompositeParameter();
+                port.setId(fieldName);
+                port.setName(fieldName);
+                String declared = declaredTypes.get(fieldName);
+                port.setType(declared != null ? declared : canvasTypeFromJavaType(fieldType));
+                ports.add(port);
+            }
+        }
+    }
+
+    /** 将 Java 参数类型名转为画布端口类型（与 CompositeFunctionCatalog.toCanvasType 对齐） */
+    private static String canvasTypeFromJavaType(String javaType) {
+        if (javaType == null || javaType.trim().isEmpty()) {
+            return "object";
+        }
+        return switch (javaType.trim().toUpperCase()) {
+            case "STRING" -> "string";
+            case "INTEGER", "INT", "FLOAT", "DOUBLE", "LONG", "SHORT", "BYTE", "NUMBER" -> "number";
+            case "BOOLEAN", "BOOL" -> "boolean";
+            case "LIST", "ARRAY" -> "array";
+            case "OBJECT" -> "object";
+            default -> "object";
+        };
     }
 
     /**

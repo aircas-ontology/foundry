@@ -359,6 +359,24 @@ public final class CompositeElCompiler {
                     plan.getOutputParams().put(parameter.getId(), parameter.getName());
                 }
             }
+            // END 节点：若无显式输入端口，用编排的 outputParameters 作为输入端口（接收上游数据）
+            if (kind == CompositeNodeKindEnum.END && plan.getInputParams().isEmpty()) {
+                for (CompositeParameter outputParam : config.getOutputParameters()) {
+                    if (outputParam != null && !isBlank(outputParam.getId())) {
+                        String name = isBlank(outputParam.getName()) ? outputParam.getId() : outputParam.getName();
+                        plan.getInputParams().put(outputParam.getId(), name);
+                    }
+                }
+            }
+            // START 节点：若无显式输出端口，用编排的 inputParameters 作为输出端口（向下游推送数据）
+            if (kind == CompositeNodeKindEnum.START && plan.getOutputParams().isEmpty()) {
+                for (CompositeParameter inputParam : config.getInputParameters()) {
+                    if (inputParam != null && !isBlank(inputParam.getId())) {
+                        String name = isBlank(inputParam.getName()) ? inputParam.getId() : inputParam.getName();
+                        plan.getOutputParams().put(inputParam.getId(), name);
+                    }
+                }
+            }
             fillInputDefaults(node, nodeRefs, plan);
 
             if (kind == CompositeNodeKindEnum.FUNCTION) {

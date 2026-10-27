@@ -37,8 +37,8 @@ public class CompositeNodePlanBO {
     @Schema(description = "出参：参数 id -> 参数名")
     private Map<String, String> outputParams = new LinkedHashMap<>();
 
-    @Schema(description = "入参默认值：参数 id -> 原始表达式")
-    private Map<String, String> inputDefaults = new LinkedHashMap<>();
+    @Schema(description = "入参默认值：参数 id -> 值（支持嵌套 Map 等复杂类型）")
+    private Map<String, Object> inputDefaults = new LinkedHashMap<>();
 
     @Schema(description = "子字段默认值：顶层入参端口名 -> 归位后的默认对象；"
             + "画布把子字段绑定的默认值按叶子字段名登记，与按端口 id 登记的 inputDefaults 分开存放")
