@@ -156,3 +156,22 @@ export async function handle(prefix: string, count: number): Promise<string[]> {
 }
 $ts$)
 on conflict do nothing;
+
+-- ============================ 预置脚本运行器容器（SYSTEM） ============================
+-- 脚本算子中 Python / TypeScript 通过远程 runner 容器执行，此处将两个 runner 登记为系统预置容器，
+-- 使其出现在容器管理列表中（只读，不允许用户启停/删除）；container_source = 'SYSTEM'。
+-- 容器由 docker-compose 独立管理（network_mode: host），phase 直接置为 RUNNING。
+insert into function_container_instance
+    (container_key, display_name, container_name, image, run_command,
+     host_port, container_port, phase, container_source, create_time, update_time)
+values
+('script-runner-python', 'Python 脚本运行器', 'python-runner',
+ 'foundry/python-runner:offline',
+ 'python -m uvicorn app:app --app-dir /app --host 0.0.0.0 --port 39101 --workers 1',
+ 39101, 39101, 'RUNNING', 'SYSTEM', now(), now()),
+
+('script-runner-typescript', 'TypeScript 脚本运行器', 'ts-runner',
+ 'foundry/ts-runner:offline',
+ 'node server.js',
+ 39102, 39102, 'RUNNING', 'SYSTEM', now(), now())
+on conflict (container_key) do nothing;

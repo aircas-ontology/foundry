@@ -3,7 +3,9 @@ package com.aircas.ptr.foundry.agent.server.controller;
 import com.aircas.ptr.foundry.agent.server.model.param.AgentChatParam;
 import com.aircas.ptr.foundry.agent.server.model.vo.AgentChatStreamVO;
 import com.aircas.ptr.foundry.agent.server.model.vo.AgentChatVO;
+import com.aircas.ptr.foundry.agent.server.model.vo.DocumentUploadVO;
 import com.aircas.ptr.foundry.agent.server.service.AgentChatService;
+import com.aircas.ptr.foundry.agent.server.service.DocumentUploadService;
 import com.aircas.ptr.foundry.agent.server.session.ConversationResetService;
 import com.aircas.ptr.foundry.common.base.RestResult;
 import io.swagger.v3.oas.annotations.Operation;
@@ -17,6 +19,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 import reactor.core.publisher.Flux;
 
 /**
@@ -46,6 +49,9 @@ public class AgentChatController {
     /** 会话上下文重置：清空 ChatMemory 记忆窗口 + SessionStateStore 构建状态。 */
     private final ConversationResetService conversationResetService;
 
+    /** 会话参考文档上传：第 2 步导入资料时解析 txt/md 并登记到会话状态。 */
+    private final DocumentUploadService documentUploadService;
+
     @PostMapping("/completions")
     @Operation(summary = "同步对话：一次性返回大模型完整回复")
     public RestResult<AgentChatVO> completions(@RequestBody @Valid AgentChatParam param) {
@@ -69,5 +75,12 @@ public class AgentChatController {
     @Operation(summary = "中断对话：取消当前正在进行的流式回复（前端“停止”按钮）")
     public RestResult<Boolean> abort(@RequestParam String sessionId) {
         return RestResult.ofData(agentChatService.abort(sessionId));
+    }
+
+    @PostMapping(value = "/upload_document", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "上传会话参考文档（对象构建第2步导入资料，仅支持 txt/md，重复上传以最新一份为准）")
+    public RestResult<DocumentUploadVO> uploadDocument(@RequestParam("file") MultipartFile file,
+                                                       @RequestParam String sessionId) {
+        return RestResult.ofData(documentUploadService.upload(file, sessionId));
     }
 }

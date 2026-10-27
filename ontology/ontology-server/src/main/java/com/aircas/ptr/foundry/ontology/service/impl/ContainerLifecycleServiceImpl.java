@@ -122,7 +122,10 @@ public class ContainerLifecycleServiceImpl implements ContainerLifecycleService 
     public List<FunctionContainerInstance> listBySpace(Integer spaceId) {
         LambdaQueryWrapper<FunctionContainerInstance> wrapper = new LambdaQueryWrapper<>();
         if (spaceId != null) {
-            wrapper.eq(FunctionContainerInstance::getOntologySpaceId, spaceId);
+            // 系统预置容器不归属空间，所有空间列表中均可见
+            wrapper.and(w -> w.eq(FunctionContainerInstance::getOntologySpaceId, spaceId)
+                    .or()
+                    .eq(FunctionContainerInstance::getContainerSource, ContainerSourceEnum.SYSTEM));
         }
         wrapper.orderByDesc(FunctionContainerInstance::getUpdateTime);
         List<FunctionContainerInstance> list = containerInstanceMapper.selectList(wrapper);

@@ -6,6 +6,7 @@ import com.aircas.ptr.foundry.ontology.model.vo.OntologySpaceVO;
 import com.aircas.ptr.foundry.ontology.service.OntologySpaceService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -33,5 +34,16 @@ public class OntologySpaceMcpTools implements McpTools {
             """)
     public List<OntologySpaceVO> listOntologySpaces() {
         return ontologySpaceService.querySpace(SpaceTypeEnum.SPACE.getValue());
+    }
+
+    @Tool(description = """
+            按名称精确查询本体空间。
+            当用户已知空间名称（apiName 或 displayName），需要查找该空间的详细信息时使用。
+            同时匹配 apiName 和 displayName（OR 关系），返回匹配的空间列表（含 spaceId、名称、描述及统计信息）。
+            无匹配时返回空列表。
+            """)
+    public List<OntologySpaceVO> queryOntologySpace(
+            @ToolParam(description = "空间名称，可以是 apiName 或 displayName") String name) {
+        return ontologySpaceService.querySpaceByName(name);
     }
 }

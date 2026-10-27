@@ -203,9 +203,107 @@ public final class CompositeElCompiler {
                 return;
             }
             CompositeNodePlanBO targetPlan = planByElId.get(targetElId);
-            String targetParamName = targetPlan == null ? targetParamId
-                    : targetPlan.getInputParams().getOrDefault(targetParamId, targetParamId);
-            sourcePlan.getEdgeTargets().add(new CompositeEdgeTargetBO(targetElId, targetParamName, sourceParamId));
+            CompositeValidator.PortRef sourceRef = resolveEdgePort(sourcePlan.getCanvasId(), sourceParamId, false);
+            CompositeValidator.PortRef targetRef = targetPlan == null ? null
+                    : resolveEdgePort(targetPlan.getCanvasId(), targetParamId, true);
+            // 引用顶层端口时保持画布上的原始写法：开始节点的产出以外部参数名为键，与端口 id 并不一致
+            String sourceKey = sourceRef == null || !sourceRef.nested()
+                    ? sourceParamId : portKey(sourceRef.topPort(), sourceParamId);
+            String targetKey;
+            if (targetPlan == null) {
+                targetKey = targetParamId;
+            } else if (targetRef != null && targetRef.nested()) {
+                targetKey = portKey(targetRef.topPort(), targetParamId);
+            } else {
+                targetKey = targetPlan.getInputParams().getOrDefault(targetParamId, targetParamId);
+            }
+            sourcePlan.getEdgeTargets().add(new CompositeEdgeTargetBO(targetElId, targetKey, sourceKey,
+                    sourceRef == null ? List.of() : sourceRef.fieldPath(),
+                    targetRef == null ? List.of() : targetRef.fieldPath()));
+        }
+
+        /** 按画布节点端口定义解析连线端点，节点不在画布上（编译期生成的循环取数节点）时返回 null */
+        private CompositeValidator.PortRef resolveEdgePort(String canvasId, String portRef, boolean inputDirection) {
+            CompositeNode node = nodeByCanvasId.get(canvasId);
+            if (node == null || isBlank(portRef)) {
+                return null;
+            }
+            return CompositeValidator.resolvePort(CompositeValidator.nodePorts(node, refs, inputDirection), portRef);
+        }
+
+        /** 端口在运行期产出/待消费入参 Map 上的键 */
+        private static String portKey(CompositeParameter port, String fallback) {
+            if (!isBlank(port.getName())) {
+                return port.getName();
+            }
+            return isBlank(port.getId()) ? fallback : port.getId();
+        }
+
+        /**
+         * 归位节点入参默认值。
+         * <p>画布把顶层端口的默认值按端口 id 登记，而子字段绑定的默认值按叶子字段名登记
+         * （形如 {@code inputDefaults:{orderAmount:"3"}}），运行期按端口取默认值，因此这里把后者组装成
+         * 所属顶层端口的默认对象；认不出的键仍按原样登记，保持改造前的行为。</p>
+         */
+        private void fillInputDefaults(CompositeNode node, Map<String, CompositeFunctionRefBO> nodeRefs,
+                                       CompositeNodePlanBO plan) {
+            if (node.getInputDefaults() == null) {
+                return;
+            }
+            List<CompositeParameter> inputPorts = CompositeValidator.nodePorts(node, nodeRefs, true);
+            node.getInputDefaults().forEach((portRef, value) -> {
+                CompositeValidator.PortRef ref = plan.getInputParams().containsKey(portRef) ? null
+                        : CompositeValidator.resolvePort(inputPorts, portRef);
+                if (ref == null || !ref.nested()) {
+                    plan.getInputDefaults().put(portRef, value == null ? null : String.valueOf(value));
+                    return;
+                }
+                putNestedDefault(plan, ref, value);
+            });
+        }
+
+        /** 把按叶子字段名登记的默认值写进所属顶层端口的默认对象 */
+        @SuppressWarnings("unchecked")
+        private void putNestedDefault(CompositeNodePlanBO plan, CompositeValidator.PortRef ref, Object value) {
+            String portName = portKey(ref.topPort(), ref.topPort().getId());
+            List<String> path = ref.fieldPath();
+            Map<String, Object> current = plan.getNestedInputDefaults()
+                    .computeIfAbsent(portName, k -> new LinkedHashMap<>());
+            for (int i = 0; i < path.size() - 1; i++) {
+                Object child = current.get(path.get(i));
+                if (child instanceof Map<?, ?> childMap) {
+                    current = (Map<String, Object>) childMap;
+                } else {
+                    Map<String, Object> created = new LinkedHashMap<>();
+                    current.put(path.get(i), created);
+                    current = created;
+                }
+            }
+            current.put(path.get(path.size() - 1), typedDefault(ref.port().getType(), value));
+        }
+
+        /** 画布上的默认值是字符串，按子字段声明类型还原，避免脚本把 "3" 当数字用时出错 */
+        private static Object typedDefault(String canvasType, Object value) {
+            if (!(value instanceof CharSequence text) || canvasType == null) {
+                return value;
+            }
+            String raw = text.toString().trim();
+            if (raw.isEmpty()) {
+                return value;
+            }
+            if ("boolean".equals(canvasType)
+                    && ("true".equalsIgnoreCase(raw) || "false".equalsIgnoreCase(raw))) {
+                return Boolean.valueOf(raw);
+            }
+            if (!"number".equals(canvasType)) {
+                return value;
+            }
+            try {
+                boolean integral = raw.indexOf('.') < 0 && raw.indexOf('e') < 0 && raw.indexOf('E') < 0;
+                return integral ? Long.valueOf(raw) : Double.valueOf(raw);
+            } catch (NumberFormatException e) {
+                return value;
+            }
         }
 
         /** Kahn 算法求控制流拓扑序，存在环路时（校验器已拦截，此处兜底）按画布顺序追加 */
@@ -261,10 +359,7 @@ public final class CompositeElCompiler {
                     plan.getOutputParams().put(parameter.getId(), parameter.getName());
                 }
             }
-            if (node.getInputDefaults() != null) {
-                node.getInputDefaults().forEach((portId, value) ->
-                        plan.getInputDefaults().put(portId, value == null ? null : String.valueOf(value)));
-            }
+            fillInputDefaults(node, nodeRefs, plan);
 
             if (kind == CompositeNodeKindEnum.FUNCTION) {
                 CompositeFunctionRefBO ref = refs.get(node.getId());

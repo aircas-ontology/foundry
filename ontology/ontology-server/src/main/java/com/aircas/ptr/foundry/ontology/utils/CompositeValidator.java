@@ -165,21 +165,22 @@ public final class CompositeValidator {
                 connected.add(edge.getTargetNodeId());
                 continue;
             }
-            CompositeParameter sourceParameter = findPort(nodePorts(sourceNode, refs, false), edge.getSourceParameterId());
-            CompositeParameter targetParameter = findPort(nodePorts(targetNode, refs, true), edge.getTargetParameterId());
-            if (sourceParameter == null || targetParameter == null) {
+            PortRef sourceRef = resolvePort(nodePorts(sourceNode, refs, false), edge.getSourceParameterId());
+            PortRef targetRef = resolvePort(nodePorts(targetNode, refs, true), edge.getTargetParameterId());
+            if (sourceRef == null || targetRef == null) {
                 String detail = "函数编排连线引用了不存在的输入输出参数";
-                if (sourceParameter == null) {
+                if (sourceRef == null) {
                     detail += "：源节点[" + edge.getSourceNodeId() + "]不存在输出端口[" + edge.getSourceParameterId() + "]";
                 }
-                if (targetParameter == null) {
+                if (targetRef == null) {
                     detail += "；目标节点[" + edge.getTargetNodeId() + "]不存在输入端口[" + edge.getTargetParameterId() + "]";
                 }
                 errors.add(detail);
                 return finish(errors, warnings);
             }
-            if (!typeEquals(sourceParameter.getType(), targetParameter.getType())) {
-                errors.add("参数类型不匹配：" + displayName(sourceParameter) + " 不能连接 " + displayName(targetParameter));
+            if (!typeEquals(sourceRef.port().getType(), targetRef.port().getType())) {
+                errors.add("参数类型不匹配：" + displayName(sourceRef.port()) + " 不能连接 "
+                        + displayName(targetRef.port()));
                 return finish(errors, warnings);
             }
             // 同一循环区域内的数据回环表达的是跨轮取值而非执行顺序，计入邻接表会被误判成环
@@ -505,6 +506,83 @@ public final class CompositeValidator {
                 errors.add("函数编排" + label + "映射参数类型不匹配");
             }
         }
+    }
+
+    /**
+     * 一条端口引用解析后的形态：顶层端口 + 子字段路径 + 实际引用到的端口。
+     * <p>路径为空表示引用的是顶层端口本身，此时运行期按端口整体读写，与既有连线行为一致。</p>
+     *
+     * @param topPort   引用所属的顶层端口（运行期入参/出参 Map 的键）
+     * @param fieldPath 从顶层端口往下到引用端口的字段名，顶层引用时为空
+     * @param port      实际引用到的端口（顶层端口本身或其某个子字段）
+     */
+    public record PortRef(CompositeParameter topPort, List<String> fieldPath, CompositeParameter port) {
+
+        /** 是否引用到子字段 */
+        public boolean nested() {
+            return fieldPath != null && !fieldPath.isEmpty();
+        }
+    }
+
+    /**
+     * 解析画布上的端口引用：先按顶层端口 id、再按顶层端口名匹配，都没命中时深度优先在子字段里找 id/名。
+     * <p>原型画布把子字段绑定后的连线端点写成叶子字段名（{@code input} 的 {@code userName}），
+     * 开始/结束节点这类画布声明的端口又常用端口名当引用，因此三种写法都要认。</p>
+     *
+     * @param ports 节点端口（含子字段）
+     * @param ref   连线或映射里记录的端口标识
+     * @return 解析结果，引用不到任何端口时返回 null
+     */
+    public static PortRef resolvePort(List<CompositeParameter> ports, String ref) {
+        if (ports == null || isBlank(ref)) {
+            return null;
+        }
+        for (CompositeParameter port : ports) {
+            if (port == null) {
+                continue;
+            }
+            if (ref.equals(port.getId()) || ref.equals(port.getName())) {
+                return new PortRef(port, List.of(), port);
+            }
+        }
+        for (CompositeParameter port : ports) {
+            if (port == null) {
+                continue;
+            }
+            PortRef nested = findChildPort(port, port, new ArrayList<>(), ref);
+            if (nested != null) {
+                return nested;
+            }
+        }
+        return null;
+    }
+
+    /** 深度优先查找子字段端口，path 记录从父端口到当前层级的字段名 */
+    private static PortRef findChildPort(CompositeParameter topPort, CompositeParameter current,
+                                         List<String> path, String ref) {
+        if (current.getChildren() == null) {
+            return null;
+        }
+        for (CompositeParameter child : current.getChildren()) {
+            if (child == null) {
+                continue;
+            }
+            List<String> childPath = new ArrayList<>(path);
+            childPath.add(fieldName(child));
+            if (ref.equals(child.getId()) || ref.equals(child.getName())) {
+                return new PortRef(topPort, List.copyOf(childPath), child);
+            }
+            PortRef deeper = findChildPort(topPort, child, childPath, ref);
+            if (deeper != null) {
+                return deeper;
+            }
+        }
+        return null;
+    }
+
+    /** 子字段在运行期对象上的键名 */
+    private static String fieldName(CompositeParameter parameter) {
+        return isBlank(parameter.getName()) ? parameter.getId() : parameter.getName();
     }
 
     private static CompositeParameter findPort(List<CompositeParameter> ports, String id) {

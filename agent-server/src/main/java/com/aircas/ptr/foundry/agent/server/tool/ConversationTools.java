@@ -26,7 +26,7 @@ public class ConversationTools {
 
     @Tool(description = """
             清空当前会话的上下文：包括多轮对话记忆，以及对象构建过程中已记录的状态
-            （已选空间 space_selected、已选数据源 datasource_selected、对象定义、属性/关系选择等）。
+            （已选空间 space_selected、已选数据源 datasource_selected、已上传的参考文档、对象定义、属性/关系选择等）。
             仅当用户明确表达"清空上下文/清除记忆/清空对话/重新开始/新对话/reset"等重置意图时调用；
             调用成功后会话回到全新状态，请向用户简短确认已清空。切勿在其他场景擅自调用。
             """)

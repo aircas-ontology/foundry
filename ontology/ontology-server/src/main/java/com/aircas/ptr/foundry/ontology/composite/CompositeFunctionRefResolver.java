@@ -8,8 +8,12 @@ import com.aircas.ptr.foundry.ontology.model.param.CompositeNode;
 import com.aircas.ptr.foundry.ontology.model.param.CompositeParameter;
 import com.aircas.ptr.foundry.ontology.model.po.Function;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionParamPO;
+import com.aircas.ptr.foundry.ontology.model.vo.FunctionParameterVO;
 import com.aircas.ptr.foundry.ontology.utils.CompositeValidator;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -27,11 +31,14 @@ import java.util.Map;
  * </ul>
  * <p>两者的键不同，容易混用，因此这里一次性提供两个视图，并把函数入参/出参定义转换成画布端口类型。</p>
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class CompositeFunctionRefResolver {
 
     private final CompositeFunctionCatalog catalog;
+
+    private final ObjectMapper objectMapper;
 
     /**
      * 建立"画布节点 id -&gt; 被引用函数快照"的映射。
@@ -133,9 +140,50 @@ public class CompositeFunctionRefResolver {
             String declared = declaredTypes.get(paramPO.getParamName());
             port.setType(declared != null ? declared : canvasType(paramPO));
             port.setDescription(paramPO.getDescription());
+            port.setChildren(parseChildPorts(paramPO.getFields(), paramPO.getParamName()));
             ports.add(port);
         }
         return ports;
+    }
+
+    /**
+     * 反序列化 {@code function_param.fields} 为子字段端口。
+     * <p>画布把子字段绑定后的连线端点直接写成叶子字段名（如 {@code input} 的 {@code userName}），
+     * 校验器与编译器需要这份层级才能解析这类引用。解析失败只记日志并按"没有子字段"处理，
+     * 不能让一段脏的层级 JSON 把整个编排校验打死。</p>
+     */
+    private List<CompositeParameter> parseChildPorts(String fieldsJson, String paramName) {
+        if (fieldsJson == null || fieldsJson.trim().isEmpty()) {
+            return null;
+        }
+        try {
+            return toChildPorts(objectMapper.readValue(fieldsJson, new TypeReference<List<FunctionParameterVO>>() {
+            }));
+        } catch (Exception e) {
+            log.warn("函数参数[{}]的子字段定义解析失败，按无子字段处理：{}", paramName, e.getMessage());
+            return null;
+        }
+    }
+
+    /** 子字段树转端口树，id 与 name 同样取字段名，保持与顶层端口一致的"按名连线"写法 */
+    private List<CompositeParameter> toChildPorts(List<FunctionParameterVO> fields) {
+        if (fields == null || fields.isEmpty()) {
+            return null;
+        }
+        List<CompositeParameter> children = new ArrayList<>();
+        for (FunctionParameterVO field : fields) {
+            if (field == null || field.getParamName() == null || field.getParamName().trim().isEmpty()) {
+                continue;
+            }
+            CompositeParameter child = new CompositeParameter();
+            child.setId(field.getParamName());
+            child.setName(field.getParamName());
+            child.setType(CompositeFunctionCatalog.toCanvasType(field.getParamType()));
+            child.setDescription(field.getDescription());
+            child.setChildren(toChildPorts(field.getFields()));
+            children.add(child);
+        }
+        return children.isEmpty() ? null : children;
     }
 
     /**
