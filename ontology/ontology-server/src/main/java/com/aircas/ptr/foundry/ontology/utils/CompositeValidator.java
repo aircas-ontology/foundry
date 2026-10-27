@@ -96,8 +96,8 @@ public final class CompositeValidator {
             errors.add("函数编排必须有且仅有一个开始节点");
             return finish(errors, warnings);
         }
-        if (endNodeCount != 1) {
-            errors.add("函数编排必须有且仅有一个结束节点");
+        if (endNodeCount < 1) {
+            errors.add("函数编排至少要有一个结束节点");
             return finish(errors, warnings);
         }
         if (!duplicates.isEmpty()) {
