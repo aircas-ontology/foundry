@@ -462,7 +462,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         FunctionLanguageEnum language = resolveLanguage(param);
         FunctionScanResult scanResult = scriptSecurityScanService.scan(
                 param.getType(), language, param.getCode(), ScanPurpose.SAVE);
-        rejectParseFailure(scanResult);
+        rejectRejectedSave(scanResult);
         if (param.getType() == FunctionTypeEnum.CUSTOMIZE) {
             validateScriptForSave(language, param.getFunctionApi(), version, param.getCode(), scanResult);
         }
@@ -618,7 +618,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         String effectiveCode = resolveEffectiveCode(function, param);
         FunctionScanResult scanResult = scriptSecurityScanService.scan(
                 function.getType(), function.getLanguage(), effectiveCode, ScanPurpose.SAVE);
-        rejectParseFailure(scanResult);
+        rejectRejectedSave(scanResult);
         if (function.getType() == FunctionTypeEnum.CUSTOMIZE) {
             validateScriptForSave(function.getLanguage(), function.getApi(), function.getVersion(),
                     effectiveCode, scanResult);
@@ -661,8 +661,6 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
             effectiveResult = scriptSecurityScanService.scan(
                     function.getType(), function.getLanguage(), function.getCode(), ScanPurpose.PUBLISH);
             if (effectiveResult.status() == ScanStatus.REJECTED) {
-                persistPublishDecision(function, originalUpdateTime, effectiveResult,
-                        FunctionConstant.PUBLISH_UNPUBLISHED);
                 return FunctionPublishResult.of(false, effectiveResult);
             }
             validatePublishAdmission(function, effectiveResult);
@@ -718,7 +716,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         }
     }
 
-    private void rejectParseFailure(FunctionScanResult scanResult) {
+    private static void rejectParseFailure(FunctionScanResult scanResult) {
         if (scanResult.error() == null) {
             return;
         }
@@ -732,6 +730,15 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
             throw new SemgrepScanException(code, scanResult);
         }
         throw new SemgrepScanException(ScanErrorCode.INVALID_SCAN_RESPONSE);
+    }
+
+    /** REJECTED 仅作为本次响应返回，创建和修改均不得持久化或保存为草稿。 */
+    static void rejectRejectedSave(FunctionScanResult scanResult) {
+        rejectParseFailure(scanResult);
+        if (scanResult.status() == ScanStatus.REJECTED) {
+            FunctionScanResult rejected = scanResult.rejectedWithError(ScanErrorCode.SECURITY_SCAN_REJECTED);
+            throw new SemgrepScanException(ScanErrorCode.SECURITY_SCAN_REJECTED, rejected);
+        }
     }
 
     private String resolveEffectiveCode(Function function, FunctionUpdateParam param) {

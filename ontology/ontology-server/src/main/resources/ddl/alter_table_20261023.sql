@@ -1,5 +1,5 @@
 -- 函数算子同步安全扫描：保存每个 api + version 当前代码对应的最后一次有效扫描结果。
--- FAILED 仅用于本次响应和日志，不允许持久化。
+-- REJECTED/FAILED 仅用于本次响应和日志，不允许持久化。
 
 -- 1. 先增加可回填字段。scan_result 此时保持可空，完成历史数据回填后再施加 NOT NULL。
 alter table ontology.function
@@ -60,21 +60,25 @@ alter table ontology.function
     alter column scan_status set not null,
     alter column scan_result set not null;
 
--- 5. 只允许持久化稳定状态，不允许 FAILED 进入数据库。
+-- 5. 只允许持久化稳定状态，不允许 REJECTED/FAILED 进入数据库。
 do $$
 begin
-    if not exists (
+    if exists (
         select 1
-        from pg_constraint
-        where conname = 'ck_function_scan_status'
-          and conrelid = 'ontology.function'::regclass
+        from ontology.function
+        where scan_status not in ('PASSED', 'SKIPPED')
     ) then
-        alter table ontology.function
-            add constraint ck_function_scan_status
-                check (scan_status in ('PASSED', 'REJECTED', 'SKIPPED'));
+        raise exception 'ontology.function contains non-persistable scan status';
     end if;
 end
 $$;
 
-comment on column ontology.function.scan_status is '安全扫描状态：PASSED/REJECTED/SKIPPED，FAILED 不落库';
+alter table ontology.function
+    drop constraint if exists ck_function_scan_status;
+
+alter table ontology.function
+    add constraint ck_function_scan_status
+        check (scan_status in ('PASSED', 'SKIPPED'));
+
+comment on column ontology.function.scan_status is '安全扫描持久化状态：PASSED/SKIPPED，REJECTED/FAILED 不落库';
 comment on column ontology.function.scan_result is '当前代码最后一次有效安全扫描结果，固定契约 JSONB；不保存源码片段或原始报告';

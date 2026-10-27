@@ -5,6 +5,7 @@ public enum ScanErrorCode {
     INVALID_REQUEST(400, "安全扫描请求不合法", false),
     UNSUPPORTED_LANGUAGE(400, "不支持该脚本语言的安全扫描", false),
     CODE_HASH_MISMATCH(400, "脚本内容校验失败", false),
+    SECURITY_SCAN_REJECTED(422, "安全扫描未通过，已阻止保存", false),
     PARSE_FAILED(422, "脚本解析失败，请检查语法后重试", false),
     PARTIAL_PARSE(422, "脚本存在无法完整解析的代码，请检查语法后重试", false),
     SCRIPT_VALIDATION_FAILED(422, "脚本语法或编译校验失败", false),
