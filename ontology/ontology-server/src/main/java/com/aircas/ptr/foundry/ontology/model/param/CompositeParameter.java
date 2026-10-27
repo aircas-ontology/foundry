@@ -6,6 +6,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 
+import java.util.List;
+
 /**
  * 函数编排对外暴露的输入/输出参数定义，序列化后存入 function.code。
  * <p>落库时按 {@code name} 生成 function_param 记录，参数类型由 {@code type}
@@ -30,4 +32,7 @@ public class CompositeParameter {
 
     @Schema(name = "description", description = "参数描述")
     private String description;
+
+    @Schema(name = "children", description = "子字段端口（算子参数定义带层级时展开，连线可引用子字段）；无子字段为 null")
+    private List<CompositeParameter> children;
 }

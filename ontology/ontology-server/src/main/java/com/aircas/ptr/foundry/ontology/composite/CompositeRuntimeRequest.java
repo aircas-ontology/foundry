@@ -30,11 +30,11 @@ public class CompositeRuntimeRequest {
     /** 节点定义：elId -> 节点定义 */
     private final Map<String, CompositeNodePlanBO> planByElId = new LinkedHashMap<>();
 
-    /** 数据连线来源：目标节点 elId -> (目标入参名 -> 上游节点 elId) */
+    /** 数据连线来源：目标节点 elId -> (目标顶层入参端口名 -> 上游节点 elId) */
     private final Map<String, Map<String, String>> feeders = new LinkedHashMap<>();
 
-    /** 连线上游出参端口：目标节点 elId -> (目标入参名 -> (上游节点 elId -> 该上游在这条线上的出参端口 id)) */
-    private final Map<String, Map<String, Map<String, List<String>>>> feederSourceParams = new LinkedHashMap<>();
+    /** 连线上游出参：目标节点 elId -> (目标顶层入参端口名 -> (上游节点 elId -> 该上游连往本目标的连线)) */
+    private final Map<String, Map<String, Map<String, List<CompositeEdgeTargetBO>>>> feederEdges = new LinkedHashMap<>();
 
     /** 逐轮重放项：取数节点 elId -> 每轮开始时要铺回的（目标节点 elId -> (入参名 -> 取值动作)) */
     private final Map<String, Map<String, Map<String, RoundValue>>> loopRounds = new LinkedHashMap<>();
@@ -68,11 +68,11 @@ public class CompositeRuntimeRequest {
             for (CompositeEdgeTargetBO target : nodePlan.getEdgeTargets()) {
                 feeders.computeIfAbsent(target.getTargetElId(), k -> new LinkedHashMap<>())
                         .put(target.getTargetParamName(), nodePlan.getElId());
-                feederSourceParams
+                feederEdges
                         .computeIfAbsent(target.getTargetElId(), k -> new LinkedHashMap<>())
                         .computeIfAbsent(target.getTargetParamName(), k -> new LinkedHashMap<>())
                         .computeIfAbsent(nodePlan.getElId(), k -> new ArrayList<>())
-                        .add(target.getSourceParamId());
+                        .add(target);
             }
         }
     }
@@ -147,8 +147,76 @@ public class CompositeRuntimeRequest {
             if (!outputs.containsKey(target.getSourceParamId())) {
                 continue;
             }
-            pending(target.getTargetElId()).put(target.getTargetParamName(), outputs.get(target.getSourceParamId()));
+            writePending(target, readPath(outputs.get(target.getSourceParamId()), target.getSourceFieldPath()));
         }
+    }
+
+    /**
+     * 写入下游节点的待消费入参。
+     * <p>顶层连线整值覆盖，与改造前一致；子字段连线（{@code targetFieldPath} 非空）在端口对象上按路径合并，
+     * 使同一个端口的多个子字段与默认值能共存。子字段取到 null 时不写入，避免一条连线把同端口其他来源的值清掉。</p>
+     */
+    private void writePending(CompositeEdgeTargetBO target, Object value) {
+        Map<String, Object> pending = pending(target.getTargetElId());
+        List<String> path = target.getTargetFieldPath();
+        if (path == null || path.isEmpty()) {
+            pending.put(target.getTargetParamName(), value);
+            return;
+        }
+        if (value == null) {
+            return;
+        }
+        Map<String, Object> root = pendingBase(target.getTargetElId(), target.getTargetParamName(), pending);
+        Map<String, Object> current = root;
+        for (int i = 0; i < path.size() - 1; i++) {
+            current = copyInto(current, path.get(i));
+        }
+        current.put(path.get(path.size() - 1), value);
+        pending.put(target.getTargetParamName(), root);
+    }
+
+    /** 子字段合并的基底：已推送值优先，其次端口默认对象（复制后才写入，编译产物不能被运行期改坏） */
+    private Map<String, Object> pendingBase(String targetElId, String portName, Map<String, Object> pending) {
+        Object pushed = pending.get(portName);
+        if (pushed instanceof Map<?, ?> map) {
+            return new LinkedHashMap<>(castMap(map));
+        }
+        CompositeNodePlanBO nodePlan = planByElId.get(targetElId);
+        Map<String, Object> defaults = nodePlan == null ? null : nodePlan.getNestedInputDefaults().get(portName);
+        return defaults == null ? new LinkedHashMap<>() : new LinkedHashMap<>(defaults);
+    }
+
+    /** 路径上的下一层：已存在且是对象时复制后下钻（不改动上游产出），否则新建一层 */
+    private static Map<String, Object> copyInto(Map<String, Object> current, String field) {
+        Object child = current.get(field);
+        if (child instanceof Map<?, ?> map) {
+            Map<String, Object> copy = new LinkedHashMap<>(castMap(map));
+            current.put(field, copy);
+            return copy;
+        }
+        Map<String, Object> created = new LinkedHashMap<>();
+        current.put(field, created);
+        return created;
+    }
+
+    /** 按子字段路径读取值，路径为空返回原值；中间层不是对象时读不到，返回 null */
+    private static Object readPath(Object value, List<String> path) {
+        if (path == null || path.isEmpty()) {
+            return value;
+        }
+        Object current = value;
+        for (String field : path) {
+            if (!(current instanceof Map<?, ?> map)) {
+                return null;
+            }
+            current = map.get(field);
+        }
+        return current;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> castMap(Map<?, ?> map) {
+        return (Map<String, Object>) map;
     }
 
     /** 某节点待消费的连线入参 */
@@ -187,7 +255,7 @@ public class CompositeRuntimeRequest {
                 continue;
             }
             Map<String, String> feederMap = feeders.getOrDefault(member, new LinkedHashMap<>());
-            Map<String, Map<String, List<String>>> sourceMap = feederSourceParams
+            Map<String, Map<String, List<CompositeEdgeTargetBO>>> edgeMap = feederEdges
                     .getOrDefault(member, new LinkedHashMap<>());
             Map<String, RoundValue> values = new LinkedHashMap<>();
             Map<String, Object> memberDefaults = new LinkedHashMap<>();
@@ -197,11 +265,17 @@ public class CompositeRuntimeRequest {
                 String feeder = feederMap.get(name);
                 // 上游在区域内时，它会在那一轮自己产出后重新推送，铺回旧值反而盖掉本轮结果
                 if (feeder != null && !members.contains(feeder)) {
-                    values.put(name, new RoundValue(feeder, sourceMap
-                            .getOrDefault(name, new LinkedHashMap<>()).getOrDefault(feeder, new ArrayList<>())));
+                    List<CompositeEdgeTargetBO> edges = edgeMap
+                            .getOrDefault(name, new LinkedHashMap<>()).getOrDefault(feeder, new ArrayList<>());
+                    if (!edges.isEmpty()) {
+                        values.put(name, new RoundValue(feeder, edges));
+                    }
                 }
                 if (nodePlan.getInputDefaults().containsKey(portId)) {
                     memberDefaults.put(name, nodePlan.getInputDefaults().get(portId));
+                } else if (nodePlan.getNestedInputDefaults().containsKey(name)) {
+                    // 复制后再铺：算子拿到的是编译产物本身时，脚本改入参会把后续轮次的默认值一起改坏
+                    memberDefaults.put(name, new LinkedHashMap<>(nodePlan.getNestedInputDefaults().get(name)));
                 }
             }
             if (!values.isEmpty()) {
@@ -249,16 +323,21 @@ public class CompositeRuntimeRequest {
         touched.addAll(defaults.keySet());
         for (String memberElId : touched) {
             Map<String, Object> pushed = pending(memberElId);
+            Map<String, RoundValue> values = targets.get(memberElId);
+            Map<String, Object> memberDefaults = defaults.getOrDefault(memberElId, new LinkedHashMap<>());
             // 只清掉本循环负责重放的入参：区域内上游在同一轮里推送的新值必须保留，
             // 否则下游节点会把上一轮的产出当成这一轮的输入
-            Map<String, RoundValue> values = targets.get(memberElId);
+            Set<String> replayed = new LinkedHashSet<>(memberDefaults.keySet());
             if (values != null) {
-                pushed.keySet().removeAll(values.keySet());
-                values.forEach((name, roundValue) -> pushed.put(name, roundValue.readFrom(this)));
+                replayed.addAll(values.keySet());
             }
-            Map<String, Object> memberDefaults = defaults.getOrDefault(memberElId, new LinkedHashMap<>());
-            pushed.keySet().removeAll(memberDefaults.keySet());
+            pushed.keySet().removeAll(replayed);
+            // 先铺默认值再铺连线值：子字段连线要在默认对象上按路径合并，
+            // 且首轮解析入参就是连线值优先，重放的优先级必须与首轮一致
             pushed.putAll(memberDefaults);
+            if (values != null) {
+                values.values().forEach(roundValue -> roundValue.apply(this));
+            }
         }
         compensateNested(preloadElId);
         return true;
@@ -343,33 +422,49 @@ public class CompositeRuntimeRequest {
     }
 
     /**
-     * 一次重放动作：把某个区域外上游的取值重新铺到目标节点的待消费入参里。
+     * 一次重放动作：把某个区域外上游在本轮解析出的值重新铺到目标节点的待消费入参里。
      * <p>连线上的端口 id 两端各自独立（画布为每个端口生成的不透明 id），不能拿源端口 id 去查目标的映射，
-     * 因此这里记住的是"上游流向该目标入参的那个出参端口 id"，与 {@code pushOutputs} 用的是同一个键。</p>
+     * 因此这里记住的是"上游流向该目标入参的那几条连线"，与 {@code pushOutputs} 用的是同一套键和子字段路径。</p>
      *
      * @param feederElId     上游节点 elId
-     * @param sourceParamIds 在该上游连往本目标的连线上出现的出参端口 id，按连线顺序
+     * @param edges          在该上游连往本目标入参的连线上出现的出参端口，按连线顺序
      */
-    private record RoundValue(String feederElId, List<String> sourceParamIds) {
+    private record RoundValue(String feederElId, List<CompositeEdgeTargetBO> edges) {
 
-        Object readFrom(CompositeRuntimeRequest request) {
+        void apply(CompositeRuntimeRequest request) {
             Map<String, Object> outputs = request.producedOf(feederElId);
-            for (String sourceParamId : sourceParamIds) {
-                if (outputs.containsKey(sourceParamId)) {
-                    return outputs.get(sourceParamId);
+            for (CompositeEdgeTargetBO edge : edges) {
+                if (!outputs.containsKey(edge.getSourceParamId())) {
+                    continue;
+                }
+                Object value = readPath(outputs.get(edge.getSourceParamId()), edge.getSourceFieldPath());
+                // 子字段取不到值时保持原样：其他连线或默认值铺进同一端口的值不能被清掉
+                if (value != null || !edge.nestedTarget()) {
+                    request.writePending(edge, value);
+                    return;
                 }
             }
-            // 上游没有对应产出（例如只给出循环次数的循环节点）时，退回读它本轮解析出的入参：
-            // 与原型"循环变量取自上游"的语义一致
+            CompositeEdgeTargetBO first = edges.get(0);
+            Object fallback = fallbackValue(request);
+            if (fallback != null || !first.nestedTarget()) {
+                request.writePending(first, fallback);
+            }
+        }
+
+        /**
+         * 上游没有对应产出（例如只给出循环次数的循环节点）时，退回读它本轮解析出的入参：
+         * 与原型"循环变量取自上游"的语义一致。
+         */
+        private Object fallbackValue(CompositeRuntimeRequest request) {
             CompositeNodePlanBO feederPlan = request.nodePlan(feederElId);
             if (feederPlan == null) {
                 return null;
             }
             Map<String, Object> consumed = request.consumedOf(feederElId);
-            for (String sourceParamId : sourceParamIds) {
-                String sourceName = feederPlan.getInputParams().get(sourceParamId);
+            for (CompositeEdgeTargetBO edge : edges) {
+                String sourceName = feederPlan.getInputParams().get(edge.getSourceParamId());
                 if (sourceName != null && consumed.containsKey(sourceName)) {
-                    return consumed.get(sourceName);
+                    return readPath(consumed.get(sourceName), edge.getSourceFieldPath());
                 }
             }
             // 上游是纯控制流节点（不引用函数、也没有虚拟端口）时没有可退回的入参，

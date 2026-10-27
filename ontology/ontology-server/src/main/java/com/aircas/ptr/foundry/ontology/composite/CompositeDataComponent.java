@@ -47,7 +47,7 @@ public abstract class CompositeDataComponent extends NodeComponent {
      * @param request  本次执行请求
      * @param nodePlan 节点定义
      * @param inputs   解析出的入参（键为入参端口名）
-     * @return 出参值，键为出参端口 id
+     * @return 出参值，键为出参端口名（数据边与出参汇总都按端口名取）
      */
     protected abstract Map<String, Object> produce(CompositeRuntimeRequest request, CompositeNodePlanBO nodePlan,
                                                    Map<String, Object> inputs);
@@ -99,7 +99,12 @@ public abstract class CompositeDataComponent extends NodeComponent {
                 inputs.put(name, externalInputs.get(externalName));
                 continue;
             }
-            inputs.put(name, nodePlan.getInputDefaults().get(portId));
+            Object defaultValue = nodePlan.getInputDefaults().get(portId);
+            if (defaultValue == null) {
+                // 画布把子字段绑定的默认值按叶子字段名登记，编译器归位成端口对象后在这里补上
+                defaultValue = nodePlan.getNestedInputDefaults().get(name);
+            }
+            inputs.put(name, defaultValue);
         }
         return inputs;
     }
