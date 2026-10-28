@@ -2050,22 +2050,32 @@ public class EntityServiceImpl implements EntityService {
                 var properties = Maps.<String, Object>newLinkedHashMap();
                 //主表属性为标量
                 properties.putAll(row);
-                //关联表属性：一对一取标量，一对多聚合为 List
+                //关联表属性：按 storageGroup 组织为行对象列表
+                Map<String, List<Map<String, Object>>> relatedTables = null;
                 var pkKey = pkVal == null ? null : String.valueOf(pkVal);
                 if (pkKey != null) {
-                    joinGroups.forEach((table, grouped) -> {
+                    for (var entry : joinGroups.entrySet()) {
+                        var table = entry.getKey();
+                        var grouped = entry.getValue();
                         var matched = grouped.get(pkKey);
                         if (CollectionUtils.isEmpty(matched)) {
-                            return;
+                            continue;
                         }
                         var joinKey = joinKeyByTable.get(table);
-                        matched.get(0).keySet().stream()
-                                .filter(apiName -> !StringUtils.equals(apiName, joinKey))
-                                .forEach(apiName -> {
-                                    var values = matched.stream().map(m -> m.get(apiName)).collect(Collectors.toList());
-                                    properties.put(apiName, matched.size() == 1 ? values.get(0) : values);
-                                });
-                    });
+                        var rowMaps = matched.stream().<Map<String, Object>>map(m -> {
+                            Map<String, Object> rowMap = new LinkedHashMap<>();
+                            m.forEach((k, v) -> {
+                                if (!StringUtils.equals(k, joinKey)) {
+                                    rowMap.put(k, v);
+                                }
+                            });
+                            return rowMap;
+                        }).collect(Collectors.toList());
+                        if (relatedTables == null) {
+                            relatedTables = Maps.newLinkedHashMap();
+                        }
+                        relatedTables.put(table, rowMaps);
+                    }
                 }
                 var titleVal = titleApiName == null ? null : properties.get(titleApiName);
                 var displayName = titleVal != null ? String.valueOf(titleVal)
@@ -2074,6 +2084,7 @@ public class EntityServiceImpl implements EntityService {
                         .primaryKey(pkVal)
                         .displayName(displayName)
                         .properties(properties)
+                        .relatedTables(relatedTables)
                         .build());
             }
         } catch (Exception e) {
@@ -2203,8 +2214,8 @@ public class EntityServiceImpl implements EntityService {
         if (properties == null || properties.isEmpty()) {
             return null;
         }
-        //storageGroup -> (apiName -> 值)，丢弃主键、未知/未绑定属性
-        var groupedValues = Maps.<String, Map<String, Object>>newLinkedHashMap();
+        //main 组属性：从 properties 中取，丢弃主键、未知/未绑定属性
+        var mainValues = Maps.<String, Object>newLinkedHashMap();
         properties.forEach((apiName, value) -> {
             if (StringUtils.equals(apiName, pkApiName)) {
                 return;
@@ -2214,33 +2225,74 @@ public class EntityServiceImpl implements EntityService {
                 return;
             }
             var group = StringUtils.isEmpty(prop.getStorageGroup()) ? "main" : prop.getStorageGroup();
-            groupedValues.computeIfAbsent(group, k -> Maps.newLinkedHashMap()).put(apiName, value);
+            if (!"main".equals(group)) {
+                return;
+            }
+            mainValues.put(apiName, value);
         });
 
-        //main 组：单行，跳过 null 值；无有效主存储列则跳过该节点
-        var mainInfos = toPropertyInfos(groupedValues.get("main"), true);
+        var mainInfos = toPropertyInfos(mainValues, true);
         if (CollectionUtils.isEmpty(mainInfos)) {
             log.warn("导入实例节点跳过：无主存储分组(main)有效属性，primaryKey={}", node.getPrimaryKey());
             return null;
         }
         var entityProperties = Lists.<EntityCreateParam.EntityProperty>newArrayList();
-        //main 组单行：显式包一层 List<List<PropertyInfo>>，避开 Guava newArrayList 重载歧义
         var mainRows = Lists.<List<EntityCreateParam.PropertyInfo>>newArrayList();
         mainRows.add(mainInfos);
         entityProperties.add(EntityCreateParam.EntityProperty.builder()
                 .storageGroup("main")
                 .props(mainRows)
                 .build());
-        //非 main 组：一对多按 List 下标还原多行
-        groupedValues.forEach((group, values) -> {
-            if (StringUtils.equals(group, "main")) {
-                return;
-            }
-            entityProperties.add(EntityCreateParam.EntityProperty.builder()
-                    .storageGroup(group)
-                    .props(buildRelatedRows(values))
-                    .build());
-        });
+
+        //关联表数据：优先取 relatedTables（新格式：行对象列表），否则从 properties 里还原（旧格式：平行数组）
+        var relatedTables = node.getRelatedTables();
+        if (relatedTables != null && !relatedTables.isEmpty()) {
+            relatedTables.forEach((storageGroup, rows) -> {
+                if (CollectionUtils.isEmpty(rows)) {
+                    return;
+                }
+                var propRows = Lists.<List<EntityCreateParam.PropertyInfo>>newArrayList();
+                for (var rowMap : rows) {
+                    var rowInfos = toPropertyInfos(rowMap, false);
+                    if (CollectionUtils.isNotEmpty(rowInfos)) {
+                        propRows.add(rowInfos);
+                    }
+                }
+                if (CollectionUtils.isNotEmpty(propRows)) {
+                    entityProperties.add(EntityCreateParam.EntityProperty.builder()
+                            .storageGroup(storageGroup)
+                            .props(propRows)
+                            .build());
+                }
+            });
+        } else {
+            //旧格式兼容：非 main 组属性散落在 properties 里，值为 List 或标量
+            var groupedValues = Maps.<String, Map<String, Object>>newLinkedHashMap();
+            properties.forEach((apiName, value) -> {
+                if (StringUtils.equals(apiName, pkApiName)) {
+                    return;
+                }
+                var prop = propertyMap.get(apiName);
+                if (prop == null) {
+                    return;
+                }
+                var group = StringUtils.isEmpty(prop.getStorageGroup()) ? "main" : prop.getStorageGroup();
+                if ("main".equals(group)) {
+                    return;
+                }
+                groupedValues.computeIfAbsent(group, k -> Maps.newLinkedHashMap()).put(apiName, value);
+            });
+            groupedValues.forEach((group, values) -> {
+                var rows = buildRelatedRows(values);
+                if (CollectionUtils.isNotEmpty(rows)) {
+                    entityProperties.add(EntityCreateParam.EntityProperty.builder()
+                            .storageGroup(group)
+                            .props(rows)
+                            .build());
+                }
+            });
+        }
+
         return EntityCreateParam.Entity.builder()
                 .entityProperties(entityProperties)
                 .build();
