@@ -14,6 +14,7 @@ import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.google.common.collect.Sets;
 import org.apache.commons.lang3.StringUtils;
 
+import java.sql.Timestamp;
 import java.util.Arrays;
 import java.util.stream.Collectors;
 
@@ -147,9 +148,9 @@ public class DataConverter {
 
         switch (targetDataType) {
             case Timestamp:
-                return DateUtils.convertToTimestamp(valueStr, "yyyy-MM-dd HH:mm:ss");
+                return parseTimestamp(valueStr);
             case Date:
-                return DateUtils.fromString2Date(valueStr, "yyyy-MM-dd");
+                return parseDate(valueStr);
             case Float:
                 return Float.parseFloat(valueStr);
             case Double:
@@ -160,6 +161,60 @@ public class DataConverter {
                 return Long.parseLong(valueStr);
             default:
                 return inputDataValue; // 原样返回不支持的类型
+        }
+    }
+
+    /**
+     * 解析时间戳字符串，支持多种格式：
+     * 1. yyyy-MM-dd HH:mm:ss
+     * 2. yyyy-MM-dd HH:mm:ss.SSS
+     * 3. ISO 8601 (yyyy-MM-dd'T'HH:mm:ss.SSSXXX)
+     */
+    private static Timestamp parseTimestamp(String valueStr) {
+        // 尝试简单格式
+        try {
+            return DateUtils.convertToTimestamp(valueStr, "yyyy-MM-dd HH:mm:ss");
+        } catch (Exception e) {
+            // 忽略，尝试下一种格式
+        }
+        
+        // 尝试带毫秒格式
+        try {
+            return DateUtils.convertToTimestamp(valueStr, "yyyy-MM-dd HH:mm:ss.SSS");
+        } catch (Exception e) {
+            // 忽略，尝试下一种格式
+        }
+        
+        // 尝试 ISO 8601 格式
+        try {
+            java.util.Date date = DateUtils.parseISO8601(valueStr);
+            return new Timestamp(date.getTime());
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Cannot parse as timestamp: " + valueStr, e);
+        }
+    }
+
+    /**
+     * 解析日期字符串，支持多种格式：
+     * 1. yyyy-MM-dd
+     * 2. ISO 8601 日期格式
+     */
+    private static java.util.Date parseDate(String valueStr) {
+        // 尝试简单格式
+        try {
+            return DateUtils.fromString2Date(valueStr, "yyyy-MM-dd");
+        } catch (Exception e) {
+            // 忽略，尝试下一种格式
+        }
+        
+        // 尝试 ISO 8601 格式（可能包含时间部分，取日期部分）
+        try {
+            java.util.Date date = DateUtils.parseISO8601(valueStr);
+            // 只取日期部分，去掉时间
+            String dateOnly = DateUtils.format(date, "yyyy-MM-dd");
+            return DateUtils.fromString2Date(dateOnly, "yyyy-MM-dd");
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Cannot parse as date: " + valueStr, e);
         }
     }
 
