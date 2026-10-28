@@ -60,7 +60,7 @@ public class OntologyFunctionController {
         return RestResult.ofData(functionService.getFunctions(param));
     }
 
-    @Operation(summary = "创建函数", description = "脚本算子同步执行安全扫描；HIGH 风险可保存为未发布草稿，响应返回扫描摘要")
+    @Operation(summary = "创建函数", description = "脚本算子同步执行安全扫描；HIGH 风险将阻止保存且不落库，响应返回扫描结果")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "创建成功，返回扫描状态和摘要"),
             @ApiResponse(responseCode = "422", description = "脚本解析或本地校验失败，不落库"),
