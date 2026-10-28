@@ -2231,7 +2231,7 @@ public class EntityServiceImpl implements EntityService {
             mainValues.put(apiName, value);
         });
 
-        var mainInfos = toPropertyInfos(mainValues, true);
+        var mainInfos = toPropertyInfos(mainValues, propertyMap, true);
         if (CollectionUtils.isEmpty(mainInfos)) {
             log.warn("导入实例节点跳过：无主存储分组(main)有效属性，primaryKey={}", node.getPrimaryKey());
             return null;
@@ -2253,7 +2253,7 @@ public class EntityServiceImpl implements EntityService {
                 }
                 var propRows = Lists.<List<EntityCreateParam.PropertyInfo>>newArrayList();
                 for (var rowMap : rows) {
-                    var rowInfos = toPropertyInfos(rowMap, false);
+                    var rowInfos = toPropertyInfos(rowMap, propertyMap, false);
                     if (CollectionUtils.isNotEmpty(rowInfos)) {
                         propRows.add(rowInfos);
                     }
@@ -2303,16 +2303,29 @@ public class EntityServiceImpl implements EntityService {
      *
      * @param skipNull 为 true 时跳过 null 值（main 组插入用 Collectors.toMap，null 值会 NPE）
      */
-    private List<EntityCreateParam.PropertyInfo> toPropertyInfos(Map<String, Object> values, boolean skipNull) {
+    private List<EntityCreateParam.PropertyInfo> toPropertyInfos(Map<String, Object> values, 
+                                                                 Map<String, OntologyProperty> propertyMap,
+                                                                 boolean skipNull) {
         if (values == null || values.isEmpty()) {
             return Lists.newArrayList();
         }
         return values.entrySet().stream()
                 .filter(e -> !(skipNull && e.getValue() == null))
-                .map(e -> EntityCreateParam.PropertyInfo.builder()
-                        .propertyApiName(e.getKey())
-                        .propertyValue(e.getValue())
-                        .build())
+                .map(e -> {
+                    var prop = propertyMap.get(e.getKey());
+                    var convertedValue = e.getValue();
+                    if (prop != null && prop.getPropertyType() != null && convertedValue != null) {
+                        try {
+                            convertedValue = DataConverter.convert2DataType(convertedValue, prop.getPropertyType());
+                        } catch (Exception ex) {
+                            log.warn("属性 {} 类型转换失败，保留原值：{}", e.getKey(), ex.getMessage());
+                        }
+                    }
+                    return EntityCreateParam.PropertyInfo.builder()
+                            .propertyApiName(e.getKey())
+                            .propertyValue(convertedValue)
+                            .build();
+                })
                 .collect(Collectors.toList());
     }
 
