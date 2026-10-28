@@ -390,10 +390,14 @@ public final class CompositeValidator {
             case END:
                 // 结束节点：输入端口由编排 outputParameters 决定，无输出端口
                 return inputDirection ? List.of() : List.of();
-            case LOOP:
+            case LOOP: {
+                // 虚拟端口 id/名恒为 item、done（itemName 只影响循环体上下文变量名），类型由画布配置
+                CompositeLoopConfig loopConfig = node == null ? null : node.getLoopConfig();
                 return inputDirection
                         ? List.of(port("collection", "collection", "array"))
-                        : List.of(port("item", "item", "object"), port("done", "done", "object"));
+                        : List.of(port("item", "item", typeName(loopConfig == null ? null : loopConfig.getItemType(), "object")),
+                                  port("done", "done", typeName(loopConfig == null ? null : loopConfig.getDoneType(), "object")));
+            }
             case BRANCH:
                 return inputDirection
                         ? List.of(port("value", "value", "object"))
@@ -687,12 +691,34 @@ public final class CompositeValidator {
                 .orElse(null);
     }
 
-    /** 端口类型比较，空类型按 object 处理（与原型默认值一致） */
+    /**
+     * 端口类型比较，空类型按 object 处理（与原型默认值一致）。
+     * <p>object 表示"不限定具体类型"，作为通配符匹配任何类型（双向）；
+     * 数字、字符串、布尔、数组各自的别名等价，避免画布上的 number 与算子声明的 double 互不认。</p>
+     */
     private static boolean typeEquals(String source, String target) {
         String s = isBlank(source) ? "object" : source.trim().toLowerCase();
         String t = isBlank(target) ? "object" : target.trim().toLowerCase();
-        // object 表示"不限定具体类型"，作为通配符可以匹配任何类型（双向）
-        return s.equals(t) || "object".equals(s) || "object".equals(t);
+        if ("object".equals(s) || "object".equals(t)) {
+            return true;
+        }
+        return canonicalType(s).equals(canonicalType(t));
+    }
+
+    /** 类型别名归一：number/int/long/float/double 等归为同类 */
+    private static String canonicalType(String type) {
+        return switch (type) {
+            case "number", "int", "integer", "long", "float", "double", "short", "byte", "decimal" -> "number";
+            case "str", "string", "char", "text" -> "string";
+            case "bool", "boolean" -> "boolean";
+            case "list", "array" -> "array";
+            default -> type;
+        };
+    }
+
+    /** 端口类型取值：空值回落默认类型 */
+    private static String typeName(String raw, String fallback) {
+        return isBlank(raw) ? fallback : raw.trim();
     }
 
     private static String displayName(CompositeParameter parameter) {

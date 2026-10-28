@@ -30,4 +30,10 @@ public class CompositeLoopConfig {
 
     @Schema(name = "itemName", description = "当前迭代项在循环体上下文中的名称", example = "item")
     private String itemName;
+
+    @Schema(name = "itemType", description = "item 端口的类型，缺省 object（可连任意下游入参）", example = "double")
+    private String itemType;
+
+    @Schema(name = "doneType", description = "done（结束后）端口的类型，缺省 object", example = "array")
+    private String doneType;
 }
