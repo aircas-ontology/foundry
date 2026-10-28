@@ -4,6 +4,7 @@ import com.aircas.ptr.foundry.common.constant.FunctionParamTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.bo.CompositeFunctionRefBO;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamCategoryEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.Status;
+import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.param.CompositeConfig;
 import com.aircas.ptr.foundry.ontology.model.param.CompositeNode;
 import com.aircas.ptr.foundry.ontology.model.param.CompositeParameter;
@@ -115,6 +116,14 @@ public class CompositeFunctionRefResolver {
         }
         List<FunctionParamPO> inputParams = catalog.findParams(function.getId(), FunctionParamCategoryEnum.INPUT);
         List<FunctionParamPO> outputParams = catalog.findParams(function.getId(), FunctionParamCategoryEnum.OUTPUT);
+        // 基础查询、容器等算子在 function_param 中未声明出参，但运行期均产出 result 端口；
+        // 前端画布按所有函数节点都有 result 出参处理，这里兜底补一个，避免保存时报“不存在输出端口[result]”。
+        if (outputParams.isEmpty() && function.getType() != FunctionTypeEnum.COMPOSITE) {
+            outputParams = List.of(FunctionParamPO.builder()
+                    .paramName("result")
+                    .paramType(FunctionParamTypeEnum.OBJECT)
+                    .build());
+        }
         // 脚本算子（CUSTOMIZE）的 result 出参承载的是 FunctionResultVO.data，真实类型由用户代码决定，
         // 注册表统一声明成 OBJECT；这里按声明类型还原（见 declaredScriptTypes），
         // 基础查询/外部API 等结构化出参保持原样。

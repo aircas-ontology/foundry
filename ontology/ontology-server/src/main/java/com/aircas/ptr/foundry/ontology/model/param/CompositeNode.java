@@ -45,6 +45,9 @@ public class CompositeNode {
     @Schema(name = "transformConfig", description = "转换节点配置")
     private CompositeTransformConfig transformConfig;
 
+    @Schema(name = "switchConfig", description = "Switch Case 节点配置")
+    private CompositeSwitchConfig switchConfig;
+
     @Schema(name = "inputDefaults", description = "节点输入端口的默认值，key 为端口（参数）标识")
     private Map<String, Object> inputDefaults;
 

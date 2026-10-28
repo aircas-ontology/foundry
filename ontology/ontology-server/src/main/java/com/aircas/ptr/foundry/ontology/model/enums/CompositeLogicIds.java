@@ -17,6 +17,9 @@ public final class CompositeLogicIds {
     /** 数据格式转换节点 */
     public static final String TRANSFORM = "__logic-transform__";
 
+    /** Switch Case 节点 */
+    public static final String SWITCH = "__logic-switch__";
+
     /** 逻辑节点统一的函数版本 */
     public static final String LOGIC_VERSION = "logic";
 

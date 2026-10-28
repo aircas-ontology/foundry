@@ -74,7 +74,8 @@ public abstract class CompositeDataComponent extends NodeComponent {
     }
 
     /**
-     * 解析节点全部入参，优先级：所在循环的当前项 &gt; 上游连线推送值 &gt; 外部输入映射 &gt; 节点默认值 &gt; null。
+     * 解析节点全部入参，优先级：手动输入的固定值 &gt; 所在循环的当前项 &gt; 上游连线推送值 &gt; 外部输入映射 &gt; 空。
+     * <p>画布上为某入参配置了手动输入时，该入参就是固定值：上游连线、调用方同名入参都不再覆盖它。</p>
      */
     static Map<String, Object> resolveInputs(NodeComponent component, CompositeRuntimeRequest request,
                                              CompositeNodePlanBO nodePlan) {
@@ -85,6 +86,11 @@ public abstract class CompositeDataComponent extends NodeComponent {
         for (Map.Entry<String, String> port : nodePlan.getInputParams().entrySet()) {
             String portId = port.getKey();
             String name = port.getValue();
+            Object manualValue = nodePlan.manualInput(portId, name);
+            if (manualValue != null) {
+                inputs.put(name, manualValue);
+                continue;
+            }
             String feeder = feederMap.get(name);
             if (feeder != null && nodePlan.getEnclosingLoops().contains(feeder)) {
                 inputs.put(name, loopObjectFor(component, request, nodePlan, feeder));

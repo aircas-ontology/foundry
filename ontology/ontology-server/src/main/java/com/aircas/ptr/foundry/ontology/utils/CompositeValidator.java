@@ -11,6 +11,7 @@ import com.aircas.ptr.foundry.ontology.model.param.CompositeLoopConfig;
 import com.aircas.ptr.foundry.ontology.model.param.CompositeNode;
 import com.aircas.ptr.foundry.ontology.model.param.CompositeParameter;
 import com.aircas.ptr.foundry.ontology.model.param.CompositePortMapping;
+import com.aircas.ptr.foundry.ontology.model.param.CompositeSwitchConfig;
 import com.aircas.ptr.foundry.ontology.model.param.CompositeTransformConfig;
 
 import java.util.ArrayDeque;
@@ -151,7 +152,7 @@ public final class CompositeValidator {
                 return finish(errors, warnings);
             }
             boolean selfEdge = java.util.Objects.equals(edge.getSourceNodeId(), edge.getTargetNodeId());
-            if (selfEdge && isControlFlowEdge(edge)) {
+            if (selfEdge && isControlFlowEdge(edge, nodeMap)) {
                 errors.add("函数编排存在无效连线");
                 return finish(errors, warnings);
             }
@@ -161,7 +162,7 @@ public final class CompositeValidator {
             }
             CompositeNode sourceNode = nodeMap.get(edge.getSourceNodeId());
             CompositeNode targetNode = nodeMap.get(edge.getTargetNodeId());
-            if (isControlFlowEdge(edge)) {
+            if (isControlFlowEdge(edge, nodeMap)) {
                 adjacency.get(edge.getSourceNodeId()).add(edge.getTargetNodeId());
                 connected.add(edge.getSourceNodeId());
                 connected.add(edge.getTargetNodeId());
@@ -279,24 +280,83 @@ public final class CompositeValidator {
     }
 
     /**
-     * 控制流连线：分支的 true/false 输出、以及节点的流程输出指向下游流程输入
+     * 控制流连线：分支的 true/false、循环的 body/done、Switch 的 case/default，
+     * 以及普通节点的流程输出指向下游流程输入。
+     * <p>Switch 的 case.id 是动态值，必须结合源节点定义判断，因此优先使用带 nodeMap 的重载。</p>
      */
     public static boolean isControlFlowEdge(CompositeEdge edge) {
-        return isControlFlowEdge(edge.getSourceParameterId(), edge.getTargetParameterId());
+        return isControlFlowEdge(edge, null);
     }
 
     /**
-     * 按端口 id 判断是否控制流连线
+     * 按源节点定义判断是否为控制流连线。
+     *
+     * @param edge    连线
+     * @param nodeMap 节点 id -> 节点；为 null 时按静态端口名兜底判断
+     * @return true 表示仅表达执行顺序的控制流连线
+     */
+    public static boolean isControlFlowEdge(CompositeEdge edge, Map<String, CompositeNode> nodeMap) {
+        if (edge == null || !FLOW_IN.equals(trimToEmpty(edge.getTargetParameterId()))) {
+            return false;
+        }
+        String sourceParamId = trimToEmpty(edge.getSourceParameterId());
+        CompositeNode sourceNode = nodeMap == null ? null : nodeMap.get(edge.getSourceNodeId());
+        if (sourceNode != null) {
+            CompositeNodeKindEnum kind = resolveKind(sourceNode);
+            switch (kind) {
+                case FUNCTION, TRANSFORM, START -> {
+                    return FLOW_OUT.equals(sourceParamId);
+                }
+                case BRANCH -> {
+                    return "true".equals(sourceParamId) || "false".equals(sourceParamId);
+                }
+                case LOOP -> {
+                    return "body".equals(sourceParamId) || "done".equals(sourceParamId);
+                }
+                case SWITCH -> {
+                    return isSwitchControlPort(sourceNode, sourceParamId);
+                }
+                default -> {
+                    return false;
+                }
+            }
+        }
+        // 无节点上下文时按已知静态端口兜底
+        return FLOW_OUT.equals(sourceParamId) || "true".equals(sourceParamId) || "false".equals(sourceParamId)
+                || "body".equals(sourceParamId) || "done".equals(sourceParamId) || "default".equals(sourceParamId);
+    }
+
+    /**
+     * 按端口 id 判断是否控制流连线（无节点上下文，仅用于无法拿到节点定义的场景）。
      *
      * @param sourceParameterId 源端口 id
      * @param targetParameterId 目标端口 id
      * @return true 表示仅表达执行顺序的控制流连线
      */
     public static boolean isControlFlowEdge(String sourceParameterId, String targetParameterId) {
-        if (!FLOW_IN.equals(targetParameterId)) {
+        if (!FLOW_IN.equals(trimToEmpty(targetParameterId))) {
             return false;
         }
-        return FLOW_OUT.equals(sourceParameterId) || "true".equals(sourceParameterId) || "false".equals(sourceParameterId);
+        String sourceParamId = trimToEmpty(sourceParameterId);
+        return FLOW_OUT.equals(sourceParamId) || "true".equals(sourceParamId) || "false".equals(sourceParamId)
+                || "body".equals(sourceParamId) || "done".equals(sourceParamId) || "default".equals(sourceParamId);
+    }
+
+    /** Switch 节点的控制流输出端口：每个 case.id 以及 default */
+    private static boolean isSwitchControlPort(CompositeNode node, String sourceParamId) {
+        if ("default".equals(sourceParamId)) {
+            return true;
+        }
+        CompositeSwitchConfig switchConfig = node.getSwitchConfig();
+        if (switchConfig == null || switchConfig.getCases() == null) {
+            return false;
+        }
+        for (CompositeSwitchConfig.CaseItem item : switchConfig.getCases()) {
+            if (item != null && sourceParamId.equals(item.getId())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -338,6 +398,20 @@ public final class CompositeValidator {
                 return inputDirection
                         ? List.of(port("value", "value", "object"))
                         : List.of(port("true", "true", "object"), port("false", "false", "object"));
+            case SWITCH:
+                List<CompositeParameter> switchOutputs = new ArrayList<>();
+                switchOutputs.add(port("default", "default", "object"));
+                CompositeSwitchConfig switchConfig = node == null ? null : node.getSwitchConfig();
+                if (switchConfig != null && switchConfig.getCases() != null) {
+                    for (CompositeSwitchConfig.CaseItem item : switchConfig.getCases()) {
+                        if (item != null && !isBlank(item.getId())) {
+                            switchOutputs.add(port(item.getId(), item.getId(), "object"));
+                        }
+                    }
+                }
+                // 输入端口：优先用 switchOnPath，兜底 value，与前端数据边 targetParameterId 对齐
+                String switchInputPort = switchConfig == null || isBlank(switchConfig.getSwitchOnPath()) ? "value" : switchConfig.getSwitchOnPath().trim();
+                return inputDirection ? List.of(port(switchInputPort, switchInputPort, "object")) : switchOutputs;
             case TRANSFORM:
             default:
                 CompositeTransformConfig transformConfig = node == null ? null : node.getTransformConfig();
@@ -394,7 +468,7 @@ public final class CompositeValidator {
     private static Map<String, Set<String>> loopRegions(Map<String, CompositeNode> nodeMap, List<CompositeEdge> edges) {
         Map<String, List<String>> controlForward = new HashMap<>();
         for (CompositeEdge edge : edges) {
-            if (edge == null || !isControlFlowEdge(edge)) {
+            if (edge == null || !isControlFlowEdge(edge, nodeMap)) {
                 continue;
             }
             controlForward.computeIfAbsent(edge.getSourceNodeId(), k -> new ArrayList<>()).add(edge.getTargetNodeId());
@@ -437,6 +511,21 @@ public final class CompositeValidator {
                 CompositeBranchConfig branchConfig = node.getBranchConfig();
                 if (branchConfig == null || isBlank(branchConfig.getExpression())) {
                     errors.add("分支节点[" + node.getId() + "]未配置判断条件");
+                }
+            } else if (kind == CompositeNodeKindEnum.SWITCH) {
+                CompositeSwitchConfig switchConfig = node.getSwitchConfig();
+                if (switchConfig == null || isBlank(switchConfig.getSwitchOnPath())) {
+                    errors.add("Switch Case 节点[" + node.getId() + "]未配置取值参数");
+                }
+                if (switchConfig == null || switchConfig.getCases() == null || switchConfig.getCases().isEmpty()) {
+                    errors.add("Switch Case 节点[" + node.getId() + "]至少需要一个 case");
+                } else {
+                    for (CompositeSwitchConfig.CaseItem item : switchConfig.getCases()) {
+                        if (item == null || isBlank(item.getId()) || isBlank(item.getValue())) {
+                            errors.add("Switch Case 节点[" + node.getId() + "]存在未配置完整的 case");
+                            break;
+                        }
+                    }
                 }
             } else if (kind == CompositeNodeKindEnum.TRANSFORM) {
                 CompositeTransformConfig transformConfig = node.getTransformConfig();
@@ -621,6 +710,10 @@ public final class CompositeValidator {
 
     private static boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
+    }
+
+    private static String trimToEmpty(String value) {
+        return value == null ? "" : value.trim();
     }
 
     private static CompositeValidationBO finish(List<String> errors, List<String> warnings) {

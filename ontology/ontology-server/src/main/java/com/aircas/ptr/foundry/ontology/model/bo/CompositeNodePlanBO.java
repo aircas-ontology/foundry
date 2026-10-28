@@ -71,6 +71,15 @@ public class CompositeNodePlanBO {
     @Schema(description = "分支节点判断表达式")
     private String branchExpression;
 
+    @Schema(description = "Switch Case 节点取值端口名")
+    private String switchOnPath;
+
+    @Schema(description = "Switch Case 分支：case.id -> 目标节点 elId")
+    private Map<String, String> switchTargets = new LinkedHashMap<>();
+
+    @Schema(description = "Switch Case 分支匹配项：case.id -> 匹配值")
+    private Map<String, String> switchCases = new LinkedHashMap<>();
+
     @Schema(description = "转换节点语言")
     private String transformLanguage;
 
@@ -101,6 +110,29 @@ public class CompositeNodePlanBO {
 
     public List<String> getEnclosingLoops() {
         return enclosingLoops == null ? enclosingLoops = new ArrayList<>() : enclosingLoops;
+    }
+
+    /**
+     * 画布上为该入参配置的手动输入固定值。
+     * <p>手填值一律以字符串登记，空串视为"未配置"，否则占位空值会挡住上游连线推过来的值。</p>
+     *
+     * @param portId 入参端口 id
+     * @param portName 入参端口名
+     * @return 固定值；未配置手动输入时返回 null
+     */
+    public Object manualInput(String portId, String portName) {
+        Map<String, Object> defaults = getInputDefaults();
+        Object value = defaults == null ? null : defaults.get(portId);
+        if (value == null) {
+            value = getNestedInputDefaults().get(portName);
+        }
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof String text && text.trim().isEmpty()) {
+            return null;
+        }
+        return value;
     }
 
     /**

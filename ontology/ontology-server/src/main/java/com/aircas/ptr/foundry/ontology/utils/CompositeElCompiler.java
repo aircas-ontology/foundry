@@ -13,6 +13,7 @@ import com.aircas.ptr.foundry.ontology.model.param.CompositeLoopConfig;
 import com.aircas.ptr.foundry.ontology.model.param.CompositeNode;
 import com.aircas.ptr.foundry.ontology.model.param.CompositeParameter;
 import com.aircas.ptr.foundry.ontology.model.param.CompositePortMapping;
+import com.aircas.ptr.foundry.ontology.model.param.CompositeSwitchConfig;
 import com.aircas.ptr.foundry.ontology.model.param.CompositeTransformConfig;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -59,6 +60,9 @@ public final class CompositeElCompiler {
 
     /** 分支节点假支路端口 */
     private static final String PORT_FALSE = "false";
+
+    /** Switch 节点未命中任何 case 时的兜底出口 */
+    private static final String DEFAULT_TARGET = "default";
 
     /** JSON 序列化工具 */
     private static final ObjectMapper objectMapper = new ObjectMapper();
@@ -184,7 +188,7 @@ public final class CompositeElCompiler {
                 }
                 String sourceParamId = trimToEmpty(edge.getSourceParameterId());
                 String targetParamId = trimToEmpty(edge.getTargetParameterId());
-                if (CompositeValidator.isControlFlowEdge(sourceParamId, targetParamId)) {
+                if (CompositeValidator.isControlFlowEdge(edge, nodeByCanvasId)) {
                     controlTargets.computeIfAbsent(adjKey(sourceElId, sourceParamId), k -> new ArrayList<>()).add(targetElId);
                     controlInDegree.merge(targetElId, 1, Integer::sum);
                 } else {
@@ -568,8 +572,8 @@ public final class CompositeElCompiler {
             CompositeNodePlanBO plan = planByElId.get(elId);
             CompositeNodeKindEnum kind = CompositeNodeKindEnum.fromKind(plan == null ? null : plan.getKind());
             if (kind == CompositeNodeKindEnum.LOOP) {
-                List<String> roots = directTargetsOf(elId, CompositeValidator.FLOW_OUT);
-                List<String> body = regionOf(elId, CompositeValidator.FLOW_OUT);
+                List<String> roots = directTargetsOf(elId, "body");
+                List<String> body = regionOf(elId, "body");
                 plan.getLoopRoots().addAll(roots);
                 plan.getLoopBody().addAll(body);
                 for (String member : body) {
@@ -593,6 +597,41 @@ public final class CompositeElCompiler {
                 plan.getBranchTargets().put(PORT_TRUE, firstOf(directTargetsOf(elId, PORT_TRUE)));
                 plan.getBranchTargets().put(PORT_FALSE, firstOf(directTargetsOf(elId, PORT_FALSE)));
                 return "IF(" + elId + ", " + join(regionParts(trueRegion)) + ", " + join(regionParts(falseRegion)) + ")";
+            }
+            if (kind == CompositeNodeKindEnum.SWITCH) {
+                CompositeNode node = nodeByCanvasId.get(plan.getCanvasId());
+                CompositeSwitchConfig switchConfig = node == null ? null : node.getSwitchConfig();
+                List<CompositeSwitchConfig.CaseItem> cases = switchConfig == null ? List.of() : switchConfig.getCases();
+                List<String> caseIds = new ArrayList<>();
+                for (CompositeSwitchConfig.CaseItem item : cases) {
+                    if (item != null && !isBlank(item.getId())) {
+                        caseIds.add(item.getId());
+                    }
+                }
+                // 记录每个 case 的首节点与匹配值，供 SwitchComponent 运行时选择
+                for (String caseId : caseIds) {
+                    plan.getSwitchTargets().put(caseId, firstOf(directTargetsOf(elId, caseId)));
+                }
+                plan.getSwitchTargets().put(DEFAULT_TARGET, firstOf(directTargetsOf(elId, DEFAULT_TARGET)));
+                if (switchConfig != null) {
+                    for (CompositeSwitchConfig.CaseItem item : cases) {
+                        if (item != null && !isBlank(item.getId())) {
+                            plan.getSwitchCases().put(item.getId(), item.getValue());
+                        }
+                    }
+                }
+                plan.setSwitchOnPath(switchConfig == null ? null : switchConfig.getSwitchOnPath());
+                List<String> toParts = new ArrayList<>();
+                for (String caseId : caseIds) {
+                    toParts.add(tagged(join(regionParts(regionOf(elId, caseId))), caseId));
+                }
+                String defaultPart = tagged(join(regionParts(regionOf(elId, DEFAULT_TARGET))), DEFAULT_TARGET);
+                // 未连 default 出口时用占位节点兜底并补回 default 标签：
+                // LiteFlow 匹配不到任何 TO 标签时只会执行 DEFAULT 子句，缺了它整条链会报找不到目标节点。
+                if (NOOP_NODE_ID.equals(defaultPart)) {
+                    defaultPart = NOOP_NODE_ID + ".tag(\"" + DEFAULT_TARGET + "\")";
+                }
+                return "SWITCH(" + elId + ").TO(" + String.join(", ", toParts) + ").DEFAULT(" + defaultPart + ")";
             }
             return elId;
         }
@@ -635,7 +674,7 @@ public final class CompositeElCompiler {
                 if (current.equals(containerElId) || !reached.add(current)) {
                     continue;
                 }
-                for (String port : controlPorts()) {
+                for (String port : controlPortsOf(current)) {
                     pending.addAll(directTargetsOf(current, port));
                 }
             }
@@ -656,7 +695,7 @@ public final class CompositeElCompiler {
                 if (current.equals(containerElId) || excluded.contains(current) || !reached.add(current)) {
                     continue;
                 }
-                for (String port : controlPorts()) {
+                for (String port : controlPortsOf(current)) {
                     pending.addAll(directTargetsOf(current, port));
                 }
             }
@@ -743,8 +782,45 @@ public final class CompositeElCompiler {
             return elId.startsWith(prefix) ? elId.substring(prefix.length()) : elId;
         }
 
-        private List<String> controlPorts() {
-            return List.of(CompositeValidator.FLOW_OUT, PORT_TRUE, PORT_FALSE);
+        /**
+         * 某节点可以作为控制流源的端口集合：普通节点只有 __flow_out__，
+         * 逻辑节点按类型展开各自的出口（body/done、true/false、case/default）。
+         */
+        private List<String> controlPortsOf(String elId) {
+            CompositeNodePlanBO plan = planByElId.get(elId);
+            CompositeNodeKindEnum kind = CompositeNodeKindEnum.fromKind(plan == null ? null : plan.getKind());
+            switch (kind) {
+                case BRANCH:
+                    return List.of(PORT_TRUE, PORT_FALSE);
+                case LOOP:
+                    return List.of("body", "done");
+                case SWITCH:
+                    List<String> ports = new ArrayList<>();
+                    ports.add("default");
+                    CompositeNode node = nodeByCanvasId.get(plan == null ? null : plan.getCanvasId());
+                    CompositeSwitchConfig switchConfig = node == null ? null : node.getSwitchConfig();
+                    if (switchConfig != null && switchConfig.getCases() != null) {
+                        for (CompositeSwitchConfig.CaseItem item : switchConfig.getCases()) {
+                            if (item != null && !isBlank(item.getId())) {
+                                ports.add(item.getId());
+                            }
+                        }
+                    }
+                    return ports;
+                case FUNCTION:
+                case TRANSFORM:
+                case START:
+                default:
+                    return List.of(CompositeValidator.FLOW_OUT);
+            }
+        }
+
+        /** 为条件/区域表达式设置 tag，便于 SwitchComponent 按 tag 选择目标 */
+        private String tagged(String expression, String tag) {
+            if (isBlank(expression) || NOOP_NODE_ID.equals(expression)) {
+                return expression;
+            }
+            return expression + ".tag(\"" + tag + "\")";
         }
     }
 

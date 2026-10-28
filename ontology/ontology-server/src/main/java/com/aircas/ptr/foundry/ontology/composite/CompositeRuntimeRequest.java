@@ -263,6 +263,12 @@ public class CompositeRuntimeRequest {
                 String portId = port.getKey();
                 String name = port.getValue();
                 String feeder = feederMap.get(name);
+                // 手填固定值优先：配置了手动输入的入参不再接受区域内外的连线值，与首轮解析入参的优先级一致
+                Object manualValue = nodePlan.manualInput(portId, name);
+                if (manualValue != null) {
+                    memberDefaults.put(name, manualValue);
+                    continue;
+                }
                 // 上游在区域内时，它会在那一轮自己产出后重新推送，铺回旧值反而盖掉本轮结果
                 if (feeder != null && !members.contains(feeder)) {
                     List<CompositeEdgeTargetBO> edges = edgeMap

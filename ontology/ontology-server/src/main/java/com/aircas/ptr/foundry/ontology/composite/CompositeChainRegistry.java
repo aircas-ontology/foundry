@@ -309,6 +309,8 @@ public class CompositeChainRegistry {
                 instance = timesLoop(nodePlan) ? new CompositeForComponent() : new CompositeLoopComponent();
             } else if (kind == CompositeNodeKindEnum.BRANCH) {
                 instance = new CompositeBranchComponent();
+            } else if (kind == CompositeNodeKindEnum.SWITCH) {
+                instance = new CompositeSwitchComponent();
             } else if (kind == CompositeNodeKindEnum.TRANSFORM) {
                 instance = new CompositeTransformComponent(transformExecutor);
             } else if (kind == CompositeNodeKindEnum.START || kind == CompositeNodeKindEnum.END) {
