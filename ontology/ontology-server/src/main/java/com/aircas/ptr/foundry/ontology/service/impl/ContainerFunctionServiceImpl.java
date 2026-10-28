@@ -270,9 +270,13 @@ public class ContainerFunctionServiceImpl implements ContainerFunctionService {
             String derivedApi = param.getFunctionApi() + "_" + itfSegment;
             PreconditionUtils.checkArgument(batchApis.add(derivedApi),
                     "本批次存在重复接口标识：" + derivedApi, HttpStatus.BAD_REQUEST);
-            // api 唯一：容器算子无版本迭代，派生 api 不能与任何已存在函数重复
-            boolean apiExists = functionMapper.selectCount(new LambdaQueryWrapper<Function>()
-                    .eq(Function::getApi, derivedApi)) > 0;
+            // api 唯一：容器算子无版本迭代，派生 api 不能与同一空间内已存在函数重复（跨空间允许重名）
+            LambdaQueryWrapper<Function> apiQuery = new LambdaQueryWrapper<Function>()
+                    .eq(Function::getApi, derivedApi);
+            if (param.getOntologySpaceId() != null) {
+                apiQuery.eq(Function::getOntologySpaceId, param.getOntologySpaceId());
+            }
+            boolean apiExists = functionMapper.selectCount(apiQuery) > 0;
             PreconditionUtils.checkArgument(!apiExists,
                     "算子 api 已存在：" + derivedApi, HttpStatus.BAD_REQUEST);
 

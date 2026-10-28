@@ -33,27 +33,43 @@ public interface FunctionService extends IService<Function> {
 
 
     /**
-     * 按 api + 版本号查函数详情；version 为空时取该 api 的最新版本
+     * 按 空间 + api + 版本号 查函数详情；version 为空时取该空间内该 api 的最新版本。
+     * <p>spaceId 为空表示不限空间（兼容旧调用）；同 api 在同空间内才唯一，跨空间允许重名。</p>
      */
-    FunctionDetailVO getFunctionDetailByApi(String api, String version);
+    FunctionDetailVO getFunctionDetailByApi(Integer spaceId, String api, String version);
+
+    /**
+     * 兼容旧调用：不限空间
+     */
+    default FunctionDetailVO getFunctionDetailByApi(String api, String version) {
+        return getFunctionDetailByApi(null, api, version);
+    }
 
     /**
      * 兼容旧调用：默认取该 api 的最新版本
      */
     default FunctionDetailVO getFunctionDetailByApi(String api) {
-        return getFunctionDetailByApi(api, null);
+        return getFunctionDetailByApi(null, api, null);
     }
 
     /**
-     * 按 function api 查询其全部版本号，按语义化版本倒序排列（最新在前）；
-     * api 不存在时返回空列表
+     * 按 spaceId + function api 查询其全部版本号，按语义化版本倒序排列（最新在前）；
+     * spaceId 为空表示不限空间，api 不存在时返回空列表
      */
-    List<String> listVersionsByApi(String api);
+    List<String> listVersionsByApi(Integer spaceId, String api);
+
+    default List<String> listVersionsByApi(String api) {
+        return listVersionsByApi(null, api);
+    }
 
     /**
-     * 按 api + 版本号删除函数（version 必填，精确定位）。仅未发布状态可删除
+     * 按 空间 + api + 版本号删除函数（version 必填，精确定位）。仅未发布状态可删除
      */
-    void deleteByApi(String api, String version);
+    void deleteByApi(Integer spaceId, String api, String version);
+
+    default void deleteByApi(String api, String version) {
+        deleteByApi(null, api, version);
+    }
 
     /**
      * 多节点部署下，删除容器算子最后一个接口后，归属节点本地执行的清理：
@@ -76,12 +92,20 @@ public interface FunctionService extends IService<Function> {
     /**
      * 发布：未发布 → 已发布，发布后不可修改/删除
      */
-    void publishFunction(String api, String version);
+    void publishFunction(Integer spaceId, String api, String version);
+
+    default void publishFunction(String api, String version) {
+        publishFunction(null, api, version);
+    }
 
     /**
      * 下线：已发布 → 未发布，下线后才可修改/删除
      */
-    void unpublishFunction(String api, String version);
+    void unpublishFunction(Integer spaceId, String api, String version);
+
+    default void unpublishFunction(String api, String version) {
+        unpublishFunction(null, api, version);
+    }
 
     FunctionExecuteResultVO getExecuteResult(String taskId);
 

@@ -33,6 +33,9 @@ public class FunctionExecuteParam {
     @Schema(name = "parameters", description = "参数列表", required = true)
     private List<FunctionParameter> parameters;
 
+    @Schema(name = "ontologySpaceId", description = "本体空间id（跨空间允许同名 api，建议传以精确定位；不传则不限空间）")
+    private Integer ontologySpaceId;
+
 
 
 }

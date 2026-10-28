@@ -166,8 +166,9 @@ create table if not exists function
     version           varchar(64) default '1.0.0'                                           not null,
     publish           smallint    default 0                                                 not null,
     language          varchar(32),
-    constraint uk_function_api_version
-    unique (api, version),
+    -- 同一空间内 api + version 唯一；不同空间允许同名 api（详见 ddl/alter_table_20261028.sql）
+    constraint uk_function_spaceid_api_version
+    unique (ontology_space_id, api, version),
     description       varchar(25500),
     status            smallint                                                              not null,
     id                bigint default nextval('ontology.ontology_function_id_seq'::regclass) not null
@@ -584,7 +585,7 @@ comment on column ontology_meta.ontology_space_id is '本体空间id';
 
 comment on column ontology_meta.ontology_category_id is '本体分类id';
 
-create index if not exists ontology_meta_uk_spaceid_apiname
+create unique index if not exists ontology_meta_uk_spaceid_apiname
     on ontology_meta (ontology_space_id, api_name);
 
 comment on index ontology_meta_uk_spaceid_apiname is '空间+api名称唯一索引';

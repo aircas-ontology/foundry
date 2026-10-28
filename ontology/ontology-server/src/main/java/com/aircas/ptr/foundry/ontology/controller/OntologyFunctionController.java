@@ -76,24 +76,27 @@ public class OntologyFunctionController {
     @Operation(summary = "查询函数详情")
     @GetMapping("/detail")
     public RestResult<FunctionDetailVO> getFunctionByApi(@RequestParam(required = true, name = "functionApi") @Parameter(description = "函数api") @NotBlank(message = "functionApi is empty") String functionApi,
-                                                         @RequestParam(required = true, name = "version") @Parameter(description = "版本号（必填，格式 x.y.z）") @NotBlank(message = "version is empty") String version) {
-        return RestResult.ofData(functionService.getFunctionDetailByApi(functionApi, version));
+                                                         @RequestParam(required = true, name = "version") @Parameter(description = "版本号（必填，格式 x.y.z）") @NotBlank(message = "version is empty") String version,
+                                                         @RequestParam(required = false, name = "spaceId") @Parameter(description = "本体空间id（跨空间允许同名 api，建议传）") Integer spaceId) {
+        return RestResult.ofData(functionService.getFunctionDetailByApi(spaceId, functionApi, version));
     }
 
 
     @Operation(summary = "根据函数api查询版本号列表")
     @GetMapping("/versions")
-    public RestResult<List<String>> getFunctionVersions(@RequestParam(required = true, name = "functionApi") @Parameter(description = "函数api") @NotBlank(message = "functionApi is empty") String functionApi) {
-        return RestResult.ofData(functionService.listVersionsByApi(functionApi));
+    public RestResult<List<String>> getFunctionVersions(@RequestParam(required = true, name = "functionApi") @Parameter(description = "函数api") @NotBlank(message = "functionApi is empty") String functionApi,
+                                                        @RequestParam(required = false, name = "spaceId") @Parameter(description = "本体空间id（跨空间允许同名 api，建议传）") Integer spaceId) {
+        return RestResult.ofData(functionService.listVersionsByApi(spaceId, functionApi));
     }
 
 
     @Operation(summary = "删除函数")
     @DeleteMapping("/delete")
     public RestResult deleteById(@RequestParam(required = true, name = "functionApi") @Parameter(description = "函数api") @NotBlank(message = "functionApi is empty") String functionApi,
-                                 @RequestParam(required = true, name = "version") @Parameter(description = "版本号（必填，格式 x.y.z）") @NotBlank(message = "version is empty") String version) {
+                                 @RequestParam(required = true, name = "version") @Parameter(description = "版本号（必填，格式 x.y.z）") @NotBlank(message = "version is empty") String version,
+                                 @RequestParam(required = false, name = "spaceId") @Parameter(description = "本体空间id（跨空间允许同名 api，建议传）") Integer spaceId) {
         //需要校验函数有没有被本体行为使用到
-        functionService.deleteByApi(functionApi, version);
+        functionService.deleteByApi(spaceId, functionApi, version);
         return RestResult.success();
     }
 
@@ -101,8 +104,9 @@ public class OntologyFunctionController {
     @Operation(summary = "发布函数")
     @PostMapping("/publish")
     public RestResult publishFunction(@RequestParam(required = true, name = "functionApi") @Parameter(description = "函数api") @NotBlank(message = "functionApi is empty") String functionApi,
-                                      @RequestParam(required = true, name = "version") @Parameter(description = "版本号（必填，格式 x.y.z）") @NotBlank(message = "version is empty") String version) {
-        functionService.publishFunction(functionApi, version);
+                                      @RequestParam(required = true, name = "version") @Parameter(description = "版本号（必填，格式 x.y.z）") @NotBlank(message = "version is empty") String version,
+                                      @RequestParam(required = false, name = "spaceId") @Parameter(description = "本体空间id（跨空间允许同名 api，建议传）") Integer spaceId) {
+        functionService.publishFunction(spaceId, functionApi, version);
         return RestResult.success();
     }
 
@@ -110,8 +114,9 @@ public class OntologyFunctionController {
     @Operation(summary = "下线函数")
     @PostMapping("/unpublish")
     public RestResult unpublishFunction(@RequestParam(required = true, name = "functionApi") @Parameter(description = "函数api") @NotBlank(message = "functionApi is empty") String functionApi,
-                                        @RequestParam(required = true, name = "version") @Parameter(description = "版本号（必填，格式 x.y.z）") @NotBlank(message = "version is empty") String version) {
-        functionService.unpublishFunction(functionApi, version);
+                                        @RequestParam(required = true, name = "version") @Parameter(description = "版本号（必填，格式 x.y.z）") @NotBlank(message = "version is empty") String version,
+                                        @RequestParam(required = false, name = "spaceId") @Parameter(description = "本体空间id（跨空间允许同名 api，建议传）") Integer spaceId) {
+        functionService.unpublishFunction(spaceId, functionApi, version);
         return RestResult.success();
     }
 

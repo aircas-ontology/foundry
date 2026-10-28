@@ -228,8 +228,8 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
 
 
     @Override
-    public FunctionDetailVO getFunctionDetailByApi(String api, String version) {
-        var function = resolveVersion(api, version);
+    public FunctionDetailVO getFunctionDetailByApi(Integer spaceId, String api, String version) {
+        var function = resolveVersion(spaceId, api, version);
         PreconditionUtils.checkArgument(function != null, "函数api不存在：" + api, HttpStatus.BAD_REQUEST);
         var functionParams = functionParamService.list(
                 new LambdaQueryWrapper<FunctionParamPO>().eq(FunctionParamPO::getFunctionId, function.getId()));
@@ -319,12 +319,12 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     }
 
     @Override
-    public List<String> listVersionsByApi(String api) {
+    public List<String> listVersionsByApi(Integer spaceId, String api) {
         if (StringUtils.isEmpty(api)) {
             return new ArrayList<>();
         }
-        // 同一 api 下全部版本号，按语义化版本倒序（最新在前）
-        return listVersions(api).stream()
+        // 同一空间同一 api 下全部版本号，按语义化版本倒序（最新在前）
+        return listVersions(spaceId, api).stream()
                 .map(Function::getVersion)
                 .sorted((v1, v2) -> compareVersion(v2, v1))
                 .collect(Collectors.toList());
@@ -332,8 +332,8 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
 
     @Override
     @Transactional(value = "mainTransactionManager")
-    public void deleteByApi(String api, String version) {
-        var function = resolveVersion(api, version);
+    public void deleteByApi(Integer spaceId, String api, String version) {
+        var function = resolveVersion(spaceId, api, version);
         PreconditionUtils.checkArgument(function != null, "无效的函数api:" + api, HttpStatus.BAD_REQUEST);
         // 已发布状态不允许删除，需先下线
         requireUnpublished(function, "已发布的函数不能删除，请先下线");
@@ -518,7 +518,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         Function func = buildAndSaveFunction(param, model, version, language);
         applyRateLimitToFunction(func, rateLimitTemplate);
         // 同一 api 的所有版本共用同一个模板：新版本选定后，旧版本也同步更新
-        syncRateLimitTemplateToAllVersions(func.getApi(), rateLimitTemplate.getId());
+        syncRateLimitTemplateToAllVersions(func.getOntologySpaceId(), func.getApi(), rateLimitTemplate.getId());
         saveTypedParams(func, param, language);
     }
 
@@ -540,9 +540,10 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
      * </ul>
      */
     private String checkVersionAndApiUnique(FunctionCreateParam param) {
-        // 版本管理：版本号必须大于同 api 下已有最大版本号（首次创建无此限制）
+        Integer spaceId = param.getOntologySpaceId();
+        // 版本管理：版本号必须大于同空间同 api 下已有最大版本号（首次创建无此限制）
         String version = requireValidVersion(param.getVersion());
-        List<Function> existVersions = listVersions(param.getFunctionApi());
+        List<Function> existVersions = listVersions(spaceId, param.getFunctionApi());
         String newApi = param.getFunctionApi() + " " + version;
         PreconditionUtils.checkArgument(existVersions.stream().noneMatch(f -> version.equals(f.getVersion())),
                 "函数版本已存在:" + newApi, HttpStatus.BAD_REQUEST);
@@ -552,9 +553,13 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         // 基于旧版本创建 vs 全新创建的 api 重复校验策略
         Boolean basedOnOldVersion = param.getBasedOnOldVersion();
         if (basedOnOldVersion == null || !basedOnOldVersion) {
-            // 全新创建：api 不能与任何已存在的函数重复（即使版本不同）
-            boolean apiExists = count(new LambdaQueryWrapper<Function>()
-                    .eq(Function::getApi, param.getFunctionApi())) > 0;
+            // 全新创建：api 不能与同一空间内已存在的函数重复（即使版本不同），跨空间允许重名
+            LambdaQueryWrapper<Function> apiQuery = new LambdaQueryWrapper<Function>()
+                    .eq(Function::getApi, param.getFunctionApi());
+            if (spaceId != null) {
+                apiQuery.eq(Function::getOntologySpaceId, spaceId);
+            }
+            boolean apiExists = count(apiQuery) > 0;
             PreconditionUtils.checkArgument(!apiExists,
                     "函数 api 已存在:" + param.getFunctionApi() + "，全新创建请使用不同的 api 名称", HttpStatus.BAD_REQUEST);
         }
@@ -643,7 +648,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     /**
      * 切换限流模板并同步到同一 api 的所有版本：模板 ID 与配置快照一并覆盖。
      */
-    private void syncRateLimitTemplateToAllVersions(String api, Long newTemplateId) {
+    private void syncRateLimitTemplateToAllVersions(Integer spaceId, String api, Long newTemplateId) {
         FunctionRateLimitTemplate template = resolveRateLimitTemplate(newTemplateId);
         String configJson;
         try {
@@ -660,7 +665,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
             log.error("限流配置序列化失败：{}", e.getMessage());
             throw new BusinessException("限流配置序列化失败：" + e.getMessage());
         }
-        List<Function> allVersions = listVersions(api);
+        List<Function> allVersions = listVersions(spaceId, api);
         for (Function f : allVersions) {
             f.setRateLimitTemplateId(template.getId());
             f.setRateLimitConfig(configJson);
@@ -672,12 +677,32 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
      * 读取指定 api+version 的限流参数（tpsLimit, maxConcurrency）。
      * 返回 [tpsLimit, maxConcurrency]，未启用或解析失败返回 [0, 0]。
      */
+    private int[] resolveRateLimit(Integer spaceId, String functionApi, String version) {
+        if (spaceId != null) {
+            var scoped = getOne(new LambdaQueryWrapper<Function>()
+                    .select(Function::getRateLimitConfig)
+                    .eq(Function::getOntologySpaceId, spaceId)
+                    .eq(Function::getApi, functionApi)
+                    .eq(Function::getVersion, version)
+                    .last("LIMIT 1"));
+            if (scoped != null) {
+                return parseRateLimitConfig(scoped, functionApi);
+            }
+        }
+        return resolveRateLimit(functionApi, version);
+    }
+
+    /** 兼容旧调用：不限空间 */
     private int[] resolveRateLimit(String functionApi, String version) {
         var function = getOne(new LambdaQueryWrapper<Function>()
                 .select(Function::getRateLimitConfig)
                 .eq(Function::getApi, functionApi)
                 .eq(Function::getVersion, version)
                 .last("LIMIT 1"));
+        return parseRateLimitConfig(function, functionApi);
+    }
+
+    private int[] parseRateLimitConfig(Function function, String functionApi) {
         if (function == null || StringUtils.isEmpty(function.getRateLimitConfig())) {
             return new int[]{0, 0};
         }
@@ -691,7 +716,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                     config.getMaxConcurrency() != null ? config.getMaxConcurrency() : 0
             };
         } catch (Exception e) {
-            log.warn("解析 rateLimitConfig 失败（api={}, version={}），跳过限流: {}", functionApi, version, e.getMessage());
+            log.warn("解析 rateLimitConfig 失败（api={}），跳过限流: {}", functionApi, e.getMessage());
             return new int[]{0, 0};
         }
     }
@@ -749,7 +774,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     @Override
     @Transactional(value = "mainTransactionManager")
     public void updateFunction(FunctionUpdateParam param) {
-        var function = resolveVersion(param.getFunctionApi(), param.getVersion());
+        var function = resolveVersion(param.getOntologySpaceId(), param.getFunctionApi(), param.getVersion());
         PreconditionUtils.checkArgument(function != null,
                 "函数版本不存在：" + param.getFunctionApi() + " " + param.getVersion(), HttpStatus.BAD_REQUEST);
         // 容器算子不支持编辑：镜像/接口配置在注册时一次性确定，如需调整请删除后重新创建
@@ -773,7 +798,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         updateById(function);
         // 限流模板变更：同一 api 的所有版本同步更新
         if (param.getRateLimitTemplateId() != null) {
-            syncRateLimitTemplateToAllVersions(function.getApi(), param.getRateLimitTemplateId());
+            syncRateLimitTemplateToAllVersions(function.getOntologySpaceId(), function.getApi(), param.getRateLimitTemplateId());
         }
         // 参数重建：CUSTOMIZE 解析成功才删旧建新（解析失败保留原定义）；BASIC_QUERY/COMPOSITE/EXTERNAL 先删后建
         if (function.getType() == FunctionTypeEnum.CUSTOMIZE) {
@@ -803,8 +828,8 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
 
     @Override
     @Transactional(value = "mainTransactionManager")
-    public void publishFunction(String api, String version) {
-        var function = requireVersionExists(api, version);
+    public void publishFunction(Integer spaceId, String api, String version) {
+        var function = requireVersionExists(spaceId, api, version);
         PreconditionUtils.checkArgument(function.getPublish() == FunctionConstant.PUBLISH_UNPUBLISHED,
                 "该版本已是发布状态：" + api + " " + function.getVersion(), HttpStatus.BAD_REQUEST);
         function.setPublish(FunctionConstant.PUBLISH_PUBLISHED);
@@ -813,8 +838,8 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
 
     @Override
     @Transactional(value = "mainTransactionManager")
-    public void unpublishFunction(String api, String version) {
-        var function = requireVersionExists(api, version);
+    public void unpublishFunction(Integer spaceId, String api, String version) {
+        var function = requireVersionExists(spaceId, api, version);
         PreconditionUtils.checkArgument(function.getPublish() == FunctionConstant.PUBLISH_PUBLISHED,
                 "该版本不是发布状态：" + api + " " + function.getVersion(), HttpStatus.BAD_REQUEST);
         //判断函数是否关联了行为，被本体行为使用到则不能下线
@@ -921,9 +946,11 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     @Override
     @SneakyThrows
     public String executeFunction(FunctionExecuteParam param) {
-        // ---- 分布式限流检查（跨实例，Redis，按 api+version 粒度） ----
-        String rateLimitKey = param.getFunctionApi() + ":" + param.getVersion();
-        int[] limits = resolveRateLimit(param.getFunctionApi(), param.getVersion());
+        // ---- 分布式限流检查（跨实例，Redis） ----
+        // 同空间同 api 才唯一，key 带上 spaceId，避免不同空间的同名算子共用一个限流桶
+        String rateLimitKey = (param.getOntologySpaceId() == null ? "" : param.getOntologySpaceId() + ":")
+                + param.getFunctionApi() + ":" + param.getVersion();
+        int[] limits = resolveRateLimit(param.getOntologySpaceId(), param.getFunctionApi(), param.getVersion());
         int tpsLimit = limits[0], maxConcurrency = limits[1];
         if (tpsLimit > 0 || maxConcurrency > 0) {
             boolean acquired = rateLimitService.acquire(rateLimitKey, tpsLimit, maxConcurrency);
@@ -947,8 +974,8 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
 
     @SneakyThrows
     private String doExecuteFunction(FunctionExecuteParam param) {
-        //查询函数（指定版本，缺省取最新版本）
-        var function = resolveVersion(param.getFunctionApi(), param.getVersion());
+        //查询函数（指定版本，缺省取最新版本；同空间优先，未命中回退全局）
+        var function = resolveVersion(param.getOntologySpaceId(), param.getFunctionApi(), param.getVersion());
         PreconditionUtils.checkArgument(function != null,
                 "函数版本不存在：" + param.getFunctionApi() + " " + param.getVersion(), HttpStatus.BAD_REQUEST);
         //查询输入参数
@@ -1597,8 +1624,8 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
             return testDraftFunction(param);
         }
 
-        // 已存库测试：按 api + version 查库
-        var function = resolveVersion(param.getFunctionApi(), param.getVersion());
+        // 已存库测试：按 空间 + api + version 查库
+        var function = resolveVersion(param.getOntologySpaceId(), param.getFunctionApi(), param.getVersion());
         PreconditionUtils.checkArgument(function != null, "函数版本不存在：" + param.getFunctionApi(), HttpStatus.BAD_REQUEST);
 
         switch (function.getType()) {
@@ -1731,6 +1758,29 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     /**
      * 解析目标版本：version 为空时按 x.y.z 语义化比较取该 api 的最大版本
      */
+    /**
+     * 解析目标版本：version 为空时按 x.y.z 语义化比较取最大版本。
+     * <p>spaceId 非空时先在该空间内查找；未命中再回退到不限空间（兼容跨空间引用与历史无空间数据）。</p>
+     */
+    private Function resolveVersion(Integer spaceId, String api, String version) {
+        if (spaceId != null) {
+            LambdaQueryWrapper<Function> scoped = new LambdaQueryWrapper<Function>()
+                    .eq(Function::getOntologySpaceId, spaceId)
+                    .eq(Function::getApi, api);
+            if (StringUtils.isNotEmpty(version)) {
+                return getOne(scoped.eq(Function::getVersion, version));
+            }
+            List<Function> scopedVersions = list(scoped);
+            if (!scopedVersions.isEmpty()) {
+                return scopedVersions.stream()
+                        .max(Comparator.comparing(Function::getVersion, FunctionServiceImpl::compareVersion))
+                        .orElse(null);
+            }
+        }
+        return resolveVersion(api, version);
+    }
+
+    /** 兼容旧调用：不限空间 */
     private Function resolveVersion(String api, String version) {
         if (StringUtils.isNotEmpty(version)) {
             return getOne(new LambdaQueryWrapper<Function>()
@@ -1743,8 +1793,18 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     }
 
     /**
-     * 查询指定 api 的全部版本
+     * 查询指定 api 的全部版本，spaceId 非空时限定在该空间内
      */
+    private List<Function> listVersions(Integer spaceId, String api) {
+        if (spaceId == null) {
+            return listVersions(api);
+        }
+        return list(new LambdaQueryWrapper<Function>()
+                .eq(Function::getOntologySpaceId, spaceId)
+                .eq(Function::getApi, api));
+    }
+
+    /** 兼容旧调用：不限空间 */
     private List<Function> listVersions(String api) {
         return list(new LambdaQueryWrapper<Function>().eq(Function::getApi, api));
     }
@@ -1752,8 +1812,8 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     /**
      * 解析目标版本，不存在则抛业务异常（发布/下线接口使用，版本号必传）
      */
-    private Function requireVersionExists(String api, String version) {
-        var function = resolveVersion(api, version);
+    private Function requireVersionExists(Integer spaceId, String api, String version) {
+        var function = resolveVersion(spaceId, api, version);
         PreconditionUtils.checkArgument(function != null,
                 "函数版本不存在：" + api + (StringUtils.isEmpty(version) ? "" : " " + version), HttpStatus.BAD_REQUEST);
         return function;
