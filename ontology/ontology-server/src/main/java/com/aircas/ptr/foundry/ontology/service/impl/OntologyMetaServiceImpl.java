@@ -666,12 +666,18 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 .ontologyCategoryId(ontologyCategoryId)
                 .build();
         save(meta);
-        //保存属性分类
+        //保存属性分类：JSON 未携带分类树时，与正常创建本体一致，默认建根节点"全部"
         var propertyCategoryCreateParam = dto.getPropertyCategory();
         if (propertyCategoryCreateParam != null) {
             propertyCategoryCreateParam.setParentId(0)
                     .setOntologyIdentifier(meta.getUniqueIdentifier());
             ontologyPropertyService.createCategory(propertyCategoryCreateParam);
+        } else {
+            ontologyPropertyService.createCategory(PropertyCategoryCreateParam.builder()
+                    .parentId(0)
+                    .name("全部")
+                    .ontologyIdentifier(meta.getUniqueIdentifier())
+                    .build());
         }
         //保存属性元数据
         var propertySchemaCreateParam = dto.getPropertySchema();
