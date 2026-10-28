@@ -169,6 +169,7 @@ public class DataConverter {
      * 1. yyyy-MM-dd HH:mm:ss
      * 2. yyyy-MM-dd HH:mm:ss.SSS
      * 3. ISO 8601 (yyyy-MM-dd'T'HH:mm:ss.SSSXXX)
+     * 4. epoch 毫秒数字
      */
     private static Timestamp parseTimestamp(String valueStr) {
         // 尝试简单格式
@@ -190,6 +191,14 @@ public class DataConverter {
             java.util.Date date = DateUtils.parseISO8601(valueStr);
             return new Timestamp(date.getTime());
         } catch (Exception e) {
+            // 忽略，尝试下一种格式
+        }
+        
+        // 尝试 epoch 毫秒数
+        try {
+            long millis = Long.parseLong(valueStr);
+            return new Timestamp(millis);
+        } catch (Exception e) {
             throw new IllegalArgumentException("Cannot parse as timestamp: " + valueStr, e);
         }
     }
@@ -197,12 +206,23 @@ public class DataConverter {
     /**
      * 解析日期字符串，支持多种格式：
      * 1. yyyy-MM-dd
-     * 2. ISO 8601 日期格式
+     * 2. yyyy-MM-dd HH:mm:ss (取日期部分)
+     * 3. ISO 8601 日期格式 (取日期部分)
+     * 4. epoch 毫秒数字
      */
     private static java.util.Date parseDate(String valueStr) {
-        // 尝试简单格式
+        // 尝试简单日期格式
         try {
             return DateUtils.fromString2Date(valueStr, "yyyy-MM-dd");
+        } catch (Exception e) {
+            // 忽略，尝试下一种格式
+        }
+        
+        // 尝试带时间的日期格式
+        try {
+            java.util.Date date = DateUtils.fromString2Date(valueStr, "yyyy-MM-dd HH:mm:ss");
+            String dateOnly = DateUtils.format(date, "yyyy-MM-dd");
+            return DateUtils.fromString2Date(dateOnly, "yyyy-MM-dd");
         } catch (Exception e) {
             // 忽略，尝试下一种格式
         }
@@ -210,7 +230,16 @@ public class DataConverter {
         // 尝试 ISO 8601 格式（可能包含时间部分，取日期部分）
         try {
             java.util.Date date = DateUtils.parseISO8601(valueStr);
-            // 只取日期部分，去掉时间
+            String dateOnly = DateUtils.format(date, "yyyy-MM-dd");
+            return DateUtils.fromString2Date(dateOnly, "yyyy-MM-dd");
+        } catch (Exception e) {
+            // 忽略，尝试下一种格式
+        }
+        
+        // 尝试 epoch 毫秒数
+        try {
+            long millis = Long.parseLong(valueStr);
+            java.util.Date date = new java.util.Date(millis);
             String dateOnly = DateUtils.format(date, "yyyy-MM-dd");
             return DateUtils.fromString2Date(dateOnly, "yyyy-MM-dd");
         } catch (Exception e) {
