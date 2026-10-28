@@ -60,10 +60,10 @@ public class OntologyFunctionController {
         return RestResult.ofData(functionService.getFunctions(param));
     }
 
-    @Operation(summary = "创建函数", description = "脚本算子同步执行安全扫描；HIGH 风险将阻止保存且不落库，响应返回扫描结果")
+    @Operation(summary = "创建函数", description = "脚本算子同步执行安全扫描；HIGH 风险将阻止保存且不落库，响应返回扫描摘要")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "创建成功，返回扫描状态和摘要"),
-            @ApiResponse(responseCode = "422", description = "脚本解析或本地校验失败，不落库"),
+            @ApiResponse(responseCode = "422", description = "命中 HIGH 风险、脚本解析或本地校验失败，不落库"),
             @ApiResponse(responseCode = "502", description = "安全扫描报告或服务异常"),
             @ApiResponse(responseCode = "503", description = "安全扫描服务不可用"),
             @ApiResponse(responseCode = "504", description = "安全扫描超时")
@@ -77,7 +77,7 @@ public class OntologyFunctionController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "更新成功，返回扫描状态和摘要"),
             @ApiResponse(responseCode = "409", description = "扫描期间函数版本发生变化"),
-            @ApiResponse(responseCode = "422", description = "脚本解析或本地校验失败，不落库"),
+            @ApiResponse(responseCode = "422", description = "命中 HIGH 风险、脚本解析或本地校验失败，不落库"),
             @ApiResponse(responseCode = "502", description = "安全扫描报告或服务异常"),
             @ApiResponse(responseCode = "503", description = "安全扫描服务不可用"),
             @ApiResponse(responseCode = "504", description = "安全扫描超时")
@@ -116,8 +116,8 @@ public class OntologyFunctionController {
     @Operation(summary = "发布函数", description = "发布前校验扫描状态；旧跳过脚本按当前开关补扫。HTTP 200 时仍须检查 data.published")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "发布成功或因扫描拒绝发布；调用方必须检查 data.published"),
+            @ApiResponse(responseCode = "400", description = "目标版本不存在、已发布或发布状态不允许操作"),
             @ApiResponse(responseCode = "409", description = "补扫期间函数版本发生变化"),
-            @ApiResponse(responseCode = "422", description = "补扫发现脚本解析或本地校验失败"),
             @ApiResponse(responseCode = "502", description = "安全扫描报告或服务异常"),
             @ApiResponse(responseCode = "503", description = "安全扫描服务不可用"),
             @ApiResponse(responseCode = "504", description = "安全扫描超时")
