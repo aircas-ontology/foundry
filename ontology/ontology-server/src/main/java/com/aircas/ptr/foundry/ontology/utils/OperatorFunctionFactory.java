@@ -6,6 +6,8 @@ import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import com.aircas.ptr.foundry.ontology.composite.CompositeFunctionCatalog;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamCategoryEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.ScanSkipReason;
+import com.aircas.ptr.foundry.ontology.model.enums.ScanStatus;
 import com.aircas.ptr.foundry.ontology.model.po.Function;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionParamPO;
 
@@ -26,7 +28,10 @@ public final class OperatorFunctionFactory {
     }
 
     /**
-     * 预置算子行的公共默认：{@code publish = 未发布}、{@code status = 启用}。
+     * 预置算子行的公共默认：{@code publish = 未发布}、{@code status = 启用}，
+     * 并生成类型匹配的完整跳过扫描结果。阶段一尚未接入远端扫描，CUSTOMIZE
+     * 暂按默认关闭策略写入 FEATURE_DISABLED；后续扫描编排层会在 insert 前覆盖为
+     * 本次真实结果或相同的关闭结果。非脚本算子始终为 NON_SCRIPT_OPERATOR。
      * 其余随类型而异的字段由调用方在返回的 builder 上继续链式设置。
      *
      * @param api             算子 api
@@ -40,6 +45,9 @@ public final class OperatorFunctionFactory {
     public static Function.FunctionBuilder operatorDefaults(String api, String version, String displayName,
                                                             FunctionTypeEnum type, Integer ontologySpaceId,
                                                             FunctionModelEnum model) {
+        ScanSkipReason skipReason = type == FunctionTypeEnum.CUSTOMIZE
+                ? ScanSkipReason.FEATURE_DISABLED
+                : ScanSkipReason.NON_SCRIPT_OPERATOR;
         return Function.builder()
                 .api(api)
                 .version(version)
@@ -48,7 +56,9 @@ public final class OperatorFunctionFactory {
                 .ontologySpaceId(ontologySpaceId)
                 .model(model)
                 .publish(FunctionConstant.PUBLISH_UNPUBLISHED)
-                .status(Status.ENABLE.getValue());
+                .status(Status.ENABLE.getValue())
+                .scanStatus(ScanStatus.SKIPPED)
+                .scanResult(FunctionScanResultFactory.skipped(skipReason));
     }
 
     /**

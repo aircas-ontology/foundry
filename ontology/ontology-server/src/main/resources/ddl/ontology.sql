@@ -180,7 +180,11 @@ create table if not exists function
     code              text,
     display_name      varchar(255),
     model             varchar(255),
-    ontology_space_id integer
+    ontology_space_id integer,
+    scan_status       varchar(32) default 'SKIPPED'                                      not null,
+    scan_result       jsonb                                                              not null,
+    constraint ck_function_scan_status
+        check (scan_status in ('PASSED', 'SKIPPED'))
     );
 
 comment on table function is '函数';
@@ -214,6 +218,10 @@ comment on column function.display_name is '函数展示名称';
 comment on column function.model is '函数模型';
 
 comment on column function.ontology_space_id is '本体空间id';
+
+comment on column function.scan_status is '安全扫描持久化状态：PASSED/SKIPPED，REJECTED/FAILED 不落库';
+
+comment on column function.scan_result is '当前代码最后一次有效安全扫描结果，固定契约 JSONB；不保存源码片段或原始报告';
 
 create table if not exists function_execute_result
 (

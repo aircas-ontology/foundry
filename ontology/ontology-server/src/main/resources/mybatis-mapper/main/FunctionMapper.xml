@@ -2,9 +2,15 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.aircas.ptr.foundry.ontology.repository.mainMapper.FunctionMapper">
 
+    <resultMap id="functionResultMap" type="com.aircas.ptr.foundry.ontology.model.po.Function" autoMapping="true">
+        <id property="id" column="id"/>
+        <result property="scanResult" column="scan_result"
+                typeHandler="com.aircas.ptr.foundry.ontology.repository.handler.JsonbTypeHandler"/>
+    </resultMap>
+
     <!-- 函数算子版本管理：按 api 分组分页，每个 api 仅展示版本号最大的一条记录。
          版本号按 x.y.z 语义化比较（逐段数值比较），不能按字符串排序（如 1.10.0 > 1.9.0）。 -->
-    <select id="pageLatestVersion" resultType="com.aircas.ptr.foundry.ontology.model.po.Function">
+    <select id="pageLatestVersion" resultMap="functionResultMap">
         select t.*
         from (
             select f.*,
@@ -47,5 +53,46 @@
         where t.rn = 1
         order by t.update_time desc nulls last, t.id desc
     </select>
+
+    <update id="updateDraftFunction">
+        update ontology.function
+        set description = #{function.description},
+            reference_name = #{function.referenceName},
+            model = #{function.model},
+            code = #{function.code},
+            scan_status = #{function.scanStatus},
+            scan_result = #{function.scanResult,
+                typeHandler=com.aircas.ptr.foundry.ontology.repository.handler.JsonbTypeHandler},
+            update_time = current_timestamp
+        where id = #{function.id}
+          and publish = 0
+        <choose>
+            <when test="originalUpdateTime != null">
+                and update_time = #{originalUpdateTime}
+            </when>
+            <otherwise>
+                and update_time is null
+            </otherwise>
+        </choose>
+    </update>
+
+    <update id="updateDraftScanAndPublish">
+        update ontology.function
+        set publish = #{publish},
+            scan_status = #{scanStatus},
+            scan_result = #{scanResult,
+                typeHandler=com.aircas.ptr.foundry.ontology.repository.handler.JsonbTypeHandler},
+            update_time = current_timestamp
+        where id = #{id}
+          and publish = 0
+        <choose>
+            <when test="originalUpdateTime != null">
+                and update_time = #{originalUpdateTime}
+            </when>
+            <otherwise>
+                and update_time is null
+            </otherwise>
+        </choose>
+    </update>
 
 </mapper>

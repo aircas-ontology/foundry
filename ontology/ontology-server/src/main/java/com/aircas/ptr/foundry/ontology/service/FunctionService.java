@@ -2,6 +2,8 @@ package com.aircas.ptr.foundry.ontology.service;
 
 
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
+import com.aircas.ptr.foundry.ontology.model.dto.scan.FunctionPublishResult;
+import com.aircas.ptr.foundry.ontology.model.dto.scan.FunctionScanResult;
 import com.aircas.ptr.foundry.ontology.model.bo.CompositePlanBO;
 import com.aircas.ptr.foundry.ontology.model.bo.CompositeValidationBO;
 import com.aircas.ptr.foundry.ontology.model.param.BasicQueryTestParam;
@@ -58,18 +60,18 @@ public interface FunctionService extends IService<Function> {
     /**
      * 创建函数版本：新版本号必须大于同 api 下已有最大版本号，初始为未发布状态
      */
-    void createFunction(FunctionCreateParam param);
+    FunctionScanResult createFunction(FunctionCreateParam param);
 
     /**
      * 修改函数版本：仅未发布且未被行为关联的版本可原地更新；
      * 已发布版本一律禁止修改（需先下线），需要新版本请走创建接口
      */
-    void updateFunction(FunctionUpdateParam param);
+    FunctionScanResult updateFunction(FunctionUpdateParam param);
 
     /**
      * 发布：未发布 → 已发布，发布后不可修改/删除
      */
-    void publishFunction(String api, String version);
+    FunctionPublishResult publishFunction(String api, String version);
 
     /**
      * 下线：已发布 → 未发布，下线后才可修改/删除

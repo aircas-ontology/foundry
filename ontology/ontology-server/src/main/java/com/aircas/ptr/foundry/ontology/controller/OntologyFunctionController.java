@@ -3,6 +3,8 @@ package com.aircas.ptr.foundry.ontology.controller;
 import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.model.bo.CompositePlanBO;
 import com.aircas.ptr.foundry.ontology.model.bo.CompositeValidationBO;
+import com.aircas.ptr.foundry.ontology.model.dto.scan.FunctionPublishResponse;
+import com.aircas.ptr.foundry.ontology.model.dto.scan.FunctionScanResponse;
 import com.aircas.ptr.foundry.ontology.model.param.CompositeValidateParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionCallbackParam;
 import com.aircas.ptr.foundry.ontology.model.param.FunctionCreateParam;
@@ -22,6 +24,8 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.annotation.Resource;
@@ -43,36 +47,48 @@ public class OntologyFunctionController {
 
 
     @PostMapping("/execute")
-    @Operation(summary = "函数执行")
+    @Operation(summary = "函数执行", description = "正式执行入口，仅允许执行 publish=1 的目标版本；未发布版本返回 HTTP 400")
+    @ApiResponse(responseCode = "400", description = "目标版本不存在或尚未发布")
     public RestResult<String> executeFunction(@RequestBody @Valid FunctionExecuteParam param) {
         return RestResult.ofData(functionService.executeFunction(param));
     }
 
 
-    @Operation(summary = "查询函数列表")
+    @Operation(summary = "查询函数列表", description = "列表项返回 scanStatus 和仅含 summary 的 scanResult，不返回 findings")
     @GetMapping("/list")
     public RestResult<Page<FunctionInfoVO>> getFunctions(FunctionListQueryParam param) {
         return RestResult.ofData(functionService.getFunctions(param));
     }
 
-    @Operation(summary = "创建函数")
+    @Operation(summary = "创建函数", description = "脚本算子同步执行安全扫描；HIGH 风险将阻止保存且不落库，响应返回扫描摘要")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "创建成功，返回扫描状态和摘要"),
+            @ApiResponse(responseCode = "422", description = "命中 HIGH 风险、脚本解析或本地校验失败，不落库"),
+            @ApiResponse(responseCode = "502", description = "安全扫描报告或服务异常"),
+            @ApiResponse(responseCode = "503", description = "安全扫描服务不可用"),
+            @ApiResponse(responseCode = "504", description = "安全扫描超时")
+    })
     @PostMapping
-    public RestResult createFunction(@RequestBody @Valid FunctionCreateParam param) {
-        //todo 需要增加代码安全检测
-        functionService.createFunction(param);
-        return RestResult.success();
+    public RestResult<FunctionScanResponse> createFunction(@RequestBody @Valid FunctionCreateParam param) {
+        return RestResult.ofData(FunctionScanResponse.from(functionService.createFunction(param)));
     }
 
-    @Operation(summary = "更新函数")
+    @Operation(summary = "更新函数", description = "仅修改未发布版本；同步安全扫描并使用 update_time 乐观锁，响应返回扫描摘要")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "更新成功，返回扫描状态和摘要"),
+            @ApiResponse(responseCode = "409", description = "扫描期间函数版本发生变化"),
+            @ApiResponse(responseCode = "422", description = "命中 HIGH 风险、脚本解析或本地校验失败，不落库"),
+            @ApiResponse(responseCode = "502", description = "安全扫描报告或服务异常"),
+            @ApiResponse(responseCode = "503", description = "安全扫描服务不可用"),
+            @ApiResponse(responseCode = "504", description = "安全扫描超时")
+    })
     @PutMapping
-    public RestResult updateFunction(@RequestBody @Valid FunctionUpdateParam param) {
-        //todo 需要增加代码安全检测
-        functionService.updateFunction(param);
-        return RestResult.success();
+    public RestResult<FunctionScanResponse> updateFunction(@RequestBody @Valid FunctionUpdateParam param) {
+        return RestResult.ofData(FunctionScanResponse.from(functionService.updateFunction(param)));
     }
 
 
-    @Operation(summary = "查询函数详情")
+    @Operation(summary = "查询函数详情", description = "返回 scanStatus、固定 11 个顶层字段的完整 scanResult 及全部 findings")
     @GetMapping("/detail")
     public RestResult<FunctionDetailVO> getFunctionByApi(@RequestParam(required = true, name = "functionApi") @Parameter(description = "函数api") String functionApi,
                                                          @RequestParam(required = true, name = "version") @Parameter(description = "版本号（必填，格式 x.y.z）") String version) {
@@ -97,12 +113,25 @@ public class OntologyFunctionController {
     }
 
 
-    @Operation(summary = "发布函数")
+    @Operation(summary = "发布函数", description = "发布前校验扫描状态；旧跳过脚本按当前开关补扫。HTTP 200 时仍须检查 data.published")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "发布成功或因扫描拒绝发布；调用方必须检查 data.published"),
+            @ApiResponse(responseCode = "400", description = "目标版本不存在、已发布或发布状态不允许操作"),
+            @ApiResponse(responseCode = "409", description = "补扫期间函数版本发生变化"),
+            @ApiResponse(responseCode = "502", description = "安全扫描报告或服务异常"),
+            @ApiResponse(responseCode = "503", description = "安全扫描服务不可用"),
+            @ApiResponse(responseCode = "504", description = "安全扫描超时")
+    })
     @PostMapping("/publish")
-    public RestResult publishFunction(@RequestParam(required = true, name = "functionApi") @Parameter(description = "函数api") String functionApi,
-                                      @RequestParam(required = true, name = "version") @Parameter(description = "版本号（必填，格式 x.y.z）") String version) {
-        functionService.publishFunction(functionApi, version);
-        return RestResult.success();
+    public RestResult<FunctionPublishResponse> publishFunction(@RequestParam(required = true, name = "functionApi") @Parameter(description = "函数api") String functionApi,
+                                                               @RequestParam(required = true, name = "version") @Parameter(description = "版本号（必填，格式 x.y.z）") String version) {
+        FunctionPublishResponse data = FunctionPublishResponse.from(
+                functionService.publishFunction(functionApi, version));
+        RestResult<FunctionPublishResponse> response = RestResult.ofData(data);
+        if (!data.published()) {
+            response.setMessage("安全扫描未通过，函数未发布");
+        }
+        return response;
     }
 
 
