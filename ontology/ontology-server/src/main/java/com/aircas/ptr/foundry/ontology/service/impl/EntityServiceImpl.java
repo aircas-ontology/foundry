@@ -2333,7 +2333,8 @@ public class EntityServiceImpl implements EntityService {
      * 关联表（非 main 存储分组）属性值还原为多行：List 值按下标展开，标量值在各行重复；
      * 行数取该组内 List 的最大长度（至少 1）。
      */
-    private List<List<EntityCreateParam.PropertyInfo>> buildRelatedRows(Map<String, Object> values) {
+    private List<List<EntityCreateParam.PropertyInfo>> buildRelatedRows(Map<String, Object> values,
+                                                                        Map<String, OntologyProperty> propertyMap) {
         //apiName -> 归一化后的值列表
         var normalized = Maps.<String, List<Object>>newLinkedHashMap();
         var rowCount = 1;
@@ -2362,6 +2363,15 @@ public class EntityServiceImpl implements EntityService {
                     v = list.get(0);
                 } else {
                     v = null;
+                }
+                //类型转换
+                var prop = propertyMap.get(e.getKey());
+                if (prop != null && prop.getPropertyType() != null && v != null) {
+                    try {
+                        v = DataConverter.convert2DataType(v, prop.getPropertyType());
+                    } catch (Exception ex) {
+                        log.warn("属性 {} 类型转换失败，保留原值：{}", e.getKey(), ex.getMessage());
+                    }
                 }
                 row.add(EntityCreateParam.PropertyInfo.builder()
                         .propertyApiName(e.getKey())
