@@ -742,9 +742,15 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                         .eq(OntologyMeta::getOntologySpaceId, spaceId)
                         .eq(OntologyMeta::getStatus, Status.ENABLE.getValue()))
                 .stream().collect(Collectors.toMap(OntologyMeta::getDisplayName, OntologyMeta::getUniqueIdentifier, (a, b) -> a));
-        var categoryIdByPath = ontologyLinkCategoryService.list(new LambdaQueryWrapper<OntologyLinkCategory>()
-                        .eq(OntologyLinkCategory::getOntologySpaceId, spaceId))
-                .stream().collect(Collectors.toMap(OntologyLinkCategory::getPath, OntologyLinkCategory::getId, (a, b) -> a));
+        var linkCategories = ontologyLinkCategoryService.list(new LambdaQueryWrapper<OntologyLinkCategory>()
+                .eq(OntologyLinkCategory::getOntologySpaceId, spaceId));
+        var categoryIdByPath = linkCategories.stream()
+                .collect(Collectors.toMap(OntologyLinkCategory::getPath, OntologyLinkCategory::getId, (a, b) -> a));
+        //取关系根分类的id，路径找不到时兜底挂到根下
+        Integer linkRootCategoryId = linkCategories.stream()
+                .filter(c -> c.getParentId() != null && c.getParentId() == 0)
+                .map(OntologyLinkCategory::getId)
+                .findFirst().orElse(null);
         // 实例关系边以两端节点为端点，同一对象的节点只同步一次
         Set<String> nodeSynced = new HashSet<>();
         for (var link : links) {
@@ -758,6 +764,15 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
             Stream.of(fromUid, toUid).filter(nodeSynced::add).forEach(entityService::createEntityNodes);
             var entityRelations = link.getEntityRelations();
             var withEntityRelations = CollectionUtils.isNotEmpty(entityRelations);
+            Integer linkCategoryId = null;
+            if (StringUtils.isNotBlank(link.getCategoryPath())) {
+                linkCategoryId = categoryIdByPath.get(link.getCategoryPath());
+                if (linkCategoryId == null) {
+                    log.warn("关系 {} 导入：分类路径 {} 在目标空间不存在，兜底挂到根分类下",
+                            link.getName(), link.getCategoryPath());
+                    linkCategoryId = linkRootCategoryId;
+                }
+            }
             var linkUid = ontologyLinkGroupService.createLink(new OntologyLinkCreateParam()
                     .setName(link.getName())
                     .setApiName(StringUtils.defaultIfBlank(link.getApiName(), "relation_" + IdGenerator.generateUUID()))
@@ -765,7 +780,7 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                     .setType(link.getType() == null ? OntologyLinkTypeEnum.OTHER : link.getType())
                     .setOntologyUniqueIdentifierFrom(fromUid)
                     .setOntologyUniqueIdentifierTo(toUid)
-                    .setCategoryId(StringUtils.isBlank(link.getCategoryPath()) ? null : categoryIdByPath.get(link.getCategoryPath()))
+                    .setCategoryId(linkCategoryId)
                     .setSpaceId(spaceId));
             if (withEntityRelations) {
                 entityService.importEntityRelations(linkUid, entityRelations,

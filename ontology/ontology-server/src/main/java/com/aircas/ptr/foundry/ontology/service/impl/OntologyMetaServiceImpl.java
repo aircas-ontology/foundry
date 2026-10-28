@@ -635,9 +635,25 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         }
 
         //获取本体分类体系
-        var ontologyCategoryMap = categoryService.list(new LambdaQueryWrapper<OntologyCategory>()
-                        .eq(OntologyCategory::getOntologySpaceId, space.getId()))
-                .stream().collect(Collectors.toMap(OntologyCategory::getPath, OntologyCategory::getId));
+        var ontologyCategories = categoryService.list(new LambdaQueryWrapper<OntologyCategory>()
+                .eq(OntologyCategory::getOntologySpaceId, space.getId()));
+        var ontologyCategoryMap = ontologyCategories.stream()
+                .collect(Collectors.toMap(OntologyCategory::getPath, OntologyCategory::getId, (a, b) -> a));
+        //取根分类"全部"的id，路径找不到时兜底挂到根下
+        Integer rootCategoryId = ontologyCategories.stream()
+                .filter(c -> c.getParentId() != null && c.getParentId() == 0)
+                .map(OntologyCategory::getId)
+                .findFirst().orElse(null);
+
+        Integer ontologyCategoryId = null;
+        if (StringUtils.isNotEmpty(metaData.getCategoryPath())) {
+            ontologyCategoryId = ontologyCategoryMap.get(metaData.getCategoryPath());
+            if (ontologyCategoryId == null) {
+                log.warn("本体 {} 导入：分类路径 {} 在目标空间不存在，兜底挂到根分类下",
+                        metaData.getDisplayName(), metaData.getCategoryPath());
+                ontologyCategoryId = rootCategoryId;
+            }
+        }
 
         var meta = OntologyMeta.builder()
                 .apiName(metaData.getApiName())
@@ -647,8 +663,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 .metaGroupId(metaGroups)
                 .uniqueIdentifier(IdGenerator.generateUUID())
                 .ontologySpaceId(space.getId())
-                .ontologyCategoryId(StringUtils.isEmpty(metaData.getCategoryPath()) ?
-                        null : ontologyCategoryMap.get(metaData.getCategoryPath()))
+                .ontologyCategoryId(ontologyCategoryId)
                 .build();
         save(meta);
         //保存属性分类
@@ -668,23 +683,39 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         //保存属性
         var props = dto.getProperties();
         if (CollectionUtils.isNotEmpty(props)) {
-            var categoryMap = propertyCategoryService.list(new LambdaQueryWrapper<PropertyCategory>()
-                            .eq(PropertyCategory::getOntologyUniqueIdentifier, meta.getUniqueIdentifier()))
-                    .stream().collect(Collectors.toMap(PropertyCategory::getPath, PropertyCategory::getId));
-            var ontologyPropertyCreateParams = props.stream().<OntologyPropertyCreateParam>map(p -> OntologyPropertyCreateParam.builder()
-                            .apiName(p.getApiName())
-                            .description(p.getDescription())
-                            .displayName(p.getDisplayName())
-                            .dataType(p.getDataType())
-                            .isPrimaryKey(p.getIsPrimaryKey())
-                            .isTitleKey(p.getIsTitleKey())
-                            .ontologyIdentifier(meta.getUniqueIdentifier())
-                            .defaultValue(p.getDefaultValue())
-                            .storageGroup(p.getStorageGroup())
-                            .categoryId(StringUtils.isEmpty(p.getCategoryPath()) ? null : categoryMap.get(p.getCategoryPath()))
-                            .metadata(p.getMetadata())
-                            .build())
-                    .collect(Collectors.toList());
+            var propertyCategories = propertyCategoryService.list(new LambdaQueryWrapper<PropertyCategory>()
+                    .eq(PropertyCategory::getOntologyUniqueIdentifier, meta.getUniqueIdentifier()));
+            var categoryMap = propertyCategories.stream()
+                    .collect(Collectors.toMap(PropertyCategory::getPath, PropertyCategory::getId, (a, b) -> a));
+            //取属性根分类的id，路径找不到时兜底挂到根下
+            Integer propertyRootCategoryId = propertyCategories.stream()
+                    .filter(c -> c.getParentId() != null && c.getParentId() == 0)
+                    .map(PropertyCategory::getId)
+                    .findFirst().orElse(null);
+            var ontologyPropertyCreateParams = props.stream().<OntologyPropertyCreateParam>map(p -> {
+                Integer propCategoryId = null;
+                if (StringUtils.isNotEmpty(p.getCategoryPath())) {
+                    propCategoryId = categoryMap.get(p.getCategoryPath());
+                    if (propCategoryId == null) {
+                        log.warn("本体 {} 属性 {} 导入：分类路径 {} 不存在，兜底挂到根分类下",
+                                metaData.getDisplayName(), p.getDisplayName(), p.getCategoryPath());
+                        propCategoryId = propertyRootCategoryId;
+                    }
+                }
+                return OntologyPropertyCreateParam.builder()
+                        .apiName(p.getApiName())
+                        .description(p.getDescription())
+                        .displayName(p.getDisplayName())
+                        .dataType(p.getDataType())
+                        .isPrimaryKey(p.getIsPrimaryKey())
+                        .isTitleKey(p.getIsTitleKey())
+                        .ontologyIdentifier(meta.getUniqueIdentifier())
+                        .defaultValue(p.getDefaultValue())
+                        .storageGroup(p.getStorageGroup())
+                        .categoryId(propCategoryId)
+                        .metadata(p.getMetadata())
+                        .build();
+            }).collect(Collectors.toList());
             ontologyPropertyService.batchCreateProperties(ontologyPropertyCreateParams);
         }
         //自动建实体表以及关联属性数据源：仅当导入了实例数据时才执行，无实例数据则跳过（避免无谓建表/绑定数据源及主键校验失败）
