@@ -164,7 +164,8 @@ public class OntologyCategoryServiceImpl extends ServiceImpl<OntologyCategoryMap
         if (CollectionUtils.isEmpty(categories)) {
             return null;
         }
-        var categoryMap = categories.stream().collect(Collectors.groupingBy(OntologyCategory::getParentId));
+        var categoryMap = categories.stream().collect(Collectors.groupingBy(
+                OntologyCategory::getParentId, LinkedHashMap::new, Collectors.toList()));
         var roots = categoryMap.get(0);
         if (CollectionUtils.isEmpty(roots)) {
             return null;

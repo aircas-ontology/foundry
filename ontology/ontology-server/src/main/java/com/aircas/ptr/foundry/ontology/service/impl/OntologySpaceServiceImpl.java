@@ -494,20 +494,16 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
 
         // 对象（本体）数量
         var ontologyCount = metaMapper.selectCount(new LambdaQueryWrapper<OntologyMeta>()
-                .eq(OntologyMeta::getOntologySpaceId, spaceId)
-                .eq(OntologyMeta::getStatus, Status.ENABLE.getValue()));
+                .eq(OntologyMeta::getOntologySpaceId, spaceId));
         // 关系数量
         var linkCount = linkMapper.selectCount(new LambdaQueryWrapper<OntologyLinkGroup>()
-                .eq(OntologyLinkGroup::getOntologySpaceId, spaceId)
-                .eq(OntologyLinkGroup::getStatus, Status.ENABLE.getValue()));
+                .eq(OntologyLinkGroup::getOntologySpaceId, spaceId));
         // 函数算子数量
         var functionCount = functionMapper.selectCount(new LambdaQueryWrapper<Function>()
-                .eq(Function::getOntologySpaceId, spaceId)
-                .eq(Function::getStatus, Status.ENABLE.getValue()));
+                .eq(Function::getOntologySpaceId, spaceId));
         // 行为数量
         var actionCount = actionMapper.selectCount(new LambdaQueryWrapper<OntologyAction>()
-                .eq(OntologyAction::getOntologySpaceId, spaceId)
-                .eq(OntologyAction::getStatus, Status.ENABLE.getValue()));
+                .eq(OntologyAction::getOntologySpaceId, spaceId));
         // 行为调度数量（调度规则 + 调度任务）
         var actionSchedulingCount = ruleMapper.selectCount(new LambdaQueryWrapper<ActionHandleRule>()
                 .eq(ActionHandleRule::getOntologySpaceId, spaceId))

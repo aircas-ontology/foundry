@@ -34,10 +34,8 @@ public class EntityDatasourceDMLListener {
             topicPattern = EntityDatasourceCdcTopics.TOPIC_PATTERN,
             groupId = "${cdc.consumer-group:cdc-monitor-group}")
     public void consumeAllTables(ConsumerRecord<String, String> record) {
-        log.info("Key: {}", record.key());
-        log.info("Value: {}", record.value());
-        log.info("Partition: {}", record.partition());
-        log.info("Offset: {}", record.offset());
+        log.debug("数据湖 CDC message, topic={}, partition={}, offset={}, key={}, value={}",
+                record.topic(), record.partition(), record.offset(), record.key(), record.value());
 
         DebeziumEnvelopeDTO<Map<String, Object>> envelope;
         try {
@@ -57,6 +55,7 @@ public class EntityDatasourceDMLListener {
             return;
         }
         String op = envelope.getOp();
+        log.info("数据湖 CDC, op={}, table=[{}.{}]", op, schema, table);
         try {
             if (Objects.equals(op, "c") || Objects.equals(op, "r")) {
                 // r = 连接器快照阶段读到的存量行，按创建处理

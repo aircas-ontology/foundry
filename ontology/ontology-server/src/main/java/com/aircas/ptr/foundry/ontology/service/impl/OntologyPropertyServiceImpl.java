@@ -38,6 +38,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -564,7 +565,8 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         if (CollectionUtils.isEmpty(categories)) {
             return null;
         }
-        var categoryMap = categories.stream().collect(Collectors.groupingBy(PropertyCategory::getParentId));
+        var categoryMap = categories.stream().collect(Collectors.groupingBy(
+                PropertyCategory::getParentId, LinkedHashMap::new, Collectors.toList()));
         var roots = categoryMap.get(0);
         if (CollectionUtils.isEmpty(roots)) {
             return null;

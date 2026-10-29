@@ -172,15 +172,15 @@ public class OntologyLinkCategoryServiceImpl extends ServiceImpl<OntologyLinkCat
         if (CollectionUtils.isEmpty(categories)) {
             return null;
         }
-        var categoryMap = categories.stream().collect(Collectors.groupingBy(OntologyLinkCategory::getParentId));
+        var categoryMap = categories.stream().collect(Collectors.groupingBy(
+                OntologyLinkCategory::getParentId, LinkedHashMap::new, Collectors.toList()));
         var roots = categoryMap.get(0);
         if (CollectionUtils.isEmpty(roots)) {
             return null;
         }
-        // 查询该空间下所有有效关系（status=1）；未挂分类或分类已删除的关系并入根分类，避免统计里有、树里查不到
+        // 查询该空间下所有关系；未挂分类或分类已删除的关系并入根分类，避免统计里有、树里查不到
         var rootCategoryId = roots.get(0).getId();
         var linkQuery = new LambdaQueryWrapper<OntologyLinkGroup>()
-                .eq(OntologyLinkGroup::getStatus, Status.ENABLE.getValue())
                 .eq(OntologyLinkGroup::getOntologySpaceId, spaceId);
         // 可选过滤：前端传了本体唯一标识时，返回该对象在任一端（源或目标）的关系，与 /link/graph 的双向口径一致
         if (ontologyUniqueIdentifierFrom != null && !ontologyUniqueIdentifierFrom.isBlank()) {
