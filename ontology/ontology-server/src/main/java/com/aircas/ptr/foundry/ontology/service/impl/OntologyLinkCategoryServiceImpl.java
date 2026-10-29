@@ -165,7 +165,10 @@ public class OntologyLinkCategoryServiceImpl extends ServiceImpl<OntologyLinkCat
 
     @Override
     public OntologyLinkCategoryVO getCategoryTree(Integer spaceId, String ontologyUniqueIdentifierFrom) {
-        var categories = list(new LambdaQueryWrapper<OntologyLinkCategory>().eq(OntologyLinkCategory::getOntologySpaceId, spaceId));
+        // 按 id 降序取出，分组后每层 children 即为 id 从大到小
+        var categories = list(new LambdaQueryWrapper<OntologyLinkCategory>()
+                .eq(OntologyLinkCategory::getOntologySpaceId, spaceId)
+                .orderByDesc(OntologyLinkCategory::getId));
         if (CollectionUtils.isEmpty(categories)) {
             return null;
         }

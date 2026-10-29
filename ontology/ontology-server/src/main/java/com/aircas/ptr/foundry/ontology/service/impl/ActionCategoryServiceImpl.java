@@ -193,8 +193,10 @@ public class ActionCategoryServiceImpl extends ServiceImpl<ActionCategoryMapper,
     @Override
     public ActionCategoryVO getActionCategoryTree(Integer spaceId) {
 
+        // 按 id 降序取出，分组后每层 children 即为 id 从大到小
         var categories = list(new LambdaQueryWrapper<ActionCategory>()
-                .eq(ActionCategory::getOntologySpaceId, spaceId));
+                .eq(ActionCategory::getOntologySpaceId, spaceId)
+                .orderByDesc(ActionCategory::getId));
         if (CollectionUtils.isEmpty(categories)) {
             return null;
         }

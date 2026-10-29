@@ -556,9 +556,11 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
 
     @Override
     public PropertyCategoryVO getCategory(String ontologyUniqueIdentifier) {
+        // 按 id 降序取出，分组后每层 children 即为 id 从大到小
         var categories = propertyCategoryService.list(
                 new LambdaQueryWrapper<PropertyCategory>()
-                        .eq(PropertyCategory::getOntologyUniqueIdentifier, ontologyUniqueIdentifier));
+                        .eq(PropertyCategory::getOntologyUniqueIdentifier, ontologyUniqueIdentifier)
+                        .orderByDesc(PropertyCategory::getId));
         if (CollectionUtils.isEmpty(categories)) {
             return null;
         }
