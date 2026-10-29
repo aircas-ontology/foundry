@@ -2283,7 +2283,7 @@ public class EntityServiceImpl implements EntityService {
                 groupedValues.computeIfAbsent(group, k -> Maps.newLinkedHashMap()).put(apiName, value);
             });
             groupedValues.forEach((group, values) -> {
-                var rows = buildRelatedRows(values);
+                var rows = buildRelatedRows(values, propertyMap);
                 if (CollectionUtils.isNotEmpty(rows)) {
                     entityProperties.add(EntityCreateParam.EntityProperty.builder()
                             .storageGroup(group)
