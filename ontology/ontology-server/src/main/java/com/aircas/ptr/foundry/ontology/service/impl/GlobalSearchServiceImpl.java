@@ -64,6 +64,21 @@ public class GlobalSearchServiceImpl implements GlobalSearchService {
             indexNameOf(EsOntologyInstanceDTO.class),
             indexNameOf(EsOntologyLinkGroupDTO.class));
 
+    /** 请求参数 searchType 取值：1=空间 2=本体对象 3=关系 4=属性 5=实例 */
+    private static final int SEARCH_TYPE_SPACE = 1;
+    private static final int SEARCH_TYPE_META = 2;
+    private static final int SEARCH_TYPE_LINK_GROUP = 3;
+    private static final int SEARCH_TYPE_PROPERTY = 4;
+    private static final int SEARCH_TYPE_INSTANCE = 5;
+
+    /** searchType → 检索索引；空间索引同时承载空间与主题（文档 type 0/1），故 1 查出的命中类型可能是「主题」 */
+    private static final Map<Integer, String> SEARCH_TYPE_INDEX_MAP = Map.of(
+            SEARCH_TYPE_SPACE, indexNameOf(EsOntologySpaceDTO.class),
+            SEARCH_TYPE_META, indexNameOf(EsOntologyMetaDTO.class),
+            SEARCH_TYPE_LINK_GROUP, indexNameOf(EsOntologyLinkGroupDTO.class),
+            SEARCH_TYPE_PROPERTY, indexNameOf(EsOntologyPropertyDTO.class),
+            SEARCH_TYPE_INSTANCE, indexNameOf(EsOntologyInstanceDTO.class));
+
     /** 索引名 → 命中类型常量，用于 toVO 分支 */
     private static final Map<String, String> INDEX_TYPE_MAP = Map.of(
             indexNameOf(EsOntologySpaceDTO.class), TYPE_SPACE,
@@ -98,6 +113,7 @@ public class GlobalSearchServiceImpl implements GlobalSearchService {
     public List<GlobalSearchHitVO> search(GlobalSearchParam param) {
         int size = param.getSize() == null || param.getSize() <= 0 ? DEFAULT_SIZE
                 : Math.min(param.getSize(), MAX_SIZE);
+        List<String> indices = resolveIndices(param.getSearchType());
         String escapedKeyword = escapeQuery(param.getKeyword());
         // 可见范围：未绑定空间的用户不限；绑定空间的用户 = 该空间 + 其本人创建的主题（及主题下内容）
         var userContext = UserContextHolder.get();
@@ -107,23 +123,26 @@ public class GlobalSearchServiceImpl implements GlobalSearchService {
         List<FieldValue> scopeIds = bindSpaceId == null ? null
                 : resolveAccessibleSpaceIds(bindSpaceId, username).stream().map(FieldValue::of).toList();
         SearchRequest request = SearchRequest.of(b -> b
-                .index(SEARCH_INDICES)
+                .index(indices)
                 .size(size)
                 .source(includeSource(SOURCE_FIELDS))
                 .query(q -> q.bool(bool -> {
-                    INDEX_SEARCH_FIELDS.forEach((index, fields) -> bool.should(sh -> sh.bool(inner -> {
-                        inner.must(m -> m.term(t -> t.field("_index").value(index)))
-                                .must(m -> m.queryString(qs -> qs
-                                        .fields(fields)
-                                        .lenient(true)
-                                        .defaultOperator(Operator.Or)
-                                        .query(escapedKeyword)));
-                        String spaceField = scopeIds == null ? null : INDEX_SPACE_FIELD.get(index);
-                        if (spaceField != null) {
-                            inner.filter(f -> f.terms(t -> t.field(spaceField).terms(v -> v.value(scopeIds))));
-                        }
-                        return inner;
-                    })));
+                    indices.forEach(index -> {
+                        List<String> fields = INDEX_SEARCH_FIELDS.get(index);
+                        bool.should(sh -> sh.bool(inner -> {
+                            inner.must(m -> m.term(t -> t.field("_index").value(index)))
+                                    .must(m -> m.queryString(qs -> qs
+                                            .fields(fields)
+                                            .lenient(true)
+                                            .defaultOperator(Operator.Or)
+                                            .query(escapedKeyword)));
+                            String spaceField = scopeIds == null ? null : INDEX_SPACE_FIELD.get(index);
+                            if (spaceField != null) {
+                                inner.filter(f -> f.terms(t -> t.field(spaceField).terms(v -> v.value(scopeIds))));
+                            }
+                            return inner;
+                        }));
+                    });
                     return bool;
                 })));
         List<Hit<Map>> hits;
@@ -155,6 +174,20 @@ public class GlobalSearchServiceImpl implements GlobalSearchService {
             }
         }
         return result;
+    }
+
+    /**
+     * searchType 为空 → 五类索引全查；否则只查对应索引。
+     */
+    private static List<String> resolveIndices(Integer searchType) {
+        if (searchType == null) {
+            return SEARCH_INDICES;
+        }
+        String index = SEARCH_TYPE_INDEX_MAP.get(searchType);
+        if (index == null) {
+            throw new BusinessException("不支持的检索类型：" + searchType + "，取值 1-5", ResultCode.PARAM_ERROR);
+        }
+        return List.of(index);
     }
 
     /**
