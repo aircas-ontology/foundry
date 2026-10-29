@@ -1004,8 +1004,33 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                 } else {
                     //创建列
                     tableMetadataMapper.addColumns(schemaName, ds, columns);
+                    // 检查并添加缺失的关联列
+                    var columnTypes = Maps.<String, String>newHashMap();
+                    tableMetadataMapper.queryColumnMetadata(schemaName, ds)
+                            .forEach(column -> columnTypes.put(column.getColumnName(), StringUtils.defaultString(column.getType())));
+                    if (!columnTypes.containsKey(relatedColumn)) {
+                        tableMetadataMapper.addColumns(schemaName, ds, Lists.newArrayList(TableColumnDesc.builder()
+                                .columnName(relatedColumn)
+                                .type("int4")
+                                .description(ontology.getDisplayName() + "主键")
+                                .isPrimaryKey(false)
+                                .build()));
+                        tableMetadataMapper.createIndex(schemaName, ds, relatedColumn);
+                        log.info("本体{}关联表{}已存在但关联列{}缺失，已补充创建", ontologyIdentifier, ds, relatedColumn);
+                    }
                     //发送mq消息给数据组织层构建管道
                     notifyEntityTableSchemaChange(ontologyIdentifier, schemaName, ds, false, columns, pkColumnName, relatedColumn, DatasourceEventTypeEnum.ADD_COLUMN);
+                    // 表已存在时，检查并创建缺失的映射关系
+                    var existMapping = tableFieldMappingMapper.selectBySourceAndTarget(schemaName, mainDS, ds);
+                    if (existMapping == null) {
+                        tableFieldMappingMapper.insertMapping(schemaName, TableFieldMapping.builder()
+                                .sourceTableName(mainDS)
+                                .sourceColumnName(pkColumnName)
+                                .targetTableName(ds)
+                                .targetColumnName(relatedColumn)
+                                .build());
+                        log.info("本体{}关联表{}已存在但映射缺失，已补充创建映射", ontologyIdentifier, ds);
+                    }
                 }
                 //更新数据源属性
                 list.forEach(p -> p.setDatasourceId(ds).setDatasourceColumnName(p.getApiName()).setDatasourceSchema(schemaName));
@@ -1019,6 +1044,8 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         var message = autoBindMessage(bindDsProps.size(), totalBoundCount, blockedItems);
         if (CollectionUtils.isNotEmpty(blockedItems)) {
             log.warn("本体{}属性自动关联数据源部分跳过：{}", ontologyIdentifier, message);
+            blockedItems.forEach(item -> log.warn("被阻止的属性: {} (存储分组={}, 原因={})", 
+                    item.getPropertyApiName(), item.getStorageGroup(), item.getReason()));
         }
         return autoBindResult(bindDsProps.size(), totalBoundCount, blockedItems, message);
     }
