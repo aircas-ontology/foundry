@@ -168,7 +168,7 @@ public class OntologyLinkCategoryServiceImpl extends ServiceImpl<OntologyLinkCat
         // 按 id 降序取出，分组后每层 children 即为 id 从大到小
         var categories = list(new LambdaQueryWrapper<OntologyLinkCategory>()
                 .eq(OntologyLinkCategory::getOntologySpaceId, spaceId)
-                .orderByDesc(OntologyLinkCategory::getId));
+                .orderByAsc(OntologyLinkCategory::getId));
         if (CollectionUtils.isEmpty(categories)) {
             return null;
         }

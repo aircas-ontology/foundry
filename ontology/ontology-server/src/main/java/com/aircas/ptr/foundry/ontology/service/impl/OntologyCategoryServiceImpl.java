@@ -160,7 +160,7 @@ public class OntologyCategoryServiceImpl extends ServiceImpl<OntologyCategoryMap
         // 按 id 降序取出，分组后每层 children 即为 id 从大到小
         var categories = list(new LambdaQueryWrapper<OntologyCategory>()
                 .eq(OntologyCategory::getOntologySpaceId, spaceId)
-                .orderByDesc(OntologyCategory::getId));
+                .orderByAsc(OntologyCategory::getId));
         if (CollectionUtils.isEmpty(categories)) {
             return null;
         }
