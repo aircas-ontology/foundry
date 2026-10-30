@@ -1,0 +1,42 @@
+version: "3.8"
+
+services:
+  kafka:
+    image: apache/kafka:4.1.1
+    container_name: ontology-kafka
+    restart: always
+    ports:
+      - "10675:10675"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:10675,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://192.168.53.103:10675
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENERS_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      CLUSTER_ID: kafka-node1
+      KAFKA_OFFSETS_TOPIC_CLEANUP_POLICY: compact
+      KAFKA_OFFSETS_LOG_COMPACTION_INTERVAL_MS: 1
+      KAFKA_CONNECT_OFFSETS_TOPIC_CLEANUP_POLICY: compact
+    volumes:
+      - ./kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD", "kafka-topics.sh", "--bootstrap-server", "localhost:10675", "--list"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - kafka_default
+
+networks:
+  kafka_default:
+    name: kafka_default
+    driver: bridge

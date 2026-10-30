@@ -1,0 +1,26 @@
+version: "3.8"
+
+services:
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: ontology-kafka-ui
+    restart: always
+    ports:
+      - "10700:8080"
+    environment:
+      TZ: "Asia/Shanghai"
+      KAFKA_CLUSTERS_0_NAME: "local-cluster"
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: "192.168.53.103:10675"
+      LOGGING_LEVEL_ROOT: "INFO"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - kafka_default
+
+networks:
+  kafka_default:
+    external: true
