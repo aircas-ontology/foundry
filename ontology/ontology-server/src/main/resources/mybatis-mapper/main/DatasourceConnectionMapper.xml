@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.aircas.ptr.foundry.ontology.repository.datalakeMapper.DatasourceConnectionMapper">
+<mapper namespace="com.aircas.ptr.foundry.ontology.repository.mainMapper.DatasourceConnectionMapper">
 
     <resultMap id="BaseResultMap" type="com.aircas.ptr.foundry.ontology.model.po.DatasourceConnection">
         <id column="id" property="id"/>
@@ -28,7 +28,7 @@
     <select id="searchByKeyword" resultMap="BaseResultMap">
         SELECT
         <include refid="Base_Column_List"/>
-        FROM db_connection.datasource_connection
+        FROM datasource_connection
         WHERE status = 1
         <if test="keyword != null and keyword != ''">
             AND (name LIKE CONCAT('%', #{keyword}, '%') OR db_type LIKE CONCAT('%', #{keyword}, '%'))

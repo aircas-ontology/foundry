@@ -1,14 +1,22 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
 import com.aircas.ptr.foundry.common.exception.BusinessException;
+import com.aircas.ptr.foundry.common.util.PreconditionUtils;
+import com.aircas.ptr.foundry.ontology.model.param.DatasourceConnectionParam;
 import com.aircas.ptr.foundry.ontology.model.po.DatasourceConnection;
+import com.aircas.ptr.foundry.ontology.model.vo.DatasourceConnectionItemVO;
 import com.aircas.ptr.foundry.ontology.model.vo.DatasourceConnectionVO;
 import com.aircas.ptr.foundry.ontology.model.vo.TableColumnDescVO;
 import com.aircas.ptr.foundry.ontology.model.vo.TableCommentVO;
-import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.DatasourceConnectionMapper;
+import com.aircas.ptr.foundry.ontology.repository.mainMapper.DatasourceConnectionMapper;
 import com.aircas.ptr.foundry.ontology.service.DatasourceConnectionService;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
@@ -17,6 +25,7 @@ import java.sql.DatabaseMetaData;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Properties;
@@ -32,11 +41,105 @@ public class DatasourceConnectionServiceImpl
     private static final String DEFAULT_SCHEMA_POSTGRES = "public";
     /** SQL Server 缺省 schema。 */
     private static final String DEFAULT_SCHEMA_SQLSERVER = "dbo";
+    /** 新增数据源未指定 status 时的缺省值：启用。 */
+    private static final int STATUS_ENABLED = 1;
 
     @Override
     public List<DatasourceConnectionVO> searchByKeyword(String keyword) {
         List<DatasourceConnection> list = baseMapper.searchByKeyword(keyword);
         return list.stream().map(this::toVO).toList();
+    }
+
+    @Override
+    public IPage<DatasourceConnectionItemVO> pageDatasources(String keyword, Integer status, Integer pageNum, Integer pageSize) {
+        checkStatus(status);
+        IPage<DatasourceConnection> page = baseMapper.selectPage(new Page<>(pageNum, pageSize),
+                new LambdaQueryWrapper<DatasourceConnection>()
+                        .and(StringUtils.isNotBlank(keyword), q -> q
+                                .like(DatasourceConnection::getName, keyword)
+                                .or()
+                                .like(DatasourceConnection::getDbType, keyword))
+                        .eq(status != null, DatasourceConnection::getStatus, status)
+                        .orderByDesc(DatasourceConnection::getUpdateTime));
+        Page<DatasourceConnectionItemVO> voPage = new Page<>(page.getCurrent(), page.getSize(), page.getTotal());
+        voPage.setRecords(page.getRecords().stream().map(this::toItemVO).toList());
+        return voPage;
+    }
+
+    @Override
+    public DatasourceConnectionItemVO getDatasource(Integer id) {
+        return toItemVO(requireExists(id));
+    }
+
+    @Override
+    public DatasourceConnectionItemVO createDatasource(DatasourceConnectionParam param) {
+        PreconditionUtils.checkArgument(StringUtils.isNotBlank(param.getPassword()),
+                "连接密码不能为空", HttpStatus.BAD_REQUEST);
+        checkStatus(param.getStatus());
+        DatasourceConnection po = DatasourceConnection.builder()
+                .name(param.getName().trim())
+                .dbType(normalizeDbType(param.getDbType()))
+                // driver_class 列是 NOT NULL：留空存空串而不是 null，此时靠 JDBC 4+ 的驱动 SPI 自动注册
+                .driverClass(StringUtils.defaultString(StringUtils.trim(param.getDriverClass())))
+                .jdbcUrl(param.getJdbcUrl().trim())
+                .host(StringUtils.trimToNull(param.getHost()))
+                .port(param.getPort())
+                .dbName(StringUtils.trimToNull(param.getDbName()))
+                .schemaName(StringUtils.trimToNull(param.getSchemaName()))
+                .username(param.getUsername().trim())
+                .password(param.getPassword())
+                .description(StringUtils.trimToNull(param.getDescription()))
+                .status(param.getStatus() == null ? STATUS_ENABLED : param.getStatus())
+                .build();
+        // id 由库自增、create_time / update_time 由 OnInsertUpdateHandler 填充，均不接受请求传入
+        baseMapper.insert(po);
+        return toItemVO(po);
+    }
+
+    @Override
+    public DatasourceConnectionItemVO updateDatasource(Integer id, DatasourceConnectionParam param) {
+        requireExists(id);
+        checkStatus(param.getStatus());
+        // 逐列显式 set：updateById 会跳过 null，「清空描述 / 清空 schema」就写不进去；
+        // 密码留空则不 set，沿用库中原值（密码不对外返回，前端回填不了）；
+        // update_time 手动填——wrapper 更新没有实体对象，MetaObjectHandler 不生效
+        baseMapper.update(null, new LambdaUpdateWrapper<DatasourceConnection>()
+                .eq(DatasourceConnection::getId, id)
+                .set(DatasourceConnection::getName, param.getName().trim())
+                .set(DatasourceConnection::getDbType, normalizeDbType(param.getDbType()))
+                .set(DatasourceConnection::getDriverClass, StringUtils.defaultString(StringUtils.trim(param.getDriverClass())))
+                .set(DatasourceConnection::getJdbcUrl, param.getJdbcUrl().trim())
+                .set(DatasourceConnection::getHost, StringUtils.trimToNull(param.getHost()))
+                .set(DatasourceConnection::getPort, param.getPort())
+                .set(DatasourceConnection::getDbName, StringUtils.trimToNull(param.getDbName()))
+                .set(DatasourceConnection::getSchemaName, StringUtils.trimToNull(param.getSchemaName()))
+                .set(DatasourceConnection::getUsername, param.getUsername().trim())
+                .set(DatasourceConnection::getDescription, StringUtils.trimToNull(param.getDescription()))
+                .set(param.getStatus() != null, DatasourceConnection::getStatus, param.getStatus())
+                .set(StringUtils.isNotBlank(param.getPassword()), DatasourceConnection::getPassword, param.getPassword())
+                .set(DatasourceConnection::getUpdateTime, new Date()));
+        return toItemVO(baseMapper.selectById(id));
+    }
+
+    @Override
+    public void deleteDatasource(Integer id) {
+        requireExists(id);
+        baseMapper.deleteById(id);
+    }
+
+    @Override
+    public String testConnection(Integer id, DatasourceConnectionParam param) {
+        DatasourceConnection target = resolveTestTarget(id, param);
+        loadDriver(target.getDriverClass());
+        Properties props = buildConnectionProps(target);
+        // 只连一次读厂商自报信息，不执行任何语句、不落库
+        try (Connection dbConn = DriverManager.getConnection(target.getJdbcUrl(), props)) {
+            DatabaseMetaData metaData = dbConn.getMetaData();
+            return metaData.getDatabaseProductName() + " " + metaData.getDatabaseProductVersion();
+        } catch (Exception e) {
+            log.warn("测试数据源连接失败，datasourceId={}, jdbcUrl={}", id, target.getJdbcUrl(), e);
+            throw new BusinessException("连接失败: " + e.getMessage(), HttpStatus.BAD_REQUEST);
+        }
     }
 
     /**
@@ -151,6 +254,60 @@ public class DatasourceConnectionServiceImpl
     }
 
     /**
+     * 仅校验记录存在性（增删改查与测试连接用）；JDBC URL 是否为空由 {@link #requireDatasource(Integer)}
+     * 在实际要建连的扫描入口再判，避免删除一条配置残缺的记录也被拦住。
+     */
+    private DatasourceConnection requireExists(Integer id) {
+        DatasourceConnection conn = baseMapper.selectById(id);
+        PreconditionUtils.checkNotNull(conn, "数据源不存在：" + id, HttpStatus.NOT_FOUND);
+        return conn;
+    }
+
+    /**
+     * status 只允许 1（启用）/ 0（禁用）；null 表示「不指定」，由调用方按缺省或「不改动」处理。
+     */
+    private void checkStatus(Integer status) {
+        PreconditionUtils.checkArgument(status == null || status == STATUS_ENABLED || status == 0,
+                "status 只能是 1（启用）或 0（禁用）", HttpStatus.BAD_REQUEST);
+    }
+
+    /**
+     * dbType 统一大写存储：{@link #resolveCatalogSchema(DatasourceConnection)} 按大写常量分派厂商语义，
+     * 小写值会落到未知厂商的 default 分支，导致扫表拿不到 schema。
+     */
+    private static String normalizeDbType(String dbType) {
+        return dbType.trim().toUpperCase();
+    }
+
+    /**
+     * 组装测试连接的目标配置：传了 id 就以库中记录为底，请求表单里的非空字段覆盖之；
+     * 只取建连真正用到的四个字段（驱动 / URL / 账号 / 密码），其余字段与试连无关。
+     */
+    private DatasourceConnection resolveTestTarget(Integer id, DatasourceConnectionParam param) {
+        DatasourceConnection stored = id == null ? null : requireExists(id);
+        if (stored == null && param == null) {
+            throw new BusinessException("请提交连接表单，或传入已保存的数据源 id", HttpStatus.BAD_REQUEST);
+        }
+        DatasourceConnectionParam form = param == null ? new DatasourceConnectionParam() : param;
+        DatasourceConnection target = DatasourceConnection.builder()
+                .driverClass(pick(form.getDriverClass(), stored == null ? null : stored.getDriverClass()))
+                .jdbcUrl(pick(form.getJdbcUrl(), stored == null ? null : stored.getJdbcUrl()))
+                .username(pick(form.getUsername(), stored == null ? null : stored.getUsername()))
+                .password(pick(form.getPassword(), stored == null ? null : stored.getPassword()))
+                .build();
+        PreconditionUtils.checkArgument(StringUtils.isNotBlank(target.getJdbcUrl()),
+                "JDBC URL 不能为空", HttpStatus.BAD_REQUEST);
+        return target;
+    }
+
+    /**
+     * 请求值非空则用请求值（去首尾空格），否则回落到库中值——编辑场景密码回不了填就靠这里。
+     */
+    private static String pick(String requestValue, String storedValue) {
+        return StringUtils.isNotBlank(requestValue) ? requestValue.trim() : storedValue;
+    }
+
+    /**
      * 按 dbType 分派 catalog / schema。各厂商语义不一致：
      * MySQL/MariaDB 的 database 对应 JDBC catalog；SQL Server 用 catalog=database、schema 缺省 {@code dbo}；
      * Oracle 的 schema 缺省等于登录用户名（且大写存储）；PostgreSQL 的 schema 缺省 {@code public}。
@@ -223,6 +380,30 @@ public class DatasourceConnectionServiceImpl
                 .dbName(po.getDbName())
                 .schemaName(po.getSchemaName())
                 .description(po.getDescription())
+                .build();
+    }
+
+    /**
+     * PO -> 管理端 VO：数据源管理页要编辑连接串、驱动、账号与启停状态，所以除密码外全量返回。
+     * 与 {@link #toVO(DatasourceConnection)} 分开维护——后者是给大模型的 MCP 最小字段集，
+     * 不该被 jdbcUrl 这类长串撑大；两者共同点是都不返回 {@code password}。
+     */
+    private DatasourceConnectionItemVO toItemVO(DatasourceConnection po) {
+        return DatasourceConnectionItemVO.builder()
+                .id(po.getId())
+                .name(po.getName())
+                .dbType(po.getDbType())
+                .driverClass(po.getDriverClass())
+                .jdbcUrl(po.getJdbcUrl())
+                .host(po.getHost())
+                .port(po.getPort())
+                .dbName(po.getDbName())
+                .schemaName(po.getSchemaName())
+                .username(po.getUsername())
+                .description(po.getDescription())
+                .status(po.getStatus())
+                .createTime(po.getCreateTime())
+                .updateTime(po.getUpdateTime())
                 .build();
     }
 }

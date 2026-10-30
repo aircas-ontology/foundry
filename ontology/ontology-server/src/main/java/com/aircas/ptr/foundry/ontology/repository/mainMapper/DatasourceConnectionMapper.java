@@ -1,4 +1,4 @@
-package com.aircas.ptr.foundry.ontology.repository.datalakeMapper;
+package com.aircas.ptr.foundry.ontology.repository.mainMapper;
 
 import com.aircas.ptr.foundry.ontology.model.po.DatasourceConnection;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
@@ -8,11 +8,12 @@ import org.apache.ibatis.annotations.Param;
 import java.util.List;
 
 /**
- * 数据源连接配置 Mapper（datalake 数据源）。
+ * 数据源连接配置 Mapper（主库数据源）。
  *
- * <p>位于 {@code datalakeMapper} 包，由 {@code datalakeSqlSessionFactory} 扫描，绑定数据湖库
- * {@code entity_datasource}（默认 public schema）。自定义查询 SQL 见
- * {@code resources/mybatis-mapper/datalake/DatasourceConnectionMapper.xml}。</p>
+ * <p>位于 {@code mainMapper} 包，由 {@code mainSqlSessionFactory} 扫描，绑定主库
+ * {@code postgres} 库的 {@code ontology} schema（JDBC URL 上 {@code currentSchema=ontology}，
+ * 故 SQL 中一律使用不带 schema 前缀的表名）。自定义查询 SQL 见
+ * {@code resources/mybatis-mapper/main/DatasourceConnectionMapper.xml}。</p>
  */
 @Mapper
 public interface DatasourceConnectionMapper extends BaseMapper<DatasourceConnection> {

@@ -3,6 +3,11 @@
     记录外部数据源（PostgreSQL / MySQL / Oracle 等）的连接信息，
     运行时可依据此表动态建立 JDBC 连接。
 
+    【已作废 · 2026-10-30】本表已迁到主库 ontology.datasource_connection，
+    新环境请改执行 alter_table_20261030_datasource_connection.sql；
+    代码侧 Mapper 也已从 datalakeMapper 挪到 mainMapper。
+    本脚本仅保留作历史记录，不要再对数据湖库执行。
+
     注意：本脚本在 entity_datasource 库（datalake 数据源）执行，
     表位于 db_connection schema 下，即 entity_datasource.db_connection.datasource_connection。
 
