@@ -202,6 +202,7 @@ script-runner:
   timeout-ms: 5000
 
 # 函数脚本同步安全扫描。base-url 由各环境覆盖；默认关闭。
+# 其余协议参数（scan-path / media-type / 各上限 / 校验规则）默认值见 SemgrepScanProperties。
 function-security:
   semgrep:
     enabled: false

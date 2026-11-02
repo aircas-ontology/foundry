@@ -33,25 +33,21 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
 /** Semgrep HTTP 客户端。只负责传输、请求元数据及协议完整性校验。 */
 @Slf4j
 @Component
 public class SemgrepScanClient {
 
-    static final int MAX_CODE_BYTES = 256 * 1024;
-    static final int MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
-    private static final String SCAN_PATH = "/api/v1/scan";
-    private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
-    private static final Pattern REQUEST_ID_PATTERN = Pattern.compile("[A-Za-z0-9_.:-]{1,128}");
-    private static final Pattern HASH_PATTERN = Pattern.compile("[0-9a-f]{64}");
-    private static final Set<String> REQUIRED_RESPONSE_FIELDS = Set.of(
-            "scanId", "durationMs", "cached", "findingsTruncated", "findings");
-
     private final SemgrepScanProperties properties;
     private final ObjectMapper objectMapper;
     private final OkHttpClient httpClient;
     private final Clock clock;
+    private final MediaType mediaType;
+    private final Pattern requestIdPattern;
+    private final Pattern hashPattern;
+    private final Set<String> requiredResponseFields;
 
     @Autowired
     public SemgrepScanClient(SemgrepScanProperties properties, ObjectMapper objectMapper) {
@@ -60,10 +56,38 @@ public class SemgrepScanClient {
 
     SemgrepScanClient(SemgrepScanProperties properties, ObjectMapper objectMapper,
                       OkHttpClient httpClient, Clock clock) {
+        properties.validate();
         this.properties = properties;
         this.objectMapper = objectMapper;
         this.httpClient = httpClient;
         this.clock = clock;
+        this.mediaType = parseMediaType(properties.getMediaType());
+        this.requestIdPattern = compilePattern(
+                "function-security.semgrep.request-id-pattern", properties.getRequestIdPattern());
+        this.hashPattern = compilePattern(
+                "function-security.semgrep.hash-pattern", properties.getHashPattern());
+        this.requiredResponseFields = Set.copyOf(properties.getRequiredResponseFields());
+    }
+
+    private static MediaType parseMediaType(String value) {
+        MediaType parsed;
+        try {
+            parsed = MediaType.get(value);
+        } catch (IllegalArgumentException exception) {
+            parsed = null;
+        }
+        if (parsed == null) {
+            throw new IllegalStateException("function-security.semgrep.media-type 不是合法的 MediaType: " + value);
+        }
+        return parsed;
+    }
+
+    private static Pattern compilePattern(String key, String value) {
+        try {
+            return Pattern.compile(value);
+        } catch (PatternSyntaxException exception) {
+            throw new IllegalStateException(key + " 不是合法的正则表达式", exception);
+        }
     }
 
     public SemgrepCallResult scan(SemgrepScriptType scriptType, String code, ScanPurpose purpose) {
@@ -75,20 +99,20 @@ public class SemgrepScanClient {
             throw new SemgrepScanException(ScanErrorCode.INVALID_REQUEST);
         }
         String requestId = purpose.requestIdPrefix() + UUID.randomUUID();
-        if (!REQUEST_ID_PATTERN.matcher(requestId).matches()) {
+        if (!requestIdPattern.matcher(requestId).matches()) {
             throw new SemgrepScanException(ScanErrorCode.INVALID_REQUEST);
         }
         String codeHash = sha256(code);
-        if (!HASH_PATTERN.matcher(codeHash).matches()) {
+        if (!hashPattern.matcher(codeHash).matches()) {
             throw new SemgrepScanException(ScanErrorCode.INVALID_REQUEST);
         }
         SemgrepScanRequest payload = new SemgrepScanRequest(requestId, scriptType, code, codeHash);
 
         try {
-            String endpoint = properties.requiredBaseUrl() + SCAN_PATH;
+            String endpoint = properties.requiredBaseUrl() + properties.getScanPath();
             Request request = new Request.Builder()
                     .url(endpoint)
-                    .post(RequestBody.create(objectMapper.writeValueAsBytes(payload), JSON))
+                    .post(RequestBody.create(objectMapper.writeValueAsBytes(payload), mediaType))
                     .build();
             try (Response response = httpClient.newCall(request).execute()) {
                 byte[] body = readBounded(response.body());
@@ -211,7 +235,7 @@ public class SemgrepScanClient {
         if (root == null || !root.isObject()) {
             throw new SemgrepScanException(ScanErrorCode.INVALID_SCAN_RESPONSE);
         }
-        for (String field : REQUIRED_RESPONSE_FIELDS) {
+        for (String field : requiredResponseFields) {
             if (!root.has(field)) {
                 throw new SemgrepScanException(ScanErrorCode.INVALID_SCAN_RESPONSE);
             }
@@ -232,7 +256,7 @@ public class SemgrepScanClient {
                 || response.durationMs() == null || response.durationMs() < 0
                 || response.cached() == null || response.cached()
                 || response.findingsTruncated() == null
-                || response.findings() == null || response.findings().size() > 200
+                || response.findings() == null || response.findings().size() > properties.getMaxFindings()
                 || response.error() != null
                 && (response.error().code() == null || response.error().code().isBlank())) {
             throw new SemgrepScanException(ScanErrorCode.INVALID_SCAN_RESPONSE);
@@ -244,17 +268,18 @@ public class SemgrepScanClient {
             throw new SemgrepScanException(ScanErrorCode.INVALID_SCAN_RESPONSE);
         }
         try (InputStream input = body.byteStream()) {
-            byte[] bytes = input.readNBytes(MAX_RESPONSE_BYTES + 1);
-            if (bytes.length > MAX_RESPONSE_BYTES) {
+            int maxResponseBytes = properties.getMaxResponseBytes();
+            byte[] bytes = input.readNBytes(maxResponseBytes + 1);
+            if (bytes.length > maxResponseBytes) {
                 throw new SemgrepScanException(ScanErrorCode.REPORT_TOO_LARGE);
             }
             return bytes;
         }
     }
 
-    private static void validateCode(String code) {
+    private void validateCode(String code) {
         if (code == null || code.isBlank() || code.indexOf('\0') >= 0
-                || code.getBytes(StandardCharsets.UTF_8).length > MAX_CODE_BYTES) {
+                || code.getBytes(StandardCharsets.UTF_8).length > properties.getMaxCodeBytes()) {
             throw new SemgrepScanException(ScanErrorCode.INVALID_REQUEST);
         }
     }
