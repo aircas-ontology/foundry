@@ -79,6 +79,17 @@ public class OntologySpaceController {
         return RestResult.ofData(res);
     }
 
+    @GetMapping("/canvas")
+    @Operation(summary = "查询画布内容：返回空间下的全部对象、对象属性、对象关系",
+            description = "与 POST /space/canvas 请求体同一结构，前端渲染画布、编辑后可直接回传")
+    public RestResult<OntologySpaceCanvasCreateParam> getSpaceCanvasContent(
+            @RequestParam(required = true, name = "spaceId")
+            @Parameter(description = "本体空间id")
+            @SpaceIdVerify Integer spaceId) {
+        var res = ontologySpaceService.getSpaceCanvasContent(spaceId);
+        return RestResult.ofData(res);
+    }
+
     @PostMapping("/subspace")
     @Operation(summary = "基于父空间创建子空间",
             description = "创建子空间")

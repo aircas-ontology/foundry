@@ -12,7 +12,7 @@ import lombok.experimental.Accessors;
 
 import java.util.List;
 
-@Schema(description = "画布一键建空间请求：创建空间并批量创建对象、属性、关系")
+@Schema(description = "画布内容（对象、属性、关系）：POST /space/canvas 保存请求体与 GET /space/canvas 查询返回体共用此结构")
 @Data
 @Accessors(chain = true)
 @AllArgsConstructor
