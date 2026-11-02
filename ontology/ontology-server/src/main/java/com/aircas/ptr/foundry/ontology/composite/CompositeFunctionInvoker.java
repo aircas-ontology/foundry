@@ -68,9 +68,18 @@ public class CompositeFunctionInvoker {
         Map<String, Object> paramMap = assembleParams(inputParams, inputs);
         return switch (function.getType()) {
             case CUSTOMIZE -> executeScriptFunction(function, paramMap, inputParams);
-            case BASIC_QUERY -> require(basicQueryOperator, "基础函数算子执行器").runAsNode(
-                    require(basicQueryOperator, "基础函数算子执行器")
-                            .parseConfig(function.getCode(), function.getApi()), paramMap);
+            case BASIC_QUERY -> {
+                // 本体标识是机制入参，不在 function_param 中声明（避免详情页把它当用户参数展示），
+                // assembleParams 会将其丢弃，这里从原始入参单独补回；未提供时维持原状
+                Map<String, Object> queryParams = new LinkedHashMap<>(paramMap);
+                Object ontologyIdentifier = inputs.get(BasicQueryOperator.PARAM_ONTOLOGY_IDENTIFIER);
+                if (ontologyIdentifier != null) {
+                    queryParams.put(BasicQueryOperator.PARAM_ONTOLOGY_IDENTIFIER, ontologyIdentifier);
+                }
+                yield require(basicQueryOperator, "基础函数算子执行器").runAsNode(
+                        require(basicQueryOperator, "基础函数算子执行器")
+                                .parseConfig(function.getCode(), function.getApi()), queryParams);
+            }
             case EXTERNAL -> require(externalApiOperator, "外部API算子执行器")
                     .runAsNode(function, nodePlan, paramMap);
             case COMPOSITE -> throw new BusinessException("编排节点[" + labelOf(nodePlan) + "]不能引用函数编排算子："

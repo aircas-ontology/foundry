@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.po;
 
+import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import com.baomidou.mybatisplus.annotation.*;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.AllArgsConstructor;
@@ -39,6 +40,11 @@ public class OntologyActionLink {
      * 行为绑定的关系存在时的参数表达式,例如data.startTime>current time && data.distance>1000
      */
     private String ontologyLinkParamExpression;
+
+    /**
+     * 实例关系-修改操作的目标状态，在行为定义里固定；其余操作为空
+     */
+    private Status targetStatus;
 
 
     @JsonFormat(pattern = DATE_FORMAT_DEFAULT, timezone = "GMT+8")

@@ -5,6 +5,7 @@ import com.aircas.ptr.foundry.common.constant.FunctionParamTypeEnum;
 import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
+import com.aircas.ptr.foundry.ontology.composite.BasicQueryOperator;
 import com.aircas.ptr.foundry.ontology.converter.DataConverter;
 import com.aircas.ptr.foundry.ontology.converter.OntologyInstanceConverter;
 import com.aircas.ptr.foundry.ontology.model.common.VisibilityWindow;
@@ -807,6 +808,21 @@ public class EntityServiceImpl implements EntityService {
     }
 
 
+    /**
+     * 删除一条实例关系：按两端实体主键定位边并置为 DELETE 状态。
+     * 与算子回写链路一致，图库里的边靠状态失效，不做物理删除。
+     */
+    public void deleteEntityRelation(String linkUniqIdentifier, Object entityPrimaryKeyFrom, Object entityPrimaryKeyTo) {
+        var link = linkGroupMapper.selectOne(new LambdaQueryWrapper<OntologyLinkGroup>()
+                .eq(OntologyLinkGroup::getUniqueIdentifier, linkUniqIdentifier));
+        PreconditionUtils.checkNotNull(link, "invalid link uniqIdentifier", HttpStatus.BAD_REQUEST);
+        var relation = relationRepository.queryRelationByFromNodeAndToNode(link.getOntologyUniqueIdentifierFrom(),
+                entityPrimaryKeyFrom, link.getOntologyUniqueIdentifierTo(), entityPrimaryKeyTo, linkUniqIdentifier);
+        PreconditionUtils.checkNotNull(relation, "实例关系不存在", HttpStatus.BAD_REQUEST);
+        relationRepository.updateRelation(null, null, Lists.<VisibilityWindow>newArrayList(), Status.DELETE, relation.getId());
+    }
+
+
     @Override
     public Page<EntityInfoVO> getEntities(String ontologyUniqueIdentifier,
                                           String propertyName,
@@ -1003,6 +1019,7 @@ public class EntityServiceImpl implements EntityService {
                                         .functionInputParams(functionInputParams)
                                         .mappings(mappings)
                                         .entityDetailMap(mergedEntityDetailMap)
+                                        .externalParams(infoDTO.getExternalParams())
                                         .actionDetailVO(actionDetailVO)
                                         .functionDetailVO(functionDetailVO)
                                         .ontologyProperties(ontologyProperties)
@@ -1040,6 +1057,7 @@ public class EntityServiceImpl implements EntityService {
                     .functionInputParams(functionInputParams)
                     .mappings(mappings)
                     .entityDetailMap(srcEntityDetailMap)
+                    .externalParams(infoDTO.getExternalParams())
                     .actionDetailVO(actionDetailVO)
                     .functionDetailVO(functionDetailVO)
                     .ontologyProperties(ontologyProperties)
@@ -1119,17 +1137,19 @@ public class EntityServiceImpl implements EntityService {
             if (!mappingVO.isPresent()) {
                 return new FunctionParameter().setParamName(p.getParamName());
             }
-            Object value = null;
-            // 如果本体没有给属性绑定数据源，则获取的values为null，函数可能执行失败
-            List<Object> values = actionContext.getEntityDetailMap().get(mappingVO.get().getPropertyUniqueIdentifier());
-            if (CollectionUtils.isNotEmpty(values)) {
-                value = p.getParamType().equals(FunctionParamTypeEnum.LIST) ? values : values.get(0);
-            }
             return FunctionParameter.builder()
                     .paramName(p.getParamName())
-                    .paramValue(value)
+                    .paramValue(resolveInputValue(mappingVO.get(), p.getParamType(), actionContext))
                     .build();
         }).collect(Collectors.toList());
+        // 基础查询算子的本体标识是机制入参，不在 function_param 中声明，由行为绑定的本体单独补上；
+        // 其它函数类型不传，assembleParams/buildInputMap 也会过滤未声明入参
+        if (actionContext.getFunctionDetailVO().getType() == FunctionTypeEnum.BASIC_QUERY) {
+            parameters.add(FunctionParameter.builder()
+                    .paramName(BasicQueryOperator.PARAM_ONTOLOGY_IDENTIFIER)
+                    .paramValue(actionContext.getEntityActionExecuteParam().getOntologyUniqueIdentifier())
+                    .build());
+        }
         //执行函数
         var functionResultJson = functionService.executeFunction(FunctionExecuteParam.builder()
                 .functionApi(actionContext.getActionDetailVO().getFunctionApi())
@@ -1151,10 +1171,53 @@ public class EntityServiceImpl implements EntityService {
     }
 
 
+    /**
+     * 取一个入参的实参值：固定值取行为定义里的字面量，外部输入取行为测试时传入的值，
+     * 其余来源从实体属性详情取。
+     */
+    private Object resolveInputValue(ActionParamMappingVO mapping, FunctionParamTypeEnum paramType, ActionContextInfoDTO actionContext) {
+        if (mapping.getSourceType() == ActionParamSourceEnum.FIXED) {
+            return parseFixedValue(mapping.getSourceConfig());
+        }
+        if (mapping.getSourceType() == ActionParamSourceEnum.EXTERNAL) {
+            var externalParams = actionContext.getExternalParams();
+            return externalParams == null ? null : externalParams.get(mapping.getParameterName());
+        }
+        // 如果本体没有给属性绑定数据源，则获取的values为null，函数可能执行失败
+        List<Object> values = actionContext.getEntityDetailMap().get(mapping.getPropertyUniqueIdentifier());
+        if (CollectionUtils.isEmpty(values)) {
+            return null;
+        }
+        return paramType.equals(FunctionParamTypeEnum.LIST) ? values : values.get(0);
+    }
+
+    /** 固定值按 JSON 字面量解析，前端直接传一段文本时按原样返回 */
+    private Object parseFixedValue(String sourceConfig) {
+        if (StringUtils.isEmpty(sourceConfig)) {
+            return null;
+        }
+        try {
+            return jsonMapper.readValue(sourceConfig, Object.class);
+        } catch (Exception e) {
+            return sourceConfig;
+        }
+    }
+
+
     @SneakyThrows
     @Override
     public void updateEntityPropertyAndRelation(String jsonString, ActionContextInfoDTO actionContext) {
+        // 输出方式为仅返回结果时不回写属性；关系边只有应用行为才落，基础行为（含基础算子）不写库
+        if (actionContext.getActionDetailVO().getOutputMode() != ActionOutputModeEnum.RESULT_ONLY) {
+            writeFunctionOutputToProperties(jsonString, actionContext);
+        }
+        if (actionContext.getActionDetailVO().getActionKind() != ActionKindEnum.BASE) {
+            updateEntityRelationByFunction(jsonString, actionContext);
+        }
+    }
 
+    /** 按出参绑定把算子输出写回对象属性：主表列走 update，分组表补一行 insert */
+    private void writeFunctionOutputToProperties(String jsonString, ActionContextInfoDTO actionContext) {
         //更新实体属性值
         //根据函数的输出结果更新源实体属性：通过json path获取value
         var functionOutputParam = actionContext.getFunctionDetailVO().getParams().stream()
@@ -1203,8 +1266,11 @@ public class EntityServiceImpl implements EntityService {
                 objectMapper.insertObject(pkProp.getDatasourceSchema(), tableName, entry.getValue());
             });
         }
+    }
 
-        //更新实体关系
+    /** 按算子结果落关系边：有可见窗口直接生效，否则用表达式判定关系是否成立 */
+    @SneakyThrows
+    private void updateEntityRelationByFunction(String jsonString, ActionContextInfoDTO actionContext) {
         if (actionContext.getLink() != null) {
             //根据函数的输出结果更新实体关系
             EntityRelation relation = relationRepository.queryRelationByFromNodeAndToNode(actionContext.getEntityActionExecuteParam().getOntologyUniqueIdentifier(),

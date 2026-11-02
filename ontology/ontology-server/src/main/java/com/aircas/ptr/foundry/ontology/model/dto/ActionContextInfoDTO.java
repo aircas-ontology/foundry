@@ -28,6 +28,11 @@ public class ActionContextInfoDTO {
 
     private Map<String, List<Object>> entityDetailMap;
 
+    /**
+     * 来源为「外部输入」的参数取值（参数名 -> 值），只有行为测试接口会传入；定时执行为空
+     */
+    private Map<String, Object> externalParams;
+
     private OntologyActionDetailVO actionDetailVO;
 
     private FunctionDetailVO functionDetailVO;

@@ -1,5 +1,9 @@
 package com.aircas.ptr.foundry.ontology.model.po;
 
+import com.aircas.ptr.foundry.ontology.model.enums.ActionKindEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.ActionOperationEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.ActionOutputModeEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.ActionSubjectTypeEnum;
 import com.baomidou.mybatisplus.annotation.*;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.AllArgsConstructor;
@@ -30,7 +34,9 @@ public class OntologyAction {
 
     /**
      * Column: function_api
+     * 编辑行为时按类别整体重写，改为基础行为（不绑算子）后要置空，故空值也参与 UPDATE
      */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String functionApi;
 
     /**
@@ -72,6 +78,35 @@ public class OntologyAction {
      * 本体空间id
      */
     private Integer ontologySpaceId;
+
+    /**
+     * 行为类别：BASE 基础行为 / APPLICATION 应用行为
+     */
+    private ActionKindEnum actionKind;
+
+    /**
+     * 基础行为的类型，应用行为为空
+     */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private ActionSubjectTypeEnum subjectType;
+
+    /**
+     * 基础操作，仅属性值、实例关系两类有值
+     */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private ActionOperationEnum actionOperation;
+
+    /**
+     * 属性值操作的目标存储分组，分组名即物理表名
+     */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private String storageGroup;
+
+    /**
+     * 输出方式；属性值、实例关系两类没有输出回写，为空
+     */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private ActionOutputModeEnum outputMode;
 
 
     private static final long serialVersionUID = 1L;

@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
+import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -18,5 +19,8 @@ public class ActionLinkMappingParam {
 
     @Schema(description = "行为关联的函数参数表达式")
     private String ontologyLinkFunctionParamExpression;
+
+    @Schema(description = "关系-修改操作的目标状态（ENABLE/DISABLE），在行为定义里固定；其余操作不传", example = "DISABLE")
+    private Status targetStatus;
 
 }
