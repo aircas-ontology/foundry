@@ -4,6 +4,8 @@ import com.aircas.ptr.foundry.ontology.model.param.DatasourceConnectionParam;
 import com.aircas.ptr.foundry.ontology.model.po.DatasourceConnection;
 import com.aircas.ptr.foundry.ontology.model.vo.DatasourceConnectionItemVO;
 import com.aircas.ptr.foundry.ontology.model.vo.DatasourceConnectionVO;
+import com.aircas.ptr.foundry.ontology.model.vo.DatasourceTableDetailVO;
+import com.aircas.ptr.foundry.ontology.model.vo.DatasourceTableSummaryVO;
 import com.aircas.ptr.foundry.ontology.model.vo.TableColumnDescVO;
 import com.aircas.ptr.foundry.ontology.model.vo.TableCommentVO;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -113,4 +115,30 @@ public interface DatasourceConnectionService extends IService<DatasourceConnecti
      * @return 列信息列表，按 {@code ORDINAL_POSITION} 升序
      */
     List<TableColumnDescVO> listTableColumns(Integer datasourceId, String tableName);
+
+    /**
+     * 扫描指定数据源的表清单，附带「字段数」。供「数据源构建对象」向导的「选择表」步骤使用。
+     *
+     * <p>与 {@link #listTableComments(Integer)} 的区别只有字段数：后者是给大模型的最小返回体，
+     * 向导页勾选表时需要知道每张表有多少列。全程一次 JDBC 连接，只读
+     * {@code DatabaseMetaData}，不执行任何 SQL。</p>
+     *
+     * @param datasourceId datasource_connection 表主键
+     * @return 表名 + 表注释 + 字段数
+     */
+    List<DatasourceTableSummaryVO> listTablesWithColumnCount(Integer datasourceId);
+
+    /**
+     * 一次扫描多张表的列信息与表间外键，供向导的「选择属性」步骤使用。
+     *
+     * <p>外键来源有两种：数据库声明的外键走 {@code DatabaseMetaData#getImportedKeys}，
+     * 没有声明时按同名的 {@code *_id} 列推断并在 VO 里标 {@code HEURISTIC} 让前端提示用户确认。
+     * 每张子表至多返回一条外键——实体表映射 {@code table_field_mapping} 的唯一约束就是
+     * {@code (source_table_name, target_table_name)}，多条存不下。</p>
+     *
+     * @param datasourceId datasource_connection 表主键
+     * @param tableNames   表名集合（区分大小写）；只有集合内部的表之间才会给出外键
+     * @return 每张表的列清单、主键列与指向其他勾选表的外键
+     */
+    List<DatasourceTableDetailVO> listTablesDetail(Integer datasourceId, List<String> tableNames);
 }

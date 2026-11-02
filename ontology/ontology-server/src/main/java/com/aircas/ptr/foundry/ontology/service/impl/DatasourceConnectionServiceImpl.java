@@ -1,11 +1,14 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
+import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.ontology.model.param.DatasourceConnectionParam;
 import com.aircas.ptr.foundry.ontology.model.po.DatasourceConnection;
 import com.aircas.ptr.foundry.ontology.model.vo.DatasourceConnectionItemVO;
 import com.aircas.ptr.foundry.ontology.model.vo.DatasourceConnectionVO;
+import com.aircas.ptr.foundry.ontology.model.vo.DatasourceTableDetailVO;
+import com.aircas.ptr.foundry.ontology.model.vo.DatasourceTableSummaryVO;
 import com.aircas.ptr.foundry.ontology.model.vo.TableColumnDescVO;
 import com.aircas.ptr.foundry.ontology.model.vo.TableCommentVO;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.DatasourceConnectionMapper;
@@ -16,6 +19,7 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -24,12 +28,18 @@ import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -43,6 +53,14 @@ public class DatasourceConnectionServiceImpl
     private static final String DEFAULT_SCHEMA_SQLSERVER = "dbo";
     /** 新增数据源未指定 status 时的缺省值：启用。 */
     private static final int STATUS_ENABLED = 1;
+    /**
+     * 允许把 {@code getColumns} 的表名参数传 null 一次统计全库字段数的厂商。
+     * Oracle / SQL Server 未列入：前者可能退化成整库字典扫描，行为未经实测验证。
+     */
+    private static final Set<String> WILDCARD_COLUMN_SCAN_DB_TYPES =
+            Set.of("POSTGRESQL", "POSTGRES", "MYSQL", "MARIADB");
+    /** 启发式外键的后缀约定：真实库普遍不建外键约束，靠 {@code xxx_id} 命名找主子表关系。 */
+    private static final String ID_COLUMN_SUFFIX = "_id";
 
     @Override
     public List<DatasourceConnectionVO> searchByKeyword(String keyword) {
@@ -222,6 +240,327 @@ public class DatasourceConnectionServiceImpl
         // DatabaseMetaData#getColumns 已按 ORDINAL_POSITION 升序返回；此处不再重排，避免不必要开销
         return result;
     }
+
+    /**
+     * 表清单 + 字段数：一次连接内 {@code getTables} 拿表、{@code getColumns} 统计列数。
+     *
+     * <p>{@code getColumns} 的表名传 {@code null} 表示不按表名过滤，是 JDBC 规范允许写法，
+     * 但各驱动实现不一（Oracle 上可能退化成全库字典扫描），所以只对白名单厂商走通配，
+     * 其余厂商在同一连接上逐表统计——仍是连接数 1，不退化成 N+1 建连。</p>
+     */
+    @Override
+    public List<DatasourceTableSummaryVO> listTablesWithColumnCount(Integer datasourceId) {
+        DatasourceConnection conn = requireDatasource(datasourceId);
+        loadDriver(conn.getDriverClass());
+
+        CatalogSchema cs = resolveCatalogSchema(conn);
+        Properties props = buildConnectionProps(conn);
+
+        try (Connection dbConn = DriverManager.getConnection(conn.getJdbcUrl(), props)) {
+            DatabaseMetaData metaData = dbConn.getMetaData();
+            List<DatasourceTableSummaryVO> tables = readTables(metaData, cs);
+            Map<String, Integer> counts = countColumnsByTable(metaData, cs, conn.getDbType(), tables);
+            tables.forEach(t -> t.setColumnCount(counts.getOrDefault(t.getTableName(), 0)));
+            return tables;
+        } catch (Exception e) {
+            log.error("扫描数据源表清单失败，datasourceId={}, dbType={}, catalog={}, schema={}",
+                    datasourceId, conn.getDbType(), cs.catalog(), cs.schema(), e);
+            throw new BusinessException("扫描表清单失败: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    /**
+     * 多表列信息与表间外键。外键只给「本次勾选表集合」内部的关系，且每张子表至多一条
+     * （实体表映射 {@code table_field_mapping} 的唯一约束就是主表名 + 子表名）。
+     */
+    @Override
+    public List<DatasourceTableDetailVO> listTablesDetail(Integer datasourceId, List<String> tableNames) {
+        PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(tableNames),
+                "tableNames 不能为空", HttpStatus.BAD_REQUEST);
+        List<String> names = tableNames.stream()
+                .filter(StringUtils::isNotBlank)
+                .map(String::trim)
+                .distinct()
+                .toList();
+        PreconditionUtils.checkArgument(!names.isEmpty(), "tableNames 不能为空", HttpStatus.BAD_REQUEST);
+
+        DatasourceConnection conn = requireDatasource(datasourceId);
+        loadDriver(conn.getDriverClass());
+
+        CatalogSchema cs = resolveCatalogSchema(conn);
+        Properties props = buildConnectionProps(conn);
+
+        try (Connection dbConn = DriverManager.getConnection(conn.getJdbcUrl(), props)) {
+            DatabaseMetaData metaData = dbConn.getMetaData();
+            Map<String, String> comments = new HashMap<>();
+            readTables(metaData, cs).forEach(t -> comments.put(t.getTableName(), t.getTableComment()));
+
+            Map<String, TableShape> shapes = new LinkedHashMap<>();
+            for (String name : names) {
+                List<String> pkColumns = readPrimaryKeyColumnList(metaData, cs, name);
+                List<DatasourceTableDetailVO.Column> columns = readColumns(metaData, cs, name, pkColumns);
+                shapes.put(name, new TableShape(name, comments.get(name), pkColumns, columns));
+            }
+            Map<String, DatasourceTableDetailVO.ForeignKey> childToForeignKey = detectForeignKeys(cs, shapes, metaData);
+
+            return shapes.values().stream()
+                    .map(shape -> {
+                        DatasourceTableDetailVO.ForeignKey foreignKey = childToForeignKey.get(shape.tableName());
+                        return DatasourceTableDetailVO.builder()
+                                .tableName(shape.tableName())
+                                .tableComment(shape.comment())
+                                .primaryKeyColumns(shape.primaryKeyColumns())
+                                .columns(shape.columns())
+                                .foreignKeys(foreignKey == null ? List.of() : List.of(foreignKey))
+                                .build();
+                    })
+                    .toList();
+        } catch (Exception e) {
+            log.error("扫描数据源表结构失败，datasourceId={}, dbType={}, catalog={}, schema={}, tableNames={}",
+                    datasourceId, conn.getDbType(), cs.catalog(), cs.schema(), names, e);
+            throw new BusinessException("扫描表结构失败: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    /**
+     * 读表名与表注释；{@code remarksReporting} 只在 PostgreSQL 生效，MySQL 需 jdbcUrl 上带
+     * {@code useInformationSchema=true}，注释为空属于数据源配置问题，不阻断扫描。
+     */
+    private List<DatasourceTableSummaryVO> readTables(DatabaseMetaData metaData, CatalogSchema cs) throws SQLException {
+        List<DatasourceTableSummaryVO> tables = new ArrayList<>();
+        try (ResultSet rs = metaData.getTables(cs.catalog(), cs.schema(), "%", new String[]{"TABLE"})) {
+            while (rs.next()) {
+                tables.add(DatasourceTableSummaryVO.builder()
+                        .tableName(rs.getString("TABLE_NAME"))
+                        .tableComment(rs.getString("REMARKS"))
+                        .build());
+            }
+        }
+        return tables;
+    }
+
+    /**
+     * 统计每张表的字段数：白名单厂商走通配表名一次拿全，其余或通配失败时逐表回落。
+     */
+    private Map<String, Integer> countColumnsByTable(DatabaseMetaData metaData, CatalogSchema cs, String dbType,
+                                                     List<DatasourceTableSummaryVO> tables) {
+        Map<String, Integer> counts = new HashMap<>();
+        String normalized = dbType == null ? "" : dbType.trim().toUpperCase();
+        if (WILDCARD_COLUMN_SCAN_DB_TYPES.contains(normalized)) {
+            try (ResultSet rs = metaData.getColumns(cs.catalog(), cs.schema(), null, "%")) {
+                while (rs.next()) {
+                    counts.merge(rs.getString("TABLE_NAME"), 1, Integer::sum);
+                }
+            } catch (Exception e) {
+                log.warn("通配表名统计字段数失败，回落逐表统计，catalog={}, schema={}, msg={}",
+                        cs.catalog(), cs.schema(), e.getMessage());
+                counts.clear();
+            }
+            // 一张都没数到才回落：该驱动不接受 null 表名
+            if (!counts.isEmpty()) {
+                log.info("字段数统计走通配表名，dbType={}, 表数={}, 列数={}", normalized, tables.size(), counts.size());
+                return counts;
+            }
+        }
+        log.info("字段数统计走逐表扫描，dbType={}, 表数={}", normalized, tables.size());
+        for (DatasourceTableSummaryVO table : tables) {
+            try (ResultSet rs = metaData.getColumns(cs.catalog(), cs.schema(), table.getTableName(), "%")) {
+                int count = 0;
+                while (rs.next()) {
+                    count++;
+                }
+                counts.put(table.getTableName(), count);
+            } catch (Exception e) {
+                log.warn("统计字段数失败，tableName={}, msg={}", table.getTableName(), e.getMessage());
+            }
+        }
+        return counts;
+    }
+
+    /**
+     * 读列清单，顺带按主键列集合标记 {@code isPrimaryKey}，并把原生类型归一化成属性类型，
+     * 让向导页看到的类型与第④步真正落库的类型一致。
+     */
+    private List<DatasourceTableDetailVO.Column> readColumns(DatabaseMetaData metaData, CatalogSchema cs,
+                                                             String tableName, List<String> pkColumns) throws SQLException {
+        Set<String> pkSet = new HashSet<>(pkColumns);
+        List<DatasourceTableDetailVO.Column> columns = new ArrayList<>();
+        try (ResultSet rs = metaData.getColumns(cs.catalog(), cs.schema(), tableName, "%")) {
+            while (rs.next()) {
+                String nativeType = rs.getString("TYPE_NAME");
+                OntologyDataTypeEnum dataType = OntologyDataTypeEnum.valueOfJdbcType(nativeType);
+                columns.add(DatasourceTableDetailVO.Column.builder()
+                        .columnName(rs.getString("COLUMN_NAME"))
+                        .nativeType(nativeType)
+                        .description(rs.getString("REMARKS"))
+                        .isPrimaryKey(pkSet.contains(rs.getString("COLUMN_NAME")))
+                        .ontologyDataType(dataType.name())
+                        .build());
+            }
+        }
+        return columns;
+    }
+
+    /**
+     * 按 {@code KEY_SEQ} 顺序返回主键列，复合主键在这里能一眼看出来（第④步不支持复合主键做外键）。
+     */
+    private List<String> readPrimaryKeyColumnList(DatabaseMetaData metaData, CatalogSchema cs, String tableName) {
+        Set<String> ordered = new LinkedHashSet<>();
+        try (ResultSet rs = metaData.getPrimaryKeys(cs.catalog(), cs.schema(), tableName)) {
+            while (rs.next()) {
+                ordered.add(rs.getString("COLUMN_NAME"));
+            }
+        } catch (Exception e) {
+            log.warn("读取主键信息失败，tableName={}, msg={}", tableName, e.getMessage());
+        }
+        return new ArrayList<>(ordered);
+    }
+
+    /**
+     * 子表 → 主表 外键：先取数据库声明的外键，缺哪张子表再用同名列启发式补，补出来的标 HEURISTIC。
+     */
+    private Map<String, DatasourceTableDetailVO.ForeignKey> detectForeignKeys(
+            CatalogSchema cs, Map<String, TableShape> shapes, DatabaseMetaData metaData) {
+        Map<String, DatasourceTableDetailVO.ForeignKey> result = new LinkedHashMap<>();
+        for (String child : shapes.keySet()) {
+            DatasourceTableDetailVO.ForeignKey declared = findDeclaredForeignKey(cs, shapes, metaData, child);
+            if (declared != null) {
+                result.put(child, declared);
+            }
+        }
+        for (String child : shapes.keySet()) {
+            if (result.containsKey(child)) {
+                continue;
+            }
+            DatasourceTableDetailVO.ForeignKey heuristic = guessForeignKeyByColumn(shapes, child);
+            if (heuristic != null) {
+                result.put(child, heuristic);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 声明外键：{@code getImportedKeys} 返回的子表→父表行，按父表分组后只取单列外键。
+     * 一张子表被多条外键指向多个勾选主表时，优先取「主表名是子表名前缀」的那条，其余丢弃并记日志
+     * ——实体表映射每对主子表只能存一条，多给前端也没法落。
+     */
+    private DatasourceTableDetailVO.ForeignKey findDeclaredForeignKey(CatalogSchema cs, Map<String, TableShape> shapes,
+                                                                      DatabaseMetaData metaData, String child) {
+        Map<String, List<String[]>> pairsByMaster = new LinkedHashMap<>();
+        try (ResultSet rs = metaData.getImportedKeys(cs.catalog(), cs.schema(), child)) {
+            while (rs.next()) {
+                String master = rs.getString("PK_TABLE_NAME");
+                if (!shapes.containsKey(master) || master.equals(child)) {
+                    continue;
+                }
+                pairsByMaster.computeIfAbsent(master, k -> new ArrayList<>())
+                        .add(new String[]{rs.getString("PKCOLUMN_NAME"), rs.getString("FKCOLUMN_NAME")});
+            }
+        } catch (Exception e) {
+            log.warn("读取声明外键失败，tableName={}, msg={}", child, e.getMessage());
+            return null;
+        }
+        List<String> singleColumnMasters = pairsByMaster.entrySet().stream()
+                .filter(entry -> entry.getValue().size() == 1)
+                .map(Map.Entry::getKey)
+                .toList();
+        if (singleColumnMasters.isEmpty()) {
+            if (!pairsByMaster.isEmpty()) {
+                log.info("子表{}的声明外键均为复合外键，第④步不支持，已忽略：{}", child, pairsByMaster.keySet());
+            }
+            return null;
+        }
+        if (singleColumnMasters.size() > 1) {
+            log.info("子表{}存在多条单列声明外键，保留与子表名最接近的主表{}，候选{}",
+                    child, pickMasterByNamePrefix(child, singleColumnMasters), singleColumnMasters);
+        }
+        String master = pickMasterByNamePrefix(child, singleColumnMasters);
+        String[] pair = pairsByMaster.get(master).get(0);
+        return DatasourceTableDetailVO.ForeignKey.builder()
+                .masterTable(master)
+                .masterColumn(pair[0])
+                .childTable(child)
+                .childColumn(pair[1])
+                .origin(DatasourceTableDetailVO.ForeignKeyOrigin.DECLARED)
+                .build();
+    }
+
+    /**
+     * 启发式外键：真实库常常不建外键约束，靠「同名列 + 是主表主键 + 不是子表主键 + 整型」三条硬条件挑候选。
+     * 主表名等于列名去掉 {@code _id} 后缀时得分最高（{@code ship} ↔ {@code ship_id}）。
+     */
+    private DatasourceTableDetailVO.ForeignKey guessForeignKeyByColumn(Map<String, TableShape> shapes, String child) {
+        TableShape childShape = shapes.get(child);
+        Set<String> childPk = new HashSet<>(childShape.primaryKeyColumns());
+        Map<String, String> childColumnTypes = childShape.columns().stream()
+                .collect(Collectors.toMap(DatasourceTableDetailVO.Column::getColumnName,
+                        c -> StringUtils.defaultString(c.getNativeType()), (a, b) -> a));
+
+        DatasourceTableDetailVO.ForeignKey best = null;
+        int bestScore = 0;
+        for (TableShape master : shapes.values()) {
+            if (master.tableName().equals(child)) {
+                continue;
+            }
+            Set<String> masterPk = new HashSet<>(master.primaryKeyColumns());
+            for (String column : childColumnTypes.keySet()) {
+                boolean inMaster = master.columns().stream().anyMatch(c -> column.equals(c.getColumnName()));
+                if (!inMaster || !StringUtils.endsWithIgnoreCase(column, ID_COLUMN_SUFFIX)) {
+                    continue;
+                }
+                boolean namedByMaster = StringUtils.endsWithIgnoreCase(column, master.tableName() + ID_COLUMN_SUFFIX);
+                boolean isMasterPk = masterPk.contains(column);
+                // 至少要满足「按主表名命名」或「是主表主键」之一，否则两条无关同名列也会被判成主子表
+                if (!namedByMaster && !isMasterPk) {
+                    continue;
+                }
+                if (childPk.contains(column) || !isIntegerish(childColumnTypes.get(column))) {
+                    continue;
+                }
+                int score = (namedByMaster ? 2 : 0) + (isMasterPk ? 1 : 0);
+                if (score > bestScore) {
+                    bestScore = score;
+                    best = DatasourceTableDetailVO.ForeignKey.builder()
+                            .masterTable(master.tableName())
+                            .masterColumn(column)
+                            .childTable(child)
+                            .childColumn(column)
+                            .origin(DatasourceTableDetailVO.ForeignKeyOrigin.HEURISTIC)
+                            .build();
+                }
+            }
+        }
+        return best;
+    }
+
+    /**
+     * 主表名是子表名前缀的优先（{@code ship} 对 {@code ship_weapon}），都没有就取第一个，保证结果稳定。
+     */
+    private String pickMasterByNamePrefix(String child, List<String> masters) {
+        for (String master : masters) {
+            if (StringUtils.startsWithIgnoreCase(child, master)) {
+                return master;
+            }
+        }
+        return masters.get(0);
+    }
+
+    private boolean isIntegerish(String nativeType) {
+        OntologyDataTypeEnum dataType = OntologyDataTypeEnum.valueOfJdbcType(nativeType);
+        return dataType == OntologyDataTypeEnum.Int
+                || dataType == OntologyDataTypeEnum.Long
+                || dataType == OntologyDataTypeEnum.Short
+                || dataType == OntologyDataTypeEnum.Byte;
+    }
+
+    /**
+     * 单张外部表的结构快照，避免在多处重复传四个集合。
+     */
+    private record TableShape(String tableName,
+                              String comment,
+                              List<String> primaryKeyColumns,
+                              List<DatasourceTableDetailVO.Column> columns) { }
 
     /**
      * 拉取主键列名集合；部分驱动（如 SQL Server 无主键表）返回空集，不视为异常。

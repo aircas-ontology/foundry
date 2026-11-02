@@ -3,6 +3,8 @@ package com.aircas.ptr.foundry.ontology.controller;
 import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.model.param.DatasourceConnectionParam;
 import com.aircas.ptr.foundry.ontology.model.vo.DatasourceConnectionItemVO;
+import com.aircas.ptr.foundry.ontology.model.vo.DatasourceTableDetailVO;
+import com.aircas.ptr.foundry.ontology.model.vo.DatasourceTableSummaryVO;
 import com.aircas.ptr.foundry.ontology.service.DatasourceConnectionService;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import io.swagger.v3.oas.annotations.Operation;
@@ -20,6 +22,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import jakarta.validation.Valid;
+
+import java.util.List;
 
 /**
  * 数据源连接配置管理接口：外部数据库连接的增删改查与连通性测试。
@@ -75,6 +79,23 @@ public class DatasourceConnectionController {
     public RestResult<Void> delete(@RequestParam @Parameter(description = "数据源 id") Integer id) {
         datasourceConnectionService.deleteDatasource(id);
         return RestResult.success();
+    }
+
+    @Operation(summary = "列出该数据源（外部库）的表：表名 / 表注释 / 字段数；「数据源构建对象」向导选表步骤用，"
+            + "与查数据湖空间内表的 /datasource/table 无关")
+    @GetMapping("/table/list")
+    public RestResult<List<DatasourceTableSummaryVO>> listTables(
+            @RequestParam @Parameter(description = "数据源 id") Integer datasourceId) {
+        return RestResult.ofData(datasourceConnectionService.listTablesWithColumnCount(datasourceId));
+    }
+
+    @Operation(summary = "列出该数据源（外部库）多张表的列与主子表外键候选；外键只给本次传入表之间的关系，"
+            + "每张子表至多一条，origin=HEURISTIC 的是按同名列推断的、需要用户确认")
+    @GetMapping("/table/columns")
+    public RestResult<List<DatasourceTableDetailVO>> listTableColumns(
+            @RequestParam @Parameter(description = "数据源 id") Integer datasourceId,
+            @RequestParam @Parameter(description = "表名，逗号分隔，区分大小写") List<String> tableNames) {
+        return RestResult.ofData(datasourceConnectionService.listTablesDetail(datasourceId, tableNames));
     }
 
     @Operation(summary = "测试连接（只建一次连接读库名与版本，不执行 SQL、不落库；"
