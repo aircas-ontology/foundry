@@ -14,6 +14,8 @@ import java.util.List;
 @NoArgsConstructor
 @Data
 public class FunctionParamDTO {
+    /** 函数参数 id（数据库主键，用于与行为绑定匹配；解析脚本时为空） */
+    private Long paramId;
     //参数名
     private String paramName;
     //参数类型

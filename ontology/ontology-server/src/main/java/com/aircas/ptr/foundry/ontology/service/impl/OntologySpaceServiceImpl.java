@@ -18,6 +18,7 @@ import com.aircas.ptr.foundry.ontology.model.param.OntologySpaceCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyCategoryCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.PropertyCategoryCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyLinkCategoryCreateParam;
+import com.aircas.ptr.foundry.ontology.model.param.ActionCategoryCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologySpaceUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyCategory;
 import com.aircas.ptr.foundry.ontology.model.po.ActionHandleRule;
@@ -27,6 +28,7 @@ import com.aircas.ptr.foundry.ontology.model.po.OntologyAction;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyCategory;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkCategory;
+import com.aircas.ptr.foundry.ontology.model.po.ActionCategory;
 import com.aircas.ptr.foundry.ontology.model.po.PropertyCategory;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.model.po.OntologySpace;
@@ -37,6 +39,7 @@ import com.aircas.ptr.foundry.ontology.model.vo.OntologySpaceStatisticVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologySpaceVO;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.*;
 import com.aircas.ptr.foundry.ontology.service.OntologyCategoryService;
+import com.aircas.ptr.foundry.ontology.service.ActionCategoryService;
 import com.aircas.ptr.foundry.ontology.service.OntologyLinkGroupService;
 import com.aircas.ptr.foundry.ontology.service.OntologyLinkCategoryService;
 import com.aircas.ptr.foundry.ontology.service.OntologyPropertyService;
@@ -131,6 +134,8 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
 
     private final OntologyLinkCategoryService ontologyLinkCategoryService;
 
+    private final ActionCategoryService actionCategoryService;
+
     private final EntityService entityService;
 
     private final SubspacePropertyFilterMapper subspacePropertyFilterMapper;
@@ -176,6 +181,8 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
         createDefaultOntologyCategoryRoot(ontologySpace.getId());
         // 默认创建关系分类树根节点
         createDefaultLinkCategoryRoot(ontologySpace.getId());
+        // 默认创建行为分类树根节点：行为分类是创建行为的必填项，没有根节点则本空间无法创建任何行为
+        createDefaultActionCategoryRoot(ontologySpace.getId());
         return ontologySpace.getId();
     }
 
@@ -402,6 +409,29 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                 .eq(OntologyCategory::getParentId, 0)
                 .orderByDesc(OntologyCategory::getId));
         PreconditionUtils.checkNotNull(created, "创建本体分类失败", HttpStatus.INTERNAL_SERVER_ERROR);
+        return created.getId();
+    }
+
+    /**
+     * 创建（或复用）空间的行为分类树根节点。
+     */
+    private Integer createDefaultActionCategoryRoot(Integer spaceId) {
+        var existingRoot = actionCategoryService.getOne(new LambdaQueryWrapper<ActionCategory>()
+                .eq(ActionCategory::getOntologySpaceId, spaceId)
+                .eq(ActionCategory::getParentId, 0));
+        if (existingRoot != null) {
+            return existingRoot.getId();
+        }
+        var categoryParam = new ActionCategoryCreateParam()
+                .setParentId(0)
+                .setName("全部");
+        categoryParam.setSpaceId(spaceId);
+        actionCategoryService.createActionCategory(categoryParam);
+        var created = actionCategoryService.getOne(new LambdaQueryWrapper<ActionCategory>()
+                .eq(ActionCategory::getOntologySpaceId, spaceId)
+                .eq(ActionCategory::getParentId, 0)
+                .orderByDesc(ActionCategory::getId));
+        PreconditionUtils.checkNotNull(created, "创建行为分类失败", HttpStatus.INTERNAL_SERVER_ERROR);
         return created.getId();
     }
 

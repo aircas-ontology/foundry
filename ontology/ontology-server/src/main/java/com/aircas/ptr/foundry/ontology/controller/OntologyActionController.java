@@ -6,6 +6,7 @@ import com.aircas.ptr.foundry.ontology.model.enums.ActionSchedulingTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.param.ActionCreateOrUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionSchedulingCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionSchedulingUpdateParam;
+import com.aircas.ptr.foundry.ontology.model.param.ActionTestParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyActionExecuteParam;
 import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.aircas.ptr.foundry.ontology.service.OntologyActionService;
@@ -52,13 +53,15 @@ public class OntologyActionController {
         return RestResult.success();
     }
 
-    @Operation(summary = "分页获取本体下行为列表")
+    @Operation(summary = "分页获取行为列表（按空间过滤，支持关键词和状态筛选）")
     @GetMapping("/list")
-    public RestResult<Page<OntologyActionInfoVO>> pageGetActionByOntologyId(@RequestParam(required = true, name = "ontologyUniqIdentifier") @Parameter(description = "本体id") @OntologyIdVerify String ontologyUniqIdentifier,
+    public RestResult<Page<OntologyActionInfoVO>> pageGetActionByOntologyId(@RequestParam(required = true, name = "ontologySpaceId") @Parameter(description = "本体空间id（必传）") Integer ontologySpaceId,
+                                                                            @RequestParam(required = false, name = "keyword") @Parameter(description = "关键词：行为名称、算子或描述") String keyword,
+                                                                            @RequestParam(required = false, name = "status") @Parameter(description = "行为状态：1 启用，0 失效，不传查全部") Integer status,
                                                                             @RequestParam(required = false, defaultValue = "1") Integer pageNum,
                                                                             @RequestParam(required = false, defaultValue = "10") Integer pageSize) {
 
-        return RestResult.ofData(ontologyActionService.pageGetActionByOntologyId(ontologyUniqIdentifier, pageNum, pageSize));
+        return RestResult.ofData(ontologyActionService.pageGetActionByOntologyId(ontologySpaceId, keyword, status, pageNum, pageSize));
     }
 
 
@@ -73,6 +76,13 @@ public class OntologyActionController {
     public RestResult executeAction(@RequestBody @Valid OntologyActionExecuteParam param) {
         ontologyActionService.executeAction(param);
         return RestResult.success();
+    }
+
+
+    @Operation(summary = "行为测试（真实落库）")
+    @PostMapping("/test")
+    public RestResult<ActionTestResultVO> testAction(@RequestBody @Valid ActionTestParam param) {
+        return RestResult.ofData(ontologyActionService.testAction(param));
     }
 
 

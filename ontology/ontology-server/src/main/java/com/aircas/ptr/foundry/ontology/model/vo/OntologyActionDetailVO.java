@@ -24,4 +24,7 @@ public class OntologyActionDetailVO extends OntologyActionInfoVO {
     @Schema(name = "mappingIns", description = "行为与函数参数映射")
     private List<ActionParamMappingVO> mappingIns;
 
+    @Schema(description = "函数参数定义（入参 + 出参列表，含类型、描述）")
+    private List<FunctionParamVO> functionParams;
+
 }

@@ -27,6 +27,12 @@ public interface TableMetadataMapper {
 
     Boolean isTableExist(@Param("schemaName") String schemaName, @Param("tableName") String tableName);
 
+    /**
+     * 表中必须由调用方给值的列（非空且无默认值）。
+     * 行为新增属性值时，定义里没绑定的列会写成 null，命中这些列会把行为标记为失效。
+     */
+    List<String> queryNotNullColumns(@Param("schemaName") String schemaName, @Param("tableName") String tableName);
+
     Boolean hasAnyRow(@Param("schemaName") String schemaName, @Param("tableName") String tableName);
 
 

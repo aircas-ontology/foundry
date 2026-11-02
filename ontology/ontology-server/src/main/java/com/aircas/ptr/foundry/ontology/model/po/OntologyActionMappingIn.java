@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.po;
 
+import com.aircas.ptr.foundry.ontology.model.enums.ActionParamSourceEnum;
 import com.baomidou.mybatisplus.annotation.*;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.AllArgsConstructor;
@@ -44,10 +45,26 @@ public class OntologyActionMappingIn {
     private String functionParamExpression;
 
     /**
+     * Column: parameter_name
+     * Remark: 参数的名字
+     */
+    private String parameterName;
+
+    /**
      * Column: property_unique_identifier
      * Remark: 属性的唯一标识，如果为this, 则表示当前本体对象。
      */
     private String propertyUniqueIdentifier;
+
+    /**
+     * 输入来源：对象属性 / 对象 / List / 固定值 / 外部输入
+     */
+    private ActionParamSourceEnum sourceType;
+
+    /**
+     * 输入来源配置（JSON）：固定值存字面量，List 存多个属性唯一标识
+     */
+    private String sourceConfig;
 
     @JsonFormat(pattern = DATE_FORMAT_DEFAULT, timezone = "GMT+8")
     @TableField(fill = FieldFill.INSERT)
