@@ -4,12 +4,13 @@ import com.aircas.ptr.foundry.common.base.ResultCode;
 import com.aircas.ptr.foundry.common.constant.FunctionParamTypeEnum;
 import com.aircas.ptr.foundry.common.util.IdGenerator;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
-import com.aircas.ptr.foundry.common.util.SnowflakeIdUtil;
 import com.aircas.ptr.foundry.ontology.converter.DataConverter;
 import com.aircas.ptr.foundry.ontology.model.dto.OntologyCreateDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.OntologyMetaDataDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.OntologyPropertyDTO;
+import com.aircas.ptr.foundry.ontology.model.dto.OntologyRelationDTO;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyExportTypeEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.OntologyLinkTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyOrderByEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.QuerySortEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.Status;
@@ -30,6 +31,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import jakarta.annotation.Resource;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import lombok.val;
@@ -41,7 +43,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import jakarta.annotation.Resource;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -93,6 +94,9 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
 
     @Resource
     private OntologyCategoryService categoryService;
+
+    @Resource
+    private OntologyLinkCategoryService linkCategoryService;
 
     @Resource
     private PropertyMetadataSchemaService propertyMetadataSchemaService;
@@ -228,7 +232,10 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 .collect(Collectors.toList());
         ontologyPropertyService.saveBatch(childProps);
         // 属性自动关联数据源
-        ontologyPropertyService.autoBindDatasource(childIdentifier);
+        var childBindResult = ontologyPropertyService.autoBindDatasource(childIdentifier);
+        if (childBindResult != null && CollectionUtils.isNotEmpty(childBindResult.getBlockedItems())) {
+            log.warn("子本体{}属性自动关联数据源部分跳过：{}", childIdentifier, childBindResult.getMessage());
+        }
         // 创建关系
         Map<String, String> parentChildLinkMap = Maps.newHashMap();
         var parentLinks = linkService.list(new LambdaUpdateWrapper<OntologyLinkGroup>()
@@ -243,7 +250,8 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                         .name(v.getName())
                         .ontologyUniqueIdentifierFrom(v.getOntologyUniqueIdentifierFrom().equals(parentIdentifier) ? childIdentifier : v.getOntologyUniqueIdentifierFrom())
                         .ontologyUniqueIdentifierTo(v.getOntologyUniqueIdentifierTo().equals(parentIdentifier) ? childIdentifier : v.getOntologyUniqueIdentifierTo())
-                        .status(v.getStatus())
+                        // 父关系 status 为历史 NULL 时不能继续往下传，否则子本体的关系同样查不到
+                        .status(v.getStatus() == null ? Status.ENABLE.getValue() : v.getStatus())
                         .uniqueIdentifier(childLinkId)
                         .ontologySpaceId(v.getOntologySpaceId())
                         .build();
@@ -252,27 +260,26 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
             linkService.saveBatch(childLinks);
         }
         // 创建行为（不创建行为调度）
-        List<OntologyAction> actions = Lists.newArrayList();
         List<OntologyActionMappingIn> mappingIns = Lists.newArrayList();
         List<OntologyActionLink> actionLinks = Lists.newArrayList();
         var actionEntity = actionService.list(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getOntologyUniqueIdentifier, parentIdentifier));
 
         actionEntity.forEach(action -> {
-            var actionId = SnowflakeIdUtil.get();
-            actions.add(OntologyAction.builder().api(ontologyCreateParam.getApiName() + "_" + action.getApi())
+            var ontologyAction = OntologyAction.builder().api(ontologyCreateParam.getApiName() + "_" + action.getApi())
                     .description(action.getDescription())
                     .displayName(action.getDisplayName())
                     .functionApi(action.getFunctionApi())
                     .status(action.getStatus())
-                    .id(actionId)
                     .ontologyUniqueIdentifier(childIdentifier)
                     .icon(action.getIcon())
-                    .build());
+                    .build();
+            actionService.save(ontologyAction);
+            var ontologyActionId = ontologyAction.getId();
 
             var actionLink = actionLinkService.getOne(new LambdaQueryWrapper<OntologyActionLink>().eq(OntologyActionLink::getOntologyActionId, action.getId()));
             if (actionLink != null) {
                 actionLinks.add(OntologyActionLink.builder()
-                        .ontologyActionId(actionLink.getOntologyActionId())
+                        .ontologyActionId(ontologyActionId)
                         .ontologyLinkUniqueIdentifier(parentChildLinkMap.get(actionLink.getOntologyLinkUniqueIdentifier()))
                         .ontologyLinkParamExpression(actionLink.getOntologyLinkParamExpression())
                         .build());
@@ -282,16 +289,14 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
             mappingIns.addAll(mapping.stream().map(v -> {
                 return OntologyActionMappingIn.builder()
                         .propertyUniqueIdentifier(findChildOntologyProperty(parentProperties, childProps, v.getPropertyUniqueIdentifier()))
-                        .ontologyActionId(actionId)
+                        .ontologyActionId(ontologyActionId)
                         .functionParamId(v.getFunctionParamId())
                         .functionParamExpression(v.getFunctionParamExpression())
                         .build();
             }).collect(Collectors.toList()));
         });
-        actionService.saveBatch(actions);
         actionMappingInService.saveBatch(mappingIns);
         actionLinkService.saveBatch(actionLinks);
-
     }
 
 
@@ -416,18 +421,27 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 .eq(OntologyMeta::getUniqueIdentifier, uniqueIdentifier)
                 .eq(OntologyMeta::getStatus, Status.ENABLE.getValue()));
         PreconditionUtils.checkNotNull(meta, "本体不存在:" + uniqueIdentifier, HttpStatus.BAD_REQUEST);
-        return buildStatistic(uniqueIdentifier);
+        return buildStatistic(uniqueIdentifier, meta.getOntologySpaceId());
     }
 
     /**
      * 统计本体对象关联的核心资源数量：实例、属性、关系、行为
+     *
+     * @param ontologyIdentifier 本体对象唯一标识
+     * @param spaceId            本体所属空间 id；关系计数按该空间裁剪，与详情页图谱、分类树口径一致
      */
-    private OntologyMetaStatisticVO buildStatistic(String ontologyIdentifier) {
+    private OntologyMetaStatisticVO buildStatistic(String ontologyIdentifier, Integer spaceId) {
         var propCnt = ontologyPropertyService.count(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyIdentifier));
         var actionCnt = actionService.count(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getOntologyUniqueIdentifier, ontologyIdentifier));
-        var linkCnt = linkService.count(new LambdaQueryWrapper<OntologyLinkGroup>()
-                .eq(OntologyLinkGroup::getOntologyUniqueIdentifierFrom, ontologyIdentifier)
-                .or().eq(OntologyLinkGroup::getOntologyUniqueIdentifierTo, ontologyIdentifier));
+        // 关系口径：有效（status=1）+ 本空间 + 该对象在任意一端（源或目标）
+        var linkQuery = new LambdaQueryWrapper<OntologyLinkGroup>()
+                .eq(OntologyLinkGroup::getStatus, Status.ENABLE.getValue())
+                .and(w -> w.eq(OntologyLinkGroup::getOntologyUniqueIdentifierFrom, ontologyIdentifier)
+                        .or().eq(OntologyLinkGroup::getOntologyUniqueIdentifierTo, ontologyIdentifier));
+        if (spaceId != null) {
+            linkQuery.eq(OntologyLinkGroup::getOntologySpaceId, spaceId);
+        }
+        var linkCnt = linkService.count(linkQuery);
 
         //实例数量取自本体主键属性绑定的数据源表
         var pk = ontologyPropertyService.getOne(new LambdaQueryWrapper<OntologyProperty>()
@@ -452,7 +466,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
     }
 
     public void buildMetaInfoStatistic(OntologyMetaInfoVO metaInfoVO) {
-        var statistic = buildStatistic(metaInfoVO.getUniqueIdentifier());
+        var statistic = buildStatistic(metaInfoVO.getUniqueIdentifier(), metaInfoVO.getSpaceId());
         metaInfoVO.setEntityCount(statistic.getEntityCount())
                 .setPropertyCount(statistic.getPropertyCount())
                 .setRelationCount(statistic.getRelationCount())
@@ -501,6 +515,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         if (categoryId != null) {
             queryWrapper.eq(OntologyMeta::getOntologyCategoryId, categoryId);
         }
+        queryWrapper.orderByAsc(OntologyMeta::getId);
         var metaList = list(queryWrapper);
         log.info("[getByCategoryId] categoryId={}, matched size={}", categoryId, metaList.size());
         return metaList.stream()
@@ -516,6 +531,28 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         var metaList = list(new LambdaQueryWrapper<OntologyMeta>()
                 .eq(OntologyMeta::getStatus, Status.ENABLE.getValue())
                 .eq(OntologyMeta::getOntologySpaceId, spaceId));
+        return metaList.stream()
+                .map(DataConverter::convert)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<OntologyMetaInfoVO> queryMetaBySpaceAndName(String spaceName, String objectName) {
+        if (StringUtils.isEmpty(spaceName) || StringUtils.isEmpty(objectName)) {
+            return Lists.newArrayList();
+        }
+        var spaces = spaceService.list(new LambdaQueryWrapper<OntologySpace>()
+                .eq(OntologySpace::getApiName, spaceName)
+                .or().eq(OntologySpace::getDisplayName, spaceName));
+        if (CollectionUtils.isEmpty(spaces)) {
+            return Lists.newArrayList();
+        }
+        var spaceIds = spaces.stream().map(OntologySpace::getId).collect(Collectors.toList());
+        var metaList = list(new LambdaQueryWrapper<OntologyMeta>()
+                .eq(OntologyMeta::getStatus, Status.ENABLE.getValue())
+                .in(OntologyMeta::getOntologySpaceId, spaceIds)
+                .and(w -> w.eq(OntologyMeta::getApiName, objectName)
+                        .or().eq(OntologyMeta::getDisplayName, objectName)));
         return metaList.stream()
                 .map(DataConverter::convert)
                 .collect(Collectors.toList());
@@ -564,14 +601,29 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
 
 
     @Transactional(value = "mainTransactionManager")
-    public void importOntology(OntologyCreateDTO dto) {
+    public Map<String, Object> importOntology(OntologyCreateDTO dto) {
+        return importOntology(dto, null);
+    }
+
+    /**
+     * 导入单个本体到指定空间。
+     *
+     * @param targetSpaceId 目标空间 id，为 null 时按 {@code metadata.ontologySpaceName} 解析空间；
+     *                      空间导入已 createSpace 拿到新 id，必须直接落进该空间，否则文件里的空间名与
+     *                      既有空间重名时对象会写回旧空间并撞 ontology_meta 空间内重名唯一键
+     * @return 实例数据导出主键到新主键的映射，无实例数据时为空 map
+     */
+    @Transactional(value = "mainTransactionManager")
+    public Map<String, Object> importOntology(OntologyCreateDTO dto, Integer targetSpaceId) {
 
         var metaData = dto.getMetadata();
         PreconditionUtils.checkNotNull(metaData, "ontology meta data is null");
         //保存基本信息
-        var space = spaceService.getOne(new LambdaQueryWrapper<OntologySpace>()
-                .eq(OntologySpace::getDisplayName, metaData.getOntologySpaceName()));
-        PreconditionUtils.checkNotNull(space, "invalid ontology space name:" + dto.getMetadata().getOntologySpaceName());
+        var space = targetSpaceId != null ? spaceService.getById(targetSpaceId)
+                : spaceService.getOne(new LambdaQueryWrapper<OntologySpace>()
+                        .eq(OntologySpace::getDisplayName, metaData.getOntologySpaceName()));
+        PreconditionUtils.checkNotNull(space, targetSpaceId != null ? "invalid ontology space id:" + targetSpaceId
+                : "invalid ontology space name:" + dto.getMetadata().getOntologySpaceName());
 
         //空间分组
         var groups = groupService.list(new LambdaQueryWrapper<OntologyGroup>()
@@ -584,9 +636,25 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         }
 
         //获取本体分类体系
-        var ontologyCategoryMap = categoryService.list(new LambdaQueryWrapper<OntologyCategory>()
-                        .eq(OntologyCategory::getOntologySpaceId, space.getId()))
-                .stream().collect(Collectors.toMap(OntologyCategory::getPath, OntologyCategory::getId));
+        var ontologyCategories = categoryService.list(new LambdaQueryWrapper<OntologyCategory>()
+                .eq(OntologyCategory::getOntologySpaceId, space.getId()));
+        var ontologyCategoryMap = ontologyCategories.stream()
+                .collect(Collectors.toMap(OntologyCategory::getPath, OntologyCategory::getId, (a, b) -> a));
+        //取根分类"全部"的id，路径找不到时兜底挂到根下
+        Integer rootCategoryId = ontologyCategories.stream()
+                .filter(c -> c.getParentId() != null && c.getParentId() == 0)
+                .map(OntologyCategory::getId)
+                .findFirst().orElse(null);
+
+        Integer ontologyCategoryId = null;
+        if (StringUtils.isNotEmpty(metaData.getCategoryPath())) {
+            ontologyCategoryId = ontologyCategoryMap.get(metaData.getCategoryPath());
+            if (ontologyCategoryId == null) {
+                log.warn("本体 {} 导入：分类路径 {} 在目标空间不存在，兜底挂到根分类下",
+                        metaData.getDisplayName(), metaData.getCategoryPath());
+                ontologyCategoryId = rootCategoryId;
+            }
+        }
 
         var meta = OntologyMeta.builder()
                 .apiName(metaData.getApiName())
@@ -596,16 +664,21 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 .metaGroupId(metaGroups)
                 .uniqueIdentifier(IdGenerator.generateUUID())
                 .ontologySpaceId(space.getId())
-                .ontologyCategoryId(StringUtils.isEmpty(metaData.getCategoryPath()) ?
-                        null : ontologyCategoryMap.get(metaData.getCategoryPath()))
+                .ontologyCategoryId(ontologyCategoryId)
                 .build();
         save(meta);
-        //保存属性分类
+        //保存属性分类：JSON 未携带分类树时，与正常创建本体一致，默认建根节点"全部"
         var propertyCategoryCreateParam = dto.getPropertyCategory();
         if (propertyCategoryCreateParam != null) {
             propertyCategoryCreateParam.setParentId(0)
                     .setOntologyIdentifier(meta.getUniqueIdentifier());
             ontologyPropertyService.createCategory(propertyCategoryCreateParam);
+        } else {
+            ontologyPropertyService.createCategory(PropertyCategoryCreateParam.builder()
+                    .parentId(0)
+                    .name("全部")
+                    .ontologyIdentifier(meta.getUniqueIdentifier())
+                    .build());
         }
         //保存属性元数据
         var propertySchemaCreateParam = dto.getPropertySchema();
@@ -617,58 +690,78 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         //保存属性
         var props = dto.getProperties();
         if (CollectionUtils.isNotEmpty(props)) {
-            var categoryMap = propertyCategoryService.list(new LambdaQueryWrapper<PropertyCategory>()
-                            .eq(PropertyCategory::getOntologyUniqueIdentifier, meta.getUniqueIdentifier()))
-                    .stream().collect(Collectors.toMap(PropertyCategory::getPath, PropertyCategory::getId));
-            var ontologyPropertyCreateParams = props.stream().<OntologyPropertyCreateParam>map(p -> OntologyPropertyCreateParam.builder()
-                            .apiName(p.getApiName())
-                            .description(p.getDescription())
-                            .displayName(p.getDisplayName())
-                            .dataType(p.getDataType())
-                            .isPrimaryKey(p.getIsPrimaryKey())
-                            .isTitleKey(p.getIsTitleKey())
-                            .ontologyIdentifier(meta.getUniqueIdentifier())
-                            .defaultValue(p.getDefaultValue())
-                            .storageGroup(p.getStorageGroup())
-                            .categoryId(StringUtils.isEmpty(p.getCategoryPath()) ? null : categoryMap.get(p.getCategoryPath()))
-                            .metadata(p.getMetadata())
-                            .build())
-                    .collect(Collectors.toList());
+            var propertyCategories = propertyCategoryService.list(new LambdaQueryWrapper<PropertyCategory>()
+                    .eq(PropertyCategory::getOntologyUniqueIdentifier, meta.getUniqueIdentifier()));
+            var categoryMap = propertyCategories.stream()
+                    .collect(Collectors.toMap(PropertyCategory::getPath, PropertyCategory::getId, (a, b) -> a));
+            //取属性根分类的id，路径找不到时兜底挂到根下
+            Integer propertyRootCategoryId = propertyCategories.stream()
+                    .filter(c -> c.getParentId() != null && c.getParentId() == 0)
+                    .map(PropertyCategory::getId)
+                    .findFirst().orElse(null);
+            var ontologyPropertyCreateParams = props.stream().<OntologyPropertyCreateParam>map(p -> {
+                Integer propCategoryId = null;
+                if (StringUtils.isNotEmpty(p.getCategoryPath())) {
+                    propCategoryId = categoryMap.get(p.getCategoryPath());
+                    if (propCategoryId == null) {
+                        log.warn("本体 {} 属性 {} 导入：分类路径 {} 不存在，兜底挂到根分类下",
+                                metaData.getDisplayName(), p.getDisplayName(), p.getCategoryPath());
+                        propCategoryId = propertyRootCategoryId;
+                    }
+                }
+                return OntologyPropertyCreateParam.builder()
+                        .apiName(p.getApiName())
+                        .description(p.getDescription())
+                        .displayName(p.getDisplayName())
+                        .dataType(p.getDataType())
+                        .isPrimaryKey(p.getIsPrimaryKey())
+                        .isTitleKey(p.getIsTitleKey())
+                        .ontologyIdentifier(meta.getUniqueIdentifier())
+                        .defaultValue(p.getDefaultValue())
+                        .storageGroup(p.getStorageGroup())
+                        .categoryId(propCategoryId)
+                        .metadata(p.getMetadata())
+                        .build();
+            }).collect(Collectors.toList());
             ontologyPropertyService.batchCreateProperties(ontologyPropertyCreateParams);
         }
         //自动建实体表以及关联属性数据源：仅当导入了实例数据时才执行，无实例数据则跳过（避免无谓建表/绑定数据源及主键校验失败）
         var instances = dto.getInstances();
         if (instances != null && CollectionUtils.isNotEmpty(instances.getNodes())) {
-            ontologyPropertyService.autoBindDatasource(meta.getUniqueIdentifier());
+            var importBindResult = ontologyPropertyService.autoBindDatasource(meta.getUniqueIdentifier());
+            if (importBindResult != null && CollectionUtils.isNotEmpty(importBindResult.getBlockedItems())) {
+                log.warn("导入本体{}属性自动关联数据源部分跳过，未绑定属性的实例值不会写入实体表：{}",
+                        meta.getUniqueIdentifier(), importBindResult.getMessage());
+            }
         }
-        //保存关系
+        //保存关系：端点以显示名称解析，目标空间缺少另一端对象时跳过该关系；关系统一挂到关系分类树根节点
         var relations = dto.getRelations();
         Map<Integer, String> relationMap = Maps.newHashMap();
         if (CollectionUtils.isNotEmpty(relations)) {
-            List<OntologyLinkGroup> links = Lists.newArrayList();
+            var uidByDisplayName = list(new LambdaQueryWrapper<OntologyMeta>()
+                            .eq(OntologyMeta::getOntologySpaceId, space.getId())
+                            .eq(OntologyMeta::getStatus, Status.ENABLE.getValue()))
+                    .stream().collect(Collectors.toMap(OntologyMeta::getDisplayName, OntologyMeta::getUniqueIdentifier, (a, b) -> a));
+            var linkRootCategoryId = getLinkCategoryRoot(space.getId());
             for (int i = 0; i < relations.size(); i++) {
                 var r = relations.get(i);
-                var fromName = r.getOntologyUniqueIdentifierFrom();
-                var toName = r.getOntologyUniqueIdentifierTo();
-                var fromMeta = getOne(new LambdaQueryWrapper<OntologyMeta>()
-                        .eq(OntologyMeta::getOntologySpaceId, space.getId())
-                        .eq(OntologyMeta::getDisplayName, fromName));
-                var toMeta = getOne(new LambdaQueryWrapper<OntologyMeta>()
-                        .eq(OntologyMeta::getOntologySpaceId, space.getId())
-                        .eq(OntologyMeta::getDisplayName, toName));
-
-                var linkId = IdGenerator.generateUUID();
-                relationMap.put(i, linkId);
-                links.add(OntologyLinkGroup.builder()
-                        .uniqueIdentifier(linkId)
-                        .name(r.getName())
-                        .type(r.getType())
-                        .ontologyUniqueIdentifierFrom(fromMeta.getUniqueIdentifier())
-                        .ontologyUniqueIdentifierTo(toMeta.getUniqueIdentifier())
-                        .ontologySpaceId(space.getId())
-                        .build());
+                var fromUid = uidByDisplayName.get(r.getOntologyNameFrom());
+                var toUid = uidByDisplayName.get(r.getOntologyNameTo());
+                if (fromUid == null || toUid == null) {
+                    log.warn("关系 {} 导入跳过：端点对象不存在，from={}, to={}", r.getName(), r.getOntologyNameFrom(), r.getOntologyNameTo());
+                    continue;
+                }
+                //走 createLink 而非直接落库：与画布创建关系同一条路径，关系索引等副作用一并触发；实例关系边不在这里生成
+                relationMap.put(i, linkService.createLink(new OntologyLinkCreateParam()
+                        .setName(r.getName())
+                        .setApiName(StringUtils.defaultIfBlank(r.getApiName(), "relation_" + IdGenerator.generateUUID()))
+                        .setDescription(r.getDescription())
+                        .setType(r.getType() == null ? OntologyLinkTypeEnum.OTHER : r.getType())
+                        .setOntologyUniqueIdentifierFrom(fromUid)
+                        .setOntologyUniqueIdentifierTo(toUid)
+                        .setCategoryId(linkRootCategoryId)
+                        .setSpaceId(space.getId())));
             }
-            linkService.saveBatch(links);
         }
         //保存函数
         var funcs = dto.getFunctions();
@@ -712,10 +805,12 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         if (CollectionUtils.isNotEmpty(actions)) {
             actions.forEach(action -> {
                 val relationIndex = action.getRelationIndex();
+                var linkUniqIdentifier = relationIndex == null ? null : relationMap.get(relationIndex);
                 ActionLinkMappingParam linkMapping = null;
-                if (relationIndex != null) {
+                //关系因端点对象缺失被跳过时不挂 linkMapping：行为本身仍应导入，且 createAction 会因 link 不存在而整条报错
+                if (linkUniqIdentifier != null) {
                     linkMapping = ActionLinkMappingParam.builder()
-                            .ontologyLinkUniqIdentifier(relationMap.get(relationIndex))
+                            .ontologyLinkUniqIdentifier(linkUniqIdentifier)
                             .build();
                 }
                 List<ActionParamMappingCreateParam> mappingIns = null;
@@ -755,7 +850,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
             });
         }
         //导入实例数据（若传递了 instances）：写数据湖物理表，id 由数据库重新生成；本体未绑定数据源或无实例时静默跳过
-        entityService.importInstances(meta.getUniqueIdentifier(), instances);
+        return entityService.importInstances(meta.getUniqueIdentifier(), instances);
     }
 
 
@@ -805,7 +900,8 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         var space = getSpaceOrThrow(meta.getOntologySpaceId());
         //关系端点可能指向同空间其它本体，displayName 解析需覆盖空间内全部启用本体
         var scopeMetas = listEnabledMetas(space);
-        return buildOntologies(space, Lists.newArrayList(meta), scopeMetas, exportType);
+        //withRelations=true：关系随单本体导出；空间导出的关系由空间级 links 承载，不在此重复
+        return buildOntologies(space, Lists.newArrayList(meta), scopeMetas, exportType, true);
     }
 
     @Override
@@ -821,7 +917,8 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         if (CollectionUtils.isEmpty(metas)) {
             return Lists.newArrayList();
         }
-        return buildOntologies(space, metas, metas, exportType);
+        //空间导出的关系放在 links 段（含实例关系边），对象级 relations 不重复导出，否则导入会建出两份关系
+        return buildOntologies(space, metas, metas, exportType, false);
     }
 
     private OntologySpace getSpaceOrThrow(Integer spaceId) {
@@ -836,9 +933,23 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 .eq(OntologyMeta::getStatus, Status.ENABLE.getValue()));
     }
 
+    /**
+     * 关系分类树根节点（parentId=0，创建空间时默认生成）id。
+     *
+     * <p>取列表首条而非 getOne：历史数据可能存在多个 parentId=0 节点，getOne 会抛 TooManyResults。
+     * 空间无根节点时返回 null，关系不挂分类，导入不应因此失败。</p>
+     */
+    private Integer getLinkCategoryRoot(Integer spaceId) {
+        return linkCategoryService.list(new LambdaQueryWrapper<OntologyLinkCategory>()
+                        .eq(OntologyLinkCategory::getOntologySpaceId, spaceId)
+                        .eq(OntologyLinkCategory::getParentId, 0))
+                .stream().map(OntologyLinkCategory::getId).findFirst().orElse(null);
+    }
+
     private List<OntologyCreateDTO> buildOntologies(OntologySpace space, List<OntologyMeta> metasToExport,
                                                     List<OntologyMeta> displayNameScope,
-                                                    OntologyExportTypeEnum exportType) {
+                                                    OntologyExportTypeEnum exportType,
+                                                    boolean withRelations) {
         //uid -> displayName（解析范围取 displayNameScope：单本体导出时关系端点可能指向同空间其它本体，需覆盖全空间启用本体）
         var uidToDisplayName = displayNameScope.stream()
                 .collect(Collectors.toMap(OntologyMeta::getUniqueIdentifier, OntologyMeta::getDisplayName, (a, b) -> a));
@@ -852,7 +963,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 .stream().collect(Collectors.toMap(OntologyGroup::getGroupId, OntologyGroup::getGroupName, (a, b) -> a));
 
         return metasToExport.stream()
-                .map(meta -> buildExportDTO(meta, space, ontologyCategoryPathMap, groupNameMap, uidToDisplayName, exportType))
+                .map(meta -> buildExportDTO(meta, space, ontologyCategoryPathMap, groupNameMap, uidToDisplayName, exportType, withRelations))
                 .collect(Collectors.toList());
     }
 
@@ -860,7 +971,8 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                                              Map<Integer, String> ontologyCategoryPathMap,
                                              Map<String, String> groupNameMap,
                                              Map<String, String> uidToDisplayName,
-                                             OntologyExportTypeEnum exportType) {
+                                             OntologyExportTypeEnum exportType,
+                                             boolean withRelations) {
         var uid = meta.getUniqueIdentifier();
 
         //metadata
@@ -918,8 +1030,38 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 .metadata(metadata)
                 .propertyCategory(propertyCategory)
                 .properties(properties)
+                .relations(withRelations ? exportOntologyRelations(uid, space.getId(), uidToDisplayName) : null)
                 .instances(instances)
                 .build();
+    }
+
+    /**
+     * 导出该对象关联的关系（含以它为起点或终点的），端点以对象显示名称表达，导入时据此解析对象。
+     *
+     * <p>端点对象已停用/已删除时 displayName 解析不到，导入了也无法还原，不导出。</p>
+     */
+    private List<OntologyRelationDTO> exportOntologyRelations(String ontologyUniqueIdentifier, Integer spaceId,
+                                                              Map<String, String> uidToDisplayName) {
+        var links = linkService.list(new LambdaQueryWrapper<OntologyLinkGroup>()
+                .eq(OntologyLinkGroup::getOntologySpaceId, spaceId)
+                .eq(OntologyLinkGroup::getStatus, Status.ENABLE.getValue())
+                .and(w -> w.eq(OntologyLinkGroup::getOntologyUniqueIdentifierFrom, ontologyUniqueIdentifier)
+                        .or().eq(OntologyLinkGroup::getOntologyUniqueIdentifierTo, ontologyUniqueIdentifier)));
+        if (CollectionUtils.isEmpty(links)) {
+            return Lists.newArrayList();
+        }
+        return links.stream()
+                .filter(link -> uidToDisplayName.containsKey(link.getOntologyUniqueIdentifierFrom())
+                        && uidToDisplayName.containsKey(link.getOntologyUniqueIdentifierTo()))
+                .map(link -> OntologyRelationDTO.builder()
+                        .name(link.getName())
+                        .apiName(link.getApiName())
+                        .description(link.getDescription())
+                        .type(link.getType())
+                        .ontologyNameFrom(uidToDisplayName.get(link.getOntologyUniqueIdentifierFrom()))
+                        .ontologyNameTo(uidToDisplayName.get(link.getOntologyUniqueIdentifierTo()))
+                        .build())
+                .collect(Collectors.toList());
     }
 
     private PropertyCategoryCreateParam buildPropertyCategoryTree(List<PropertyCategory> categories) {

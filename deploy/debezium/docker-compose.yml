@@ -1,0 +1,36 @@
+version: "3.8"
+
+services:
+  debezium-connect:
+    image: quay.io/debezium/connect:3.4.3.Final
+    container_name: ontology-debezium-connect
+    restart: always
+    ports:
+      - "10701:8083"
+    environment:
+      TZ: "Asia/Shanghai"
+      BOOTSTRAP_SERVERS: 192.168.53.103:10675
+      GROUP_ID: debezium-connect-group
+      CONFIG_STORAGE_TOPIC: debezium-connect-configs
+      OFFSET_STORAGE_TOPIC: debezium-connect-offsets
+      STATUS_STORAGE_TOPIC: debezium-connect-statuses
+      KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      KEY_CONVERTER_SCHEMAS_ENABLE: "false"
+      VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+      KAFKA_CONNECT_PLUGINS_DIR: /kafka/connect
+    volumes:
+      - ./debezium-data:/kafka/connect
+      - ./debezium-plugins/debezium-postgres:/kafka/connect/debezium-postgres:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8083/connectors || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - kafka_default
+
+networks:
+  kafka_default:
+    external: true

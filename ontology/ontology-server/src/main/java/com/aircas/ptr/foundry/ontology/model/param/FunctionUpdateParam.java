@@ -36,6 +36,9 @@ public class FunctionUpdateParam {
     @Pattern(regexp = VERSION_PATTERN, message = "版本号格式必须为 x.y.z（如 1.0.0）")
     private String version;
 
+    @Schema(name = "ontologySpaceId", description = "本体空间id（跨空间允许同名 api，建议传以精确定位；不传则不限空间）")
+    private Integer ontologySpaceId;
+
     @Schema(name = "description", description = "描述")
     private String description;
 
@@ -78,4 +81,7 @@ public class FunctionUpdateParam {
      */
     @Schema(name = "apiConfig", description = "外部API算子配置（仅 type=EXTERNAL 时必填）")
     private ExternalApiConfig apiConfig;
+
+    @Schema(name = "rateLimitTemplateId", description = "限流配置模板 ID（不传则不修改；修改后同一 api 的所有版本同步更新）")
+    private Long rateLimitTemplateId;
 }

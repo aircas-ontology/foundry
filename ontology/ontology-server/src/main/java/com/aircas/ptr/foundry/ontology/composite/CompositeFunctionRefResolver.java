@@ -1,15 +1,21 @@
 package com.aircas.ptr.foundry.ontology.composite;
 
+import com.aircas.ptr.foundry.common.constant.FunctionParamTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.bo.CompositeFunctionRefBO;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamCategoryEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.Status;
+import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.param.CompositeConfig;
 import com.aircas.ptr.foundry.ontology.model.param.CompositeNode;
 import com.aircas.ptr.foundry.ontology.model.param.CompositeParameter;
 import com.aircas.ptr.foundry.ontology.model.po.Function;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionParamPO;
+import com.aircas.ptr.foundry.ontology.model.vo.FunctionParameterVO;
 import com.aircas.ptr.foundry.ontology.utils.CompositeValidator;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -22,16 +28,21 @@ import java.util.Map;
  * <p>{@code CompositeValidator} 与 {@code CompositeElCompiler} 需要两类视角的被引用函数信息：</p>
  * <ul>
  *   <li>按<b>画布节点 id</b> 索引的 {@code Map}（校验器端口推导与编译器的 {@code refs} 参数）；</li>
- *   <li>按<b>函数 api</b> 求值的 {@code java.util.function.Function}（校验器的 {@code resolver} 参数，
- *       校验器传入的是节点的 {@code functionId}）。</li>
+ *   <li>按<b>函数标识（api 或显示名）+ 版本</b> 求值的 {@code java.util.function.Function}
+ *       （校验器的 {@code resolver} 参数，解析器优先按 api 精确匹配，未命中时回退按显示名+版本匹配）。</li>
  * </ul>
  * <p>两者的键不同，容易混用，因此这里一次性提供两个视图，并把函数入参/出参定义转换成画布端口类型。</p>
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class CompositeFunctionRefResolver {
 
     private final CompositeFunctionCatalog catalog;
+
+    private final ObjectMapper objectMapper;
+
+    private static final ObjectMapper fieldMapper = new ObjectMapper();
 
     /**
      * 建立"画布节点 id -&gt; 被引用函数快照"的映射。
@@ -42,7 +53,7 @@ public class CompositeFunctionRefResolver {
         if (config == null) {
             return refs;
         }
-        Map<String, CompositeFunctionRefBO> byApi = new LinkedHashMap<>();
+        Map<String, CompositeFunctionRefBO> byQuery = new LinkedHashMap<>();
         for (CompositeNode node : config.getNodes()) {
             if (node == null || node.getId() == null || node.getFunctionId() == null
                     || node.getFunctionId().trim().isEmpty()) {
@@ -51,14 +62,16 @@ public class CompositeFunctionRefResolver {
             if (CompositeValidator.isLogicNode(node)) {
                 continue;
             }
-            String api = node.getFunctionId().trim();
+            CompositeFunctionRefQuery query = CompositeFunctionRefQuery.of(node.getFunctionId().trim(),
+                    node.getFunctionVersion());
+            String key = queryKey(query);
             // computeIfAbsent 不会缓存 null，函数不存在时每次都会重新查库，这里显式记忆未命中结果
             CompositeFunctionRefBO ref;
-            if (byApi.containsKey(api)) {
-                ref = byApi.get(api);
+            if (byQuery.containsKey(key)) {
+                ref = byQuery.get(key);
             } else {
-                ref = loadByApi(api);
-                byApi.put(api, ref);
+                ref = loadByQuery(query);
+                byQuery.put(key, ref);
             }
             if (ref != null) {
                 refs.put(node.getId(), ref);
@@ -67,32 +80,50 @@ public class CompositeFunctionRefResolver {
         return refs;
     }
 
-    /** 校验器使用的解析器：按函数 api 取快照，不存在返回 null */
-    public java.util.function.Function<String, CompositeFunctionRefBO> byFunctionApi() {
+    /** 校验器使用的解析器：优先按 api 取快照，未命中时按显示名+版本回退，不存在返回 null */
+    public java.util.function.Function<CompositeFunctionRefQuery, CompositeFunctionRefBO> byFunctionRef() {
         Map<String, CompositeFunctionRefBO> cache = new LinkedHashMap<>();
-        return api -> {
-            if (api == null || api.trim().isEmpty()) {
+        return query -> {
+            if (query == null || query.getFunctionId() == null || query.getFunctionId().trim().isEmpty()) {
                 return null;
             }
-            String key = api.trim();
+            String key = queryKey(query);
             // 未命中同样要记忆，否则每次校验都重复查库
             if (cache.containsKey(key)) {
                 return cache.get(key);
             }
-            CompositeFunctionRefBO ref = loadByApi(key);
+            CompositeFunctionRefBO ref = loadByQuery(query);
             cache.put(key, ref);
             return ref;
         };
     }
 
+    private static String queryKey(CompositeFunctionRefQuery query) {
+        String version = query.getFunctionVersion() == null ? "" : query.getFunctionVersion().trim();
+        return query.getFunctionId().trim() + "|" + version;
+    }
+
     /** 查询函数定义并组装端口信息，函数不存在返回 null */
-    private CompositeFunctionRefBO loadByApi(String functionApi) {
-        Function function = catalog.findFunction(functionApi);
+    private CompositeFunctionRefBO loadByQuery(CompositeFunctionRefQuery query) {
+        String functionId = query.getFunctionId().trim();
+        Function function = catalog.findFunction(functionId);
+        if (function == null) {
+            // 按 api 未命中时，回退按显示名+版本匹配（前端可能用名称引用函数）
+            function = catalog.findFunctionByNameAndVersion(functionId, query.getFunctionVersion());
+        }
         if (function == null) {
             return null;
         }
         List<FunctionParamPO> inputParams = catalog.findParams(function.getId(), FunctionParamCategoryEnum.INPUT);
         List<FunctionParamPO> outputParams = catalog.findParams(function.getId(), FunctionParamCategoryEnum.OUTPUT);
+        // 基础查询、容器等算子在 function_param 中未声明出参，但运行期均产出 result 端口；
+        // 前端画布按所有函数节点都有 result 出参处理，这里兜底补一个，避免保存时报“不存在输出端口[result]”。
+        if (outputParams.isEmpty() && function.getType() != FunctionTypeEnum.COMPOSITE) {
+            outputParams = List.of(FunctionParamPO.builder()
+                    .paramName("result")
+                    .paramType(FunctionParamTypeEnum.OBJECT)
+                    .build());
+        }
         // 脚本算子（CUSTOMIZE）的 result 出参承载的是 FunctionResultVO.data，真实类型由用户代码决定，
         // 注册表统一声明成 OBJECT；这里按声明类型还原（见 declaredScriptTypes），
         // 基础查询/外部API 等结构化出参保持原样。
@@ -126,16 +157,118 @@ public class CompositeFunctionRefResolver {
     private List<CompositeParameter> toPorts(List<FunctionParamPO> params, FunctionParamCategoryEnum category,
                                              Map<String, String> declaredTypes) {
         List<CompositeParameter> ports = new ArrayList<>();
+        boolean flattenObject = category == FunctionParamCategoryEnum.INPUT;
         for (FunctionParamPO paramPO : params) {
-            CompositeParameter port = new CompositeParameter();
-            port.setId(paramPO.getParamName());
-            port.setName(paramPO.getParamName());
-            String declared = declaredTypes.get(paramPO.getParamName());
-            port.setType(declared != null ? declared : canvasType(paramPO));
-            port.setDescription(paramPO.getDescription());
-            ports.add(port);
+            List<Map<String, Object>> nestedFields = parseFields(paramPO.getFields());
+            if (flattenObject && paramPO.getParamType() == FunctionParamTypeEnum.OBJECT
+                    && nestedFields != null && !nestedFields.isEmpty()) {
+                // 入参 OBJECT 类型含嵌套字段时，展开为叶子字段端口（前端画布连线引用的是叶子字段名）
+                addLeafPorts(ports, nestedFields, declaredTypes);
+            } else {
+                CompositeParameter port = new CompositeParameter();
+                port.setId(paramPO.getParamName());
+                port.setName(paramPO.getParamName());
+                String declared = declaredTypes.get(paramPO.getParamName());
+                port.setType(declared != null ? declared : canvasType(paramPO));
+                port.setDescription(paramPO.getDescription());
+                port.setChildren(parseChildPorts(paramPO.getFields(), paramPO.getParamName()));
+                ports.add(port);
+            }
         }
         return ports;
+    }
+
+    /** 解析 fields JSON 为嵌套字段列表 */
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> parseFields(String fieldsJson) {
+        if (fieldsJson == null || fieldsJson.trim().isEmpty()) {
+            return null;
+        }
+        try {
+            return fieldMapper.readValue(fieldsJson, new TypeReference<List<Map<String, Object>>>() {});
+        } catch (Exception e) {
+            log.warn("函数字段定义解析失败: {}", fieldsJson, e);
+            return null;
+        }
+    }
+
+    /** 递归提取叶子字段端口：跳过有子字段的中间 OBJECT 节点，只保留叶子 */
+    private void addLeafPorts(List<CompositeParameter> ports, List<Map<String, Object>> fields,
+                              Map<String, String> declaredTypes) {
+        for (Map<String, Object> field : fields) {
+            String fieldName = field == null ? null : String.valueOf(field.get("paramName"));
+            if (fieldName == null || fieldName.equals("null")) {
+                continue;
+            }
+            String fieldType = String.valueOf(field.get("paramType"));
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> children = (List<Map<String, Object>>) field.get("fields");
+            if ("OBJECT".equalsIgnoreCase(fieldType) && children != null && !children.isEmpty()) {
+                addLeafPorts(ports, children, declaredTypes);
+            } else {
+                CompositeParameter port = new CompositeParameter();
+                port.setId(fieldName);
+                port.setName(fieldName);
+                String declared = declaredTypes.get(fieldName);
+                port.setType(declared != null ? declared : canvasTypeFromJavaType(fieldType));
+                ports.add(port);
+            }
+        }
+    }
+
+    /** 将 Java 参数类型名转为画布端口类型（与 CompositeFunctionCatalog.toCanvasType 对齐） */
+    private static String canvasTypeFromJavaType(String javaType) {
+        if (javaType == null || javaType.trim().isEmpty()) {
+            return "object";
+        }
+        return switch (javaType.trim().toUpperCase()) {
+            case "STRING" -> "string";
+            case "INTEGER", "INT", "FLOAT", "DOUBLE", "LONG", "SHORT", "BYTE", "NUMBER" -> "number";
+            case "BOOLEAN", "BOOL" -> "boolean";
+            case "LIST", "ARRAY" -> "array";
+            case "OBJECT" -> "object";
+            default -> "object";
+        };
+    }
+
+    /**
+     * 反序列化 {@code function_param.fields} 为子字段端口。
+     * <p>画布把子字段绑定后的连线端点直接写成叶子字段名（如 {@code input} 的 {@code userName}），
+     * 校验器与编译器需要这份层级才能解析这类引用。解析失败只记日志并按"没有子字段"处理，
+     * 不能让一段脏的层级 JSON 把整个编排校验打死。</p>
+     */
+    private List<CompositeParameter> parseChildPorts(String fieldsJson, String paramName) {
+        if (fieldsJson == null || fieldsJson.trim().isEmpty()) {
+            return null;
+        }
+        try {
+            return toChildPorts(objectMapper.readValue(fieldsJson, new TypeReference<List<FunctionParameterVO>>() {
+            }));
+        } catch (Exception e) {
+            log.warn("函数参数[{}]的子字段定义解析失败，按无子字段处理：{}", paramName, e.getMessage());
+            return null;
+        }
+    }
+
+    /** 子字段树转端口树，id 与 name 同样取字段名，保持与顶层端口一致的"按名连线"写法 */
+    private List<CompositeParameter> toChildPorts(List<FunctionParameterVO> fields) {
+        if (fields == null || fields.isEmpty()) {
+            return null;
+        }
+        List<CompositeParameter> children = new ArrayList<>();
+        for (FunctionParameterVO field : fields) {
+            if (field == null || field.getParamName() == null || field.getParamName().trim().isEmpty()) {
+                continue;
+            }
+            CompositeParameter child = new CompositeParameter();
+            child.setId(field.getParamName());
+            child.setName(field.getParamName());
+            child.setType(CompositeFunctionCatalog.toCanvasType(field.getParamType()));
+            child.setDescription(field.getDescription());
+            child.setChildren(toChildPorts(field.getFields()));
+            children.add(child);
+        }
+        return children.isEmpty() ? null : children;
     }
 
     /**

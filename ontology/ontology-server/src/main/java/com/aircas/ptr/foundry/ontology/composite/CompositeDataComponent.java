@@ -47,7 +47,7 @@ public abstract class CompositeDataComponent extends NodeComponent {
      * @param request  本次执行请求
      * @param nodePlan 节点定义
      * @param inputs   解析出的入参（键为入参端口名）
-     * @return 出参值，键为出参端口 id
+     * @return 出参值，键为出参端口名（数据边与出参汇总都按端口名取）
      */
     protected abstract Map<String, Object> produce(CompositeRuntimeRequest request, CompositeNodePlanBO nodePlan,
                                                    Map<String, Object> inputs);
@@ -74,7 +74,8 @@ public abstract class CompositeDataComponent extends NodeComponent {
     }
 
     /**
-     * 解析节点全部入参，优先级：所在循环的当前项 &gt; 上游连线推送值 &gt; 外部输入映射 &gt; 节点默认值 &gt; null。
+     * 解析节点全部入参，优先级：手动输入的固定值 &gt; 所在循环的当前项 &gt; 上游连线推送值 &gt; 外部输入映射 &gt; 空。
+     * <p>画布上为某入参配置了手动输入时，该入参就是固定值：上游连线、调用方同名入参都不再覆盖它。</p>
      */
     static Map<String, Object> resolveInputs(NodeComponent component, CompositeRuntimeRequest request,
                                              CompositeNodePlanBO nodePlan) {
@@ -85,6 +86,11 @@ public abstract class CompositeDataComponent extends NodeComponent {
         for (Map.Entry<String, String> port : nodePlan.getInputParams().entrySet()) {
             String portId = port.getKey();
             String name = port.getValue();
+            Object manualValue = nodePlan.manualInput(portId, name);
+            if (manualValue != null) {
+                inputs.put(name, manualValue);
+                continue;
+            }
             String feeder = feederMap.get(name);
             if (feeder != null && nodePlan.getEnclosingLoops().contains(feeder)) {
                 inputs.put(name, loopObjectFor(component, request, nodePlan, feeder));
@@ -99,7 +105,12 @@ public abstract class CompositeDataComponent extends NodeComponent {
                 inputs.put(name, externalInputs.get(externalName));
                 continue;
             }
-            inputs.put(name, nodePlan.getInputDefaults().get(portId));
+            Object defaultValue = nodePlan.getInputDefaults().get(portId);
+            if (defaultValue == null) {
+                // 画布把子字段绑定的默认值按叶子字段名登记，编译器归位成端口对象后在这里补上
+                defaultValue = nodePlan.getNestedInputDefaults().get(name);
+            }
+            inputs.put(name, defaultValue);
         }
         return inputs;
     }

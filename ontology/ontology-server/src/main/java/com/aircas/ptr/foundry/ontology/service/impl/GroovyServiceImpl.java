@@ -95,12 +95,22 @@ public class GroovyServiceImpl implements GroovyService {
                 for (int i = 0; i < parameters.length; i++) {
                     String paramName = getParameterName(parameters[i]);
                     Class<?> paramType = parameters[i].getType();
-                    PreconditionUtils.checkArgument(FunctionParamTypeEnum.isBasicType(paramType.getName()), "暂不支持复杂类型参数", HttpStatus.BAD_REQUEST);
+                    FunctionParamTypeEnum paramTypeEnum = FunctionParamTypeEnum.getByTypeName(paramType.getName());
+                    // 允许基本类型 + OBJECT/LIST（Map/Object/List 等容器类型）
+                    PreconditionUtils.checkArgument(
+                            paramTypeEnum != null || 
+                            paramType.getName().equals("java.lang.Object") ||
+                            paramType.getName().equals("java.util.Map") ||
+                            paramType.getName().equals("java.util.List") ||
+                            paramType.isAssignableFrom(Map.class) ||
+                            paramType.isAssignableFrom(List.class),
+                            "暂不支持复杂类型参数", HttpStatus.BAD_REQUEST);
                     JsonSchema schema = generator.generateSchema(paramType);
                     String jsonSchema = objectMapper.writeValueAsString(schema);
                     funcParams.add(FunctionParamDTO.builder()
                             .paramName(paramName)
-                            .paramType(FunctionParamTypeEnum.getByTypeName(paramType.getName()))
+                            .paramType(paramTypeEnum != null ? paramTypeEnum : 
+                                      (paramType.isAssignableFrom(List.class) ? FunctionParamTypeEnum.LIST : FunctionParamTypeEnum.OBJECT))
                             .category(FunctionParamCategoryEnum.INPUT)
                             .paramOrder(i + 1)
                             .referenceType(paramType.getName())
@@ -140,11 +150,12 @@ public class GroovyServiceImpl implements GroovyService {
 
         var paramValues = paramInfos.stream().map(p -> {
             var value = paramMap.get(p.getParamName());
-            if (p.getParamType() == FunctionParamTypeEnum.OBJECT) {
-                throw new BusinessException("parse error");
-            } else {
+            // OBJECT/LIST 类型直接透传（编排上游节点产出的对象/列表），其余按声明类型转换
+            if (p.getParamType() != FunctionParamTypeEnum.OBJECT
+                    && p.getParamType() != FunctionParamTypeEnum.LIST) {
                 return SchemaHandleUtil.convertValue(value, p.getTypeReferenceName());
             }
+            return value;
         }).collect(Collectors.toList());
         var result = CollectionUtils.isEmpty(paramValues) ?
                 groovyInstance.invokeMethod("handle", null) :
@@ -165,9 +176,44 @@ public class GroovyServiceImpl implements GroovyService {
             for (FunctionParamPO paramInfo : paramInfos) {
                 Object value = inputMap.get(paramInfo.getParamName());
                 // 编排上游节点产出的对象/列表直接透传，其余按声明类型转换，与 executeGroovy 保持一致
+                // typeReferenceName 为空时，对于基本类型按 paramType 转换，其他类型直接透传
                 if (paramInfo.getParamType() != FunctionParamTypeEnum.OBJECT
                         && paramInfo.getParamType() != FunctionParamTypeEnum.LIST) {
-                    value = SchemaHandleUtil.convertValue(value, paramInfo.getTypeReferenceName());
+                    if (StringUtils.isNotEmpty(paramInfo.getTypeReferenceName())) {
+                        value = SchemaHandleUtil.convertValue(value, paramInfo.getTypeReferenceName());
+                    } else if (value instanceof Number number) {
+                        // 上游产出的数值类型与下游声明不一致时做窄化/宽化
+                        if (paramInfo.getParamType() == FunctionParamTypeEnum.INTEGER) {
+                            value = number.intValue();
+                        } else if (paramInfo.getParamType() == FunctionParamTypeEnum.DOUBLE) {
+                            value = number.doubleValue();
+                        } else if (paramInfo.getParamType() == FunctionParamTypeEnum.LONG) {
+                            value = number.longValue();
+                        } else if (paramInfo.getParamType() == FunctionParamTypeEnum.FLOAT) {
+                            value = number.floatValue();
+                        }
+                    } else if (value != null) {
+                        // typeReferenceName 为空但参数是基本类型，按 paramType 转换
+                        String valueStr = value.toString();
+                        if (paramInfo.getParamType() == FunctionParamTypeEnum.DOUBLE) {
+                            value = Double.parseDouble(valueStr);
+                        } else if (paramInfo.getParamType() == FunctionParamTypeEnum.INTEGER) {
+                            // 兼容浮点数形式的字符串（如 "100.0"）
+                            if (valueStr.contains(".")) {
+                                value = (int) Double.parseDouble(valueStr);
+                            } else {
+                                value = Integer.parseInt(valueStr);
+                            }
+                        } else if (paramInfo.getParamType() == FunctionParamTypeEnum.LONG) {
+                            if (valueStr.contains(".")) {
+                                value = (long) Double.parseDouble(valueStr);
+                            } else {
+                                value = Long.parseLong(valueStr);
+                            }
+                        } else if (paramInfo.getParamType() == FunctionParamTypeEnum.BOOL) {
+                            value = Boolean.parseBoolean(valueStr);
+                        }
+                    }
                 }
                 paramValues.add(value);
             }

@@ -90,6 +90,20 @@ public interface EntityRelationRepository extends ArangoRepository<EntityRelatio
             "    RETURN edge")
     List<EntityRelation> queryRelationsByLinkId(@Param("linkId") String linkId);
 
+    @Query("FOR edge IN relation" +
+            "    FILTER edge.ontologyLinkId == @linkId AND edge.status != 'DELETE' " +
+            "    LIMIT @limit" +
+            "    RETURN edge")
+    List<EntityRelation> queryNonDeletedRelationsByLinkIdWithLimit(@Param("linkId") String linkId,
+                                                                   @Param("limit") int limit);
+
+    @Query("FOR edge IN relation" +
+            "    FILTER edge.ontologyLinkId == @linkId" +
+            "    FILTER CONCAT(edge._from, '|', edge._to) IN @nodePairs" +
+            "    RETURN edge")
+    List<EntityRelation> queryRelationsByNodePairs(@Param("linkId") String linkId,
+                                                  @Param("nodePairs") List<String> nodePairs);
+
 
     @Query("FOR r IN relation FILTER r._key == @id UPDATE r WITH { startTime: @startTime, endTime: @endTime, status: @status, timeWindows: @timeWindows } IN relation")
     void updateRelation(@Param("startTime") Date startTime,

@@ -97,8 +97,10 @@ public class OntologySpaceController {
 
     @GetMapping
     @Operation(summary = "查询本体空间列表")
-    public RestResult<List<OntologySpaceVO>> querySpace() {
-        List<OntologySpaceVO> res = ontologySpaceService.querySpace();
+    public RestResult<List<OntologySpaceVO>> querySpace(
+            @RequestParam(required = false, defaultValue = "0")
+            @Parameter(description = "类型：0=空间（默认），1=主题") Integer type) {
+        List<OntologySpaceVO> res = ontologySpaceService.querySpace(type);
         return RestResult.ofData(res);
     }
 

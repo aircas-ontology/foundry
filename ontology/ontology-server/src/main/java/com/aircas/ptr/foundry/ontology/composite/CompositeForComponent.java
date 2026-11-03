@@ -30,7 +30,8 @@ public class CompositeForComponent extends NodeForComponent {
             outputs.put("item", null);
         }
         if (nodePlan.getOutputParams().containsKey("done")) {
-            outputs.put("done", null);
+            // times 模式没有 collectionPath，但画布仍可把集合接到 collection 端口上供"结束后"出口输出
+            outputs.put("done", CompositeDataComponent.resolveCollection(request, nodePlan, inputs));
         }
         request.putProduced(nodePlan.getElId(), outputs);
         request.pushOutputs(nodePlan, outputs);

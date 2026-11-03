@@ -6,6 +6,8 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import java.util.List;
 
 @Data
@@ -36,8 +38,11 @@ public class FunctionListQueryParam {
     private String endDate;
 
     @Schema(name = "pageNum", description = "页号，默认 1")
+    @Min(value = 1, message = "pageNum 必须大于 0")
     private Integer pageNum = 1;
 
     @Schema(name = "pageSize", description = "每页条数，默认 10")
+    @Min(value = 1, message = "pageSize 必须大于 0")
+    @Max(value = 1000, message = "pageSize 不能超过 1000")
     private Integer pageSize = 10;
 }

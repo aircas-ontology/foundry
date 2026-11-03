@@ -28,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import jakarta.annotation.Resource;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -193,12 +194,15 @@ public class ActionCategoryServiceImpl extends ServiceImpl<ActionCategoryMapper,
     @Override
     public ActionCategoryVO getActionCategoryTree(Integer spaceId) {
 
+        // 按 id 升序取出，分组后每层 children 即为 id 从小到大
         var categories = list(new LambdaQueryWrapper<ActionCategory>()
-                .eq(ActionCategory::getOntologySpaceId, spaceId));
+                .eq(ActionCategory::getOntologySpaceId, spaceId)
+                .orderByAsc(ActionCategory::getId));
         if (CollectionUtils.isEmpty(categories)) {
             return null;
         }
-        var categoryMap = categories.stream().collect(Collectors.groupingBy(ActionCategory::getParentId));
+        var categoryMap = categories.stream().collect(Collectors.groupingBy(
+                ActionCategory::getParentId, LinkedHashMap::new, Collectors.toList()));
         var roots = categoryMap.get(0);
         if (CollectionUtils.isEmpty(roots)) {
             return null;

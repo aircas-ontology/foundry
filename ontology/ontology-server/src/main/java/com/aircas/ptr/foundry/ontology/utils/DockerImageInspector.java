@@ -24,7 +24,7 @@ import java.util.Map;
 
 /**
  * docker save 导出的镜像 tar 包解析工具：读取镜像 config，提取架构（architecture）与标签（RepoTags），
- * 用于容器算子上传镜像时的 ARM64 架构校验。
+ * 用于容器算子上传镜像时的架构校验。
  * <p>
  * 兼容 {@code .tar} 与 {@code .tar.gz/.tgz}；层内容只做流式跳过不加载进内存，仅保留少量 JSON。</p>
  */
@@ -44,6 +44,9 @@ public final class DockerImageInspector {
     /** OCI layout 索引文件 */
     private static final String INDEX_JSON = "index.json";
 
+    /** 元数据条目入内存的上限：manifest/config/index 均为 KB 级，超过此体积一律视为层数据只跳过 */
+    private static final long MAX_METADATA_BYTES = 8 * 1024 * 1024;
+
     /**
      * 解析镜像 tar，返回架构与标签。文件无法解析或缺失 config 时抛业务异常。
      */
@@ -58,8 +61,11 @@ public final class DockerImageInspector {
                 }
                 String name = entry.getName();
                 // 仅缓存体积较小的 JSON 元数据（manifest/config/index），大层直接跳过
-                if (name.endsWith(".json") && entry.getSize() < 8 * 1024 * 1024) {
-                    jsonEntries.put(normalize(name), readFully(tar));
+                if (entry.getSize() < MAX_METADATA_BYTES) {
+                    byte[] json = readJson(tar, name.endsWith(".json"));
+                    if (json != null) {
+                        jsonEntries.put(normalize(name), json);
+                    }
                 } else {
                     // 消费掉该 entry 以便流前进（不保留内容）
                     skip(tar);
@@ -218,11 +224,27 @@ public final class DockerImageInspector {
         return node == null || node.isNull() ? null : node.asText();
     }
 
-    private static byte[] readFully(InputStream in) throws IOException {
+    /**
+     * 读取当前 tar 条目并判定其内容是否 JSON：{@code jsonExtension}（.json 后缀）直接接受；
+     * 无后缀的条目看首字节是否为 <code>{</code> 或 <code>[</code>——
+     * containerd 镜像存储导出的 tar 里 config 名为 {@code blobs/sha256/&lt;hex&gt;} 没有扩展名，
+     * 而层 blob 是 gzip（首字节 0x1f），据此把两者区分开。
+     * <p>非 JSON 时返回 null，但条目剩余内容仍被消费掉：调用方不需再 skip，流已前进到条目末尾。</p>
+     */
+    private static byte[] readJson(TarArchiveInputStream tar, boolean jsonExtension) throws IOException {
+        int first = tar.read();
+        if (first == -1) {
+            return new byte[0];
+        }
+        if (!jsonExtension && first != '{' && first != '[') {
+            skip(tar);
+            return null;
+        }
         ByteArrayOutputStream out = new ByteArrayOutputStream();
+        out.write(first);
         byte[] buf = new byte[8192];
         int len;
-        while ((len = in.read(buf)) != -1) {
+        while ((len = tar.read(buf)) != -1) {
             out.write(buf, 0, len);
         }
         return out.toByteArray();

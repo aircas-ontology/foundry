@@ -49,6 +49,16 @@ public class OntologySpace {
 
     private String description;
 
+    /**
+     * 创建该空间/主题的用户名
+     */
+    private String username;
+
+    /**
+     * 类型：0=空间，1=主题
+     */
+    private Integer type;
+
 
     /**
      * 记录创建时间

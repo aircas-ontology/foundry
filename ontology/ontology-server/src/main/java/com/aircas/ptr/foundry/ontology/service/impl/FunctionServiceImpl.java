@@ -19,13 +19,14 @@ import com.aircas.ptr.foundry.ontology.model.dto.ActionContextInfoDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.FunctionParamDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.scan.FunctionPublishResult;
 import com.aircas.ptr.foundry.ontology.model.dto.scan.FunctionScanResult;
+import com.aircas.ptr.foundry.ontology.model.dto.RateLimitConfig;
 import com.aircas.ptr.foundry.ontology.model.dto.container.ContainerOperatorConfig;
 import com.aircas.ptr.foundry.ontology.model.dto.container.ContainerImageInfo;
 import com.aircas.ptr.foundry.ontology.model.dto.container.ContainerInterfaceDoc;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamCategoryEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamRoleEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionRuntimeStatusEnum;
-import com.aircas.ptr.foundry.ontology.model.enums.ContainerPhaseEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.ContainerSourceEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.TaskStatusEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionModelEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionLanguageEnum;
@@ -40,6 +41,7 @@ import com.aircas.ptr.foundry.ontology.model.param.BasicQueryTestParam;
 import com.aircas.ptr.foundry.ontology.model.param.ContainerConfig;
 import com.aircas.ptr.foundry.ontology.model.param.ContainerFunctionCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.CompositeConfig;
+import com.aircas.ptr.foundry.ontology.model.param.CompositeEdge;
 import com.aircas.ptr.foundry.ontology.model.param.CompositeNode;
 import com.aircas.ptr.foundry.ontology.model.param.CompositeParameter;
 import com.aircas.ptr.foundry.ontology.model.param.CompositeValidateParam;
@@ -56,10 +58,13 @@ import com.aircas.ptr.foundry.ontology.model.param.FunctionUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologySelectPropertyParam;
 import com.aircas.ptr.foundry.ontology.model.param.PropertyFilterParam;
 import com.aircas.ptr.foundry.ontology.model.enums.FilterNodeTypeEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.QueryOpEnum;
 import com.aircas.ptr.foundry.ontology.model.vo.BasicQueryResultVO;
 import com.aircas.ptr.foundry.ontology.model.vo.EntityPropertyGenericQueryVO;
 import com.aircas.ptr.foundry.ontology.model.po.Function;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionContainerInstance;
+import com.aircas.ptr.foundry.ontology.model.po.FunctionContainerUpload;
+import com.aircas.ptr.foundry.ontology.model.po.FunctionRateLimitTemplate;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionExecuteResult;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionParamPO;
@@ -72,6 +77,8 @@ import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyActionMappe
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyPropertyMapper;
 import com.aircas.ptr.foundry.ontology.service.ContainerFunctionService;
 import com.aircas.ptr.foundry.ontology.service.FunctionParamService;
+import com.aircas.ptr.foundry.ontology.service.FunctionRateLimitTemplateService;
+import com.aircas.ptr.foundry.ontology.service.RateLimitService;
 import com.aircas.ptr.foundry.ontology.service.FunctionService;
 import com.aircas.ptr.foundry.ontology.service.GroovyService;
 import com.aircas.ptr.foundry.ontology.service.ScriptSecurityScanService;
@@ -82,6 +89,10 @@ import com.aircas.ptr.foundry.ontology.utils.OperatorFunctionUtil;
 import com.aircas.ptr.foundry.ontology.utils.ScriptParamDescriptionExtractor;
 import com.aircas.ptr.foundry.ontology.utils.ScriptParamDescriptionExtractor.Descriptions;
 import com.aircas.ptr.foundry.ontology.utils.SchemaHandleUtil;
+import com.aircas.ptr.foundry.ontology.utils.ContainerNodeForwarder;
+import com.aircas.ptr.foundry.ontology.utils.ContainerNodeIdentity;
+import com.aircas.ptr.foundry.ontology.utils.ContainerUploadRegistry;
+import com.aircas.ptr.foundry.ontology.utils.CompositeValidator;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -136,6 +147,19 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     @Resource
     private DockerCommandExecutor dockerCommandExecutor;
 
+    /**
+     * 容器算子跨节点路由：镜像 tar 只落在收到上传请求那台机器的本地磁盘上，
+     * 创建算子时若镜像归属兄弟节点，须整单转发过去，否则对端 {@code Files.exists} 必然失败。
+     */
+    @Resource
+    private ContainerUploadRegistry containerUploadRegistry;
+
+    @Resource
+    private ContainerNodeIdentity containerNodeIdentity;
+
+    @Resource
+    private ContainerNodeForwarder containerNodeForwarder;
+
     @Resource
     private FunctionExecuteResultMapper executeResultMapper;
 
@@ -181,13 +205,25 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     @Resource
     private ContainerFunctionService containerFunctionService;
 
+    /** 编排函数定义读取入口：详情回显入口节点入参与执行链路共用同一查询口径 */
+    @Resource
+    private CompositeFunctionCatalog compositeFunctionCatalog;
+
+    /** 限流配置模板服务：创建函数时按 ID 取模板，复制配置快照写入 function 表 */
+    @Resource
+    private FunctionRateLimitTemplateService rateLimitTemplateService;
+
+    /** 分布式限流执行服务：Redis + Lua，跨实例 TPS + 并发检查 */
+    @Resource
+    private RateLimitService rateLimitService;
+
     private ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules()
             // 存进库的 fields 是 FunctionParamDTO 序列化结果（含 referenceType 等 VO 没有的字段），
             // 详情读回时反序列化为 FunctionParameterVO，需忽略未知字段，否则抛异常导致层级结构丢失
             .configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
-    /** 内存级运行状态跟踪：正在执行的 functionApi 集合，列表查询时据此填充 runningStatus */
-    private final Set<String> runningFunctions = Collections.newSetFromMap(new ConcurrentHashMap<>());
+    /** 内存级运行状态跟踪：正在执行的 functionApi → 并发计数，列表查询时据此填充 runningStatus */
+    private final ConcurrentHashMap<String, java.util.concurrent.atomic.AtomicInteger> runningFunctions = new ConcurrentHashMap<>();
 
 
     @Override
@@ -207,8 +243,8 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
 
 
     @Override
-    public FunctionDetailVO getFunctionDetailByApi(String api, String version) {
-        var function = resolveVersion(api, version);
+    public FunctionDetailVO getFunctionDetailByApi(Integer spaceId, String api, String version) {
+        var function = resolveVersion(spaceId, api, version);
         PreconditionUtils.checkArgument(function != null, "函数api不存在：" + api, HttpStatus.BAD_REQUEST);
         var functionParams = functionParamService.list(
                 new LambdaQueryWrapper<FunctionParamPO>().eq(FunctionParamPO::getFunctionId, function.getId()));
@@ -220,7 +256,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                     .paramOrder(p.getParamOrder())
                     .paramSchema(p.getParamSchema())
                     .paramType(p.getParamType())
-                    .description(p.getDescription());
+                    .description(p.getDescription() == null ? "" : p.getDescription());
             // 反序列化 fields JSON 为嵌套结构
             if (StringUtils.isNotEmpty(p.getFields())) {
                 try {
@@ -291,7 +327,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 .scanStatus(function.getScanStatus())
                 .scanResult(readScanResult(function))
                 .displayName(function.getDisplayName())
-                .description(function.getDescription())
+                .description(function.getDescription() == null ? "" : function.getDescription())
                 .type(function.getType())
                 .language(function.getLanguage())
                 .model(function.getModel())
@@ -306,12 +342,12 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     }
 
     @Override
-    public List<String> listVersionsByApi(String api) {
+    public List<String> listVersionsByApi(Integer spaceId, String api) {
         if (StringUtils.isEmpty(api)) {
             return new ArrayList<>();
         }
-        // 同一 api 下全部版本号，按语义化版本倒序（最新在前）
-        return listVersions(api).stream()
+        // 同一空间同一 api 下全部版本号，按语义化版本倒序（最新在前）
+        return listVersions(spaceId, api).stream()
                 .map(Function::getVersion)
                 .sorted((v1, v2) -> compareVersion(v2, v1))
                 .collect(Collectors.toList());
@@ -319,8 +355,8 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
 
     @Override
     @Transactional(value = "mainTransactionManager")
-    public void deleteByApi(String api, String version) {
-        var function = resolveVersion(api, version);
+    public void deleteByApi(Integer spaceId, String api, String version) {
+        var function = resolveVersion(spaceId, api, version);
         PreconditionUtils.checkArgument(function != null, "无效的函数api:" + api, HttpStatus.BAD_REQUEST);
         // 已发布状态不允许删除，需先下线
         requireUnpublished(function, "已发布的函数不能删除，请先下线");
@@ -344,8 +380,8 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     /**
      * 删除容器算子后按 container_key 引用计数清理：
      * 若该 key 下已无任何存留 function（最后一个接口算子被删），则删除运行实例行、并清理镜像/接口文档磁盘文件。
-     * <p>一容器=多条 function 共用同一 container_key，故须等全部关联算子删完才动容器与文件。
-     * docker 容器本身的停止/移除随生命周期服务（t4/t8）接入，本处先保证实例行与磁盘文件不泄漏。</p>
+     * <p>一容器=多条 function 共用同一 container_key，故须等全部关联算子删完才动容器与文件。</p>
+     * <p>多节点部署下，容器与文件在归属节点上：本节点只做引用计数判定，实际清理转发到归属节点执行。</p>
      */
     private void cleanupContainerFilesIfUnused(Function deleted) {
         if (deleted.getType() != FunctionTypeEnum.CONTAINER
@@ -353,7 +389,6 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
             return;
         }
         String containerKey = deleted.getContainerKey();
-        // 该函数已从库中删除；统计同 key 下仍存留的接口算子数，仍有则不动容器与文件
         long remaining = count(new LambdaQueryWrapper<Function>()
                 .eq(Function::getContainerKey, containerKey));
         if (remaining > 0) {
@@ -363,7 +398,39 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         if (instance == null) {
             return;
         }
-        // 曾启动过（containerId 非空）则先停止并移除常驻容器，再释放镜像/文档文件（否则文件可能占用中）
+        if (instance.getContainerSource() == ContainerSourceEnum.SYSTEM) {
+            log.warn("系统预置容器不允许删除（containerKey={}）", containerKey);
+            return;
+        }
+        if (!containerNodeIdentity.isSelf(instance.getNodeIp())) {
+            try {
+                containerNodeForwarder.forwardTo(instance.getNodeIp(), instance.getNodePort(),
+                        "/function/container/runtime/cleanup_files?containerKey=" + containerKey,
+                        null, "删除清理");
+                log.info("容器算子删除清理已转发至归属节点 {}:{}（containerKey={}）",
+                        instance.getNodeIp(), instance.getNodePort(), containerKey);
+            } catch (Exception e) {
+                log.warn("转发容器算子删除清理到归属节点 {} 失败（containerKey={}），"
+                                + "请到该节点手工执行 docker rm -f {} 并清理文件：{}",
+                        instance.getNodeIp(), containerKey,
+                        StringUtils.defaultIfBlank(instance.getContainerId(), instance.getContainerName()),
+                        e.getMessage());
+            }
+            return;
+        }
+        cleanupContainerLocalInternal(containerKey);
+    }
+
+    @Override
+    public void cleanupContainerLocal(String containerKey) {
+        cleanupContainerLocalInternal(containerKey);
+    }
+
+    private void cleanupContainerLocalInternal(String containerKey) {
+        FunctionContainerInstance instance = findInstanceByKey(containerKey);
+        if (instance == null) {
+            return;
+        }
         if (StringUtils.isNotEmpty(instance.getContainerId())) {
             stopAndRemoveContainerQuietly(instance.getContainerId());
         }
@@ -448,10 +515,22 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 "functionApi is empty", HttpStatus.BAD_REQUEST);
         PreconditionUtils.checkArgument(StringUtils.isNotEmpty(param.getDisplayName()),
                 "displayName is empty", HttpStatus.BAD_REQUEST);
+        // 限流模板：所有算子类型通用，创建时选定；同一 api 的所有版本共用同一个模板
+        FunctionRateLimitTemplate rateLimitTemplate = resolveRateLimitTemplate(param.getRateLimitTemplateId());
         // 容器算子：统一创建入口按类型分发——委托容器注册服务（1 请求 → N 条派生算子 + 1 运行实例），
         // 不走下方脚本/查询/编排算子的版本管理与参数解析逻辑
         if (param.getType() == FunctionTypeEnum.CONTAINER) {
-            containerFunctionService.createContainerFunction(buildContainerCreateParam(param));
+            // 镜像 tar 只落在收到上传请求那台机器的磁盘上：归属是兄弟节点时整单转发过去，
+            // 对端跑同一个 POST /function（含 @Valid 与全部校验），本端不会因 Files.exists 失败
+            FunctionContainerUpload owner = containerUploadRegistry.findOwner(imagePathOf(param));
+            if (owner != null && !containerNodeIdentity.isSelf(owner.getNodeIp())
+                    && !containerNodeForwarder.isForwardedRequest()) {
+                containerNodeForwarder.forward(owner.getNodeIp(), owner.getNodePort(), param, "创建");
+                return FunctionScanResult.skipped(ScanSkipReasonEnum.NON_SCRIPT_OPERATOR);
+            }
+            ContainerFunctionCreateParam cp = buildContainerCreateParam(param);
+            cp.setRateLimitTemplateId(rateLimitTemplate.getId());
+            containerFunctionService.createContainerFunction(cp);
             return FunctionScanResult.skipped(ScanSkipReasonEnum.NON_SCRIPT_OPERATOR);
         }
         // 非容器算子：先完成校验和安全扫描，再写入函数与参数。
@@ -469,6 +548,9 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 ? resolveCustomizeParams(language, param.getCode(), param.getParameters())
                 : null;
         Function func = buildAndSaveFunction(param, model, version, language, scanResult);
+        applyRateLimitToFunction(func, rateLimitTemplate);
+        // 同一 api 的所有版本共用同一个模板：新版本选定后，旧版本也同步更新
+        syncRateLimitTemplateToAllVersions(func.getOntologySpaceId(), func.getApi(), rateLimitTemplate.getId());
         if (param.getType() == FunctionTypeEnum.CUSTOMIZE) {
             saveResolvedCustomizeParams(func, customizeParams);
         } else {
@@ -495,9 +577,10 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
      * </ul>
      */
     private String checkVersionAndApiUnique(FunctionCreateParam param) {
-        // 版本管理：版本号必须大于同 api 下已有最大版本号（首次创建无此限制）
+        Integer spaceId = param.getOntologySpaceId();
+        // 版本管理：版本号必须大于同空间同 api 下已有最大版本号（首次创建无此限制）
         String version = requireValidVersion(param.getVersion());
-        List<Function> existVersions = listVersions(param.getFunctionApi());
+        List<Function> existVersions = listVersions(spaceId, param.getFunctionApi());
         String newApi = param.getFunctionApi() + " " + version;
         PreconditionUtils.checkArgument(existVersions.stream().noneMatch(f -> version.equals(f.getVersion())),
                 "函数版本已存在:" + newApi, HttpStatus.BAD_REQUEST);
@@ -507,9 +590,13 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         // 基于旧版本创建 vs 全新创建的 api 重复校验策略
         Boolean basedOnOldVersion = param.getBasedOnOldVersion();
         if (basedOnOldVersion == null || !basedOnOldVersion) {
-            // 全新创建：api 不能与任何已存在的函数重复（即使版本不同）
-            boolean apiExists = count(new LambdaQueryWrapper<Function>()
-                    .eq(Function::getApi, param.getFunctionApi())) > 0;
+            // 全新创建：api 不能与同一空间内已存在的函数重复（即使版本不同），跨空间允许重名
+            LambdaQueryWrapper<Function> apiQuery = new LambdaQueryWrapper<Function>()
+                    .eq(Function::getApi, param.getFunctionApi());
+            if (spaceId != null) {
+                apiQuery.eq(Function::getOntologySpaceId, spaceId);
+            }
+            boolean apiExists = count(apiQuery) > 0;
             PreconditionUtils.checkArgument(!apiExists,
                     "函数 api 已存在:" + param.getFunctionApi() + "，全新创建请使用不同的 api 名称", HttpStatus.BAD_REQUEST);
         }
@@ -540,14 +627,136 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                         param.getFunctionApi(), version, param.getDisplayName(), param.getType(),
                         param.getOntologySpaceId(), model)
                 .description(param.getDescription())
+                .displayName(param.getDisplayName())
                 .code(param.getCode())
+                .type(param.getType())
                 .language(language)
+                .model(model)
+                .status(Status.ENABLE.getValue())
                 .referenceName(param.getReferenceName())
                 .scanStatus(scanResult.status())
                 .scanResult(toScanJson(scanResult))
+                .ontologySpaceId(param.getOntologySpaceId())
                 .build();
         save(func);
         return func;
+    }
+
+    /**
+     * 解析限流模板：指定 ID 则按 ID 查找，未指定则取默认模板（ID 最小）；模板不存在或已禁用时拒绝创建。
+     */
+    private FunctionRateLimitTemplate resolveRateLimitTemplate(Long templateId) {
+        FunctionRateLimitTemplate template;
+        if (templateId != null) {
+            template = rateLimitTemplateService.getById(templateId);
+            PreconditionUtils.checkArgument(template != null,
+                    "限流模板不存在：" + templateId, HttpStatus.BAD_REQUEST);
+        } else {
+            template = rateLimitTemplateService.getDefaultTemplate();
+            PreconditionUtils.checkArgument(template != null,
+                    "系统未配置限流默认模板，请联系管理员", HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+        PreconditionUtils.checkArgument(template.getEnabled() != null && template.getEnabled() == 1,
+                "限流模板已禁用：" + template.getName(), HttpStatus.BAD_REQUEST);
+        return template;
+    }
+
+    /**
+     * 将限流模板配置快照写入 Function 并更新。
+     */
+    private void applyRateLimitToFunction(Function func, FunctionRateLimitTemplate template) {
+        RateLimitConfig config = RateLimitConfig.builder()
+                .timeoutMs(template.getTimeoutMs())
+                .retryCount(template.getRetryCount())
+                .retryIntervalMs(template.getRetryIntervalMs())
+                .tpsLimit(template.getTpsLimit())
+                .maxConcurrency(template.getMaxConcurrency())
+                .enabled(template.getEnabled())
+                .build();
+        try {
+            func.setRateLimitTemplateId(template.getId());
+            func.setRateLimitConfig(objectMapper.writeValueAsString(config));
+            updateById(func);
+        } catch (JsonProcessingException e) {
+            log.error("限流配置序列化失败：{}", e.getMessage());
+            throw new BusinessException("限流配置序列化失败：" + e.getMessage());
+        }
+    }
+
+    /**
+     * 切换限流模板并同步到同一 api 的所有版本：模板 ID 与配置快照一并覆盖。
+     */
+    private void syncRateLimitTemplateToAllVersions(Integer spaceId, String api, Long newTemplateId) {
+        FunctionRateLimitTemplate template = resolveRateLimitTemplate(newTemplateId);
+        String configJson;
+        try {
+            RateLimitConfig config = RateLimitConfig.builder()
+                    .timeoutMs(template.getTimeoutMs())
+                    .retryCount(template.getRetryCount())
+                    .retryIntervalMs(template.getRetryIntervalMs())
+                    .tpsLimit(template.getTpsLimit())
+                    .maxConcurrency(template.getMaxConcurrency())
+                    .enabled(template.getEnabled())
+                    .build();
+            configJson = objectMapper.writeValueAsString(config);
+        } catch (JsonProcessingException e) {
+            log.error("限流配置序列化失败：{}", e.getMessage());
+            throw new BusinessException("限流配置序列化失败：" + e.getMessage());
+        }
+        List<Function> allVersions = listVersions(spaceId, api);
+        for (Function f : allVersions) {
+            f.setRateLimitTemplateId(template.getId());
+            f.setRateLimitConfig(configJson);
+            updateById(f);
+        }
+    }
+
+    /**
+     * 读取指定 api+version 的限流参数（tpsLimit, maxConcurrency）。
+     * 返回 [tpsLimit, maxConcurrency]，未启用或解析失败返回 [0, 0]。
+     */
+    private int[] resolveRateLimit(Integer spaceId, String functionApi, String version) {
+        if (spaceId != null) {
+            var scoped = getOne(new LambdaQueryWrapper<Function>()
+                    .select(Function::getRateLimitConfig)
+                    .eq(Function::getOntologySpaceId, spaceId)
+                    .eq(Function::getApi, functionApi)
+                    .eq(Function::getVersion, version)
+                    .last("LIMIT 1"));
+            if (scoped != null) {
+                return parseRateLimitConfig(scoped, functionApi);
+            }
+        }
+        return resolveRateLimit(functionApi, version);
+    }
+
+    /** 兼容旧调用：不限空间 */
+    private int[] resolveRateLimit(String functionApi, String version) {
+        var function = getOne(new LambdaQueryWrapper<Function>()
+                .select(Function::getRateLimitConfig)
+                .eq(Function::getApi, functionApi)
+                .eq(Function::getVersion, version)
+                .last("LIMIT 1"));
+        return parseRateLimitConfig(function, functionApi);
+    }
+
+    private int[] parseRateLimitConfig(Function function, String functionApi) {
+        if (function == null || StringUtils.isEmpty(function.getRateLimitConfig())) {
+            return new int[]{0, 0};
+        }
+        try {
+            RateLimitConfig config = objectMapper.readValue(function.getRateLimitConfig(), RateLimitConfig.class);
+            if (config.getEnabled() == null || config.getEnabled() != 1) {
+                return new int[]{0, 0};
+            }
+            return new int[]{
+                    config.getTpsLimit() != null ? config.getTpsLimit() : 0,
+                    config.getMaxConcurrency() != null ? config.getMaxConcurrency() : 0
+            };
+        } catch (Exception e) {
+            log.warn("解析 rateLimitConfig 失败（api={}），跳过限流: {}", functionApi, e.getMessage());
+            return new int[]{0, 0};
+        }
     }
 
     /**
@@ -594,9 +803,16 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         return cp;
     }
 
+    /** 取镜像 tar 的节点本地绝对路径（缺失时返回 null，由创建校验给出「缺少 containerConfig」等准确报错） */
+    private String imagePathOf(FunctionCreateParam param) {
+        ContainerConfig cc = param.getContainerConfig();
+        return cc == null || cc.getImage() == null ? null : cc.getImage().getPath();
+    }
+
     @Override
+    @Transactional(value = "mainTransactionManager")
     public FunctionScanResult updateFunction(FunctionUpdateParam param) {
-        var function = resolveVersion(param.getFunctionApi(), param.getVersion());
+        var function = resolveVersion(param.getOntologySpaceId(), param.getFunctionApi(), param.getVersion());
         PreconditionUtils.checkArgument(function != null,
                 "函数版本不存在：" + param.getFunctionApi() + " " + param.getVersion(), HttpStatus.BAD_REQUEST);
         // 容器算子不支持编辑：镜像/接口配置在注册时一次性确定，如需调整请删除后重新创建
@@ -637,6 +853,12 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         requireConditionalUpdate(baseMapper.update(update, updateWrapper));
         rebuildTypedParams(function, param, effectiveCode, customizeParams);
 
+        // 限流模板变更：同一空间内同一 api 的所有版本同步更新。
+        if (param.getRateLimitTemplateId() != null) {
+            syncRateLimitTemplateToAllVersions(function.getOntologySpaceId(), function.getApi(),
+                    param.getRateLimitTemplateId());
+        }
+
         // 数据库写入成功后清理脚本编译/产物缓存。
         if (function.getType() == FunctionTypeEnum.CUSTOMIZE) {
             scriptEngineRouter.route(function.getLanguage()).invalidate(function.getLanguage(), function.getApi());
@@ -645,8 +867,9 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     }
 
     @Override
-    public FunctionPublishResult publishFunction(String api, String version) {
-        var function = requireVersionExists(api, version);
+    @Transactional(value = "mainTransactionManager")
+    public FunctionPublishResult publishFunction(Integer spaceId, String api, String version) {
+        var function = requireVersionExists(spaceId, api, version);
         PreconditionUtils.checkArgument(function.getPublish() == FunctionConstant.PUBLISH_UNPUBLISHED,
                 "该版本已是发布状态：" + api + " " + function.getVersion(), HttpStatus.BAD_REQUEST);
         Timestamp originalUpdateTime = toTimestamp(function.getUpdateTime());
@@ -675,8 +898,8 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
 
     @Override
     @Transactional(value = "mainTransactionManager")
-    public void unpublishFunction(String api, String version) {
-        var function = requireVersionExists(api, version);
+    public void unpublishFunction(Integer spaceId, String api, String version) {
+        var function = requireVersionExists(spaceId, api, version);
         PreconditionUtils.checkArgument(function.getPublish() == FunctionConstant.PUBLISH_PUBLISHED,
                 "该版本不是发布状态：" + api + " " + function.getVersion(), HttpStatus.BAD_REQUEST);
         //判断函数是否关联了行为，被本体行为使用到则不能下线
@@ -691,7 +914,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
      * 仅 CUSTOMIZE 脚本函数需要；无代码时跳过（BASIC_QUERY/EXTERNAL 不走脚本校验）。
      */
     private void validateScript(FunctionLanguageEnum language, String functionApi, String version, String code) {
-        if (StringUtils.isEmpty(code)) {
+        if (StringUtils.isBlank(code)) {
             return;
         }
         FunctionLanguageEnum lang = language == null ? FunctionLanguageEnum.GROOVY : language;
@@ -947,31 +1170,12 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                         .ontologySpaceId(func.getOntologySpaceId())
                         .createTime(func.getCreateTime())
                         .updateTime(func.getUpdateTime())
-                        .runningStatus(runningFunctions.contains(func.getApi())
+                        .runningStatus(runningFunctions.containsKey(func.getApi())
                                 ? FunctionRuntimeStatusEnum.RUNNING
                                 : FunctionRuntimeStatusEnum.NOT_RUNNING)
                         .containerKey(func.getContainerKey())
                         .build();
         }).collect(Collectors.toList());
-
-        // 容器算子：批量查运行实例 phase，回填 containerPhase
-        List<String> containerKeys = records.stream()
-                .filter(r -> r.getType() == FunctionTypeEnum.CONTAINER && r.getContainerKey() != null)
-                .map(FunctionInfoVO::getContainerKey)
-                .collect(Collectors.toList());
-        if (!containerKeys.isEmpty()) {
-            Map<String, ContainerPhaseEnum> phaseMap = containerInstanceMapper.selectList(
-                    new LambdaQueryWrapper<FunctionContainerInstance>()
-                            .in(FunctionContainerInstance::getContainerKey, containerKeys)
-                            .select(FunctionContainerInstance::getContainerKey, FunctionContainerInstance::getPhase)
-            ).stream().collect(Collectors.toMap(
-                    FunctionContainerInstance::getContainerKey,
-                    FunctionContainerInstance::getPhase,
-                    (a, b) -> a));
-            records.stream()
-                    .filter(r -> r.getType() == FunctionTypeEnum.CONTAINER && r.getContainerKey() != null)
-                    .forEach(r -> r.setContainerPhase(phaseMap.get(r.getContainerKey())));
-        }
 
         return new Page<FunctionInfoVO>()
                 .setRecords(records)
@@ -984,11 +1188,19 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
      * 使用 MyBatis-Plus 完成列表条件查询，再按 api 在内存中选出语义化版本号最大的一条。
      */
     private List<Function> listLatestVersions(FunctionListQueryParam param) {
+        // 未明确查询函数编排时，默认排除函数编排。
+        List<FunctionTypeEnum> excludeTypes = param.getExcludeTypes() == null
+                ? new ArrayList<>()
+                : new ArrayList<>(param.getExcludeTypes());
+        if (param.getType() != FunctionTypeEnum.COMPOSITE
+                && !excludeTypes.contains(FunctionTypeEnum.COMPOSITE)) {
+            excludeTypes.add(FunctionTypeEnum.COMPOSITE);
+        }
         LambdaQueryWrapper<Function> queryWrapper = new LambdaQueryWrapper<Function>()
                 .eq(param.getOntologySpaceId() != null, Function::getOntologySpaceId, param.getOntologySpaceId())
                 .like(StringUtils.isNotEmpty(param.getDisplayName()), Function::getDisplayName, param.getDisplayName())
                 .eq(param.getType() != null, Function::getType, param.getType())
-                .notIn(CollectionUtils.isNotEmpty(param.getExcludeTypes()), Function::getType, param.getExcludeTypes())
+                .notIn(CollectionUtils.isNotEmpty(excludeTypes), Function::getType, excludeTypes)
                 .eq(param.getPublishStatus() != null, Function::getPublish, param.getPublishStatus());
         if (StringUtils.isNotEmpty(param.getStartDate())) {
             queryWrapper.ge(Function::getCreateTime,
@@ -1015,7 +1227,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     @Override
     @SneakyThrows
     public String executeFunction(FunctionExecuteParam param) {
-        var function = resolveVersion(param.getFunctionApi(), param.getVersion());
+        var function = resolveVersion(param.getOntologySpaceId(), param.getFunctionApi(), param.getVersion());
         PreconditionUtils.checkArgument(function != null,
                 "函数版本不存在：" + param.getFunctionApi() + " " + param.getVersion(), HttpStatus.BAD_REQUEST);
         PreconditionUtils.checkArgument(function.getPublish() == FunctionConstant.PUBLISH_PUBLISHED,
@@ -1025,11 +1237,29 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
 
     @SneakyThrows
     private String executeResolvedFunction(FunctionExecuteParam param, Function function) {
-        runningFunctions.add(param.getFunctionApi());
+        // ---- 分布式限流检查（跨实例，Redis） ----
+        // 同空间同 api 才唯一，key 带上 spaceId，避免不同空间的同名算子共用一个限流桶
+        String rateLimitKey = (function.getOntologySpaceId() == null ? "" : function.getOntologySpaceId() + ":")
+                + function.getApi() + ":" + function.getVersion();
+        int[] limits = resolveRateLimit(function.getOntologySpaceId(), function.getApi(), function.getVersion());
+        int tpsLimit = limits[0], maxConcurrency = limits[1];
+        if (tpsLimit > 0 || maxConcurrency > 0) {
+            boolean acquired = rateLimitService.acquire(rateLimitKey, tpsLimit, maxConcurrency);
+            if (!acquired) {
+                throw new BusinessException("算子调用频率超限，请稍后重试", HttpStatus.TOO_MANY_REQUESTS);
+            }
+        }
+        runningFunctions.computeIfAbsent(param.getFunctionApi(), k -> new java.util.concurrent.atomic.AtomicInteger(0)).incrementAndGet();
         try {
             return doExecuteFunction(param, function);
         } finally {
-            runningFunctions.remove(param.getFunctionApi());
+            java.util.concurrent.atomic.AtomicInteger count = runningFunctions.get(param.getFunctionApi());
+            if (count != null && count.decrementAndGet() <= 0) {
+                runningFunctions.remove(param.getFunctionApi());
+            }
+            if (tpsLimit > 0 || maxConcurrency > 0) {
+                rateLimitService.release(rateLimitKey);
+            }
         }
     }
 
@@ -1064,18 +1294,16 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         }
         //脚本函数：按参数定义组装单对象入参（handle(input)），按语言路由到对应引擎执行
         Map<String, Object> inputMap = buildInputMap(executeInputParams, funParamMap);
-        // 单对象入参解包：当只有一个 OBJECT 入参时，直接将该对象的值作为 runner 的 input，
-        // 避免脚本里写 input.input.xxx 的双层嵌套（用户给参数起名 input/user/whatever 都能直接用 input.xxx）
+        // 单对象入参解包：当只有一个入参时，直接将该参数的值作为 runner 的 input，
+        // 避免脚本里写 input.input.xxx 的双层嵌套（用户给参数起名 input/user/whatever 都能直接用 input.xxx 或 input）
         String inputJson;
-        if (executeInputParams.size() == 1
-                && executeInputParams.get(0).getParamType() == FunctionParamTypeEnum.OBJECT
-                && inputMap.containsKey(executeInputParams.get(0).getParamName())) {
+        if (executeInputParams.size() == 1 && inputMap.containsKey(executeInputParams.get(0).getParamName())) {
             Object value = inputMap.get(executeInputParams.get(0).getParamName());
             inputJson = objectMapper.writeValueAsString(value);
         } else {
             inputJson = objectMapper.writeValueAsString(inputMap);
         }
-        FunctionLanguageEnum language = function.getLanguage() == null ? FunctionLanguageEnum.GROOVY : function.getLanguage();
+        FunctionLanguageEnum language = function.getLanguage() == null ? inferLanguageFromCode(function.getCode()) : function.getLanguage();
         ScriptExecutionContext ctx = ScriptExecutionContext.builder()
                 .language(language)
                 .functionApi(param.getFunctionApi())
@@ -1154,22 +1382,27 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     private void createBasicQueryParams(Long functionId, BasicQueryConfig queryConfig) {
         PreconditionUtils.checkArgument(queryConfig != null, "基础查询算子必须提供 queryConfig", HttpStatus.BAD_REQUEST);
         // 聚合操作：targetProperty 必须由前端传入（作为变量名），执行时通过 variableBindings 映射到实际属性 apiName
-        if (queryConfig.getAggFunc() != null && StringUtils.isEmpty(queryConfig.getTargetProperty())) {
+        if (queryConfig.getAggFunc() != null && StringUtils.isBlank(queryConfig.getTargetProperty())) {
             PreconditionUtils.checkArgument(false, "聚合函数必须提供 targetProperty（聚合目标字段）", HttpStatus.BAD_REQUEST);
         }
+        // 落库前拦截脏配置：空变量名会执行成 "过滤变量 未绑定"，空/非法数值布尔值会执行成残缺 SQL
+        validateBasicQueryVariables(queryConfig);
 
         // 更新 code 字段为 queryConfig JSON
         var func = getById(functionId);
         func.setCode(objectMapper.writeValueAsString(queryConfig));
         updateById(func);
 
-        // 收集变量名 → 数据类型映射
-        Map<String, String> varTypeMap = new HashMap<>();
+        // 收集变量名 → 数据类型映射：先登记过滤变量（携带声明的真实 dataType），
+        // 聚合目标用 putIfAbsent 补登记，避免同名时把过滤变量的真实类型覆盖成硬编码 STRING
+        Map<String, String> varTypeMap = new LinkedHashMap<>();
+        collectFilterVariables(queryConfig.getFilters(), varTypeMap);
+        // 此刻 keySet 即过滤变量集合，用于后续识别"目标变量同时作为过滤条件"的双角色
+        Set<String> filterVars = new HashSet<>(varTypeMap.keySet());
         String targetVar = queryConfig.getTargetProperty();
         if (StringUtils.isNotEmpty(targetVar)) {
-            varTypeMap.put(targetVar, "STRING");
+            varTypeMap.putIfAbsent(targetVar, "STRING");
         }
-        collectFilterVariables(queryConfig.getFilters(), varTypeMap);
 
         // 仅持久化用户在 queryConfig 里声明的变量（聚合目标 + 过滤条件）作为入参，
         // 不追加编排机制参数（本体标识、结果出参等），避免详情页把机制参数当成用户参数展示。
@@ -1177,8 +1410,11 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         int order = 1;
         for (var entry : varTypeMap.entrySet()) {
             String varName = entry.getKey();
-            // 根据变量角色设置描述：聚合目标 vs 过滤条件
-            String description = varName.equals(targetVar) ? "聚合目标" : "过滤条件";
+            // 角色描述：同名既做聚合目标又做过滤条件时如实标注，避免丢失过滤角色
+            boolean isTarget = varName.equals(targetVar);
+            boolean isFilter = filterVars.contains(varName);
+            String description = isTarget && isFilter ? "聚合目标/过滤条件"
+                    : isTarget ? "聚合目标" : "过滤条件";
             params.add(FunctionParamPO.builder()
                     .functionId(functionId)
                     .paramName(varName)
@@ -1193,6 +1429,81 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         if (!params.isEmpty()) {
             functionParamService.saveBatch(params);
         }
+    }
+
+    /**
+     * 落库前校验基础查询算子的变量名与过滤取值：
+     * <ul>
+     *   <li>过滤节点变量名（propertyApiName）空白 → 执行期 {@code bindings.get("")} 命中不到，报"过滤变量 未绑定"；</li>
+     *   <li>NUMBER/BOOLEAN 型过滤值空白或非法 → 执行期 {@code formatSqlValue} 拼出 {@code col = } 残缺 SQL。</li>
+     * </ul>
+     * 与创建/更新共用同一入口 {@link #createBasicQueryParams}，两条路径都会被拦。
+     */
+    private void validateBasicQueryVariables(BasicQueryConfig queryConfig) {
+        if (StringUtils.isNotEmpty(queryConfig.getTargetProperty())) {
+            PreconditionUtils.checkArgument(StringUtils.isNotBlank(queryConfig.getTargetProperty()),
+                    "聚合目标变量名不能为空", HttpStatus.BAD_REQUEST);
+        }
+        validateFilterVariables(queryConfig.getFilters());
+    }
+
+    private void validateFilterVariables(FilterGroupParam group) {
+        if (group == null || CollectionUtils.isEmpty(group.getChildren())) {
+            return;
+        }
+        for (FilterNodeParam node : group.getChildren()) {
+            if (node.getType() == FilterNodeTypeEnum.FILTER && node.getFilter() != null) {
+                PropertyFilterParam filter = node.getFilter();
+                PreconditionUtils.checkArgument(StringUtils.isNotBlank(filter.getPropertyApiName()),
+                        "过滤条件变量名不能为空", HttpStatus.BAD_REQUEST);
+                validateFilterValues(filter);
+            } else if (node.getType() == FilterNodeTypeEnum.GROUP && node.getGroup() != null) {
+                validateFilterVariables(node.getGroup());
+            }
+        }
+    }
+
+    private void validateFilterValues(PropertyFilterParam filter) {
+        QueryOpEnum op = filter.getOp() != null ? filter.getOp() : QueryOpEnum.EQ;
+        // IS_NULL/IS_NOT_NULL 无值，APPLY 的 value 是模板串，均不校验具体取值
+        if (op == QueryOpEnum.IS_NULL || op == QueryOpEnum.IS_NOT_NULL || op == QueryOpEnum.APPLY) {
+            return;
+        }
+        String dataType = filter.getDataType();
+        if (op == QueryOpEnum.IN || op == QueryOpEnum.NOT_IN
+                || op == QueryOpEnum.BETWEEN || op == QueryOpEnum.NOT_BETWEEN) {
+            PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(filter.getValues()),
+                    "过滤变量 " + filter.getPropertyApiName() + " 的取值列表不能为空", HttpStatus.BAD_REQUEST);
+            for (Object v : filter.getValues()) {
+                checkValueCompatible(filter.getPropertyApiName(), v, dataType);
+            }
+            return;
+        }
+        checkValueCompatible(filter.getPropertyApiName(), filter.getValue(), dataType);
+    }
+
+    private void checkValueCompatible(String varName, Object value, String dataType) {
+        if (StringUtils.isEmpty(dataType)) {
+            return;
+        }
+        String upper = dataType.toUpperCase();
+        String strVal = value == null ? null : value.toString().trim();
+        if ("NUMBER".equals(upper)) {
+            PreconditionUtils.checkArgument(StringUtils.isNotBlank(strVal),
+                    "数值型过滤变量 " + varName + " 的取值不能为空", HttpStatus.BAD_REQUEST);
+            try {
+                Double.parseDouble(strVal);
+            } catch (NumberFormatException e) {
+                PreconditionUtils.checkArgument(false,
+                        "数值型过滤变量 " + varName + " 的取值 \"" + strVal + "\" 不是合法数字", HttpStatus.BAD_REQUEST);
+            }
+        } else if ("BOOLEAN".equals(upper)) {
+            PreconditionUtils.checkArgument(StringUtils.isNotBlank(strVal),
+                    "布尔型过滤变量 " + varName + " 的取值不能为空", HttpStatus.BAD_REQUEST);
+            PreconditionUtils.checkArgument("true".equalsIgnoreCase(strVal) || "false".equalsIgnoreCase(strVal),
+                    "布尔型过滤变量 " + varName + " 的取值 \"" + strVal + "\" 应为 true 或 false", HttpStatus.BAD_REQUEST);
+        }
+        // STRING 允许空串（如 LIKE '%%'、EQ '' 是合法 SQL），不做非空拦截
     }
 
     // ==================== 外部API函数算子 ====================
@@ -1349,7 +1660,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         }
         for (var node : group.getChildren()) {
             if (node.getType() == FilterNodeTypeEnum.FILTER && node.getFilter() != null) {
-                if (StringUtils.isNotEmpty(node.getFilter().getPropertyApiName())) {
+                if (StringUtils.isNotBlank(node.getFilter().getPropertyApiName())) {
                     result.put(node.getFilter().getPropertyApiName(), node.getFilter().getDataType());
                 }
             } else if (node.getType() == FilterNodeTypeEnum.GROUP && node.getGroup() != null) {
@@ -1529,7 +1840,13 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                         || StringUtils.isEmpty(p.getTypeReferenceName())) {
                     input.put(p.getParamName(), value);
                 } else {
-                    input.put(p.getParamName(), SchemaHandleUtil.convertValue(value, p.getTypeReferenceName()));
+                    try {
+                        input.put(p.getParamName(), SchemaHandleUtil.convertValue(value, p.getTypeReferenceName()));
+                    } catch (RuntimeException e) {
+                        log.warn("参数 {} 类型转换失败（{} → {}），透传原值：{}",
+                                p.getParamName(), value, p.getTypeReferenceName(), e.getMessage());
+                        input.put(p.getParamName(), value);
+                    }
                 }
             }
         }
@@ -1553,10 +1870,10 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
             return p.getParamValue();
         }
         List<FunctionParameter> fields = p.getFields();
-        if (CollectionUtils.isEmpty(fields)) {
+        if (fields == null) {
             return null;
         }
-        // LIST 类型：把 fields 组装为数组
+        // LIST 类型：把 fields 组装为数组（空列表返回 [] 而非 null，保留用户显式传入空数组的语义）
         if (p.getParamType() == FunctionParamTypeEnum.LIST) {
             List<Object> list = new ArrayList<>();
             for (FunctionParameter f : fields) {
@@ -1565,9 +1882,9 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                     list.add(v);
                 }
             }
-            return list.isEmpty() ? null : list;
+            return list;
         }
-        // OBJECT 类型或其他类型：把 fields 组装为对象（默认行为）
+        // OBJECT 类型或其他类型：把 fields 组装为对象（空对象返回 {} 而非 null，保留用户显式传入空对象的语义）
         Map<String, Object> nested = new LinkedHashMap<>();
         for (FunctionParameter f : fields) {
             Object v = resolveParamValue(f);
@@ -1575,7 +1892,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 nested.put(f.getParamName(), v);
             }
         }
-        return nested.isEmpty() ? null : nested;
+        return nested;
     }
 
     /**
@@ -1594,8 +1911,8 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
             return testDraftFunction(param);
         }
 
-        // 已存库测试：按 api + version 查库
-        var function = resolveVersion(param.getFunctionApi(), param.getVersion());
+        // 已存库测试：按 空间 + api + version 查库
+        var function = resolveVersion(param.getOntologySpaceId(), param.getFunctionApi(), param.getVersion());
         PreconditionUtils.checkArgument(function != null, "函数版本不存在：" + param.getFunctionApi(), HttpStatus.BAD_REQUEST);
 
         switch (function.getType()) {
@@ -1619,22 +1936,29 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 var executeParam = FunctionExecuteParam.builder()
                         .functionApi(param.getFunctionApi())
                         .version(function.getVersion())
+                        .ontologySpaceId(function.getOntologySpaceId())
                         .parameters(param.getParameters())
                         .build();
                 var resultJson = executeResolvedFunction(executeParam, function);
-                return objectMapper.readValue(resultJson, new TypeReference<Map<String, Object>>() {
-                });
+                // 尝试解析为 Map，失败则包装成 Map（支持数字、字符串等非对象返回值）
+                try {
+                    return objectMapper.readValue(resultJson, new TypeReference<Map<String, Object>>() {
+                    });
+                } catch (com.fasterxml.jackson.databind.exc.MismatchedInputException e) {
+                    Object value = objectMapper.readValue(resultJson, Object.class);
+                    return Map.of("result", value);
+                }
 
             case CONTAINER:
                 // 容器算子测试：复用 executeFunction（按 containerKey 调常驻容器，未运行则报错引导手动启动）
                 var containerExecuteParam = FunctionExecuteParam.builder()
                         .functionApi(param.getFunctionApi())
                         .version(function.getVersion())
+                        .ontologySpaceId(function.getOntologySpaceId())
                         .parameters(param.getParameters())
                         .build();
                 var containerResultJson = executeResolvedFunction(containerExecuteParam, function);
-                return objectMapper.readValue(containerResultJson, new TypeReference<Map<String, Object>>() {
-                });
+                return objectMapper.readValue(containerResultJson, Object.class);
 
             default:
                 throw new BusinessException("不支持的函数类型：" + function.getType());
@@ -1664,7 +1988,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 PreconditionUtils.checkArgument(StringUtils.isNotEmpty(param.getCode()),
                         "脚本草稿测试必须提供 code", HttpStatus.BAD_REQUEST);
                 FunctionLanguageEnum language = param.getLanguage() == null
-                        ? FunctionLanguageEnum.GROOVY : param.getLanguage();
+                        ? inferLanguageFromCode(param.getCode()) : param.getLanguage();
                 // 草稿测试：单对象入参解包（与 executeFunction 语义对齐——组装结果为 Map 时才解包）
                 String inputJson;
                 Object singleVal = null;
@@ -1691,8 +2015,12 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 if (draftRoot != null && draftRoot.has("data")) {
                     return objectMapper.treeToValue(draftRoot.get("data"), Object.class);
                 }
-                return objectMapper.readValue(resultJsonStr, new TypeReference<Map<String, Object>>() {
-                });
+                try {
+                    return objectMapper.readValue(resultJsonStr, new TypeReference<Map<String, Object>>() {
+                    });
+                } catch (com.fasterxml.jackson.databind.exc.MismatchedInputException e) {
+                    return Map.of("result", objectMapper.readValue(resultJsonStr, Object.class));
+                }
             }
             case EXTERNAL -> {
                 PreconditionUtils.checkArgument(param.getApiConfig() != null,
@@ -1719,6 +2047,29 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     /**
      * 解析目标版本：version 为空时按 x.y.z 语义化比较取该 api 的最大版本
      */
+    /**
+     * 解析目标版本：version 为空时按 x.y.z 语义化比较取最大版本。
+     * <p>spaceId 非空时先在该空间内查找；未命中再回退到不限空间（兼容跨空间引用与历史无空间数据）。</p>
+     */
+    private Function resolveVersion(Integer spaceId, String api, String version) {
+        if (spaceId != null) {
+            LambdaQueryWrapper<Function> scoped = new LambdaQueryWrapper<Function>()
+                    .eq(Function::getOntologySpaceId, spaceId)
+                    .eq(Function::getApi, api);
+            if (StringUtils.isNotEmpty(version)) {
+                return getOne(scoped.eq(Function::getVersion, version));
+            }
+            List<Function> scopedVersions = list(scoped);
+            if (!scopedVersions.isEmpty()) {
+                return scopedVersions.stream()
+                        .max(Comparator.comparing(Function::getVersion, FunctionServiceImpl::compareVersion))
+                        .orElse(null);
+            }
+        }
+        return resolveVersion(api, version);
+    }
+
+    /** 兼容旧调用：不限空间 */
     private Function resolveVersion(String api, String version) {
         if (StringUtils.isNotEmpty(version)) {
             return getOne(new LambdaQueryWrapper<Function>()
@@ -1731,8 +2082,18 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     }
 
     /**
-     * 查询指定 api 的全部版本
+     * 查询指定 api 的全部版本，spaceId 非空时限定在该空间内
      */
+    private List<Function> listVersions(Integer spaceId, String api) {
+        if (spaceId == null) {
+            return listVersions(api);
+        }
+        return list(new LambdaQueryWrapper<Function>()
+                .eq(Function::getOntologySpaceId, spaceId)
+                .eq(Function::getApi, api));
+    }
+
+    /** 兼容旧调用：不限空间 */
     private List<Function> listVersions(String api) {
         return list(new LambdaQueryWrapper<Function>().eq(Function::getApi, api));
     }
@@ -1740,8 +2101,8 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     /**
      * 解析目标版本，不存在则抛业务异常（发布/下线接口使用，版本号必传）
      */
-    private Function requireVersionExists(String api, String version) {
-        var function = resolveVersion(api, version);
+    private Function requireVersionExists(Integer spaceId, String api, String version) {
+        var function = resolveVersion(spaceId, api, version);
         PreconditionUtils.checkArgument(function != null,
                 "函数版本不存在：" + api + (StringUtils.isEmpty(version) ? "" : " " + version), HttpStatus.BAD_REQUEST);
         return function;
@@ -1810,7 +2171,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         var config = param.getCompositeConfig();
         var functionApi = param.getFunctionApi();
         if (config == null) {
-            PreconditionUtils.checkArgument(StringUtils.isNotEmpty(functionApi), "必须提供 compositeConfig 或 functionApi", HttpStatus.BAD_REQUEST);
+            PreconditionUtils.checkArgument(StringUtils.isNotBlank(functionApi), "必须提供 compositeConfig 或 functionApi", HttpStatus.BAD_REQUEST);
             config = loadStoredCompositeConfig(functionApi);
         }
         checkNoSelfReference(config, functionApi);
@@ -1893,6 +2254,68 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 .build();
     }
 
+    /**
+     * 编排入口节点的入参转成详情参数列表，仅用于详情回显，不落 {@code function_param}。
+     * <p>函数节点的端口由被引用函数的入参表决定（与执行链路同一份 {@link CompositeFunctionCatalog}
+     * 查询口径，保证详情与执行看到的入参一致）；loop/branch/transform 等逻辑节点取节点自身声明的
+     * {@code inputParameters}。</p>
+     *
+     * @param config         编排配置
+     * @param paramOrderBase 追加参数的起始顺序，接在编排自身参数之后
+     * @return 入口节点入参对应的详情参数
+     */
+    private List<FunctionParameterVO> resolveCompositeEntryParams(CompositeConfig config, int paramOrderBase) {
+        CompositeNode entry = CompositeValidator.resolveEntryNode(config);
+        if (entry == null) {
+            return new ArrayList<>();
+        }
+        List<FunctionParameterVO> entryParams = new ArrayList<>();
+        int paramOrder = paramOrderBase;
+        if (CompositeValidator.isLogicNode(entry)) {
+            if (entry.getInputParameters() == null) {
+                return entryParams;
+            }
+            for (CompositeParameter port : entry.getInputParameters()) {
+                if (port == null || StringUtils.isBlank(port.getName())) {
+                    continue;
+                }
+                entryParams.add(FunctionParameterVO.builder()
+                        .paramName(port.getName())
+                        .paramType(CompositeFunctionCatalog.toParamType(port.getType()))
+                        .category(FunctionParamCategoryEnum.INPUT)
+                        .paramOrder(paramOrder++)
+                        .description(port.getDescription() == null ? "" : port.getDescription())
+                        .build());
+            }
+            return entryParams;
+        }
+        Function referenced = compositeFunctionCatalog.findFunction(entry.getFunctionId());
+        if (referenced == null) {
+            log.warn("编排入口节点引用的函数不存在：nodeId={}, functionId={}", entry.getId(), entry.getFunctionId());
+            return entryParams;
+        }
+        for (FunctionParamPO paramPO : compositeFunctionCatalog.findInputParams(referenced.getId())) {
+            FunctionParameterVO.FunctionParameterVOBuilder voBuilder = FunctionParameterVO.builder()
+                    .paramName(paramPO.getParamName())
+                    .paramType(paramPO.getParamType())
+                    .category(FunctionParamCategoryEnum.INPUT)
+                    .paramOrder(paramOrder++)
+                    .paramSchema(paramPO.getParamSchema())
+                    .description(paramPO.getDescription() == null ? "" : paramPO.getDescription());
+            if (StringUtils.isNotEmpty(paramPO.getFields())) {
+                try {
+                    voBuilder.fields(objectMapper.readValue(
+                            paramPO.getFields(), new TypeReference<List<FunctionParameterVO>>() {}));
+                } catch (JsonProcessingException e) {
+                    log.warn("反序列化编排入口节点参数 fields 失败：paramName={}, cause={}",
+                            paramPO.getParamName(), e.getMessage());
+                }
+            }
+            entryParams.add(voBuilder.build());
+        }
+        return entryParams;
+    }
+
     private CompositeConfig loadStoredCompositeConfig(String functionApi) {
         var function = loadCompositeFunction(functionApi);
         CompositeConfig config = parseCompositeConfig(function.getCode());
@@ -1901,7 +2324,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     }
 
     private Function loadCompositeFunction(String functionApi) {
-        var function = getOne(new LambdaQueryWrapper<Function>().eq(Function::getApi, functionApi));
+        var function = resolveVersion(functionApi, null);
         PreconditionUtils.checkArgument(function != null, "函数api不存在：" + functionApi, HttpStatus.BAD_REQUEST);
         PreconditionUtils.checkArgument(function.getType() == FunctionTypeEnum.COMPOSITE,
                 "该函数不是函数编排类型：" + functionApi, HttpStatus.BAD_REQUEST);
@@ -1920,5 +2343,35 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                     && node.getFunctionId().trim().equals(functionApi.trim());
             PreconditionUtils.checkArgument(!selfReference, "函数编排不能引用自身：" + functionApi, HttpStatus.BAD_REQUEST);
         }
+    }
+
+    /**
+     * 从代码内容推断脚本语言：仅用于兼容旧数据（language 字段为 null 的历史记录）。
+     * <p>新创建的函数必须在前端明确选择语言并落库，此方法不作为主路径。</p>
+     */
+    private FunctionLanguageEnum inferLanguageFromCode(String code) {
+        if (StringUtils.isEmpty(code)) {
+            return FunctionLanguageEnum.GROOVY;
+        }
+        String trimmed = code.trim();
+        // TypeScript: export function / interface / type 声明 / 类型注解 (: number, : string)
+        if (trimmed.contains("export function") || trimmed.contains("export async function")
+                || trimmed.matches("(?s).*\\binterface\\s+\\w+.*")
+                || trimmed.matches("(?s).*:\\s*(number|string|boolean|any|unknown)\\b.*")) {
+            return FunctionLanguageEnum.TYPESCRIPT;
+        }
+        // Python: def handle / import / from ... import
+        if (trimmed.matches("(?s).*\\bdef\\s+handle\\s*\\(.*")
+                || trimmed.matches("(?s).*\\bfrom\\s+\\w+\\s+import\\b.*")
+                || trimmed.matches("(?s).*\\bimport\\s+\\w+\\b.*")) {
+            return FunctionLanguageEnum.PYTHON;
+        }
+        // Java: public class / package 声明
+        if (trimmed.matches("(?s).*\\bpackage\\s+[\\w.]+;.*")
+                || trimmed.matches("(?s).*\\bpublic\\s+class\\s+\\w+.*")) {
+            return FunctionLanguageEnum.JAVA;
+        }
+        // 默认回落 Groovy
+        return FunctionLanguageEnum.GROOVY;
     }
 }

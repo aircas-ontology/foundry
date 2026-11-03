@@ -3,6 +3,7 @@ package com.aircas.ptr.foundry.ontology.service.impl;
 import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.ontology.model.enums.ContainerPhaseEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.ContainerSourceEnum;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionContainerInstance;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.FunctionContainerInstanceMapper;
 import com.aircas.ptr.foundry.ontology.service.ContainerLifecycleService;
@@ -46,6 +47,7 @@ public class ContainerLifecycleServiceImpl implements ContainerLifecycleService 
     public FunctionContainerInstance start(String containerKey) {
         synchronized (lockFor(containerKey)) {
             FunctionContainerInstance instance = requireInstance(containerKey);
+            requireManageable(instance);
             ContainerPhaseEnum phase = instance.getPhase();
             // 非可启动态（运行中/停止中/重启中等）：幂等返回当前态，不重复起容器
             if (phase != null && !phase.canStart()) {
@@ -73,6 +75,7 @@ public class ContainerLifecycleServiceImpl implements ContainerLifecycleService 
     public FunctionContainerInstance stop(String containerKey) {
         synchronized (lockFor(containerKey)) {
             FunctionContainerInstance instance = requireInstance(containerKey);
+            requireManageable(instance);
             stopAndRemoveLocked(instance, containerKey);
             containerInstanceMapper.updateById(instance);
             return instance;
@@ -83,6 +86,7 @@ public class ContainerLifecycleServiceImpl implements ContainerLifecycleService 
     public FunctionContainerInstance restart(String containerKey) {
         synchronized (lockFor(containerKey)) {
             FunctionContainerInstance instance = requireInstance(containerKey);
+            requireManageable(instance);
             // 先停（best-effort：容器可能本就不在），落 STOPPED/中间态
             stopAndRemoveLocked(instance, containerKey);
             containerInstanceMapper.updateById(instance);
@@ -118,7 +122,10 @@ public class ContainerLifecycleServiceImpl implements ContainerLifecycleService 
     public List<FunctionContainerInstance> listBySpace(Integer spaceId) {
         LambdaQueryWrapper<FunctionContainerInstance> wrapper = new LambdaQueryWrapper<>();
         if (spaceId != null) {
-            wrapper.eq(FunctionContainerInstance::getOntologySpaceId, spaceId);
+            // 系统预置容器不归属空间，所有空间列表中均可见
+            wrapper.and(w -> w.eq(FunctionContainerInstance::getOntologySpaceId, spaceId)
+                    .or()
+                    .eq(FunctionContainerInstance::getContainerSource, ContainerSourceEnum.SYSTEM));
         }
         wrapper.orderByDesc(FunctionContainerInstance::getUpdateTime);
         List<FunctionContainerInstance> list = containerInstanceMapper.selectList(wrapper);
@@ -266,7 +273,11 @@ public class ContainerLifecycleServiceImpl implements ContainerLifecycleService 
         instance.setLastActionAt(new Date());
     }
 
-    private FunctionContainerInstance requireInstance(String containerKey) {
+    /**
+     * 按 containerKey 定位实例（不存在报错）。除内部启停逻辑外，也供控制器先读归属节点决定本地执行还是转发。
+     */
+    @Override
+    public FunctionContainerInstance requireInstance(String containerKey) {
         PreconditionUtils.checkArgument(StringUtils.isNotBlank(containerKey),
                 "containerKey 不能为空", HttpStatus.BAD_REQUEST);
         FunctionContainerInstance instance = containerInstanceMapper.selectOne(
@@ -275,6 +286,16 @@ public class ContainerLifecycleServiceImpl implements ContainerLifecycleService 
         PreconditionUtils.checkArgument(instance != null,
                 "容器实例不存在：" + containerKey, HttpStatus.BAD_REQUEST);
         return instance;
+    }
+
+    /**
+     * 校验容器是否允许操作（USER 来源可操作，SYSTEM 来源禁止启停/删除）。
+     */
+    public void requireManageable(FunctionContainerInstance instance) {
+        if (instance.getContainerSource() == ContainerSourceEnum.SYSTEM) {
+            throw new BusinessException(
+                    "系统预置容器不允许此操作：" + instance.getContainerKey());
+        }
     }
 
     private Object lockFor(String containerKey) {

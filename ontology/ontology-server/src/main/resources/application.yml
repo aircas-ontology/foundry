@@ -20,8 +20,8 @@ spring:
     allow-circular-references: true
   servlet:
     multipart:
-      max-file-size: 500MB
-      max-request-size: 1024MB
+      max-file-size: 2048MB
+      max-request-size: 2048MB
   datasource:
     main:
       driver-class-name: org.postgresql.Driver
@@ -88,6 +88,9 @@ cdc:
   ontology-property: ontology.ontology_property
   ontology-link-group: ontology.ontology_link_group
   entity-datasource-prefix: entity_datasource_server
+  sync:
+    enabled: true
+    cron: "0 0 * * * ?"
 
 rabbitmq:
   exchange: entity.schema.exchange
@@ -99,6 +102,10 @@ rabbitmq:
 ontology:
   swagger:
     enable: true
+  space-binding:
+    users:
+      admin2: 89
+      admin3: 88
   # 函数编排（LiteFlow 组合函数）运行期配置
   composite:
     # JS 转换脚本通过 node 子进程执行（JDK17 无 Nashorn/GraalJS），可用值：node 的绝对路径或命令名
@@ -146,7 +153,7 @@ minio:
 
 orekit:
   data:
-    path: "ontology/ontology-server/src/main/resources/orekit-data"
+    path: "E:\\temp\\ontology\\foundry\\ontology\\ontology-server\\src\\main\\resources\\orekit-data"
 
 
 
@@ -166,11 +173,11 @@ xxl:
     accessToken:
     cookie:
     executor:
-      appname: ontology-xxl-job-executor
+      appname: ontology-executor
       address:
       ip:
-      port:
-      logpath: ./logs/xxl-job/jobhandler
+      port: 9999
+      logpath:
       logretentiondays: 30
 
 
@@ -221,3 +228,8 @@ container-operator:
   arm-check-enabled: true
   exec-host: 127.0.0.1
   exec-timeout-seconds: 30
+
+foundry:
+  integration:
+    cdc:
+      enabled: true

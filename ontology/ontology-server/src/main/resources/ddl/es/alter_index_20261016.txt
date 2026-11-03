@@ -1,0 +1,50 @@
+
+PUT /ontology_space/_mapping
+{
+  "properties": {
+    "username": {
+      "type": "keyword"
+    },
+    "type": {
+      "type": "short"
+    }
+  }
+}
+
+
+PUT /ontology_meta/_mapping
+{
+  "properties": {
+    "space_type": {
+      "type": "short"
+    }
+  }
+}
+
+PUT /ontology_property/_mapping
+{
+  "properties": {
+    "space_type": {
+      "type": "short"
+    }
+  }
+}
+
+PUT /ontology_link_group/_mapping
+{
+  "properties": {
+    "space_type": {
+      "type": "short"
+    }
+  }
+}
+
+PUT /ontology_instance/_mapping
+{
+  "properties": {
+    "space_type": {
+      "type": "short"
+    }
+  }
+}
+

@@ -12,12 +12,10 @@ import com.aircas.ptr.foundry.ontology.model.enums.ScanStatusEnum;
 import com.aircas.ptr.foundry.ontology.model.param.BasicQueryConfig;
 import com.aircas.ptr.foundry.ontology.model.param.CompositeConfig;
 import com.aircas.ptr.foundry.ontology.model.param.ExternalApiConfig;
-import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
 
 import java.util.List;
@@ -27,8 +25,6 @@ import java.util.Date;
 @AllArgsConstructor
 @Data
 @SuperBuilder
-@Accessors(chain = true)
-@JsonInclude(JsonInclude.Include.NON_NULL)
 @Schema(description = "函数详细信息VO")
 public class FunctionDetailVO {
 

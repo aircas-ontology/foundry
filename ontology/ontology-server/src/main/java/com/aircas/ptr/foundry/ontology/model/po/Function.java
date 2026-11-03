@@ -145,4 +145,14 @@ public class Function {
      * 结构见 {@link com.aircas.ptr.foundry.ontology.model.dto.container.ContainerOperatorConfig} 的 interfaces 字段
      */
     private String dockerConfig;
+    /**
+     * 选用的限流配置模板 ID。
+     */
+    private Long rateLimitTemplateId;
+
+    /**
+     * 限流配置快照 JSON（从模板复制，按 api+version 独立执行限流）。
+     * 结构：{"timeoutMs":10000,"retryCount":2,"retryIntervalMs":500,"tpsLimit":50,"maxConcurrency":20,"enabled":1}
+     */
+    private String rateLimitConfig;
 }

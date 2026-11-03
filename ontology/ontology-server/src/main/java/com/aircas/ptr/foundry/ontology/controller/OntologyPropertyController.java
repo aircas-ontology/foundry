@@ -112,10 +112,9 @@ public class OntologyPropertyController {
 
 
     @PostMapping("/auto_bind_datasource")
-    @Operation(summary = "属性自动关联数据源")
-    public RestResult autoBindDatasource(@RequestBody @Valid OntologyIdentifierParam param) {
-        ontologyPropertyService.autoBindDatasource(param.getOntologyIdentifier());
-        return RestResult.success();
+    @Operation(summary = "属性自动关联数据源；列类型冲突且实体表已有实例数据的属性不绑定，明细在data.blockedItems中")
+    public RestResult<AutoBindDatasourceResultVO> autoBindDatasource(@RequestBody @Valid OntologyIdentifierParam param) {
+        return RestResult.ofData(ontologyPropertyService.autoBindDatasource(param.getOntologyIdentifier()));
     }
 
 

@@ -96,6 +96,163 @@ public class CompositeTransformExecutor {
         return runGroovy(text, args);
     }
 
+    /**
+     * 执行 JSON 结构映射。
+     *
+     * @param mappingsJson JSON 映射规则数组的 JSON 字符串
+     * @param inputs       节点入参：端口名 -&gt; 值
+     * @return 映射后的输出对象（Map）
+     */
+    public Object executeJsonMapping(String mappingsJson, Map<String, Object> inputs) {
+        try {
+            List<Map<String, Object>> mappings = objectMapper.readValue(mappingsJson,
+                    objectMapper.getTypeFactory().constructCollectionType(List.class, Map.class));
+            Map<String, Object> result = new LinkedHashMap<>();
+            Map<String, Object> flatInputs = flattenMap("", inputs);
+
+            for (Map<String, Object> mapping : mappings) {
+                String outputField = (String) mapping.get("outputField");
+                String mappingType = (String) mapping.get("mappingType");
+                if (outputField == null || outputField.isEmpty()) {
+                    continue;
+                }
+
+                Object value = switch (mappingType) {
+                    case "constant" -> mapping.get("constantValue");
+                    case "direct" -> resolveInputPath(mapping.get("inputPath"), inputs, flatInputs);
+                    case "transform" -> applyTransform(mapping.get("inputPath"), mapping.get("transformExpression"),
+                            inputs, flatInputs);
+                    default -> null;
+                };
+                result.put(outputField, value);
+            }
+            return result;
+        } catch (BusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new BusinessException("JSON 映射执行失败：" + rootMessage(e));
+        }
+    }
+
+    /**
+     * 将嵌套 Map 展平为点分路径格式。
+     */
+    private Map<String, Object> flattenMap(String prefix, Map<String, Object> map) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : map.entrySet()) {
+            String key = prefix.isEmpty() ? entry.getKey() : prefix + "." + entry.getKey();
+            Object value = entry.getValue();
+            if (value instanceof Map<?, ?> nestedMap) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> typedMap = (Map<String, Object>) nestedMap;
+                result.putAll(flattenMap(key, typedMap));
+            } else {
+                result.put(key, value);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 解析输入路径取值。
+     */
+    private Object resolveInputPath(Object inputPathObj, Map<String, Object> inputs, Map<String, Object> flatInputs) {
+        if (inputPathObj == null) {
+            return null;
+        }
+        String path = inputPathObj.toString();
+        if (path.isEmpty()) {
+            return null;
+        }
+        // 先尝试从展平的路径中取值
+        if (flatInputs.containsKey(path)) {
+            return flatInputs.get(path);
+        }
+        // 再尝试从原始 inputs 中按顶层 key 取值
+        if (inputs.containsKey(path)) {
+            return inputs.get(path);
+        }
+        // 支持点分路径逐层解析
+        String[] parts = path.split("\\.");
+        Object current = inputs;
+        for (String part : parts) {
+            if (current instanceof Map<?, ?> map) {
+                current = map.get(part);
+            } else {
+                return null;
+            }
+        }
+        return current;
+    }
+
+    /**
+     * 应用简单转换表达式。
+     */
+    private Object applyTransform(Object inputPathObj, Object transformExprObj, Map<String, Object> inputs,
+            Map<String, Object> flatInputs) {
+        Object value = resolveInputPath(inputPathObj, inputs, flatInputs);
+        if (value == null) {
+            return null;
+        }
+        if (transformExprObj == null) {
+            return value;
+        }
+        String expr = transformExprObj.toString().trim();
+        if (expr.isEmpty()) {
+            return value;
+        }
+        // 支持常见的转换表达式
+        if (expr.equals("toUpperCase()") && value instanceof String str) {
+            return str.toUpperCase();
+        }
+        if (expr.equals("toLowerCase()") && value instanceof String str) {
+            return str.toLowerCase();
+        }
+        if (expr.equals("trim()") && value instanceof String str) {
+            return str.trim();
+        }
+        if (expr.equals("parseInt()") || expr.equals("toInt()")) {
+            if (value instanceof Number num) {
+                return num.intValue();
+            }
+            if (value instanceof String str) {
+                try {
+                    return Integer.parseInt(str);
+                } catch (NumberFormatException e) {
+                    return null;
+                }
+            }
+        }
+        if (expr.equals("parseFloat()") || expr.equals("toDouble()")) {
+            if (value instanceof Number num) {
+                return num.doubleValue();
+            }
+            if (value instanceof String str) {
+                try {
+                    return Double.parseDouble(str);
+                } catch (NumberFormatException e) {
+                    return null;
+                }
+            }
+        }
+        if (expr.equals("toString()") || expr.equals("String()")) {
+            return String.valueOf(value);
+        }
+        if (expr.equals("toBoolean()") || expr.equals("Boolean()")) {
+            if (value instanceof Boolean b) {
+                return b;
+            }
+            if (value instanceof String str) {
+                return Boolean.parseBoolean(str);
+            }
+            if (value instanceof Number num) {
+                return num.doubleValue() != 0;
+            }
+        }
+        log.warn("不支持的转换表达式[{}]，返回原值", expr);
+        return value;
+    }
+
     // ================================================================== Groovy
 
     private Object runGroovy(String script, Map<String, Object> inputs) {

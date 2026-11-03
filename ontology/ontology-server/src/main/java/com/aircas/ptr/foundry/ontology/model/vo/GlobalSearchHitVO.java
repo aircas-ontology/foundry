@@ -16,8 +16,11 @@ public class GlobalSearchHitVO {
     @Schema(name = "name", description = "名称：空间/对象/属性取 display_name，实例取行名称，关系分组取 name")
     private String name;
 
-    @Schema(name = "type", description = "命中类型：空间 / 对象 / 属性 / 实例 / 关系分组")
+    @Schema(name = "type", description = "命中类型：空间 / 主题 / 对象 / 属性 / 实例 / 关系分组（主题与空间同源于 ontology_space 索引，按文档 type 字段 0=空间、1=主题区分）")
     private String type;
+
+    @Schema(name = "spaceType", description = "所属空间类型：0=空间，1=主题。空间/主题命中为自身类型，对象/属性/实例/关系分组命中取 space_type；历史文档未回填时为 null")
+    private Integer spaceType;
 
     @Schema(name = "uniqueIdentifier", description = "唯一标识：对象/属性/关系分组取 unique_identifier，实例取 ontology_uid，空间取 api_name（空间索引未存 unique_identifier 字段）")
     private String uniqueIdentifier;

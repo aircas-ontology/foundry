@@ -102,8 +102,14 @@ public class RemoteRunnerScriptEngine implements ScriptEngine {
         if (inputJson == null || inputJson.isBlank()) {
             return new LinkedHashMap<String, Object>();
         }
-        return objectMapper.readValue(inputJson, new TypeReference<Map<String, Object>>() {
-        });
+        // 尝试解析为 Map，失败则原样返回（支持数字、字符串等非对象类型）
+        try {
+            return objectMapper.readValue(inputJson, new TypeReference<Map<String, Object>>() {
+            });
+        } catch (com.fasterxml.jackson.databind.exc.MismatchedInputException e) {
+            // 非对象类型（数字、字符串、布尔等），直接返回解析后的值
+            return objectMapper.readValue(inputJson, Object.class);
+        }
     }
 
 }

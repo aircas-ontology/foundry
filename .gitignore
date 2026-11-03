@@ -1,4 +1,6 @@
 target/
+node_modules/
+logs/
 !.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
@@ -46,3 +48,9 @@ api-explorer-template.html
 formatted.json
 function-create-example.http
 subspace-create-example.http
+
+### 代码审查报告（本地留存，不入库）###
+CODE_REVIEW_*.md
+
+### 测试文档（本地留存，不入库）###
+test-docs/

@@ -26,7 +26,8 @@ import java.util.regex.Pattern;
 /**
  * 容器算子执行器：常驻复用模型（设计 B）下，按 {@code containerKey} 定位已运行的容器实例，
  * 依据算子保存的接口定义（docker_config 中的单个接口）组装 HTTP 请求，打到
- * {@code http://execHost:hostPort + path}，复用 {@link ExternalApiExecutor} 发起调用。
+ * {@code http://归属节点 node_ip（为空回退配置 exec-host）:hostPort + path}，复用 {@link ExternalApiExecutor} 发起调用。
+ * <p>容器的 {@code -p} 宿主端口只在承载它的那台机器上可达，因此多实例部署下基地址必须取实例归属节点。</p>
  *
  * <p>与外部API算子的区别：地址不来自 {@code function.code} 的 endpoint，而是运行实例的宿主端口 + 接口路径；
  * 且调用前强制要求容器处于 RUNNING——未运行则报错引导用户去容器运行管理页手动启动，执行器不代为拉起。</p>
@@ -72,7 +73,7 @@ public class ContainerOperatorInvoker {
         Map<String, Object> bodyValues = new LinkedHashMap<>();
         distribute(itf, inputs, pathValues, queryValues, headerValues, bodyValues);
 
-        String url = buildUrl(instance.getHostPort(), itf.getPath(), pathValues, queryValues);
+        String url = buildUrl(instance, itf.getPath(), pathValues, queryValues);
         String body = buildBody(method, bodyValues);
 
         int timeout = properties.getExecTimeoutSeconds();
@@ -144,11 +145,16 @@ public class ContainerOperatorInvoker {
         }
     }
 
-    /** 拼完整调用地址：execHost:hostPort + 填充占位符后的 path + query */
-    private String buildUrl(Integer hostPort, String pathTemplate, Map<String, String> pathValues,
+    /**
+     * 拼完整调用地址：归属节点:hostPort + 填充占位符后的 path + query。
+     * <p>容器的 {@code -p} 宿主端口只在承载它的那台机器（= 归属节点）上可达，故基地址取实例的
+     * {@code node_ip}；为空（单节点部署或改造前的历史数据）回退全局 {@code exec-host}。</p>
+     */
+    private String buildUrl(FunctionContainerInstance instance, String pathTemplate, Map<String, String> pathValues,
                             Map<String, String> queryValues) {
         String path = fillPathPlaceholders(pathTemplate, pathValues);
-        String url = "http://" + properties.getExecHost() + ":" + hostPort + path;
+        String host = StringUtils.defaultIfBlank(instance.getNodeIp(), properties.getExecHost());
+        String url = "http://" + host + ":" + instance.getHostPort() + path;
         ExternalApiExecutor.requireValidUrl(url);
         return ExternalApiExecutor.appendQuery(url, queryValues);
     }

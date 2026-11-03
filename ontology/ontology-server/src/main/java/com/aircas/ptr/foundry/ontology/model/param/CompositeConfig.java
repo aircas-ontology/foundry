@@ -4,7 +4,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
 
 import java.util.ArrayList;
@@ -18,7 +17,7 @@ import java.util.List;
  */
 @Data
 @SuperBuilder
-@Accessors(chain = true)
+
 @AllArgsConstructor
 @NoArgsConstructor
 @Schema(description = "函数编排配置")
@@ -44,6 +43,13 @@ public class CompositeConfig {
 
     @Schema(name = "outputParameters", description = "编排对外输出参数定义")
     private List<CompositeParameter> outputParameters = new ArrayList<>();
+
+    /**
+     * 画布原始图（LogicFlow getGraphRawData 结构），保存时随编排一起落库、详情原样带回，
+     * 前端回显优先用它渲染（含节点坐标与配置快照）；不参与校验与执行。
+     */
+    @Schema(name = "graph", description = "画布原始图（前端回显用，服务端仅透传）")
+    private Object graph;
 
     public List<CompositeNode> getNodes() {
         return nodes == null ? new ArrayList<>() : nodes;

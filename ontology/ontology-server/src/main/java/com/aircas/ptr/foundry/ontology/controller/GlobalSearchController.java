@@ -25,12 +25,13 @@ public class GlobalSearchController {
     private final GlobalSearchService globalSearchService;
 
     /**
-     * 全局检索：输入查询内容，同时检索五个本体索引
+     * 全局检索：输入查询内容，默认同时检索五个本体索引
      * （ontology_space / ontology_meta / ontology_property / ontology_instance / ontology_link_group），
+     * 传 searchType（1=空间 2=本体对象 3=关系 4=属性 5=实例）只检索对应索引，
      * 匹配文档所有字段，按相关性得分降序返回命中项（名称/类型/描述/空间 id/对象 id/实例 id/属性 id）。
      */
     @PostMapping("/global")
-    @Operation(summary = "全局检索（跨五个本体索引，按相关性排序返回名称/类型/描述及各业务 id）")
+    @Operation(summary = "全局检索（默认跨五个本体索引，可用 searchType 只查空间/本体对象/关系/属性/实例，按相关性排序返回名称/类型/描述及各业务 id）")
     public RestResult<List<GlobalSearchHitVO>> globalSearch(@RequestBody @Validated GlobalSearchParam param) {
         return RestResult.ofData(globalSearchService.search(param));
     }

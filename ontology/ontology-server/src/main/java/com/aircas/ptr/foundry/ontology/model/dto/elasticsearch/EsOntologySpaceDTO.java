@@ -20,13 +20,23 @@ public class EsOntologySpaceDTO {
     @Field(name = "api_name", type = FieldType.Keyword)
     private String apiName;
 
-    /** description：text */
-    @Field(name = "description", type = FieldType.Text)
+    /** description：text + ik 分词 */
+    @Field(name = "description", type = FieldType.Text,
+            analyzer = "ik_max_word", searchAnalyzer = "ik_smart")
     private String description;
 
-    /** display_name：text + keyword 子字段 */
-    @Field(name = "display_name", type = FieldType.Text)
+    /** display_name：text + ik 分词 */
+    @Field(name = "display_name", type = FieldType.Text,
+            analyzer = "ik_max_word", searchAnalyzer = "ik_smart")
     private String displayName;
+
+    /** username：keyword，创建该空间/主题的用户名 */
+    @Field(name = "username", type = FieldType.Keyword)
+    private String username;
+
+    /** type：short，0=空间，1=主题 */
+    @Field(name = "type", type = FieldType.Short)
+    private Integer type;
 
     /** create_time：date，自定义多格式 */
     @Field(name = "create_time", type = FieldType.Date,

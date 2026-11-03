@@ -57,7 +57,7 @@ public class OntologyLinkCategoryController {
             @Parameter(description = "本体空间id")
             @SpaceIdVerify Integer spaceId,
             @RequestParam(required = false, name = "ontologyUniqueIdentifierFrom")
-            @Parameter(description = "本体对象唯一标识，选填；传入时仅返回该本体关联的关系")
+            @Parameter(description = "本体对象唯一标识，选填；传入时返回该对象作为源或目标任意一端关联的关系")
             String ontologyUniqueIdentifierFrom) {
         OntologyLinkCategoryVO res = ontologyLinkCategoryService.getCategoryTree(spaceId, ontologyUniqueIdentifierFrom);
         return RestResult.ofData(res);

@@ -78,4 +78,8 @@ public class EsOntologyInstanceDTO {
     /** 所属本体空间 api_name */
     @Field(name = "space_api_name", type = FieldType.Keyword)
     private String spaceApiName;
+
+    /** 所属本体空间类型：0=空间，1=主题（索引 dynamic=strict，需先在 mapping 中登记） */
+    @Field(name = "space_type", type = FieldType.Short)
+    private Integer spaceType;
 }

@@ -104,4 +104,12 @@ public class FunctionCreateParam {
      */
     @Schema(name = "containerConfig", description = "容器算子配置（仅 type=CONTAINER 时必填）")
     private ContainerConfig containerConfig;
+
+    /**
+     * 选用的限流配置模板 ID（所有算子类型通用）。
+     * 创建时选定，配置快照写入 function 表，模板后续修改不影响已创建算子；创建后不可修改。
+     * 不传则使用系统默认模板（ID 最小的模板）。
+     */
+    @Schema(name = "rateLimitTemplateId", description = "限流配置模板 ID（不传则使用默认模板，创建后不可修改）")
+    private Long rateLimitTemplateId;
 }

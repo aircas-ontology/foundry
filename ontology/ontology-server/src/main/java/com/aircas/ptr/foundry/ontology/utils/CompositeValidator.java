@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.utils;
 
+import com.aircas.ptr.foundry.ontology.composite.CompositeFunctionRefQuery;
 import com.aircas.ptr.foundry.ontology.model.bo.CompositeFunctionRefBO;
 import com.aircas.ptr.foundry.ontology.model.bo.CompositeValidationBO;
 import com.aircas.ptr.foundry.ontology.model.enums.CompositeNodeKindEnum;
@@ -10,6 +11,7 @@ import com.aircas.ptr.foundry.ontology.model.param.CompositeLoopConfig;
 import com.aircas.ptr.foundry.ontology.model.param.CompositeNode;
 import com.aircas.ptr.foundry.ontology.model.param.CompositeParameter;
 import com.aircas.ptr.foundry.ontology.model.param.CompositePortMapping;
+import com.aircas.ptr.foundry.ontology.model.param.CompositeSwitchConfig;
 import com.aircas.ptr.foundry.ontology.model.param.CompositeTransformConfig;
 
 import java.util.ArrayDeque;
@@ -45,9 +47,9 @@ public final class CompositeValidator {
      * 校验编排定义。
      *
      * @param config   编排定义
-     * @param resolver 根据函数 api 解析被引用函数（不存在返回 null）
+     * @param resolver 根据函数标识（api 或显示名）+ 版本解析被引用函数（不存在返回 null）
      */
-    public static CompositeValidationBO validate(CompositeConfig config, Function<String, CompositeFunctionRefBO> resolver) {
+    public static CompositeValidationBO validate(CompositeConfig config, Function<CompositeFunctionRefQuery, CompositeFunctionRefBO> resolver) {
         List<String> errors = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
         if (config == null) {
@@ -74,13 +76,29 @@ public final class CompositeValidator {
             }
         }
         List<CompositeNode> functionNodes = new ArrayList<>();
+        long startNodeCount = 0;
+        long endNodeCount = 0;
         for (CompositeNode node : nodeMap.values()) {
             if (!isLogicNode(node)) {
                 functionNodes.add(node);
             }
+            CompositeNodeKindEnum kind = resolveKind(node);
+            if (kind == CompositeNodeKindEnum.START) {
+                startNodeCount++;
+            } else if (kind == CompositeNodeKindEnum.END) {
+                endNodeCount++;
+            }
         }
         if (functionNodes.isEmpty()) {
             errors.add("函数编排至少需要一个函数节点");
+            return finish(errors, warnings);
+        }
+        if (startNodeCount != 1) {
+            errors.add("函数编排必须有且仅有一个开始节点");
+            return finish(errors, warnings);
+        }
+        if (endNodeCount < 1) {
+            errors.add("函数编排至少要有一个结束节点");
             return finish(errors, warnings);
         }
         if (!duplicates.isEmpty()) {
@@ -97,7 +115,8 @@ public final class CompositeValidator {
                 missing = true;
                 continue;
             }
-            CompositeFunctionRefBO ref = resolver == null ? null : resolver.apply(node.getFunctionId());
+            CompositeFunctionRefBO ref = resolver == null ? null
+                    : resolver.apply(CompositeFunctionRefQuery.of(node.getFunctionId(), node.getFunctionVersion()));
             if (ref == null) {
                 missing = true;
                 continue;
@@ -133,7 +152,7 @@ public final class CompositeValidator {
                 return finish(errors, warnings);
             }
             boolean selfEdge = java.util.Objects.equals(edge.getSourceNodeId(), edge.getTargetNodeId());
-            if (selfEdge && isControlFlowEdge(edge)) {
+            if (selfEdge && isControlFlowEdge(edge, nodeMap)) {
                 errors.add("函数编排存在无效连线");
                 return finish(errors, warnings);
             }
@@ -143,20 +162,28 @@ public final class CompositeValidator {
             }
             CompositeNode sourceNode = nodeMap.get(edge.getSourceNodeId());
             CompositeNode targetNode = nodeMap.get(edge.getTargetNodeId());
-            if (isControlFlowEdge(edge)) {
+            if (isControlFlowEdge(edge, nodeMap)) {
                 adjacency.get(edge.getSourceNodeId()).add(edge.getTargetNodeId());
                 connected.add(edge.getSourceNodeId());
                 connected.add(edge.getTargetNodeId());
                 continue;
             }
-            CompositeParameter sourceParameter = findPort(nodePorts(sourceNode, refs, false), edge.getSourceParameterId());
-            CompositeParameter targetParameter = findPort(nodePorts(targetNode, refs, true), edge.getTargetParameterId());
-            if (sourceParameter == null || targetParameter == null) {
-                errors.add("函数编排连线引用了不存在的输入输出参数");
+            PortRef sourceRef = resolvePort(nodePorts(sourceNode, refs, false), edge.getSourceParameterId());
+            PortRef targetRef = resolvePort(nodePorts(targetNode, refs, true), edge.getTargetParameterId());
+            if (sourceRef == null || targetRef == null) {
+                String detail = "函数编排连线引用了不存在的输入输出参数";
+                if (sourceRef == null) {
+                    detail += "：源节点[" + edge.getSourceNodeId() + "]不存在输出端口[" + edge.getSourceParameterId() + "]";
+                }
+                if (targetRef == null) {
+                    detail += "；目标节点[" + edge.getTargetNodeId() + "]不存在输入端口[" + edge.getTargetParameterId() + "]";
+                }
+                errors.add(detail);
                 return finish(errors, warnings);
             }
-            if (!typeEquals(sourceParameter.getType(), targetParameter.getType())) {
-                errors.add("参数类型不匹配：" + displayName(sourceParameter) + " 不能连接 " + displayName(targetParameter));
+            if (!typeEquals(sourceRef.port().getType(), targetRef.port().getType())) {
+                errors.add("参数类型不匹配：" + displayName(sourceRef.port()) + " 不能连接 "
+                        + displayName(targetRef.port()));
                 return finish(errors, warnings);
             }
             // 同一循环区域内的数据回环表达的是跨轮取值而非执行顺序，计入邻接表会被误判成环
@@ -212,6 +239,33 @@ public final class CompositeValidator {
     }
 
     /**
+     * 编排入口节点：拓扑上没有入边的节点，按 {@code nodes} 顺序取第一个；
+     * 全部有入边（成环）时回退 {@code nodes[0]}；空编排返回 null。
+     * <p>用于详情回显（补首节点入参）与编译期兜底（未映射端口按端口名登记为外部入参）。</p>
+     */
+    public static CompositeNode resolveEntryNode(CompositeConfig config) {
+        if (config == null) {
+            return null;
+        }
+        List<CompositeNode> nodes = config.getNodes();
+        if (nodes == null || nodes.isEmpty()) {
+            return null;
+        }
+        Set<String> nodesWithIncoming = new HashSet<>();
+        for (CompositeEdge edge : config.getEdges()) {
+            if (edge != null && edge.getTargetNodeId() != null) {
+                nodesWithIncoming.add(edge.getTargetNodeId());
+            }
+        }
+        for (CompositeNode node : nodes) {
+            if (node != null && node.getId() != null && !nodesWithIncoming.contains(node.getId())) {
+                return node;
+            }
+        }
+        return nodes.get(0);
+    }
+
+    /**
      * 逻辑节点虚拟端口 id。
      * <p>原型 logicCompositeNodePorts 中 port(id, name, type) 的 id 与 name 恒等
      * （collection/item/done/value/true/false 以及 transform 注解端口），
@@ -226,24 +280,83 @@ public final class CompositeValidator {
     }
 
     /**
-     * 控制流连线：分支的 true/false 输出、以及节点的流程输出指向下游流程输入
+     * 控制流连线：分支的 true/false、循环的 body/done、Switch 的 case/default，
+     * 以及普通节点的流程输出指向下游流程输入。
+     * <p>Switch 的 case.id 是动态值，必须结合源节点定义判断，因此优先使用带 nodeMap 的重载。</p>
      */
     public static boolean isControlFlowEdge(CompositeEdge edge) {
-        return isControlFlowEdge(edge.getSourceParameterId(), edge.getTargetParameterId());
+        return isControlFlowEdge(edge, null);
     }
 
     /**
-     * 按端口 id 判断是否控制流连线
+     * 按源节点定义判断是否为控制流连线。
+     *
+     * @param edge    连线
+     * @param nodeMap 节点 id -> 节点；为 null 时按静态端口名兜底判断
+     * @return true 表示仅表达执行顺序的控制流连线
+     */
+    public static boolean isControlFlowEdge(CompositeEdge edge, Map<String, CompositeNode> nodeMap) {
+        if (edge == null || !FLOW_IN.equals(trimToEmpty(edge.getTargetParameterId()))) {
+            return false;
+        }
+        String sourceParamId = trimToEmpty(edge.getSourceParameterId());
+        CompositeNode sourceNode = nodeMap == null ? null : nodeMap.get(edge.getSourceNodeId());
+        if (sourceNode != null) {
+            CompositeNodeKindEnum kind = resolveKind(sourceNode);
+            switch (kind) {
+                case FUNCTION, TRANSFORM, START -> {
+                    return FLOW_OUT.equals(sourceParamId);
+                }
+                case BRANCH -> {
+                    return "true".equals(sourceParamId) || "false".equals(sourceParamId);
+                }
+                case LOOP -> {
+                    return "body".equals(sourceParamId) || "done".equals(sourceParamId);
+                }
+                case SWITCH -> {
+                    return isSwitchControlPort(sourceNode, sourceParamId);
+                }
+                default -> {
+                    return false;
+                }
+            }
+        }
+        // 无节点上下文时按已知静态端口兜底
+        return FLOW_OUT.equals(sourceParamId) || "true".equals(sourceParamId) || "false".equals(sourceParamId)
+                || "body".equals(sourceParamId) || "done".equals(sourceParamId) || "default".equals(sourceParamId);
+    }
+
+    /**
+     * 按端口 id 判断是否控制流连线（无节点上下文，仅用于无法拿到节点定义的场景）。
      *
      * @param sourceParameterId 源端口 id
      * @param targetParameterId 目标端口 id
      * @return true 表示仅表达执行顺序的控制流连线
      */
     public static boolean isControlFlowEdge(String sourceParameterId, String targetParameterId) {
-        if (!FLOW_IN.equals(targetParameterId)) {
+        if (!FLOW_IN.equals(trimToEmpty(targetParameterId))) {
             return false;
         }
-        return FLOW_OUT.equals(sourceParameterId) || "true".equals(sourceParameterId) || "false".equals(sourceParameterId);
+        String sourceParamId = trimToEmpty(sourceParameterId);
+        return FLOW_OUT.equals(sourceParamId) || "true".equals(sourceParamId) || "false".equals(sourceParamId)
+                || "body".equals(sourceParamId) || "done".equals(sourceParamId) || "default".equals(sourceParamId);
+    }
+
+    /** Switch 节点的控制流输出端口：每个 case.id 以及 default */
+    private static boolean isSwitchControlPort(CompositeNode node, String sourceParamId) {
+        if ("default".equals(sourceParamId)) {
+            return true;
+        }
+        CompositeSwitchConfig switchConfig = node.getSwitchConfig();
+        if (switchConfig == null || switchConfig.getCases() == null) {
+            return false;
+        }
+        for (CompositeSwitchConfig.CaseItem item : switchConfig.getCases()) {
+            if (item != null && sourceParamId.equals(item.getId())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -271,14 +384,38 @@ public final class CompositeValidator {
     /** 逻辑节点虚拟端口，与原型 logicCompositeNodePorts 对齐 */
     public static List<CompositeParameter> defaultLogicPorts(CompositeNodeKindEnum kind, CompositeNode node, boolean inputDirection) {
         switch (kind) {
-            case LOOP:
+            case START:
+                // 开始节点：无输入端口，输出端口由编排 inputParameters 决定（此处返回空，实际映射时从 config 取）
+                return inputDirection ? List.of() : List.of();
+            case END:
+                // 结束节点：输入端口由编排 outputParameters 决定，无输出端口
+                return inputDirection ? List.of() : List.of();
+            case LOOP: {
+                // 虚拟端口 id/名恒为 item、done（itemName 只影响循环体上下文变量名），类型由画布配置
+                CompositeLoopConfig loopConfig = node == null ? null : node.getLoopConfig();
                 return inputDirection
                         ? List.of(port("collection", "collection", "array"))
-                        : List.of(port("item", "item", "object"), port("done", "done", "object"));
+                        : List.of(port("item", "item", typeName(loopConfig == null ? null : loopConfig.getItemType(), "object")),
+                                  port("done", "done", typeName(loopConfig == null ? null : loopConfig.getDoneType(), "object")));
+            }
             case BRANCH:
                 return inputDirection
                         ? List.of(port("value", "value", "object"))
                         : List.of(port("true", "true", "object"), port("false", "false", "object"));
+            case SWITCH:
+                List<CompositeParameter> switchOutputs = new ArrayList<>();
+                switchOutputs.add(port("default", "default", "object"));
+                CompositeSwitchConfig switchConfig = node == null ? null : node.getSwitchConfig();
+                if (switchConfig != null && switchConfig.getCases() != null) {
+                    for (CompositeSwitchConfig.CaseItem item : switchConfig.getCases()) {
+                        if (item != null && !isBlank(item.getId())) {
+                            switchOutputs.add(port(item.getId(), item.getId(), "object"));
+                        }
+                    }
+                }
+                // 输入端口：优先用 switchOnPath，兜底 value，与前端数据边 targetParameterId 对齐
+                String switchInputPort = switchConfig == null || isBlank(switchConfig.getSwitchOnPath()) ? "value" : switchConfig.getSwitchOnPath().trim();
+                return inputDirection ? List.of(port(switchInputPort, switchInputPort, "object")) : switchOutputs;
             case TRANSFORM:
             default:
                 CompositeTransformConfig transformConfig = node == null ? null : node.getTransformConfig();
@@ -335,7 +472,7 @@ public final class CompositeValidator {
     private static Map<String, Set<String>> loopRegions(Map<String, CompositeNode> nodeMap, List<CompositeEdge> edges) {
         Map<String, List<String>> controlForward = new HashMap<>();
         for (CompositeEdge edge : edges) {
-            if (edge == null || !isControlFlowEdge(edge)) {
+            if (edge == null || !isControlFlowEdge(edge, nodeMap)) {
                 continue;
             }
             controlForward.computeIfAbsent(edge.getSourceNodeId(), k -> new ArrayList<>()).add(edge.getTargetNodeId());
@@ -379,6 +516,21 @@ public final class CompositeValidator {
                 if (branchConfig == null || isBlank(branchConfig.getExpression())) {
                     errors.add("分支节点[" + node.getId() + "]未配置判断条件");
                 }
+            } else if (kind == CompositeNodeKindEnum.SWITCH) {
+                CompositeSwitchConfig switchConfig = node.getSwitchConfig();
+                if (switchConfig == null || isBlank(switchConfig.getSwitchOnPath())) {
+                    errors.add("Switch Case 节点[" + node.getId() + "]未配置取值参数");
+                }
+                if (switchConfig == null || switchConfig.getCases() == null || switchConfig.getCases().isEmpty()) {
+                    errors.add("Switch Case 节点[" + node.getId() + "]至少需要一个 case");
+                } else {
+                    for (CompositeSwitchConfig.CaseItem item : switchConfig.getCases()) {
+                        if (item == null || isBlank(item.getId()) || isBlank(item.getValue())) {
+                            errors.add("Switch Case 节点[" + node.getId() + "]存在未配置完整的 case");
+                            break;
+                        }
+                    }
+                }
             } else if (kind == CompositeNodeKindEnum.TRANSFORM) {
                 CompositeTransformConfig transformConfig = node.getTransformConfig();
                 if (transformConfig == null || isBlank(transformConfig.getScript())) {
@@ -416,7 +568,28 @@ public final class CompositeValidator {
                 continue;
             }
             if (isLogicNode(node)) {
-                errors.add("函数编排" + label + "映射不能指向逻辑节点");
+                // 开始/结束节点是特殊的逻辑节点，允许映射指向
+                CompositeNodeKindEnum nodeKind = resolveKind(node);
+                if (nodeKind != CompositeNodeKindEnum.START && nodeKind != CompositeNodeKindEnum.END) {
+                    errors.add("函数编排" + label + "映射不能指向逻辑节点");
+                    continue;
+                }
+                // 开始节点的输入映射：检查其输出端口；结束节点的输出映射：检查其输入端口
+                boolean checkOutputPorts = (nodeKind == CompositeNodeKindEnum.START && isInput);
+                boolean checkInputPorts = (nodeKind == CompositeNodeKindEnum.END && !isInput);
+                List<CompositeParameter> nodePorts = checkOutputPorts 
+                    ? (node.getOutputParameters() != null ? node.getOutputParameters() : List.of())
+                    : checkInputPorts 
+                        ? (node.getInputParameters() != null ? node.getInputParameters() : List.of())
+                        : List.of();
+                CompositeParameter nodeParameter = findPort(nodePorts, mapping.getNodeParameterId());
+                if (nodeParameter == null) {
+                    errors.add("函数编排" + label + "映射引用了无效参数");
+                    continue;
+                }
+                if (!typeEquals(externalParameter.getType(), nodeParameter.getType())) {
+                    errors.add("函数编排" + label + "映射参数类型不匹配");
+                }
                 continue;
             }
             CompositeParameter nodeParameter = findPort(nodePorts(node, refs, isInput), mapping.getNodeParameterId());
@@ -430,18 +603,122 @@ public final class CompositeValidator {
         }
     }
 
+    /**
+     * 一条端口引用解析后的形态：顶层端口 + 子字段路径 + 实际引用到的端口。
+     * <p>路径为空表示引用的是顶层端口本身，此时运行期按端口整体读写，与既有连线行为一致。</p>
+     *
+     * @param topPort   引用所属的顶层端口（运行期入参/出参 Map 的键）
+     * @param fieldPath 从顶层端口往下到引用端口的字段名，顶层引用时为空
+     * @param port      实际引用到的端口（顶层端口本身或其某个子字段）
+     */
+    public record PortRef(CompositeParameter topPort, List<String> fieldPath, CompositeParameter port) {
+
+        /** 是否引用到子字段 */
+        public boolean nested() {
+            return fieldPath != null && !fieldPath.isEmpty();
+        }
+    }
+
+    /**
+     * 解析画布上的端口引用：先按顶层端口 id、再按顶层端口名匹配，都没命中时深度优先在子字段里找 id/名。
+     * <p>原型画布把子字段绑定后的连线端点写成叶子字段名（{@code input} 的 {@code userName}），
+     * 开始/结束节点这类画布声明的端口又常用端口名当引用，因此三种写法都要认。</p>
+     *
+     * @param ports 节点端口（含子字段）
+     * @param ref   连线或映射里记录的端口标识
+     * @return 解析结果，引用不到任何端口时返回 null
+     */
+    public static PortRef resolvePort(List<CompositeParameter> ports, String ref) {
+        if (ports == null || isBlank(ref)) {
+            return null;
+        }
+        for (CompositeParameter port : ports) {
+            if (port == null) {
+                continue;
+            }
+            if (ref.equals(port.getId()) || ref.equals(port.getName())) {
+                return new PortRef(port, List.of(), port);
+            }
+        }
+        for (CompositeParameter port : ports) {
+            if (port == null) {
+                continue;
+            }
+            PortRef nested = findChildPort(port, port, new ArrayList<>(), ref);
+            if (nested != null) {
+                return nested;
+            }
+        }
+        return null;
+    }
+
+    /** 深度优先查找子字段端口，path 记录从父端口到当前层级的字段名 */
+    private static PortRef findChildPort(CompositeParameter topPort, CompositeParameter current,
+                                         List<String> path, String ref) {
+        if (current.getChildren() == null) {
+            return null;
+        }
+        for (CompositeParameter child : current.getChildren()) {
+            if (child == null) {
+                continue;
+            }
+            List<String> childPath = new ArrayList<>(path);
+            childPath.add(fieldName(child));
+            if (ref.equals(child.getId()) || ref.equals(child.getName())) {
+                return new PortRef(topPort, List.copyOf(childPath), child);
+            }
+            PortRef deeper = findChildPort(topPort, child, childPath, ref);
+            if (deeper != null) {
+                return deeper;
+            }
+        }
+        return null;
+    }
+
+    /** 子字段在运行期对象上的键名 */
+    private static String fieldName(CompositeParameter parameter) {
+        return isBlank(parameter.getName()) ? parameter.getId() : parameter.getName();
+    }
+
     private static CompositeParameter findPort(List<CompositeParameter> ports, String id) {
         if (ports == null || isBlank(id)) {
             return null;
         }
-        return ports.stream().filter(item -> item != null && id.equals(item.getId())).findFirst().orElse(null);
+        // 优先按端口 id 精确匹配，未命中时回落按端口 name 匹配（前端画布连线可能使用 name 而非 id）
+        return ports.stream()
+                .filter(item -> item != null && (id.equals(item.getId()) || id.equals(item.getName())))
+                .findFirst()
+                .orElse(null);
     }
 
-    /** 端口类型比较，空类型按 object 处理（与原型默认值一致） */
+    /**
+     * 端口类型比较，空类型按 object 处理（与原型默认值一致）。
+     * <p>object 表示"不限定具体类型"，作为通配符匹配任何类型（双向）；
+     * 数字、字符串、布尔、数组各自的别名等价，避免画布上的 number 与算子声明的 double 互不认。</p>
+     */
     private static boolean typeEquals(String source, String target) {
         String s = isBlank(source) ? "object" : source.trim().toLowerCase();
         String t = isBlank(target) ? "object" : target.trim().toLowerCase();
-        return s.equals(t);
+        if ("object".equals(s) || "object".equals(t)) {
+            return true;
+        }
+        return canonicalType(s).equals(canonicalType(t));
+    }
+
+    /** 类型别名归一：number/int/long/float/double 等归为同类 */
+    private static String canonicalType(String type) {
+        return switch (type) {
+            case "number", "int", "integer", "long", "float", "double", "short", "byte", "decimal" -> "number";
+            case "str", "string", "char", "text" -> "string";
+            case "bool", "boolean" -> "boolean";
+            case "list", "array" -> "array";
+            default -> type;
+        };
+    }
+
+    /** 端口类型取值：空值回落默认类型 */
+    private static String typeName(String raw, String fallback) {
+        return isBlank(raw) ? fallback : raw.trim();
     }
 
     private static String displayName(CompositeParameter parameter) {
@@ -449,11 +726,20 @@ public final class CompositeValidator {
     }
 
     private static CompositeParameter port(String id, String name, String type) {
-        return CompositeParameter.builder().id(id).name(name).type(type).description("").build();
+        CompositeParameter param = new CompositeParameter();
+        param.setId(id);
+        param.setName(name);
+        param.setType(type);
+        param.setDescription("");
+        return param;
     }
 
     private static boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
+    }
+
+    private static String trimToEmpty(String value) {
+        return value == null ? "" : value.trim();
     }
 
     private static CompositeValidationBO finish(List<String> errors, List<String> warnings) {

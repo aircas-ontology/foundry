@@ -157,11 +157,15 @@ public class OntologyCategoryServiceImpl extends ServiceImpl<OntologyCategoryMap
 
     @Override
     public OntologyCategoryVO getCategoryTree(Integer spaceId) {
-        var categories = list(new LambdaQueryWrapper<OntologyCategory>().eq(OntologyCategory::getOntologySpaceId, spaceId));
+        // 按 id 升序取出，分组后每层 children 即为 id 从小到大
+        var categories = list(new LambdaQueryWrapper<OntologyCategory>()
+                .eq(OntologyCategory::getOntologySpaceId, spaceId)
+                .orderByAsc(OntologyCategory::getId));
         if (CollectionUtils.isEmpty(categories)) {
             return null;
         }
-        var categoryMap = categories.stream().collect(Collectors.groupingBy(OntologyCategory::getParentId));
+        var categoryMap = categories.stream().collect(Collectors.groupingBy(
+                OntologyCategory::getParentId, LinkedHashMap::new, Collectors.toList()));
         var roots = categoryMap.get(0);
         if (CollectionUtils.isEmpty(roots)) {
             return null;

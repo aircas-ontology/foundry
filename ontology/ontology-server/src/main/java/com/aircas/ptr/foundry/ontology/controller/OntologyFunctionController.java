@@ -30,6 +30,7 @@ import org.springframework.web.bind.annotation.*;
 
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 
 import java.util.List;
 
@@ -56,7 +57,7 @@ public class OntologyFunctionController {
 
     @Operation(summary = "查询函数列表", description = "列表项返回 scanStatus 和仅含 summary 的 scanResult，不返回 findings")
     @GetMapping("/list")
-    public RestResult<Page<FunctionInfoVO>> getFunctions(FunctionListQueryParam param) {
+    public RestResult<Page<FunctionInfoVO>> getFunctions(@Valid FunctionListQueryParam param) {
         return RestResult.ofData(functionService.getFunctions(param));
     }
 
@@ -90,25 +91,28 @@ public class OntologyFunctionController {
 
     @Operation(summary = "查询函数详情", description = "返回 scanStatus、固定 11 个顶层字段的完整 scanResult 及全部 findings")
     @GetMapping("/detail")
-    public RestResult<FunctionDetailVO> getFunctionByApi(@RequestParam(required = true, name = "functionApi") @Parameter(description = "函数api") String functionApi,
-                                                         @RequestParam(required = true, name = "version") @Parameter(description = "版本号（必填，格式 x.y.z）") String version) {
-        return RestResult.ofData(functionService.getFunctionDetailByApi(functionApi, version));
+    public RestResult<FunctionDetailVO> getFunctionByApi(@RequestParam(required = true, name = "functionApi") @Parameter(description = "函数api") @NotBlank(message = "functionApi is empty") String functionApi,
+                                                         @RequestParam(required = true, name = "version") @Parameter(description = "版本号（必填，格式 x.y.z）") @NotBlank(message = "version is empty") String version,
+                                                         @RequestParam(required = false, name = "spaceId") @Parameter(description = "本体空间id（跨空间允许同名 api，建议传）") Integer spaceId) {
+        return RestResult.ofData(functionService.getFunctionDetailByApi(spaceId, functionApi, version));
     }
 
 
     @Operation(summary = "根据函数api查询版本号列表")
     @GetMapping("/versions")
-    public RestResult<List<String>> getFunctionVersions(@RequestParam(required = true, name = "functionApi") @Parameter(description = "函数api") String functionApi) {
-        return RestResult.ofData(functionService.listVersionsByApi(functionApi));
+    public RestResult<List<String>> getFunctionVersions(@RequestParam(required = true, name = "functionApi") @Parameter(description = "函数api") @NotBlank(message = "functionApi is empty") String functionApi,
+                                                        @RequestParam(required = false, name = "spaceId") @Parameter(description = "本体空间id（跨空间允许同名 api，建议传）") Integer spaceId) {
+        return RestResult.ofData(functionService.listVersionsByApi(spaceId, functionApi));
     }
 
 
     @Operation(summary = "删除函数")
     @DeleteMapping("/delete")
-    public RestResult deleteById(@RequestParam(required = true, name = "functionApi") @Parameter(description = "函数api") String functionApi,
-                                 @RequestParam(required = true, name = "version") @Parameter(description = "版本号（必填，格式 x.y.z）") String version) {
+    public RestResult deleteById(@RequestParam(required = true, name = "functionApi") @Parameter(description = "函数api") @NotBlank(message = "functionApi is empty") String functionApi,
+                                 @RequestParam(required = true, name = "version") @Parameter(description = "版本号（必填，格式 x.y.z）") @NotBlank(message = "version is empty") String version,
+                                 @RequestParam(required = false, name = "spaceId") @Parameter(description = "本体空间id（跨空间允许同名 api，建议传）") Integer spaceId) {
         //需要校验函数有没有被本体行为使用到
-        functionService.deleteByApi(functionApi, version);
+        functionService.deleteByApi(spaceId, functionApi, version);
         return RestResult.success();
     }
 
@@ -123,10 +127,11 @@ public class OntologyFunctionController {
             @ApiResponse(responseCode = "504", description = "安全扫描超时")
     })
     @PostMapping("/publish")
-    public RestResult<FunctionPublishResponse> publishFunction(@RequestParam(required = true, name = "functionApi") @Parameter(description = "函数api") String functionApi,
-                                                               @RequestParam(required = true, name = "version") @Parameter(description = "版本号（必填，格式 x.y.z）") String version) {
+    public RestResult<FunctionPublishResponse> publishFunction(@RequestParam(required = true, name = "functionApi") @Parameter(description = "函数api") @NotBlank(message = "functionApi is empty") String functionApi,
+                                                               @RequestParam(required = true, name = "version") @Parameter(description = "版本号（必填，格式 x.y.z）") @NotBlank(message = "version is empty") String version,
+                                                               @RequestParam(required = false, name = "spaceId") @Parameter(description = "本体空间id（跨空间允许同名 api，建议传）") Integer spaceId) {
         FunctionPublishResponse data = FunctionPublishResponse.from(
-                functionService.publishFunction(functionApi, version));
+                functionService.publishFunction(spaceId, functionApi, version));
         RestResult<FunctionPublishResponse> response = RestResult.ofData(data);
         if (!data.published()) {
             response.setMessage("安全扫描未通过，函数未发布");
@@ -137,9 +142,10 @@ public class OntologyFunctionController {
 
     @Operation(summary = "下线函数")
     @PostMapping("/unpublish")
-    public RestResult unpublishFunction(@RequestParam(required = true, name = "functionApi") @Parameter(description = "函数api") String functionApi,
-                                        @RequestParam(required = true, name = "version") @Parameter(description = "版本号（必填，格式 x.y.z）") String version) {
-        functionService.unpublishFunction(functionApi, version);
+    public RestResult unpublishFunction(@RequestParam(required = true, name = "functionApi") @Parameter(description = "函数api") @NotBlank(message = "functionApi is empty") String functionApi,
+                                        @RequestParam(required = true, name = "version") @Parameter(description = "版本号（必填，格式 x.y.z）") @NotBlank(message = "version is empty") String version,
+                                        @RequestParam(required = false, name = "spaceId") @Parameter(description = "本体空间id（跨空间允许同名 api，建议传）") Integer spaceId) {
+        functionService.unpublishFunction(spaceId, functionApi, version);
         return RestResult.success();
     }
 
@@ -160,7 +166,7 @@ public class OntologyFunctionController {
 
     @GetMapping("/callback_result")
     @Operation(summary = "根据taskId查询异步函数执行结果")
-    public RestResult<FunctionExecuteResultVO> getExecuteResult(@RequestParam(required = true, name = "taskId") @Parameter(description = "任务id") String taskId) {
+    public RestResult<FunctionExecuteResultVO> getExecuteResult(@RequestParam(required = true, name = "taskId") @Parameter(description = "任务id") @NotBlank(message = "taskId is empty") String taskId) {
         return RestResult.ofData(functionService.getExecuteResult(taskId));
     }
 
@@ -172,14 +178,14 @@ public class OntologyFunctionController {
 
     @PostMapping("/composite/validate")
     @Operation(summary = "校验函数编排定义（不落库）")
-    public RestResult<CompositeValidationBO> validateComposite(@RequestBody CompositeValidateParam param) {
+    public RestResult<CompositeValidationBO> validateComposite(@RequestBody @Valid CompositeValidateParam param) {
         return RestResult.ofData(functionService.validateComposite(param));
     }
 
     @GetMapping("/composite/el")
     @Operation(summary = "编译已落库的函数编排定义，返回 LiteFlow 执行链 EL")
     public RestResult<CompositePlanBO> compileComposite(
-            @RequestParam(required = true, name = "functionApi") @Parameter(description = "编排函数api") String functionApi) {
+            @RequestParam(required = true, name = "functionApi") @Parameter(description = "编排函数api") @NotBlank(message = "functionApi is empty") String functionApi) {
         return RestResult.ofData(functionService.compileComposite(functionApi));
     }
 

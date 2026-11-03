@@ -98,16 +98,26 @@
                    )
     </select>
 
+    <!-- 实体表是否已有数据行（EXISTS 探测，不做 count(*) 全扫） -->
+    <select id="hasAnyRow" resultType="boolean">
+        SELECT EXISTS(
+                       SELECT 1
+                       FROM "${schemaName}"."${tableName}"
+                   )
+    </select>
+
 
     <insert id="createTable">
         <!-- Create table: id SERIAL PRIMARY KEY + filtered columns -->
         CREATE TABLE IF NOT EXISTS "${schemaName}"."${table.tableName}" (
+        <trim suffixOverrides=",">
         id SERIAL PRIMARY KEY,
         <foreach collection="columns" item="col" separator=",">
             <if test="col.columnName != null and col.columnName.toLowerCase() != 'id'">
                  "${col.columnName}" ${col.type}
             </if>
         </foreach>
+        </trim>
         );
         <!-- Add comments -->
         COMMENT ON TABLE "${schemaName}"."${table.tableName}" IS '${table.description}';

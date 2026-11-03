@@ -24,7 +24,20 @@ public interface OntologySpaceService extends IService<OntologySpace> {
 
     void updateSpace(OntologySpaceUpdateParam param);
 
-    List<OntologySpaceVO> querySpace();
+    /**
+     * 查询本体空间/主题列表。
+     *
+     * @param type 类型：0=空间（默认，按配置文件绑定的空间过滤），1=主题（按创建用户名过滤）；为空按空间处理
+     */
+    List<OntologySpaceVO> querySpace(Integer type);
+
+    /**
+     * 按名称精确查询空间（同时匹配 apiName 和 displayName，OR 关系）。
+     *
+     * @param name 空间名称（apiName 或 displayName）
+     * @return 匹配的空间列表，无匹配时返回空列表
+     */
+    List<OntologySpaceVO> querySpaceByName(String name);
 
     OntologySpaceStatisticVO getStatistic(Integer spaceId);
 

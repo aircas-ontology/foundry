@@ -1,5 +1,10 @@
--- 子空间属性筛选条件表：记录通过向导创建子空间时为每个选中属性配置的筛选条件与属性类型
-create table if not exists ontology.ontology_subspace_property_filter
+/**
+    子空间属性筛选条件表：记录通过父空间创建子空间时，为每个选中属性配置的筛选条件与属性类型。
+
+    注意：本脚本在主库（ontology schema）执行。
+
+ */
+CREATE TABLE IF NOT EXISTS ontology.ontology_subspace_property_filter
 (
     id                             bigserial
     constraint pk_ontology_subspace_property_filter

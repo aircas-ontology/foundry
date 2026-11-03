@@ -4,8 +4,9 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
+
+import java.util.List;
 
 /**
  * 函数编排对外暴露的输入/输出参数定义，序列化后存入 function.code。
@@ -14,7 +15,7 @@ import lombok.experimental.SuperBuilder;
  */
 @Data
 @SuperBuilder
-@Accessors(chain = true)
+
 @AllArgsConstructor
 @NoArgsConstructor
 @Schema(description = "函数编排对外参数定义")
@@ -31,4 +32,7 @@ public class CompositeParameter {
 
     @Schema(name = "description", description = "参数描述")
     private String description;
+
+    @Schema(name = "children", description = "子字段端口（算子参数定义带层级时展开，连线可引用子字段）；无子字段为 null")
+    private List<CompositeParameter> children;
 }

@@ -49,11 +49,14 @@ import java.util.UUID;
  * <ol>
  *   <li>可靠层：handle 形参/返回值若声明为脚本内自定义类（如 {@code ExecuteOutput handle(ExecuteInput i)}），
  *       展开该类的字段作为入参/出参；</li>
+ *   <li>工程内类层：类型是脚本 {@code import} 进来的工程类（如 {@code FunctionResultVO}）时，
+ *       按 import（显式优先、再通配包）补全全限定名后反射展开其字段，得到 object 下一级的结构；</li>
  *   <li>标量层：形参为基本类型时直接落一个入参；</li>
  *   <li>启发层：handle 形参为无类型 Object（新契约 {@code def handle(input)}）时，
  *       扫描函数体收集 {@code input.xxx} 成员访问作为入参、{@code return [...]} map 字面量键作为出参。</li>
  * </ol>
- * 编译只到 CONVERSION 阶段（仅建 AST、不生成字节码、不执行），用完即关 ClassLoader 避免 Metaspace 堆积。
+ * 编译只到 CONVERSION 阶段（仅建 AST、不生成字节码、不执行），用完即关 ClassLoader 避免 Metaspace 堆积；
+ * 工程内类的补全与反射展开统一委托给 {@link ProjectClassExpander}（与 Java 解析器共用一套口径）。
  */
 @Slf4j
 @Component
@@ -77,7 +80,7 @@ public class GroovyScriptParamParser implements ScriptParamParser {
             CompilationUnit cu = new CompilationUnit(config, (java.security.CodeSource) null, loader);
             SourceUnit su = cu.addSource("GroovyParse_" + UUID.randomUUID() + ".groovy", code);
             cu.compile(Phases.CONVERSION);
-            return extract(su.getAST());
+            return extract(su.getAST(), code);
         } catch (CompilationFailedException e) {
             log.warn("Groovy 脚本 AST 解析失败（语法错误）：{}", e.getMessage());
             return ScriptParseOutcome.of(ScriptParseStatus.SYNTAX_ERROR, e.getMessage());
@@ -92,20 +95,34 @@ public class GroovyScriptParamParser implements ScriptParamParser {
         }
     }
 
-    private ScriptParseOutcome extract(ModuleNode module) {
+    private ScriptParseOutcome extract(ModuleNode module, String code) {
         List<ScriptParsedParam> result = new ArrayList<>();
         Map<String, ClassNode> classByName = new LinkedHashMap<>();
         for (ClassNode cn : module.getClasses()) {
             classByName.put(cn.getName(), cn);
             classByName.put(simpleName(cn.getName()), cn);
         }
+        ParseContext ctx = new ParseContext(classByName, code);
         MethodNode handle = findHandleMethod(module, classByName);
         if (handle == null) {
             return ScriptParseOutcome.of(ScriptParseStatus.NO_HANDLE, "脚本未定义 handle 入口方法");
         }
-        collectInputs(handle, classByName, result);
-        collectOutputs(handle, classByName, result);
+        collectInputs(handle, ctx, result);
+        collectOutputs(handle, ctx, result);
         return ScriptParseOutcome.ok(result);
+    }
+
+    /**
+     * 解析上下文：脚本内定义的类（AST）+ 工程内类展开器（import 补全 + 反射展开）。
+     */
+    private static final class ParseContext {
+        private final Map<String, ClassNode> classByName;
+        private final ProjectClassExpander expander;
+
+        private ParseContext(Map<String, ClassNode> classByName, String code) {
+            this.classByName = classByName;
+            this.expander = new ProjectClassExpander(code);
+        }
     }
 
     private MethodNode findHandleMethod(ModuleNode module, Map<String, ClassNode> classByName) {
@@ -126,17 +143,18 @@ public class GroovyScriptParamParser implements ScriptParamParser {
         return null;
     }
 
-    private void collectInputs(MethodNode handle, Map<String, ClassNode> classByName, List<ScriptParsedParam> out) {
+    private void collectInputs(MethodNode handle, ParseContext ctx, List<ScriptParsedParam> out) {
         Parameter[] parameters = handle.getParameters();
         boolean expanded = false;
         if (parameters != null) {
             for (Parameter p : parameters) {
                 ClassNode type = p.getType();
-                ClassNode userClass = resolveUserClass(type, classByName);
+                ClassNode userClass = resolveUserClass(type, ctx.classByName);
                 if (userClass != null) {
                     // 层级结构：父参数为自定义类型，字段放入 fields
                     String typeText = typeNodeText(type);
-                    List<ScriptParsedParam> fields = expandFields(userClass, FunctionParamCategoryEnum.INPUT, "ANNOTATION", classByName, new LinkedHashSet<>());
+                    List<ScriptParsedParam> fields = expandFields(userClass, FunctionParamCategoryEnum.INPUT,
+                            "ANNOTATION", ctx, new LinkedHashSet<>(), 1);
                     out.add(ScriptParsedParam.builder()
                             .name(p.getName())
                             .type(ScriptParamTypeMapper.map(typeText))
@@ -148,13 +166,27 @@ public class GroovyScriptParamParser implements ScriptParamParser {
                     expanded = true;
                 } else if (!isObjectType(type)) {
                     String typeText = typeNodeText(type);
-                    out.add(ScriptParsedParam.builder()
-                            .name(p.getName())
-                            .type(ScriptParamTypeMapper.map(typeText))
-                            .rawType(typeText)
-                            .category(FunctionParamCategoryEnum.INPUT)
-                            .source("ANNOTATION")
-                            .build());
+                    Class<?> projectClass = ctx.expander.resolve(type.getName());
+                    if (projectClass != null) {
+                        // 工程内类（import 进来的 VO/DTO）：rawType 用真实全限定名，字段反射展开下一级
+                        out.add(ScriptParsedParam.builder()
+                                .name(p.getName())
+                                .type(ScriptParamTypeMapper.map(typeText))
+                                .rawType(projectClass.getName())
+                                .category(FunctionParamCategoryEnum.INPUT)
+                                .source("ANNOTATION")
+                                .fields(ctx.expander.expandFields(projectClass, FunctionParamCategoryEnum.INPUT,
+                                        new LinkedHashSet<>(), 1))
+                                .build());
+                    } else {
+                        out.add(ScriptParsedParam.builder()
+                                .name(p.getName())
+                                .type(ScriptParamTypeMapper.map(typeText))
+                                .rawType(typeText)
+                                .category(FunctionParamCategoryEnum.INPUT)
+                                .source("ANNOTATION")
+                                .build());
+                    }
                     expanded = true;
                 }
             }
@@ -165,13 +197,14 @@ public class GroovyScriptParamParser implements ScriptParamParser {
         }
     }
 
-    private void collectOutputs(MethodNode handle, Map<String, ClassNode> classByName, List<ScriptParsedParam> out) {
+    private void collectOutputs(MethodNode handle, ParseContext ctx, List<ScriptParsedParam> out) {
         ClassNode returnType = handle.getReturnType();
-        ClassNode userClass = resolveUserClass(returnType, classByName);
+        ClassNode userClass = resolveUserClass(returnType, ctx.classByName);
         if (userClass != null) {
             // 层级结构：返回类型为自定义类时，父参数带 fields
             String typeText = typeNodeText(returnType);
-            List<ScriptParsedParam> fields = expandFields(userClass, FunctionParamCategoryEnum.OUTPUT, "ANNOTATION", classByName, new LinkedHashSet<>());
+            List<ScriptParsedParam> fields = expandFields(userClass, FunctionParamCategoryEnum.OUTPUT,
+                    "ANNOTATION", ctx, new LinkedHashSet<>(), 1);
             out.add(ScriptParsedParam.builder()
                     .name(typeText)
                     .type(ScriptParamTypeMapper.map(typeText))
@@ -179,6 +212,20 @@ public class GroovyScriptParamParser implements ScriptParamParser {
                     .category(FunctionParamCategoryEnum.OUTPUT)
                     .source("ANNOTATION")
                     .fields(fields)
+                    .build());
+            return;
+        }
+        Class<?> projectClass = ctx.expander.resolve(returnType.getName());
+        if (projectClass != null) {
+            // 老契约：返回工程内 VO（如 FunctionResultVO），出参统一命名 result，字段反射展开下一级
+            out.add(ScriptParsedParam.builder()
+                    .name("result")
+                    .type(ScriptParamTypeMapper.map(typeNodeText(returnType)))
+                    .rawType(projectClass.getName())
+                    .category(FunctionParamCategoryEnum.OUTPUT)
+                    .source("ANNOTATION")
+                    .fields(ctx.expander.expandFields(projectClass, FunctionParamCategoryEnum.OUTPUT,
+                            new LinkedHashSet<>(), 1))
                     .build());
             return;
         }
@@ -199,8 +246,11 @@ public class GroovyScriptParamParser implements ScriptParamParser {
     }
 
     private List<ScriptParsedParam> expandFields(ClassNode userClass, FunctionParamCategoryEnum category, String source,
-                                                    Map<String, ClassNode> classByName, Set<String> visited) {
+                                                    ParseContext ctx, Set<String> visited, int depth) {
         List<ScriptParsedParam> fields = new ArrayList<>();
+        if (depth > ProjectClassExpander.MAX_FIELD_DEPTH) {
+            return fields;
+        }
         Set<String> seen = new LinkedHashSet<>();
         userClass.getProperties().forEach(prop -> {
             String name = prop.getName();
@@ -213,26 +263,31 @@ public class GroovyScriptParamParser implements ScriptParamParser {
                         .category(category)
                         .source(source);
                 // 字段类型本身也是自定义类 → 递归展开
-                ClassNode nestedClass = resolveUserClass(prop.getType(), classByName);
+                ClassNode nestedClass = resolveUserClass(prop.getType(), ctx.classByName);
                 if (nestedClass != null && visited.add(propTypeText)) {
-                    fb.fields(expandFields(nestedClass, category, source, classByName, visited));
+                    fb.fields(expandFields(nestedClass, category, source, ctx, visited, depth + 1));
                 } else {
                     // 集合泛型：List<Admin> → 提取泛型参数递归展开
                     String elementType = extractCollectionElementType(prop.getType());
-                    if (elementType != null) {
-                        ClassNode elemNode = classByName.get(elementType);
-                        if (elemNode == null) {
-                            elemNode = classByName.get(simpleName(elementType));
-                        }
-                        if (elemNode != null && visited.add(elementType)) {
-                            fb.fields(expandFields(elemNode, category, source, classByName, visited));
-                        }
+                    ClassNode elemNode = elementType == null ? null : lookupScriptClass(elementType, ctx);
+                    if (elemNode != null && visited.add(elementType)) {
+                        fb.fields(expandFields(elemNode, category, source, ctx, visited, depth + 1));
+                    } else {
+                        // 脚本内类没命中 → 试工程内类（import 进来的 VO/DTO），反射展开下一级
+                        fb.fields(ctx.expander.expandFieldsByName(
+                                elementType == null ? prop.getType().getName() : elementType, category, visited, depth + 1));
                     }
                 }
                 fields.add(fb.build());
             }
         });
         return fields;
+    }
+
+    /** 脚本内类查表：全限定名与简单名都试（{@link #typeNodeText} 已把类型还原成简单名）。 */
+    private ClassNode lookupScriptClass(String typeText, ParseContext ctx) {
+        ClassNode exact = ctx.classByName.get(typeText);
+        return exact != null ? exact : ctx.classByName.get(simpleName(typeText));
     }
 
     private void inferInputsFromBody(MethodNode handle, List<ScriptParsedParam> out) {

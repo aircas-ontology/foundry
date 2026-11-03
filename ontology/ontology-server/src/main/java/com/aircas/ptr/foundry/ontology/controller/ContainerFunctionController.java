@@ -31,7 +31,7 @@ public class ContainerFunctionController {
     @Resource
     private ContainerFunctionService containerFunctionService;
 
-    @Operation(summary = "上传镜像（tar/tar.gz），校验 ARM64 架构并返回镜像信息")
+    @Operation(summary = "上传镜像（tar/tar.gz），校验镜像架构（container-operator.allowed-architectures）并返回镜像信息")
     @PostMapping("/upload_image")
     public RestResult<ContainerImageInfo> uploadImage(@RequestParam("file") MultipartFile file) {
         return RestResult.ofData(containerFunctionService.uploadImage(file));

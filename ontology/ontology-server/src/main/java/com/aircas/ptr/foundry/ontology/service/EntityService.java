@@ -2,12 +2,14 @@ package com.aircas.ptr.foundry.ontology.service;
 
 import com.aircas.ptr.foundry.ontology.model.document.EntityNode;
 import com.aircas.ptr.foundry.ontology.model.dto.ActionContextInfoDTO;
+import com.aircas.ptr.foundry.ontology.model.dto.EntityRelationExportDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.OntologyInstancesExportDTO;
 import com.aircas.ptr.foundry.ontology.model.param.*;
 import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 
 import jakarta.validation.Valid;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
@@ -19,27 +21,6 @@ import java.util.Map;
  * @description: 实体数据操作，外部接口
  */
 public interface EntityService {
-
-    void createEntityRelations(String linkUniqueIdentifier);
-
-    /**
-     * 将指定关系下的全部实体关系边置为 ENABLE。
-     * <p>平台 {@code createEntityRelations} 默认生成 Status.DELETE 的边（启用过滤查询看不到），
-     * 子空间等一次性全量复制场景调用此方法将其激活为可见可用的关系。</p>
-     *
-     * @param linkUniqueIdentifier 关系唯一标识
-     */
-    void activateLinkRelations(String linkUniqueIdentifier);
-
-    /**
-     * 判断指定关系在 ArangoDB 中是否已存在 ENABLE 的实体关系边。
-     * <p>用于子空间复制时镜像源关系的可见状态：源边为 ENABLE 则子空间新边也应 ENABLE，
-     * 源边为 DELETE（或无边）则保持默认 DELETE，避免子空间关系与源不一致。</p>
-     *
-     * @param linkUniqueIdentifier 关系唯一标识
-     * @return 是否存在 ENABLE 的关系边
-     */
-    boolean hasEnabledRelations(String linkUniqueIdentifier);
 
     void syncNodes(String ontologyUniqueIdentifier, String schemaName, String datasourceId, String primaryKeyColumnName, String titleKeyColumnName);
 
@@ -69,9 +50,33 @@ public interface EntityService {
 
     void updateEntityPropertyAndRelation(String jsonString, ActionContextInfoDTO actionContext);
 
-    void completeEntityNodeAndRelations(String ontologyUniqueIdentifier, Map<String, Object> entityPropertyMap);
+    void completeEntityNode(String ontologyUniqueIdentifier, Map<String, Object> entityPropertyMap);
 
     void deleteEntityNodeAndRelations(String ontologyUniqueIdentifier, Object entityPrimaryKey);
+
+    /**
+     * 单行实例数据 -> 图库节点（upsert，按「本体 + 归一化主键」定位已存在节点，仅名称变化时覆盖）。
+     *
+     * @return true 表示本次新建了节点（图库此前无该实例节点）
+     */
+    boolean upsertEntityNode(String ontologyUniqueIdentifier, String tableName, Object primaryKeyValue, String displayName);
+
+    /**
+     * 批量实例数据 -> 图库节点，语义同 {@link #upsertEntityNode}，用于全量同步按页写入。
+     *
+     * @param pkToDisplayName 主键值 -> 展示名，同一主键只写一次
+     * @return 本次写入（新建 + 改名）的节点数
+     */
+    int upsertEntityNodes(String ontologyUniqueIdentifier, String tableName, Map<Object, String> pkToDisplayName);
+
+    /**
+     * 清理该本体的图库孤儿节点：删除主键不在 {@code keepPrimaryKeyValues} 中的节点及其相邻关系边，
+     * 用于全量同步以数据湖当前内容为准收敛图库。主键为空的节点不参与清理。
+     *
+     * @param keepPrimaryKeyValues 本次同步到的全部主键值
+     * @return 实际删除的节点数
+     */
+    int deleteEntityNodeOrphans(String ontologyUniqueIdentifier, Collection<Object> keepPrimaryKeyValues);
 
     void generateEntities(EntityGenerateParam param);
 
@@ -112,8 +117,36 @@ public interface EntityService {
      *
      * @param ontologyUniqueIdentifier 本体唯一标识
      * @param instances                实例导出结构，为 null 或 nodes 为空时不做任何操作
+     * @return 导出主键（字符串归一化）到新主键的映射，供实例关系边重新落位；无实例时为空 map
      */
-    void importInstances(String ontologyUniqueIdentifier, OntologyInstancesExportDTO instances);
+    Map<String, Object> importInstances(String ontologyUniqueIdentifier, OntologyInstancesExportDTO instances);
+
+    /**
+     * 导出指定关系下图库 relation 中状态非 DELETE 的实例关系边。
+     *
+     * <p>图库里只保留真实成立的关系边，未点亮的实例对没有边，因此导出即所得。
+     * 单条关系超过上限时截断并告警。</p>
+     *
+     * @param linkUniqueIdentifier 关系唯一标识
+     * @return 实例关系边列表，端点节点缺失的边会被跳过
+     */
+    List<EntityRelationExportDTO> exportEntityRelations(String linkUniqueIdentifier);
+
+    /**
+     * 按导出的实例关系边精确落位到新建关系上。
+     *
+     * <p>只写导出文件里的那些实例对（状态与时间窗原样搬运），端点对已存在则覆盖，
+     * 不会为未点亮的实例对补边。两端节点需已同步到图库。</p>
+     *
+     * @param linkUniqueIdentifier 新关系唯一标识
+     * @param relations            导出的实例关系边，端点主键为导出时的主键
+     * @param fromPkMapping        开始对象「导出主键 → 新主键」映射，来自 importInstances
+     * @param toPkMapping          结束对象「导出主键 → 新主键」映射，来自 importInstances
+     */
+    void importEntityRelations(String linkUniqueIdentifier,
+                               List<EntityRelationExportDTO> relations,
+                               Map<String, Object> fromPkMapping,
+                               Map<String, Object> toPkMapping);
 
     /**
      * 按本体空间 + 本体对象查询实例数据的指定属性值，支持可选过滤条件。

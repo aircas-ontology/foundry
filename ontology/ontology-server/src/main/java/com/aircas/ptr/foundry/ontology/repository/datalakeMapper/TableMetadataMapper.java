@@ -27,6 +27,8 @@ public interface TableMetadataMapper {
 
     Boolean isTableExist(@Param("schemaName") String schemaName, @Param("tableName") String tableName);
 
+    Boolean hasAnyRow(@Param("schemaName") String schemaName, @Param("tableName") String tableName);
+
 
     String queryPrimaryKeyColumnName(@Param("schemaName") String schemaName, @Param("tableName") String tableName);
 

@@ -4,7 +4,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
 
 /**
@@ -14,7 +13,7 @@ import lombok.experimental.SuperBuilder;
  */
 @Data
 @SuperBuilder
-@Accessors(chain = true)
+
 @AllArgsConstructor
 @NoArgsConstructor
 @Schema(description = "函数编排循环节点配置")
@@ -31,4 +30,10 @@ public class CompositeLoopConfig {
 
     @Schema(name = "itemName", description = "当前迭代项在循环体上下文中的名称", example = "item")
     private String itemName;
+
+    @Schema(name = "itemType", description = "item 端口的类型，缺省 object（可连任意下游入参）", example = "double")
+    private String itemType;
+
+    @Schema(name = "doneType", description = "done（结束后）端口的类型，缺省 object", example = "array")
+    private String doneType;
 }

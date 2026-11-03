@@ -58,6 +58,10 @@ public enum FunctionParamTypeEnum {
         FUNC_PARAM_TYPE_MAP.put("java.lang.String", FunctionParamTypeEnum.STRING);
         FUNC_PARAM_TYPE_MAP.put("java.util.List", FunctionParamTypeEnum.LIST);
         FUNC_PARAM_TYPE_MAP.put("java.util.Date", FunctionParamTypeEnum.DATE);
+        FUNC_PARAM_TYPE_MAP.put("java.lang.Object", FunctionParamTypeEnum.OBJECT);
+        FUNC_PARAM_TYPE_MAP.put("java.util.Map", FunctionParamTypeEnum.OBJECT);
+        FUNC_PARAM_TYPE_MAP.put("Object", FunctionParamTypeEnum.OBJECT);
+        FUNC_PARAM_TYPE_MAP.put("Map", FunctionParamTypeEnum.OBJECT);
     }
 
     /**

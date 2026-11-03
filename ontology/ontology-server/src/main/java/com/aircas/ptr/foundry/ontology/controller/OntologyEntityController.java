@@ -127,18 +127,10 @@ public class OntologyEntityController {
         return RestResult.success();
     }
 
-    @Operation(summary = "根据本体关系id创建所有实体节点关系")
-    @PostMapping("/relation/{linkUniqIdentifier}")
-    public RestResult createEntityRelations(@PathVariable String linkUniqIdentifier) {
-        entityService.createEntityRelations(linkUniqIdentifier);
-        return RestResult.success();
-    }
-
-
-    @Operation(summary = "补全单个实体节点和关系")
+    @Operation(summary = "补全单个实体节点")
     @PostMapping("/complete_node_and_relations")
-    public RestResult completeEntityNodeAndRelations(@RequestBody @Valid EntityNodeAndRelationsCompleteParam param) {
-        entityService.completeEntityNodeAndRelations(param.getOntologyUniqueIdentifier(), param.getEntityPropertyMap());
+    public RestResult completeEntityNode(@RequestBody @Valid EntityNodeAndRelationsCompleteParam param) {
+        entityService.completeEntityNode(param.getOntologyUniqueIdentifier(), param.getEntityPropertyMap());
         return RestResult.success();
     }
 

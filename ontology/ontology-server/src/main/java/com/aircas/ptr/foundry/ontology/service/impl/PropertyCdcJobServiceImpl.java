@@ -71,6 +71,7 @@ public class PropertyCdcJobServiceImpl implements PropertyCdcJobService {
             OntologySpace space = spaceMapper.selectById(meta.getOntologySpaceId());
             if (space != null) {
                 dto.setSpaceName(space.getDisplayName());
+                dto.setSpaceType(space.getType());
             }
         }
     }

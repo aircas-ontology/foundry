@@ -50,4 +50,7 @@ public class ContainerFunctionCreateParam {
     @Schema(name = "selectedInterfaces", description = "从探查结果中勾选的接口列表（非空，未勾选不生成算子）")
     @NotEmpty(message = "至少勾选一个接口")
     private List<ContainerInterface> selectedInterfaces;
+
+    @Schema(name = "rateLimitTemplateId", description = "限流配置模板 ID（不传则使用默认模板，创建后不可修改）")
+    private Long rateLimitTemplateId;
 }

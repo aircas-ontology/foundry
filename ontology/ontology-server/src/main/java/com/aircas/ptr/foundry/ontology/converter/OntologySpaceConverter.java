@@ -14,6 +14,8 @@ public class OntologySpaceConverter {
         dto.setApiName(ontologySpace.getApiName());
         dto.setDescription(ontologySpace.getDescription());
         dto.setDisplayName(ontologySpace.getDisplayName());
+        dto.setUsername(ontologySpace.getUsername());
+        dto.setType(ontologySpace.getType());
         dto.setCreateTime(DateUtils.toLocalDateTime(ontologySpace.getCreateTime()));
         dto.setUpdateTime(DateUtils.toLocalDateTime(ontologySpace.getUpdateTime()));
         return dto;

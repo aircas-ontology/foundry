@@ -37,8 +37,12 @@ public class CompositeNodePlanBO {
     @Schema(description = "出参：参数 id -> 参数名")
     private Map<String, String> outputParams = new LinkedHashMap<>();
 
-    @Schema(description = "入参默认值：参数 id -> 原始表达式")
-    private Map<String, String> inputDefaults = new LinkedHashMap<>();
+    @Schema(description = "入参默认值：参数 id -> 值（支持嵌套 Map 等复杂类型）")
+    private Map<String, Object> inputDefaults = new LinkedHashMap<>();
+
+    @Schema(description = "子字段默认值：顶层入参端口名 -> 归位后的默认对象；"
+            + "画布把子字段绑定的默认值按叶子字段名登记，与按端口 id 登记的 inputDefaults 分开存放")
+    private Map<String, Map<String, Object>> nestedInputDefaults = new LinkedHashMap<>();
 
     @Schema(description = "外部输入映射：目标入参 id -> 外部参数名")
     private Map<String, String> externalInputs = new LinkedHashMap<>();
@@ -67,14 +71,33 @@ public class CompositeNodePlanBO {
     @Schema(description = "分支节点判断表达式")
     private String branchExpression;
 
+    @Schema(description = "Switch Case 节点取值端口名")
+    private String switchOnPath;
+
+    @Schema(description = "Switch Case 分支：case.id -> 目标节点 elId")
+    private Map<String, String> switchTargets = new LinkedHashMap<>();
+
+    @Schema(description = "Switch Case 分支匹配项：case.id -> 匹配值")
+    private Map<String, String> switchCases = new LinkedHashMap<>();
+
     @Schema(description = "转换节点语言")
     private String transformLanguage;
 
     @Schema(description = "转换节点脚本")
     private String transformScript;
 
+    @Schema(description = "转换节点映射模式：json/script")
+    private String transformMappingMode;
+
+    @Schema(description = "转换节点 JSON 映射规则（JSON 字符串）")
+    private String transformMappings;
+
     public Map<String, String> getInputParams() {
         return inputParams == null ? inputParams = new LinkedHashMap<>() : inputParams;
+    }
+
+    public Map<String, Map<String, Object>> getNestedInputDefaults() {
+        return nestedInputDefaults == null ? nestedInputDefaults = new LinkedHashMap<>() : nestedInputDefaults;
     }
 
     public List<String> getLoopBody() {
@@ -87,6 +110,29 @@ public class CompositeNodePlanBO {
 
     public List<String> getEnclosingLoops() {
         return enclosingLoops == null ? enclosingLoops = new ArrayList<>() : enclosingLoops;
+    }
+
+    /**
+     * 画布上为该入参配置的手动输入固定值。
+     * <p>手填值一律以字符串登记，空串视为"未配置"，否则占位空值会挡住上游连线推过来的值。</p>
+     *
+     * @param portId 入参端口 id
+     * @param portName 入参端口名
+     * @return 固定值；未配置手动输入时返回 null
+     */
+    public Object manualInput(String portId, String portName) {
+        Map<String, Object> defaults = getInputDefaults();
+        Object value = defaults == null ? null : defaults.get(portId);
+        if (value == null) {
+            value = getNestedInputDefaults().get(portName);
+        }
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof String text && text.trim().isEmpty()) {
+            return null;
+        }
+        return value;
     }
 
     /**

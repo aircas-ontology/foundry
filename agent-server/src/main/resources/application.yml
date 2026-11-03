@@ -1,0 +1,27 @@
+# 配置约定：
+# 1. 本文件仅声明非 AI 相关的基础配置；AI 相关全部配置（spring.ai.* 与 mcp.*）
+#    已迁至 application-local.yml（.gitignore 忽略 **/application-local.yml，不入库）。
+# 2. 启动时通过 spring.profiles.active=local 加载本地覆盖。
+server:
+  port: 37003
+  servlet:
+    context-path: /agent
+
+spring:
+  profiles:
+    active: local
+  application:
+    name: agent
+  jackson:
+    default-property-inclusion: non_null
+
+# Knife4j / SpringDoc OpenAPI 3 配置
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    path: /swagger-ui.html

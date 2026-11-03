@@ -2,7 +2,9 @@ package com.aircas.ptr.foundry.ontology.service.impl;
 
 import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
+import com.aircas.ptr.foundry.ontology.composite.CompositeFunctionCatalog;
 import com.aircas.ptr.foundry.ontology.config.ContainerOperatorProperties;
+import com.aircas.ptr.foundry.ontology.model.dto.RateLimitConfig;
 import com.aircas.ptr.foundry.ontology.model.dto.container.ContainerImageInfo;
 import com.aircas.ptr.foundry.ontology.model.dto.container.ContainerInterface;
 import com.aircas.ptr.foundry.ontology.model.dto.container.ContainerInterfaceDoc;
@@ -13,14 +15,22 @@ import com.aircas.ptr.foundry.ontology.model.enums.ContainerPhaseEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamCategoryEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.param.ContainerFunctionCreateParam;
+import com.aircas.ptr.foundry.ontology.model.param.ContainerProbeParam;
 import com.aircas.ptr.foundry.ontology.model.po.Function;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionContainerInstance;
+import com.aircas.ptr.foundry.ontology.model.po.FunctionContainerUpload;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionParamPO;
+import com.aircas.ptr.foundry.ontology.model.po.FunctionRateLimitTemplate;
+import com.aircas.ptr.foundry.ontology.model.vo.FunctionParameterVO;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.FunctionMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.FunctionContainerInstanceMapper;
 import com.aircas.ptr.foundry.ontology.service.ContainerFunctionService;
 import com.aircas.ptr.foundry.ontology.service.FunctionParamService;
+import com.aircas.ptr.foundry.ontology.service.FunctionRateLimitTemplateService;
 import com.aircas.ptr.foundry.ontology.service.OpenApiProbeService;
+import com.aircas.ptr.foundry.ontology.utils.ContainerNodeForwarder;
+import com.aircas.ptr.foundry.ontology.utils.ContainerNodeIdentity;
+import com.aircas.ptr.foundry.ontology.utils.ContainerUploadRegistry;
 import com.aircas.ptr.foundry.ontology.utils.DockerImageInspector;
 import com.aircas.ptr.foundry.ontology.utils.DockerCommandExecutor;
 import com.aircas.ptr.foundry.ontology.utils.DockerRunCommandParser;
@@ -65,8 +75,6 @@ public class ContainerFunctionServiceImpl implements ContainerFunctionService {
     private static final Set<String> IMAGE_EXTENSIONS = Set.of(".tar", ".tar.gz", ".tgz");
     /** 允许的接口文档扩展名 */
     private static final Set<String> DOC_EXTENSIONS = Set.of(".json", ".yaml", ".yml");
-    /** ARM 架构标识 */
-    private static final String ARM64 = "arm64";
 
     private final ContainerOperatorProperties properties;
     private final OpenApiProbeService openApiProbeService;
@@ -79,6 +87,24 @@ public class ContainerFunctionServiceImpl implements ContainerFunctionService {
 
     @Resource
     private FunctionContainerInstanceMapper containerInstanceMapper;
+
+    /**
+     * 多实例部署下的节点归属三件套：镜像 tar 与 docker 容器只落在收到上传请求那台机器上，
+     * 上传时登记归属（{@link ContainerUploadRegistry}）→ 探查/启停据此判定归属（{@link ContainerNodeIdentity}）
+     * → 非本节点则把同一请求转发到归属节点（{@link ContainerNodeForwarder}）。
+     */
+    @Resource
+    private ContainerUploadRegistry containerUploadRegistry;
+
+    @Resource
+    private ContainerNodeIdentity containerNodeIdentity;
+
+    @Resource
+    private ContainerNodeForwarder containerNodeForwarder;
+
+    /** 限流配置模板服务：容器算子每条派生 function 均需写入模板快照 */
+    @Resource
+    private FunctionRateLimitTemplateService rateLimitTemplateService;
 
     // 序列化入库时忽略 null：docker_config 只落接口级内容（{"interfaces":[...]}），不携带容器级空字段
     private final ObjectMapper objectMapper = new ObjectMapper()
@@ -105,31 +131,36 @@ public class ContainerFunctionServiceImpl implements ContainerFunctionService {
         try {
             meta = DockerImageInspector.inspect(target);
         } catch (RuntimeException e) {
-            // 解析失败：仅启用校验时视为非法并清理；关闭校验时记录并放行（本地无 ARM 环境测试）
+            // 解析失败：仅启用校验时视为非法并清理；关闭校验时记录并放行（本地无法解析镜像包时测试用）
             if (properties.isArmCheckEnabled()) {
                 deleteQuietly(target);
                 throw e;
             }
-            log.warn("ARM 校验已关闭，镜像架构解析失败但放行：{}", e.getMessage());
+            log.warn("架构校验已关闭，镜像架构解析失败但放行：{}", e.getMessage());
             meta = new DockerImageInspector.ImageMeta(DockerImageInspector.UNKNOWN_ARCH, new ArrayList<>());
         }
 
-        if (properties.isArmCheckEnabled() && !ARM64.equals(meta.getArchitecture())) {
+        String architecture = meta.getArchitecture();
+        if (properties.isArmCheckEnabled() && !isArchitectureAllowed(architecture)) {
             deleteQuietly(target);
             // UNKNOWN_ARCH 代表 config 缺失/解析失败，与“架构不对”同位拒绝但归因不同，文案区分便于运维定位
-            String message = DockerImageInspector.UNKNOWN_ARCH.equals(meta.getArchitecture())
+            String message = DockerImageInspector.UNKNOWN_ARCH.equals(architecture)
                     ? "镜像 config 缺失或解析失败，无法识别架构（请确认 tar 为 docker save 导出的完整镜像包）"
-                    : "仅支持 ARM64 镜像，当前镜像架构为 " + meta.getArchitecture();
+                    : "镜像架构不受支持，当前镜像架构为 " + architecture + "，允许的架构："
+                            + String.join("/", properties.getAllowedArchitectures());
             throw new BusinessException(message);
         }
 
-        return ContainerImageInfo.builder()
+        ContainerImageInfo imageInfo = ContainerImageInfo.builder()
                 .fileName(fileName)
                 .path(target.toAbsolutePath().toString())
                 .size(file.getSize())
                 .architecture(meta.getArchitecture())
                 .repoTags(meta.getRepoTags())
                 .build();
+        // tar 只落在本节点磁盘：登记归属，后续的探查/创建/启停据此把请求指回这里
+        containerUploadRegistry.record(imageInfo.getPath(), FunctionContainerUpload.KIND_IMAGE);
+        return imageInfo;
     }
 
     @Override
@@ -146,15 +177,26 @@ public class ContainerFunctionServiceImpl implements ContainerFunctionService {
             throw new BusinessException("接口文档保存失败：" + e.getMessage());
         }
 
-        return ContainerInterfaceDoc.builder()
+        ContainerInterfaceDoc docInfo = ContainerInterfaceDoc.builder()
                 .fileName(fileName)
                 .path(target.toAbsolutePath().toString())
                 .format(openApiProbeService.detectFormat(target.toAbsolutePath().toString()))
                 .build();
+        // 文档同样只落在本节点磁盘：探查接口时要读它，故一并登记归属
+        containerUploadRegistry.record(docInfo.getPath(), FunctionContainerUpload.KIND_DOC);
+        return docInfo;
     }
 
     @Override
     public List<ContainerInterface> probeInterfaces(String docPath) {
+        // 文档可能在兄弟节点上（上传与探查是两次独立请求，会被负载到不同实例）：按登记反查归属并转发，
+        // 对端跑同一个端点、读它自己磁盘上的文件，前端无需感知 node.ip
+        FunctionContainerUpload owner = containerUploadRegistry.findOwner(docPath);
+        if (owner != null && !containerNodeIdentity.isSelf(owner.getNodeIp())
+                && !containerNodeForwarder.isForwardedRequest()) {
+            return containerNodeForwarder.forwardList(owner.getNodeIp(), owner.getNodePort(),
+                    new ContainerProbeParam(docPath), ContainerInterface.class, "接口探查");
+        }
         return openApiProbeService.probe(docPath);
     }
 
@@ -183,23 +225,42 @@ public class ContainerFunctionServiceImpl implements ContainerFunctionService {
         String containerKey = UUID.randomUUID().toString().replace("-", "");
 
         // 容器级唯一性校验（一容器=一实例，保存期拦截，避免存入 start 才爆的算子）：
+        // 多节点部署下端口与容器名按节点隔离（每台机器各有独立 docker daemon），故校验范围限定在本节点；
+        // 单节点模式 node_ip 为空，查同为空的历史记录，保持原行为。
         // 1) 容器名：用户 --name 优先，否则平台默认 foundry-ctr-<key>（UUID 天然唯一）；docker 容器名全局唯一，不得与已注册实例重名。
         // 2) 宿主端口：一宿主端口=一容器算子，不得与任何已注册实例的 host_port 重复。
         String userContainerName = DockerRunCommandParser.parseContainerName(param.getRunCommand());
         String containerName = (userContainerName != null && !userContainerName.isBlank())
                 ? userContainerName
                 : DockerCommandExecutor.defaultContainerName(containerKey);
-        boolean portTaken = containerInstanceMapper.selectCount(new LambdaQueryWrapper<FunctionContainerInstance>()
+        LambdaQueryWrapper<FunctionContainerInstance> nodeScope = new LambdaQueryWrapper<>();
+        if (containerNodeIdentity.isMultiNode()) {
+            nodeScope.eq(FunctionContainerInstance::getNodeIp, containerNodeIdentity.nodeIp());
+        } else {
+            nodeScope.isNull(FunctionContainerInstance::getNodeIp);
+        }
+        boolean portTaken = containerInstanceMapper.selectCount(nodeScope
                 .eq(FunctionContainerInstance::getHostPort, portMapping.getHostPort())) > 0;
         PreconditionUtils.checkArgument(!portTaken,
                 "宿主端口 " + portMapping.getHostPort() + " 已被其他容器算子占用，请更换 -p 端口映射", HttpStatus.BAD_REQUEST);
-        boolean nameTaken = containerInstanceMapper.selectCount(new LambdaQueryWrapper<FunctionContainerInstance>()
+        LambdaQueryWrapper<FunctionContainerInstance> nameScope = new LambdaQueryWrapper<>();
+        if (containerNodeIdentity.isMultiNode()) {
+            nameScope.eq(FunctionContainerInstance::getNodeIp, containerNodeIdentity.nodeIp());
+        } else {
+            nameScope.isNull(FunctionContainerInstance::getNodeIp);
+        }
+        boolean nameTaken = containerInstanceMapper.selectCount(nameScope
                 .eq(FunctionContainerInstance::getContainerName, containerName)) > 0;
         PreconditionUtils.checkArgument(!nameTaken,
                 "容器名与已注册容器算子重名：" + containerName + "，请在启动命令中更换 --name", HttpStatus.BAD_REQUEST);
 
         List<String> createdApis = new ArrayList<>();
         Set<String> batchApis = new HashSet<>();
+        // 限流模板快照：容器算子每条派生 function 均写入同一份配置快照
+        FunctionRateLimitTemplate rateLimitTemplate = rateLimitTemplateService.getById(param.getRateLimitTemplateId());
+        PreconditionUtils.checkArgument(rateLimitTemplate != null,
+                "限流模板不存在：" + param.getRateLimitTemplateId(), HttpStatus.BAD_REQUEST);
+        String rateLimitConfigJson = buildRateLimitConfigJson(rateLimitTemplate);
         for (ContainerInterface itf : param.getSelectedInterfaces()) {
             String itfApi = itf.getApi() != null ? itf.getApi()
                     : (itf.getMethod() + " " + itf.getPath());
@@ -209,9 +270,13 @@ public class ContainerFunctionServiceImpl implements ContainerFunctionService {
             String derivedApi = param.getFunctionApi() + "_" + itfSegment;
             PreconditionUtils.checkArgument(batchApis.add(derivedApi),
                     "本批次存在重复接口标识：" + derivedApi, HttpStatus.BAD_REQUEST);
-            // api 唯一：容器算子无版本迭代，派生 api 不能与任何已存在函数重复
-            boolean apiExists = functionMapper.selectCount(new LambdaQueryWrapper<Function>()
-                    .eq(Function::getApi, derivedApi)) > 0;
+            // api 唯一：容器算子无版本迭代，派生 api 不能与同一空间内已存在函数重复（跨空间允许重名）
+            LambdaQueryWrapper<Function> apiQuery = new LambdaQueryWrapper<Function>()
+                    .eq(Function::getApi, derivedApi);
+            if (param.getOntologySpaceId() != null) {
+                apiQuery.eq(Function::getOntologySpaceId, param.getOntologySpaceId());
+            }
+            boolean apiExists = functionMapper.selectCount(apiQuery) > 0;
             PreconditionUtils.checkArgument(!apiExists,
                     "算子 api 已存在：" + derivedApi, HttpStatus.BAD_REQUEST);
 
@@ -227,6 +292,8 @@ public class ContainerFunctionServiceImpl implements ContainerFunctionService {
                     .description(joinDesc(param.getDescription(), itf.getDescription()))
                     .containerKey(containerKey)
                     .dockerConfig(writeJson(config))
+                    .rateLimitTemplateId(rateLimitTemplate.getId())
+                    .rateLimitConfig(rateLimitConfigJson)
                     .build();
             functionMapper.insert(function);
 
@@ -235,6 +302,7 @@ public class ContainerFunctionServiceImpl implements ContainerFunctionService {
         }
         // 生成一个运行实例行（一个容器算子=一个容器，设计 C 的 N 条 function 通过 containerKey 归组），初始态 CREATED
         // 容器级信息（镜像/接口文档/启动命令/端口）在此仅存一份，为唯一权威来源
+        boolean multiNode = containerNodeIdentity.isMultiNode();
         FunctionContainerInstance instance = FunctionContainerInstance.builder()
                 .containerKey(containerKey)
                 .ontologySpaceId(param.getOntologySpaceId())
@@ -245,12 +313,19 @@ public class ContainerFunctionServiceImpl implements ContainerFunctionService {
                 .runCommand(param.getRunCommand())
                 .hostPort(portMapping.getHostPort())
                 .containerPort(portMapping.getContainerPort())
+                // 归属节点 = 实际执行创建的节点（创建请求已按镜像归属转发到这里）：
+                // 启停/刷新据此转发，执行期也据此拼容器调用地址；单节点模式留空，保持原行为
+                .nodeIp(multiNode ? containerNodeIdentity.nodeIp() : null)
+                .nodePort(multiNode ? containerNodeIdentity.nodePort() : null)
                 .phase(ContainerPhaseEnum.CREATED)
                 .message("容器算子已创建，尚未启动")
                 .createTime(new Date())
                 .updateTime(new Date())
                 .build();
         containerInstanceMapper.insert(instance);
+        // 归属已固化到实例行，向导期的上传登记不再需要
+        containerUploadRegistry.remove(param.getImage().getPath(),
+                param.getInterfaceDoc() != null ? param.getInterfaceDoc().getPath() : null);
         return createdApis;
     }
 
@@ -314,7 +389,46 @@ public class ContainerFunctionServiceImpl implements ContainerFunctionService {
                         "in", p.getIn() == null ? "" : p.getIn(),
                         "required", Boolean.TRUE.equals(p.getRequired()),
                         "openapiType", p.getType() == null ? "object" : p.getType())))
+                .fields(toFieldsJson(p.getFields()))
                 .build();
+    }
+
+    /**
+     * 子字段落 {@code function_param.fields}：形状必须是 {@link FunctionParameterVO} 列表，
+     * 因为 {@code getFunctionDetailByApi} 按该类型反序列化此列（键为 paramName/paramType），
+     * 直接序列化探查 DTO 的 name/type 会让详情页子字段读不出名字。
+     */
+    private String toFieldsJson(List<ContainerInterfaceParam> fields) {
+        if (CollectionUtils.isEmpty(fields)) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(toFieldVOs(fields));
+        } catch (Exception e) {
+            log.warn("序列化参数 fields 失败：cause={}", e.getMessage());
+            return null;
+        }
+    }
+
+    private List<FunctionParameterVO> toFieldVOs(List<ContainerInterfaceParam> fields) {
+        List<FunctionParameterVO> vos = new ArrayList<>();
+        int order = 0;
+        for (ContainerInterfaceParam f : fields) {
+            List<FunctionParameterVO> children = CollectionUtils.isEmpty(f.getFields())
+                    ? null : toFieldVOs(f.getFields());
+            vos.add(FunctionParameterVO.builder()
+                    .paramName(f.getName())
+                    .paramType(CompositeFunctionCatalog.toParamType(f.getType()))
+                    .paramOrder(order++)
+                    .description(f.getDescription())
+                    .paramSchema(writeJson(Map.of(
+                            "in", f.getIn() == null ? "" : f.getIn(),
+                            "required", Boolean.TRUE.equals(f.getRequired()),
+                            "openapiType", f.getType() == null ? "object" : f.getType())))
+                    .fields(children)
+                    .build());
+        }
+        return vos;
     }
 
     private String writeJson(Object obj) {
@@ -323,6 +437,21 @@ public class ContainerFunctionServiceImpl implements ContainerFunctionService {
         } catch (Exception e) {
             throw new BusinessException("容器算子配置序列化失败：" + e.getMessage());
         }
+    }
+
+    private String buildRateLimitConfigJson(FunctionRateLimitTemplate template) {
+        if (template == null) {
+            return null;
+        }
+        RateLimitConfig config = RateLimitConfig.builder()
+                .timeoutMs(template.getTimeoutMs())
+                .retryCount(template.getRetryCount())
+                .retryIntervalMs(template.getRetryIntervalMs())
+                .tpsLimit(template.getTpsLimit())
+                .maxConcurrency(template.getMaxConcurrency())
+                .enabled(template.getEnabled())
+                .build();
+        return writeJson(config);
     }
 
     private List<ContainerInterfaceParam> nullSafe(List<ContainerInterfaceParam> list) {
@@ -349,6 +478,15 @@ public class ContainerFunctionServiceImpl implements ContainerFunctionService {
     private boolean hasDocExtension(String name) {
         String lower = name.toLowerCase(Locale.ROOT);
         return DOC_EXTENSIONS.stream().anyMatch(lower::endsWith);
+    }
+
+    /** 架构是否落在 {@code container-operator.allowed-architectures} 内（大小写不敏感）；清单为空视为不限制 */
+    private boolean isArchitectureAllowed(String architecture) {
+        List<String> allowed = properties.getAllowedArchitectures();
+        if (allowed == null || allowed.isEmpty()) {
+            return true;
+        }
+        return allowed.stream().anyMatch(item -> item != null && item.trim().equalsIgnoreCase(architecture));
     }
 
     private void deleteQuietly(Path path) {
