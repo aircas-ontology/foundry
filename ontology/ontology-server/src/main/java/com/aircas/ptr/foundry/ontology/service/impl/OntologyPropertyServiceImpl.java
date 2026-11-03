@@ -571,11 +571,13 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         if (CollectionUtils.isEmpty(roots)) {
             return null;
         }
+        Integer rootCategoryId = roots.get(0).getId();
         // query properties of this ontology, grouped by propertyCategoryId, so each category node carries its own properties
         var props = list(new LambdaQueryWrapper<OntologyProperty>()
                 .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier));
         var propMap = props.stream()
-                .collect(Collectors.groupingBy(OntologyProperty::getPropertyCategoryId,
+                .collect(Collectors.groupingBy(
+                        p -> p.getPropertyCategoryId() != null ? p.getPropertyCategoryId() : rootCategoryId,
                         Collectors.mapping(DataConverter::convertToPropertyInfoVO, Collectors.toList())));
         return buildCategoryVO(roots.get(0), categoryMap, propMap);
     }
