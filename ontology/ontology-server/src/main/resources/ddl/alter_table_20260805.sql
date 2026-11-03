@@ -20,7 +20,7 @@ drop column forward_child_link_id;
 
 
 /**
-  本体空间表
+  对象空间表
  */
 CREATE TABLE IF NOT EXISTS ontology.ontology_space (
     id          SERIAL         NOT NULL,
@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS ontology.ontology_space (
     CONSTRAINT pk_ontology_space PRIMARY KEY (id)
     );
 
-COMMENT ON TABLE  ontology.ontology_space IS '本体空间';
+COMMENT ON TABLE  ontology.ontology_space IS '对象空间';
 COMMENT ON COLUMN ontology.ontology_space.id          IS '主键ID，自增';
 COMMENT ON COLUMN ontology.ontology_space.display_name        IS '显示名称';
 COMMENT ON COLUMN ontology.ontology_space.icon        IS '图标URL';
@@ -49,28 +49,28 @@ create unique index ontology_space_uk_api_name
     on ontology.ontology_space (api_name);
 
 /**
-   增加本体空间column
+   增加对象空间column
  */
 alter table ontology.ontology_meta
     add ontology_space_id integer;
 
-comment on column ontology.ontology_meta.ontology_space_id is '本体空间id';
+comment on column ontology.ontology_meta.ontology_space_id is '对象空间id';
 
 alter table ontology.ontology_meta
     add ontology_category_id integer;
 
-comment on column ontology.ontology_meta.ontology_category_id is '本体分类id';
+comment on column ontology.ontology_meta.ontology_category_id is '对象分类id';
 
 alter table ontology.ontology_group
     add ontology_space_id integer;
 
-comment on column ontology.ontology_group.ontology_space_id is '本体空间id';
+comment on column ontology.ontology_group.ontology_space_id is '对象空间id';
 
 
 alter table ontology.ontology_link_group
     add ontology_space_id int4;
 
-comment on column ontology.ontology_link_group.ontology_space_id is '本体空间id';
+comment on column ontology.ontology_link_group.ontology_space_id is '对象空间id';
 
 
 
@@ -95,7 +95,7 @@ COMMENT ON COLUMN ontology.users.create_time IS '创建时间';
 COMMENT ON COLUMN ontology.users.update_time IS '更新时间';
 
 /**
-        本体分类表
+        对象分类表
  */
 create table IF NOT EXISTS ontology.ontology_category
 (
@@ -110,7 +110,7 @@ create table IF NOT EXISTS ontology.ontology_category
         unique (ontology_space_id, path)
 );
 
-comment on table ontology.ontology_category is '本体分类表';
+comment on table ontology.ontology_category is '对象分类表';
 
 comment on column ontology.ontology_category.parent_id is '父分类节点，根节点为0';
 
@@ -118,13 +118,13 @@ comment on column ontology.ontology_category.path is '分类路径';
 
 comment on column ontology.ontology_category.name is '分类名称';
 
-comment on column ontology.ontology_category.ontology_space_id is '本体空间id';
+comment on column ontology.ontology_category.ontology_space_id is '对象空间id';
 
 comment on column ontology.ontology_category.create_time is '创建时间';
 
 comment on column ontology.ontology_category.update_time is '更新时间';
 
-comment on constraint uk_ontology_space_id_path on ontology.ontology_category is '本体空间id+分类path，唯一索引';
+comment on constraint uk_ontology_space_id_path on ontology.ontology_category is '对象空间id+分类path，唯一索引';
 
 /**
         用户自定义画布表
@@ -143,7 +143,7 @@ CREATE TABLE IF NOT EXISTS ontology.user_workshop (
 COMMENT ON TABLE ontology.user_workshop IS '用户自定义画布表';
 COMMENT ON COLUMN ontology.user_workshop.id IS '主键ID，自增';
 COMMENT ON COLUMN ontology.user_workshop.user_id IS '用户ID，关联users表';
-COMMENT ON COLUMN ontology.user_workshop.ontology_unique_identifier IS '本体唯一标识符，对应ontology_meta.unique_identifier';
+COMMENT ON COLUMN ontology.user_workshop.ontology_unique_identifier IS '对象唯一标识符，对应ontology_meta.unique_identifier';
 COMMENT ON COLUMN ontology.user_workshop.canvas_config IS '画布配置信息，JSON格式';
 COMMENT ON COLUMN ontology.user_workshop.status IS '状态：已发布，草稿';
 COMMENT ON COLUMN ontology.user_workshop.version IS '版本号，每次更新递增';

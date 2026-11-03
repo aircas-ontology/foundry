@@ -17,11 +17,11 @@ import jakarta.validation.constraints.NotNull;
 @Accessors(chain = true)
 @NoArgsConstructor
 @AllArgsConstructor
-@Schema(description = "本体id Param")
+@Schema(description = "对象id Param")
 public class OntologyIdentifierParam {
 
     @NotBlank(message = "ontologyIdentifier is empty")
     @OntologyIdVerify
-    @Schema(name = "ontologyIdentifier", description = "本体id", example = "abcdef",required = true)
+    @Schema(name = "ontologyIdentifier", description = "对象id", example = "abcdef",required = true)
     private String ontologyIdentifier;
 }

@@ -9,7 +9,7 @@ import lombok.experimental.Accessors;
 import java.util.List;
 
 /**
- * 本体实例数据结构，作为 {@link OntologyCreateDTO#getInstances()} 段。
+ * 对象实例数据结构，作为 {@link OntologyCreateDTO#getInstances()} 段。
  *
  * <p>导出时从数据湖物理表装配；导入时若带有该段则回写数据湖（id 由数据库重新生成）。</p>
  */

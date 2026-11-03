@@ -19,7 +19,7 @@ import java.util.List;
 @Accessors(chain = true)
 @NoArgsConstructor
 @AllArgsConstructor
-@Schema(description = "从外部数据源创建本体对象的结果")
+@Schema(description = "从外部数据源创建对象的结果")
 public class OntologyBuildFromDatasourceResultVO {
 
     @Schema(name = "uniqueIdentifier", description = "新建对象的 uniqueIdentifier")

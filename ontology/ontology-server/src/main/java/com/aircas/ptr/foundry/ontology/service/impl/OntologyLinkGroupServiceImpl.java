@@ -62,7 +62,7 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
             PreconditionUtils.checkArgument(category != null, "关系分类不存在：" + categoryId, HttpStatus.BAD_REQUEST);
         }
 
-        // 空间id由调用方直接传入，不再反查本体归属
+        // 空间id由调用方直接传入，不再反查对象归属
         var spaceId = linkCreateParam.getSpaceId();
         PreconditionUtils.checkArgument(spaceId != null, "spaceId is empty", HttpStatus.BAD_REQUEST);
 
@@ -79,7 +79,7 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
                 .apiName(linkCreateParam.getApiName())
                 .description(linkCreateParam.getDescription())
                 .build();
-        //创建本体间关系
+        //创建对象间关系
         save(link);
         return link.getUniqueIdentifier();
     }
@@ -170,9 +170,9 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
             var meta = ontologyMetaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>()
                     .eq(OntologyMeta::getUniqueIdentifier, ontologyUniqueIdentifier)
                     .eq(OntologyMeta::getStatus, Status.ENABLE.getValue()));
-            PreconditionUtils.checkArgument(meta != null, "无效的本体id", HttpStatus.BAD_REQUEST);
+            PreconditionUtils.checkArgument(meta != null, "无效的对象id", HttpStatus.BAD_REQUEST);
             PreconditionUtils.checkArgument(meta.getOntologySpaceId() != null && meta.getOntologySpaceId().equals(spaceId),
-                    "本体不属于该空间", HttpStatus.BAD_REQUEST);
+                    "对象不属于该空间", HttpStatus.BAD_REQUEST);
         }
 
         // 限定在本空间内；传了对象 id 则进一步只取以该对象为端点的关系，否则取空间全部关系
@@ -192,7 +192,7 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
                     .build();
         }
 
-        // 收集边两端的本体id，查出节点信息（限制在本空间内）
+        // 收集边两端的对象id，查出节点信息（限制在本空间内）
         var idList = links.stream()
                 .flatMap(l -> Stream.of(l.getOntologyUniqueIdentifierFrom(), l.getOntologyUniqueIdentifierTo()))
                 .distinct()
@@ -264,8 +264,8 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
         PreconditionUtils.checkArgument(link != null, "无效的关系id", HttpStatus.BAD_REQUEST);
         // 检测是否被行为使用到
         var actions = actionLinkMapper.selectList(new LambdaQueryWrapper<OntologyActionLink>().eq(OntologyActionLink::getOntologyLinkUniqueIdentifier, linkUniqIdentifier));
-        PreconditionUtils.checkArgument(CollectionUtils.isEmpty(actions), "该关系被本体的某个行为使用到，不能删除", HttpStatus.FORBIDDEN);
-        // 删除本体关系
+        PreconditionUtils.checkArgument(CollectionUtils.isEmpty(actions), "该关系被对象的某个行为使用到，不能删除", HttpStatus.FORBIDDEN);
+        // 删除对象关系
         remove(query);
         // 删除实体关系
         entityService.deleteRelationsByLinkId(linkUniqIdentifier);

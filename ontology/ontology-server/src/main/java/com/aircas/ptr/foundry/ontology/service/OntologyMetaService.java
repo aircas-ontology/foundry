@@ -37,25 +37,25 @@ public interface OntologyMetaService extends IService<OntologyMeta> {
     List<OntologyMetaInfoVO> searchByKeyword(String keyword);
 
     /**
-     * 列出指定本体空间下已存在的本体元数据（仅含启用中 status=1 的记录）。
+     * 列出指定对象空间下已存在的对象元数据（仅含启用中 status=1 的记录）。
      *
      * <p>供 Agent 在「功能四 对象关系推导」中拉取同空间的已有对象作为候选目标，
      * 与 {@link #searchByKeyword(String)} 的区别在于本方法按 spaceId 硬隔离，不接受关键字。</p>
      *
-     * @param spaceId 本体空间 id（ontology_space 主键）
-     * @return 空间内已存在的本体列表，无则返回空集合
+     * @param spaceId 对象空间 id（ontology_space 主键）
+     * @return 空间内已存在的对象列表，无则返回空集合
      */
     List<OntologyMetaInfoVO> listBySpaceId(Integer spaceId);
 
     /**
-     * 按空间名称 + 对象名称精确查询本体。
+     * 按空间名称 + 对象名称精确查询对象。
      *
      * <p>先按 spaceName（匹配 apiName 或 displayName）定位空间，
-     * 再在该空间内按 objectName（匹配 apiName 或 displayName）精确查找本体。</p>
+     * 再在该空间内按 objectName（匹配 apiName 或 displayName）精确查找对象。</p>
      *
      * @param spaceName  空间名称（apiName 或 displayName）
      * @param objectName 对象名称（apiName 或 displayName）
-     * @return 匹配的本体列表，无匹配时返回空列表
+     * @return 匹配的对象列表，无匹配时返回空列表
      */
     List<OntologyMetaInfoVO> queryMetaBySpaceAndName(String spaceName, String objectName);
 
@@ -75,32 +75,32 @@ public interface OntologyMetaService extends IService<OntologyMeta> {
     List<String> importOntologies(MultipartFile file);
 
     /**
-     * 导出单个本体（含 schema、对象级关系，可选实例数据），结构对齐导入模板。
+     * 导出单个对象（含 schema、对象级关系，可选实例数据），结构对齐导入模板。
      *
-     * <p>关系端点可能指向同空间其它本体，displayName 解析覆盖该本体所属空间的全部启用本体；
+     * <p>关系端点可能指向同空间其它对象，displayName 解析覆盖该对象所属空间的全部启用对象；
      * 不附带函数定义（函数为空间级资源，随空间导出给出）。</p>
      *
-     * @param uniqueIdentifier 本体唯一标识
+     * @param uniqueIdentifier 对象唯一标识
      * @param exportType       导出类型（SCHEMA=仅结构, INSTANCE=含实例数据）
-     * @return 单元素本体导出列表，relations 段带出该对象关联的关系，端点以 displayName 表达
+     * @return 单元素对象导出列表，relations 段带出该对象关联的关系，端点以 displayName 表达
      */
     List<OntologyCreateDTO> exportOntology(String uniqueIdentifier, OntologyExportTypeEnum exportType);
 
     /**
-     * 导出指定空间的全部本体（含 schema，按 exportType 决定是否含实例数据）。
+     * 导出指定空间的全部对象（含 schema，按 exportType 决定是否含实例数据）。
      *
-     * @param spaceId    本体空间 id
+     * @param spaceId    对象空间 id
      * @param exportType 导出类型
-     * @return 本体导出列表，无本体时返回空列表
+     * @return 对象导出列表，无对象时返回空列表
      */
     List<OntologyCreateDTO> exportOntologies(Integer spaceId, OntologyExportTypeEnum exportType);
 
     /**
      * 空间已加载时的重载：供空间导出复用已查出的 space，避免重复 getById。
      *
-     * @param space      本体空间实体
+     * @param space      对象空间实体
      * @param exportType 导出类型
-     * @return 本体导出列表
+     * @return 对象导出列表
      */
     List<OntologyCreateDTO> exportOntologies(OntologySpace space, OntologyExportTypeEnum exportType);
 }

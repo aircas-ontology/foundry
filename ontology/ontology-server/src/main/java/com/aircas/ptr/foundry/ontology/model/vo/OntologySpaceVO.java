@@ -18,7 +18,7 @@ import static com.aircas.ptr.foundry.common.constant.DateFormat.DATE_FORMAT_DEFA
 @NoArgsConstructor
 @AllArgsConstructor
 @Accessors(chain = true)
-@Schema(description = "本体空间VO")
+@Schema(description = "对象空间VO")
 public class OntologySpaceVO {
 
     @Schema(name = "icon", description = "空间图标url")
@@ -43,23 +43,23 @@ public class OntologySpaceVO {
     private String username;
 
     /**
-     * 本体数量统计
+     * 对象数量统计
      */
-    @Schema(name = "ontologyCount", description = "本体数量", example = "10")
+    @Schema(name = "ontologyCount", description = "对象数量", example = "10")
     private Integer ontologyCount;
 
 
     @Schema(description = "行为统计")
     private Integer actionCount;
 
-    @Schema(description = "本体属性统计")
+    @Schema(description = "对象属性统计")
     private Integer propertyCount;
 
 
     /**
-     * 本体关系统计
+     * 对象关系统计
      */
-    @Schema(description = "本体关系统计")
+    @Schema(description = "对象关系统计")
     private Integer linkCount;
     @JsonFormat(pattern = DATE_FORMAT_DEFAULT, timezone = "GMT+8")
     @Schema(description = "创建时间")

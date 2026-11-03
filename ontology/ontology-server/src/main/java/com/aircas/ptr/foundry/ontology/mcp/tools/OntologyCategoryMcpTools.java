@@ -12,9 +12,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 本体分类 MCP 工具。
+ * 对象分类 MCP 工具。
  *
- * <p>作为 MCP Server 的能力提供方：用 Spring AI {@link Tool} / {@link ToolParam} 声明本体分类的只读原子操作，
+ * <p>作为 MCP Server 的能力提供方：用 Spring AI {@link Tool} / {@link ToolParam} 声明对象分类的只读原子操作，
  * 由 {@code McpServerConfig} 通过 {@link McpTools} 标记接口自动收集。方法委托既有 Service，
  * 直接返回自有业务 VO，Spring AI 自动序列化为 MCP 结果。</p>
  */
@@ -25,12 +25,12 @@ public class OntologyCategoryMcpTools implements McpTools {
     private final OntologyCategoryService ontologyCategoryService;
 
     @Tool(description = """
-            根据本体空间 id（spaceId）查询该空间下的分类列表（拍平）。
-            当用户需要为本体对象选择分类时使用。
+            根据对象空间 id（spaceId）查询该空间下的分类列表（拍平）。
+            当用户需要为对象选择分类时使用。
             返回分类 id 和名称列表。
             """)
     public List<OntologyCategoryVO> listCategoriesBySpace(
-            @ToolParam(description = "本体空间 id（spaceId）") Integer spaceId) {
+            @ToolParam(description = "对象空间 id（spaceId）") Integer spaceId) {
         // Service 返回分类树，此处拍平为仅含 categoryId / name 的扁平列表，便于大模型选择分类
         OntologyCategoryVO tree = ontologyCategoryService.getCategoryTree(spaceId);
         List<OntologyCategoryVO> flat = new ArrayList<>();

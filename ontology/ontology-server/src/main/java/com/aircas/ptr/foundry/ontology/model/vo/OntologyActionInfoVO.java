@@ -16,16 +16,16 @@ import lombok.experimental.SuperBuilder;
 @Accessors(chain = true)
 @AllArgsConstructor
 @NoArgsConstructor
-@Schema(description = "本体行为信息")
+@Schema(description = "对象行为信息")
 public class OntologyActionInfoVO {
 
     @Schema(name = "id", description = "行为id", example = "1")
     private Long id;
 
-    @Schema(name = "icon", description = "本体icon", example = "http://127.0.0.1/a.jpeg")
+    @Schema(name = "icon", description = "对象icon", example = "http://127.0.0.1/a.jpeg")
     private String icon;
 
-    @Schema(name = "ontologyUniqIdentifier", description = "本体id", example = "123456")
+    @Schema(name = "ontologyUniqIdentifier", description = "对象id", example = "123456")
     private String ontologyUniqIdentifier;
 
     @Schema(name = "actionApi", description = "api名称", example = "satellite")
@@ -37,7 +37,7 @@ public class OntologyActionInfoVO {
     @Schema(name = "displayName", description = "行为显示名称", example = "调用函数")
     private String displayName;
 
-    @Schema(name = "functionApi", description = "本体下函数api", example = "getInfo")
+    @Schema(name = "functionApi", description = "对象下函数api", example = "getInfo")
     private String functionApi;
 
     @Schema(name = "functionDescription", description = "函数描述", example = "这是一个函数")

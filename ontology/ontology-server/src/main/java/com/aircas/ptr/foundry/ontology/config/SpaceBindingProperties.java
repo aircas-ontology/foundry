@@ -9,7 +9,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * 用户与本体空间的绑定配置。
+ * 用户与对象空间的绑定配置。
  * <p>
  * 配置了绑定的用户，查询空间列表、全局检索等入口只返回/检索该空间；未配置的用户不受限制。
  * 绑定关系属环境相关配置，key 在 application.yml 声明，value 写在 application-local.yml（本地维护，不提交）。
@@ -20,7 +20,7 @@ import java.util.Map;
 public class SpaceBindingProperties {
 
     /**
-     * 用户名（users.username，大小写敏感） → 绑定的本体空间id（ontology_space.id）
+     * 用户名（users.username，大小写敏感） → 绑定的对象空间id（ontology_space.id）
      */
     private Map<String, Integer> users = new HashMap<>();
 

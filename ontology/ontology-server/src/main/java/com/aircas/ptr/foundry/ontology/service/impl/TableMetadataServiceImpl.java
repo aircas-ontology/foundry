@@ -49,7 +49,7 @@ public class TableMetadataServiceImpl implements TableMetadataService {
     public List<TableColumnDescVO> getColumns(Integer spaceId, String datasourceId) {
 
         var ontologySpace = spaceMapper.selectById(spaceId);
-        PreconditionUtils.checkNotNull(ontologySpace, "无效的本体空间id", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkNotNull(ontologySpace, "无效的对象空间id", HttpStatus.BAD_REQUEST);
 
         return tableMetadataMapper.queryColumnMetadata(ontologySpace.getApiName(), datasourceId).stream().map(v ->
                 TableColumnDescVO.builder()
@@ -69,7 +69,7 @@ public class TableMetadataServiceImpl implements TableMetadataService {
                                              Integer pageSize) {
 
         var ontologySpace = spaceMapper.selectById(spaceId);
-        PreconditionUtils.checkNotNull(ontologySpace, "无效的本体空间id", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkNotNull(ontologySpace, "无效的对象空间id", HttpStatus.BAD_REQUEST);
 
         var schemaName = ontologySpace.getApiName();
         var total = tableMetadataMapper.countTables(schemaName, keyword);

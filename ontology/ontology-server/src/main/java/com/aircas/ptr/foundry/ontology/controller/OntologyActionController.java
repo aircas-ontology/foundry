@@ -20,7 +20,7 @@ import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
 
 
-@Tag(name = "本体行为")
+@Tag(name = "对象行为")
 @RestController
 @RequestMapping("/action")
 public class OntologyActionController {
@@ -55,7 +55,7 @@ public class OntologyActionController {
 
     @Operation(summary = "分页获取行为列表（按空间过滤，支持关键词和状态筛选）")
     @GetMapping("/list")
-    public RestResult<Page<OntologyActionInfoVO>> pageGetActionByOntologyId(@RequestParam(required = true, name = "ontologySpaceId") @Parameter(description = "本体空间id（必传）") Integer ontologySpaceId,
+    public RestResult<Page<OntologyActionInfoVO>> pageGetActionByOntologyId(@RequestParam(required = true, name = "ontologySpaceId") @Parameter(description = "对象空间id（必传）") Integer ontologySpaceId,
                                                                             @RequestParam(required = false, name = "keyword") @Parameter(description = "关键词：行为名称、算子或描述") String keyword,
                                                                             @RequestParam(required = false, name = "status") @Parameter(description = "行为状态：1 启用，0 失效，不传查全部") Integer status,
                                                                             @RequestParam(required = false, defaultValue = "1") Integer pageNum,
@@ -71,7 +71,7 @@ public class OntologyActionController {
         return RestResult.ofData(ontologyActionService.getActionByApi(actionApi));
     }
 
-    @Operation(summary = "执行本体单个行为")
+    @Operation(summary = "执行对象单个行为")
     @PostMapping("/execute")
     public RestResult executeAction(@RequestBody @Valid OntologyActionExecuteParam param) {
         ontologyActionService.executeAction(param);

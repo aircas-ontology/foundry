@@ -18,10 +18,10 @@ import lombok.experimental.SuperBuilder;
 @Schema(description = "行为调度VO")
 public class ActionSchedulingInfoVO {
 
-    @Schema(name = "ontologyName", description = "本体名称", example = "名称")
+    @Schema(name = "ontologyName", description = "对象名称", example = "名称")
     private String ontologyName;
 
-    @Schema(name = "ontologyIdentifier", description = "本体id", example = "abcdef", required = true)
+    @Schema(name = "ontologyIdentifier", description = "对象id", example = "abcdef", required = true)
     private String ontologyIdentifier;
 
     @Schema(name = "actionApi", description = "行为id", example = "abcdef", required = true)

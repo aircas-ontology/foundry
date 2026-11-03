@@ -8,7 +8,7 @@
 |------|------|----------|
 | `common` | 统一响应、异常、工具、CORS、日志等 | 第三方库；**不得**依赖业务模块 |
 | `license-generator` | 许可证签发；也可作为库被引用 | 尽量自洽，不依赖 ontology-server |
-| `ontology-server` | 本体业务 REST 服务 | `common`、`license-generator` |
+| `ontology-server` | 对象业务 REST 服务 | `common`、`license-generator` |
 
 原则：
 
@@ -71,7 +71,7 @@ HTTP 路径：短横或资源名词，与现有风格一致（如 `/space`、`/m
 参考现有写法：
 
 ```java
-@Api(tags = "本体空间管理")
+@Api(tags = "对象空间管理")
 @RestController
 @RequestMapping("/space")
 @RequiredArgsConstructor
@@ -81,7 +81,7 @@ public class OntologySpaceController {
     private final OntologySpaceService ontologySpaceService;
 
     @PostMapping
-    @ApiOperation(value = "创建本体空间")
+    @ApiOperation(value = "创建对象空间")
     public RestResult<Integer> createSpace(@RequestBody @Valid OntologySpaceCreateParam param) {
         Integer id = ontologySpaceService.createSpace(param);
         return RestResult.ofData(id);

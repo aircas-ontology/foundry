@@ -27,16 +27,16 @@ public class ErrorCodeMap {
     private static Map codeMap = new HashMap();
 
     static {
-        codeMap.put(ONTOLOGY_API_NAME_NOT_FOUND_CODE, "本体未找到");
+        codeMap.put(ONTOLOGY_API_NAME_NOT_FOUND_CODE, "对象未找到");
         codeMap.put(FUNCTION_FILE_NOT_FOUND_CODE, "函数文件未找到");
         codeMap.put(FUNCTION_FILE_NOT_COMPILED_CODE, "函数文件无法编译");
         codeMap.put(FUNCTION_CLASS_NOT_NEW_INSTANCE_CODE, "函数类不能创建实例");
         codeMap.put(FUNCTION_RUNTIME_ERROR_CODE, "函数运行时错误");
-        codeMap.put(ONTOLOGY_FUNCTION_NOT_FOUND_CODE, "无法找到绑定到该本体的函数");
-        codeMap.put(ONTOLOGY_FUNCTION_MAPPED_PROPERTY_NOT_FOUND_CODE, "绑定的本体属性无法找到");
-        codeMap.put(ONTOLOGY_FUNCTION_PARAMETE_PROPERTY_Type_NOT_SAME_CODE, "绑定的本体属性和参数类型不一致");
+        codeMap.put(ONTOLOGY_FUNCTION_NOT_FOUND_CODE, "无法找到绑定到该对象的函数");
+        codeMap.put(ONTOLOGY_FUNCTION_MAPPED_PROPERTY_NOT_FOUND_CODE, "绑定的对象属性无法找到");
+        codeMap.put(ONTOLOGY_FUNCTION_PARAMETE_PROPERTY_Type_NOT_SAME_CODE, "绑定的对象属性和参数类型不一致");
         codeMap.put(ONTOLOGY_FUNCTION_BINDG_PARAMETER_NOT_FOUND_CODE, "绑定的参数无法找到");
-        codeMap.put(OWL_URI_INVALID_CLASS_NOT_FOUND_CODE, "无法找到OWL URI中此本体");
+        codeMap.put(OWL_URI_INVALID_CLASS_NOT_FOUND_CODE, "无法找到OWL URI中此对象");
         codeMap.put(OWL_URI_INVALID_PRIMARY_KEY_NOT_FOUND_CODE, "无法找到OWL URI中的主键对应的对象");
     }
 

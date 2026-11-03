@@ -27,22 +27,22 @@ public class OntologyLinkCategoryLinkVO {
     @Schema(name = "categoryId", description = "关系所属分类id（ontology_link_category.id）")
     private Integer categoryId;
 
-    @Schema(name = "ontologyUniqueIdentifierFrom", description = "开始本体unique identifier")
+    @Schema(name = "ontologyUniqueIdentifierFrom", description = "开始对象unique identifier")
     private String ontologyUniqueIdentifierFrom;
 
-    @Schema(name = "ontologyNameFrom", description = "开始本体名称")
+    @Schema(name = "ontologyNameFrom", description = "开始对象名称")
     private String ontologyNameFrom;
 
-    @Schema(name = "ontologyUniqueIdentifierTo", description = "结束本体unique identifier")
+    @Schema(name = "ontologyUniqueIdentifierTo", description = "结束对象unique identifier")
     private String ontologyUniqueIdentifierTo;
 
-    @Schema(name = "ontologyNameTo", description = "结束本体名称")
+    @Schema(name = "ontologyNameTo", description = "结束对象名称")
     private String ontologyNameTo;
 
-    @Schema(name = "ontologyIconFrom", description = "开始本体icon")
+    @Schema(name = "ontologyIconFrom", description = "开始对象icon")
     private String ontologyIconFrom;
 
-    @Schema(name = "ontologyIconTO", description = "结束本体icon")
+    @Schema(name = "ontologyIconTO", description = "结束对象icon")
     private String ontologyIconTO;
 
     @Schema(name = "apiName", description = "apiName")

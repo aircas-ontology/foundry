@@ -15,10 +15,10 @@ import java.util.List;
 @SuperBuilder
 public class CdcFullSyncParam {
 
-    @Schema(name = "syncSpace", description = "是否同步本体空间索引 ontology_space，缺省 true")
+    @Schema(name = "syncSpace", description = "是否同步对象空间索引 ontology_space，缺省 true")
     private Boolean syncSpace;
 
-    @Schema(name = "syncMeta", description = "是否同步本体元数据索引 ontology_meta，缺省 true")
+    @Schema(name = "syncMeta", description = "是否同步对象元数据索引 ontology_meta，缺省 true")
     private Boolean syncMeta;
 
     @Schema(name = "syncProperty", description = "是否同步属性索引 ontology_property，缺省 true")
@@ -33,6 +33,6 @@ public class CdcFullSyncParam {
     @Schema(name = "syncLinkGroup", description = "是否同步关系索引 ontology_link_group，缺省 true")
     private Boolean syncLinkGroup;
 
-    @Schema(name = "ontologyUids", description = "仅同步指定本体（unique_identifier 列表）的实例文档，缺省全部启用本体。仅作用于实例同步")
+    @Schema(name = "ontologyUids", description = "仅同步指定对象（unique_identifier 列表）的实例文档，缺省全部启用对象。仅作用于实例同步")
     private List<String> ontologyUids;
 }

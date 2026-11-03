@@ -19,7 +19,7 @@ import jakarta.validation.Valid;
  * 「数据源构建对象」向导的落库入口。前三个步骤由
  * {@link DatasourceConnectionController} 的 {@code /datasource/connection/list}、
  * {@code /datasource/connection/table/list}、{@code /datasource/connection/table/columns} 提供，
- * 这里只负责最后一步：把用户勾选的列一次性建成一个本体对象。
+ * 这里只负责最后一步：把用户勾选的列一次性建成一个对象。
  * <p>
  * 一次调用只建一个对象；选了多张表即「一主多子」，主表属性归 {@code storageGroup=main}，
  * 子表属性用子表名作存储分组。
@@ -36,7 +36,7 @@ public class OntologyBuildFromDatasourceController {
 
     private final OntologyBuildFromDatasourceService ontologyBuildFromDatasourceService;
 
-    @Operation(summary = "用外部数据源勾选的表与列创建一个本体对象（主表建 apiName 表、子表按原名建表并写列映射；"
+    @Operation(summary = "用外部数据源勾选的表与列创建一个对象（主表建 apiName 表、子表按原名建表并写列映射；"
             + "所有校验在任何建表动作前完成，列名跨主子表重复整单报错）")
     @PostMapping("/build_object")
     public RestResult<OntologyBuildFromDatasourceResultVO> buildObject(

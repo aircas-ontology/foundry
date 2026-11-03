@@ -23,9 +23,9 @@ public class EntityActionExecuteParam extends EntityQueryParam {
     private String actionApi;
 
 
-    @Schema(name = "linkedOntologyUniqueIdentifier", description = "关联本体id", example = "123")
+    @Schema(name = "linkedOntologyUniqueIdentifier", description = "关联对象id", example = "123")
     private String linkedOntologyUniqueIdentifier;
 
-    @Schema(name = "linkedEntityPrimaryKey", description = "关联本体id下某实体主键值", example = "123")
+    @Schema(name = "linkedEntityPrimaryKey", description = "关联对象id下某实体主键值", example = "123")
     private Object linkedEntityPrimaryKey;
 }

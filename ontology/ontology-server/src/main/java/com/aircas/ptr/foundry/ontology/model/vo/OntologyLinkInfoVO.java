@@ -9,7 +9,7 @@ import lombok.experimental.Accessors;
 @Data
 @Builder
 @Accessors(chain = true)
-@Schema(description = "本体关系数据信息")
+@Schema(description = "对象关系数据信息")
 public class OntologyLinkInfoVO {
 
 
@@ -26,39 +26,39 @@ public class OntologyLinkInfoVO {
     private String name;
 
     /**
-     * 开始本体unique identifier
+     * 开始对象unique identifier
      */
-    @Schema(name = "ontologyUniqueIdentifierFrom", description = "开始本体unique identifier")
+    @Schema(name = "ontologyUniqueIdentifierFrom", description = "开始对象unique identifier")
     private String ontologyUniqueIdentifierFrom;
 
     /**
-     * 开始本体名称
+     * 开始对象名称
      */
-    @Schema(name = "ontologyNameFrom", description = "开始本体名称")
+    @Schema(name = "ontologyNameFrom", description = "开始对象名称")
     private String ontologyNameFrom;
 
     /**
-     * 开始本体icon
+     * 开始对象icon
      */
-    @Schema(name = "ontologyIconFrom", description = "开始本体icon")
+    @Schema(name = "ontologyIconFrom", description = "开始对象icon")
     private String ontologyIconFrom;
 
     /**
-     * 结束本体id
+     * 结束对象id
      */
-    @Schema(name = "ontologyUniqueIdentifierTo", description = "结束本体id")
+    @Schema(name = "ontologyUniqueIdentifierTo", description = "结束对象id")
     private String ontologyUniqueIdentifierTo;
 
     /**
-     * 结束本体名称
+     * 结束对象名称
      */
-    @Schema(name = "ontologyNameTo", description = "结束本体名称")
+    @Schema(name = "ontologyNameTo", description = "结束对象名称")
     private String ontologyNameTo;
 
     /**
-     * 开始本体icon
+     * 开始对象icon
      */
-    @Schema(name = "ontologyIconTO", description = "开始本体icon")
+    @Schema(name = "ontologyIconTO", description = "开始对象icon")
     private String ontologyIconTO;
 
     /**

@@ -18,7 +18,7 @@ import java.util.List;
 @Schema(description = "实体关系VO")
 public class EntityLinksVO {
 
-    @Schema(name = "ontologyUniqueIdentifier", description = "本体id", example = "abc")
+    @Schema(name = "ontologyUniqueIdentifier", description = "对象id", example = "abc")
     private String ontologyUniqueIdentifier;
 
     @Schema(name = "entityPrimaryKey", description = "实体主键值", example = "123")

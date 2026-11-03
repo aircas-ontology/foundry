@@ -22,7 +22,7 @@ public class EntityPropertyRowDetailVO {
     @Schema(name = "primaryKey", description = "实体主键", example = "1")
     private Object entityPrimaryKey;
 
-    @Schema(name = "ontologyUniqueIdentifier", description = "本体id")
+    @Schema(name = "ontologyUniqueIdentifier", description = "对象id")
     private String ontologyUniqueIdentifier;
 
     @Schema(name = "propertyGroups", description = "属性分组")

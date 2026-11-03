@@ -108,12 +108,12 @@ public class Function {
     private FunctionModelEnum model;
 
     /**
-     * 涉及的本体
+     * 涉及的对象
      */
     private String objectTypes;
 
     /**
-     * 本体空间id
+     * 对象空间id
      */
     private Integer ontologySpaceId;
 

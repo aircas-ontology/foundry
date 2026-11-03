@@ -13,7 +13,7 @@ public class Knife4jConfiguration {
     public OpenAPI customOpenAPI() {
         return new OpenAPI()
                 .info(new Info()
-                        .title("本体服务")
+                        .title("对象服务")
                         .description("中国科学院空天信息创新研究院")
                         .version("1.0.0"));
     }

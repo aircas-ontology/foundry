@@ -31,13 +31,13 @@ comment on column action_category.path is '分类路径，以 / 分隔';
 
 comment on column action_category.name is '分类名称';
 
-comment on column action_category.ontology_space_id is '本体空间id';
+comment on column action_category.ontology_space_id is '对象空间id';
 
 comment on column action_category.create_time is '创建时间';
 
 comment on column action_category.update_time is '更新时间';
 
-comment on constraint uk_action_category_space_id_path on action_category is '本体空间id+分类path，唯一索引';
+comment on constraint uk_action_category_space_id_path on action_category is '对象空间id+分类path，唯一索引';
 
 -- 行为挂载到行为分类体系树上
 alter table ontology.ontology_action

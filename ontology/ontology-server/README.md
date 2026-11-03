@@ -2,7 +2,7 @@
 
 ## 模块概述
 
-ontology-server 是 Foundry 平台的核心微服务模块，负责本体（Ontology）的全生命周期管理，包括本体建模、属性定义、关系链接、实体数据操作、行为编排、函数管理等功能。该模块基于 Spring Boot 构建，采用多数据源架构，支持 PostgreSQL（关系型存储）与 ArangoDB（图数据库）混合存储。
+ontology-server 是 Foundry 平台的核心微服务模块，负责对象（Ontology）的全生命周期管理，包括对象建模、属性定义、关系链接、实体数据操作、行为编排、函数管理等功能。该模块基于 Spring Boot 构建，采用多数据源架构，支持 PostgreSQL（关系型存储）与 ArangoDB（图数据库）混合存储。
 
 ## 技术栈
 
@@ -18,7 +18,7 @@ ontology-server 是 Foundry 平台的核心微服务模块，负责本体（Onto
 | Quartz | 定时任务调度 |
 | Knife4j (Swagger) | API 文档 |
 | Druid | 数据库连接池 |
-| OWL API | 本体语义处理 |
+| OWL API | 对象语义处理 |
 | Orekit | 空间动力学计算 |
 | Groovy | 动态脚本执行（函数运行时） |
 | Lombok | 代码简化 |
@@ -52,7 +52,7 @@ ontology-server/
 │   │   ├── OntologyGroupController.java  # 分组管理
 │   │   ├── OntologyLemmaController.java  # 词条管理
 │   │   ├── OntologyLinkController.java   # 链接关系管理
-│   │   ├── OntologyMetaController.java   # 本体元数据管理
+│   │   ├── OntologyMetaController.java   # 对象元数据管理
 │   │   ├── OntologyOverviewController.java # 概览统计
 │   │   ├── OntologyPropertyController.java # 属性管理
 │   │   └── OntologySpaceController.java  # 空间管理
@@ -87,13 +87,13 @@ ontology-server/
 ## 核心业务域
 
 ### 1. 空间管理（Space）
-本体空间的顶层容器，一个空间下可包含多个本体、分组和分类。
+对象空间的顶层容器，一个空间下可包含多个对象、分组和分类。
 
-### 2. 本体管理（Meta）
-本体的核心定义，包括本体名称、API 名称、所属空间/分组等元数据。支持批量导入创建。
+### 2. 对象管理（Meta）
+对象的核心定义，包括对象名称、API 名称、所属空间/分组等元数据。支持批量导入创建。
 
 ### 3. 属性管理（Property）
-定义本体的属性字段，包括：
+定义对象的属性字段，包括：
 - 属性类型（基本类型、枚举等）
 - 主键/标题键标记
 - 存储分组（主表/附表）
@@ -102,7 +102,7 @@ ontology-server/
 - 可见性窗口配置
 
 ### 4. 链接关系（Link）
-定义本体之间的关联关系，支持：
+定义对象之间的关联关系，支持：
 - 多种链接类型（一对一、一对多、多对多）
 - 链接方向（单向/双向）
 - 链接映射配置
@@ -114,7 +114,7 @@ ontology-server/
 - 实体查询与分页
 
 ### 6. 行为管理（Action）
-本体的行为编排，包括：
+对象的行为编排，包括：
 - 行为规则配置（HandleRule）
 - 行为任务调度（HandleTask）
 - 参数映射（MappingIn）
@@ -125,16 +125,16 @@ ontology-server/
 可复用的函数定义，支持多种模型（Groovy 脚本等），为行为提供执行逻辑。
 
 ### 8. 数据源管理（Datasource）
-本体属性与 PostgreSQL 表/列的映射关系管理，支持 Schema 变更事件通知（通过 RabbitMQ）。
+对象属性与 PostgreSQL 表/列的映射关系管理，支持 Schema 变更事件通知（通过 RabbitMQ）。
 
 ### 9. 词条管理（Lemma）
-本体相关的词条/术语管理。
+对象相关的词条/术语管理。
 
 ### 10. RAG 流程
 与 RAG（检索增强生成）相关的流程处理。
 
 ### 11. 行为分类体系（Action Category）
-行为（Action）的分类体系树，作用域为本体空间（一个空间一棵树），把同一空间下的行为按战术/功能归类。支持子树一次性创建、改名级联重写 path、级联删除（节点下有行为时拒绝）。
+行为（Action）的分类体系树，作用域为对象空间（一个空间一棵树），把同一空间下的行为按战术/功能归类。支持子树一次性创建、改名级联重写 path、级联删除（节点下有行为时拒绝）。
 
 ## 数据架构
 
@@ -237,10 +237,10 @@ http://localhost:37002/ontology/doc.html
 
 | 路径 | 方法 | 说明 |
 |------|------|------|
-| `/meta` | POST | 创建本体 |
-| `/meta` | GET | 查询本体列表 |
-| `/meta/{id}` | DELETE | 删除本体 |
-| `/meta/import` | POST | 批量导入本体 |
+| `/meta` | POST | 创建对象 |
+| `/meta` | GET | 查询对象列表 |
+| `/meta/{id}` | DELETE | 删除对象 |
+| `/meta/import` | POST | 批量导入对象 |
 | `/space` | POST | 创建空间 |
 | `/property` | POST | 创建属性 |
 | `/link` | POST | 创建链接关系 |

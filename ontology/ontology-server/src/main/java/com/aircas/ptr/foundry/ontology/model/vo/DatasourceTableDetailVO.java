@@ -11,7 +11,7 @@ import java.util.List;
 
 /**
  * 外部数据源表结构明细（向导「选择属性」步骤用）：列清单 + 主键 + 与其他勾选表之间的外键候选。
- * <p>只描述外部库的真实结构，不做任何本体侧的改写；第④步进库时的类型归一化以服务端重新扫描的结果为准。
+ * <p>只描述外部库的真实结构，不做任何对象侧的改写；第④步进库时的类型归一化以服务端重新扫描的结果为准。
  */
 @Data
 @Builder
@@ -56,7 +56,7 @@ public class DatasourceTableDetailVO {
         @Schema(name = "isPrimaryKey", description = "是否主键列")
         private Boolean isPrimaryKey;
 
-        @Schema(name = "ontologyDataType", description = "归一化后的本体属性类型，与第④步进库结果一致")
+        @Schema(name = "ontologyDataType", description = "归一化后的对象属性类型，与第④步进库结果一致")
         private String ontologyDataType;
     }
 

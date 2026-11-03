@@ -83,7 +83,7 @@ public class OntologyBuildFromDatasourceServiceImpl implements OntologyBuildFrom
         OntologyBuildFromDatasourceParam.SelectedTable master = requireMaster(tables);
         List<String> childTables = tables.keySet().stream().filter(name -> !name.equals(master.getTableName())).toList();
         PreconditionUtils.checkArgument(!childTables.contains(objectApiName),
-                "子表名不能与对象apiName相同：" + objectApiName + "（属性存储分组不允许与本体同名）", HttpStatus.BAD_REQUEST);
+                "子表名不能与对象apiName相同：" + objectApiName + "（属性存储分组不允许与对象同名）", HttpStatus.BAD_REQUEST);
         PreconditionUtils.checkArgument(!childTables.contains(MAIN_STORAGE_GROUP),
                 "子表名不能为" + MAIN_STORAGE_GROUP + "：子表的存储分组名即实体表名，会与主表分组冲突",
                 HttpStatus.BAD_REQUEST);
@@ -144,9 +144,9 @@ public class OntologyBuildFromDatasourceServiceImpl implements OntologyBuildFrom
      */
     private OntologySpace requireSpace(Integer spaceId) {
         OntologySpace space = ontologySpaceMapper.selectById(spaceId);
-        PreconditionUtils.checkNotNull(space, "本体空间不存在：spaceId=" + spaceId, HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkNotNull(space, "对象空间不存在：spaceId=" + spaceId, HttpStatus.BAD_REQUEST);
         PreconditionUtils.checkArgument(StringUtils.isNotEmpty(space.getApiName()),
-                "本体空间apiName为空，无法确定数据湖schema：spaceId=" + spaceId, HttpStatus.BAD_REQUEST);
+                "对象空间apiName为空，无法确定数据湖schema：spaceId=" + spaceId, HttpStatus.BAD_REQUEST);
         return space;
     }
 

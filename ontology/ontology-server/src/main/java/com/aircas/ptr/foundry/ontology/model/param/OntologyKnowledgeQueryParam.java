@@ -15,7 +15,7 @@ import jakarta.validation.constraints.NotNull;
 @Accessors(chain = true)
 @NoArgsConstructor
 @AllArgsConstructor
-@Schema(description = "本体知识库查询请求")
+@Schema(description = "对象知识库查询请求")
 public class OntologyKnowledgeQueryParam {
 
     @NotBlank(message = "question is empty")

@@ -16,7 +16,7 @@ import java.util.List;
 public interface OntologyLinkGroupService extends IService<OntologyLinkGroup> {
 
     /**
-     * 创建本体关系及实体关系边
+     * 创建对象关系及实体关系边
      *
      * @return 新建关系的 uniqueIdentifier
      */

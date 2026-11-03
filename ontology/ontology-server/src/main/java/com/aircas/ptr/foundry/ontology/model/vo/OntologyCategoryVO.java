@@ -15,7 +15,7 @@ import java.util.List;
 @AllArgsConstructor
 @NoArgsConstructor
 @Accessors(chain = true)
-@Schema(description = "本体分类VO")
+@Schema(description = "对象分类VO")
 public class OntologyCategoryVO {
 
     @Schema(name = "categoryId", description = "分类id", example = "1")
@@ -24,7 +24,7 @@ public class OntologyCategoryVO {
     @Schema(name = "name", description = "分类名称", example = "平台")
     private String name;
 
-    @Schema(name = "ontologyMetaInfos", description = "本体信息")
+    @Schema(name = "ontologyMetaInfos", description = "对象信息")
     private List<OntologyMetaInfoVO> ontologyMetaInfos;
 
     @Schema(name = "children", description = "子分类")

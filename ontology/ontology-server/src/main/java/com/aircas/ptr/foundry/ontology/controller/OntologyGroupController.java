@@ -17,7 +17,7 @@ import java.util.List;
 
 
 
-@Tag(name = "本体分组管理")
+@Tag(name = "对象分组管理")
 @RestController
 @Validated
 @RequestMapping("/group")
@@ -28,21 +28,21 @@ public class OntologyGroupController {
 
 
     @PostMapping("")
-    @Operation(summary = "新增本体分组")
+    @Operation(summary = "新增对象分组")
     public RestResult createGroup(@RequestBody @Valid OntologyGroupCreateParam param) {
         ontologyGroupService.createGroup(param);
         return RestResult.success();
     }
 
     @PutMapping("")
-    @Operation(summary = "编辑本体分组")
+    @Operation(summary = "编辑对象分组")
     public RestResult updateGroup(@RequestBody @Valid OntologyGroupUpdatedParam param) {
         ontologyGroupService.updateGroup(param);
         return RestResult.success();
     }
 
     @DeleteMapping("/{groupId}")
-    @Operation(summary = "删除本体分组")
+    @Operation(summary = "删除对象分组")
     public RestResult deleteGroupById(@PathVariable(required = true, name = "groupId") @GroupIdVerify String groupId) {
         ontologyGroupService.deleteGroupById(groupId);
         return RestResult.success();
@@ -50,7 +50,7 @@ public class OntologyGroupController {
 
 
     @GetMapping("/search")
-    @Operation(summary = "关键字检索本体分组")
+    @Operation(summary = "关键字检索对象分组")
     public RestResult<List<OntologyGroupInfoVO>> searchOntologyGroups(@RequestParam(required = false, name = "keyword") String keyword) {
         return RestResult.ofData(ontologyGroupService.searchByKeyword(keyword));
     }

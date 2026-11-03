@@ -108,7 +108,7 @@ public interface DatasourceConnectionService extends IService<DatasourceConnecti
      *
      * <p>实现上走 JDBC {@code DatabaseMetaData#getColumns} + {@code #getPrimaryKeys}，
      * catalog / schema 的分派规则与 {@link #listTableComments(Integer)} 一致。供 Agent
-     * 在「功能三 对象属性推导」中取当前本体对象对应表的列清单。</p>
+     * 在「功能三 对象属性推导」中取当前对象对应表的列清单。</p>
      *
      * @param datasourceId datasource_connection 表主键
      * @param tableName    表名（区分大小写，与 {@code DatabaseMetaData} 返回值保持一致）

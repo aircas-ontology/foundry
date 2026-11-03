@@ -35,7 +35,7 @@ public class EntityRelation {
     @To
     private EntityNode to;
 
-    //本体关系id
+    //对象关系id
     private String ontologyLinkId;
 
     //关系类型

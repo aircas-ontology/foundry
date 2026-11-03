@@ -20,7 +20,7 @@ import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
 import java.util.List;
 
-@Tag(name = "本体百科词条")
+@Tag(name = "对象百科词条")
 @RestController
 @Validated
 @RequestMapping("/lemma")
@@ -32,21 +32,21 @@ public class OntologyLemmaController {
 
 
     @PostMapping("")
-    @Operation(summary = "创建单个本体词条")
+    @Operation(summary = "创建单个对象词条")
     public RestResult<Integer> createLemma(@RequestBody @Valid OntologyLemmaCreateParam param) {
         Integer id = ontologyLemmaService.createLemma(param);
         return RestResult.ofData(id);
     }
 
     @PutMapping("")
-    @Operation(summary = "批量更新本体词条")
+    @Operation(summary = "批量更新对象词条")
     public RestResult batchUpdateLemma(@RequestBody @Valid List<OntologyLemmaUpdateParam> param) {
         ontologyLemmaService.batchUpdateLemma(param);
         return RestResult.success();
     }
 
     @DeleteMapping("/{lemmaId}")
-    @Operation(summary = "删除本体词条")
+    @Operation(summary = "删除对象词条")
     public RestResult deleteLemma(@PathVariable(required = true, name = "lemmaId") Integer lemmaId) {
         ontologyLemmaService.deleteLemma(lemmaId);
         return RestResult.success();
@@ -54,9 +54,9 @@ public class OntologyLemmaController {
 
 
     @GetMapping("/ontology")
-    @Operation(summary = "查询本体词条")
+    @Operation(summary = "查询对象词条")
     public RestResult<OntologyLemmaTreeVO> queryLemmaByOntologyId(@RequestParam(name = "ontologyUniqueIdentifier", required = true)
-                                                      @Parameter(description = "本体unique identifier")
+                                                      @Parameter(description = "对象unique identifier")
                                                       @OntologyIdVerify String ontologyUniqueIdentifier) {
         OntologyLemmaTreeVO res = ontologyLemmaService.queryLemmaByOntologyId(ontologyUniqueIdentifier);
         return RestResult.ofData(res);
@@ -65,20 +65,20 @@ public class OntologyLemmaController {
 
     @GetMapping("")
     @Operation(summary = "查询词条详情")
-    public RestResult<OntologyLemmaVO> queryLemmaById(@RequestParam(name = "lemmaId", required = true)  @Parameter(description = "本体词条id") Integer lemmaId) {
+    public RestResult<OntologyLemmaVO> queryLemmaById(@RequestParam(name = "lemmaId", required = true)  @Parameter(description = "对象词条id") Integer lemmaId) {
         OntologyLemmaVO res = ontologyLemmaService.queryLemmaById(lemmaId);
         return RestResult.ofData(res);
     }
 
     @PostMapping("/statistic")
-    @Operation(summary = "创建本体统计词条(webhook)")
+    @Operation(summary = "创建对象统计词条(webhook)")
     public RestResult<Integer> createStatisticLemma(@RequestBody @Valid OntologyStatisticLemmaCreateParam param) {
         Integer id = ontologyLemmaService.createStatisticLemma(param);
         return RestResult.ofData(id);
     }
 
     @PutMapping("/statistic")
-    @Operation(summary = "更新本体统计词条(webhook)")
+    @Operation(summary = "更新对象统计词条(webhook)")
     public RestResult updateStatisticLemma(@RequestBody @Valid OntologyStatisticLemmaUpdateParam param) {
         ontologyLemmaService.updateStatisticLemma(param);
         return RestResult.success();

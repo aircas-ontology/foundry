@@ -24,7 +24,7 @@ public class OntologyDatasourceController {
     private TableMetadataService tableMetadataService;
 
     @GetMapping("/column")
-    @Operation(summary = "根据本体空间和表名查询字段信息")
+    @Operation(summary = "根据对象空间和表名查询字段信息")
     public RestResult<List<TableColumnDescVO>> getColumns(
             @RequestParam @Parameter(description = "spaceId") Integer spaceId,
             @RequestParam @Parameter(description = "dataSourceId") String dataSourceId) {
@@ -32,7 +32,7 @@ public class OntologyDatasourceController {
     }
 
     @GetMapping("/table")
-    @Operation(summary = "搜索查询本体空间下数据源列表")
+    @Operation(summary = "搜索查询对象空间下数据源列表")
     public RestResult<Page<DatasourceTableVO>> getTables(
             @RequestParam @Parameter(description = "spaceId") Integer spaceId,
             @RequestParam(required = false, defaultValue = "") @Parameter(description = "keyword") String keyword,

@@ -23,11 +23,11 @@ public interface OntologySpaceService extends IService<OntologySpace> {
     OntologySpaceCanvasCreateVO createSpaceWithCanvasContent(OntologySpaceCanvasCreateParam param);
 
     /**
-     * 查询空间下的画布内容：全部本体对象、对象属性、对象间关系。
+     * 查询空间下的画布内容：全部对象、对象属性、对象间关系。
      *
      * <p>复用 {@link #createSpaceWithCanvasContent} 的请求参数类，前端渲染画布、编辑后可直接回传。</p>
      *
-     * @param spaceId 本体空间 id
+     * @param spaceId 对象空间 id
      * @return 画布内容
      */
     OntologySpaceCanvasCreateParam getSpaceCanvasContent(Integer spaceId);
@@ -35,7 +35,7 @@ public interface OntologySpaceService extends IService<OntologySpace> {
     void updateSpace(OntologySpaceUpdateParam param);
 
     /**
-     * 查询本体空间/主题列表。
+     * 查询对象空间/主题列表。
      *
      * @param type 类型：0=空间（默认，按配置文件绑定的空间过滤），1=主题（按创建用户名过滤）；为空按空间处理
      */
@@ -56,9 +56,9 @@ public interface OntologySpaceService extends IService<OntologySpace> {
     List<String> importOntologySpace(MultipartFile file);
 
     /**
-     * 导出指定本体空间（含分类树、全部本体 schema，按 exportType 决定是否含实例数据）。
+     * 导出指定对象空间（含分类树、全部对象 schema，按 exportType 决定是否含实例数据）。
      *
-     * @param spaceId    本体空间 id
+     * @param spaceId    对象空间 id
      * @param exportType 导出类型（SCHEMA=仅结构, INSTANCE=含实例数据）
      * @return 空间导出结构
      */
@@ -68,7 +68,7 @@ public interface OntologySpaceService extends IService<OntologySpace> {
      * 基于父空间创建子空间。
      *
      * @param param 子空间创建参数
-     * @return 创建结果，包含子空间 id 及本体/关系映射
+     * @return 创建结果，包含子空间 id 及对象/关系映射
      */
     OntologySubspaceCreateVO createSubspace(OntologySubspaceCreateParam param);
 }

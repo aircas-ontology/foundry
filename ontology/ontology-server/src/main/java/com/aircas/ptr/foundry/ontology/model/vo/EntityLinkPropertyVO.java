@@ -32,10 +32,10 @@ public class EntityLinkPropertyVO {
     @Schema(name = "linkType", description = "关系类型")
     private OntologyLinkTypeEnum linkType;
 
-    @Schema(name = "ontologyFrom", description = "本体开始id")
+    @Schema(name = "ontologyFrom", description = "对象开始id")
     private String ontologyFrom;
 
-    @Schema(name = "ontologyTo", description = "本体结束id")
+    @Schema(name = "ontologyTo", description = "对象结束id")
     private String ontologyTo;
 
     @Schema(name = "entityPrimaryKeyFrom", description = "开始实体主键值")

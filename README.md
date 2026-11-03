@@ -1,6 +1,6 @@
 # Foundry
 
-Foundry 是本体（Ontology）平台后端，负责本体建模、实体数据、行为编排、函数运行时与许可证管理。项目采用 Maven 多模块结构，核心服务基于 Spring Boot 构建，使用 PostgreSQL + ArangoDB 混合存储。
+Foundry 是对象（Ontology）平台后端，负责对象建模、实体数据、行为编排、函数运行时与许可证管理。项目采用 Maven 多模块结构，核心服务基于 Spring Boot 构建，使用 PostgreSQL + ArangoDB 混合存储。
 
 当前版本：`0.0.1-SNAPSHOT`  
 坐标：`com.aircas.ptr:foundry`
@@ -10,7 +10,7 @@ Foundry 是本体（Ontology）平台后端，负责本体建模、实体数据�
 ```
 foundry                          # 父工程（packaging: pom）
 ├── common                       # 公共库：统一返回、异常、工具类、跨域与日志
-├── ontology                     # 本体业务聚合模块
+├── ontology                     # 对象业务聚合模块
 │   ├── ontology-server          # 核心微服务（可运行 JAR：ontology.jar）
 │   └── license-generator        # 许可证生成与校验
 └── deploy                       # 依赖中间件 Docker Compose 部署
@@ -19,7 +19,7 @@ foundry                          # 父工程（packaging: pom）
 | 模块 | 说明 | 文档 |
 |------|------|------|
 | **common** | 被各业务模块依赖的公共组件：`RestResult` / `ResultCode`、全局异常处理、CORS、请求日志、雪花 ID、加解密、OWL/GeoTools 等通用能力 | 见下文 [common](#common) |
-| **ontology-server** | 本体全生命周期管理服务，对外提供 REST API | [ontology/ontology-server/README.md](ontology/ontology-server/README.md) |
+| **ontology-server** | 对象全生命周期管理服务，对外提供 REST API | [ontology/ontology-server/README.md](ontology/ontology-server/README.md) |
 | **license-generator** | 基于 TrueLicense 的证书生成工具；同时作为库被 ontology-server 依赖，用于启动时校验证书 | [ontology/license-generator/README.md](ontology/license-generator/README.md) |
 
 模块依赖关系：
@@ -47,7 +47,7 @@ ontology-server ──► common
 | Quartz | 定时任务 |
 | Knife4j / Swagger 2 | API 文档 |
 | Druid | 连接池 |
-| OWL API | OWL 本体语义 |
+| OWL API | OWL 对象语义 |
 | Orekit | 空间动力学计算 |
 | Groovy | 函数 / 行为动态脚本 |
 | JWT | 用户认证 |
@@ -78,7 +78,7 @@ ontology-server ──► common
 
 | 存储 | 用途 |
 |------|------|
-| PostgreSQL Main（`currentSchema=ontology`） | 元数据：空间、本体、属性、链接、行为、函数、用户等 |
+| PostgreSQL Main（`currentSchema=ontology`） | 元数据：空间、对象、属性、链接、行为、函数、用户等 |
 | PostgreSQL Datalake（`entity_datasource`） | 按存储分组动态生成的实体业务表 |
 | ArangoDB（database: `entity`，collections: `node`, `relation`） | 实体节点与关系图 |
 | MinIO（bucket: `ptr`） | 文件、图标、缩略图 |
@@ -86,22 +86,22 @@ ontology-server ──► common
 
 初始化 DDL 位于 `ontology/ontology-server/src/main/resources/ddl/`，其中 `ontology.sql` 为主库建表脚本，其余 `alter_table_*.sql` 为增量变更。
 
-仓库根目录的 `ontology.owl` 为 OWL 本体样例/语义资源。
+仓库根目录的 `ontology.owl` 为 OWL 对象样例/语义资源。
 
 ## 核心业务
 
-ontology-server 覆盖本体从建模到运行的完整链路：
+ontology-server 覆盖对象从建模到运行的完整链路：
 
 1. **空间 / 分组 / 分类**：顶层容器与组织方式
-2. **本体元数据（Meta）**：本体定义、导入、检索
+2. **对象元数据（Meta）**：对象定义、导入、检索
 3. **属性（Property）**：类型、主键/标题键、存储分组、数据源映射、可见性窗口
-4. **链接（Link）**：本体间一对一 / 一对多 / 多对多关系
+4. **链接（Link）**：对象间一对一 / 一对多 / 多对多关系
 5. **实体（Entity）**：PostgreSQL 行数据与 ArangoDB 图节点/关系同步、查询与生成
 6. **行为（Action）**：规则、任务、参数映射、调度启停
 7. **函数（Function）**：Groovy 等可复用执行逻辑
 8. **数据源（Datasource）**：表/列映射与 Schema 变更通知
 9. **词条（Lemma）**：术语管理
-10. **RAG**：知识问答与本体构建流程对接
+10. **RAG**：知识问答与对象构建流程对接
 11. **用户**：注册、登录，JWT 访问令牌 / 刷新令牌
 
 更细的包结构与接口说明见 [ontology-server README](ontology/ontology-server/README.md)。
@@ -116,7 +116,7 @@ ontology-server 覆盖本体从建模到运行的完整链路：
 | `exception` | `BusinessException`、全局异常处理 |
 | `config` | CORS |
 | `filter` | 请求日志、可缓存 Request |
-| `constant` | 本体数据类型、Postgres 类型、函数参数类型 |
+| `constant` | 对象数据类型、Postgres 类型、函数参数类型 |
 | `util` | 日期、HTTP、加解密、雪花 ID、Bean 拷贝、前置校验等 |
 
 ## 环境要求
@@ -258,7 +258,7 @@ java -jar ontology/license-generator/target/license-generator-0.0.1-SNAPSHOT-exe
 | `/space` | 空间 |
 | `/group` | 分组 |
 | `/category` | 分类树 |
-| `/meta` | 本体元数据 |
+| `/meta` | 对象元数据 |
 | `/property` | 属性、分类、元数据 Schema、数据源绑定 |
 | `/link` | 链接关系 |
 | `/entity` | 实体查询、节点/关系、行为执行 |

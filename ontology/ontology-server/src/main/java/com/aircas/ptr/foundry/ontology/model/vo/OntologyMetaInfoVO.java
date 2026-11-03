@@ -20,13 +20,13 @@ import static com.aircas.ptr.foundry.common.constant.DateFormat.DATE_FORMAT_DEFA
 @NoArgsConstructor
 @AllArgsConstructor
 @Accessors(chain = true)
-@Schema(description = "本体元数据信息")
+@Schema(description = "对象元数据信息")
 public class OntologyMetaInfoVO {
 
     /**
      * 唯一标识
      */
-    @Schema(name = "uniqueIdentifier", description = "本体id")
+    @Schema(name = "uniqueIdentifier", description = "对象id")
     private String uniqueIdentifier;
 
 
@@ -58,22 +58,22 @@ public class OntologyMetaInfoVO {
     private String icon;
 
     /**
-     * 本体名称
+     * 对象名称
      */
-    @Schema(name = "displayName", description = "本体名称", example = "飞机")
+    @Schema(name = "displayName", description = "对象名称", example = "飞机")
     private String displayName;
 
 
     /**
-     * 本体描述
+     * 对象描述
      */
-    @Schema(name = "description", description = "本体描述")
+    @Schema(name = "description", description = "对象描述")
     private String description;
 
     /**
-     * 在代码里用的本体名称
+     * 在代码里用的对象名称
      */
-    @Schema(name = "apiName", description = "在代码里用的本体名称")
+    @Schema(name = "apiName", description = "在代码里用的对象名称")
     private String apiName;
 
     /**
@@ -82,16 +82,16 @@ public class OntologyMetaInfoVO {
     @Schema(name = "metaGroupId", description = "分组")
     private Set<String> metaGroupId;
 
-    @Schema(name = "spaceId", description = "本体空间id")
+    @Schema(name = "spaceId", description = "对象空间id")
     private Integer spaceId;
 
-    @Schema(name = "ontologyCategoryId", description = "本体分类id")
+    @Schema(name = "ontologyCategoryId", description = "对象分类id")
     private Integer ontologyCategoryId;
 
-    @Schema(name = "parentOntologyUniqueIdentifier", description = "父本体id")
+    @Schema(name = "parentOntologyUniqueIdentifier", description = "父对象id")
     private String parentOntologyUniqueIdentifier;
 
-    @Schema(name = "parentOntologyDisplayName", description = "父本体名称")
+    @Schema(name = "parentOntologyDisplayName", description = "父对象名称")
     private String parentOntologyDisplayName;
 
     @Schema(name = "entityCount", description = "实例数量")

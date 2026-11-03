@@ -39,7 +39,7 @@ public class OntologyLinkCategory {
     private Integer parentId;
 
     /**
-     * 本体空间id
+     * 对象空间id
      */
     private Integer ontologySpaceId;
 

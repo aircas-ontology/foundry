@@ -337,7 +337,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         PreconditionUtils.checkArgument(function != null, "无效的函数api:" + api, HttpStatus.BAD_REQUEST);
         // 已发布状态不允许删除，需先下线
         requireUnpublished(function, "已发布的函数不能删除，请先下线");
-        //判断函数是否关联了行为，被本体行为使用到则不删除
+        //判断函数是否关联了行为，被对象行为使用到则不删除
         var ontologyActions = ontologyActionMapper.selectList(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getFunctionApi, api));
         PreconditionUtils.checkArgument(CollectionUtils.isEmpty(ontologyActions), "该函数已被行为关联" + api);
         //删除函数参数
@@ -842,7 +842,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         var function = requireVersionExists(spaceId, api, version);
         PreconditionUtils.checkArgument(function.getPublish() == FunctionConstant.PUBLISH_PUBLISHED,
                 "该版本不是发布状态：" + api + " " + function.getVersion(), HttpStatus.BAD_REQUEST);
-        //判断函数是否关联了行为，被本体行为使用到则不能下线
+        //判断函数是否关联了行为，被对象行为使用到则不能下线
         var ontologyActions = ontologyActionMapper.selectList(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getFunctionApi, api));
         PreconditionUtils.checkArgument(CollectionUtils.isEmpty(ontologyActions), "该函数已被行为关联，不能下线：" + api);
         function.setPublish(FunctionConstant.PUBLISH_UNPUBLISHED);
@@ -1118,7 +1118,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         }
 
         // 仅持久化用户在 queryConfig 里声明的变量（聚合目标 + 过滤条件）作为入参，
-        // 不追加编排机制参数（本体标识、结果出参等），避免详情页把机制参数当成用户参数展示。
+        // 不追加编排机制参数（对象标识、结果出参等），避免详情页把机制参数当成用户参数展示。
         List<FunctionParamPO> params = new ArrayList<>();
         int order = 1;
         for (var entry : varTypeMap.entrySet()) {

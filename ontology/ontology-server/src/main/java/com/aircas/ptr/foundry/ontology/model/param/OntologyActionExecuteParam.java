@@ -16,11 +16,11 @@ import jakarta.validation.constraints.NotBlank;
 @NoArgsConstructor
 @SuperBuilder
 @Accessors(chain = true)
-@Schema(description = "本体行为执行请求")
+@Schema(description = "对象行为执行请求")
 public class OntologyActionExecuteParam {
 
 
-    @Schema(name = "ontologyUniqueIdentifier", description = "本体id", example = "123")
+    @Schema(name = "ontologyUniqueIdentifier", description = "对象id", example = "123")
     @OntologyIdVerify
     private String ontologyUniqueIdentifier;
 

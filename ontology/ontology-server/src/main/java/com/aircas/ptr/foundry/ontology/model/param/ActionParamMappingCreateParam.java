@@ -32,9 +32,9 @@ public class ActionParamMappingCreateParam {
     @Schema(description = "输入来源配置：固定值存字面量（合法 JSON 按 JSON 解析，否则按原文本），List 存多个属性唯一标识的 JSON 数组；其余来源不传", example = "120.5")
     private String sourceConfig;
 
-    @Schema(description = "参数对应的本体属性ID；来源为对象属性/对象/List 时是取值属性，不绑算子的行为是目标属性", required = true, example = "fdsfa-gfdsagf-dfs")
+    @Schema(description = "参数对应的对象属性ID；来源为对象属性/对象/List 时是取值属性，不绑算子的行为是目标属性", required = true, example = "fdsfa-gfdsagf-dfs")
     private String propertyUniqueIdentifier;
 
-    @Schema(description = "参数对应的本体", required = true, example = "fdsfa-gfdsagf-dfs")
+    @Schema(description = "参数对应的对象", required = true, example = "fdsfa-gfdsagf-dfs")
     private String ontologyUniqueIdentifier;
 }

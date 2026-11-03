@@ -28,11 +28,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.regex.Pattern;
 
 /**
- * Agent 本体构建落库服务实现。
+ * Agent 对象构建落库服务实现。
  *
  * <p>编排逻辑严格模仿画布一键建空间 {@code OntologySpaceServiceImpl#createSpaceWithCanvasContent}：
- * 先建本体元数据拿到 uniqueIdentifier，再逐条建属性，最后逐条建关系；区别在于本实现**不建空间**
- * （spaceId 由用户选定），且关系的目标端是空间内已有本体（uniqueIdentifier 由功能四给出），
+ * 先建对象元数据拿到 uniqueIdentifier，再逐条建属性，最后逐条建关系；区别在于本实现**不建空间**
+ * （spaceId 由用户选定），且关系的目标端是空间内已有对象（uniqueIdentifier 由功能四给出），
  * 无需像画布那样在批次内做 apiName→uid 解析。</p>
  *
  * <p>关系分类（categoryId）为 {@code ontology_link_group} 必填项：入参未携带时，沿用画布策略
@@ -63,9 +63,9 @@ public class AgentOntologyBuildServiceImpl implements AgentOntologyBuildService 
     public AgentOntologyBuildResultVO buildOntology(AgentOntologyBuildParam param) {
         // 0. 入口兜底校验：MCP 写工具经大模型调用，@Valid 在工具入参上不保证触发，
         //    此处在事务开始前拦截非法入参，避免脏数据直达 DB 或落库到一半回滚。
-        PreconditionUtils.checkNotNull(param, "本体构建入参不能为空", HttpStatus.BAD_REQUEST);
-        PreconditionUtils.checkNotNull(param.getSpaceId(), "spaceId（本体空间 id）不能为空", HttpStatus.BAD_REQUEST);
-        PreconditionUtils.checkNotNull(param.getCategoryId(), "categoryId（本体分类）不能为空", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkNotNull(param, "对象构建入参不能为空", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkNotNull(param.getSpaceId(), "spaceId（对象空间 id）不能为空", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkNotNull(param.getCategoryId(), "categoryId（对象分类）不能为空", HttpStatus.BAD_REQUEST);
         PreconditionUtils.checkArgument(StringUtils.isNotBlank(param.getDisplayName()),
                 "displayName（对象名称）不能为空", HttpStatus.BAD_REQUEST);
         PreconditionUtils.checkArgument(StringUtils.isNotBlank(param.getApiName()),
@@ -76,9 +76,9 @@ public class AgentOntologyBuildServiceImpl implements AgentOntologyBuildService 
         // 空间存在性校验：MCP 工具入口非 Controller，@SpaceIdVerify 不会被触发；
         // 与 SpaceIdValidator 语义对齐——空间必须存在（与状态无关），否则后续属性/关系将挂到不存在的空间。
         PreconditionUtils.checkArgument(ontologySpaceMapper.selectById(param.getSpaceId()) != null,
-                "本体空间不存在：spaceId=" + param.getSpaceId(), HttpStatus.BAD_REQUEST);
+                "对象空间不存在：spaceId=" + param.getSpaceId(), HttpStatus.BAD_REQUEST);
 
-        // 1. 创建本体元数据，拿到 uniqueIdentifier（与画布 createOntology 同一入口，含同空间重名校验）
+        // 1. 创建对象元数据，拿到 uniqueIdentifier（与画布 createOntology 同一入口，含同空间重名校验）
         var metaParam = new OntologyMetaCreateParam()
                 .setDisplayName(param.getDisplayName())
                 .setApiName(param.getApiName())
@@ -86,7 +86,7 @@ public class AgentOntologyBuildServiceImpl implements AgentOntologyBuildService 
                 .setCategoryId(param.getCategoryId());
         metaParam.setSpaceId(param.getSpaceId());
         String uniqueIdentifier = ontologyMetaService.createOntology(metaParam);
-        log.info("[AgentOntologyBuild] 本体已创建 uniqueIdentifier={}, apiName={}, spaceId={}, sourceTable={}",
+        log.info("[AgentOntologyBuild] 对象已创建 uniqueIdentifier={}, apiName={}, spaceId={}, sourceTable={}",
                 uniqueIdentifier, param.getApiName(), param.getSpaceId(), param.getSourceTable());
 
         // 2. 逐条创建属性（与画布 buildPropertyCreateParam + createProperty 一致）
@@ -112,7 +112,7 @@ public class AgentOntologyBuildServiceImpl implements AgentOntologyBuildService 
                 }
                 var linkParam = new OntologyLinkCreateParam()
                         .setName(agentRelation.getName())
-                        // 源端固定为本次新建本体，目标端为功能四选定的同空间已有本体
+                        // 源端固定为本次新建对象，目标端为功能四选定的同空间已有对象
                         .setOntologyUniqueIdentifierFrom(uniqueIdentifier)
                         .setOntologyUniqueIdentifierTo(agentRelation.getTargetUniqueIdentifier())
                         .setType(resolveLinkType(agentRelation.getType()))

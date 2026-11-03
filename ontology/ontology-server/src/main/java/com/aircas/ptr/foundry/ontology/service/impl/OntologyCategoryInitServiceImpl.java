@@ -33,7 +33,7 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
- * 本体/关系/属性/行为分类树根节点初始化实现。
+ * 对象/关系/属性/行为分类树根节点初始化实现。
  *
  * <p>每个空间：建对象分类根节点“全部” + 关系分类根节点“全部” + 行为分类根节点“全部”，
  * 回填本空间所有对象、关系、行为；每个对象：建属性分类根节点“全部”，回填其所有属性。</p>
@@ -71,7 +71,7 @@ public class OntologyCategoryInitServiceImpl implements OntologyCategoryInitServ
         for (OntologySpace space : spaces) {
             Integer spaceId = space.getId();
 
-            // 1. 本体对象分类树：建“全部”根节点
+            // 1. 对象分类树：建“全部”根节点
             Integer objRootId = getOrCreateOntologyCategoryRoot(spaceId);
             // 2. 关系分类树：建“全部”根节点
             Integer linkRootId = getOrCreateLinkCategoryRoot(spaceId);
@@ -104,7 +104,7 @@ public class OntologyCategoryInitServiceImpl implements OntologyCategoryInitServ
                 linkUpdated += linksWithNullCategory.size();
             }
 
-            // 5. 每个本体对象：建属性分类根节点，并将其属性的 propertyCategoryId 回填
+            // 5. 每个对象：建属性分类根节点，并将其属性的 propertyCategoryId 回填
             List<OntologyMeta> allMetas = ontologyMetaService.list(
                     new LambdaQueryWrapper<OntologyMeta>()
                             .eq(OntologyMeta::getOntologySpaceId, spaceId));
@@ -128,7 +128,7 @@ public class OntologyCategoryInitServiceImpl implements OntologyCategoryInitServ
             }
 
             // 6. 本空间下所有行为的 categoryId 回填为行为分类根节点
-            //    行为表的空间列不由分类服务维护，故经「本体 → 空间」解析
+            //    行为表的空间列不由分类服务维护，故经「对象 → 空间」解析
             var ontologyIdentifiers = allMetas.stream()
                     .map(OntologyMeta::getUniqueIdentifier)
                     .filter(Objects::nonNull)

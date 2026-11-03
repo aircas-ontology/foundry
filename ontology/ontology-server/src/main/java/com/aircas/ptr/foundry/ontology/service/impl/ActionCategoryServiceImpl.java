@@ -43,10 +43,10 @@ import java.util.stream.Collectors;
  *     <li>重命名：整体替换 path 前缀，一次性 updateBatchById；</li>
  *     <li>删除：级联整棵子树，但先做下游引用校验。</li>
  * </ul>
- * 作用域为「本体空间」（{@code unique(ontology_space_id, path)}），与 {@link OntologyCategoryServiceImpl} 一致，
+ * 作用域为「对象空间」（{@code unique(ontology_space_id, path)}），与 {@link OntologyCategoryServiceImpl} 一致，
  * 即同一空间共用一棵行为分类体系树；删除时的引用校验对象是行为（{@code ontology_action}）。
  * <p>
- * 注意：行为到空间的归属需经「本体 → 空间」桥接，见 {@link #listOntologyIdentifiersOfSpace(Integer)}。
+ * 注意：行为到空间的归属需经「对象 → 空间」桥接，见 {@link #listOntologyIdentifiersOfSpace(Integer)}。
  */
 @Service
 @Slf4j
@@ -208,7 +208,7 @@ public class ActionCategoryServiceImpl extends ServiceImpl<ActionCategoryMapper,
             return null;
         }
 
-        // 以本空间下的本体集合收敛行为的挂载范围（行为到空间的归属经本体解析）
+        // 以本空间下的对象集合收敛行为的挂载范围（行为到空间的归属经对象解析）
         var ontologyIdentifiers = listOntologyIdentifiersOfSpace(spaceId);
         var actions = CollectionUtils.isEmpty(ontologyIdentifiers)
                 ? Collections.<OntologyAction>emptyList()
@@ -227,10 +227,10 @@ public class ActionCategoryServiceImpl extends ServiceImpl<ActionCategoryMapper,
     }
 
     /**
-     * 取本空间下的全部本体唯一标识。
+     * 取本空间下的全部对象唯一标识。
      * <p>
-     * 行为的空间归属以本体为准：行为表上的空间列不由本服务维护，
-     * 因此统一经本体（{@code ontology_meta.ontology_space_id}）解析，避免两处空间值不一致。
+     * 行为的空间归属以对象为准：行为表上的空间列不由本服务维护，
+     * 因此统一经对象（{@code ontology_meta.ontology_space_id}）解析，避免两处空间值不一致。
      */
     private List<String> listOntologyIdentifiersOfSpace(Integer spaceId) {
         return ontologyMetaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>()

@@ -20,7 +20,7 @@ import jakarta.validation.constraints.Pattern;
 @NoArgsConstructor
 @SuperBuilder
 @Accessors(chain = true)
-@Schema(description = "本体属性创建请求")
+@Schema(description = "对象属性创建请求")
 public class OntologyPropertyCreateParam extends OntologyIdentifierParam {
 
     @Schema(name = "datasource", description = "数据源", required = false, example = "xtmb")

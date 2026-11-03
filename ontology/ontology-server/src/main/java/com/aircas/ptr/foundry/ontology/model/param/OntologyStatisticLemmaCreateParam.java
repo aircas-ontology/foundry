@@ -15,7 +15,7 @@ import jakarta.validation.constraints.NotBlank;
 @NoArgsConstructor
 @SuperBuilder
 @Accessors(chain = true)
-@Schema(description = "本体统计词条创建请求")
+@Schema(description = "对象统计词条创建请求")
 public class OntologyStatisticLemmaCreateParam extends OntologyIdentifierParam {
 
 

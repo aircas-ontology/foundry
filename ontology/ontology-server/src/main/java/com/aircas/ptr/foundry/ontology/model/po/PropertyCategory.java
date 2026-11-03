@@ -40,7 +40,7 @@ public class PropertyCategory {
     private String name;
 
     /**
-     * 本体唯一标识
+     * 对象唯一标识
      */
     private String ontologyUniqueIdentifier;
 

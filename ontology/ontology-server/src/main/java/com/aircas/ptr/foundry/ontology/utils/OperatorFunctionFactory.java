@@ -33,7 +33,7 @@ public final class OperatorFunctionFactory {
      * @param version         版本号
      * @param displayName     展示名
      * @param type            算子类型
-     * @param ontologySpaceId 所属本体空间 id
+     * @param ontologySpaceId 所属对象空间 id
      * @param model           函数模型（如 BASIC / OTHER；调用方按各自规则推断后传入）
      * @return 预置好公共约定的 Function builder
      */

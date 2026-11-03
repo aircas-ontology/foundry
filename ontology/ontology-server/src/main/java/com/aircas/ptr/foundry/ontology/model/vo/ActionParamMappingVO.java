@@ -31,10 +31,10 @@ public class ActionParamMappingVO {
     @Schema(description = "输入来源配置（JSON）：固定值存字面量，List 存属性唯一标识数组")
     private String sourceConfig;
 
-    @Schema(description = "属性关联本体id", required = true, example = "abcd1234")
+    @Schema(description = "属性关联对象id", required = true, example = "abcd1234")
     private String ontologyUniqueIdentifier;
 
-    @Schema(description = "参数对应的本体属性ID", required = true, example = "fdsfa-gfdsagf-dfs")
+    @Schema(description = "参数对应的对象属性ID", required = true, example = "fdsfa-gfdsagf-dfs")
     private String propertyUniqueIdentifier;
 
 }

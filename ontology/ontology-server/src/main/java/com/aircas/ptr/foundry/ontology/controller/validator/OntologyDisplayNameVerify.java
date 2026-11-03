@@ -11,7 +11,7 @@ import java.lang.annotation.Target;
 @Target({ ElementType.FIELD, ElementType.PARAMETER })
 @Retention(RetentionPolicy.RUNTIME)
 public @interface OntologyDisplayNameVerify {
-    String message() default "本体DisplayName非法或已存在";
+    String message() default "对象DisplayName非法或已存在";
     Class<?>[] groups() default {};
     Class<? extends Payload>[] payload() default {};
 }

@@ -18,7 +18,7 @@ import java.util.List;
 @Schema(description = "实体id查询结果")
 public class EntityIdsQueryVO {
 
-    @Schema(name = "ontologyUniqueIdentifier", description = "本体唯一标识", example = "abcd")
+    @Schema(name = "ontologyUniqueIdentifier", description = "对象唯一标识", example = "abcd")
     private String ontologyUniqueIdentifier;
 
     @Schema(name = "entityList", description = "实体属性信息列表")

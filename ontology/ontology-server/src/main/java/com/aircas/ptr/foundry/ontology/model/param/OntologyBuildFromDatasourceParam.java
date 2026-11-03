@@ -17,7 +17,7 @@ import jakarta.validation.constraints.Pattern;
 import java.util.List;
 
 /**
- * 「数据源构建对象」向导第④步：在已选空间下，用外部库若干张表的勾选列创建一个本体对象。
+ * 「数据源构建对象」向导第④步：在已选空间下，用外部库若干张表的勾选列创建一个对象。
  *
  * <p>选中的表按主子表处理：主表的属性 {@code storageGroup=main}，子表的属性 {@code storageGroup}
  * 用该子表的表名（这也是数据湖里那张实体表的物理表名）。一次只建一个对象。</p>
@@ -30,10 +30,10 @@ import java.util.List;
 @Accessors(chain = true)
 @NoArgsConstructor
 @AllArgsConstructor
-@Schema(description = "从外部数据源创建本体对象请求")
+@Schema(description = "从外部数据源创建对象请求")
 public class OntologyBuildFromDatasourceParam extends OntologySpaceIdParam {
 
-    @Schema(name = "categoryId", description = "本体分类 id（ontology_category.id），不传则不挂分类", example = "1")
+    @Schema(name = "categoryId", description = "对象分类 id（ontology_category.id），不传则不挂分类", example = "1")
     private Integer categoryId;
 
     @Schema(name = "displayName", description = "对象名称（中文展示名）", required = true, example = "舰船")
@@ -43,7 +43,7 @@ public class OntologyBuildFromDatasourceParam extends OntologySpaceIdParam {
     @Schema(name = "apiName", description = "对象 api 名称，同时作为主表在数据湖里的物理表名",
             required = true, example = "ship")
     @NotBlank(message = "apiName is empty")
-    @Pattern(regexp = "^[a-zA-Z_$][a-zA-Z0-9_$]{0,62}$", message = "本体apiName格式不合法")
+    @Pattern(regexp = "^[a-zA-Z_$][a-zA-Z0-9_$]{0,62}$", message = "对象apiName格式不合法")
     private String apiName;
 
     @Schema(name = "description", description = "对象描述", example = "我方舰船")

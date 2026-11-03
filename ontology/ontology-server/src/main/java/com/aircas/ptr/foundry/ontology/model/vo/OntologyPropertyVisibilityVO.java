@@ -12,7 +12,7 @@ import lombok.experimental.SuperBuilder;
 @NoArgsConstructor
 @AllArgsConstructor
 @Accessors(chain = true)
-@Schema(description = "本体属性可见性VO")
+@Schema(description = "对象属性可见性VO")
 public class OntologyPropertyVisibilityVO {
 
 

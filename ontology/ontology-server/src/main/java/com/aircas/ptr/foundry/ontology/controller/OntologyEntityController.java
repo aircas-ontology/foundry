@@ -26,7 +26,7 @@ public class OntologyEntityController {
     private EntityService entityService;
 
 
-    @Operation(summary = "根据多个本体下多个实体id查询实体主属性信息")
+    @Operation(summary = "根据多个对象下多个实体id查询实体主属性信息")
     @PostMapping("/query")
     public RestResult<List<EntityIdsQueryVO>> getByEntityIds(@RequestBody @Valid List<EntityIdsQueryParam> params) {
         return RestResult.ofData(entityService.getByEntityIds(params));
@@ -36,7 +36,7 @@ public class OntologyEntityController {
     @Operation(summary = "实体分页查询（只返回实体主属性信息列表）")
     @GetMapping("/list")
     public RestResult<Page<EntityInfoVO>> getEntities(
-            @RequestParam(required = true, name = "ontologyUniqueIdentifier") @Parameter(description = "本体id") @OntologyIdVerify String ontologyUniqueIdentifier,
+            @RequestParam(required = true, name = "ontologyUniqueIdentifier") @Parameter(description = "对象id") @OntologyIdVerify String ontologyUniqueIdentifier,
             @RequestParam(required = false, defaultValue = "1") Integer pageNum,
             @RequestParam(required = false, defaultValue = "10") Integer pageSize) {
         return RestResult.ofData(entityService.getEntities(ontologyUniqueIdentifier, "", "", pageNum, pageSize, false));
@@ -69,14 +69,14 @@ public class OntologyEntityController {
     }
 
     @PostMapping("/link")
-    @Operation(summary = "查询单本体单个实体所有关联关系")
+    @Operation(summary = "查询单对象单个实体所有关联关系")
     public RestResult<List<EntityLinkPropertyVO>> getEntityLinksByPrimaryKey(@RequestBody @Valid EntityQueryParam param) {
         return RestResult.ofData(entityService.getEntityLinksByPrimaryKey(param.getOntologyUniqueIdentifier(), param.getEntityPrimaryKey()));
     }
 
 
     @PostMapping("/all_link")
-    @Operation(summary = "查询多本体下多个实体所有关联关系")
+    @Operation(summary = "查询多对象下多个实体所有关联关系")
     public RestResult<List<EntityLinksVO>> getAllLinksByEntityIds(@RequestBody @Valid List<EntityIdsQueryParam> params) {
         return RestResult.ofData(entityService.getAllLinksByEntityIds(params));
     }
@@ -120,7 +120,7 @@ public class OntologyEntityController {
         return RestResult.success();
     }
 
-    @Operation(summary = "创建本体下所有实体节点")
+    @Operation(summary = "创建对象下所有实体节点")
     @PostMapping("/node")
     public RestResult createEntityNodes(@RequestBody @Valid OntologyIdentifierParam param) {
         entityService.createEntityNodes(param.getOntologyIdentifier());

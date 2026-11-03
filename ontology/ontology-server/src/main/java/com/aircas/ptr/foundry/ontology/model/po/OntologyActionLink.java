@@ -32,7 +32,7 @@ public class OntologyActionLink {
     private Long ontologyActionId;
 
     /**
-     * 关联的本体关系
+     * 关联的对象关系
      */
     private String ontologyLinkUniqueIdentifier;
 

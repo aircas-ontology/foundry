@@ -18,16 +18,16 @@ import java.util.List;
 @NoArgsConstructor
 public class OntologySpaceCanvasVO {
 
-    @Schema(name = "spaceId", description = "本体空间id", example = "1")
+    @Schema(name = "spaceId", description = "对象空间id", example = "1")
     private Integer spaceId;
 
-    @Schema(name = "ontologies", description = "空间下的本体对象列表")
+    @Schema(name = "ontologies", description = "空间下的对象列表")
     private List<CanvasOntology> ontologies;
 
     @Schema(name = "links", description = "空间下的对象关系列表")
     private List<CanvasLink> links;
 
-    @Schema(description = "画布本体对象")
+    @Schema(description = "画布对象")
     @Data
     @Builder
     @Accessors(chain = true)
@@ -35,23 +35,23 @@ public class OntologySpaceCanvasVO {
     @NoArgsConstructor
     public static class CanvasOntology {
 
-        @Schema(name = "displayName", description = "本体名称", example = "舰船aaa")
+        @Schema(name = "displayName", description = "对象名称", example = "舰船aaa")
         private String displayName;
 
-        @Schema(name = "apiName", description = "本体api名称", example = "ship")
+        @Schema(name = "apiName", description = "对象api名称", example = "ship")
         private String apiName;
 
-        @Schema(name = "description", description = "本体描述")
+        @Schema(name = "description", description = "对象描述")
         private String description;
 
-        @Schema(name = "iconUrl", description = "本体图标url")
+        @Schema(name = "iconUrl", description = "对象图标url")
         private String iconUrl;
 
-        @Schema(name = "properties", description = "本体属性列表")
+        @Schema(name = "properties", description = "对象属性列表")
         private List<CanvasProperty> properties;
     }
 
-    @Schema(description = "画布本体属性")
+    @Schema(description = "画布对象属性")
     @Data
     @Builder
     @Accessors(chain = true)
@@ -84,7 +84,7 @@ public class OntologySpaceCanvasVO {
         private String defaultValue;
     }
 
-    @Schema(description = "画布本体关系")
+    @Schema(description = "画布对象关系")
     @Data
     @Builder
     @Accessors(chain = true)

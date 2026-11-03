@@ -33,7 +33,7 @@ public class OntologySubspaceCreateParam {
     @SpaceIdVerify
     private Integer parentSpaceId;
 
-    @Schema(name = "displayName", description = "子空间显示名称", example = "海军本体空间子空间", required = true)
+    @Schema(name = "displayName", description = "子空间显示名称", example = "海军对象空间子空间", required = true)
     @NotBlank(message = "displayName is empty")
     private String displayName;
 
@@ -57,17 +57,17 @@ public class OntologySubspaceCreateParam {
     private List<LinkSelection> selectedLinks;
 
     /**
-     * 选中的本体对象。
+     * 选中的对象。
      */
     @Data
     @SuperBuilder
     @Accessors(chain = true)
     @NoArgsConstructor
     @AllArgsConstructor
-    @Schema(description = "选中的本体对象")
+    @Schema(description = "选中的对象")
     public static class OntologySelection {
 
-        @Schema(name = "sourceOntologyUniqueIdentifier", description = "源空间中被选中的本体 uniqueIdentifier", required = true)
+        @Schema(name = "sourceOntologyUniqueIdentifier", description = "源空间中被选中的对象 uniqueIdentifier", required = true)
         @NotBlank(message = "sourceOntologyUniqueIdentifier is empty")
         @OntologyIdVerify
         private String sourceOntologyUniqueIdentifier;

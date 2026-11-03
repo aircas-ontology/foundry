@@ -24,25 +24,25 @@ public class OntologyUpdateParam extends OntologyIdentifierParam {
     /**
      * 图标
      */
-    @Schema(name = "iconUrl", description = "本体图标", example = "飞机图标base64")
+    @Schema(name = "iconUrl", description = "对象图标", example = "飞机图标base64")
     private String icon;
 
     /**
-     * 本体名称
+     * 对象名称
      */
-    @Schema(name = "displayName", description = "本体名称", example = "飞机")
+    @Schema(name = "displayName", description = "对象名称", example = "飞机")
     @NotBlank(message = "displayName is empty")
     private String displayName;
 
 
     /**
-     * 本体描述
+     * 对象描述
      */
-    @Schema(name = "description", description = "本体描述", example = "这是一架我方战斗机")
+    @Schema(name = "description", description = "对象描述", example = "这是一架我方战斗机")
     private String description;
 
     /**
-     * 本体描述
+     * 对象描述
      */
     @Schema(name = "groupIds", description = "分组ids", example = "[123,456]")
     @NotEmpty(message = "groupIds is empty")

@@ -16,7 +16,7 @@ public interface FunctionMapper extends BaseMapper<Function> {
      * 版本分组分页：按 api 分组，每组仅取版本号最大的一条记录
      *
      * @param page            分页参数
-     * @param ontologySpaceId 本体空间 id，可空
+     * @param ontologySpaceId 对象空间 id，可空
      * @param displayName     函数名称模糊搜索，可空
      * @param type            函数类型，可空
      * @param excludeTypes    排除的函数类型列表，可空

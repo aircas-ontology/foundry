@@ -13,7 +13,7 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * 目前本体属性类型的string
+ * 目前对象属性类型的string
  * 有几种方式是需要此类：
  * OntologyType是中间类型
  * <p>
@@ -21,7 +21,7 @@ import java.util.Objects;
  * 需要 Class -> owl需要type
  * 2. 函数evaluate时，返回参数名字和类型，类型给前端转化数据类型
  * 需要Class -> OntologyType
- * 3. 本体的属性的类型，应该保存在OntologyMeta的数据表中，该类型返回给前端/SDK时，可以转化
+ * 3. 对象的属性的类型，应该保存在OntologyMeta的数据表中，该类型返回给前端/SDK时，可以转化
  * 需要OntologyType -> Class, OntologyType
  *
  * @author Lenovo
@@ -163,7 +163,7 @@ public enum OntologyDataTypeEnum {
      * 避免因类型字符串的厂商差异导致批量落库失败。</p>
      *
      * @param jdbcTypeName 数据库原生类型名，可为空
-     * @return 归一化后的本体数据类型；空或无法识别时返回 {@link #String}
+     * @return 归一化后的对象数据类型；空或无法识别时返回 {@link #String}
      */
     public static OntologyDataTypeEnum valueOfJdbcType(String jdbcTypeName) {
         if (jdbcTypeName == null || jdbcTypeName.isBlank()) {

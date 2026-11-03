@@ -34,7 +34,7 @@ public class OntologyCreateDTO {
     private List<OntologyActionDTO> actions;
 
     /**
-     * 本体实例数据（全量）。导出时填充；导入时若带有该段则写回数据湖物理表。
+     * 对象实例数据（全量）。导出时填充；导入时若带有该段则写回数据湖物理表。
      */
     private OntologyInstancesExportDTO instances;
 }

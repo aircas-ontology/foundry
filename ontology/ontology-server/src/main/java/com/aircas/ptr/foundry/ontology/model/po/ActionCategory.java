@@ -16,8 +16,8 @@ import java.util.Date;
  * parent_id 用于构建父子关系，path 保存根到当前节点的全路径（以 "/" 分隔），
  * 使子树查询可退化为一次 likeRight(path) 前缀扫描。
  * <p>
- * 作用域为「本体空间」：与 {@link OntologyCategory} 一致，同一空间共用一棵行为分类体系树，
- * 唯一约束为 (ontology_space_id, path)；行为（ontology_action）经其所属本体归属到空间。
+ * 作用域为「对象空间」：与 {@link OntologyCategory} 一致，同一空间共用一棵行为分类体系树，
+ * 唯一约束为 (ontology_space_id, path)；行为（ontology_action）经其所属对象归属到空间。
  *
  * @author foundry
  */
@@ -51,7 +51,7 @@ public class ActionCategory {
     private Integer parentId;
 
     /**
-     * 本体空间id
+     * 对象空间id
      */
     private Integer ontologySpaceId;
 

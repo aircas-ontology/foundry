@@ -177,7 +177,7 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
         spaceMapper.insert(ontologySpace);
         //create new schema &  table_filed_mapping table
         tableMetadataService.initSpaceSchema(param.getApiName());
-        // 默认创建本体（本地对象）分类树根节点
+        // 默认创建对象（本地对象）分类树根节点
         createDefaultOntologyCategoryRoot(ontologySpace.getId());
         // 默认创建关系分类树根节点
         createDefaultLinkCategoryRoot(ontologySpace.getId());
@@ -197,7 +197,7 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
         var existingMetaList = metaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>()
                 .eq(OntologyMeta::getOntologySpaceId, spaceId));
         PreconditionUtils.checkArgument(CollectionUtils.isEmpty(existingMetaList),
-                "该空间下已存在本体对象，无法创建画布", HttpStatus.BAD_REQUEST);
+                "该空间下已存在对象，无法创建画布", HttpStatus.BAD_REQUEST);
 
         Integer defaultCategoryId = getOntologyCategoryRoot(spaceId);
         Integer defaultLinkCategoryId = getLinkCategoryRoot(spaceId);
@@ -343,7 +343,7 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
     }
 
     /**
-     * 创建（或复用）本体的属性分类树根节点，让画布导入的属性都能挂到分类下。
+     * 创建（或复用）对象的属性分类树根节点，让画布导入的属性都能挂到分类下。
      */
     private Integer createDefaultPropertyCategoryRoot(String ontologyUniqueIdentifier) {
         var existingRoot = propertyCategoryService.getOne(new LambdaQueryWrapper<PropertyCategory>()
@@ -390,7 +390,7 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
     }
 
     /**
-     * 创建（或复用）空间的本体分类树全部，让画布导入的本体都能挂到分类下。
+     * 创建（或复用）空间的对象分类树全部，让画布导入的对象都能挂到分类下。
      */
     private Integer createDefaultOntologyCategoryRoot(Integer spaceId) {
         var existingRoot = categoryService.getOne(new LambdaQueryWrapper<OntologyCategory>()
@@ -408,7 +408,7 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                 .eq(OntologyCategory::getOntologySpaceId, spaceId)
                 .eq(OntologyCategory::getParentId, 0)
                 .orderByDesc(OntologyCategory::getId));
-        PreconditionUtils.checkNotNull(created, "创建本体分类失败", HttpStatus.INTERNAL_SERVER_ERROR);
+        PreconditionUtils.checkNotNull(created, "创建对象分类失败", HttpStatus.INTERNAL_SERVER_ERROR);
         return created.getId();
     }
 
@@ -477,18 +477,18 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
             return Lists.newArrayList();
         }
         var spaceMap = spaces.stream().collect(Collectors.toMap(v -> v.getId(), v -> v));
-        // 获取本体meta map（按照空间id分组）
+        // 获取对象meta map（按照空间id分组）
         var metaMap = metaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>()
                         .in(OntologyMeta::getOntologySpaceId, spaceMap.keySet()))
                 .stream().collect(Collectors.groupingBy(OntologyMeta::getOntologySpaceId));
 
-        // 获取本体action map（key为ontology uniqueIdentifier, value为action 数量）
+        // 获取对象action map（key为ontology uniqueIdentifier, value为action 数量）
         Map<String, Integer> actionMap = actionMapper.countGroupByOntology().stream()
                 .collect(Collectors.toMap(OntologyStatisticsCountView::getOntologyUniqueIdentifier, OntologyStatisticsCountView::getCnt));
-        // 获取本体property map（key为ontology uniqueIdentifier, value为property 数量）
+        // 获取对象property map（key为ontology uniqueIdentifier, value为property 数量）
         Map<String, Integer> propertyMap = propertyMapper.countGroupByOntology().stream()
                 .collect(Collectors.toMap(OntologyStatisticsCountView::getOntologyUniqueIdentifier, OntologyStatisticsCountView::getCnt));
-        // 获取本体link map（key为ontology spaceId, value为link 数量）
+        // 获取对象link map（key为ontology spaceId, value为link 数量）
         Map<Integer, Integer> linkMap = linkMapper.countGroupByOntologySpace().stream()
                 .collect(Collectors.toMap(SpaceStatisticsCountView::getOntologySpaceId, SpaceStatisticsCountView::getCnt));
 
@@ -591,7 +591,7 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
         var space = spaceMapper.selectById(spaceId);
         PreconditionUtils.checkNotNull(space, "空间id不存在", HttpStatus.BAD_REQUEST);
 
-        // 对象（本体）数量
+        // 对象数量
         var ontologyCount = metaMapper.selectCount(new LambdaQueryWrapper<OntologyMeta>()
                 .eq(OntologyMeta::getOntologySpaceId, spaceId));
         // 关系数量
@@ -620,7 +620,7 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
     }
 
     /**
-     * 当空间本体数量为0时才可删除，删除本体空间不会删除db下的schema
+     * 当空间对象数量为0时才可删除，删除对象空间不会删除db下的schema
      *
      * @param spaceId
      */
@@ -631,7 +631,7 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
         var space = spaceMapper.selectById(spaceId);
         PreconditionUtils.checkNotNull(space, "空间id不存在", HttpStatus.BAD_REQUEST);
         var metaList = metaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getOntologySpaceId, spaceId));
-        PreconditionUtils.checkArgument(CollectionUtils.isEmpty(metaList), "该空间下存在本体，不能删除", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(CollectionUtils.isEmpty(metaList), "该空间下存在对象，不能删除", HttpStatus.BAD_REQUEST);
         //delete ontology category
         categoryMapper.delete(new LambdaQueryWrapper<OntologyCategory>().eq(OntologyCategory::getOntologySpaceId, spaceId));
         //delete links and link categories：不清理会留下指向已删空间的孤儿关系，使全局概览数大于各空间之和
@@ -713,12 +713,12 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                         pkMappingByOntologyName.put(dto.getMetadata().getDisplayName(), pkMapping);
                     }
                 } catch (Exception e) {
-                    log.error("本体 {} 导入失败", dto.getMetadata().getDisplayName(), e);
+                    log.error("对象 {} 导入失败", dto.getMetadata().getDisplayName(), e);
                     failedOntology.add(dto.getMetadata().getDisplayName());
                 }
             });
         }
-        //import links：关系端点按对象显示名称解析为新对象id，必须在全部本体导入完成后创建
+        //import links：关系端点按对象显示名称解析为新对象id，必须在全部对象导入完成后创建
         importOntologyLinks(spaceId, spaceCreateDTO.getLinks(), pkMappingByOntologyName);
         return failedOntology;
     }
@@ -726,7 +726,7 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
     @Override
     public OntologySpaceCreateDTO exportOntologySpace(Integer spaceId, OntologyExportTypeEnum exportType) {
         var space = getById(spaceId);
-        PreconditionUtils.checkNotNull(space, "本体空间不存在:" + spaceId);
+        PreconditionUtils.checkNotNull(space, "对象空间不存在:" + spaceId);
 
         var ontologySpace = OntologySpaceDTO.builder()
                 .apiName(space.getApiName())
@@ -738,7 +738,7 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                 .eq(OntologyCategory::getOntologySpaceId, space.getId()));
         var ontologyCategory = buildOntologyCategoryTree(categories);
 
-        //一次装配空间下全部本体
+        //一次装配空间下全部对象
         var ontologies = ontologyMetaService.exportOntologies(space, exportType);
 
         //空间下的对象关系：端点以对象显示名称表达，导入时据此解析新生成的对象id
@@ -913,7 +913,7 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
     }
 
     /**
-     * 查询本体的属性分类树根节点（创建本体时已默认生成）。
+     * 查询对象的属性分类树根节点（创建对象时已默认生成）。
      */
     private Integer getPropertyCategoryRoot(String ontologyUniqueIdentifier) {
         var root = propertyCategoryService.getOne(new LambdaQueryWrapper<PropertyCategory>()
@@ -936,13 +936,13 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
     }
 
     /**
-     * 查询空间的本体（本地对象）分类树根节点（创建空间时已默认生成）。
+     * 查询空间的对象（本地对象）分类树根节点（创建空间时已默认生成）。
      */
     private Integer getOntologyCategoryRoot(Integer spaceId) {
         var root = categoryService.getOne(new LambdaQueryWrapper<OntologyCategory>()
                 .eq(OntologyCategory::getOntologySpaceId, spaceId)
                 .eq(OntologyCategory::getParentId, 0));
-        PreconditionUtils.checkNotNull(root, "本体分类根节点不存在", HttpStatus.INTERNAL_SERVER_ERROR);
+        PreconditionUtils.checkNotNull(root, "对象分类根节点不存在", HttpStatus.INTERNAL_SERVER_ERROR);
         return root.getId();
     }
 
@@ -958,7 +958,7 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
         // 2. 校验子空间名称/apiName 不重复
         checkSpaceNameConflict(param.getDisplayName(), param.getApiName());
 
-        // 3. 预查并校验源本体
+        // 3. 预查并校验源对象
         var sourceOntologyIds = param.getSelectedOntologies().stream()
                 .map(OntologySubspaceCreateParam.OntologySelection::getSourceOntologyUniqueIdentifier)
                 .collect(Collectors.toList());
@@ -980,7 +980,7 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                 .iconUrl(param.getIconUrl())
                 .build(), SpaceTypeEnum.TOPIC.getValue());
 
-        // 4.1 拷贝父空间的本体分类树与关系分类树（含多级）到子空间，并记录  映射
+        // 4.1 拷贝父空间的对象分类树与关系分类树（含多级）到子空间，并记录  映射
         Integer newOntologyCatRoot = getOntologyCategoryRoot(spaceId);
         Integer newLinkCatRoot = getLinkCategoryRoot(spaceId);
         Map<Integer, Integer> ontologyCatMap = copyOntologyCategoryTree(param.getParentSpaceId(), spaceId);
@@ -1027,7 +1027,7 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
             var bindResult = ontologyPropertyService.autoBindDatasource(newOntologyId);
             if (bindResult != null && CollectionUtils.isNotEmpty(bindResult.getBlockedItems())) {
                 // 未绑定数据源的属性不会建列，下一步 importInstances 会直接丢弃这些属性的实例值
-                log.warn("子空间本体{}属性自动关联数据源部分跳过，未绑定属性的实例值不会写入实体表：{}", newOntologyId, bindResult.getMessage());
+                log.warn("子空间对象{}属性自动关联数据源部分跳过，未绑定属性的实例值不会写入实体表：{}", newOntologyId, bindResult.getMessage());
             }
 
             // 导入实例（先按显式勾选主键过滤，再按属性筛选条件过滤实例；筛选条件元数据仍由 savePropertyFilter 写入新表）
@@ -1428,7 +1428,7 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
     }
 
     /**
-     * 拷贝父空间的本体分类树（ontology_category，按 spaceId）到子空间。
+     * 拷贝父空间的对象分类树（ontology_category，按 spaceId）到子空间。
      */
     private Map<Integer, Integer> copyOntologyCategoryTree(Integer parentSpaceId, Integer newSpaceId) {
         Integer newRootId = getOntologyCategoryRoot(newSpaceId);
@@ -1508,7 +1508,7 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
     }
 
     /**
-     * 拷贝源本体的属性分类树（property_category，按 ontology_unique_identifier）到新本体，复用已生成的“全部”根节点。
+     * 拷贝源对象的属性分类树（property_category，按 ontology_unique_identifier）到新对象，复用已生成的“全部”根节点。
      */
     private Map<Integer, Integer> copyPropertyCategoryTree(String sourceOntologyUid, String newOntologyUid) {
         Integer newRootId = getPropertyCategoryRoot(newOntologyUid);

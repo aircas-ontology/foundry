@@ -12,7 +12,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 
-@Schema(description = "本体空间修改请求")
+@Schema(description = "对象空间修改请求")
 @Data
 @SuperBuilder
 @Accessors(chain = true)

@@ -31,7 +31,7 @@ public class ActionCreateOrUpdateParam extends OntologyIdentifierParam {
     @NotBlank(message = "actionApi is empty")
     private String actionApi;
 
-    @Schema(description = "本体下函数api；应用行为必填（CUSTOMIZE/EXTERNAL/CONTAINER），基础算子行为必填（BASIC_QUERY），属性值、实例关系行为不可传", example = "satellite")
+    @Schema(description = "对象下函数api；应用行为必填（CUSTOMIZE/EXTERNAL/CONTAINER），基础算子行为必填（BASIC_QUERY），属性值、实例关系行为不可传", example = "satellite")
     private String functionApi;
 
     @Schema(description = "行为描述", example = "这是一个行为")

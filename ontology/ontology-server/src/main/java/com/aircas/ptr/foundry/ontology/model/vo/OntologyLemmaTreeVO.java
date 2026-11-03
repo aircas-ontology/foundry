@@ -17,10 +17,10 @@ import java.util.List;
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@Schema(description = "本体词条树")
+@Schema(description = "对象词条树")
 public class OntologyLemmaTreeVO implements Comparable<OntologyLemmaTreeVO> {
 
-    @Schema(name = "ontologyUniqueIdentifier", required = true, description = "本体")
+    @Schema(name = "ontologyUniqueIdentifier", required = true, description = "对象")
     private String ontologyUniqueIdentifier;
 
     @Schema(name = "lemmaId", required = true, description = "词条id")

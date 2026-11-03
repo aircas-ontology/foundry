@@ -8,14 +8,14 @@ import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 
 /**
- * 本体对象简要信息（按本地主键 id 查询）。
+ * 对象简要信息（按本地主键 id 查询）。
  */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 @Accessors(chain = true)
-@Schema(description = "本体对象简要信息")
+@Schema(description = "对象简要信息")
 public class OntologyMetaBriefVO {
 
     /**
@@ -33,7 +33,7 @@ public class OntologyMetaBriefVO {
     /**
      * 空间名称
      */
-    @Schema(name = "spaceName", description = "所属本体空间名称", example = "航空领域")
+    @Schema(name = "spaceName", description = "所属对象空间名称", example = "航空领域")
     private String spaceName;
 
     /**

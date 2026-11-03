@@ -14,7 +14,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Accessors(chain = true)
-@Schema(description = "本体属性元数据VO")
+@Schema(description = "对象属性元数据VO")
 public class PropertyMetadataSchemaVO {
 
     @Schema(name = "schemaId", description = "schemaId", example = "1")

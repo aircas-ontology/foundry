@@ -17,10 +17,10 @@ import java.util.List;
 @Schema(description = "实体信息数据")
 public class EntityInfoVO {
 
-    @Schema(name = "ontologyUniqueIdentifier",description = "本体id")
+    @Schema(name = "ontologyUniqueIdentifier",description = "对象id")
     private String ontologyUniqueIdentifier;
 
-    @Schema(name = "ontologyName",description = "本体名称")
+    @Schema(name = "ontologyName",description = "对象名称")
     private String ontologyName;
 
     @Schema(name = "primaryKey",description = "实体主键id")

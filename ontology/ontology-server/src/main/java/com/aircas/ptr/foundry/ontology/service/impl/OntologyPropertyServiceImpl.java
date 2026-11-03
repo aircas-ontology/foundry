@@ -82,7 +82,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         PreconditionUtils.checkArgument(originalProperty != null, "属性不存在", HttpStatus.BAD_REQUEST);
         //get ontology apiName
         var apiName = metaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, originalProperty.getOntologyUniqueIdentifier())).getApiName();
-        PreconditionUtils.checkArgument(!StringUtils.equals(apiName, param.getStorageGroup()), "属性存储分组名称不能和本体apiName相同", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(!StringUtils.equals(apiName, param.getStorageGroup()), "属性存储分组名称不能和对象apiName相同", HttpStatus.BAD_REQUEST);
 
         var otherProps = list(new LambdaQueryWrapper<OntologyProperty>()
                 .eq(OntologyProperty::getOntologyUniqueIdentifier, originalProperty.getOntologyUniqueIdentifier()))
@@ -108,7 +108,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         var schema = getMetadataSchema(originalProperty.getOntologyUniqueIdentifier());
         var metadata = param.getMetadata();
         if (metadata != null) {
-            PreconditionUtils.checkNotNull(schema, "当前本体未定义元数据schema，不能设置元数据", HttpStatus.BAD_REQUEST);
+            PreconditionUtils.checkNotNull(schema, "当前对象未定义元数据schema，不能设置元数据", HttpStatus.BAD_REQUEST);
             validateMetadataAgainstSchema(metadata, schema, "");
         }
         var titleKeyChanged = isTitleKeyChanged(originalProperty, param);
@@ -158,7 +158,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
 
         for (OntologyPropertyUpdateParam p : params) {
             //check storage group
-            PreconditionUtils.checkArgument(!StringUtils.equals(apiName, p.getStorageGroup()), "属性存储分组名称不能和本体apiName相同", HttpStatus.BAD_REQUEST);
+            PreconditionUtils.checkArgument(!StringUtils.equals(apiName, p.getStorageGroup()), "属性存储分组名称不能和对象apiName相同", HttpStatus.BAD_REQUEST);
             //check datasource columnName conflict
             if (p.getDatasource() != null) {
                 var datasource = p.getDatasource();
@@ -186,7 +186,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
             //check metadata schema 和元数据schema格式是否一致
             var metadata = p.getMetadata();
             if (metadata != null) {
-                PreconditionUtils.checkNotNull(schema, "当前本体未定义元数据schema，不能设置元数据", HttpStatus.BAD_REQUEST);
+                PreconditionUtils.checkNotNull(schema, "当前对象未定义元数据schema，不能设置元数据", HttpStatus.BAD_REQUEST);
                 validateMetadataAgainstSchema(metadata, schema, "");
             }
             var prop = updatePropMap.get(p.getUniqueIdentifier());
@@ -239,7 +239,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
 
         for (var p : params) {
             // check storage group
-            PreconditionUtils.checkArgument(!StringUtils.equals(apiName, p.getStorageGroup()), "属性存储分组名称不能和本体apiName相同", HttpStatus.BAD_REQUEST);
+            PreconditionUtils.checkArgument(!StringUtils.equals(apiName, p.getStorageGroup()), "属性存储分组名称不能和对象apiName相同", HttpStatus.BAD_REQUEST);
             //check api name conflict
             if (apiNameSet.contains(p.getApiName())) {
                 throw new BusinessException("属性apiName冲突：" + p.getApiName(), HttpStatus.BAD_REQUEST);
@@ -276,7 +276,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
             //check metadata schema 和元数据schema格式是否一致
             var metadata = p.getMetadata();
             if (metadata != null) {
-                PreconditionUtils.checkNotNull(schema, "当前本体未定义元数据schema，不能设置元数据", HttpStatus.BAD_REQUEST);
+                PreconditionUtils.checkNotNull(schema, "当前对象未定义元数据schema，不能设置元数据", HttpStatus.BAD_REQUEST);
                 validateMetadataAgainstSchema(metadata, schema, "");
             }
             propertyList.add(DataConverter.convert(p));
@@ -296,7 +296,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         PreconditionUtils.checkArgument(property.getIsPrimaryKey() == 0 && property.getIsTitleKey() == 0, "主键和标题健不能删除", HttpStatus.FORBIDDEN);
         //被行为使用到的属性不能删除
         var mappingList = mappingInMapper.selectList(new LambdaQueryWrapper<OntologyActionMappingIn>().eq(OntologyActionMappingIn::getPropertyUniqueIdentifier, propertyUniqueIdentifier));
-        PreconditionUtils.checkArgument(CollectionUtils.isEmpty(mappingList), "该属性被本体行为用到", HttpStatus.FORBIDDEN);
+        PreconditionUtils.checkArgument(CollectionUtils.isEmpty(mappingList), "该属性被对象行为用到", HttpStatus.FORBIDDEN);
         //delete
         remove(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getUniqueIdentifier, propertyUniqueIdentifier));
     }
@@ -310,7 +310,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         //get ontology apiName
         var apiName = metaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, ontologyId)).getApiName();
         // check storage group
-        PreconditionUtils.checkArgument(!StringUtils.equals(apiName, param.getStorageGroup()), "属性存储分组名称不能和本体apiName相同", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(!StringUtils.equals(apiName, param.getStorageGroup()), "属性存储分组名称不能和对象apiName相同", HttpStatus.BAD_REQUEST);
         //check apiName
         checkApiName(properties, param.getApiName());
         //check columnName
@@ -334,7 +334,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         var schema = getMetadataSchema(param.getOntologyIdentifier());
         var metadata = param.getMetadata();
         if (metadata != null) {
-            PreconditionUtils.checkNotNull(schema, "当前本体未定义元数据schema，不能设置元数据", HttpStatus.BAD_REQUEST);
+            PreconditionUtils.checkNotNull(schema, "当前对象未定义元数据schema，不能设置元数据", HttpStatus.BAD_REQUEST);
             validateMetadataAgainstSchema(metadata, schema, "");
         }
         //create property
@@ -426,7 +426,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
 
 
     /**
-     * 针对在途本体实体表数据通知数据组织层构建数据管道
+     * 针对在途对象实体表数据通知数据组织层构建数据管道
      *
      * @param ontologyIdentifier
      */
@@ -434,27 +434,27 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
     public void notifyBuildPipeline(String ontologyIdentifier) {
         // 获取schemeName
         var schemaName = resolveSchemaName(ontologyIdentifier);
-        // 校验本体属性是否存在
+        // 校验对象属性是否存在
         var props = list(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyIdentifier));
         if (CollectionUtils.isEmpty(props)) {
-            log.warn("本体{}没有属性", ontologyIdentifier);
+            log.warn("对象{}没有属性", ontologyIdentifier);
             return;
         }
         String pkColumnName = "id";
         String mainStorageGroup = "main";
-        // 校验本体主键id是否存在且属于主存储分组
+        // 校验对象主键id是否存在且属于主存储分组
         var pk = props.stream().filter(v -> v.getIsPrimaryKey() == 1).findFirst();
         if (!pk.isPresent()
                 || !StringUtils.equals(pk.get().getApiName(), pkColumnName)
                 || !StringUtils.equals(pk.get().getStorageGroup(), mainStorageGroup)) {
-            throw new BusinessException("本体" + ontologyIdentifier + "没有id主键属性或id不属于主存储分组");
+            throw new BusinessException("对象" + ontologyIdentifier + "没有id主键属性或id不属于主存储分组");
         }
         // 检查属性数据源
         var alreadyBindProps = props.stream()
                 .filter(p -> StringUtils.isNotEmpty(p.getDatasourceId()) && StringUtils.isNotEmpty(p.getDatasourceColumnName()))
                 .collect(Collectors.toList());
         if (CollectionUtils.isEmpty(alreadyBindProps)) {
-            log.warn("本体{}所有属性都没有关联数据源", ontologyIdentifier);
+            log.warn("对象{}所有属性都没有关联数据源", ontologyIdentifier);
             return;
         }
         // 处理已绑定数据源的属性
@@ -853,20 +853,20 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         var ontology = metaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, ontologyIdentifier));
         // 获取schemaName
         var schemaName = resolveSchemaName(ontologyIdentifier);
-        // 校验本体属性是否存在
+        // 校验对象属性是否存在
         var props = list(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyIdentifier));
         if (CollectionUtils.isEmpty(props)) {
-            log.warn("本体{}没有属性", ontologyIdentifier);
-            return autoBindResult(0, 0, Lists.newArrayList(), "本体" + ontologyIdentifier + "没有属性，无需关联数据源");
+            log.warn("对象{}没有属性", ontologyIdentifier);
+            return autoBindResult(0, 0, Lists.newArrayList(), "对象" + ontologyIdentifier + "没有属性，无需关联数据源");
         }
         String pkColumnName = "id";
         String mainStorageGroup = "main";
-        // 校验本体主键id是否存在且属于主存储分组
+        // 校验对象主键id是否存在且属于主存储分组
         var pk = props.stream().filter(v -> v.getIsPrimaryKey() == 1).findFirst();
         if (!pk.isPresent()
                 || !StringUtils.equals(pk.get().getApiName(), pkColumnName)
                 || !StringUtils.equals(pk.get().getStorageGroup(), mainStorageGroup)) {
-            throw new BusinessException("本体" + ontologyIdentifier + "没有id主键属性或id不属于主存储分组");
+            throw new BusinessException("对象" + ontologyIdentifier + "没有id主键属性或id不属于主存储分组");
         }
         // 检查属性数据源
         var notBindProps = props.stream()
@@ -874,7 +874,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                 .collect(Collectors.toList());
         if (CollectionUtils.isEmpty(notBindProps)) {
             var totalBoundCount = autoBindBoundTotal(props);
-            log.warn("本体{}所有属性已关联数据源", ontologyIdentifier);
+            log.warn("对象{}所有属性已关联数据源", ontologyIdentifier);
             return autoBindResult(0, totalBoundCount, Lists.newArrayList(), autoBindMessage(0, totalBoundCount, Lists.newArrayList()));
         }
         // 处理未绑定数据源的属性
@@ -928,13 +928,13 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                 .filter(v -> mainStorageGroup.equals(v.getStorageGroup()) && pkColumnName.equals(v.getPropertyApiName()))
                 .findFirst();
         if (blockedPk.isPresent()) {
-            throw new BusinessException("本体" + ontologyIdentifier + "主键属性" + pkColumnName + "无法关联数据源："
+            throw new BusinessException("对象" + ontologyIdentifier + "主键属性" + pkColumnName + "无法关联数据源："
                     + blockedPk.get().getReason(), HttpStatus.BAD_REQUEST);
         }
         if (bindablePropsMap.isEmpty()) {
             var totalBoundCount = autoBindBoundTotal(props);
             var blockedMessage = autoBindMessage(0, totalBoundCount, blockedItems);
-            log.warn("本体{}属性自动关联数据源未绑定任何属性：{}", ontologyIdentifier, blockedMessage);
+            log.warn("对象{}属性自动关联数据源未绑定任何属性：{}", ontologyIdentifier, blockedMessage);
             return autoBindResult(0, totalBoundCount, blockedItems, blockedMessage);
         }
 
@@ -1018,7 +1018,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                                 .isPrimaryKey(false)
                                 .build()));
                         tableMetadataMapper.createIndex(schemaName, ds, relatedColumn);
-                        log.info("本体{}关联表{}已存在但关联列{}缺失，已补充创建", ontologyIdentifier, ds, relatedColumn);
+                        log.info("对象{}关联表{}已存在但关联列{}缺失，已补充创建", ontologyIdentifier, ds, relatedColumn);
                     }
                     //发送mq消息给数据组织层构建管道
                     notifyEntityTableSchemaChange(ontologyIdentifier, schemaName, ds, false, columns, pkColumnName, relatedColumn, DatasourceEventTypeEnum.ADD_COLUMN);
@@ -1031,21 +1031,21 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                                 .targetTableName(ds)
                                 .targetColumnName(relatedColumn)
                                 .build());
-                        log.info("本体{}关联表{}已存在但映射缺失，已补充创建映射", ontologyIdentifier, ds);
+                        log.info("对象{}关联表{}已存在但映射缺失，已补充创建映射", ontologyIdentifier, ds);
                     }
                 }
                 //更新数据源属性
                 list.forEach(p -> p.setDatasourceId(ds).setDatasourceColumnName(p.getApiName()).setDatasourceSchema(schemaName));
             }
         });
-        //批量更新本体属性数据源
+        //批量更新对象属性数据源
         var bindDsProps = bindablePropsMap.values().stream().flatMap(List::stream).collect(Collectors.toList());
         updateBatchById(bindDsProps);
         // props与bindDsProps是同一批对象实例，DDL阶段已就地回填datasource字段，可直接统计累计已绑定数
         var totalBoundCount = autoBindBoundTotal(props);
         var message = autoBindMessage(bindDsProps.size(), totalBoundCount, blockedItems);
         if (CollectionUtils.isNotEmpty(blockedItems)) {
-            log.warn("本体{}属性自动关联数据源部分跳过：{}", ontologyIdentifier, message);
+            log.warn("对象{}属性自动关联数据源部分跳过：{}", ontologyIdentifier, message);
             blockedItems.forEach(item -> log.warn("被阻止的属性: {} (存储分组={}, 原因={})", 
                     item.getPropertyApiName(), item.getStorageGroup(), item.getReason()));
         }
@@ -1283,12 +1283,12 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
     private String resolveSchemaName(String ontologyUniqueIdentifier) {
         var meta = metaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>()
                 .eq(OntologyMeta::getUniqueIdentifier, ontologyUniqueIdentifier));
-        PreconditionUtils.checkNotNull(meta, "本体不存在", HttpStatus.BAD_REQUEST);
-        PreconditionUtils.checkNotNull(meta.getOntologySpaceId(), "本体未关联空间", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkNotNull(meta, "对象不存在", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkNotNull(meta.getOntologySpaceId(), "对象未关联空间", HttpStatus.BAD_REQUEST);
         var space = spaceMapper.selectById(meta.getOntologySpaceId());
-        PreconditionUtils.checkNotNull(space, "本体空间不存在", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkNotNull(space, "对象空间不存在", HttpStatus.BAD_REQUEST);
         PreconditionUtils.checkArgument(StringUtils.isNotEmpty(space.getApiName()),
-                "本体空间apiName为空", HttpStatus.BAD_REQUEST);
+                "对象空间apiName为空", HttpStatus.BAD_REQUEST);
         return space.getApiName();
     }
 
@@ -1316,7 +1316,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
     }
 
     /**
-     * 本体下已关联数据源的属性总数（含本次新关联），判定口径与未绑定属性筛选互补：
+     * 对象下已关联数据源的属性总数（含本次新关联），判定口径与未绑定属性筛选互补：
      * datasourceId与datasourceColumnName都非空才算已关联。
      */
     private int autoBindBoundTotal(List<OntologyProperty> props) {

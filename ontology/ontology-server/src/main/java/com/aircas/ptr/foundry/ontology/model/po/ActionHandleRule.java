@@ -18,7 +18,7 @@ import static com.aircas.ptr.foundry.common.constant.DateFormat.DATE_FORMAT_DEFA
  * @author: yangj
  * @date: 2024/9/1 18:00
  * @version: 1.0
- * @description: 本体行为执行规则
+ * @description: 对象行为执行规则
  */
 @Builder
 @Data
@@ -52,7 +52,7 @@ public class ActionHandleRule {
     private Integer ruleConnectType;
 
     /**
-     * 本体空间id
+     * 对象空间id
      */
     private Integer ontologySpaceId;
 

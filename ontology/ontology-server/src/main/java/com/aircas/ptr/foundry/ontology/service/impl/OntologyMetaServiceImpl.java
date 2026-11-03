@@ -117,16 +117,16 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 .eq(OntologyMeta::getOntologySpaceId, ontologyCreateParam.getSpaceId())
                 .eq(OntologyMeta::getDisplayName, ontologyCreateParam.getDisplayName())
         );
-        PreconditionUtils.checkIsNull(duplicateDisplayName, "本体显示名称 '" + ontologyCreateParam.getDisplayName() + "' 已存在", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkIsNull(duplicateDisplayName, "对象显示名称 '" + ontologyCreateParam.getDisplayName() + "' 已存在", HttpStatus.BAD_REQUEST);
         var duplicateApiName = getOne(new LambdaQueryWrapper<OntologyMeta>()
                 .eq(OntologyMeta::getOntologySpaceId, ontologyCreateParam.getSpaceId())
                 .eq(OntologyMeta::getApiName, ontologyCreateParam.getApiName())
         );
-        PreconditionUtils.checkIsNull(duplicateApiName, "本体api名称 '" + ontologyCreateParam.getApiName() + "' 已存在", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkIsNull(duplicateApiName, "对象api名称 '" + ontologyCreateParam.getApiName() + "' 已存在", HttpStatus.BAD_REQUEST);
         var groupIds = ontologyCreateParam.getGroupIds();
         if (CollectionUtils.isNotEmpty(groupIds)) {
             List<OntologyGroup> list = groupService.list(new LambdaQueryWrapper<OntologyGroup>().in(OntologyGroup::getGroupId, groupIds));
-            PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(list) && list.size() == groupIds.size(), "无效的本体分组ID", HttpStatus.BAD_REQUEST);
+            PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(list) && list.size() == groupIds.size(), "无效的对象分组ID", HttpStatus.BAD_REQUEST);
         }
         var meta = OntologyMeta.builder()
                 .uniqueIdentifier(IdGenerator.generateUUID())
@@ -157,14 +157,14 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
     }
 
 
-    //继承创建：继承目标本体属性、关系、行为；不继承实体数据源、行为调度
+    //继承创建：继承目标对象属性、关系、行为；不继承实体数据源、行为调度
     private void createOntologyByInherit(OntologyMetaCreateParam ontologyCreateParam, OntologyMeta meta) {
         var childIdentifier = meta.getUniqueIdentifier();
         var parentIdentifier = ontologyCreateParam.getParentOntologyUniqueIdentifier();
-        //校验父本体
+        //校验父对象
         var parentOntology = getOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, parentIdentifier).eq(OntologyMeta::getStatus, Status.ENABLE.getValue()));
-        PreconditionUtils.checkArgument(parentOntology != null, "父本体不存在", ResultCode.PARAM_ERROR, HttpStatus.BAD_REQUEST);
-        //创建子本体元数据
+        PreconditionUtils.checkArgument(parentOntology != null, "父对象不存在", ResultCode.PARAM_ERROR, HttpStatus.BAD_REQUEST);
+        //创建子对象元数据
         meta.setMetaGroupId(parentOntology.getMetaGroupId())
                 .setParentUniqueIdentifier(parentIdentifier)
                 .setStatus(parentOntology.getStatus())
@@ -234,7 +234,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         // 属性自动关联数据源
         var childBindResult = ontologyPropertyService.autoBindDatasource(childIdentifier);
         if (childBindResult != null && CollectionUtils.isNotEmpty(childBindResult.getBlockedItems())) {
-            log.warn("子本体{}属性自动关联数据源部分跳过：{}", childIdentifier, childBindResult.getMessage());
+            log.warn("子对象{}属性自动关联数据源部分跳过：{}", childIdentifier, childBindResult.getMessage());
         }
         // 创建关系
         Map<String, String> parentChildLinkMap = Maps.newHashMap();
@@ -250,7 +250,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                         .name(v.getName())
                         .ontologyUniqueIdentifierFrom(v.getOntologyUniqueIdentifierFrom().equals(parentIdentifier) ? childIdentifier : v.getOntologyUniqueIdentifierFrom())
                         .ontologyUniqueIdentifierTo(v.getOntologyUniqueIdentifierTo().equals(parentIdentifier) ? childIdentifier : v.getOntologyUniqueIdentifierTo())
-                        // 父关系 status 为历史 NULL 时不能继续往下传，否则子本体的关系同样查不到
+                        // 父关系 status 为历史 NULL 时不能继续往下传，否则子对象的关系同样查不到
                         .status(v.getStatus() == null ? Status.ENABLE.getValue() : v.getStatus())
                         .uniqueIdentifier(childLinkId)
                         .ontologySpaceId(v.getOntologySpaceId())
@@ -348,8 +348,8 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
     @Transactional(value = "mainTransactionManager")
     public void deleteOntology(String ontologyIdentifier) {
         var meta = getOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, ontologyIdentifier));
-        PreconditionUtils.checkArgument(meta != null, "本体不存在:" + ontologyIdentifier, ResultCode.PARAM_ERROR, HttpStatus.BAD_REQUEST);
-        //删除本体元数据
+        PreconditionUtils.checkArgument(meta != null, "对象不存在:" + ontologyIdentifier, ResultCode.PARAM_ERROR, HttpStatus.BAD_REQUEST);
+        //删除对象元数据
         this.remove(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, ontologyIdentifier));
         //删除属性分类
         propertyCategoryService.remove(new LambdaQueryWrapper<PropertyCategory>().eq(PropertyCategory::getOntologyUniqueIdentifier, ontologyIdentifier));
@@ -401,7 +401,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
     @Override
     public OntologyMetaBriefVO getMetaById(Long id) {
         var meta = getById(id);
-        PreconditionUtils.checkNotNull(meta, "本体不存在:" + id, HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkNotNull(meta, "对象不存在:" + id, HttpStatus.BAD_REQUEST);
         String spaceName = null;
         if (meta.getOntologySpaceId() != null) {
             var space = spaceService.getById(meta.getOntologySpaceId());
@@ -420,15 +420,15 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         var meta = getOne(new LambdaQueryWrapper<OntologyMeta>()
                 .eq(OntologyMeta::getUniqueIdentifier, uniqueIdentifier)
                 .eq(OntologyMeta::getStatus, Status.ENABLE.getValue()));
-        PreconditionUtils.checkNotNull(meta, "本体不存在:" + uniqueIdentifier, HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkNotNull(meta, "对象不存在:" + uniqueIdentifier, HttpStatus.BAD_REQUEST);
         return buildStatistic(uniqueIdentifier, meta.getOntologySpaceId());
     }
 
     /**
-     * 统计本体对象关联的核心资源数量：实例、属性、关系、行为
+     * 统计对象关联的核心资源数量：实例、属性、关系、行为
      *
-     * @param ontologyIdentifier 本体对象唯一标识
-     * @param spaceId            本体所属空间 id；关系计数按该空间裁剪，与详情页图谱、分类树口径一致
+     * @param ontologyIdentifier 对象唯一标识
+     * @param spaceId            对象所属空间 id；关系计数按该空间裁剪，与详情页图谱、分类树口径一致
      */
     private OntologyMetaStatisticVO buildStatistic(String ontologyIdentifier, Integer spaceId) {
         var propCnt = ontologyPropertyService.count(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyIdentifier));
@@ -443,7 +443,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         }
         var linkCnt = linkService.count(linkQuery);
 
-        //实例数量取自本体主键属性绑定的数据源表
+        //实例数量取自对象主键属性绑定的数据源表
         var pk = ontologyPropertyService.getOne(new LambdaQueryWrapper<OntologyProperty>()
                 .eq(OntologyProperty::getIsPrimaryKey, 1)
                 .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyIdentifier));
@@ -591,7 +591,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
             try {
                 proxyService.importOntology(dto);
             } catch (Exception e) {
-                log.error("本体 {} 导入失败", dto.getMetadata().getDisplayName(), e);
+                log.error("对象 {} 导入失败", dto.getMetadata().getDisplayName(), e);
                 failedOntology.add(dto.getMetadata().getDisplayName());
             }
         });
@@ -605,7 +605,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
     }
 
     /**
-     * 导入单个本体到指定空间。
+     * 导入单个对象到指定空间。
      *
      * @param targetSpaceId 目标空间 id，为 null 时按 {@code metadata.ontologySpaceName} 解析空间；
      *                      空间导入已 createSpace 拿到新 id，必须直接落进该空间，否则文件里的空间名与
@@ -634,7 +634,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
             metaGroups = groups.stream().map(OntologyGroup::getGroupId).collect(Collectors.joining(","));
         }
 
-        //获取本体分类体系
+        //获取对象分类体系
         var ontologyCategories = categoryService.list(new LambdaQueryWrapper<OntologyCategory>()
                 .eq(OntologyCategory::getOntologySpaceId, space.getId()));
         var ontologyCategoryMap = ontologyCategories.stream()
@@ -649,7 +649,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         if (StringUtils.isNotEmpty(metaData.getCategoryPath())) {
             ontologyCategoryId = ontologyCategoryMap.get(metaData.getCategoryPath());
             if (ontologyCategoryId == null) {
-                log.warn("本体 {} 导入：分类路径 {} 在目标空间不存在，兜底挂到根分类下",
+                log.warn("对象 {} 导入：分类路径 {} 在目标空间不存在，兜底挂到根分类下",
                         metaData.getDisplayName(), metaData.getCategoryPath());
                 ontologyCategoryId = rootCategoryId;
             }
@@ -666,7 +666,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 .ontologyCategoryId(ontologyCategoryId)
                 .build();
         save(meta);
-        //保存属性分类：JSON 未携带分类树时，与正常创建本体一致，默认建根节点"全部"
+        //保存属性分类：JSON 未携带分类树时，与正常创建对象一致，默认建根节点"全部"
         var propertyCategoryCreateParam = dto.getPropertyCategory();
         if (propertyCategoryCreateParam != null) {
             propertyCategoryCreateParam.setParentId(0)
@@ -703,7 +703,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 if (StringUtils.isNotEmpty(p.getCategoryPath())) {
                     propCategoryId = categoryMap.get(p.getCategoryPath());
                     if (propCategoryId == null) {
-                        log.warn("本体 {} 属性 {} 导入：分类路径 {} 不存在，兜底挂到根分类下",
+                        log.warn("对象 {} 属性 {} 导入：分类路径 {} 不存在，兜底挂到根分类下",
                                 metaData.getDisplayName(), p.getDisplayName(), p.getCategoryPath());
                         propCategoryId = propertyRootCategoryId;
                     }
@@ -729,7 +729,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         if (instances != null && CollectionUtils.isNotEmpty(instances.getNodes())) {
             var importBindResult = ontologyPropertyService.autoBindDatasource(meta.getUniqueIdentifier());
             if (importBindResult != null && CollectionUtils.isNotEmpty(importBindResult.getBlockedItems())) {
-                log.warn("导入本体{}属性自动关联数据源部分跳过，未绑定属性的实例值不会写入实体表：{}",
+                log.warn("导入对象{}属性自动关联数据源部分跳过，未绑定属性的实例值不会写入实体表：{}",
                         meta.getUniqueIdentifier(), importBindResult.getMessage());
             }
         }
@@ -848,7 +848,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
 
             });
         }
-        //导入实例数据（若传递了 instances）：写数据湖物理表，id 由数据库重新生成；本体未绑定数据源或无实例时静默跳过
+        //导入实例数据（若传递了 instances）：写数据湖物理表，id 由数据库重新生成；对象未绑定数据源或无实例时静默跳过
         return entityService.importInstances(meta.getUniqueIdentifier(), instances);
     }
 
@@ -895,11 +895,11 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         var meta = getOne(new LambdaQueryWrapper<OntologyMeta>()
                 .eq(OntologyMeta::getUniqueIdentifier, uniqueIdentifier)
                 .eq(OntologyMeta::getStatus, Status.ENABLE.getValue()));
-        PreconditionUtils.checkNotNull(meta, "本体不存在或已停用:" + uniqueIdentifier);
+        PreconditionUtils.checkNotNull(meta, "对象不存在或已停用:" + uniqueIdentifier);
         var space = getSpaceOrThrow(meta.getOntologySpaceId());
-        //关系端点可能指向同空间其它本体，displayName 解析需覆盖空间内全部启用本体
+        //关系端点可能指向同空间其它对象，displayName 解析需覆盖空间内全部启用对象
         var scopeMetas = listEnabledMetas(space);
-        //withRelations=true：关系随单本体导出；空间导出的关系由空间级 links 承载，不在此重复
+        //withRelations=true：关系随单对象导出；空间导出的关系由空间级 links 承载，不在此重复
         return buildOntologies(space, Lists.newArrayList(meta), scopeMetas, exportType, true);
     }
 
@@ -922,7 +922,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
 
     private OntologySpace getSpaceOrThrow(Integer spaceId) {
         var space = spaceService.getById(spaceId);
-        PreconditionUtils.checkNotNull(space, "本体空间不存在:" + spaceId);
+        PreconditionUtils.checkNotNull(space, "对象空间不存在:" + spaceId);
         return space;
     }
 
@@ -949,10 +949,10 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                                                     List<OntologyMeta> displayNameScope,
                                                     OntologyExportTypeEnum exportType,
                                                     boolean withRelations) {
-        //uid -> displayName（解析范围取 displayNameScope：单本体导出时关系端点可能指向同空间其它本体，需覆盖全空间启用本体）
+        //uid -> displayName（解析范围取 displayNameScope：单对象导出时关系端点可能指向同空间其它对象，需覆盖全空间启用对象）
         var uidToDisplayName = displayNameScope.stream()
                 .collect(Collectors.toMap(OntologyMeta::getUniqueIdentifier, OntologyMeta::getDisplayName, (a, b) -> a));
-        //本体分类 id -> path
+        //对象分类 id -> path
         var ontologyCategoryPathMap = categoryService.list(new LambdaQueryWrapper<OntologyCategory>()
                         .eq(OntologyCategory::getOntologySpaceId, space.getId()))
                 .stream().collect(Collectors.toMap(OntologyCategory::getId, OntologyCategory::getPath, (a, b) -> a));

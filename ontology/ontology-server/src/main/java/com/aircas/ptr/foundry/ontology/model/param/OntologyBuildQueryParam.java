@@ -15,7 +15,7 @@ import jakarta.validation.constraints.NotNull;
 @Accessors(chain = true)
 @NoArgsConstructor
 @AllArgsConstructor
-@Schema(description = "本体格式化构建请求")
+@Schema(description = "对象格式化构建请求")
 public class OntologyBuildQueryParam {
 
     @NotBlank(message = "query is empty")

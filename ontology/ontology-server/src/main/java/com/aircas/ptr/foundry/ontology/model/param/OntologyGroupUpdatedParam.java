@@ -9,7 +9,7 @@ import lombok.experimental.SuperBuilder;
 @AllArgsConstructor
 @NoArgsConstructor
 @SuperBuilder
-@Schema(description = "更新本体分组")
+@Schema(description = "更新对象分组")
 public class OntologyGroupUpdatedParam extends OntologyGroupCreateParam {
 
     @GroupIdVerify

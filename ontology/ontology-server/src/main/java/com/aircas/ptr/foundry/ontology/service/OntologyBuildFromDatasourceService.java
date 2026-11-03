@@ -4,12 +4,12 @@ import com.aircas.ptr.foundry.ontology.model.param.OntologyBuildFromDatasourcePa
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyBuildFromDatasourceResultVO;
 
 /**
- * 「数据源构建对象」向导第④步：把外部库勾选的列落成一个可查询的本体对象。
+ * 「数据源构建对象」向导第④步：把外部库勾选的列落成一个可查询的对象。
  */
 public interface OntologyBuildFromDatasourceService {
 
     /**
-     * 用外部数据源若干张表的勾选列创建一个本体对象，并在数据湖该空间的 schema 下建对应实体表、
+     * 用外部数据源若干张表的勾选列创建一个对象，并在数据湖该空间的 schema 下建对应实体表、
      * 写好主子表列映射、把属性的数据源字段回填。
      *
      * <p>规则：主表属性 {@code storageGroup=main}、实体表名取对象 apiName；子表属性

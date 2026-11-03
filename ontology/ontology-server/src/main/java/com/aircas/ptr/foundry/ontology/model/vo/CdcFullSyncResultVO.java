@@ -13,16 +13,16 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class CdcFullSyncResultVO {
 
-    @Schema(name = "spaceSynced", description = "本体空间索引写入文档数")
+    @Schema(name = "spaceSynced", description = "对象空间索引写入文档数")
     private long spaceSynced;
 
-    @Schema(name = "spaceDeleted", description = "本体空间索引清理的孤儿文档数")
+    @Schema(name = "spaceDeleted", description = "对象空间索引清理的孤儿文档数")
     private long spaceDeleted;
 
-    @Schema(name = "metaSynced", description = "本体元数据索引写入文档数")
+    @Schema(name = "metaSynced", description = "对象元数据索引写入文档数")
     private long metaSynced;
 
-    @Schema(name = "metaDeleted", description = "本体元数据索引清理的孤儿文档数")
+    @Schema(name = "metaDeleted", description = "对象元数据索引清理的孤儿文档数")
     private long metaDeleted;
 
     @Schema(name = "propertySynced", description = "属性索引写入文档数")

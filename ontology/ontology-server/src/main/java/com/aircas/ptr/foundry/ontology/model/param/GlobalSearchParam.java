@@ -8,7 +8,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-@Schema(description = "本体全局检索参数")
+@Schema(description = "对象全局检索参数")
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
@@ -19,9 +19,9 @@ public class GlobalSearchParam {
     private String keyword;
 
     @Schema(name = "searchType",
-            description = "检索类型：1=空间（含主题） 2=本体对象 3=关系 4=属性 5=实例；不传则五类全查")
-    @Min(value = 1, message = "检索类型取值范围为 1-5（1=空间 2=本体对象 3=关系 4=属性 5=实例）")
-    @Max(value = 5, message = "检索类型取值范围为 1-5（1=空间 2=本体对象 3=关系 4=属性 5=实例）")
+            description = "检索类型：1=空间（含主题） 2=对象 3=关系 4=属性 5=实例；不传则五类全查")
+    @Min(value = 1, message = "检索类型取值范围为 1-5（1=空间 2=对象 3=关系 4=属性 5=实例）")
+    @Max(value = 5, message = "检索类型取值范围为 1-5（1=空间 2=对象 3=关系 4=属性 5=实例）")
     private Integer searchType;
 
     @Schema(name = "size", description = "返回条数上限，缺省 100")

@@ -19,7 +19,7 @@ import java.util.List;
 @NoArgsConstructor
 @SuperBuilder
 @Accessors(chain = true)
-@Schema(description = "本体分类体系创建")
+@Schema(description = "对象分类体系创建")
 public class OntologyCategoryCreateParam extends OntologySpaceIdParam {
 
     @Schema(name = "parentId", description = "父节点id，为0表示当前节点为根节点(新创建属性体系)", example = "0")

@@ -156,12 +156,12 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     private ActionDefinition checkActionDefinition(OntologyAction action, ActionCreateOrUpdateParam param) {
         var meta = ontologyMetaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>()
                 .eq(OntologyMeta::getUniqueIdentifier, param.getOntologyIdentifier()));
-        PreconditionUtils.checkNotNull(meta, "无效的本体：" + param.getOntologyIdentifier(), HttpStatus.BAD_REQUEST);
-        // 归属的行为分类必须存在，且与本体同属一个本体空间
+        PreconditionUtils.checkNotNull(meta, "无效的对象：" + param.getOntologyIdentifier(), HttpStatus.BAD_REQUEST);
+        // 归属的行为分类必须存在，且与对象同属一个对象空间
         var category = actionCategoryMapper.selectById(param.getCategoryId());
         PreconditionUtils.checkArgument(category != null, "无效的行为分类：" + param.getCategoryId(), HttpStatus.BAD_REQUEST);
         PreconditionUtils.checkArgument(category.getOntologySpaceId().equals(meta.getOntologySpaceId()),
-                "行为分类不属于该本体所在的空间：" + category.getName(), HttpStatus.BAD_REQUEST);
+                "行为分类不属于该对象所在的空间：" + category.getName(), HttpStatus.BAD_REQUEST);
 
         // 类别、输出方式必须由调用方明确传入：猜错会把行为建成另一种，执行时才暴露很难定位
         PreconditionUtils.checkNotNull(param.getActionKind(), "必须选择行为类别：基础行为/应用行为", HttpStatus.BAD_REQUEST);
@@ -303,7 +303,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 .stream()
                 .filter(p -> param.getStorageGroup().equals(p.getStorageGroup()))
                 .collect(Collectors.toMap(OntologyProperty::getUniqueIdentifier, v -> v, (existingValue, newValue) -> existingValue));
-        PreconditionUtils.checkArgument(!groupPropMap.isEmpty(), "该本体不存在存储分组：" + param.getStorageGroup(), HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(!groupPropMap.isEmpty(), "该对象不存在存储分组：" + param.getStorageGroup(), HttpStatus.BAD_REQUEST);
         // 主键由分组表自己的序列生成，不参与绑定
         var bindableProps = groupPropMap.entrySet().stream()
                 .filter(entry -> entry.getValue().getIsPrimaryKey() == 0)
@@ -384,7 +384,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         var linkMapping = param.getLinkMapping();
         var linkId = linkMapping == null ? null : linkMapping.getOntologyLinkUniqIdentifier();
         if (StringUtils.isEmpty(linkId)) {
-            PreconditionUtils.checkArgument(!required, "该行为必须绑定一条本体关系", HttpStatus.BAD_REQUEST);
+            PreconditionUtils.checkArgument(!required, "该行为必须绑定一条对象关系", HttpStatus.BAD_REQUEST);
             return;
         }
         var ontologyId = param.getOntologyIdentifier();
@@ -392,7 +392,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 .eq(OntologyLinkGroup::getUniqueIdentifier, linkId));
         PreconditionUtils.checkArgument(link != null && (ontologyId.equals(link.getOntologyUniqueIdentifierFrom())
                         || ontologyId.equals(link.getOntologyUniqueIdentifierTo())),
-                "无效的本体关系：" + linkId, HttpStatus.BAD_REQUEST);
+                "无效的对象关系：" + linkId, HttpStatus.BAD_REQUEST);
         definition.actionLink = OntologyActionLink.builder()
                 .ontologyLinkUniqueIdentifier(linkId)
                 .ontologyLinkParamExpression(linkMapping.getOntologyLinkFunctionParamExpression())
@@ -573,7 +573,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         if (primaryProperty == null || StringUtils.isEmpty(primaryProperty.getDatasourceColumnName())) {
             return "";
         }
-        //查询本体的实体主键
+        //查询对象的实体主键
         var hasDeletedField = tableMetadataMapper.isColumnExist(primaryProperty.getDatasourceSchema(), primaryProperty.getDatasourceId(), "is_deleted");
         var records = entityMapper.pageQuery(
                 primaryProperty.getDatasourceSchema(),
@@ -585,7 +585,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 0,
                 hasDeletedField);
         //执行每个实体的行为
-        //获取行为关联关系下的本体的所有实体详情
+        //获取行为关联关系下的对象的所有实体详情
         List<List<EntityPropertyDetailVO>> linkedEntities = entityService.getLinkedEntities(contextInfoDTO);
         //执行日志
         List<String> logMsg = Lists.newArrayList();
@@ -782,9 +782,9 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         PreconditionUtils.checkArgument(param.getLinkEntityPrimaryKey() != null, "实例关系行为测试必须提供对端实体主键", HttpStatus.BAD_REQUEST);
         var linkGroup = linkGroupMapper.selectOne(new LambdaQueryWrapper<OntologyLinkGroup>()
                 .eq(OntologyLinkGroup::getUniqueIdentifier, linkMapping.getOntologyLinkUniqIdentifier()));
-        PreconditionUtils.checkArgument(linkGroup != null, "无效的本体关系：" + linkMapping.getOntologyLinkUniqIdentifier(), HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(linkGroup != null, "无效的对象关系：" + linkMapping.getOntologyLinkUniqIdentifier(), HttpStatus.BAD_REQUEST);
 
-        // 行为挂在本体的一侧，行为测试给的实体主键就落在关系的那一端
+        // 行为挂在对象的一侧，行为测试给的实体主键就落在关系的那一端
         var selfIsFrom = action.getOntologyUniqueIdentifier().equals(linkGroup.getOntologyUniqueIdentifierFrom());
         var primaryKeyFrom = selfIsFrom ? param.getEntityPrimaryKey() : param.getLinkEntityPrimaryKey();
         var primaryKeyTo = selfIsFrom ? param.getLinkEntityPrimaryKey() : param.getEntityPrimaryKey();
@@ -820,7 +820,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         if (detail.getLinkMapping() != null && param.getLinkEntityPrimaryKey() != null) {
             var linkGroup = linkGroupMapper.selectOne(new LambdaQueryWrapper<OntologyLinkGroup>()
                     .eq(OntologyLinkGroup::getUniqueIdentifier, detail.getLinkMapping().getOntologyLinkUniqIdentifier()));
-            PreconditionUtils.checkArgument(linkGroup != null, "无效的本体关系：" + detail.getLinkMapping().getOntologyLinkUniqIdentifier(), HttpStatus.BAD_REQUEST);
+            PreconditionUtils.checkArgument(linkGroup != null, "无效的对象关系：" + detail.getLinkMapping().getOntologyLinkUniqIdentifier(), HttpStatus.BAD_REQUEST);
             executeParamBuilder.linkedOntologyUniqueIdentifier(linkGroup.getOntologyUniqueIdentifierTo())
                     .linkedEntityPrimaryKey(param.getLinkEntityPrimaryKey());
         }

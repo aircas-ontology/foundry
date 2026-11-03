@@ -52,7 +52,7 @@ public class OntologyActionMappingIn {
 
     /**
      * Column: property_unique_identifier
-     * Remark: 属性的唯一标识，如果为this, 则表示当前本体对象。
+     * Remark: 属性的唯一标识，如果为this, 则表示当前对象。
      */
     private String propertyUniqueIdentifier;
 

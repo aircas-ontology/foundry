@@ -18,7 +18,7 @@ import java.util.List;
 @Schema(description = "根据实体id查询")
 public class EntityIdsQueryParam {
 
-    @Schema(name = "ontologyUniqueIdentifier", description = "本体id", example = "123")
+    @Schema(name = "ontologyUniqueIdentifier", description = "对象id", example = "123")
     @OntologyIdVerify
     private String ontologyUniqueIdentifier;
 

@@ -38,7 +38,7 @@ public class DatasourceMcpTools implements McpTools {
 
     @Tool(description = """
             扫描指定数据源的表注释（表名 + 表注释）。
-            当用户需要基于数据源创建本体对象、匹配表结构时使用。
+            当用户需要基于数据源创建对象、匹配表结构时使用。
             返回该数据源下所有表的表名和表注释列表。
             支持 POSTGRESQL / MYSQL / ORACLE / SQLSERVER 等主流关系型数据库；具体驱动、URL、schema 由数据源配置决定。
             """)
@@ -49,7 +49,7 @@ public class DatasourceMcpTools implements McpTools {
 
     @Tool(description = """
             扫描指定数据源下指定表的列信息（列名 + 列注释 + 数据类型 + 是否主键）。
-            当用户已确认本体对象后、需要推导该对象的属性清单时使用；支持主表与关联表的多次调用，
+            当用户已确认对象后、需要推导该对象的属性清单时使用；支持主表与关联表的多次调用，
             以拼接来自不同表的属性。返回字段按表中物理顺序排列。
             支持 POSTGRESQL / MYSQL / ORACLE / SQLSERVER 等主流关系型数据库；列注释仅当驱动开启 remarksReporting
             或 JDBC URL 带 useInformationSchema=true 时非空（与数据源配置相关）。

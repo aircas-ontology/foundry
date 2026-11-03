@@ -34,7 +34,7 @@ public class FunctionContainerInstance {
     /** 容器实例分组键（UUID），同批次派生的多条 function 算子共用 */
     private String containerKey;
 
-    /** 所属本体空间 id */
+    /** 所属对象空间 id */
     private Integer ontologySpaceId;
 
     /** 容器算子展示名（公共前缀） */

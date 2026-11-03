@@ -12,13 +12,13 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Map;
 
 /**
- * 本体/关系/属性分类体系根节点初始化接口。
+ * 对象/关系/属性分类体系根节点初始化接口。
  *
  * <p>在 Swagger 上执行一次即可：为全部空间建立对象分类树、关系分类树、行为分类树的“全部”根节点，
- * 为每个本体对象建立属性分类树的“全部”根节点，并把对应 categoryId 回填到
+ * 为每个对象建立属性分类树的“全部”根节点，并把对应 categoryId 回填到
  * ontology_meta / ontology_link_group / ontology_property / ontology_action。</p>
  */
-@Tag(name = "本体分类体系初始化")
+@Tag(name = "对象分类体系初始化")
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/category/init")

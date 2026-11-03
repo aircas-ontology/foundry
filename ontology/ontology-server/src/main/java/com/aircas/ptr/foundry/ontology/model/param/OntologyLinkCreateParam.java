@@ -24,22 +24,22 @@ public class OntologyLinkCreateParam {
     /**
      * link的名称
      */
-    @Schema(name = "name", required = true, description = "本体关系名称")
+    @Schema(name = "name", required = true, description = "对象关系名称")
     @NotBlank(message = "link name is empty")
     private String name;
 
     /**
-     * 开始本体unique identifier
+     * 开始对象unique identifier
      */
-    @Schema(name = "ontologyUniqueIdentifierFrom", required = true, description = "开始本体uniq id")
+    @Schema(name = "ontologyUniqueIdentifierFrom", required = true, description = "开始对象uniq id")
     @NotBlank(message = "ontologyUniqueIdentifierFrom name is empty")
     @OntologyIdVerify
     private String ontologyUniqueIdentifierFrom;
 
     /**
-     * 结束本体unique identifier
+     * 结束对象unique identifier
      */
-    @Schema(name = "ontologyUniqueIdentifierTo", required = true, description = "结束本体uniq id")
+    @Schema(name = "ontologyUniqueIdentifierTo", required = true, description = "结束对象uniq id")
     @NotBlank(message = "ontologyUniqueIdentifierTo name is empty")
     @OntologyIdVerify
     private String ontologyUniqueIdentifierTo;
@@ -69,7 +69,7 @@ public class OntologyLinkCreateParam {
     private String description;
 
     /**
-     * 关系所属空间id（ontology_space.id），由调用方直接传入，不再反查本体归属
+     * 关系所属空间id（ontology_space.id），由调用方直接传入，不再反查对象归属
      */
     @Schema(name = "spaceId", required = true, description = "关系所属空间id（ontology_space.id）", example = "1")
     @NotNull(message = "spaceId is empty")

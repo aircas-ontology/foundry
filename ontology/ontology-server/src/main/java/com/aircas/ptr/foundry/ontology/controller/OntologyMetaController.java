@@ -31,7 +31,7 @@ import jakarta.validation.Valid;
 import java.util.List;
 
 
-@Tag(name = "本体对象管理")
+@Tag(name = "对象管理")
 @RestController
 @RequestMapping("/meta")
 @Validated
@@ -45,7 +45,7 @@ public class OntologyMetaController {
 
 
     @GetMapping("/export")
-    @Operation(summary = "导出单个本体（含 schema，可选是否含实例数据）")
+    @Operation(summary = "导出单个对象（含 schema，可选是否含实例数据）")
     public void exportOntology(@RequestParam(name = "uniqueIdentifier") @OntologyIdVerify String uniqueIdentifier,
                                @RequestParam(name = "exportType", defaultValue = "INSTANCE")
                                @Parameter(description = "导出类型：SCHEMA=仅结构, INSTANCE=含实例数据（默认）")
@@ -61,15 +61,15 @@ public class OntologyMetaController {
 
 
     @PostMapping("/import")
-    @Operation(summary = "本体批量导入创建")
+    @Operation(summary = "对象批量导入创建")
     public RestResult importOntologies(@RequestParam(required = true, name = "file") MultipartFile file) {
         var failedOntology = ontologyMetaService.importOntologies(file);
-        return CollectionUtils.isNotEmpty(failedOntology) ? new RestResult(ResultCode.ERROR, "本体批量导入失败", failedOntology) : RestResult.success();
+        return CollectionUtils.isNotEmpty(failedOntology) ? new RestResult(ResultCode.ERROR, "对象批量导入失败", failedOntology) : RestResult.success();
     }
 
 
     @PostMapping
-    @Operation(summary = "创建本体")
+    @Operation(summary = "创建对象")
     public RestResult<IdentifierVO> createOntology(@RequestBody @Valid OntologyMetaCreateParam ontologyCreateParam) {
         String uniqIdentifier = ontologyMetaService.createOntology(ontologyCreateParam);
         return RestResult.ofData(IdentifierVO.builder().uniqueIdentifier(uniqIdentifier).build());
@@ -77,14 +77,14 @@ public class OntologyMetaController {
 
 
     @DeleteMapping("/{ontologyIdentifier}")
-    @Operation(summary = "删除本体")
+    @Operation(summary = "删除对象")
     public RestResult deleteOntology(@PathVariable(required = true, name = "ontologyIdentifier") @OntologyIdVerify String ontologyIdentifier) {
         ontologyMetaService.deleteOntology(ontologyIdentifier);
         return RestResult.success();
     }
 
     @PutMapping
-    @Operation(summary = "修改本体元数据")
+    @Operation(summary = "修改对象元数据")
     public RestResult updateMeta(@RequestBody @Valid OntologyUpdateParam updateParam) {
         ontologyMetaService.updateMeta(updateParam);
         return RestResult.success();
@@ -92,8 +92,8 @@ public class OntologyMetaController {
 
 
     @GetMapping
-    @Operation(summary = "根据unique identifier查询一个本体元数据")
-    public RestResult<OntologyMetaInfoVO> getMetaByUniqueIdentifier(@RequestParam(name = "uniqueIdentifier", required = true) @Parameter(description = "本体unique identifer") @OntologyIdVerify String uniqueIdentifier) {
+    @Operation(summary = "根据unique identifier查询一个对象元数据")
+    public RestResult<OntologyMetaInfoVO> getMetaByUniqueIdentifier(@RequestParam(name = "uniqueIdentifier", required = true) @Parameter(description = "对象unique identifer") @OntologyIdVerify String uniqueIdentifier) {
         return RestResult.ofData(ontologyMetaService.getMetaByUniqueIdentifier(uniqueIdentifier));
     }
 
@@ -106,26 +106,26 @@ public class OntologyMetaController {
 
 
     @GetMapping("/statistic")
-    @Operation(summary = "统计本体对象关联的核心资源数量（实例、属性、关系、行为）")
-    public RestResult<OntologyMetaStatisticVO> getStatistic(@RequestParam(name = "uniqueIdentifier", required = true) @Parameter(description = "本体unique identifer") @OntologyIdVerify String uniqueIdentifier) {
+    @Operation(summary = "统计对象关联的核心资源数量（实例、属性、关系、行为）")
+    public RestResult<OntologyMetaStatisticVO> getStatistic(@RequestParam(name = "uniqueIdentifier", required = true) @Parameter(description = "对象unique identifer") @OntologyIdVerify String uniqueIdentifier) {
         return RestResult.ofData(ontologyMetaService.getStatistic(uniqueIdentifier));
     }
 
 
     @GetMapping("/search")
-    @Operation(summary = "搜索本体")
+    @Operation(summary = "搜索对象")
     public RestResult<List<OntologyMetaInfoVO>> searchByKeyword(@RequestParam(name = "keyword", required = false) @Parameter(description = "搜索关键词") String keyword) {
         return RestResult.ofData(ontologyMetaService.searchByKeyword(keyword));
     }
 
     @GetMapping("/category")
-    @Operation(summary = "根据categoryId查询本体对象列表")
-    public RestResult<List<OntologyMetaInfoVO>> getByCategoryId(@RequestParam(name = "categoryId", required = false) @Parameter(description = "分类id，不传则查询全部本体") Integer categoryId) {
+    @Operation(summary = "根据categoryId查询对象列表")
+    public RestResult<List<OntologyMetaInfoVO>> getByCategoryId(@RequestParam(name = "categoryId", required = false) @Parameter(description = "分类id，不传则查询全部对象") Integer categoryId) {
         return RestResult.ofData(ontologyMetaService.getByCategoryId(categoryId));
     }
 
     @GetMapping("/group")
-    @Operation(summary = "根据groupId查询组内本体")
+    @Operation(summary = "根据groupId查询组内对象")
     public RestResult<List<OntologyGroupMetaVO>> getByGroupId(@RequestParam(name = "groupId", required = false) @Parameter(description = "groupId") String groupId,
                                                               @RequestParam(name = "orderBy", required = false) @Parameter(description = "orderBy") OntologyOrderByEnum orderBy,
                                                               @RequestParam(name = "sort", required = false) @Parameter(description = "sort") QuerySortEnum sort) {
@@ -134,7 +134,7 @@ public class OntologyMetaController {
 
 
     @GetMapping("/group/tree")
-    @Operation(summary = "根据groupId查询组内本体树")
+    @Operation(summary = "根据groupId查询组内对象树")
     public RestResult<List<OntologyMetaNodeVO>> getOntologyTreeByByGroupId(@RequestParam(name = "groupId", required = false) @Parameter(description = "groupId") String groupId) {
         return RestResult.ofData(ontologyMetaService.getOntologyTreeByByGroupId(groupId));
     }

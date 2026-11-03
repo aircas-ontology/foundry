@@ -20,7 +20,7 @@ public class StorageGroupVO {
     @Schema(name = "id", description = "主键id", example = "1")
     private Integer id;
 
-    @Schema(name = "ontologyUniqueIdentifier", description = "本体对象唯一标识", example = "ship_001")
+    @Schema(name = "ontologyUniqueIdentifier", description = "对象唯一标识", example = "ship_001")
     private String ontologyUniqueIdentifier;
 
     @Schema(name = "storageName", description = "存储名称", example = "postgresql_main")

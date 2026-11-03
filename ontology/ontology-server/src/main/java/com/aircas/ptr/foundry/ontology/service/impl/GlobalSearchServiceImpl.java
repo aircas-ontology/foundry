@@ -64,7 +64,7 @@ public class GlobalSearchServiceImpl implements GlobalSearchService {
             indexNameOf(EsOntologyInstanceDTO.class),
             indexNameOf(EsOntologyLinkGroupDTO.class));
 
-    /** 请求参数 searchType 取值：1=空间 2=本体对象 3=关系 4=属性 5=实例 */
+    /** 请求参数 searchType 取值：1=空间 2=对象 3=关系 4=属性 5=实例 */
     private static final int SEARCH_TYPE_SPACE = 1;
     private static final int SEARCH_TYPE_META = 2;
     private static final int SEARCH_TYPE_LINK_GROUP = 3;

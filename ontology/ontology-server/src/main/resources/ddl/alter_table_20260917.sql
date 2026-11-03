@@ -1,4 +1,4 @@
--- 关系分类树表（与本体分类表 ontology_category 平行）
+-- 关系分类树表（与对象分类表 ontology_category 平行）
 create table if not exists ontology.ontology_link_category
 (
     id                serial
@@ -21,7 +21,7 @@ comment on column ontology.ontology_link_category.path is '分类路径';
 
 comment on column ontology.ontology_link_category.name is '分类名称';
 
-comment on column ontology.ontology_link_category.ontology_space_id is '本体空间id';
+comment on column ontology.ontology_link_category.ontology_space_id is '对象空间id';
 
 comment on column ontology.ontology_link_category.create_time is '创建时间';
 

@@ -58,7 +58,7 @@ public class ActionHandleTask {
     private String remark;
 
     /**
-     * 本体空间id
+     * 对象空间id
      */
     private Integer ontologySpaceId;
 

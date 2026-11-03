@@ -8,7 +8,7 @@ import java.util.List;
 
 @Data
 @Builder
-@Schema(description = "本体分组搜索返回参数")
+@Schema(description = "对象分组搜索返回参数")
 public class OntologyGroupMetaVO {
 
     @Schema(name = "groupName", description = "分组名称", example = "远海远域")

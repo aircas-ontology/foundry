@@ -48,7 +48,7 @@ public class OntologyGroupServiceImpl extends ServiceImpl<OntologyGroupMapper, O
         if (CollectionUtils.isEmpty(metaList)) {
             remove(new LambdaQueryWrapper<OntologyGroup>().eq(OntologyGroup::getGroupId, groupId));
         } else {
-            throw new BusinessException("该组内存在本体，无法删除", ResultCode.NO_PERMISSION, HttpStatus.FORBIDDEN);
+            throw new BusinessException("该组内存在对象，无法删除", ResultCode.NO_PERMISSION, HttpStatus.FORBIDDEN);
         }
     }
 
