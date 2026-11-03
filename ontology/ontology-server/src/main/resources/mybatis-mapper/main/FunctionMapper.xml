@@ -54,45 +54,4 @@
         order by t.update_time desc nulls last, t.id desc
     </select>
 
-    <update id="updateDraftFunction">
-        update ontology.function
-        set description = #{function.description},
-            reference_name = #{function.referenceName},
-            model = #{function.model},
-            code = #{function.code},
-            scan_status = #{function.scanStatus},
-            scan_result = #{function.scanResult,
-                typeHandler=com.aircas.ptr.foundry.ontology.repository.handler.JsonbTypeHandler},
-            update_time = current_timestamp
-        where id = #{function.id}
-          and publish = 0
-        <choose>
-            <when test="originalUpdateTime != null">
-                and update_time = #{originalUpdateTime}
-            </when>
-            <otherwise>
-                and update_time is null
-            </otherwise>
-        </choose>
-    </update>
-
-    <update id="updateDraftScanAndPublish">
-        update ontology.function
-        set publish = #{publish},
-            scan_status = #{scanStatus},
-            scan_result = #{scanResult,
-                typeHandler=com.aircas.ptr.foundry.ontology.repository.handler.JsonbTypeHandler},
-            update_time = current_timestamp
-        where id = #{id}
-          and publish = 0
-        <choose>
-            <when test="originalUpdateTime != null">
-                and update_time = #{originalUpdateTime}
-            </when>
-            <otherwise>
-                and update_time is null
-            </otherwise>
-        </choose>
-    </update>
-
 </mapper>

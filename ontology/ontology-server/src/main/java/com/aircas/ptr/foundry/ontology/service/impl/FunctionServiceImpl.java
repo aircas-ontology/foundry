@@ -84,6 +84,7 @@ import com.aircas.ptr.foundry.ontology.utils.ScriptParamDescriptionExtractor;
 import com.aircas.ptr.foundry.ontology.utils.ScriptParamDescriptionExtractor.Descriptions;
 import com.aircas.ptr.foundry.ontology.utils.SchemaHandleUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -632,7 +633,15 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         function.setScanResult(toScanJson(scanResult));
 
         mainTransactionExecutor.execute(() -> {
-            requireConditionalUpdate(baseMapper.updateDraftFunction(function, originalUpdateTime));
+            Function update = new Function()
+                    .setScanStatus(function.getScanStatus())
+                    .setScanResult(function.getScanResult());
+            LambdaUpdateWrapper<Function> updateWrapper = draftUpdateWrapper(function.getId(), originalUpdateTime)
+                    .set(Function::getDescription, function.getDescription())
+                    .set(Function::getReferenceName, function.getReferenceName())
+                    .set(Function::getModel, function.getModel())
+                    .set(Function::getCode, function.getCode());
+            requireConditionalUpdate(baseMapper.update(update, updateWrapper));
             rebuildTypedParams(function, param, effectiveCode, customizeParams);
             return null;
         });
@@ -829,11 +838,24 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     private void persistPublishDecision(Function function, Timestamp originalUpdateTime,
                                         FunctionScanResult scanResult, int publish) {
         mainTransactionExecutor.execute(() -> {
-            int updated = baseMapper.updateDraftScanAndPublish(function.getId(), originalUpdateTime, publish,
-                    scanResult.status(), toScanJson(scanResult));
+            Function update = new Function()
+                    .setPublish(publish)
+                    .setScanStatus(scanResult.status())
+                    .setScanResult(toScanJson(scanResult));
+            int updated = baseMapper.update(update, draftUpdateWrapper(function.getId(), originalUpdateTime));
             requireConditionalUpdate(updated);
             return null;
         });
+    }
+
+    private LambdaUpdateWrapper<Function> draftUpdateWrapper(Long id, Timestamp originalUpdateTime) {
+        LambdaUpdateWrapper<Function> wrapper = new LambdaUpdateWrapper<Function>()
+                .eq(Function::getId, id)
+                .eq(Function::getPublish, FunctionConstant.PUBLISH_UNPUBLISHED);
+        if (originalUpdateTime == null) {
+            return wrapper.isNull(Function::getUpdateTime);
+        }
+        return wrapper.eq(Function::getUpdateTime, originalUpdateTime);
     }
 
     private FunctionScanResult readScanResult(Function function) {
