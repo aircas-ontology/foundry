@@ -953,7 +953,9 @@ public class EntityServiceImpl implements EntityService {
     public ActionContextInfoDTO initActionContextInfoDTO(EntityActionExecuteParam param) {
 
         var actionDetailVO = actionService.getActionByApi(param.getActionApi());
-        var functionDetailVO = functionService.getFunctionDetailByApi(actionDetailVO.getFunctionApi());
+        // 算子 api 跨空间允许重名，执行必须按行为所属空间取，否则会跑到其他空间的同名算子上
+        var functionDetailVO = functionService.getFunctionDetailByApi(actionDetailVO.getOntologySpaceId(),
+                actionDetailVO.getFunctionApi(), null);
         var link = actionDetailVO.getLinkMapping();
         var mappings = actionDetailVO.getMappingIns();
         //src本体属性

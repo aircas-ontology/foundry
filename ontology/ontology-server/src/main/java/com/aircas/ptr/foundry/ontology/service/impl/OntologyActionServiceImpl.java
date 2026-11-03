@@ -171,7 +171,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             PreconditionUtils.checkArgument(param.getSubjectType() == null && param.getOperation() == null
                     && StringUtils.isEmpty(param.getStorageGroup()), "应用行为不需要行为类型、基础操作和存储分组", HttpStatus.BAD_REQUEST);
             PreconditionUtils.checkNotNull(param.getOutputMode(), "应用行为必须选择输出方式", HttpStatus.BAD_REQUEST);
-            checkFunctionAction(param, definition, APPLICATION_FUNCTION_TYPES, true);
+            checkFunctionAction(param, definition, APPLICATION_FUNCTION_TYPES, true, meta.getOntologySpaceId());
             if (param.getOutputMode() == ActionOutputModeEnum.WRITE_PROPERTY) {
                 checkWritePropertyOutput(definition);
             }
@@ -190,7 +190,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                         "基础算子行为不需要基础操作和存储分组", HttpStatus.BAD_REQUEST);
                 PreconditionUtils.checkArgument(param.getOutputMode() != ActionOutputModeEnum.WRITE_PROPERTY,
                         "基础算子行为只支持仅返回结果", HttpStatus.BAD_REQUEST);
-                checkFunctionAction(param, definition, Collections.singletonList(FunctionTypeEnum.BASIC_QUERY), false);
+                checkFunctionAction(param, definition, Collections.singletonList(FunctionTypeEnum.BASIC_QUERY),
+                        false, meta.getOntologySpaceId());
             }
             // 属性值、实例关系的输出即落库本身，没有回写方式；基础算子只读
             action.setOutputMode(subjectType == ActionSubjectTypeEnum.BASIC_OPERATOR
@@ -219,13 +220,16 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
      *
      * @param allowedTypes 该类别允许的算子类型
      * @param linkRequired 应用行为必须绑定一条关系，执行时据此补一条实例关系
+     * @param spaceId      行为所属空间，算子 api 仅在该空间内唯一
      */
     private void checkFunctionAction(ActionCreateOrUpdateParam param, ActionDefinition definition,
-                                     List<FunctionTypeEnum> allowedTypes, boolean linkRequired) {
+                                     List<FunctionTypeEnum> allowedTypes, boolean linkRequired, Integer spaceId) {
         var funcApi = param.getFunctionApi();
         PreconditionUtils.checkArgument(StringUtils.isNotEmpty(funcApi), "行为必须绑定算子", HttpStatus.BAD_REQUEST);
-        // 版本管理后 api 可能对应多条记录，取版本号最大的最新版本（x.y.z 逐段数值比较）
-        definition.func = functionMapper.selectList(new LambdaQueryWrapper<Function>().eq(Function::getApi, funcApi))
+        // 算子 api 只保证空间内唯一（跨空间允许重名），取最新版本必须先限定在本空间，否则会选中其他空间的同名算子
+        definition.func = functionMapper.selectList(new LambdaQueryWrapper<Function>()
+                        .eq(Function::getOntologySpaceId, spaceId)
+                        .eq(Function::getApi, funcApi))
                 .stream()
                 .max(Comparator.comparing((Function f) -> f.getVersion() == null ? "" : f.getVersion(),
                                 FunctionServiceImpl::compareVersion)
@@ -482,6 +486,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         var detailVO = OntologyActionDetailVO
                 .builder()
                 .id(action.getId())
+                .ontologySpaceId(action.getOntologySpaceId())
                 .functionApi(action.getFunctionApi())
                 .functionDescription(functionService
                         .mapDescriptionByApi(Collections.singletonList(action.getFunctionApi()))
@@ -527,9 +532,11 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                     .collect(Collectors.toList());
             detailVO.setMappingIns(mappingVOS);
         }
-        // 函数参数定义（入参 + 出参），前端绑定 UI 用
+        // 函数参数定义（入参 + 出参），前端绑定 UI 用；算子 api 跨空间允许重名，必须按本行为所属空间取
         if (StringUtils.isNotEmpty(action.getFunctionApi())) {
-            var func = functionMapper.selectList(new LambdaQueryWrapper<Function>().eq(Function::getApi, action.getFunctionApi()))
+            var func = functionMapper.selectList(new LambdaQueryWrapper<Function>()
+                            .eq(Function::getOntologySpaceId, action.getOntologySpaceId())
+                            .eq(Function::getApi, action.getFunctionApi()))
                     .stream()
                     .max(Comparator.comparing((Function f) -> f.getVersion() == null ? "" : f.getVersion(),
                                     FunctionServiceImpl::compareVersion)

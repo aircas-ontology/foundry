@@ -815,7 +815,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 List<ActionParamMappingCreateParam> mappingIns = null;
                 var mapping = action.getMappingIns();
                 if (CollectionUtils.isNotEmpty(mapping)) {
-                    var detail = functionService.getFunctionDetailByApi(action.getFunctionApi());
+                    var detail = functionService.getFunctionDetailByApi(space.getId(), action.getFunctionApi(), null);
                     var paramMap = detail.getParams().stream().collect(Collectors.toMap(v -> v.getParamName(), v -> v));
 
                     mappingIns = mapping.stream().map(m -> {
