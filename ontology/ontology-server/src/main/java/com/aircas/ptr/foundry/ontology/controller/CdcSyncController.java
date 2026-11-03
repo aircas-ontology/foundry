@@ -4,7 +4,6 @@ import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.model.param.CdcFullSyncParam;
 import com.aircas.ptr.foundry.ontology.model.vo.CdcFullSyncResultVO;
 import com.aircas.ptr.foundry.ontology.service.CdcFullSyncService;
-import com.aircas.ptr.foundry.ontology.service.CdcIncrementalSyncService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -22,7 +21,6 @@ import org.springframework.web.bind.annotation.RestController;
 public class CdcSyncController {
 
     private final CdcFullSyncService cdcFullSyncService;
-    private final CdcIncrementalSyncService cdcIncrementalSyncService;
 
     /**
      * CDC 初始化全量同步：以数据库当前内容为准，将主库（空间/本体/属性）与数据湖实例
@@ -38,15 +36,4 @@ public class CdcSyncController {
         return RestResult.ofData(cdcFullSyncService.fullSync(param));
     }
 
-    /**
-     * CDC 增量同步：仅 upsert 数据到 ES 和 ArangoDB，不做孤儿清理。
-     * <p>
-     * 适用于两次全量同步之间补漏、或按时间窗口定期触发；可安全地与全量同步交错执行。
-     * 并发保护：同一实例同时只允许一个增量同步，重复触发返回 409。
-     */
-    @PostMapping("/sync/incremental")
-    @Operation(summary = "CDC增量同步（仅 upsert，不清理孤儿）")
-    public RestResult<CdcFullSyncResultVO> incrementalSync(@RequestBody(required = false) CdcFullSyncParam param) {
-        return RestResult.ofData(cdcIncrementalSyncService.incrementalSync(param));
-    }
 }

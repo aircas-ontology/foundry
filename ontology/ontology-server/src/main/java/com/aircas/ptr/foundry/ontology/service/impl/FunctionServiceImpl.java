@@ -1173,7 +1173,6 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                         .runningStatus(runningFunctions.containsKey(func.getApi())
                                 ? FunctionRuntimeStatusEnum.RUNNING
                                 : FunctionRuntimeStatusEnum.NOT_RUNNING)
-                        .containerKey(func.getContainerKey())
                         .build();
         }).collect(Collectors.toList());
 
