@@ -74,7 +74,6 @@ import com.aircas.ptr.foundry.ontology.service.ContainerFunctionService;
 import com.aircas.ptr.foundry.ontology.service.FunctionParamService;
 import com.aircas.ptr.foundry.ontology.service.FunctionService;
 import com.aircas.ptr.foundry.ontology.service.GroovyService;
-import com.aircas.ptr.foundry.ontology.service.MainTransactionExecutor;
 import com.aircas.ptr.foundry.ontology.service.ScriptSecurityScanService;
 import com.aircas.ptr.foundry.ontology.exception.FunctionVersionConflictException;
 import com.aircas.ptr.foundry.ontology.exception.SemgrepScanException;
@@ -151,9 +150,6 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
 
     @Resource
     private ScriptSecurityScanService scriptSecurityScanService;
-
-    @Resource
-    private MainTransactionExecutor mainTransactionExecutor;
 
     @Lazy
     @Resource
@@ -458,7 +454,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
             containerFunctionService.createContainerFunction(buildContainerCreateParam(param));
             return FunctionScanResult.skipped(ScanSkipReason.NON_SCRIPT_OPERATOR);
         }
-        // 非容器算子：事务外完成校验和安全扫描，随后在独立短事务原子写函数与参数。
+        // 非容器算子：先完成校验和安全扫描，再写入函数与参数。
         FunctionModelEnum model = resolveModel(param);
         String version = checkVersionAndApiUnique(param);
         FunctionLanguageEnum language = resolveLanguage(param);
@@ -472,15 +468,12 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         List<FunctionParamDTO> customizeParams = param.getType() == FunctionTypeEnum.CUSTOMIZE
                 ? resolveCustomizeParams(language, param.getCode(), param.getParameters())
                 : null;
-        mainTransactionExecutor.execute(() -> {
-            Function func = buildAndSaveFunction(param, model, version, language, scanResult);
-            if (param.getType() == FunctionTypeEnum.CUSTOMIZE) {
-                saveResolvedCustomizeParams(func, customizeParams);
-            } else {
-                saveTypedParams(func, param, language);
-            }
-            return null;
-        });
+        Function func = buildAndSaveFunction(param, model, version, language, scanResult);
+        if (param.getType() == FunctionTypeEnum.CUSTOMIZE) {
+            saveResolvedCustomizeParams(func, customizeParams);
+        } else {
+            saveTypedParams(func, param, language);
+        }
         return scanResult;
     }
 
@@ -633,21 +626,18 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         function.setScanStatus(scanResult.status());
         function.setScanResult(toScanJson(scanResult));
 
-        mainTransactionExecutor.execute(() -> {
-            Function update = new Function()
-                    .setScanStatus(function.getScanStatus())
-                    .setScanResult(function.getScanResult());
-            LambdaUpdateWrapper<Function> updateWrapper = draftUpdateWrapper(function.getId(), originalUpdateTime)
-                    .set(Function::getDescription, function.getDescription())
-                    .set(Function::getReferenceName, function.getReferenceName())
-                    .set(Function::getModel, function.getModel())
-                    .set(Function::getCode, function.getCode());
-            requireConditionalUpdate(baseMapper.update(update, updateWrapper));
-            rebuildTypedParams(function, param, effectiveCode, customizeParams);
-            return null;
-        });
+        Function update = new Function()
+                .setScanStatus(function.getScanStatus())
+                .setScanResult(function.getScanResult());
+        LambdaUpdateWrapper<Function> updateWrapper = draftUpdateWrapper(function.getId(), originalUpdateTime)
+                .set(Function::getDescription, function.getDescription())
+                .set(Function::getReferenceName, function.getReferenceName())
+                .set(Function::getModel, function.getModel())
+                .set(Function::getCode, function.getCode());
+        requireConditionalUpdate(baseMapper.update(update, updateWrapper));
+        rebuildTypedParams(function, param, effectiveCode, customizeParams);
 
-        // 只有数据库事务成功提交后才清理脚本编译/产物缓存。
+        // 数据库写入成功后清理脚本编译/产物缓存。
         if (function.getType() == FunctionTypeEnum.CUSTOMIZE) {
             scriptEngineRouter.route(function.getLanguage()).invalidate(function.getLanguage(), function.getApi());
         }
@@ -838,15 +828,12 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
 
     private void persistPublishDecision(Function function, Timestamp originalUpdateTime,
                                         FunctionScanResult scanResult, int publish) {
-        mainTransactionExecutor.execute(() -> {
-            Function update = new Function()
-                    .setPublish(publish)
-                    .setScanStatus(scanResult.status())
-                    .setScanResult(toScanJson(scanResult));
-            int updated = baseMapper.update(update, draftUpdateWrapper(function.getId(), originalUpdateTime));
-            requireConditionalUpdate(updated);
-            return null;
-        });
+        Function update = new Function()
+                .setPublish(publish)
+                .setScanStatus(scanResult.status())
+                .setScanResult(toScanJson(scanResult));
+        int updated = baseMapper.update(update, draftUpdateWrapper(function.getId(), originalUpdateTime));
+        requireConditionalUpdate(updated);
     }
 
     private LambdaUpdateWrapper<Function> draftUpdateWrapper(Long id, Timestamp originalUpdateTime) {
