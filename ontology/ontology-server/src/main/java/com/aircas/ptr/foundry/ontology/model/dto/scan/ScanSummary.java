@@ -1,6 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.dto.scan;
 
-import com.aircas.ptr.foundry.ontology.model.enums.ScanSeverity;
+import com.aircas.ptr.foundry.ontology.model.enums.ScanSeverityEnum;
 import com.fasterxml.jackson.annotation.JsonInclude;
 
 import java.util.List;
@@ -18,11 +18,11 @@ public record ScanSummary(int total, int high, int medium, int low) {
         int medium = 0;
         int low = 0;
         for (ScanFinding finding : findings) {
-            if (finding.severity() == ScanSeverity.HIGH) {
+            if (finding.severity() == ScanSeverityEnum.HIGH) {
                 high++;
-            } else if (finding.severity() == ScanSeverity.MEDIUM) {
+            } else if (finding.severity() == ScanSeverityEnum.MEDIUM) {
                 medium++;
-            } else if (finding.severity() == ScanSeverity.LOW) {
+            } else if (finding.severity() == ScanSeverityEnum.LOW) {
                 low++;
             }
         }

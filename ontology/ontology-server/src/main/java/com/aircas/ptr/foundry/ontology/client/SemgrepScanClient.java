@@ -5,8 +5,8 @@ import com.aircas.ptr.foundry.ontology.exception.SemgrepScanException;
 import com.aircas.ptr.foundry.ontology.model.dto.scan.SemgrepCallResult;
 import com.aircas.ptr.foundry.ontology.model.dto.scan.SemgrepScanRequest;
 import com.aircas.ptr.foundry.ontology.model.dto.scan.SemgrepScanResponse;
-import com.aircas.ptr.foundry.ontology.model.enums.ScanErrorCode;
-import com.aircas.ptr.foundry.ontology.model.enums.ScanPurpose;
+import com.aircas.ptr.foundry.ontology.model.enums.ScanErrorCodeEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.ScanPurposeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.SemgrepScriptType;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -90,21 +90,21 @@ public class SemgrepScanClient {
         }
     }
 
-    public SemgrepCallResult scan(SemgrepScriptType scriptType, String code, ScanPurpose purpose) {
+    public SemgrepCallResult scan(SemgrepScriptType scriptType, String code, ScanPurposeEnum purpose) {
         validateCode(code);
         if (scriptType == null) {
-            throw new SemgrepScanException(ScanErrorCode.UNSUPPORTED_LANGUAGE);
+            throw new SemgrepScanException(ScanErrorCodeEnum.UNSUPPORTED_LANGUAGE);
         }
         if (purpose == null) {
-            throw new SemgrepScanException(ScanErrorCode.INVALID_REQUEST);
+            throw new SemgrepScanException(ScanErrorCodeEnum.INVALID_REQUEST);
         }
         String requestId = purpose.requestIdPrefix() + UUID.randomUUID();
         if (!requestIdPattern.matcher(requestId).matches()) {
-            throw new SemgrepScanException(ScanErrorCode.INVALID_REQUEST);
+            throw new SemgrepScanException(ScanErrorCodeEnum.INVALID_REQUEST);
         }
         String codeHash = sha256(code);
         if (!hashPattern.matcher(codeHash).matches()) {
-            throw new SemgrepScanException(ScanErrorCode.INVALID_REQUEST);
+            throw new SemgrepScanException(ScanErrorCodeEnum.INVALID_REQUEST);
         }
         SemgrepScanRequest payload = new SemgrepScanRequest(requestId, scriptType, code, codeHash);
 
@@ -129,12 +129,12 @@ public class SemgrepScanClient {
             throw exception;
         } catch (InterruptedIOException exception) {
             log.warn("Semgrep scan timed out requestId={} codeHash={} errorCode={}",
-                    requestId, codeHash, ScanErrorCode.SEMGREP_TIMEOUT.name());
-            throw new SemgrepScanException(ScanErrorCode.SEMGREP_TIMEOUT, exception);
+                    requestId, codeHash, ScanErrorCodeEnum.SEMGREP_TIMEOUT.name());
+            throw new SemgrepScanException(ScanErrorCodeEnum.SEMGREP_TIMEOUT, exception);
         } catch (IOException | IllegalArgumentException | IllegalStateException exception) {
             log.warn("Semgrep scan unavailable requestId={} codeHash={} errorCode={}",
-                    requestId, codeHash, ScanErrorCode.SEMGREP_UNREACHABLE.name());
-            throw new SemgrepScanException(ScanErrorCode.SEMGREP_UNREACHABLE, exception);
+                    requestId, codeHash, ScanErrorCodeEnum.SEMGREP_UNREACHABLE.name());
+            throw new SemgrepScanException(ScanErrorCodeEnum.SEMGREP_UNREACHABLE, exception);
         }
     }
 
@@ -166,43 +166,43 @@ public class SemgrepScanClient {
         }
         switch (status) {
             case 400 -> throw mapBadRequest(body);
-            case 404 -> throw new SemgrepScanException(ScanErrorCode.SEMGREP_ENDPOINT_NOT_FOUND);
-            case 429 -> throw mapExpectedError(body, ScanErrorCode.SERVICE_BUSY);
-            case 500 -> throw new SemgrepScanException(ScanErrorCode.SERVICE_FAILURE);
+            case 404 -> throw new SemgrepScanException(ScanErrorCodeEnum.SEMGREP_ENDPOINT_NOT_FOUND);
+            case 429 -> throw mapExpectedError(body, ScanErrorCodeEnum.SERVICE_BUSY);
+            case 500 -> throw new SemgrepScanException(ScanErrorCodeEnum.SERVICE_FAILURE);
             case 503 -> throw mapServiceUnavailable(body);
-            case 504 -> throw new SemgrepScanException(ScanErrorCode.SEMGREP_TIMEOUT);
+            case 504 -> throw new SemgrepScanException(ScanErrorCodeEnum.SEMGREP_TIMEOUT);
             default -> throw unexpectedStatus();
         }
     }
 
-    private SemgrepScanException mapExpectedError(byte[] body, ScanErrorCode expected) {
+    private SemgrepScanException mapExpectedError(byte[] body, ScanErrorCodeEnum expected) {
         String code = extractErrorCode(body);
         return code.isEmpty() || expected.name().equals(code)
                 ? new SemgrepScanException(expected)
-                : new SemgrepScanException(ScanErrorCode.INVALID_SCAN_RESPONSE);
+                : new SemgrepScanException(ScanErrorCodeEnum.INVALID_SCAN_RESPONSE);
     }
 
     private SemgrepScanException mapServiceUnavailable(byte[] body) {
         String code = extractErrorCode(body);
         return switch (code) {
-            case "", "SERVICE_NOT_READY" -> new SemgrepScanException(ScanErrorCode.SERVICE_NOT_READY);
-            case "RESOURCE_UNAVAILABLE" -> new SemgrepScanException(ScanErrorCode.RESOURCE_UNAVAILABLE);
-            default -> new SemgrepScanException(ScanErrorCode.INVALID_SCAN_RESPONSE);
+            case "", "SERVICE_NOT_READY" -> new SemgrepScanException(ScanErrorCodeEnum.SERVICE_NOT_READY);
+            case "RESOURCE_UNAVAILABLE" -> new SemgrepScanException(ScanErrorCodeEnum.RESOURCE_UNAVAILABLE);
+            default -> new SemgrepScanException(ScanErrorCodeEnum.INVALID_SCAN_RESPONSE);
         };
     }
 
     private SemgrepScanException mapBadRequest(byte[] body) {
         String code = extractErrorCode(body);
         return switch (code) {
-            case "INVALID_REQUEST" -> new SemgrepScanException(ScanErrorCode.INVALID_REQUEST);
-            case "UNSUPPORTED_LANGUAGE" -> new SemgrepScanException(ScanErrorCode.UNSUPPORTED_LANGUAGE);
-            case "CODE_HASH_MISMATCH" -> new SemgrepScanException(ScanErrorCode.CODE_HASH_MISMATCH);
-            default -> new SemgrepScanException(ScanErrorCode.INVALID_SCAN_RESPONSE);
+            case "INVALID_REQUEST" -> new SemgrepScanException(ScanErrorCodeEnum.INVALID_REQUEST);
+            case "UNSUPPORTED_LANGUAGE" -> new SemgrepScanException(ScanErrorCodeEnum.UNSUPPORTED_LANGUAGE);
+            case "CODE_HASH_MISMATCH" -> new SemgrepScanException(ScanErrorCodeEnum.CODE_HASH_MISMATCH);
+            default -> new SemgrepScanException(ScanErrorCodeEnum.INVALID_SCAN_RESPONSE);
         };
     }
 
     private SemgrepScanException unexpectedStatus() {
-        return new SemgrepScanException(ScanErrorCode.INVALID_SCAN_RESPONSE,
+        return new SemgrepScanException(ScanErrorCodeEnum.INVALID_SCAN_RESPONSE,
                 "安全扫描服务返回非预期状态");
     }
 
@@ -227,17 +227,17 @@ public class SemgrepScanClient {
         } catch (SemgrepScanException exception) {
             throw exception;
         } catch (Exception exception) {
-            throw new SemgrepScanException(ScanErrorCode.INVALID_SCAN_RESPONSE, exception);
+            throw new SemgrepScanException(ScanErrorCodeEnum.INVALID_SCAN_RESPONSE, exception);
         }
     }
 
     private void validateResponseShape(JsonNode root) {
         if (root == null || !root.isObject()) {
-            throw new SemgrepScanException(ScanErrorCode.INVALID_SCAN_RESPONSE);
+            throw new SemgrepScanException(ScanErrorCodeEnum.INVALID_SCAN_RESPONSE);
         }
         for (String field : requiredResponseFields) {
             if (!root.has(field)) {
-                throw new SemgrepScanException(ScanErrorCode.INVALID_SCAN_RESPONSE);
+                throw new SemgrepScanException(ScanErrorCodeEnum.INVALID_SCAN_RESPONSE);
             }
         }
         JsonNode error = root.get("error");
@@ -247,7 +247,7 @@ public class SemgrepScanClient {
                 || !root.path("findingsTruncated").isBoolean()
                 || !root.path("findings").isArray()
                 || error != null && !(error.isNull() || error.isObject())) {
-            throw new SemgrepScanException(ScanErrorCode.INVALID_SCAN_RESPONSE);
+            throw new SemgrepScanException(ScanErrorCodeEnum.INVALID_SCAN_RESPONSE);
         }
     }
 
@@ -259,19 +259,19 @@ public class SemgrepScanClient {
                 || response.findings() == null || response.findings().size() > properties.getMaxFindings()
                 || response.error() != null
                 && (response.error().code() == null || response.error().code().isBlank())) {
-            throw new SemgrepScanException(ScanErrorCode.INVALID_SCAN_RESPONSE);
+            throw new SemgrepScanException(ScanErrorCodeEnum.INVALID_SCAN_RESPONSE);
         }
     }
 
     private byte[] readBounded(ResponseBody body) throws IOException {
         if (body == null) {
-            throw new SemgrepScanException(ScanErrorCode.INVALID_SCAN_RESPONSE);
+            throw new SemgrepScanException(ScanErrorCodeEnum.INVALID_SCAN_RESPONSE);
         }
         try (InputStream input = body.byteStream()) {
             int maxResponseBytes = properties.getMaxResponseBytes();
             byte[] bytes = input.readNBytes(maxResponseBytes + 1);
             if (bytes.length > maxResponseBytes) {
-                throw new SemgrepScanException(ScanErrorCode.REPORT_TOO_LARGE);
+                throw new SemgrepScanException(ScanErrorCodeEnum.REPORT_TOO_LARGE);
             }
             return bytes;
         }
@@ -280,7 +280,7 @@ public class SemgrepScanClient {
     private void validateCode(String code) {
         if (code == null || code.isBlank() || code.indexOf('\0') >= 0
                 || code.getBytes(StandardCharsets.UTF_8).length > properties.getMaxCodeBytes()) {
-            throw new SemgrepScanException(ScanErrorCode.INVALID_REQUEST);
+            throw new SemgrepScanException(ScanErrorCodeEnum.INVALID_REQUEST);
         }
     }
 }

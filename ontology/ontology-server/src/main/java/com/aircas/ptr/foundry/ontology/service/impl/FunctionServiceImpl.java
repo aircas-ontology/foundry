@@ -31,10 +31,10 @@ import com.aircas.ptr.foundry.ontology.model.enums.FunctionModelEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionLanguageEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.Status;
-import com.aircas.ptr.foundry.ontology.model.enums.ScanErrorCode;
-import com.aircas.ptr.foundry.ontology.model.enums.ScanPurpose;
-import com.aircas.ptr.foundry.ontology.model.enums.ScanSkipReason;
-import com.aircas.ptr.foundry.ontology.model.enums.ScanStatus;
+import com.aircas.ptr.foundry.ontology.model.enums.ScanErrorCodeEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.ScanPurposeEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.ScanSkipReasonEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.ScanStatusEnum;
 import com.aircas.ptr.foundry.ontology.model.param.BasicQueryConfig;
 import com.aircas.ptr.foundry.ontology.model.param.BasicQueryTestParam;
 import com.aircas.ptr.foundry.ontology.model.param.ContainerConfig;
@@ -452,14 +452,14 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         // 不走下方脚本/查询/编排算子的版本管理与参数解析逻辑
         if (param.getType() == FunctionTypeEnum.CONTAINER) {
             containerFunctionService.createContainerFunction(buildContainerCreateParam(param));
-            return FunctionScanResult.skipped(ScanSkipReason.NON_SCRIPT_OPERATOR);
+            return FunctionScanResult.skipped(ScanSkipReasonEnum.NON_SCRIPT_OPERATOR);
         }
         // 非容器算子：先完成校验和安全扫描，再写入函数与参数。
         FunctionModelEnum model = resolveModel(param);
         String version = checkVersionAndApiUnique(param);
         FunctionLanguageEnum language = resolveLanguage(param);
         FunctionScanResult scanResult = scriptSecurityScanService.scan(
-                param.getType(), language, param.getCode(), ScanPurpose.SAVE);
+                param.getType(), language, param.getCode(), ScanPurposeEnum.SAVE);
         rejectRejectedSave(scanResult);
         if (param.getType() == FunctionTypeEnum.CUSTOMIZE) {
             validateScriptForSave(language, param.getFunctionApi(), version, param.getCode(), scanResult);
@@ -612,7 +612,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         Timestamp originalUpdateTime = toTimestamp(function.getUpdateTime());
         String effectiveCode = resolveEffectiveCode(function, param);
         FunctionScanResult scanResult = scriptSecurityScanService.scan(
-                function.getType(), function.getLanguage(), effectiveCode, ScanPurpose.SAVE);
+                function.getType(), function.getLanguage(), effectiveCode, ScanPurposeEnum.SAVE);
         rejectRejectedSave(scanResult);
         if (function.getType() == FunctionTypeEnum.CUSTOMIZE) {
             validateScriptForSave(function.getLanguage(), function.getApi(), function.getVersion(),
@@ -652,15 +652,15 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         Timestamp originalUpdateTime = toTimestamp(function.getUpdateTime());
         FunctionScanResult currentResult = readScanResult(function);
 
-        if (currentResult.status() == ScanStatus.REJECTED) {
+        if (currentResult.status() == ScanStatusEnum.REJECTED) {
             return FunctionPublishResult.of(false, currentResult);
         }
 
         FunctionScanResult effectiveResult = currentResult;
         if (requiresPublishRescan(function, currentResult)) {
             effectiveResult = scriptSecurityScanService.scan(
-                    function.getType(), function.getLanguage(), function.getCode(), ScanPurpose.PUBLISH);
-            if (effectiveResult.status() == ScanStatus.REJECTED) {
+                    function.getType(), function.getLanguage(), function.getCode(), ScanPurposeEnum.PUBLISH);
+            if (effectiveResult.status() == ScanStatusEnum.REJECTED) {
                 return FunctionPublishResult.of(false, effectiveResult);
             }
             validatePublishAdmission(function, effectiveResult);
@@ -709,10 +709,10 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         try {
             validateScript(language, functionApi, version, code);
         } catch (RuntimeException exception) {
-            FunctionScanResult rejected = scanResult.status() == ScanStatus.SKIPPED
+            FunctionScanResult rejected = scanResult.status() == ScanStatusEnum.SKIPPED
                     ? null
-                    : scanResult.rejectedWithError(ScanErrorCode.SCRIPT_VALIDATION_FAILED);
-            throw new SemgrepScanException(ScanErrorCode.SCRIPT_VALIDATION_FAILED, rejected, exception);
+                    : scanResult.rejectedWithError(ScanErrorCodeEnum.SCRIPT_VALIDATION_FAILED);
+            throw new SemgrepScanException(ScanErrorCodeEnum.SCRIPT_VALIDATION_FAILED, rejected, exception);
         }
     }
 
@@ -720,24 +720,24 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         if (scanResult.error() == null) {
             return;
         }
-        ScanErrorCode code;
+        ScanErrorCodeEnum code;
         try {
-            code = ScanErrorCode.valueOf(scanResult.error().code());
+            code = ScanErrorCodeEnum.valueOf(scanResult.error().code());
         } catch (RuntimeException exception) {
-            throw new SemgrepScanException(ScanErrorCode.INVALID_SCAN_RESPONSE);
+            throw new SemgrepScanException(ScanErrorCodeEnum.INVALID_SCAN_RESPONSE);
         }
-        if (code == ScanErrorCode.PARSE_FAILED || code == ScanErrorCode.PARTIAL_PARSE) {
+        if (code == ScanErrorCodeEnum.PARSE_FAILED || code == ScanErrorCodeEnum.PARTIAL_PARSE) {
             throw new SemgrepScanException(code, scanResult);
         }
-        throw new SemgrepScanException(ScanErrorCode.INVALID_SCAN_RESPONSE);
+        throw new SemgrepScanException(ScanErrorCodeEnum.INVALID_SCAN_RESPONSE);
     }
 
     /** REJECTED 仅作为本次响应返回，创建和修改均不得持久化或保存为草稿。 */
     static void rejectRejectedSave(FunctionScanResult scanResult) {
         rejectParseFailure(scanResult);
-        if (scanResult.status() == ScanStatus.REJECTED) {
-            FunctionScanResult rejected = scanResult.rejectedWithError(ScanErrorCode.SECURITY_SCAN_REJECTED);
-            throw new SemgrepScanException(ScanErrorCode.SECURITY_SCAN_REJECTED, rejected);
+        if (scanResult.status() == ScanStatusEnum.REJECTED) {
+            FunctionScanResult rejected = scanResult.rejectedWithError(ScanErrorCodeEnum.SECURITY_SCAN_REJECTED);
+            throw new SemgrepScanException(ScanErrorCodeEnum.SECURITY_SCAN_REJECTED, rejected);
         }
     }
 
@@ -801,28 +801,28 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     private boolean requiresPublishRescan(Function function, FunctionScanResult currentResult) {
         if (function.getType() != FunctionTypeEnum.CUSTOMIZE
                 || !scriptSecurityScanService.isEnabled()
-                || currentResult.status() != ScanStatus.SKIPPED) {
+                || currentResult.status() != ScanStatusEnum.SKIPPED) {
             return false;
         }
-        return currentResult.skipReason() == ScanSkipReason.FEATURE_DISABLED
-                || currentResult.skipReason() == ScanSkipReason.LEGACY_DATA;
+        return currentResult.skipReason() == ScanSkipReasonEnum.FEATURE_DISABLED
+                || currentResult.skipReason() == ScanSkipReasonEnum.LEGACY_DATA;
     }
 
     private void validatePublishAdmission(Function function, FunctionScanResult result) {
-        if (result.status() == ScanStatus.PASSED) {
+        if (result.status() == ScanStatusEnum.PASSED) {
             return;
         }
-        if (result.status() != ScanStatus.SKIPPED) {
-            throw new SemgrepScanException(ScanErrorCode.INVALID_SCAN_RESPONSE);
+        if (result.status() != ScanStatusEnum.SKIPPED) {
+            throw new SemgrepScanException(ScanErrorCodeEnum.INVALID_SCAN_RESPONSE);
         }
         boolean nonScriptAllowed = function.getType() != FunctionTypeEnum.CUSTOMIZE
-                && result.skipReason() == ScanSkipReason.NON_SCRIPT_OPERATOR;
+                && result.skipReason() == ScanSkipReasonEnum.NON_SCRIPT_OPERATOR;
         boolean disabledScriptAllowed = function.getType() == FunctionTypeEnum.CUSTOMIZE
                 && !scriptSecurityScanService.isEnabled()
-                && (result.skipReason() == ScanSkipReason.FEATURE_DISABLED
-                || result.skipReason() == ScanSkipReason.LEGACY_DATA);
+                && (result.skipReason() == ScanSkipReasonEnum.FEATURE_DISABLED
+                || result.skipReason() == ScanSkipReasonEnum.LEGACY_DATA);
         if (!nonScriptAllowed && !disabledScriptAllowed) {
-            throw new SemgrepScanException(ScanErrorCode.INVALID_SCAN_RESPONSE);
+            throw new SemgrepScanException(ScanErrorCodeEnum.INVALID_SCAN_RESPONSE);
         }
     }
 
@@ -848,18 +848,18 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
 
     private FunctionScanResult readScanResult(Function function) {
         if (function.getScanResult() == null || function.getScanStatus() == null) {
-            throw new SemgrepScanException(ScanErrorCode.INVALID_SCAN_RESPONSE);
+            throw new SemgrepScanException(ScanErrorCodeEnum.INVALID_SCAN_RESPONSE);
         }
         try {
             FunctionScanResult result = objectMapper.treeToValue(function.getScanResult(), FunctionScanResult.class);
             if (result.status() != function.getScanStatus()) {
-                throw new SemgrepScanException(ScanErrorCode.INVALID_SCAN_RESPONSE);
+                throw new SemgrepScanException(ScanErrorCodeEnum.INVALID_SCAN_RESPONSE);
             }
             return result;
         } catch (SemgrepScanException exception) {
             throw exception;
         } catch (Exception exception) {
-            throw new SemgrepScanException(ScanErrorCode.INVALID_SCAN_RESPONSE, exception);
+            throw new SemgrepScanException(ScanErrorCodeEnum.INVALID_SCAN_RESPONSE, exception);
         }
     }
 

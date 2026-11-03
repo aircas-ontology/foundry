@@ -1,7 +1,7 @@
 package com.aircas.ptr.foundry.ontology.utils;
 
-import com.aircas.ptr.foundry.ontology.model.enums.ScanSkipReason;
-import com.aircas.ptr.foundry.ontology.model.enums.ScanStatus;
+import com.aircas.ptr.foundry.ontology.model.enums.ScanSkipReasonEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.ScanStatusEnum;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -20,7 +20,7 @@ public final class FunctionScanResultUtil {
     private FunctionScanResultUtil() {
     }
 
-    public static JsonNode skipped(ScanSkipReason reason) {
+    public static JsonNode skipped(ScanSkipReasonEnum reason) {
         ObjectNode summary = JsonNodeFactory.instance.objectNode()
                 .put("total", 0)
                 .put("high", 0)
@@ -29,7 +29,7 @@ public final class FunctionScanResultUtil {
 
         ObjectNode result = JsonNodeFactory.instance.objectNode();
         result.put("schemaVersion", SCHEMA_VERSION);
-        result.put("status", ScanStatus.SKIPPED.name());
+        result.put("status", ScanStatusEnum.SKIPPED.name());
         result.put("skipReason", reason.name());
         result.putNull("codeHash");
         result.putNull("scannedAt");

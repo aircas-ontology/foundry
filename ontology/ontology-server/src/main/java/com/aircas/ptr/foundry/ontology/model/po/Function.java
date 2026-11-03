@@ -3,7 +3,7 @@ package com.aircas.ptr.foundry.ontology.model.po;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionLanguageEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionModelEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
-import com.aircas.ptr.foundry.ontology.model.enums.ScanStatus;
+import com.aircas.ptr.foundry.ontology.model.enums.ScanStatusEnum;
 import com.aircas.ptr.foundry.ontology.repository.handler.JsonbTypeHandler;
 import com.aircas.ptr.foundry.ontology.repository.handler.PreciseDateTypeHandler;
 import com.baomidou.mybatisplus.annotation.*;
@@ -115,7 +115,7 @@ public class Function {
      * 当前代码最后一次有效安全扫描的持久化状态。
      * FAILED 仅用于当次响应和日志，数据库约束禁止持久化。
      */
-    private ScanStatus scanStatus;
+    private ScanStatusEnum scanStatus;
 
     /**
      * 当前代码最后一次有效安全扫描的完整固定契约。

@@ -6,8 +6,8 @@ import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import com.aircas.ptr.foundry.ontology.composite.CompositeFunctionCatalog;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamCategoryEnum;
-import com.aircas.ptr.foundry.ontology.model.enums.ScanSkipReason;
-import com.aircas.ptr.foundry.ontology.model.enums.ScanStatus;
+import com.aircas.ptr.foundry.ontology.model.enums.ScanSkipReasonEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.ScanStatusEnum;
 import com.aircas.ptr.foundry.ontology.model.po.Function;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionParamPO;
 
@@ -45,9 +45,9 @@ public final class OperatorFunctionUtil {
     public static Function.FunctionBuilder operatorDefaults(String api, String version, String displayName,
                                                             FunctionTypeEnum type, Integer ontologySpaceId,
                                                             FunctionModelEnum model) {
-        ScanSkipReason skipReason = type == FunctionTypeEnum.CUSTOMIZE
-                ? ScanSkipReason.FEATURE_DISABLED
-                : ScanSkipReason.NON_SCRIPT_OPERATOR;
+        ScanSkipReasonEnum skipReason = type == FunctionTypeEnum.CUSTOMIZE
+                ? ScanSkipReasonEnum.FEATURE_DISABLED
+                : ScanSkipReasonEnum.NON_SCRIPT_OPERATOR;
         return Function.builder()
                 .api(api)
                 .version(version)
@@ -57,7 +57,7 @@ public final class OperatorFunctionUtil {
                 .model(model)
                 .publish(FunctionConstant.PUBLISH_UNPUBLISHED)
                 .status(Status.ENABLE.getValue())
-                .scanStatus(ScanStatus.SKIPPED)
+                .scanStatus(ScanStatusEnum.SKIPPED)
                 .scanResult(FunctionScanResultUtil.skipped(skipReason));
     }
 

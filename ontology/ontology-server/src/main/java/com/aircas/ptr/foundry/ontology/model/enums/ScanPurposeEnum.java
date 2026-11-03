@@ -1,13 +1,13 @@
 package com.aircas.ptr.foundry.ontology.model.enums;
 
 /** 扫描调用目的，同时决定不含业务信息的 requestId 前缀。 */
-public enum ScanPurpose {
+public enum ScanPurposeEnum {
     SAVE("function-save:"),
     PUBLISH("function-publish:");
 
     private final String requestIdPrefix;
 
-    ScanPurpose(String requestIdPrefix) {
+    ScanPurposeEnum(String requestIdPrefix) {
         this.requestIdPrefix = requestIdPrefix;
     }
 

@@ -8,7 +8,7 @@ import com.aircas.ptr.foundry.ontology.model.enums.FunctionLanguageEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionModelEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionRuntimeStatusEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
-import com.aircas.ptr.foundry.ontology.model.enums.ScanStatus;
+import com.aircas.ptr.foundry.ontology.model.enums.ScanStatusEnum;
 import com.aircas.ptr.foundry.ontology.model.param.BasicQueryConfig;
 import com.aircas.ptr.foundry.ontology.model.param.CompositeConfig;
 import com.aircas.ptr.foundry.ontology.model.param.ExternalApiConfig;
@@ -42,7 +42,7 @@ public class FunctionDetailVO {
     private Integer publishStatus;
 
     @Schema(name = "scanStatus", description = "安全扫描状态", requiredMode = Schema.RequiredMode.REQUIRED)
-    private ScanStatus scanStatus;
+    private ScanStatusEnum scanStatus;
 
     @Schema(name = "scanResult", description = "完整扫描结果，包含固定 11 个顶层字段及 findings",
             requiredMode = Schema.RequiredMode.REQUIRED)

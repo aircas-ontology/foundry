@@ -5,7 +5,7 @@ import com.aircas.ptr.foundry.ontology.model.enums.FunctionLanguageEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionModelEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionRuntimeStatusEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
-import com.aircas.ptr.foundry.ontology.model.enums.ScanStatus;
+import com.aircas.ptr.foundry.ontology.model.enums.ScanStatusEnum;
 import com.aircas.ptr.foundry.ontology.model.dto.scan.FunctionScanSummary;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
@@ -36,7 +36,7 @@ public class FunctionInfoVO {
     private Integer publishStatus;
 
     @Schema(name = "scanStatus", description = "安全扫描状态", requiredMode = Schema.RequiredMode.REQUIRED)
-    private ScanStatus scanStatus;
+    private ScanStatusEnum scanStatus;
 
     @Schema(name = "scanResult", description = "精简扫描结果，仅包含 summary", requiredMode = Schema.RequiredMode.REQUIRED)
     private FunctionScanSummary scanResult;

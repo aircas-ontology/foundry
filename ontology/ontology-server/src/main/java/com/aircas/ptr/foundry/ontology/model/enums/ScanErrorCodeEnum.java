@@ -1,7 +1,7 @@
 package com.aircas.ptr.foundry.ontology.model.enums;
 
 /** 本体服务对外暴露的稳定扫描错误码及默认 HTTP 映射。 */
-public enum ScanErrorCode {
+public enum ScanErrorCodeEnum {
     INVALID_REQUEST(400, "安全扫描请求不合法", false),
     UNSUPPORTED_LANGUAGE(400, "不支持该脚本语言的安全扫描", false),
     CODE_HASH_MISMATCH(400, "脚本内容校验失败", false),
@@ -29,7 +29,7 @@ public enum ScanErrorCode {
     private final String message;
     private final boolean retryable;
 
-    ScanErrorCode(int httpStatus, String message, boolean retryable) {
+    ScanErrorCodeEnum(int httpStatus, String message, boolean retryable) {
         this.httpStatus = httpStatus;
         this.message = message;
         this.retryable = retryable;
