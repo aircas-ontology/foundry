@@ -106,6 +106,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Timestamp;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -936,9 +937,14 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     @Override
     public Page<FunctionInfoVO> getFunctions(FunctionListQueryParam param) {
         var pageInfo = new Page<Function>(param.getPageNum(), param.getPageSize());
-        // 版本分组分页：按 api 分组，每组仅展示版本号最大的一条（XML 内按 x.y.z 语义化比较）
-        var functionPage = getBaseMapper().pageLatestVersion(pageInfo, param.getOntologySpaceId(), param.getDisplayName(),
-                param.getType(), param.getExcludeTypes(), param.getPublishStatus(), param.getStartDate(), param.getEndDate());
+        List<Function> latestFunctions = listLatestVersions(param);
+        long offset = (pageInfo.getCurrent() - 1) * pageInfo.getSize();
+        List<Function> pageRecords = offset >= latestFunctions.size()
+                ? Collections.emptyList()
+                : latestFunctions.subList((int) offset,
+                        (int) Math.min(offset + pageInfo.getSize(), latestFunctions.size()));
+        pageInfo.setTotal(latestFunctions.size()).setRecords(pageRecords);
+        var functionPage = pageInfo;
         var records = functionPage.getRecords().stream().<FunctionInfoVO>map(func -> {
             FunctionScanResult fullScanResult = readScanResult(func);
             return FunctionInfoVO.builder()
@@ -985,6 +991,38 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 .setTotal(functionPage.getTotal())
                 .setCurrent(functionPage.getCurrent())
                 .setSize(functionPage.getSize());
+    }
+
+    /**
+     * 使用 MyBatis-Plus 完成列表条件查询，再按 api 在内存中选出语义化版本号最大的一条。
+     */
+    private List<Function> listLatestVersions(FunctionListQueryParam param) {
+        LambdaQueryWrapper<Function> queryWrapper = new LambdaQueryWrapper<Function>()
+                .eq(param.getOntologySpaceId() != null, Function::getOntologySpaceId, param.getOntologySpaceId())
+                .like(StringUtils.isNotEmpty(param.getDisplayName()), Function::getDisplayName, param.getDisplayName())
+                .eq(param.getType() != null, Function::getType, param.getType())
+                .notIn(CollectionUtils.isNotEmpty(param.getExcludeTypes()), Function::getType, param.getExcludeTypes())
+                .eq(param.getPublishStatus() != null, Function::getPublish, param.getPublishStatus());
+        if (StringUtils.isNotEmpty(param.getStartDate())) {
+            queryWrapper.ge(Function::getCreateTime,
+                    Timestamp.valueOf(LocalDate.parse(param.getStartDate()).atStartOfDay()));
+        }
+        if (StringUtils.isNotEmpty(param.getEndDate())) {
+            queryWrapper.lt(Function::getCreateTime,
+                    Timestamp.valueOf(LocalDate.parse(param.getEndDate()).plusDays(1).atStartOfDay()));
+        }
+
+        Map<String, Function> latestByApi = new HashMap<>();
+        for (Function function : list(queryWrapper)) {
+            latestByApi.merge(function.getApi(), function,
+                    (current, candidate) -> compareVersion(current.getVersion(), candidate.getVersion()) >= 0
+                            ? current
+                            : candidate);
+        }
+        Comparator<Function> listOrder = Comparator
+                .comparing(Function::getUpdateTime, Comparator.nullsLast(Comparator.reverseOrder()))
+                .thenComparing(Function::getId, Comparator.nullsLast(Comparator.reverseOrder()));
+        return latestByApi.values().stream().sorted(listOrder).collect(Collectors.toList());
     }
 
     @Override
