@@ -13,11 +13,11 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  * 结果由后续安全扫描策略层构造。这里显式写入 JSON null，避免全局 NON_NULL
  * 序列化配置造成持久化契约字段缺失。</p>
  */
-public final class FunctionScanResultFactory {
+public final class FunctionScanResultUtil {
 
     public static final int SCHEMA_VERSION = 1;
 
-    private FunctionScanResultFactory() {
+    private FunctionScanResultUtil() {
     }
 
     public static JsonNode skipped(ScanSkipReason reason) {

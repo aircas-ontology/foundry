@@ -6,9 +6,9 @@ import com.aircas.ptr.foundry.ontology.model.enums.ScanErrorCode;
 import com.aircas.ptr.foundry.ontology.model.enums.SemgrepScriptType;
 
 /** 函数语言到扫描服务语言的唯一映射入口。 */
-public final class ScriptTypeMapper {
+public final class ScriptTypeUtil {
 
-    private ScriptTypeMapper() {
+    private ScriptTypeUtil() {
     }
 
     public static SemgrepScriptType toSemgrep(FunctionLanguageEnum language) {

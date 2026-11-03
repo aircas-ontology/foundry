@@ -14,7 +14,7 @@ import com.aircas.ptr.foundry.ontology.model.po.FunctionParamPO;
 import java.util.Date;
 
 /**
- * 算子（函数）记录创建的公共默认约定工厂。
+ * 算子（函数）记录创建的公共默认约定工具类。
  * <p>各类算子（自定义脚本 / 基础查询 / 外部API / 函数编排 / 容器）落 {@code function} 表时，
  * 「未发布 + 启用」这两个平台级默认值必须一致。历史上统一创建
  * （{@code FunctionServiceImpl.createFunction}）与容器创建
@@ -22,9 +22,9 @@ import java.util.Date;
  * 约定漂移风险大。此处收敛为单一入口：调用方拿到预置好的 builder，再补各自专有字段
  * （code / dockerConfig / language / containerKey / description 等）。</p>
  */
-public final class OperatorFunctionFactory {
+public final class OperatorFunctionUtil {
 
-    private OperatorFunctionFactory() {
+    private OperatorFunctionUtil() {
     }
 
     /**
@@ -58,7 +58,7 @@ public final class OperatorFunctionFactory {
                 .publish(FunctionConstant.PUBLISH_UNPUBLISHED)
                 .status(Status.ENABLE.getValue())
                 .scanStatus(ScanStatus.SKIPPED)
-                .scanResult(FunctionScanResultFactory.skipped(skipReason));
+                .scanResult(FunctionScanResultUtil.skipped(skipReason));
     }
 
     /**

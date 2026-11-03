@@ -18,7 +18,7 @@ import com.aircas.ptr.foundry.ontology.model.enums.ScanPurpose;
 import com.aircas.ptr.foundry.ontology.model.enums.ScanSeverity;
 import com.aircas.ptr.foundry.ontology.model.enums.ScanSkipReason;
 import com.aircas.ptr.foundry.ontology.model.enums.ScanStatus;
-import com.aircas.ptr.foundry.ontology.utils.ScriptTypeMapper;
+import com.aircas.ptr.foundry.ontology.utils.ScriptTypeUtil;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -49,7 +49,7 @@ public class ScriptSecurityScanService {
             return FunctionScanResult.skipped(ScanSkipReason.FEATURE_DISABLED);
         }
 
-        SemgrepCallResult call = client.scan(ScriptTypeMapper.toSemgrep(language), code, purpose);
+        SemgrepCallResult call = client.scan(ScriptTypeUtil.toSemgrep(language), code, purpose);
         SemgrepScanResponse response = call.response();
 
         // 顺序固定：HTTP/协议已由 client 处理；随后依次处理 error、截断、severity。

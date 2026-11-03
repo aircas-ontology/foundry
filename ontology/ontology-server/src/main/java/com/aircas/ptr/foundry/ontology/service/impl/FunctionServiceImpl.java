@@ -79,7 +79,7 @@ import com.aircas.ptr.foundry.ontology.service.ScriptSecurityScanService;
 import com.aircas.ptr.foundry.ontology.exception.FunctionVersionConflictException;
 import com.aircas.ptr.foundry.ontology.exception.SemgrepScanException;
 import com.aircas.ptr.foundry.ontology.utils.DockerCommandExecutor;
-import com.aircas.ptr.foundry.ontology.utils.OperatorFunctionFactory;
+import com.aircas.ptr.foundry.ontology.utils.OperatorFunctionUtil;
 import com.aircas.ptr.foundry.ontology.utils.ScriptParamDescriptionExtractor;
 import com.aircas.ptr.foundry.ontology.utils.ScriptParamDescriptionExtractor.Descriptions;
 import com.aircas.ptr.foundry.ontology.utils.SchemaHandleUtil;
@@ -538,12 +538,12 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     }
 
     /**
-     * 组装并保存 Function 主记录：新增版本默认未发布、状态启用（公共默认值统一走 OperatorFunctionFactory）。
+     * 组装并保存 Function 主记录：新增版本默认未发布、状态启用（公共默认值统一走 OperatorFunctionUtil）。
      * <p>language 仅 CUSTOMIZE 脚本算子有意义；基础查询/外部/容器算子存 NULL。</p>
      */
     private Function buildAndSaveFunction(FunctionCreateParam param, FunctionModelEnum model, String version,
                                           FunctionLanguageEnum language, FunctionScanResult scanResult) {
-        var func = OperatorFunctionFactory.operatorDefaults(
+        var func = OperatorFunctionUtil.operatorDefaults(
                         param.getFunctionApi(), version, param.getDisplayName(), param.getType(),
                         param.getOntologySpaceId(), model)
                 .description(param.getDescription())
@@ -1296,7 +1296,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
 
     private FunctionParamPO externalParam(Long functionId, ExternalApiConfig.PortDefinition port,
                                           FunctionParamCategoryEnum category, int paramOrder) {
-        return OperatorFunctionFactory.functionParamDefaults(
+        return OperatorFunctionUtil.functionParamDefaults(
                         functionId, port.getName(), port.getType(), category, paramOrder, port.getDescription())
                 // OBJECT/LIST 端口的子字段与脚本函数同一套层级结构，共用 saveParams 那条序列化口径
                 .fields(portFieldsJson(port.getFields()))
@@ -1901,7 +1901,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
      */
     private FunctionParamPO buildCompositeParam(Long functionId, CompositeParameter parameter,
                                                 FunctionParamCategoryEnum category, int paramOrder) {
-        return OperatorFunctionFactory.functionParamDefaults(
+        return OperatorFunctionUtil.functionParamDefaults(
                         functionId, parameter.getName(), parameter.getType(), category, paramOrder, parameter.getDescription())
                 .build();
     }
