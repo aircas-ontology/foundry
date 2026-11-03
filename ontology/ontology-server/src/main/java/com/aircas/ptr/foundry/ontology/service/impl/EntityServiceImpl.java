@@ -773,12 +773,22 @@ public class EntityServiceImpl implements EntityService {
         //更新实体关系（已存在）
         if (relation != null) {
             var visibilityWindows = param.getVisibilityWindows();
+            var status = param.getStatus();
+            // 行为定义的「修改」只改填了的那几项，没填的保留边上原值，避免改状态顺手把已有时段抹掉
+            if (Boolean.TRUE.equals(param.getPartialUpdate())) {
+                if (CollectionUtils.isEmpty(visibilityWindows)) {
+                    visibilityWindows = relation.getTimeWindows();
+                }
+                if (status == null) {
+                    status = relation.getStatus();
+                }
+            }
             Date startTime = null, endTime = null;
             if (CollectionUtils.isNotEmpty(visibilityWindows)) {
                 startTime = visibilityWindows.get(0).getStartTime();
                 endTime = visibilityWindows.get(0).getEndTime();
             }
-            relationRepository.updateRelation(startTime, endTime, visibilityWindows, param.getStatus(), relation.getId());
+            relationRepository.updateRelation(startTime, endTime, visibilityWindows, status, relation.getId());
         }
         //插入新的实体关系（实体节点已存在）
         else {
@@ -812,7 +822,9 @@ public class EntityServiceImpl implements EntityService {
         var relation = relationRepository.queryRelationByFromNodeAndToNode(link.getOntologyUniqueIdentifierFrom(),
                 entityPrimaryKeyFrom, link.getOntologyUniqueIdentifierTo(), entityPrimaryKeyTo, linkUniqIdentifier);
         PreconditionUtils.checkNotNull(relation, "实例关系不存在", HttpStatus.BAD_REQUEST);
-        relationRepository.updateRelation(null, null, Lists.<VisibilityWindow>newArrayList(), Status.DELETE, relation.getId());
+        // 删除只翻状态：边上的时段是已有数据，原样保留，便于恢复和追溯
+        relationRepository.updateRelation(relation.getStartTime(), relation.getEndTime(),
+                relation.getTimeWindows(), Status.DELETE, relation.getId());
     }
 
 
@@ -1128,14 +1140,21 @@ public class EntityServiceImpl implements EntityService {
 
         //构造函数参数，list类型返回所有值，其他类型取第一个值
         List<FunctionParameter> parameters = actionContext.getFunctionInputParams().stream().map(p -> {
-            var mappingVO = actionContext.getMappings().stream().filter(m -> m.getFunctionParamId().equals(p.getParamId())).findFirst();
-            if (!mappingVO.isPresent()) {
+            var paramMappings = actionContext.getMappings().stream()
+                    .filter(m -> p.getParamId().equals(m.getFunctionParamId()))
+                    .collect(Collectors.toList());
+            if (paramMappings.isEmpty()) {
                 return new FunctionParameter().setParamName(p.getParamName());
             }
-            return FunctionParameter.builder()
-                    .paramName(p.getParamName())
-                    .paramValue(resolveInputValue(mappingVO.get(), p.getParamType(), actionContext))
-                    .build();
+            // 没有子字段路径即整包给这个参数一个值，与逐字段绑定改造前的行为一致
+            boolean boundWhole = paramMappings.stream().noneMatch(m -> StringUtils.isNotEmpty(m.getParamPath()));
+            if (boundWhole) {
+                return FunctionParameter.builder()
+                        .paramName(p.getParamName())
+                        .paramValue(resolveInputValue(paramMappings.get(0), p.getParamType(), actionContext))
+                        .build();
+            }
+            return assembleObjectParam(p, paramMappings, actionContext);
         }).collect(Collectors.toList());
         // 基础查询算子的对象标识是机制入参，不在 function_param 中声明，由行为绑定的对象单独补上；
         // 其它函数类型不传，assembleParams/buildInputMap 也会过滤未声明入参
@@ -1167,6 +1186,71 @@ public class EntityServiceImpl implements EntityService {
 
 
     /**
+     * 对象（自定义类）参数的逐子字段绑定：按 paramPath 把多条绑定拼成字段树，
+     * 由算子执行侧的组装逻辑还原成嵌套对象。
+     * <p>
+     * 同一参数上若还有一条不带路径的绑定，它作为整包取值，优先于逐字段组装。
+     */
+    private FunctionParameter assembleObjectParam(FunctionParameterVO param,
+                                                  List<ActionParamMappingVO> mappings,
+                                                  ActionContextInfoDTO actionContext) {
+        var root = new ParamFieldNode();
+        mappings.stream()
+                .filter(m -> StringUtils.isNotEmpty(m.getParamPath()))
+                .forEach(m -> insertFieldPath(root, m));
+        var fields = toFieldParams(root, param.getFields(), actionContext);
+        var builder = FunctionParameter.builder()
+                .paramName(param.getParamName())
+                .paramType(param.getParamType());
+        mappings.stream()
+                .filter(m -> StringUtils.isEmpty(m.getParamPath()))
+                .findFirst()
+                .ifPresent(m -> builder.paramValue(resolveInputValue(m, param.getParamType(), actionContext)));
+        return builder.fields(fields.isEmpty() ? null : fields).build();
+    }
+
+    private void insertFieldPath(ParamFieldNode root, ActionParamMappingVO mapping) {
+        ParamFieldNode node = root;
+        for (var segment : mapping.getParamPath().split("\\.")) {
+            node = node.children.computeIfAbsent(segment, k -> new ParamFieldNode());
+        }
+        node.mapping = mapping;
+    }
+
+    /** 按算子声明的字段树还原各层取值；声明里已不存在的子字段跳过，不让一条失效绑定拖垮整次执行 */
+    private List<FunctionParameter> toFieldParams(ParamFieldNode node, List<FunctionParameterVO> declared,
+                                                  ActionContextInfoDTO actionContext) {
+        List<FunctionParameter> fields = Lists.newArrayList();
+        node.children.forEach((name, child) -> {
+            var declaredField = declared == null ? null : declared.stream()
+                    .filter(f -> name.equals(f.getParamName())).findFirst().orElse(null);
+            if (declaredField == null) {
+                log.warn("算子入参不存在子字段：{}，已跳过该绑定", name);
+                return;
+            }
+            var children = toFieldParams(child, declaredField.getFields(), actionContext);
+            var builder = FunctionParameter.builder()
+                    .paramName(name)
+                    .paramType(declaredField.getParamType());
+            if (child.mapping != null) {
+                builder.paramValue(resolveInputValue(child.mapping, declaredField.getParamType(), actionContext));
+            }
+            if (!children.isEmpty()) {
+                builder.fields(children);
+            }
+            fields.add(builder.build());
+        });
+        return fields;
+    }
+
+    /** 子字段绑定树：中间节点只有 children，叶子节点记一条绑定 */
+    private static class ParamFieldNode {
+        private final Map<String, ParamFieldNode> children = new LinkedHashMap<>();
+        private ActionParamMappingVO mapping;
+    }
+
+
+    /**
      * 取一个入参的实参值：固定值取行为定义里的字面量，外部输入取行为测试时传入的值，
      * 其余来源从实体属性详情取。
      */
@@ -1183,7 +1267,7 @@ public class EntityServiceImpl implements EntityService {
         if (CollectionUtils.isEmpty(values)) {
             return null;
         }
-        return paramType.equals(FunctionParamTypeEnum.LIST) ? values : values.get(0);
+        return FunctionParamTypeEnum.LIST.equals(paramType) ? values : values.get(0);
     }
 
     /** 固定值按 JSON 字面量解析，前端直接传一段文本时按原样返回 */
@@ -1215,11 +1299,16 @@ public class EntityServiceImpl implements EntityService {
     private void writeFunctionOutputToProperties(String jsonString, ActionContextInfoDTO actionContext) {
         //更新实体属性值
         //根据函数的输出结果更新源实体属性：通过json path获取value
-        var functionOutputParam = actionContext.getFunctionDetailVO().getParams().stream()
+        // 算子可以有多个出参，绑定了哪几个就回写哪几个；没填取值路径的绑定跳过，它本身无法定位出参
+        var outputParamIds = actionContext.getFunctionDetailVO().getParams().stream()
                 .filter(v -> v.getCategory().equals(FunctionParamCategoryEnum.OUTPUT))
-                .findFirst().get();
+                .map(v -> v.getParamId())
+                .collect(Collectors.toSet());
 
-        var output = actionContext.getMappings().stream().filter(m -> m.getFunctionParamId().equals(functionOutputParam.getParamId())).collect(Collectors.toList());
+        var output = actionContext.getMappings().stream()
+                .filter(m -> m.getFunctionParamId() != null && outputParamIds.contains(m.getFunctionParamId()))
+                .filter(m -> StringUtils.isNotEmpty(m.getFunctionParamExpression()))
+                .collect(Collectors.toList());
         //primary datasource
         var primaryDatasource = actionContext.getOntologyProperties().stream().filter(v -> v.getIsPrimaryKey() == 1).findFirst().get().getDatasourceId();
         var propMap = actionContext.getOntologyProperties().stream().collect(Collectors.toMap(v -> v.getUniqueIdentifier(), v -> v));

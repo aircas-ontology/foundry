@@ -32,6 +32,11 @@ public class ActionParamMappingCreateParam {
     @Schema(description = "输入来源配置：固定值存字面量（合法 JSON 按 JSON 解析，否则按原文本），List 存多个属性唯一标识的 JSON 数组；其余来源不传", example = "120.5")
     private String sourceConfig;
 
+    @Schema(description = "对象入参的子字段路径（仅入参绑定使用）：算子的对象参数没有独立的函数参数 id，" +
+            "用该路径指明绑的是哪个子字段，相对参数名按点分层级，带上参数名全路径也可识别；" +
+            "标量参数或整个对象一次取值时不传", example = "position.longitude")
+    private String paramPath;
+
     @Schema(description = "参数对应的对象属性ID；来源为对象属性/对象/List 时是取值属性，不绑算子的行为是目标属性", required = true, example = "fdsfa-gfdsagf-dfs")
     private String propertyUniqueIdentifier;
 

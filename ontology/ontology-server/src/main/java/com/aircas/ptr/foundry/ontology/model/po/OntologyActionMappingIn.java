@@ -62,6 +62,11 @@ public class OntologyActionMappingIn {
     private ActionParamSourceEnum sourceType;
 
     /**
+     * 对象入参的子字段路径（相对该算子参数，点分层级，如 position.longitude），标量参数或整包取值为空
+     */
+    private String paramPath;
+
+    /**
      * 输入来源配置（JSON）：固定值存字面量，List 存多个属性唯一标识
      */
     private String sourceConfig;

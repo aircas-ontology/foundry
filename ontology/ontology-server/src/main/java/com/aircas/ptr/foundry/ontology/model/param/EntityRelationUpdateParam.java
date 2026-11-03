@@ -39,4 +39,7 @@ public class EntityRelationUpdateParam {
     @Schema(name = "status", description = "关系状态")
     @NotNull(message = "status is null")
     private Status status;
+
+    @Schema(name = "partialUpdate", description = "true 时状态、时段里没填的字段保留边上原值（实例关系行为的「修改」）；不传按全量覆盖")
+    private Boolean partialUpdate;
 }

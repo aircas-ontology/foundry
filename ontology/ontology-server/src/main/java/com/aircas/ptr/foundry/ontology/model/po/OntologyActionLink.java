@@ -46,6 +46,11 @@ public class OntologyActionLink {
      */
     private Status targetStatus;
 
+    /**
+     * 实例关系的持续时段 JSON 数组（[{"startTime":..,"endTime":..}]），仅新增/修改两类操作有值
+     */
+    private String timeWindows;
+
 
     @JsonFormat(pattern = DATE_FORMAT_DEFAULT, timezone = "GMT+8")
     @TableField(fill = FieldFill.INSERT)

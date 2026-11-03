@@ -31,6 +31,9 @@ public class ActionParamMappingVO {
     @Schema(description = "输入来源配置（JSON）：固定值存字面量，List 存属性唯一标识数组")
     private String sourceConfig;
 
+    @Schema(description = "对象入参的子字段路径（相对该算子参数，点分层级）；标量参数或整包取值为空", example = "position.longitude")
+    private String paramPath;
+
     @Schema(description = "属性关联对象id", required = true, example = "abcd1234")
     private String ontologyUniqueIdentifier;
 

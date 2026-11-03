@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
+import com.aircas.ptr.foundry.common.constant.FunctionParamTypeEnum;
 import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
@@ -17,6 +18,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.OrderItem;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.google.common.collect.Lists;
 import com.xxl.job.core.context.XxlJobHelper;
 import lombok.SneakyThrows;
@@ -259,10 +261,20 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                     "无效的行为参数：" + mapping.getPropertyUniqueIdentifier(), HttpStatus.BAD_REQUEST);
             var funcParam = paramMap.get(mapping.getFunctionParamId());
             PreconditionUtils.checkArgument(funcParam != null, "无效的函数参数：" + mapping.getFunctionParamId(), HttpStatus.BAD_REQUEST);
+            var paramPath = normalizeParamPath(funcParam, mapping.getParamPath());
             if (property != null && funcParam.getCategory().equals(FunctionParamCategoryEnum.INPUT)) {
-                var dataType = OntologyDataTypeEnum.valueOfDataType(funcParam.getParamType());
-                PreconditionUtils.checkArgument(dataType.equals(OntologyDataTypeEnum.Array) || property.getPropertyType().equals(dataType),
+                var dataType = OntologyDataTypeEnum.valueOfDataType(resolveInputParamType(funcParam, paramPath));
+                // 对象/自定义类参数没有对应的属性数据类型，整包绑定时不做标量比对
+                PreconditionUtils.checkArgument(dataType == null || dataType.equals(OntologyDataTypeEnum.Array)
+                                || property.getPropertyType().equals(dataType),
                         "行为属性类型与函数参数类型不匹配：", HttpStatus.BAD_REQUEST);
+            }
+            // 出参写回落库时只在本对象自己的属性表里找列，绑到别的对象上执行时会取不到属性，必须在这里挡住
+            if (funcParam.getCategory().equals(FunctionParamCategoryEnum.OUTPUT)
+                    && param.getOutputMode() == ActionOutputModeEnum.WRITE_PROPERTY) {
+                PreconditionUtils.checkArgument(property != null
+                                && param.getOntologyIdentifier().equals(property.getOntologyUniqueIdentifier()),
+                        "出参写回的属性必须属于该行为所属的对象：" + mapping.getPropertyUniqueIdentifier(), HttpStatus.BAD_REQUEST);
             }
             definition.mappings.add(OntologyActionMappingIn.builder()
                     .functionParamId(funcParam.getId())
@@ -271,8 +283,49 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                     .propertyUniqueIdentifier(mapping.getPropertyUniqueIdentifier())
                     .sourceType(sourceType)
                     .sourceConfig(mapping.getSourceConfig())
+                    .paramPath(paramPath)
                     .build());
         }
+    }
+
+    /** 子字段路径归一：去掉前端可能带上的参数名前缀，空白按「未绑定子字段」处理 */
+    private String normalizeParamPath(FunctionParamPO funcParam, String paramPath) {
+        if (StringUtils.isBlank(paramPath)) {
+            return null;
+        }
+        return StringUtils.removeStart(paramPath.trim(), funcParam.getParamName() + ".");
+    }
+
+    /**
+     * 取一条入参绑定实际对应的声明类型。
+     * <p>
+     * 对象（自定义类）参数在 function_param 表里只有一行，子字段整体存在该行的 fields JSON 中、
+     * 没有自己的参数 id，所以只能按已归一的子字段路径在字段树里逐层定位。
+     */
+    private FunctionParamTypeEnum resolveInputParamType(FunctionParamPO funcParam, String paramPath) {
+        if (StringUtils.isEmpty(paramPath)) {
+            return funcParam.getParamType();
+        }
+        var fields = parseParamFields(funcParam);
+        FunctionParamTypeEnum currentType = funcParam.getParamType();
+        for (var segment : paramPath.split("\\.")) {
+            var field = fields.stream().filter(f -> segment.equals(f.getParamName())).findFirst().orElse(null);
+            PreconditionUtils.checkArgument(field != null,
+                    "算子入参 " + funcParam.getParamName() + " 不存在子字段：" + paramPath, HttpStatus.BAD_REQUEST);
+            currentType = field.getParamType();
+            fields = field.getFields() == null ? Lists.newArrayList() : field.getFields();
+        }
+        return currentType;
+    }
+
+    /** function_param.fields 存的是 {@link FunctionParameterVO} 列表 JSON，解析不了说明算子参数定义本身已损坏，直接抛出 */
+    @SneakyThrows
+    private List<FunctionParameterVO> parseParamFields(FunctionParamPO funcParam) {
+        if (StringUtils.isEmpty(funcParam.getFields())) {
+            return Lists.newArrayList();
+        }
+        return jsonMapper.readValue(funcParam.getFields(), new TypeReference<List<FunctionParameterVO>>() {
+        });
     }
 
     /** 写入对象属性要求算子有出参，且定义里至少把一个出参绑到了属性 */
@@ -295,8 +348,11 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 "属性值行为不需要关联关系", HttpStatus.BAD_REQUEST);
         PreconditionUtils.checkNotNull(param.getOperation(), "属性值行为必须选择基础操作", HttpStatus.BAD_REQUEST);
         PreconditionUtils.checkArgument(StringUtils.isNotEmpty(param.getStorageGroup()), "属性值行为必须选择存储分组", HttpStatus.BAD_REQUEST);
-        PreconditionUtils.checkArgument(!MAIN_STORAGE_GROUP.equals(param.getStorageGroup()),
-                "属性值行为不支持 main 分组：main 行的增删改就是实体本身", HttpStatus.BAD_REQUEST);
+        // main 分组只支持修改，不支持新增和删除（新增/删除走实体接口）
+        if (MAIN_STORAGE_GROUP.equals(param.getStorageGroup())) {
+            PreconditionUtils.checkArgument(param.getOperation() == ActionOperationEnum.UPDATE,
+                    "属性值行为的 main 分组只支持修改，不支持新增和删除", HttpStatus.BAD_REQUEST);
+        }
 
         var groupPropMap = ontologyPropertyService.list(new LambdaQueryWrapper<OntologyProperty>()
                         .eq(OntologyProperty::getOntologyUniqueIdentifier, param.getOntologyIdentifier()))
@@ -350,13 +406,23 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         var operation = param.getOperation();
         PreconditionUtils.checkNotNull(operation, "实例关系行为必须选择基础操作", HttpStatus.BAD_REQUEST);
         checkActionLink(param, definition, true);
-        if (operation == ActionOperationEnum.UPDATE) {
-            var targetStatus = definition.actionLink.getTargetStatus();
-            PreconditionUtils.checkArgument(targetStatus != null && targetStatus != Status.DELETE,
-                    "实例关系-修改必须指定目标状态（启用/停用）", HttpStatus.BAD_REQUEST);
-        } else {
-            // 只有修改操作会改边的状态，其余操作不保留目标状态，避免执行时误改边
+        var visibilityWindows = param.getLinkMapping().getVisibilityWindows();
+        if (operation == ActionOperationEnum.DELETE) {
+            // 删除只是把边置为删除态，状态和时段都不取定义里的值
             definition.actionLink.setTargetStatus(null);
+            definition.actionLink.setTimeWindows(null);
+        } else {
+            checkVisibilityWindows(visibilityWindows);
+            var targetStatus = definition.actionLink.getTargetStatus();
+            if (operation == ActionOperationEnum.UPDATE) {
+                PreconditionUtils.checkArgument(targetStatus != null && targetStatus != Status.DELETE,
+                        "实例关系-修改必须指定目标状态（启用/停用）", HttpStatus.BAD_REQUEST);
+            } else {
+                // 新增允许直接建成删除态的边：删除态只是不生效，不是消失，语义交给使用者定
+                PreconditionUtils.checkNotNull(targetStatus, "实例关系-新增必须指定目标状态", HttpStatus.BAD_REQUEST);
+                PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(visibilityWindows),
+                        "实例关系-新增必须填写持续时段", HttpStatus.BAD_REQUEST);
+            }
         }
         // 关系两端主键等输入项没有属性可指向，用参数名标识，取值来自固定值或外部输入
         if (CollectionUtils.isEmpty(param.getMappingIns())) {
@@ -397,7 +463,34 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 .ontologyLinkUniqueIdentifier(linkId)
                 .ontologyLinkParamExpression(linkMapping.getOntologyLinkFunctionParamExpression())
                 .targetStatus(linkMapping.getTargetStatus())
+                .timeWindows(writeTimeWindows(linkMapping.getVisibilityWindows()))
                 .build();
+    }
+
+    /** 持续时段按 JSON 存在 ontology_action_link.time_windows，空列表与不填等价 */
+    @SneakyThrows
+    private String writeTimeWindows(List<VisibilityWindow> windows) {
+        return CollectionUtils.isEmpty(windows) ? null : jsonMapper.writeValueAsString(windows);
+    }
+
+    /** 读回行为定义里的持续时段，未配置时返回空列表 */
+    @SneakyThrows
+    private List<VisibilityWindow> readTimeWindows(String timeWindows) {
+        if (StringUtils.isEmpty(timeWindows)) {
+            return Lists.newArrayList();
+        }
+        return jsonMapper.readValue(timeWindows, new TypeReference<List<VisibilityWindow>>() {
+        });
+    }
+
+    /** 时段执行时原样写到图库的边上，要求每段起止齐全且结束晚于开始 */
+    private void checkVisibilityWindows(List<VisibilityWindow> windows) {
+        if (CollectionUtils.isEmpty(windows)) {
+            return;
+        }
+        var invalid = windows.stream().anyMatch(w -> w.getStartTime() == null || w.getEndTime() == null
+                || !w.getEndTime().after(w.getStartTime()));
+        PreconditionUtils.checkArgument(!invalid, "持续时段需填写开始与结束时间，且结束时间晚于开始时间", HttpStatus.BAD_REQUEST);
     }
 
     private void saveActionChildren(Long actionId, ActionDefinition definition) {
@@ -510,6 +603,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                     .ontologyLinkFunctionParamExpression(link.getOntologyLinkParamExpression())
                     .ontologyLinkUniqIdentifier(link.getOntologyLinkUniqueIdentifier())
                     .targetStatus(link.getTargetStatus())
+                    .visibilityWindows(readTimeWindows(link.getTimeWindows()))
                     .build());
         }
         var mappings = ontologyActionMappingInService.list(new LambdaQueryWrapper<OntologyActionMappingIn>().eq(OntologyActionMappingIn::getOntologyActionId, action.getId()));
@@ -526,6 +620,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                             .parameterName(v.getParameterName())
                             .sourceType(v.getSourceType())
                             .sourceConfig(v.getSourceConfig())
+                            .paramPath(v.getParamPath())
                             .propertyUniqueIdentifier(v.getPropertyUniqueIdentifier())
                             .ontologyUniqueIdentifier(propMap.get(v.getPropertyUniqueIdentifier()))
                             .build())
@@ -795,13 +890,18 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             entityService.deleteEntityRelation(linkId, primaryKeyFrom, primaryKeyTo);
             return testResult(action, "已将实例关系[" + linkId + "]置为删除状态");
         }
-        var status = operation == ActionOperationEnum.UPDATE ? linkMapping.getTargetStatus() : Status.ENABLE;
+        // 新增按定义写状态与时段；修改只改定义里填了的项，没填的保留边上原值
+        var definedStatus = linkMapping.getTargetStatus();
+        // 改造前建的新增行为状态被强制留空，这里按当时的固定值 ENABLE 处理，不让老行为执行结果发生变化
+        var status = operation == ActionOperationEnum.UPDATE ? definedStatus
+                : (definedStatus == null ? Status.ENABLE : definedStatus);
         entityService.updateEntityRelation(EntityRelationUpdateParam.builder()
                 .linkUniqIdentifier(linkId)
                 .entityPrimaryKeyFrom(primaryKeyFrom)
                 .entityPrimaryKeyTo(primaryKeyTo)
-                .visibilityWindows(Collections.<VisibilityWindow>emptyList())
+                .visibilityWindows(linkMapping.getVisibilityWindows())
                 .status(status)
+                .partialUpdate(operation == ActionOperationEnum.UPDATE)
                 .build());
         var msg = operation == ActionOperationEnum.UPDATE
                 ? "已将实例关系[" + linkId + "]状态改为 " + status.getName()

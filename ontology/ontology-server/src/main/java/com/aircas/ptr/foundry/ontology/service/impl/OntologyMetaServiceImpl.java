@@ -282,6 +282,8 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                         .ontologyActionId(ontologyActionId)
                         .ontologyLinkUniqueIdentifier(parentChildLinkMap.get(actionLink.getOntologyLinkUniqueIdentifier()))
                         .ontologyLinkParamExpression(actionLink.getOntologyLinkParamExpression())
+                        .targetStatus(actionLink.getTargetStatus())
+                        .timeWindows(actionLink.getTimeWindows())
                         .build());
             }
 
