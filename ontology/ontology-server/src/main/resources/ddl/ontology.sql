@@ -181,10 +181,8 @@ create table if not exists function
     display_name      varchar(255),
     model             varchar(255),
     ontology_space_id integer,
-    scan_status       varchar(32) default 'SKIPPED'                                      not null,
-    scan_result       jsonb                                                              not null,
-    constraint ck_function_scan_status
-        check (scan_status in ('PASSED', 'SKIPPED'))
+    scan_status       varchar(32) default 'SKIPPED',
+    scan_result       jsonb default '""'::jsonb
     );
 
 comment on table function is '函数';
