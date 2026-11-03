@@ -715,6 +715,7 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
     private List<CategoryNode> buildLinkCategoryChildren(Integer parentId, List<OntologyLinkCategory> categories) {
         return categories.stream()
                 .filter(c -> c.getParentId() != null && c.getParentId().equals(parentId))
+                .sorted(java.util.Comparator.comparing(OntologyLinkCategory::getId))
                 .map(c -> CategoryNode.builder()
                         .name(c.getName())
                         .children(buildLinkCategoryChildren(c.getId(), categories))
@@ -806,6 +807,7 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
     private List<CategoryNode> buildOntologyCategoryChildren(Integer parentId, List<OntologyCategory> categories) {
         return categories.stream()
                 .filter(c -> c.getParentId() != null && c.getParentId().equals(parentId))
+                .sorted(java.util.Comparator.comparing(OntologyCategory::getId))
                 .map(c -> CategoryNode.builder()
                         .name(c.getName())
                         .children(buildOntologyCategoryChildren(c.getId(), categories))
@@ -1347,7 +1349,9 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                 .filter(c -> c.getParentId() != 0)
                 .collect(Collectors.groupingBy(OntologyCategory::getParentId));
         List<OntologyCategory> current = parentRoot != null
-                ? byParent.getOrDefault(parentRoot.getId(), new ArrayList<>())
+                ? byParent.getOrDefault(parentRoot.getId(), new ArrayList<>()).stream()
+                        .sorted(java.util.Comparator.comparing(OntologyCategory::getId))
+                        .collect(Collectors.toList())
                 : new ArrayList<>();
         while (CollectionUtils.isNotEmpty(current)) {
             List<OntologyCategory> next = new ArrayList<>();
@@ -1361,7 +1365,9 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                         .build();
                 categoryService.save(clone);
                 map.put(node.getId(), clone.getId());
-                next.addAll(byParent.getOrDefault(node.getId(), new ArrayList<>()));
+                next.addAll(byParent.getOrDefault(node.getId(), new ArrayList<>()).stream()
+                        .sorted(java.util.Comparator.comparing(OntologyCategory::getId))
+                        .collect(Collectors.toList()));
             }
             current = next;
         }
@@ -1387,7 +1393,9 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                 .filter(c -> c.getParentId() != 0)
                 .collect(Collectors.groupingBy(OntologyLinkCategory::getParentId));
         List<OntologyLinkCategory> current = parentRoot != null
-                ? byParent.getOrDefault(parentRoot.getId(), new ArrayList<>())
+                ? byParent.getOrDefault(parentRoot.getId(), new ArrayList<>()).stream()
+                        .sorted(java.util.Comparator.comparing(OntologyLinkCategory::getId))
+                        .collect(Collectors.toList())
                 : new ArrayList<>();
         while (CollectionUtils.isNotEmpty(current)) {
             List<OntologyLinkCategory> next = new ArrayList<>();
@@ -1401,7 +1409,9 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                         .build();
                 ontologyLinkCategoryService.save(clone);
                 map.put(node.getId(), clone.getId());
-                next.addAll(byParent.getOrDefault(node.getId(), new ArrayList<>()));
+                next.addAll(byParent.getOrDefault(node.getId(), new ArrayList<>()).stream()
+                        .sorted(java.util.Comparator.comparing(OntologyLinkCategory::getId))
+                        .collect(Collectors.toList()));
             }
             current = next;
         }
@@ -1427,7 +1437,9 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                 .filter(c -> c.getParentId() != 0)
                 .collect(Collectors.groupingBy(PropertyCategory::getParentId));
         List<PropertyCategory> current = parentRoot != null
-                ? byParent.getOrDefault(parentRoot.getId(), new ArrayList<>())
+                ? byParent.getOrDefault(parentRoot.getId(), new ArrayList<>()).stream()
+                        .sorted(java.util.Comparator.comparing(PropertyCategory::getId))
+                        .collect(Collectors.toList())
                 : new ArrayList<>();
         while (CollectionUtils.isNotEmpty(current)) {
             List<PropertyCategory> next = new ArrayList<>();
@@ -1441,7 +1453,9 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                         .build();
                 propertyCategoryService.save(clone);
                 map.put(node.getId(), clone.getId());
-                next.addAll(byParent.getOrDefault(node.getId(), new ArrayList<>()));
+                next.addAll(byParent.getOrDefault(node.getId(), new ArrayList<>()).stream()
+                        .sorted(java.util.Comparator.comparing(PropertyCategory::getId))
+                        .collect(Collectors.toList()));
             }
             current = next;
         }

@@ -88,6 +88,9 @@ cdc:
   ontology-property: ontology.ontology_property
   ontology-link-group: ontology.ontology_link_group
   entity-datasource-prefix: entity_datasource_server
+  sync:
+    enabled: true
+    cron: "0 0 * * * ?"
 
 rabbitmq:
   exchange: entity.schema.exchange
@@ -150,7 +153,7 @@ minio:
 
 orekit:
   data:
-    path: "ontology/ontology-server/src/main/resources/orekit-data"
+    path: "E:\\temp\\ontology\\foundry\\ontology\\ontology-server\\src\\main\\resources\\orekit-data"
 
 
 
@@ -170,12 +173,12 @@ xxl:
     accessToken:
     cookie:
     executor:
-      appname:
+      appname: ontology-executor
       address:
       ip:
-      port:
+      port: 9999
       logpath:
-      logretentiondays:
+      logretentiondays: 30
 
 
 license:
@@ -216,3 +219,10 @@ container-operator:
   arm-check-enabled: true
   exec-host: 127.0.0.1
   exec-timeout-seconds: 30
+foundry:
+  integration:
+    cdc:
+      enabled: true
+      sync:
+        enabled: true
+        cron: "0 0 * * * ?"

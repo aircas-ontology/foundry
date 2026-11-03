@@ -368,6 +368,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         if (categoryId != null) {
             queryWrapper.eq(OntologyProperty::getPropertyCategoryId, categoryId);
         }
+        queryWrapper.orderByAsc(OntologyProperty::getId);
         var propList = list(queryWrapper);
         log.info("[getByCategoryId] categoryId={}, matched size={}", categoryId, propList.size());
         return propList.stream()
@@ -557,11 +558,11 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
 
     @Override
     public PropertyCategoryVO getCategory(String ontologyUniqueIdentifier) {
-        // 按 id 降序取出，分组后每层 children 即为 id 从大到小
+        // 按 id 升序取出，分组后每层 children 即为 id 从小到大
         var categories = propertyCategoryService.list(
                 new LambdaQueryWrapper<PropertyCategory>()
                         .eq(PropertyCategory::getOntologyUniqueIdentifier, ontologyUniqueIdentifier)
-                        .orderByDesc(PropertyCategory::getId));
+                        .orderByAsc(PropertyCategory::getId));
         if (CollectionUtils.isEmpty(categories)) {
             return null;
         }

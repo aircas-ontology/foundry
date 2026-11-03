@@ -25,13 +25,15 @@ public class EsOntologyLinkGroupDTO {
             pattern = "yyyy-MM-dd HH:mm:ss||yyyy-MM-dd'T'HH:mm:ss.SSSZ||epoch_millis")
     private LocalDateTime updateTime;
 
-    @Field(name = "name", type = FieldType.Text)
+    @Field(name = "name", type = FieldType.Text,
+            analyzer = "ik_max_word", searchAnalyzer = "ik_smart")
     private String name;
 
     @Field(name = "ontology_space_id", type = FieldType.Long)
     private Long ontologySpaceId;
 
-    @Field(name = "space_name", type = FieldType.Text)
+    @Field(name = "space_name", type = FieldType.Text,
+            analyzer = "ik_max_word", searchAnalyzer = "ik_smart")
     private String spaceName;
 
     /** space_type：short，所属空间类型，0=空间，1=主题 */

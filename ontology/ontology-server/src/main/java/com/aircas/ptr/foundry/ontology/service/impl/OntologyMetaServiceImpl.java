@@ -515,6 +515,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         if (categoryId != null) {
             queryWrapper.eq(OntologyMeta::getOntologyCategoryId, categoryId);
         }
+        queryWrapper.orderByAsc(OntologyMeta::getId);
         var metaList = list(queryWrapper);
         log.info("[getByCategoryId] categoryId={}, matched size={}", categoryId, metaList.size());
         return metaList.stream()
