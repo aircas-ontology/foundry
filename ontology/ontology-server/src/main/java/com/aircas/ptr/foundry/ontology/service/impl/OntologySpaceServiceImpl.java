@@ -256,6 +256,75 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                 .build();
     }
 
+    @Override
+    public OntologySpaceCanvasCreateParam getSpaceCanvasContent(Integer spaceId) {
+        var space = spaceMapper.selectById(spaceId);
+        PreconditionUtils.checkNotNull(space, "空间id不存在", HttpStatus.BAD_REQUEST);
+
+        var canvas = new OntologySpaceCanvasCreateParam()
+                .setSpaceId(spaceId)
+                .setOntologies(Lists.newArrayList())
+                .setLinks(Lists.newArrayList());
+
+        var metas = metaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>()
+                .eq(OntologyMeta::getOntologySpaceId, spaceId)
+                .eq(OntologyMeta::getStatus, Status.ENABLE.getValue())
+                .orderByAsc(OntologyMeta::getId));
+        if (CollectionUtils.isEmpty(metas)) {
+            return canvas;
+        }
+
+        var properties = propertyMapper.selectList(new LambdaQueryWrapper<OntologyProperty>()
+                .in(OntologyProperty::getOntologyUniqueIdentifier,
+                        metas.stream().map(OntologyMeta::getUniqueIdentifier).collect(Collectors.toList()))
+                .eq(OntologyProperty::getStatus, Status.ENABLE.getValue())
+                .orderByAsc(OntologyProperty::getId));
+        var propertiesByOntology = properties.stream()
+                .collect(Collectors.groupingBy(OntologyProperty::getOntologyUniqueIdentifier));
+
+        // 关系端点以对象 apiName 表达，与创建时 fromOntologyApiName/toOntologyApiName 的解析口径一致
+        var apiNameByUid = metas.stream()
+                .collect(Collectors.toMap(OntologyMeta::getUniqueIdentifier, OntologyMeta::getApiName, (a, b) -> a));
+        var links = linkMapper.selectList(new LambdaQueryWrapper<OntologyLinkGroup>()
+                .eq(OntologyLinkGroup::getOntologySpaceId, spaceId)
+                .eq(OntologyLinkGroup::getStatus, Status.ENABLE.getValue())
+                .orderByAsc(OntologyLinkGroup::getId));
+
+        canvas.setOntologies(metas.stream()
+                .map(meta -> new OntologySpaceCanvasCreateParam.CanvasOntology()
+                        .setDisplayName(meta.getDisplayName())
+                        .setApiName(meta.getApiName())
+                        .setDescription(meta.getDescription())
+                        .setIconUrl(meta.getIcon())
+                        .setProperties(propertiesByOntology.getOrDefault(meta.getUniqueIdentifier(), Lists.newArrayList())
+                                .stream().map(this::buildCanvasProperty).collect(Collectors.toList())))
+                .collect(Collectors.toList()));
+        //端点对象已停用/已删除的关系在画布上连不出线，不返回
+        canvas.setLinks(links.stream()
+                .filter(link -> apiNameByUid.containsKey(link.getOntologyUniqueIdentifierFrom())
+                        && apiNameByUid.containsKey(link.getOntologyUniqueIdentifierTo()))
+                .map(link -> new OntologySpaceCanvasCreateParam.CanvasLink()
+                        .setName(link.getName())
+                        .setApiName(link.getApiName())
+                        .setDescription(link.getDescription())
+                        .setFromOntologyApiName(apiNameByUid.get(link.getOntologyUniqueIdentifierFrom()))
+                        .setToOntologyApiName(apiNameByUid.get(link.getOntologyUniqueIdentifierTo())))
+                .collect(Collectors.toList()));
+        return canvas;
+    }
+
+    private OntologySpaceCanvasCreateParam.CanvasProperty buildCanvasProperty(OntologyProperty property) {
+        return new OntologySpaceCanvasCreateParam.CanvasProperty()
+                .setDisplayName(property.getDisplayName())
+                .setApiName(property.getApiName())
+                .setDataType(property.getPropertyType())
+                .setStorageGroup(property.getStorageGroup())
+                .setDescription(property.getDescription())
+                .setIsPrimaryKey(property.getIsPrimaryKey() != null && property.getIsPrimaryKey() == 1)
+                .setIsTitleKey(property.getIsTitleKey() != null && property.getIsTitleKey() == 1)
+                .setDefaultValue(property.getDefaultValue());
+    }
+
     private OntologyPropertyCreateParam buildPropertyCreateParam(String ontologyUniqueIdentifier,
                                                                  OntologySpaceCanvasCreateParam.CanvasProperty canvasProperty,
                                                                  Integer propertyCategoryId) {

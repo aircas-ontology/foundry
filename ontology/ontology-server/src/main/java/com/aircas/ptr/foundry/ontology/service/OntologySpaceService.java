@@ -22,6 +22,16 @@ public interface OntologySpaceService extends IService<OntologySpace> {
 
     OntologySpaceCanvasCreateVO createSpaceWithCanvasContent(OntologySpaceCanvasCreateParam param);
 
+    /**
+     * 查询空间下的画布内容：全部本体对象、对象属性、对象间关系。
+     *
+     * <p>复用 {@link #createSpaceWithCanvasContent} 的请求参数类，前端渲染画布、编辑后可直接回传。</p>
+     *
+     * @param spaceId 本体空间 id
+     * @return 画布内容
+     */
+    OntologySpaceCanvasCreateParam getSpaceCanvasContent(Integer spaceId);
+
     void updateSpace(OntologySpaceUpdateParam param);
 
     /**
