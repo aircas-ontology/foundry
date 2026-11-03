@@ -22,7 +22,7 @@ public interface OntologyActionService extends IService<OntologyAction> {
 
     void deleteActionByApi(String actionApi);
 
-    Page<OntologyActionInfoVO> pageGetActionByOntologyId(Integer ontologySpaceId, String keyword, Integer status, Integer pageNum, Integer pageSize);
+    Page<OntologyActionInfoVO> pageGetActionByOntologyId(Integer ontologySpaceId, String ontologyId, Integer categoryId, String keyword, Integer status, Integer pageNum, Integer pageSize);
 
     OntologyActionDetailVO getActionByApi(String actionApi);
 

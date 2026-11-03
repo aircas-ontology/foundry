@@ -530,10 +530,18 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     }
 
     @Override
-    public Page<OntologyActionInfoVO> pageGetActionByOntologyId(Integer ontologySpaceId, String keyword, Integer status, Integer pageNum, Integer pageSize) {
+    public Page<OntologyActionInfoVO> pageGetActionByOntologyId(Integer ontologySpaceId, String ontologyId, Integer categoryId, String keyword, Integer status, Integer pageNum, Integer pageSize) {
         Page<OntologyActionInfoVO> result = new Page<>(pageNum, pageSize);
         LambdaQueryWrapper<OntologyAction> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(OntologyAction::getOntologySpaceId, ontologySpaceId);
+        if (ontologySpaceId != null) {
+            wrapper.eq(OntologyAction::getOntologySpaceId, ontologySpaceId);
+        }
+        if (StringUtils.isNotEmpty(ontologyId)) {
+            wrapper.eq(OntologyAction::getOntologyUniqueIdentifier, ontologyId);
+        }
+        if (categoryId != null) {
+            wrapper.eq(OntologyAction::getActionCategoryId, categoryId);
+        }
         // 关键词：行为名称、算子 api、描述
         if (StringUtils.isNotEmpty(keyword)) {
             wrapper.and(w -> w.like(OntologyAction::getDisplayName, keyword)
@@ -566,6 +574,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                         .operation(v.getActionOperation())
                         .storageGroup(v.getStorageGroup())
                         .outputMode(v.getOutputMode())
+                        .createTime(v.getCreateTime())
+                        .updateTime(v.getUpdateTime())
                         .build())
                 .collect(Collectors.toList());
         result.setRecords(records).setTotal(pageResult.getTotal());

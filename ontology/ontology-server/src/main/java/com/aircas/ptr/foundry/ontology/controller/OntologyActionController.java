@@ -53,15 +53,17 @@ public class OntologyActionController {
         return RestResult.success();
     }
 
-    @Operation(summary = "分页获取行为列表（按空间过滤，支持关键词和状态筛选）")
+    @Operation(summary = "分页获取行为列表（支持按空间、对象、分类、关键词和状态筛选）")
     @GetMapping("/list")
-    public RestResult<Page<OntologyActionInfoVO>> pageGetActionByOntologyId(@RequestParam(required = true, name = "ontologySpaceId") @Parameter(description = "对象空间id（必传）") Integer ontologySpaceId,
+    public RestResult<Page<OntologyActionInfoVO>> pageGetActionByOntologyId(@RequestParam(required = false, name = "ontologySpaceId") @Parameter(description = "对象空间id") Integer ontologySpaceId,
+                                                                            @RequestParam(required = false, name = "ontologyId") @Parameter(description = "对象唯一标识符") String ontologyId,
+                                                                            @RequestParam(required = false, name = "categoryId") @Parameter(description = "行为分类id") Integer categoryId,
                                                                             @RequestParam(required = false, name = "keyword") @Parameter(description = "关键词：行为名称、算子或描述") String keyword,
                                                                             @RequestParam(required = false, name = "status") @Parameter(description = "行为状态：1 启用，0 失效，不传查全部") Integer status,
                                                                             @RequestParam(required = false, defaultValue = "1") Integer pageNum,
                                                                             @RequestParam(required = false, defaultValue = "10") Integer pageSize) {
 
-        return RestResult.ofData(ontologyActionService.pageGetActionByOntologyId(ontologySpaceId, keyword, status, pageNum, pageSize));
+        return RestResult.ofData(ontologyActionService.pageGetActionByOntologyId(ontologySpaceId, ontologyId, categoryId, keyword, status, pageNum, pageSize));
     }
 
 

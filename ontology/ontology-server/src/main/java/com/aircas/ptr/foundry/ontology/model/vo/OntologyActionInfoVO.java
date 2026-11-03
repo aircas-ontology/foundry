@@ -4,12 +4,17 @@ import com.aircas.ptr.foundry.ontology.model.enums.ActionKindEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.ActionOperationEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.ActionOutputModeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.ActionSubjectTypeEnum;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
+
+import java.util.Date;
+
+import static com.aircas.ptr.foundry.common.constant.DateFormat.DATE_FORMAT_DEFAULT;
 
 @Data
 @SuperBuilder
@@ -63,4 +68,12 @@ public class OntologyActionInfoVO {
 
     @Schema(name = "outputMode", description = "输出方式：RESULT_ONLY 仅返回结果 / WRITE_PROPERTY 写入对象属性", example = "RESULT_ONLY")
     private ActionOutputModeEnum outputMode;
+
+    @Schema(name = "createTime", description = "创建时间")
+    @JsonFormat(pattern = DATE_FORMAT_DEFAULT, timezone = "GMT+8")
+    private Date createTime;
+
+    @Schema(name = "updateTime", description = "修改时间")
+    @JsonFormat(pattern = DATE_FORMAT_DEFAULT, timezone = "GMT+8")
+    private Date updateTime;
 }
