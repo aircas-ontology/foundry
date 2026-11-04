@@ -1378,13 +1378,19 @@ public class EntityServiceImpl implements EntityService {
             return;
         }
         //primary datasource
-        var primaryDatasource = actionContext.getOntologyProperties().stream().filter(v -> v.getIsPrimaryKey() == 1).findFirst().get().getDatasourceId();
+        var primaryProp = actionContext.getOntologyProperties().stream().filter(v -> v.getIsPrimaryKey() == 1).findFirst().orElse(null);
+        PreconditionUtils.checkNotNull(primaryProp, "对象未配置主键属性，无法写回", HttpStatus.BAD_REQUEST);
+        var primaryDatasource = primaryProp.getDatasourceId();
         var propMap = actionContext.getOntologyProperties().stream().collect(Collectors.toMap(v -> v.getUniqueIdentifier(), v -> v));
         List<EntityUpdateParam.ColumnUpdate> columnUpdates = Lists.newArrayList();
         Map<String, Map<String, Object>> insertMap = Maps.newHashMap();
         output.stream().forEach(out -> {
             Object actualValue = JsonPath.using(safeConfig).parse(jsonString).read(out.getFunctionParamExpression());
             var prop = propMap.get(out.getPropertyUniqueIdentifier());
+            if (prop == null) {
+                log.warn("行为写回属性不存在，跳过：{}", out.getPropertyUniqueIdentifier());
+                return;
+            }
             //主数据源列
             if (prop.getDatasourceId().equals(primaryDatasource)) {
                 columnUpdates.add(EntityUpdateParam.ColumnUpdate.builder()
@@ -1409,13 +1415,13 @@ public class EntityServiceImpl implements EntityService {
         }
         //其他数据源数据insert
         if (MapUtils.isNotEmpty(insertMap)) {
-            var pkProp = actionContext.getOntologyProperties().stream().filter(v -> v.getIsPrimaryKey() == 1).findFirst().get();
+            // pkProp 已提前取为 primaryProp，此处复用
             insertMap.entrySet().forEach(entry -> {
                 //查询关联建，补全columns
                 var tableName = entry.getKey();
-                var mapping = tableFieldMappingMapper.selectByTargetTable(pkProp.getDatasourceSchema(), tableName);
+                var mapping = tableFieldMappingMapper.selectByTargetTable(primaryProp.getDatasourceSchema(), tableName);
                 entry.getValue().put(mapping.getTargetColumnName(), actionContext.getEntityActionExecuteParam().getEntityPrimaryKey());
-                objectMapper.insertObject(pkProp.getDatasourceSchema(), tableName, entry.getValue());
+                objectMapper.insertObject(primaryProp.getDatasourceSchema(), tableName, entry.getValue());
             });
         }
     }

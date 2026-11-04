@@ -823,7 +823,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         var shardTotal = param.getShardTotal();
         var shardIndex = param.getShardIndex();
         for (int i = 0; i < records.size(); i++) {
-            if ((shardIndex == null || shardIndex == null)
+            if ((shardIndex == null || shardTotal == null)
                     || (i % shardTotal == shardIndex)) {
                 var record = records.get(i);
                 var entityPrimaryKey = record.get(primaryProperty.getDatasourceColumnName());
