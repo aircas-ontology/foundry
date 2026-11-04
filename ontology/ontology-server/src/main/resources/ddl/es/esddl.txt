@@ -1,3 +1,11 @@
+# ES 索引创建脚本
+# ES 版本: 7.17.3+
+# 分词器: IK (ik_max_word 索引时, ik_smart 搜索时)
+# 所有 name 相关字段都配置了 IK 分词器 + keyword 子字段
+
+# ============================================
+# 1. ontology_instance - 数据湖实例索引
+# ============================================
 PUT /ontology_instance
 {
   "aliases": {},
@@ -11,7 +19,15 @@ PUT /ontology_instance
         "type": "keyword"
       },
       "api_name": {
-        "type": "keyword"
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        },
+        "analyzer": "od_index",
+        "search_analyzer": "od_search"
       },
       "doc_type": {
         "type": "keyword"
@@ -35,7 +51,15 @@ PUT /ontology_instance
         "max_input_length": 50
       },
       "ontology_name": {
-        "type": "keyword"
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        },
+        "analyzer": "od_index",
+        "search_analyzer": "od_search"
       },
       "ontology_uid": {
         "type": "keyword"
@@ -53,10 +77,26 @@ PUT /ontology_instance
         "search_analyzer": "od_search"
       },
       "space_api_name": {
-        "type": "keyword"
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        },
+        "analyzer": "od_index",
+        "search_analyzer": "od_search"
       },
       "space_display_name": {
-        "type": "keyword"
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        },
+        "analyzer": "od_index",
+        "search_analyzer": "od_search"
       },
       "space_id": {
         "type": "integer"
@@ -65,7 +105,15 @@ PUT /ontology_instance
         "type": "short"
       },
       "table_name": {
-        "type": "keyword"
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        },
+        "analyzer": "od_index",
+        "search_analyzer": "od_search"
       }
     }
   },
@@ -98,10 +146,9 @@ PUT /ontology_instance
 }
 
 
-
-
-
-
+# ============================================
+# 2. ontology_link_group - 关系分组索引
+# ============================================
 PUT /ontology_link_group
 {
   "aliases": {},
@@ -120,14 +167,16 @@ PUT /ontology_link_group
         "type": "date",
         "format": "yyyy-MM-dd HH:mm:ss||yyyy-MM-dd'T'HH:mm:ss.SSSZ||epoch_millis"
       },
-	   "space_name": {
+      "space_name": {
         "type": "text",
         "fields": {
           "keyword": {
             "type": "keyword",
             "ignore_above": 256
           }
-        }
+        },
+        "analyzer": "ik_max_word",
+        "search_analyzer": "ik_smart"
       },
       "id": {
         "type": "long"
@@ -139,7 +188,9 @@ PUT /ontology_link_group
             "type": "keyword",
             "ignore_above": 256
           }
-        }
+        },
+        "analyzer": "ik_max_word",
+        "search_analyzer": "ik_smart"
       },
       "ontology_space_id": {
         "type": "long"
@@ -185,8 +236,9 @@ PUT /ontology_link_group
 }
 
 
-
-
+# ============================================
+# 3. ontology_meta - 本体元数据索引
+# ============================================
 PUT /ontology_meta
 {
   "aliases": {},
@@ -208,16 +260,20 @@ PUT /ontology_meta
             "type": "keyword",
             "ignore_above": 256
           }
-        }
+        },
+        "analyzer": "ik_max_word",
+        "search_analyzer": "ik_smart"
       },
-	  "space_name": {
+      "space_name": {
         "type": "text",
         "fields": {
           "keyword": {
             "type": "keyword",
             "ignore_above": 256
           }
-        }
+        },
+        "analyzer": "ik_max_word",
+        "search_analyzer": "ik_smart"
       },
       "create_time": {
         "type": "text",
@@ -235,7 +291,9 @@ PUT /ontology_meta
             "type": "keyword",
             "ignore_above": 256
           }
-        }
+        },
+        "analyzer": "ik_max_word",
+        "search_analyzer": "ik_smart"
       },
       "display_name": {
         "type": "text",
@@ -244,7 +302,9 @@ PUT /ontology_meta
             "type": "keyword",
             "ignore_above": 256
           }
-        }
+        },
+        "analyzer": "ik_max_word",
+        "search_analyzer": "ik_smart"
       },
       "id": {
         "type": "long"
@@ -295,9 +355,9 @@ PUT /ontology_meta
 }
 
 
-
-
-
+# ============================================
+# 4. ontology_property - 本体属性索引
+# ============================================
 PUT /ontology_property
 {
   "aliases": {},
@@ -319,28 +379,34 @@ PUT /ontology_property
             "type": "keyword",
             "ignore_above": 256
           }
-        }
+        },
+        "analyzer": "ik_max_word",
+        "search_analyzer": "ik_smart"
       },
-	  "ontology_name": {
+      "ontology_name": {
         "type": "text",
         "fields": {
           "keyword": {
             "type": "keyword",
             "ignore_above": 256
           }
-        }
+        },
+        "analyzer": "ik_max_word",
+        "search_analyzer": "ik_smart"
       },
-	  "space_id": {
+      "ontology_space_id": {
         "type": "integer"
       },
-	   "space_name": {
+      "space_name": {
         "type": "text",
         "fields": {
           "keyword": {
             "type": "keyword",
             "ignore_above": 256
           }
-        }
+        },
+        "analyzer": "ik_max_word",
+        "search_analyzer": "ik_smart"
       },
       "create_time": {
         "type": "text",
@@ -358,7 +424,9 @@ PUT /ontology_property
             "type": "keyword",
             "ignore_above": 256
           }
-        }
+        },
+        "analyzer": "ik_max_word",
+        "search_analyzer": "ik_smart"
       },
       "display_name": {
         "type": "text",
@@ -367,7 +435,9 @@ PUT /ontology_property
             "type": "keyword",
             "ignore_above": 256
           }
-        }
+        },
+        "analyzer": "ik_max_word",
+        "search_analyzer": "ik_smart"
       },
       "id": {
         "type": "long"
@@ -439,7 +509,9 @@ PUT /ontology_property
 }
 
 
-
+# ============================================
+# 5. ontology_space - 本体空间索引
+# ============================================
 PUT /ontology_space
 {
   "aliases": {},
@@ -461,7 +533,9 @@ PUT /ontology_space
             "type": "keyword",
             "ignore_above": 256
           }
-        }
+        },
+        "analyzer": "ik_max_word",
+        "search_analyzer": "ik_smart"
       },
       "create_time": {
         "type": "text",
@@ -479,7 +553,9 @@ PUT /ontology_space
             "type": "keyword",
             "ignore_above": 256
           }
-        }
+        },
+        "analyzer": "ik_max_word",
+        "search_analyzer": "ik_smart"
       },
       "display_name": {
         "type": "text",
@@ -488,7 +564,9 @@ PUT /ontology_space
             "type": "keyword",
             "ignore_above": 256
           }
-        }
+        },
+        "analyzer": "ik_max_word",
+        "search_analyzer": "ik_smart"
       },
       "id": {
         "type": "long"
@@ -525,4 +603,3 @@ PUT /ontology_space
     }
   }
 }
-

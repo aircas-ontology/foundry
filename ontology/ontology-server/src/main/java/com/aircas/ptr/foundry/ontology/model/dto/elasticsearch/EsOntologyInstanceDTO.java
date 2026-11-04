@@ -35,7 +35,8 @@ public class EsOntologyInstanceDTO {
     private String docType;
 
     /** 数据湖表名（datasource_id） */
-    @Field(name = "table_name", type = FieldType.Keyword)
+    @Field(name = "table_name", type = FieldType.Text,
+            analyzer = "od_index", searchAnalyzer = "od_search")
     private String tableName;
 
     /** 数据湖 schema（本体空间 api_name） */
@@ -60,11 +61,13 @@ public class EsOntologyInstanceDTO {
     private String ontologyUid;
 
     /** 所属本体显示名 */
-    @Field(name = "ontology_name", type = FieldType.Keyword)
+    @Field(name = "ontology_name", type = FieldType.Text,
+            analyzer = "od_index", searchAnalyzer = "od_search")
     private String ontologyName;
 
     /** 所属本体 api_name */
-    @Field(name = "api_name", type = FieldType.Keyword)
+    @Field(name = "api_name", type = FieldType.Text,
+            analyzer = "od_index", searchAnalyzer = "od_search")
     private String apiName;
 
     /** 所属本体空间 id */
@@ -72,11 +75,13 @@ public class EsOntologyInstanceDTO {
     private Integer spaceId;
 
     /** 所属本体空间显示名 */
-    @Field(name = "space_display_name", type = FieldType.Keyword)
+    @Field(name = "space_display_name", type = FieldType.Text,
+            analyzer = "od_index", searchAnalyzer = "od_search")
     private String spaceDisplayName;
 
     /** 所属本体空间 api_name */
-    @Field(name = "space_api_name", type = FieldType.Keyword)
+    @Field(name = "space_api_name", type = FieldType.Text,
+            analyzer = "od_index", searchAnalyzer = "od_search")
     private String spaceApiName;
 
     /** 所属本体空间类型：0=空间，1=主题（索引 dynamic=strict，需先在 mapping 中登记） */

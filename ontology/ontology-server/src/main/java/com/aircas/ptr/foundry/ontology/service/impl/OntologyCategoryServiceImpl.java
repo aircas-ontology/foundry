@@ -157,7 +157,7 @@ public class OntologyCategoryServiceImpl extends ServiceImpl<OntologyCategoryMap
 
     @Override
     public OntologyCategoryVO getCategoryTree(Integer spaceId) {
-        // 按 id 降序取出，分组后每层 children 即为 id 从大到小
+        // 按 id 升序取出，分组后每层 children 即为 id 从小到大
         var categories = list(new LambdaQueryWrapper<OntologyCategory>()
                 .eq(OntologyCategory::getOntologySpaceId, spaceId)
                 .orderByAsc(OntologyCategory::getId));
@@ -171,7 +171,8 @@ public class OntologyCategoryServiceImpl extends ServiceImpl<OntologyCategoryMap
             return null;
         }
         var metas = ontologyMetaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>()
-                .eq(OntologyMeta::getOntologySpaceId, spaceId));
+                .eq(OntologyMeta::getOntologySpaceId, spaceId)
+                .orderByAsc(OntologyMeta::getId));
 
         var metaMap = metas.stream()
                 .collect(Collectors.toMap(

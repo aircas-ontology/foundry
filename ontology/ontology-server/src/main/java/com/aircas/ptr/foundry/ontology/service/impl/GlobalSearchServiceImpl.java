@@ -2,7 +2,6 @@ package com.aircas.ptr.foundry.ontology.service.impl;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.FieldValue;
-import co.elastic.clients.elasticsearch._types.query_dsl.Operator;
 import co.elastic.clients.elasticsearch._types.query_dsl.Query;
 import co.elastic.clients.elasticsearch.core.SearchRequest;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
@@ -131,11 +130,7 @@ public class GlobalSearchServiceImpl implements GlobalSearchService {
                         List<String> fields = INDEX_SEARCH_FIELDS.get(index);
                         bool.should(sh -> sh.bool(inner -> {
                             inner.must(m -> m.term(t -> t.field("_index").value(index)))
-                                    .must(m -> m.queryString(qs -> qs
-                                            .fields(fields)
-                                            .lenient(true)
-                                            .defaultOperator(Operator.Or)
-                                            .query(escapedKeyword)));
+                                    .must(buildPhraseBoostQuery(fields, escapedKeyword));
                             String spaceField = scopeIds == null ? null : INDEX_SPACE_FIELD.get(index);
                             if (spaceField != null) {
                                 inner.filter(f -> f.terms(t -> t.field(spaceField).terms(v -> v.value(scopeIds))));
@@ -152,6 +147,9 @@ public class GlobalSearchServiceImpl implements GlobalSearchService {
         } catch (IOException e) {
             log.error("全局检索失败, keyword={}", param.getKeyword(), e);
             throw new BusinessException("全局检索失败：" + e.getMessage(), ResultCode.ERROR);
+        } catch (Exception e) {
+            log.error("全局检索异常, keyword={}, error={}", param.getKeyword(), e.getMessage(), e);
+            throw new BusinessException("全局检索异常：" + e.getMessage(), ResultCode.ERROR);
         }
 
         Set<String> uidNeeded = hits.stream()
@@ -377,5 +375,49 @@ public class GlobalSearchServiceImpl implements GlobalSearchService {
             sb.append(c);
         }
         return sb.toString();
+    }
+
+    /**
+     * 构建查询：精确匹配优先，拼音/英文次之
+     * - display_name 完全匹配（term）权重最高
+     * - display_name 短语匹配（match_phrase）权重次之，确保中文名称排在拼音前面
+     * - api_name/name 完全匹配权重再次之
+     * - 前缀匹配权重更低
+     * - 模糊匹配权重最低
+     */
+    private Query buildPhraseBoostQuery(List<String> fields, String keyword) {
+        return Query.of(q -> q.bool(bool -> {
+            // 完全匹配：所有字段
+            for (String field : fields) {
+                bool.should(s -> s.term(t -> t
+                        .field(field + ".keyword")
+                        .value(keyword)
+                        .boost(10.0f)));
+            }
+            // 短语匹配：display_name 优先，确保中文名称排在拼音前面
+            for (String field : fields) {
+                if (field.equals("display_name") || field.equals("name")) {
+                    bool.should(s -> s.matchPhrase(mp -> mp
+                            .field(field)
+                            .query(keyword)
+                            .boost(5.0f)));
+                }
+            }
+            // 前缀匹配：权重次之
+            for (String field : fields) {
+                bool.should(s -> s.prefix(p -> p
+                        .field(field + ".keyword")
+                        .value(keyword)
+                        .boost(3.0f)));
+            }
+            // 模糊匹配：权重最低
+            for (String field : fields) {
+                bool.should(s -> s.match(m -> m
+                        .field(field)
+                        .query(keyword)
+                        .boost(1.0f)));
+            }
+            return bool;
+        }));
     }
 }

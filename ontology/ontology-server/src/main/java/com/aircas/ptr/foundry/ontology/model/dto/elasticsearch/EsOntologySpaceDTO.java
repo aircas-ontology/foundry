@@ -16,16 +16,19 @@ public class EsOntologySpaceDTO {
     @Id
     private Long id;
 
-    /** api_name：keyword */
-    @Field(name = "api_name", type = FieldType.Keyword)
+    /** api_name：text + ik 分词 */
+    @Field(name = "api_name", type = FieldType.Text,
+            analyzer = "ik_max_word", searchAnalyzer = "ik_smart")
     private String apiName;
 
-    /** description：text */
-    @Field(name = "description", type = FieldType.Text)
+    /** description：text + ik 分词 */
+    @Field(name = "description", type = FieldType.Text,
+            analyzer = "ik_max_word", searchAnalyzer = "ik_smart")
     private String description;
 
-    /** display_name：text + keyword 子字段 */
-    @Field(name = "display_name", type = FieldType.Text)
+    /** display_name：text + ik 分词 */
+    @Field(name = "display_name", type = FieldType.Text,
+            analyzer = "ik_max_word", searchAnalyzer = "ik_smart")
     private String displayName;
 
     /** username：keyword，创建该空间/主题的用户名 */

@@ -156,6 +156,7 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
         if (categoryId != null) {
             queryWrapper.eq(OntologyLinkGroup::getCategoryId, categoryId);
         }
+        queryWrapper.orderByAsc(OntologyLinkGroup::getId);
         var links = list(queryWrapper);
         if (CollectionUtils.isEmpty(links)) {
             return Lists.newArrayList();
@@ -246,6 +247,7 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
                 query.eq(OntologyLinkGroup::getOntologyUniqueIdentifierTo, ontologyUniqueIdentifier);
                 break;
         }
+        query.orderByAsc(OntologyLinkGroup::getId);
 
         var links = list(query);
 
