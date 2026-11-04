@@ -200,6 +200,19 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         updateById(action);
     }
 
+    @Override
+    @Transactional(value = "mainTransactionManager")
+    public void unpublishAction(Integer ontologySpaceId, String actionApi) {
+        var action = getOne(new LambdaQueryWrapper<OntologyAction>()
+                .eq(OntologyAction::getApi, actionApi)
+                .eq(OntologyAction::getOntologySpaceId, ontologySpaceId));
+        PreconditionUtils.checkArgument(action != null, "行为不存在", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(action.getStatus() == ActionStatusEnum.PUBLISHED.getValue(),
+                "该行为未在发布状态，无需撤回", HttpStatus.BAD_REQUEST);
+        action.setStatus(ActionStatusEnum.DRAFT.getValue());
+        updateById(action);
+    }
+
     /** 绑算子的行为发布后要按引用执行，算子还停在草稿时执行必失败，所以发布前先看算子发布没有 */
     private void checkBoundFunctionPublished(OntologyAction action) {
         if (StringUtils.isEmpty(action.getFunctionApi())) {
@@ -239,12 +252,10 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         if (kind == ActionKindEnum.APPLICATION) {
             PreconditionUtils.checkArgument(param.getSubjectType() == null && param.getOperation() == null
                     && StringUtils.isEmpty(param.getStorageGroup()), "应用行为不需要行为类型、基础操作和存储分组", HttpStatus.BAD_REQUEST);
-            PreconditionUtils.checkNotNull(param.getOutputMode(), "应用行为必须选择输出方式", HttpStatus.BAD_REQUEST);
+            // outputMode 下沉到 mappingIns 每行：每个出参独立选 RESULT_ONLY / WRITE_PROPERTY
             checkFunctionAction(param, definition, APPLICATION_FUNCTION_TYPES, true, spaceId);
-            if (param.getOutputMode() == ActionOutputModeEnum.WRITE_PROPERTY) {
-                checkWritePropertyOutput(definition);
-            }
-            action.setOutputMode(param.getOutputMode());
+            checkWritePropertyOutput(definition);
+            action.setOutputMode(null);
         } else {
             var subjectType = param.getSubjectType();
             if (subjectType == null) {
@@ -261,6 +272,10 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                         "基础算子行为只支持仅返回结果", HttpStatus.BAD_REQUEST);
                 checkFunctionAction(param, definition, Collections.singletonList(FunctionTypeEnum.BASIC_QUERY),
                         false, spaceId);
+                // 基础算子也不允许行级 WRITE_PROPERTY
+                PreconditionUtils.checkArgument(definition.mappings.stream()
+                                .noneMatch(m -> m.getOutputMode() == ActionOutputModeEnum.WRITE_PROPERTY),
+                        "基础算子行为只支持仅返回结果，出参不可写入属性", HttpStatus.BAD_REQUEST);
             }
             // 属性值、实例关系的输出即落库本身，没有回写方式；基础算子只读
             action.setOutputMode(subjectType == ActionSubjectTypeEnum.BASIC_OPERATOR
@@ -334,12 +349,14 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                                 || property.getPropertyType().equals(dataType),
                         "行为属性类型与函数参数类型不匹配：", HttpStatus.BAD_REQUEST);
             }
-            // 出参写回落库时只在本对象自己的属性表里找列，绑到别的对象上执行时会取不到属性，必须在这里挡住
+            // 出参写回：按行级 outputMode 判断，WRITE_PROPERTY 要求属性存在且归属该行指定的对象
             if (funcParam.getCategory().equals(FunctionParamCategoryEnum.OUTPUT)
-                    && param.getOutputMode() == ActionOutputModeEnum.WRITE_PROPERTY) {
-                PreconditionUtils.checkArgument(property != null
-                                && param.getOntologyIdentifier().equals(property.getOntologyUniqueIdentifier()),
-                        "出参写回的属性必须属于该行为所属的对象：" + mapping.getPropertyUniqueIdentifier(), HttpStatus.BAD_REQUEST);
+                    && mapping.getOutputMode() == ActionOutputModeEnum.WRITE_PROPERTY) {
+                PreconditionUtils.checkArgument(property != null,
+                        "写入对象属性的出参必须指定目标属性：" + mapping.getFunctionParamId(), HttpStatus.BAD_REQUEST);
+                PreconditionUtils.checkArgument(StringUtils.isNotEmpty(mapping.getOntologyUniqueIdentifier())
+                                && mapping.getOntologyUniqueIdentifier().equals(property.getOntologyUniqueIdentifier()),
+                        "出参写回的属性必须属于该行指定的对象：" + mapping.getPropertyUniqueIdentifier(), HttpStatus.BAD_REQUEST);
             }
             definition.mappings.add(OntologyActionMappingIn.builder()
                     .functionParamId(funcParam.getId())
@@ -349,6 +366,10 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                     .sourceType(sourceType)
                     .sourceConfig(mapping.getSourceConfig())
                     .paramPath(paramPath)
+                    .outputMode(funcParam.getCategory().equals(FunctionParamCategoryEnum.OUTPUT)
+                            ? (mapping.getOutputMode() != null ? mapping.getOutputMode() : ActionOutputModeEnum.RESULT_ONLY)
+                            : null)
+                    .ontologyUniqueIdentifier(mapping.getOntologyUniqueIdentifier())
                     .build());
         }
     }
@@ -393,15 +414,22 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         });
     }
 
-    /** 写入对象属性要求算子有出参，且定义里至少把一个出参绑到了属性 */
+    /** 至少有一个出参行选了 WRITE_PROPERTY 时，校验算子确实有出参可供写回 */
     private void checkWritePropertyOutput(ActionDefinition definition) {
+        var hasWriteProperty = definition.mappings.stream()
+                .anyMatch(m -> m.getOutputMode() == ActionOutputModeEnum.WRITE_PROPERTY);
+        if (!hasWriteProperty) {
+            return;
+        }
         var outputParamIds = definition.funcParams.stream()
                 .filter(p -> p.getCategory().equals(FunctionParamCategoryEnum.OUTPUT))
                 .map(FunctionParamPO::getId)
                 .collect(Collectors.toSet());
         PreconditionUtils.checkArgument(!outputParamIds.isEmpty(),
                 "算子没有输出参数，无法写入对象属性：" + definition.func.getApi(), HttpStatus.BAD_REQUEST);
-        PreconditionUtils.checkArgument(definition.mappings.stream().anyMatch(m -> outputParamIds.contains(m.getFunctionParamId())),
+        PreconditionUtils.checkArgument(definition.mappings.stream()
+                        .anyMatch(m -> m.getOutputMode() == ActionOutputModeEnum.WRITE_PROPERTY
+                                && outputParamIds.contains(m.getFunctionParamId())),
                 "输出方式为写入对象属性时，至少要绑定一个输出参数", HttpStatus.BAD_REQUEST);
     }
 
@@ -697,26 +725,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         }
         var mappings = ontologyActionMappingInService.list(new LambdaQueryWrapper<OntologyActionMappingIn>().eq(OntologyActionMappingIn::getOntologyActionId, action.getId()));
 
-        if (CollectionUtils.isNotEmpty(mappings)) {
-
-            var propUniqIds = mappings.stream().map(v -> v.getPropertyUniqueIdentifier()).collect(Collectors.toList());
-            var props = ontologyPropertyService.list(new LambdaQueryWrapper<OntologyProperty>().in(OntologyProperty::getUniqueIdentifier, propUniqIds));
-            var propMap = props.stream().collect(Collectors.toMap(v -> v.getUniqueIdentifier(), v -> v.getOntologyUniqueIdentifier()));
-
-            var mappingVOS = mappings.stream().map(v -> ActionParamMappingVO.builder()
-                            .functionParamExpression(v.getFunctionParamExpression())
-                            .functionParamId(v.getFunctionParamId())
-                            .parameterName(v.getParameterName())
-                            .sourceType(v.getSourceType())
-                            .sourceConfig(v.getSourceConfig())
-                            .paramPath(v.getParamPath())
-                            .propertyUniqueIdentifier(v.getPropertyUniqueIdentifier())
-                            .ontologyUniqueIdentifier(propMap.get(v.getPropertyUniqueIdentifier()))
-                            .build())
-                    .collect(Collectors.toList());
-            detailVO.setMappingIns(mappingVOS);
-        }
-        // 函数参数定义（入参 + 出参），前端绑定 UI 用；算子 api 跨空间允许重名，必须按本行为所属空间取
+        // 函数参数定义（入参 + 出参），先取到以便给 mappingIns 每行填 category
+        Map<Long, FunctionParamCategoryEnum> funcParamCategoryMap = new HashMap<>();
         if (StringUtils.isNotEmpty(action.getFunctionApi())) {
             var func = functionMapper.selectList(new LambdaQueryWrapper<Function>()
                             .eq(Function::getOntologySpaceId, action.getOntologySpaceId())
@@ -729,6 +739,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             if (func != null) {
                 var funcParams = functionParamMapper.selectList(new LambdaQueryWrapper<FunctionParamPO>()
                         .eq(FunctionParamPO::getFunctionId, func.getId()));
+                funcParams.forEach(p -> funcParamCategoryMap.put(p.getId(), p.getCategory()));
                 detailVO.setFunctionParams(funcParams.stream().map(p -> FunctionParamVO.builder()
                         .paramId(p.getId())
                         .paramName(p.getParamName())
@@ -739,6 +750,29 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                         .referenceType(p.getTypeReferenceName())
                         .build()).collect(Collectors.toList()));
             }
+        }
+
+        if (CollectionUtils.isNotEmpty(mappings)) {
+
+            var propUniqIds = mappings.stream().map(v -> v.getPropertyUniqueIdentifier()).collect(Collectors.toList());
+            var props = ontologyPropertyService.list(new LambdaQueryWrapper<OntologyProperty>().in(OntologyProperty::getUniqueIdentifier, propUniqIds));
+            var propMap = props.stream().collect(Collectors.toMap(v -> v.getUniqueIdentifier(), v -> v.getOntologyUniqueIdentifier()));
+
+            var mappingVOS = mappings.stream().map(v -> ActionParamMappingVO.builder()
+                            .functionParamExpression(v.getFunctionParamExpression())
+                            .functionParamId(v.getFunctionParamId())
+                            .category(funcParamCategoryMap.get(v.getFunctionParamId()))
+                            .parameterName(v.getParameterName())
+                            .sourceType(v.getSourceType())
+                            .sourceConfig(v.getSourceConfig())
+                            .paramPath(v.getParamPath())
+                            .propertyUniqueIdentifier(v.getPropertyUniqueIdentifier())
+                            .ontologyUniqueIdentifier(StringUtils.isNotEmpty(v.getOntologyUniqueIdentifier())
+                                    ? v.getOntologyUniqueIdentifier() : propMap.get(v.getPropertyUniqueIdentifier()))
+                            .outputMode(v.getOutputMode())
+                            .build())
+                    .collect(Collectors.toList());
+            detailVO.setMappingIns(mappingVOS);
         }
         return detailVO;
     }

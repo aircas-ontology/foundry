@@ -53,6 +53,14 @@ public class OntologyActionController {
         return RestResult.success();
     }
 
+    @Operation(summary = "撤回发布（已发布 -> 草稿）")
+    @PutMapping("/unpublish")
+    public RestResult unpublishAction(@RequestParam(required = true, name = "ontologySpaceId") @Parameter(description = "对象空间id") Integer ontologySpaceId,
+                                      @RequestParam(required = true, name = "actionApi") @Parameter(description = "行为api") String actionApi) {
+        ontologyActionService.unpublishAction(ontologySpaceId, actionApi);
+        return RestResult.success();
+    }
+
 
     @Operation(summary = "依据actionApi删除行为")
     @DeleteMapping("")

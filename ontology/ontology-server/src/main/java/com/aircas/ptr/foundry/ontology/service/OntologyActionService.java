@@ -31,6 +31,14 @@ public interface OntologyActionService extends IService<OntologyAction> {
      */
     void publishAction(Integer ontologySpaceId, String actionApi);
 
+    /**
+     * 撤回发布：已发布的行为退回草稿状态。
+     *
+     * @param ontologySpaceId 对象空间id
+     * @param actionApi       行为 api
+     */
+    void unpublishAction(Integer ontologySpaceId, String actionApi);
+
     void deleteActionByApi(Integer ontologySpaceId, String actionApi);
 
     Page<OntologyActionInfoVO> pageGetActionByOntologyId(Integer ontologySpaceId, String ontologyId, Integer categoryId, String keyword, Integer status, Integer pageNum, Integer pageSize);

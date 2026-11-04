@@ -1350,10 +1350,9 @@ public class EntityServiceImpl implements EntityService {
     @SneakyThrows
     @Override
     public void updateEntityPropertyAndRelation(String jsonString, ActionContextInfoDTO actionContext) {
-        // 输出方式为仅返回结果时不回写属性；关系边只有应用行为才落，基础行为（含基础算子）不写库
-        if (actionContext.getActionDetailVO().getOutputMode() != ActionOutputModeEnum.RESULT_ONLY) {
-            writeFunctionOutputToProperties(jsonString, actionContext);
-        }
+        // 按行级 outputMode 回写：只有标记为 WRITE_PROPERTY 的出参行才写回属性
+        writeFunctionOutputToProperties(jsonString, actionContext);
+        // 关系边只有应用行为才落，基础行为（含基础算子）不写库
         if (actionContext.getActionDetailVO().getActionKind() != ActionKindEnum.BASE) {
             updateEntityRelationByFunction(jsonString, actionContext);
         }
@@ -1369,10 +1368,15 @@ public class EntityServiceImpl implements EntityService {
                 .map(v -> v.getParamId())
                 .collect(Collectors.toSet());
 
+        // 按行级 outputMode 过滤：只有标记 WRITE_PROPERTY 的出参行才回写
         var output = actionContext.getMappings().stream()
                 .filter(m -> m.getFunctionParamId() != null && outputParamIds.contains(m.getFunctionParamId()))
+                .filter(m -> m.getOutputMode() == ActionOutputModeEnum.WRITE_PROPERTY)
                 .filter(m -> StringUtils.isNotEmpty(m.getFunctionParamExpression()))
                 .collect(Collectors.toList());
+        if (output.isEmpty()) {
+            return;
+        }
         //primary datasource
         var primaryDatasource = actionContext.getOntologyProperties().stream().filter(v -> v.getIsPrimaryKey() == 1).findFirst().get().getDatasourceId();
         var propMap = actionContext.getOntologyProperties().stream().collect(Collectors.toMap(v -> v.getUniqueIdentifier(), v -> v));

@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.po;
 
+import com.aircas.ptr.foundry.ontology.model.enums.ActionOutputModeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.ActionParamSourceEnum;
 import com.baomidou.mybatisplus.annotation.*;
 import com.fasterxml.jackson.annotation.JsonFormat;
@@ -70,6 +71,16 @@ public class OntologyActionMappingIn {
      * 输入来源配置（JSON）：固定值存字面量，List 存多个属性唯一标识
      */
     private String sourceConfig;
+
+    /**
+     * 出参行输出方式：RESULT_ONLY 仅返回 / WRITE_PROPERTY 写入属性；入参行为空
+     */
+    private ActionOutputModeEnum outputMode;
+
+    /**
+     * 该行参数关联的对象唯一标识；出参 WRITE_PROPERTY 时必填，入参行可省略
+     */
+    private String ontologyUniqueIdentifier;
 
     @JsonFormat(pattern = DATE_FORMAT_DEFAULT, timezone = "GMT+8")
     @TableField(fill = FieldFill.INSERT)

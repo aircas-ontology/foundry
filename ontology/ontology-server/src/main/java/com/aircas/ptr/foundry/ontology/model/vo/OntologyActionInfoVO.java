@@ -66,7 +66,7 @@ public class OntologyActionInfoVO {
     @Schema(name = "storageGroup", description = "属性值操作的目标存储分组", example = "extra")
     private String storageGroup;
 
-    @Schema(name = "outputMode", description = "输出方式：RESULT_ONLY 仅返回结果 / WRITE_PROPERTY 写入对象属性", example = "RESULT_ONLY")
+    @Schema(name = "outputMode", description = "输出方式（仅基础算子行为有值 RESULT_ONLY）；应用行为已下沉到 mappingIns 每行独立选择", example = "RESULT_ONLY")
     private ActionOutputModeEnum outputMode;
 
     @Schema(name = "createTime", description = "创建时间")
