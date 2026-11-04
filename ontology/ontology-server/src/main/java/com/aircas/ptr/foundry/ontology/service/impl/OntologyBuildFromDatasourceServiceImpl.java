@@ -96,7 +96,7 @@ public class OntologyBuildFromDatasourceServiceImpl implements OntologyBuildFrom
 
         // 类型与列注释以现场扫描为准：向导页打开后外部库可能已经改过表
         Map<String, Map<String, DatasourceTableDetailVO.Column>> liveColumns =
-                scanLiveColumns(param.getDatasourceId(), new ArrayList<>(tables.keySet()));
+                scanLiveColumns(param.getSpaceId(), param.getSchemaName(), new ArrayList<>(tables.keySet()));
         List<PropertySpec> specs = buildPropertySpecs(master, childTables, tables, liveColumns);
         // 建表列清单同样在 Phase 0 算完：外键引用的列不存在时，报错要早于任何写库动作
         Map<String, List<TableColumnDesc>> entityColumns = buildEntityColumns(master, specs, foreignKeys, liveColumns);
@@ -125,8 +125,8 @@ public class OntologyBuildFromDatasourceServiceImpl implements OntologyBuildFrom
                         + "实体表当前没有实例数据，外部库数据需另行灌入，数据管道请再调 /property/notify_build_pipeline",
                 StringUtils.trim(param.getDisplayName()), specs.size(), entityTables.size(),
                 String.join("、", entityTables), mappingCount, pipeColumnCount);
-        log.info("数据源构建对象完成 datasourceId={}, spaceId={}, uid={}, {}",
-                param.getDatasourceId(), param.getSpaceId(), uniqueIdentifier, message);
+        log.info("数据源构建对象完成 spaceId={}, schemaName={}, uid={}, {}",
+                param.getSpaceId(), param.getSchemaName(), uniqueIdentifier, message);
 
         return OntologyBuildFromDatasourceResultVO.builder()
                 .uniqueIdentifier(uniqueIdentifier)
@@ -276,10 +276,11 @@ public class OntologyBuildFromDatasourceServiceImpl implements OntologyBuildFrom
     /**
      * 现场重扫外部库，返回「表名 → 列名 → 列信息」；勾选的表已经不存在时直接 400。
      */
-    private Map<String, Map<String, DatasourceTableDetailVO.Column>> scanLiveColumns(Integer datasourceId,
+    private Map<String, Map<String, DatasourceTableDetailVO.Column>> scanLiveColumns(Integer spaceId,
+                                                                                     String schemaName,
                                                                                      List<String> tableNames) {
         Map<String, List<DatasourceTableDetailVO.Column>> scanned = datasourceConnectionService
-                .listTablesDetail(datasourceId, tableNames).stream()
+                .listTablesDetail(spaceId, schemaName, tableNames).stream()
                 .collect(Collectors.toMap(DatasourceTableDetailVO::getTableName,
                         DatasourceTableDetailVO::getColumns, (a, b) -> a, LinkedHashMap::new));
         Map<String, Map<String, DatasourceTableDetailVO.Column>> live = new LinkedHashMap<>();

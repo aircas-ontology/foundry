@@ -7,6 +7,7 @@ import com.aircas.ptr.foundry.ontology.model.param.DatasourceConnectionParam;
 import com.aircas.ptr.foundry.ontology.model.po.DatasourceConnection;
 import com.aircas.ptr.foundry.ontology.model.vo.DatasourceConnectionItemVO;
 import com.aircas.ptr.foundry.ontology.model.vo.DatasourceConnectionVO;
+import com.aircas.ptr.foundry.ontology.model.vo.DatasourceSchemaVO;
 import com.aircas.ptr.foundry.ontology.model.vo.DatasourceTableDetailVO;
 import com.aircas.ptr.foundry.ontology.model.vo.DatasourceTableSummaryVO;
 import com.aircas.ptr.foundry.ontology.model.vo.TableColumnDescVO;
@@ -62,6 +63,24 @@ public class DatasourceConnectionServiceImpl
     /** 启发式外键的后缀约定：真实库普遍不建外键约束，靠 {@code xxx_id} 命名找主子表关系。 */
     private static final String ID_COLUMN_SUFFIX = "_id";
 
+    /** MySQL/MariaDB 系统 catalog（数据库名），listSchemas 走 getCatalogs() 时过滤掉。 */
+    private static final Set<String> MYSQL_SYSTEM_CATALOGS =
+            Set.of("INFORMATION_SCHEMA", "MYSQL", "PERFORMANCE_SCHEMA", "SYS");
+    /** PostgreSQL 系统 schema，listSchemas 走 getSchemas() 时过滤掉；pg_ 前缀的 schema 也一并过滤。 */
+    private static final Set<String> PG_SYSTEM_SCHEMAS = Set.of("PG_CATALOG", "INFORMATION_SCHEMA");
+    /**
+     * Oracle 系统 schema（用户）集合。Oracle 的 schema 等于数据库用户，系统用户众多；
+     * 这里只列常见且普遍会污染向导下拉的，未穷尽（APEX_% 等按前缀另判）。
+     * 注意：该集合未经 Oracle 环境实测验证，若现场出现系统 schema 漏过请补全。
+     */
+    private static final Set<String> ORACLE_SYSTEM_SCHEMAS = Set.of(
+            "SYS", "SYSTEM", "DBSNMP", "OUTLN", "WMSYS", "XDB", "CTXSYS", "MDSYS",
+            "ORDSYS", "ORDDATA", "EXFSYS", "LBACSYS", "DIP", "OLAPSYS", "APEX_PUBLIC_USER",
+            "APPQOSSYS", "AUDSYS", "DBSFWUSER", "REMOTE_SCHEDULER_AGENT", "GGSYS",
+            "ANONYMOUS", "OJVMSYS", "SI_INFORMTN_SCHEMA", "ORACLE_OCM", "FLOWS_FILES");
+    /** SQL Server 系统 schema：sys、INFORMATION_SCHEMA、guest；db_* 前缀的角色伪 schema 也过滤。 */
+    private static final Set<String> SQLSERVER_SYSTEM_SCHEMAS = Set.of("SYS", "INFORMATION_SCHEMA", "GUEST");
+
     @Override
     public List<DatasourceConnectionVO> searchByKeyword(String keyword) {
         List<DatasourceConnection> list = baseMapper.searchByKeyword(keyword);
@@ -94,7 +113,9 @@ public class DatasourceConnectionServiceImpl
         PreconditionUtils.checkArgument(StringUtils.isNotBlank(param.getPassword()),
                 "连接密码不能为空", HttpStatus.BAD_REQUEST);
         checkStatus(param.getStatus());
+        checkSpaceNotTaken(param.getSpaceId(), null);
         DatasourceConnection po = DatasourceConnection.builder()
+                .spaceId(param.getSpaceId())
                 .name(param.getName().trim())
                 .dbType(normalizeDbType(param.getDbType()))
                 // driver_class 列是 NOT NULL：留空存空串而不是 null，此时靠 JDBC 4+ 的驱动 SPI 自动注册
@@ -118,11 +139,13 @@ public class DatasourceConnectionServiceImpl
     public DatasourceConnectionItemVO updateDatasource(Integer id, DatasourceConnectionParam param) {
         requireExists(id);
         checkStatus(param.getStatus());
+        checkSpaceNotTaken(param.getSpaceId(), id);
         // 逐列显式 set：updateById 会跳过 null，「清空描述 / 清空 schema」就写不进去；
         // 密码留空则不 set，沿用库中原值（密码不对外返回，前端回填不了）；
         // update_time 手动填——wrapper 更新没有实体对象，MetaObjectHandler 不生效
         baseMapper.update(null, new LambdaUpdateWrapper<DatasourceConnection>()
                 .eq(DatasourceConnection::getId, id)
+                .set(DatasourceConnection::getSpaceId, param.getSpaceId())
                 .set(DatasourceConnection::getName, param.getName().trim())
                 .set(DatasourceConnection::getDbType, normalizeDbType(param.getDbType()))
                 .set(DatasourceConnection::getDriverClass, StringUtils.defaultString(StringUtils.trim(param.getDriverClass())))
@@ -249,11 +272,11 @@ public class DatasourceConnectionServiceImpl
      * 其余厂商在同一连接上逐表统计——仍是连接数 1，不退化成 N+1 建连。</p>
      */
     @Override
-    public List<DatasourceTableSummaryVO> listTablesWithColumnCount(Integer datasourceId) {
-        DatasourceConnection conn = requireDatasource(datasourceId);
+    public List<DatasourceTableSummaryVO> listTablesWithColumnCount(Integer spaceId, String schemaName) {
+        DatasourceConnection conn = requireDatasourceBySpace(spaceId);
         loadDriver(conn.getDriverClass());
 
-        CatalogSchema cs = resolveCatalogSchema(conn);
+        CatalogSchema cs = resolveCatalogSchema(conn, schemaName);
         Properties props = buildConnectionProps(conn);
 
         try (Connection dbConn = DriverManager.getConnection(conn.getJdbcUrl(), props)) {
@@ -263,8 +286,8 @@ public class DatasourceConnectionServiceImpl
             tables.forEach(t -> t.setColumnCount(counts.getOrDefault(t.getTableName(), 0)));
             return tables;
         } catch (Exception e) {
-            log.error("扫描数据源表清单失败，datasourceId={}, dbType={}, catalog={}, schema={}",
-                    datasourceId, conn.getDbType(), cs.catalog(), cs.schema(), e);
+            log.error("扫描数据源表清单失败，spaceId={}, schemaName={}, dbType={}, catalog={}, schema={}",
+                    spaceId, schemaName, conn.getDbType(), cs.catalog(), cs.schema(), e);
             throw new BusinessException("扫描表清单失败: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
@@ -274,7 +297,7 @@ public class DatasourceConnectionServiceImpl
      * （实体表映射 {@code table_field_mapping} 的唯一约束就是主表名 + 子表名）。
      */
     @Override
-    public List<DatasourceTableDetailVO> listTablesDetail(Integer datasourceId, List<String> tableNames) {
+    public List<DatasourceTableDetailVO> listTablesDetail(Integer spaceId, String schemaName, List<String> tableNames) {
         PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(tableNames),
                 "tableNames 不能为空", HttpStatus.BAD_REQUEST);
         List<String> names = tableNames.stream()
@@ -284,10 +307,10 @@ public class DatasourceConnectionServiceImpl
                 .toList();
         PreconditionUtils.checkArgument(!names.isEmpty(), "tableNames 不能为空", HttpStatus.BAD_REQUEST);
 
-        DatasourceConnection conn = requireDatasource(datasourceId);
+        DatasourceConnection conn = requireDatasourceBySpace(spaceId);
         loadDriver(conn.getDriverClass());
 
-        CatalogSchema cs = resolveCatalogSchema(conn);
+        CatalogSchema cs = resolveCatalogSchema(conn, schemaName);
         Properties props = buildConnectionProps(conn);
 
         try (Connection dbConn = DriverManager.getConnection(conn.getJdbcUrl(), props)) {
@@ -316,10 +339,73 @@ public class DatasourceConnectionServiceImpl
                     })
                     .toList();
         } catch (Exception e) {
-            log.error("扫描数据源表结构失败，datasourceId={}, dbType={}, catalog={}, schema={}, tableNames={}",
-                    datasourceId, conn.getDbType(), cs.catalog(), cs.schema(), names, e);
+            log.error("扫描数据源表结构失败，spaceId={}, schemaName={}, dbType={}, catalog={}, schema={}, tableNames={}",
+                    spaceId, schemaName, conn.getDbType(), cs.catalog(), cs.schema(), names, e);
             throw new BusinessException("扫描表结构失败: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
         }
+    }
+
+    /**
+     * 扫描指定对象空间对应数据源下的 schema 清单。按 dbType 分派：MySQL/MariaDB 走 getCatalogs()，
+     * 其余厂商走 getSchemas()。系统 schema 在结果里过滤掉，避免污染向导下拉。
+     */
+    @Override
+    public List<DatasourceSchemaVO> listSchemas(Integer spaceId) {
+        DatasourceConnection conn = requireDatasourceBySpace(spaceId);
+        loadDriver(conn.getDriverClass());
+
+        String dbType = conn.getDbType() == null ? "" : conn.getDbType().trim().toUpperCase();
+        boolean useCatalogs = "MYSQL".equals(dbType) || "MARIADB".equals(dbType);
+        Properties props = buildConnectionProps(conn);
+
+        List<DatasourceSchemaVO> result = new ArrayList<>();
+        try (Connection dbConn = DriverManager.getConnection(conn.getJdbcUrl(), props)) {
+            DatabaseMetaData metaData = dbConn.getMetaData();
+            if (useCatalogs) {
+                try (ResultSet rs = metaData.getCatalogs()) {
+                    while (rs.next()) {
+                        String name = rs.getString("TABLE_CAT");
+                        if (isSystemCatalog(name)) continue;
+                        result.add(DatasourceSchemaVO.builder().schemaName(name).catalogName(name).build());
+                    }
+                }
+            } else {
+                try (ResultSet rs = metaData.getSchemas()) {
+                    while (rs.next()) {
+                        String name = rs.getString("TABLE_SCHEM");
+                        String catalog = rs.getString("TABLE_CATALOG");
+                        if (isSystemSchema(name, dbType)) continue;
+                        result.add(DatasourceSchemaVO.builder().schemaName(name).catalogName(catalog).build());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.error("扫描数据源 schema 失败，spaceId={}, dbType={}, useCatalogs={}",
+                    spaceId, dbType, useCatalogs, e);
+            throw new BusinessException("扫描 schema 失败: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+        return result;
+    }
+
+    /**
+     * 判断是否为 MySQL/MariaDB 系统 catalog（数据库名）。
+     */
+    private static boolean isSystemCatalog(String name) {
+        return name != null && MYSQL_SYSTEM_CATALOGS.contains(name.toUpperCase());
+    }
+
+    /**
+     * 判断是否为系统 schema（按 dbType 分派过滤规则）。
+     */
+    private static boolean isSystemSchema(String name, String dbType) {
+        if (name == null) return false;
+        String upper = name.toUpperCase();
+        return switch (dbType) {
+            case "POSTGRESQL", "POSTGRES" -> PG_SYSTEM_SCHEMAS.contains(upper) || upper.startsWith("PG_");
+            case "ORACLE" -> ORACLE_SYSTEM_SCHEMAS.contains(upper);
+            case "SQLSERVER", "MSSQL" -> SQLSERVER_SYSTEM_SCHEMAS.contains(upper) || upper.startsWith("DB_");
+            default -> false;
+        };
     }
 
     /**
@@ -603,6 +689,37 @@ public class DatasourceConnectionServiceImpl
     }
 
     /**
+     * 按 spaceId 查找数据源记录（每个空间至多一条）。不存在抛 404，存在多条抛 400（唯一索引未生效时的防御）。
+     */
+    private DatasourceConnection requireDatasourceBySpace(Integer spaceId) {
+        List<DatasourceConnection> list = baseMapper.selectList(new LambdaQueryWrapper<DatasourceConnection>()
+                .eq(DatasourceConnection::getSpaceId, spaceId));
+        if (list.isEmpty()) {
+            throw new BusinessException("该对象空间未配置数据源：spaceId=" + spaceId, HttpStatus.NOT_FOUND);
+        }
+        if (list.size() > 1) {
+            throw new BusinessException("该对象空间存在多条数据源配置（唯一索引未生效？）：spaceId=" + spaceId,
+                    HttpStatus.BAD_REQUEST);
+        }
+        DatasourceConnection conn = list.get(0);
+        if (conn.getJdbcUrl() == null || conn.getJdbcUrl().isBlank()) {
+            throw new BusinessException("数据源 JDBC URL 为空", HttpStatus.BAD_REQUEST);
+        }
+        return conn;
+    }
+
+    /**
+     * 校验 spaceId 是否已被其他数据源占用（排除 selfId）。占用则抛 400。
+     */
+    private void checkSpaceNotTaken(Integer spaceId, Integer selfId) {
+        long count = baseMapper.selectCount(new LambdaQueryWrapper<DatasourceConnection>()
+                .eq(DatasourceConnection::getSpaceId, spaceId)
+                .ne(selfId != null, DatasourceConnection::getId, selfId));
+        PreconditionUtils.checkArgument(count == 0,
+                "该对象空间已配置数据源，一个空间只能有一条：spaceId=" + spaceId, HttpStatus.BAD_REQUEST);
+    }
+
+    /**
      * status 只允许 1（启用）/ 0（禁用）；null 表示「不指定」，由调用方按缺省或「不改动」处理。
      */
     private void checkStatus(Integer status) {
@@ -652,18 +769,25 @@ public class DatasourceConnectionServiceImpl
      * Oracle 的 schema 缺省等于登录用户名（且大写存储）；PostgreSQL 的 schema 缺省 {@code public}。
      */
     private CatalogSchema resolveCatalogSchema(DatasourceConnection conn) {
+        return resolveCatalogSchema(conn, conn.getSchemaName());
+    }
+
+    /**
+     * 按 dbType 分派 catalog / schema，使用传入的 schemaName 作为覆盖值（向导场景从请求传入）。
+     */
+    private CatalogSchema resolveCatalogSchema(DatasourceConnection conn, String schemaName) {
         String dbType = conn.getDbType() == null ? "" : conn.getDbType().trim().toUpperCase();
         return switch (dbType) {
-            case "MYSQL", "MARIADB" -> new CatalogSchema(conn.getDbName(), null);
+            case "MYSQL", "MARIADB" -> new CatalogSchema(defaultIfBlank(schemaName, conn.getDbName()), null);
             case "SQLSERVER", "MSSQL" -> new CatalogSchema(conn.getDbName(),
-                    defaultIfBlank(conn.getSchemaName(), DEFAULT_SCHEMA_SQLSERVER));
+                    defaultIfBlank(schemaName, DEFAULT_SCHEMA_SQLSERVER));
             case "ORACLE" -> new CatalogSchema(null,
-                    defaultIfBlank(conn.getSchemaName(),
+                    defaultIfBlank(schemaName,
                             conn.getUsername() == null ? null : conn.getUsername().toUpperCase()));
             case "POSTGRESQL", "POSTGRES" -> new CatalogSchema(null,
-                    defaultIfBlank(conn.getSchemaName(), DEFAULT_SCHEMA_POSTGRES));
+                    defaultIfBlank(schemaName, DEFAULT_SCHEMA_POSTGRES));
             // 未知 dbType：按 JDBC 默认语义，catalog 传 dbName（多数驱动接受），schema 传配置值
-            default -> new CatalogSchema(conn.getDbName(), conn.getSchemaName());
+            default -> new CatalogSchema(conn.getDbName(), defaultIfBlank(schemaName, conn.getSchemaName()));
         };
     }
 
@@ -730,6 +854,7 @@ public class DatasourceConnectionServiceImpl
     private DatasourceConnectionItemVO toItemVO(DatasourceConnection po) {
         return DatasourceConnectionItemVO.builder()
                 .id(po.getId())
+                .spaceId(po.getSpaceId())
                 .name(po.getName())
                 .dbType(po.getDbType())
                 .driverClass(po.getDriverClass())

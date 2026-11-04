@@ -4,6 +4,7 @@ import com.aircas.ptr.foundry.ontology.model.param.DatasourceConnectionParam;
 import com.aircas.ptr.foundry.ontology.model.po.DatasourceConnection;
 import com.aircas.ptr.foundry.ontology.model.vo.DatasourceConnectionItemVO;
 import com.aircas.ptr.foundry.ontology.model.vo.DatasourceConnectionVO;
+import com.aircas.ptr.foundry.ontology.model.vo.DatasourceSchemaVO;
 import com.aircas.ptr.foundry.ontology.model.vo.DatasourceTableDetailVO;
 import com.aircas.ptr.foundry.ontology.model.vo.DatasourceTableSummaryVO;
 import com.aircas.ptr.foundry.ontology.model.vo.TableColumnDescVO;
@@ -117,16 +118,17 @@ public interface DatasourceConnectionService extends IService<DatasourceConnecti
     List<TableColumnDescVO> listTableColumns(Integer datasourceId, String tableName);
 
     /**
-     * 扫描指定数据源的表清单，附带「字段数」。供「数据源构建对象」向导的「选择表」步骤使用。
+     * 扫描指定对象空间对应数据源的表清单，附带「字段数」。供「数据源构建对象」向导的「选择表」步骤使用。
      *
      * <p>与 {@link #listTableComments(Integer)} 的区别只有字段数：后者是给大模型的最小返回体，
      * 向导页勾选表时需要知道每张表有多少列。全程一次 JDBC 连接，只读
      * {@code DatabaseMetaData}，不执行任何 SQL。</p>
      *
-     * @param datasourceId datasource_connection 表主键
+     * @param spaceId    归属的对象空间 id（每个空间至多一条数据源记录）
+     * @param schemaName 外部库 schema 名（MySQL/MariaDB 上作为 catalog；其余厂商作为 schema 参数）
      * @return 表名 + 表注释 + 字段数
      */
-    List<DatasourceTableSummaryVO> listTablesWithColumnCount(Integer datasourceId);
+    List<DatasourceTableSummaryVO> listTablesWithColumnCount(Integer spaceId, String schemaName);
 
     /**
      * 一次扫描多张表的列信息与表间外键，供向导的「选择属性」步骤使用。
@@ -136,9 +138,24 @@ public interface DatasourceConnectionService extends IService<DatasourceConnecti
      * 每张子表至多返回一条外键——实体表映射 {@code table_field_mapping} 的唯一约束就是
      * {@code (source_table_name, target_table_name)}，多条存不下。</p>
      *
-     * @param datasourceId datasource_connection 表主键
-     * @param tableNames   表名集合（区分大小写）；只有集合内部的表之间才会给出外键
+     * @param spaceId    归属的对象空间 id（每个空间至多一条数据源记录）
+     * @param schemaName 外部库 schema 名（MySQL/MariaDB 上作为 catalog；其余厂商作为 schema 参数）
+     * @param tableNames 表名集合（区分大小写）；只有集合内部的表之间才会给出外键
      * @return 每张表的列清单、主键列与指向其他勾选表的外键
      */
-    List<DatasourceTableDetailVO> listTablesDetail(Integer datasourceId, List<String> tableNames);
+    List<DatasourceTableDetailVO> listTablesDetail(Integer spaceId, String schemaName, List<String> tableNames);
+
+    /**
+     * 扫描指定对象空间对应数据源下的 schema 清单。
+     *
+     * <p>按 dbType 分派：MySQL/MariaDB 走 {@link DatabaseMetaData#getCatalogs()}（数据库名即 schema），
+     * 其余厂商走 {@link DatabaseMetaData#getSchemas()}。系统 schema（{@code pg_*}、{@code information_schema}、
+     * Oracle 的 {@code SYS/SYSTEM}、SQL Server 的 {@code sys/db_*}、MySQL 的 {@code mysql/performance_schema/sys}）
+     * 在结果里过滤掉，避免污染向导下拉。返回的 {@link DatasourceSchemaVO#getSchemaName()} 即后续
+     * {@code /table/list}、{@code /table/columns}、{@code /build_object} 要回传的 schemaName 参数。</p>
+     *
+     * @param spaceId 归属的对象空间 id（每个空间至多一条数据源记录）
+     * @return schema 清单
+     */
+    List<DatasourceSchemaVO> listSchemas(Integer spaceId);
 }
