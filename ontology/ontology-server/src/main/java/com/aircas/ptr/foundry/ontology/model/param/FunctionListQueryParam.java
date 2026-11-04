@@ -22,10 +22,11 @@ public class FunctionListQueryParam {
     @Schema(name = "displayName", description = "函数名称（模糊搜索）")
     private String displayName;
 
-    @Schema(name = "type", description = "函数类型：CUSTOMIZE / EXTERNAL / BASIC_QUERY / COMPOSITE / CONTAINER")
-    private FunctionTypeEnum type;
+    @Schema(name = "types", description = "函数类型（可多值，逗号分隔或重复传参）：CUSTOMIZE / EXTERNAL / BASIC_QUERY / COMPOSITE / CONTAINER。"
+            + "传什么查什么，不传=全部类型（含函数编排）", example = "CUSTOMIZE,CONTAINER")
+    private List<FunctionTypeEnum> types;
 
-    @Schema(name = "excludeTypes", description = "排除的函数类型列表（逗号分隔），如 BASIC_QUERY,CONTAINER")
+    @Schema(name = "excludeTypes", description = "排除的函数类型列表（逗号分隔），如 BASIC_QUERY,CONTAINER；与 types 同时传时两者都生效")
     private List<FunctionTypeEnum> excludeTypes;
 
     @Schema(name = "publishStatus", description = "发布状态：0 未发布，1 已发布")

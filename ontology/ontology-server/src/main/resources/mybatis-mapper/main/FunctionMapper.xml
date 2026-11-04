@@ -24,8 +24,11 @@
                 <if test="displayName != null and displayName != ''">
                     and f.display_name like '%' || #{displayName} || '%'
                 </if>
-                <if test="type != null">
-                    and f.type = #{type}
+                <if test="types != null and types.size() > 0">
+                    and f.type in
+                    <foreach collection="types" item="t" open="(" separator="," close=")">
+                        #{t}
+                    </foreach>
                 </if>
                 <if test="excludeTypes != null and excludeTypes.size() > 0">
                     and f.type not in

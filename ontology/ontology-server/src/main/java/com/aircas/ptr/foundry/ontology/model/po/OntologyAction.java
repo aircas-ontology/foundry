@@ -65,6 +65,11 @@ public class OntologyAction {
      */
     private String displayName;
 
+    /**
+     * 行为状态：2 草稿 / 1 已发布 / 0 已失效
+     *
+     * @see com.aircas.ptr.foundry.ontology.model.enums.ActionStatusEnum
+     */
     private Integer status;
 
     private String icon;

@@ -22,6 +22,10 @@ public class EntityActionExecuteParam extends EntityQueryParam {
     @NotBlank(message = "actionApi is null")
     private String actionApi;
 
+    @Schema(name = "dataPrimaryKey",
+            description = "存储分组行的数据主键；属性值行为的修改/删除需要它定位到具体一行，"
+                    + "main 分组可不传（等同实体主键），绑算子的行为忽略该字段", example = "123")
+    private Object dataPrimaryKey;
 
     @Schema(name = "linkedOntologyUniqueIdentifier", description = "关联对象id", example = "123")
     private String linkedOntologyUniqueIdentifier;

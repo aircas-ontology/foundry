@@ -45,6 +45,14 @@ public class OntologyActionController {
         return RestResult.success();
     }
 
+    @Operation(summary = "发布行为（草稿/已失效 -> 已发布，发布后对智能体和调度可用）")
+    @PutMapping("/publish")
+    public RestResult publishAction(@RequestParam(required = true, name = "actionApi") @Parameter(description = "行为api") String actionApi) {
+        ontologyActionService.publishAction(actionApi);
+        return RestResult.success();
+    }
+
+
     @Operation(summary = "依据actionApi删除行为")
     @DeleteMapping("/{actionApi}")
     public RestResult delete(@PathVariable(required = true, name = "actionApi") String actionApi) {
@@ -59,7 +67,7 @@ public class OntologyActionController {
                                                                             @RequestParam(required = false, name = "ontologyId") @Parameter(description = "对象唯一标识符") String ontologyId,
                                                                             @RequestParam(required = false, name = "categoryId") @Parameter(description = "行为分类id") Integer categoryId,
                                                                             @RequestParam(required = false, name = "keyword") @Parameter(description = "关键词：行为名称、算子或描述") String keyword,
-                                                                            @RequestParam(required = false, name = "status") @Parameter(description = "行为状态：1 启用，0 失效，不传查全部") Integer status,
+                                                                            @RequestParam(required = false, name = "status") @Parameter(description = "行为状态：2 草稿，1 已发布，0 已失效，不传查全部") Integer status,
                                                                             @RequestParam(required = false, defaultValue = "1") Integer pageNum,
                                                                             @RequestParam(required = false, defaultValue = "10") Integer pageSize) {
 
