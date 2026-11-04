@@ -194,10 +194,10 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
         var space = spaceMapper.selectById(spaceId);
         PreconditionUtils.checkNotNull(space, "空间id不存在", HttpStatus.BAD_REQUEST);
 
-        var existingMetaList = metaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>()
+        /*var existingMetaList = metaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>()
                 .eq(OntologyMeta::getOntologySpaceId, spaceId));
         PreconditionUtils.checkArgument(CollectionUtils.isEmpty(existingMetaList),
-                "该空间下已存在对象，无法创建画布", HttpStatus.BAD_REQUEST);
+                "该空间下已存在对象，无法创建画布", HttpStatus.BAD_REQUEST);*/
 
         Integer defaultCategoryId = getOntologyCategoryRoot(spaceId);
         Integer defaultLinkCategoryId = getLinkCategoryRoot(spaceId);
