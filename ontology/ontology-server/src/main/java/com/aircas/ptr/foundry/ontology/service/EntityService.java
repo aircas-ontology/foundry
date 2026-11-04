@@ -55,7 +55,7 @@ public interface EntityService {
     void deleteEntityNodeAndRelations(String ontologyUniqueIdentifier, Object entityPrimaryKey);
 
     /**
-     * 单行实例数据 -> 图库节点（upsert，按「本体 + 归一化主键」定位已存在节点，仅名称变化时覆盖）。
+     * 单行实例数据 -> 图库节点（upsert，按「对象 + 归一化主键」定位已存在节点，仅名称变化时覆盖）。
      *
      * @return true 表示本次新建了节点（图库此前无该实例节点）
      */
@@ -70,7 +70,7 @@ public interface EntityService {
     int upsertEntityNodes(String ontologyUniqueIdentifier, String tableName, Map<Object, String> pkToDisplayName);
 
     /**
-     * 清理该本体的图库孤儿节点：删除主键不在 {@code keepPrimaryKeyValues} 中的节点及其相邻关系边，
+     * 清理该对象的图库孤儿节点：删除主键不在 {@code keepPrimaryKeyValues} 中的节点及其相邻关系边，
      * 用于全量同步以数据湖当前内容为准收敛图库。主键为空的节点不参与清理。
      *
      * @param keepPrimaryKeyValues 本次同步到的全部主键值
@@ -97,25 +97,25 @@ public interface EntityService {
     void updateEntityRelation(EntityRelationUpdateParam param);
 
     /**
-     * 导出指定本体的全量实例数据（仅节点）。
+     * 导出指定对象的全量实例数据（仅节点）。
      *
      * <p>数据来源为数据湖物理表：以主键属性所在主表全量行为骨架，
      * 按 {@code table_field_mapping} 将关联表属性内存 join 入节点。
-     * 若本体未绑定数据源（无实体表），则返回空 nodes。</p>
+     * 若对象未绑定数据源（无实体表），则返回空 nodes。</p>
      *
-     * @param ontologyUniqueIdentifier 本体唯一标识
+     * @param ontologyUniqueIdentifier 对象唯一标识
      * @return 实例导出结构，无实体表时 nodes 为空列表
      */
     OntologyInstancesExportDTO exportInstances(String ontologyUniqueIdentifier);
 
     /**
-     * 导入指定本体的实例数据（若导出结构中带有 instances）。
+     * 导入指定对象的实例数据（若导出结构中带有 instances）。
      *
      * <p>将每个导出节点还原为实体行写入数据湖物理表：主键 id 由数据库 SERIAL 重新生成，
      * 丢弃导出携带的原 id；关联表（非 main 存储分组）属性按 List 下标还原为一对多多行。
-     * 仅写数据湖，不建 ArangoDB 图节点。本体未绑定数据源或无有效节点时静默跳过。</p>
+     * 仅写数据湖，不建 ArangoDB 图节点。对象未绑定数据源或无有效节点时静默跳过。</p>
      *
-     * @param ontologyUniqueIdentifier 本体唯一标识
+     * @param ontologyUniqueIdentifier 对象唯一标识
      * @param instances                实例导出结构，为 null 或 nodes 为空时不做任何操作
      * @return 导出主键（字符串归一化）到新主键的映射，供实例关系边重新落位；无实例时为空 map
      */
@@ -149,8 +149,8 @@ public interface EntityService {
                                Map<String, Object> toPkMapping);
 
     /**
-     * 按本体空间 + 本体对象查询实例数据的指定属性值，支持可选过滤条件。
-     * <p>过滤条件中的属性必须是该本体的属性，值类型需与属性定义的类型兼容，
+     * 按对象空间 + 对象查询实例数据的指定属性值，支持可选过滤条件。
+     * <p>过滤条件中的属性必须是该对象的属性，值类型需与属性定义的类型兼容，
      * 执行查询前先做完整校验，避免类型不匹配或 SQL 异常。</p>
      *
      * @param param 查询参数，包括 spaceId、ontologyUniqueIdentifier、propertyApiNames 及可选 filters

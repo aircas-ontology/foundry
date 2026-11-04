@@ -23,7 +23,7 @@ public class EntityGenerateParam {
 
     @NotBlank(message = "ontologyIdentifier is empty")
     @OntologyIdVerify
-    @Schema(name = "ontologyIdentifier", description = "本体id", example = "abcdef", required = true)
+    @Schema(name = "ontologyIdentifier", description = "对象id", example = "abcdef", required = true)
     private String ontologyIdentifier;
 
 

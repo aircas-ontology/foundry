@@ -12,7 +12,7 @@ import lombok.NoArgsConstructor;
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@Schema(description = "本体分组VO")
+@Schema(description = "对象分组VO")
 public class OntologyGroupInfoVO {
 
      @Schema(description = "分组名称", example = "远海远域")
@@ -27,7 +27,7 @@ public class OntologyGroupInfoVO {
      @Schema(description = "分组icon url", example = "icon")
      private String icon;
 
-     @Schema(name = "spaceId", description = "本体空间id")
+     @Schema(name = "spaceId", description = "对象空间id")
      private Integer spaceId;
 
 }

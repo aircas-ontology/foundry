@@ -24,7 +24,7 @@ public class PropertyMetadataSchema {
     private Integer id;
 
     /**
-     * 本体唯一标识
+     * 对象唯一标识
      */
     private String ontologyUniqueIdentifier;
 

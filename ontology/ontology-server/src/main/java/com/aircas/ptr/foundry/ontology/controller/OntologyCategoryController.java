@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
 
-@Tag(name = "本体分类体系管理")
+@Tag(name = "对象分类体系管理")
 @RestController
 @Validated
 @RequiredArgsConstructor
@@ -28,14 +28,14 @@ public class OntologyCategoryController {
 
 
     @PostMapping
-    @Operation(summary = "创建本体分类体系树")
+    @Operation(summary = "创建对象分类体系树")
     public RestResult createCategory(@RequestBody @Valid OntologyCategoryCreateParam param) {
         ontologyCategoryService.createCategory(param);
         return RestResult.success();
     }
 
     @PutMapping
-    @Operation(summary = "修改本体分类名称")
+    @Operation(summary = "修改对象分类名称")
     public RestResult updateCategory(@RequestBody @Valid OntologyCategoryUpdateParam param) {
         ontologyCategoryService.updateCategory(param);
         return RestResult.success();
@@ -43,7 +43,7 @@ public class OntologyCategoryController {
 
 
     @DeleteMapping
-    @Operation(summary = "删除本体分类树")
+    @Operation(summary = "删除对象分类树")
     public RestResult deleteCategory(@RequestBody @Valid OntologyCategoryDeleteParam param) {
         ontologyCategoryService.deleteCategory(param);
         return RestResult.success();
@@ -51,9 +51,9 @@ public class OntologyCategoryController {
 
 
     @GetMapping("/tree")
-    @Operation(summary = "查询本体分类体系树")
+    @Operation(summary = "查询对象分类体系树")
     public RestResult<OntologyCategoryVO> getCategoryTree(@RequestParam(required = true, name = "spaceId")
-                                                          @Parameter(description = "本体空间id")
+                                                          @Parameter(description = "对象空间id")
                                                           @SpaceIdVerify Integer spaceId) {
         OntologyCategoryVO res = ontologyCategoryService.getCategoryTree(spaceId);
         return RestResult.ofData(res);

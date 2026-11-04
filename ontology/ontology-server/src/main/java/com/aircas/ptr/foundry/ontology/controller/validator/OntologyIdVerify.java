@@ -11,7 +11,7 @@ import java.lang.annotation.Target;
 @Target({ ElementType.FIELD, ElementType.PARAMETER })
 @Retention(RetentionPolicy.RUNTIME)
 public @interface OntologyIdVerify {
-    String message() default "无效的本体identifier";
+    String message() default "无效的对象identifier";
     Class<?>[] groups() default {};
     Class<? extends Payload>[] payload() default {};
 }

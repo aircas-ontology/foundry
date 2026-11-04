@@ -8,7 +8,7 @@ import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 
 /**
- * 单本体导出的对象关系（ontology_link_group）。
+ * 单对象导出的对象关系（ontology_link_group）。
  *
  * <p>导入时 uniqueIdentifier 会重新生成，端点对象以空间内唯一的 displayName 表达，
  * 导入据此解析目标空间中已存在的对象；另一端对象不存在时该条关系跳过。</p>

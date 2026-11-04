@@ -15,7 +15,7 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 @Accessors(chain = true)
-@Schema(description = "本体节点信息")
+@Schema(description = "对象节点信息")
 public class OntologyMetaNodeVO {
 
     /**
@@ -25,9 +25,9 @@ public class OntologyMetaNodeVO {
     private String uniqueIdentifier;
 
     /**
-     * 本体名称
+     * 对象名称
      */
-    @Schema(name = "displayName", description = "本体名称", example = "飞机")
+    @Schema(name = "displayName", description = "对象名称", example = "飞机")
     private String displayName;
 
 
@@ -35,7 +35,7 @@ public class OntologyMetaNodeVO {
     private String parentUniqueIdentifier;
 
     /**
-     * 子本体
+     * 子对象
      */
     @Schema(name = "childNodes")
     private List<OntologyMetaNodeVO> childNodes;

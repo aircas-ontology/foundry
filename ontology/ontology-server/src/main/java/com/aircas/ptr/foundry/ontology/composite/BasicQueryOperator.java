@@ -30,7 +30,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 基础函数算子（本体属性通用查询）执行器。
+ * 基础函数算子（对象属性通用查询）执行器。
  *
  * <p>把原先只长在 {@code FunctionServiceImpl#testBasicQuery} 里的查询构建逻辑抽出来，
  * 供 REST 测试接口与函数编排节点共用：编排工作流因此可以直接把基础函数算子当作节点接入。</p>
@@ -39,7 +39,7 @@ import java.util.Map;
 @Component
 public class BasicQueryOperator {
 
-    /** 编排节点上代表"查询哪个本体"的约定入参名 */
+    /** 编排节点上代表"查询哪个对象"的约定入参名 */
     public static final String PARAM_ONTOLOGY_IDENTIFIER = "ontologyIdentifier";
 
     /** 编排节点上可选的分页入参名 */
@@ -72,7 +72,7 @@ public class BasicQueryOperator {
      * 执行基础查询算子。
      *
      * @param config             算子查询配置
-     * @param ontologyIdentifier 目标本体标识
+     * @param ontologyIdentifier 目标对象标识
      * @param variableBindings   变量名 -&gt; 实际属性 apiName
      * @param pageNum            分页号，null 时用默认值
      * @param pageSize           每页条数，null 时用默认值
@@ -104,7 +104,7 @@ public class BasicQueryOperator {
             selectProps.add(selectProp);
         }
 
-        // query 模式下如果没有指定 targetProperty，查询本体的所有属性
+        // query 模式下如果没有指定 targetProperty，查询对象的所有属性
         if (config.getAggFunc() == null && selectProps.isEmpty()) {
             var allProps = propertyMapper.selectList(
                     new LambdaQueryWrapper<OntologyProperty>()
@@ -164,7 +164,7 @@ public class BasicQueryOperator {
     }
 
     /**
-     * 编排节点视角：把节点入参拆成本体标识 + 变量绑定，执行后整理成端口可直接取值的键值对。
+     * 编排节点视角：把节点入参拆成对象标识 + 变量绑定，执行后整理成端口可直接取值的键值对。
      *
      * @param config 查询配置
      * @param inputs 节点入参（含 {@code ontologyIdentifier}、变量、可选分页参数）
@@ -175,7 +175,7 @@ public class BasicQueryOperator {
         Object ontologyValue = inputs.get(PARAM_ONTOLOGY_IDENTIFIER);
         String ontologyIdentifier = ontologyValue == null ? null : String.valueOf(ontologyValue).trim();
         if (StringUtils.isEmpty(ontologyIdentifier)) {
-            throw new BusinessException("基础查询节点缺少本体标识：" + PARAM_ONTOLOGY_IDENTIFIER,
+            throw new BusinessException("基础查询节点缺少对象标识：" + PARAM_ONTOLOGY_IDENTIFIER,
                     HttpStatus.BAD_REQUEST);
         }
         Map<String, String> bindings = new LinkedHashMap<>();

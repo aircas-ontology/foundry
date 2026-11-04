@@ -14,7 +14,7 @@ import jakarta.validation.constraints.NotBlank;
 @SuperBuilder
 @AllArgsConstructor
 @NoArgsConstructor
-@Schema(description = "创建本体分组")
+@Schema(description = "创建对象分组")
 public class OntologyGroupCreateParam extends OntologySpaceIdParam {
 
     @Schema(name = "groupName", description = "分组名称", required = true, example = "远海远域")

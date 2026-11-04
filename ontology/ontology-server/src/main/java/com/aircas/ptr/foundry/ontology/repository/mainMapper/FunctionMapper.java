@@ -16,9 +16,9 @@ public interface FunctionMapper extends BaseMapper<Function> {
      * 版本分组分页：按 api 分组，每组仅取版本号最大的一条记录
      *
      * @param page            分页参数
-     * @param ontologySpaceId 本体空间 id，可空
+     * @param ontologySpaceId 对象空间 id，可空
      * @param displayName     函数名称模糊搜索，可空
-     * @param type            函数类型，可空
+     * @param types           包含的函数类型列表，可空（空=不限类型）
      * @param excludeTypes    排除的函数类型列表，可空
      * @param publishStatus   发布状态（0 未发布 / 1 已发布），可空
      * @param startDate       创建开始日期 yyyy-MM-dd，可空
@@ -28,7 +28,7 @@ public interface FunctionMapper extends BaseMapper<Function> {
     Page<Function> pageLatestVersion(Page<Function> page,
                                      @Param("ontologySpaceId") Integer ontologySpaceId,
                                      @Param("displayName") String displayName,
-                                     @Param("type") FunctionTypeEnum type,
+                                     @Param("types") List<FunctionTypeEnum> types,
                                      @Param("excludeTypes") List<FunctionTypeEnum> excludeTypes,
                                      @Param("publishStatus") Integer publishStatus,
                                      @Param("startDate") String startDate,

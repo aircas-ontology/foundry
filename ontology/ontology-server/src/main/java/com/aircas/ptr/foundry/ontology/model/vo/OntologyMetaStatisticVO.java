@@ -13,10 +13,10 @@ import lombok.experimental.Accessors;
 @NoArgsConstructor
 @AllArgsConstructor
 @Accessors(chain = true)
-@Schema(description = "本体对象资源统计")
+@Schema(description = "对象资源统计")
 public class OntologyMetaStatisticVO {
 
-    @Schema(name = "uniqueIdentifier", description = "本体id")
+    @Schema(name = "uniqueIdentifier", description = "对象id")
     private String uniqueIdentifier;
 
     @Schema(name = "entityCount", description = "实例数量")

@@ -26,13 +26,13 @@ COMMENT ON COLUMN "ontology"."property_category"."path" IS '分类路径';
 
 COMMENT ON COLUMN "ontology"."property_category"."name" IS '分类名称';
 
-COMMENT ON COLUMN "ontology"."property_category"."ontology_unique_identifier" IS '本体唯一标识';
+COMMENT ON COLUMN "ontology"."property_category"."ontology_unique_identifier" IS '对象唯一标识';
 
 COMMENT ON COLUMN "ontology"."property_category"."create_time" IS '创建时间';
 
 COMMENT ON COLUMN "ontology"."property_category"."update_time" IS '更新时间';
 
-COMMENT ON CONSTRAINT "uk_ontology_id_path" ON "ontology"."property_category" IS '本体id+分类path，唯一索引';
+COMMENT ON CONSTRAINT "uk_ontology_id_path" ON "ontology"."property_category" IS '对象id+分类path，唯一索引';
 
 COMMENT ON TABLE "ontology"."property_category" IS '属性分类表';
 
@@ -52,7 +52,7 @@ CREATE TABLE "ontology"."property_metadata_schema" (
 
 COMMENT ON COLUMN "ontology"."property_metadata_schema"."id" IS '主键id';
 
-COMMENT ON COLUMN "ontology"."property_metadata_schema"."ontology_unique_identifier" IS '本体唯一标识';
+COMMENT ON COLUMN "ontology"."property_metadata_schema"."ontology_unique_identifier" IS '对象唯一标识';
 
 COMMENT ON COLUMN "ontology"."property_metadata_schema"."path" IS '元数据完整path，/分割符';
 

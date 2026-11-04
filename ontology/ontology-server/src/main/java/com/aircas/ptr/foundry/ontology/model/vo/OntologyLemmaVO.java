@@ -12,10 +12,10 @@ import lombok.NoArgsConstructor;
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@Schema(description = "本体词条详情")
+@Schema(description = "对象词条详情")
 public class OntologyLemmaVO {
 
-    @Schema(name = "ontologyUniqueIdentifier", required = true, description = "本体")
+    @Schema(name = "ontologyUniqueIdentifier", required = true, description = "对象")
     private String ontologyUniqueIdentifier;
 
     @Schema(name = "lemmaId", required = true, description = "词条id")

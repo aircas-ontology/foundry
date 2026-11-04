@@ -59,7 +59,7 @@ public class OntologyProperty implements Serializable {
     private Date updateTime;
 
     /**
-     * 本体id
+     * 对象id
      */
     private String ontologyUniqueIdentifier;
 
@@ -95,7 +95,7 @@ public class OntologyProperty implements Serializable {
     private Integer isPrimaryKey;
 
     /**
-     * 是否为名称键，将该属性作为本体的显示名称，1是0否
+     * 是否为名称键，将该属性作为对象的显示名称，1是0否
      */
     private Integer isTitleKey;
 

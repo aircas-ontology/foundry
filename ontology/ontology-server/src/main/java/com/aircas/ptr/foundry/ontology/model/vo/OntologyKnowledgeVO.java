@@ -17,7 +17,7 @@ import java.util.List;
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@Schema(description = "本体知识库vo")
+@Schema(description = "对象知识库vo")
 public class OntologyKnowledgeVO {
 
     private String answer;

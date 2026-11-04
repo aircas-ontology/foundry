@@ -16,7 +16,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Accessors(chain = true)
-@Schema(description = "本体属性分类VO")
+@Schema(description = "对象属性分类VO")
 public class PropertyCategoryVO {
 
     @Schema(name = "categoryId", description = "分类id", example = "1")

@@ -98,6 +98,16 @@
                    )
     </select>
 
+    <!-- 表中必须由调用方给值的列：非空且没有默认值，插入时缺这些列会直接写库失败 -->
+    <select id="queryNotNullColumns" resultType="string">
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = #{schemaName}
+          AND table_name = #{tableName}
+          AND is_nullable = 'NO'
+          AND column_default IS NULL
+    </select>
+
     <!-- 实体表是否已有数据行（EXISTS 探测，不做 count(*) 全扫） -->
     <select id="hasAnyRow" resultType="boolean">
         SELECT EXISTS(

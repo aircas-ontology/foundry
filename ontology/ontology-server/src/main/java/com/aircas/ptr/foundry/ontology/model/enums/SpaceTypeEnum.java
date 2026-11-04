@@ -4,7 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 
 /**
- * 本体空间类型：区分普通空间与主题。
+ * 对象空间类型：区分普通空间与主题。
  */
 @Getter
 @AllArgsConstructor

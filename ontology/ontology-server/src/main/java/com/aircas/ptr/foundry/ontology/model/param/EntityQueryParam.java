@@ -16,7 +16,7 @@ import jakarta.validation.constraints.NotNull;
 @Schema(description = "实体查询请求")
 public class EntityQueryParam {
 
-    @Schema(name = "ontologyUniqueIdentifier" , description = "本体id", example = "123")
+    @Schema(name = "ontologyUniqueIdentifier" , description = "对象id", example = "123")
     @OntologyIdVerify
     private String ontologyUniqueIdentifier;
 

@@ -23,7 +23,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * 本体属性 MCP 工具。
+ * 对象属性 MCP 工具。
  *
  * <p>提供空间+对象+属性名称的组合精确查询，由 {@code McpServerConfig} 通过 {@link McpTools} 标记接口自动收集。</p>
  */
@@ -36,7 +36,7 @@ public class OntologyPropertyMcpTools implements McpTools {
     private final OntologyPropertyService ontologyPropertyService;
 
     @Tool(description = """
-            按空间名称 + 对象名称 + 属性名称精确查询本体属性。
+            按空间名称 + 对象名称 + 属性名称精确查询对象属性。
             当用户已知空间、对象和属性名称，需要查找属性的详细信息时使用。
             先按空间名定位空间，再按对象名定位对象，最后按属性名过滤（可选）。
             属性名同时匹配 apiName 和 displayName（OR 关系）；不传属性名时返回该对象下的全部属性。

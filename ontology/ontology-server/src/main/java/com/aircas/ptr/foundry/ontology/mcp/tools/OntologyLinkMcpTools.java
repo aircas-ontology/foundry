@@ -25,7 +25,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * 本体关系 MCP 工具。
+ * 对象关系 MCP 工具。
  *
  * <p>提供空间+主体对象+客体对象+关系名称的组合精确查询，由 {@code McpServerConfig} 通过 {@link McpTools} 标记接口自动收集。</p>
  */
@@ -38,7 +38,7 @@ public class OntologyLinkMcpTools implements McpTools {
     private final OntologyLinkGroupService ontologyLinkGroupService;
 
     @Tool(description = """
-            按空间名称 + 主体对象名称 + 客体对象名称 + 关系名称精确查询本体关系。
+            按空间名称 + 主体对象名称 + 客体对象名称 + 关系名称精确查询对象关系。
             当用户已知空间、两端的对象和关系名称，需要查找关系的详细信息时使用。
             先按空间名定位空间，再按对象名定位主体和客体对象，最后查找它们之间的关系。
             关系名同时匹配 name 和 apiName（OR 关系）；不传关系名时返回两端对象之间的全部关系。

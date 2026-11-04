@@ -46,7 +46,7 @@ public class OntologyGroup implements Serializable {
     private Date updateTime;
 
     /**
-     * 本体分组名称
+     * 对象分组名称
      */
     private String groupName;
 

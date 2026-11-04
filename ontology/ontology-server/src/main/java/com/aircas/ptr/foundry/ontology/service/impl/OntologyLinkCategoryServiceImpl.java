@@ -41,7 +41,7 @@ public class OntologyLinkCategoryServiceImpl extends ServiceImpl<OntologyLinkCat
     private OntologyMetaMapper ontologyMetaMapper;
 
     /**
-     * 关系分类与本体分类采用同一套树模型：
+     * 关系分类与对象分类采用同一套树模型：
      * parentId=0 表示根节点；path 为全路径（以 "/" 分隔），用于级联更新/删除。
      */
     @Transactional(transactionManager = "mainTransactionManager")
@@ -182,7 +182,7 @@ public class OntologyLinkCategoryServiceImpl extends ServiceImpl<OntologyLinkCat
         var rootCategoryId = roots.get(0).getId();
         var linkQuery = new LambdaQueryWrapper<OntologyLinkGroup>()
                 .eq(OntologyLinkGroup::getOntologySpaceId, spaceId);
-        // 可选过滤：前端传了本体唯一标识时，返回该对象在任一端（源或目标）的关系，与 /link/graph 的双向口径一致
+        // 可选过滤：前端传了对象唯一标识时，返回该对象在任一端（源或目标）的关系，与 /link/graph 的双向口径一致
         if (ontologyUniqueIdentifierFrom != null && !ontologyUniqueIdentifierFrom.isBlank()) {
             linkQuery.and(w -> w.eq(OntologyLinkGroup::getOntologyUniqueIdentifierFrom, ontologyUniqueIdentifierFrom)
                     .or().eq(OntologyLinkGroup::getOntologyUniqueIdentifierTo, ontologyUniqueIdentifierFrom));
@@ -193,7 +193,7 @@ public class OntologyLinkCategoryServiceImpl extends ServiceImpl<OntologyLinkCat
                 .collect(Collectors.groupingBy(l -> l.getCategoryId() != null && knownCategoryIds.contains(l.getCategoryId())
                         ? l.getCategoryId() : rootCategoryId));
 
-        // 收集关系两端本体的 uniqueIdentifier，一次性查出本体名称，供 linkVO 填充 ontologyNameFrom/To
+        // 收集关系两端对象的 uniqueIdentifier，一次性查出对象名称，供 linkVO 填充 ontologyNameFrom/To
         Set<String> uidSet = new HashSet<>();
         links.forEach(l -> {
             if (l.getOntologyUniqueIdentifierFrom() != null) uidSet.add(l.getOntologyUniqueIdentifierFrom());

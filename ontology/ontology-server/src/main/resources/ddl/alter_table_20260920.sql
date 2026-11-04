@@ -1,4 +1,4 @@
--- 本体关系(ontology_link_group)新增 api_name 与 comment 字段
+-- 对象关系(ontology_link_group)新增 api_name 与 comment 字段
 alter table ontology.ontology_link_group
     add column if not exists api_name varchar(255);
 

@@ -40,7 +40,7 @@ public class SpaceCdcJobServiceImpl implements SpaceCdcJobService {
         if (after == null || after.getId() == null) {
             return false;
         }
-        // 1. 更新本体空间元数据文档（ontology_space 索引）
+        // 1. 更新对象空间元数据文档（ontology_space 索引）
         ontologySpaceRepository.save(OntologySpaceConverter.convert(after));
 
         // 2. 实例文档（ontology_instance 索引）中来源于空间的字段：
@@ -73,11 +73,11 @@ public class SpaceCdcJobServiceImpl implements SpaceCdcJobService {
         if (before == null || before.getId() == null) {
             return false;
         }
-        // 1. 删除本体空间元数据文档
+        // 1. 删除对象空间元数据文档
         ontologySpaceRepository.deleteById(before.getId().longValue());
 
         // 2. 级联删除该空间下所有由数据湖同步来的实例对象文档
-        //    （业务上空间下有本体时不允许删除，此处按 space_id 兜底清理残留实例）
+        //    （业务上空间下有对象时不允许删除，此处按 space_id 兜底清理残留实例）
         DeleteQuery deleteQuery = DeleteQuery.builder(instanceQueryBySpaceId(before.getId()))
                 .withRefresh(Boolean.TRUE)
                 .build();

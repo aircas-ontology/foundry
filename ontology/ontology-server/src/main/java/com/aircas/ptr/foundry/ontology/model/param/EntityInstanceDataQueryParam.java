@@ -24,19 +24,19 @@ public class EntityInstanceDataQueryParam {
 
     @NotNull(message = "spaceId is null")
     @SpaceIdVerify
-    @Schema(name = "spaceId", description = "本体空间id", example = "1", required = true)
+    @Schema(name = "spaceId", description = "对象空间id", example = "1", required = true)
     private Integer spaceId;
 
     @NotBlank(message = "ontologyUniqueIdentifier is empty")
     @OntologyIdVerify
-    @Schema(name = "ontologyUniqueIdentifier", description = "本体对象唯一标识", example = "abcdef", required = true)
+    @Schema(name = "ontologyUniqueIdentifier", description = "对象唯一标识", example = "abcdef", required = true)
     private String ontologyUniqueIdentifier;
 
     @NotEmpty(message = "propertyApiNames is empty")
     @Schema(name = "propertyApiNames", description = "需要查询的属性apiName列表", example = "[\"name\", \"age\", \"time\"]", required = true)
     private List<String> propertyApiNames;
 
-    @Schema(name = "filters", description = "过滤条件（选填），支持嵌套 AND/OR；条件中的属性必须是该本体的属性，值类型需与属性类型兼容")
+    @Schema(name = "filters", description = "过滤条件（选填），支持嵌套 AND/OR；条件中的属性必须是该对象的属性，值类型需与属性类型兼容")
     private FilterGroupParam filters;
 
     @Schema(name = "pageNum", description = "页码，默认1")

@@ -11,7 +11,7 @@ import lombok.experimental.SuperBuilder;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 
-@Schema(description = "本体空间创建请求")
+@Schema(description = "对象空间创建请求")
 @Data
 @SuperBuilder
 @Accessors(chain = true)

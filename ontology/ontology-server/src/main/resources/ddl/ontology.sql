@@ -2,7 +2,7 @@ create database entity_datasource;
 comment on database entity_datasource is '实体数据';
 
 create database postgres;
-comment on database postgres is '本体schema';
+comment on database postgres is '对象schema';
 
 -- 切换到 postgres 库（仅 psql 有效；其他客户端请手动选择 postgres 后再执行）
 \c postgres
@@ -120,7 +120,7 @@ comment on column action_handle_rule.name is '名称';
 
 comment on column action_handle_rule.description is '描述';
 
-comment on column action_handle_rule.ontology_space_id is '本体空间id';
+comment on column action_handle_rule.ontology_space_id is '对象空间id';
 
 alter sequence action_handle_rule_id_seq1 owned by action_handle_rule.id;
 
@@ -156,7 +156,7 @@ comment on column action_handle_task.id is '主键';
 
 comment on column action_handle_task.remark is '备注信息';
 
-comment on column action_handle_task.ontology_space_id is '本体空间id';
+comment on column action_handle_task.ontology_space_id is '对象空间id';
 
 alter sequence action_handle_task_id_seq1 owned by action_handle_task.id;
 
@@ -198,7 +198,7 @@ comment on column function.description is '函数描述';
 
 comment on column function.id is '唯一主键，snowid';
 
-comment on column function.object_types is '涉及的本体';
+comment on column function.object_types is '涉及的对象';
 
 comment on column function.update_time is '更新时间';
 
@@ -214,7 +214,7 @@ comment on column function.display_name is '函数展示名称';
 
 comment on column function.model is '函数模型';
 
-comment on column function.ontology_space_id is '本体空间id';
+comment on column function.ontology_space_id is '对象空间id';
 
 create table if not exists function_execute_result
 (
@@ -294,20 +294,20 @@ create table if not exists ontology_action
     update_time                timestamp(6),
     description                varchar(255),
     display_name               varchar(50) default ''::character varying                                not null,
-    status                     smallint    default 1,
+    status                     smallint    default 2,
     handle_type                smallint    default 1,
     icon                       varchar(255),
     ontology_space_id          integer,
     action_category_id         integer
     );
 
-comment on table ontology_action is '本体行为';
+comment on table ontology_action is '对象行为';
 
 comment on column ontology_action.api is 'api';
 
 comment on column ontology_action.function_api is '函数api';
 
-comment on column ontology_action.ontology_unique_identifier is '本体id';
+comment on column ontology_action.ontology_unique_identifier is '对象id';
 
 comment on column ontology_action.id is '主键，snowid';
 
@@ -319,7 +319,7 @@ comment on column ontology_action.description is '描述';
 
 comment on column ontology_action.display_name is '名称';
 
-comment on column ontology_action.status is '状态，0标识删除，1标识可用';
+comment on column ontology_action.status is '行为状态：2 草稿（未发布，智能体和调度不可用），1 已发布';
 
 comment on column ontology_action.handle_type is '动作执行类型；
 1：定时
@@ -327,7 +327,7 @@ comment on column ontology_action.handle_type is '动作执行类型；
 
 comment on column ontology_action.icon is '行为icon url';
 
-comment on column ontology_action.ontology_space_id is '本体空间id';
+comment on column ontology_action.ontology_space_id is '对象空间id';
 
 comment on column ontology_action.action_category_id is '所属行为分类id，对应 action_category.id';
 
@@ -342,7 +342,7 @@ create table if not exists ontology_action_link
     ontology_link_param_expression  text
     );
 
-comment on table ontology_action_link is '本体行为关联关系';
+comment on table ontology_action_link is '对象行为关联关系';
 
 comment on column ontology_action_link.ontology_action_id is '行为id';
 
@@ -367,13 +367,13 @@ create table if not exists ontology_action_mapping_in
     function_param_expression  text
     );
 
-comment on table ontology_action_mapping_in is '本体行为参数';
+comment on table ontology_action_mapping_in is '对象行为参数';
 
 comment on column ontology_action_mapping_in.ontology_action_id is 'function的名称';
 
 comment on column ontology_action_mapping_in.parameter_name is '参数的名字';
 
-comment on column ontology_action_mapping_in.property_unique_identifier is '属性的唯一标识，如果为this, 则表示当前本体对象。';
+comment on column ontology_action_mapping_in.property_unique_identifier is '属性的唯一标识，如果为this, 则表示当前对象。';
 
 comment on column ontology_action_mapping_in.function_param_id is '关联的函数参数id';
 
@@ -397,7 +397,7 @@ create table if not exists ontology_action_rule
 
 comment on column ontology_action_rule.id is '主键自增';
 
-comment on column ontology_action_rule.ontology_action_id is '本体行为主键';
+comment on column ontology_action_rule.ontology_action_id is '对象行为主键';
 
 comment on column ontology_action_rule.schema is '数据库模式';
 
@@ -431,7 +431,7 @@ create table if not exists ontology_group
     ontology_space_id integer
     );
 
-comment on table ontology_group is '本体所属分组';
+comment on table ontology_group is '对象所属分组';
 
 comment on column ontology_group.id is '主键自增';
 
@@ -441,15 +441,15 @@ comment on column ontology_group.create_time is '记录创建时间';
 
 comment on column ontology_group.update_time is '记录修改时间';
 
-comment on column ontology_group.group_name is '本体分组名称';
+comment on column ontology_group.group_name is '对象分组名称';
 
-comment on column ontology_group.group_id is '本体的组别id';
+comment on column ontology_group.group_id is '对象的组别id';
 
 comment on column ontology_group.icon is '分组icon url';
 
 comment on column ontology_group.description is '描述';
 
-comment on column ontology_group.ontology_space_id is '本体空间id';
+comment on column ontology_group.ontology_space_id is '对象空间id';
 
 create table if not exists ontology_lemma
 (
@@ -467,11 +467,11 @@ create table if not exists ontology_lemma
     extra_info                 text
     );
 
-comment on table ontology_lemma is '本体词条';
+comment on table ontology_lemma is '对象词条';
 
 comment on column ontology_lemma.id is '主键Id';
 
-comment on column ontology_lemma.ontology_unique_identifier is '本体id';
+comment on column ontology_lemma.ontology_unique_identifier is '对象id';
 
 comment on column ontology_lemma.title is '词条title';
 
@@ -509,7 +509,7 @@ create table if not exists ontology_link_group
     ontology_space_id               integer
     );
 
-comment on table ontology_link_group is '本体关系';
+comment on table ontology_link_group is '对象关系';
 
 comment on column ontology_link_group.id is '主键自增';
 
@@ -519,17 +519,17 @@ comment on column ontology_link_group.create_time is '记录创建时间';
 
 comment on column ontology_link_group.update_time is '记录修改时间';
 
-comment on column ontology_link_group.ontology_unique_identifier_from is '开始本体id';
+comment on column ontology_link_group.ontology_unique_identifier_from is '开始对象id';
 
-comment on column ontology_link_group.ontology_unique_identifier_to is '结束本体id';
+comment on column ontology_link_group.ontology_unique_identifier_to is '结束对象id';
 
-comment on column ontology_link_group.name is '本体间关系的名称';
+comment on column ontology_link_group.name is '对象间关系的名称';
 
 comment on column ontology_link_group.unique_identifier is '唯一的unique identifier';
 
 comment on column ontology_link_group.type is '关系类型：组合关系，其他关系';
 
-comment on column ontology_link_group.ontology_space_id is '本体空间id';
+comment on column ontology_link_group.ontology_space_id is '对象空间id';
 
 create table if not exists ontology_meta
 (
@@ -552,7 +552,7 @@ create table if not exists ontology_meta
     ontology_category_id     integer
     );
 
-comment on table ontology_meta is '本体元数据表';
+comment on table ontology_meta is '对象元数据表';
 
 comment on column ontology_meta.id is '主键自增';
 
@@ -564,26 +564,26 @@ comment on column ontology_meta.update_time is '记录修改时间';
 
 comment on column ontology_meta.icon is '图标';
 
-comment on column ontology_meta.display_name is '本体名称';
+comment on column ontology_meta.display_name is '对象名称';
 
-comment on column ontology_meta.description is '本体描述';
+comment on column ontology_meta.description is '对象描述';
 
-comment on column ontology_meta.api_name is '在代码里用的本体名称';
+comment on column ontology_meta.api_name is '在代码里用的对象名称';
 
 comment on column ontology_meta.unique_identifier is '唯一id
 ';
 
 comment on column ontology_meta.meta_group_id is '组别id，对应于ontology_group中的group_id';
 
-comment on column ontology_meta.parent_unique_identifier is '父本体uid';
+comment on column ontology_meta.parent_unique_identifier is '父对象uid';
 
 comment on column ontology_meta.latest_query_time is '最新查看时间';
 
 comment on column ontology_meta.can_generate_entity is '能否生成实体对象';
 
-comment on column ontology_meta.ontology_space_id is '本体空间id';
+comment on column ontology_meta.ontology_space_id is '对象空间id';
 
-comment on column ontology_meta.ontology_category_id is '本体分类id';
+comment on column ontology_meta.ontology_category_id is '对象分类id';
 
 create unique index if not exists ontology_meta_uk_spaceid_apiname
     on ontology_meta (ontology_space_id, api_name);
@@ -623,7 +623,7 @@ create table if not exists ontology_property
     metadata                   jsonb
     );
 
-comment on table ontology_property is '本体属性';
+comment on table ontology_property is '对象属性';
 
 comment on column ontology_property.id is '主键自增';
 
@@ -647,13 +647,13 @@ comment on column ontology_property.api_name is '在代码里用的属性名称�
 
 comment on column ontology_property.is_primary_key is '是否为主键，1是0否';
 
-comment on column ontology_property.is_title_key is '是否为名称键，将该属性作为本体的显示名称，1是0否';
+comment on column ontology_property.is_title_key is '是否为名称键，将该属性作为对象的显示名称，1是0否';
 
 comment on column ontology_property.datasource_id is '数据源ID';
 
-comment on column ontology_property.unique_identifier is '本体属性identifier';
+comment on column ontology_property.unique_identifier is '对象属性identifier';
 
-comment on column ontology_property.ontology_unique_identifier is '本体id';
+comment on column ontology_property.ontology_unique_identifier is '对象id';
 
 comment on column ontology_property.default_value is '属性默认值';
 
@@ -698,13 +698,13 @@ comment on column property_category.path is '分类路径';
 
 comment on column property_category.name is '分类名称';
 
-comment on column property_category.ontology_unique_identifier is '本体唯一标识';
+comment on column property_category.ontology_unique_identifier is '对象唯一标识';
 
 comment on column property_category.create_time is '创建时间';
 
 comment on column property_category.update_time is '更新时间';
 
-comment on constraint uk_ontology_id_path on property_category is '本体id+分类path，唯一索引';
+comment on constraint uk_ontology_id_path on property_category is '对象id+分类path，唯一索引';
 
 create table if not exists property_metadata_schema
 (
@@ -723,7 +723,7 @@ comment on table property_metadata_schema is '属性元数据schema表';
 
 comment on column property_metadata_schema.id is '主键id';
 
-comment on column property_metadata_schema.ontology_unique_identifier is '本体唯一标识';
+comment on column property_metadata_schema.ontology_unique_identifier is '对象唯一标识';
 
 comment on column property_metadata_schema.path is '元数据完整path，/分割符';
 
@@ -752,7 +752,7 @@ comment on column user_workshop.id is '主键ID，自增';
 
 comment on column user_workshop.user_id is '用户ID，关联users表';
 
-comment on column user_workshop.ontology_unique_identifier is '本体唯一标识符，对应ontology_meta.unique_identifier';
+comment on column user_workshop.ontology_unique_identifier is '对象唯一标识符，对应ontology_meta.unique_identifier';
 
 comment on column user_workshop.canvas_config is '画布配置信息，JSON格式';
 
@@ -807,7 +807,7 @@ create table if not exists ontology_space
     type         integer      default 0                  not null
     );
 
-comment on table ontology_space is '本体空间';
+comment on table ontology_space is '对象空间';
 
 comment on column ontology_space.id is '主键ID，自增';
 
@@ -849,7 +849,7 @@ create table if not exists ontology_category
     unique (ontology_space_id, path)
     );
 
-comment on table ontology_category is '本体分类表';
+comment on table ontology_category is '对象分类表';
 
 comment on column ontology_category.parent_id is '父分类节点，根节点为0';
 
@@ -857,7 +857,7 @@ comment on column ontology_category.path is '分类路径';
 
 comment on column ontology_category.name is '分类名称';
 
-comment on column ontology_category.ontology_space_id is '本体空间id';
+comment on column ontology_category.ontology_space_id is '对象空间id';
 
 comment on column ontology_category.create_time is '创建时间';
 
@@ -888,11 +888,11 @@ comment on column action_category.path is '分类路径，以 / 分隔';
 
 comment on column action_category.name is '分类名称';
 
-comment on column action_category.ontology_space_id is '本体空间id';
+comment on column action_category.ontology_space_id is '对象空间id';
 
 comment on column action_category.create_time is '创建时间';
 
 comment on column action_category.update_time is '更新时间';
 
-comment on constraint uk_action_category_space_id_path on action_category is '本体空间id+分类path，唯一索引';
+comment on constraint uk_action_category_space_id_path on action_category is '对象空间id+分类path，唯一索引';
 

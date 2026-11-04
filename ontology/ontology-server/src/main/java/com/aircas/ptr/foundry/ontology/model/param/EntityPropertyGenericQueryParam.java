@@ -12,7 +12,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.util.List;
 
-@Schema(description = "本体属性通用查询请求")
+@Schema(description = "对象属性通用查询请求")
 @SuperBuilder
 @Accessors(chain = true)
 @AllArgsConstructor

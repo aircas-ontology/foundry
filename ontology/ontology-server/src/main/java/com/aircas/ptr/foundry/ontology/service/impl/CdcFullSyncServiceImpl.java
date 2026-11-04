@@ -75,9 +75,9 @@ import java.util.stream.Collectors;
  *       每行以整行内容重建文档（search_text 覆盖全列），不依赖增量事件的部分字段语义，
  *       重建结果与逐条快照写入等价；</li>
  *   <li>孤儿清理：以"数据库当前内容"为准对 ES 存量求差集删除（行被物理删除、表被删除、
- *       本体被禁用、空间 apiName 变更等场景均收敛），保证同步后 ES 与 DB 一致；</li>
+ *       对象被禁用、空间 apiName 变更等场景均收敛），保证同步后 ES 与 DB 一致；</li>
  *   <li>图库（ArangoDB {@code node}/{@code relation}）：实例段复用同一批分页读结果，按
- *       「本体 + 归一化主键」覆盖写节点、按本体维度对湖内当前主键求差集清理孤儿节点（连带其相邻边），
+ *       「对象 + 归一化主键」覆盖写节点、按对象维度对湖内当前主键求差集清理孤儿节点（连带其相邻边），
  *       重复执行不产生第二份节点；实例关系边不在这里生成；{@code syncGraph=false}
  *       或图库未启用时整段跳过，图库异常只记录日志、不影响 ES 结果；</li>
  *   <li>并发保护：AtomicBoolean 互斥，同一实例同时只允许一个全量同步在跑，重复触发直接 409。</li>
@@ -311,20 +311,20 @@ public class CdcFullSyncServiceImpl implements CdcFullSyncService {
      * @return [实例写入, 实例孤儿清理, 图节点写入, 图孤儿节点清理]
      */
     private long[] syncInstanceIndex(List<String> ontologyUidFilter, boolean syncGraph) {
-        // 启用中的本体：uid -> meta（实例同步范围，与 CDC 消费端 syncInstance 的过滤口径一致）
+        // 启用中的对象：uid -> meta（实例同步范围，与 CDC 消费端 syncInstance 的过滤口径一致）
         Map<String, OntologyMeta> enabledMetas = metaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>()
                         .eq(OntologyMeta::getStatus, Status.ENABLE.getValue()))
                 .stream()
                 .filter(m -> StringUtils.isNotEmpty(m.getUniqueIdentifier()))
                 .collect(Collectors.toMap(OntologyMeta::getUniqueIdentifier, m -> m, (a, b) -> a, LinkedHashMap::new));
-        // 指定本体过滤（缺省全部启用本体）。带过滤时跳过全局孤儿清理，避免误删过滤范围外的合法文档；
-        // 本体维度的孤儿清理仍会执行。
+        // 指定对象过滤（缺省全部启用对象）。带过滤时跳过全局孤儿清理，避免误删过滤范围外的合法文档；
+        // 对象维度的孤儿清理仍会执行。
         boolean filtered = !CollectionUtils.isEmpty(ontologyUidFilter);
         if (filtered) {
             enabledMetas.keySet().retainAll(new HashSet<>(ontologyUidFilter));
         }
 
-        // 本体所属空间：spaceId -> space（数据湖真实 schema = space.apiName）
+        // 对象所属空间：spaceId -> space（数据湖真实 schema = space.apiName）
         Map<Integer, OntologySpace> spaceById = new HashMap<>();
         enabledMetas.values().stream()
                 .map(OntologyMeta::getOntologySpaceId)
@@ -346,7 +346,7 @@ public class CdcFullSyncServiceImpl implements CdcFullSyncService {
                     ? null : spaceById.get(meta.getOntologySpaceId());
             String schema = space == null ? null : space.getApiName();
             if (StringUtils.isEmpty(schema)) {
-                log.warn("本体[{}]未关联空间或缺少 apiName，跳过其实例同步", meta.getUniqueIdentifier());
+                log.warn("对象[{}]未关联空间或缺少 apiName，跳过其实例同步", meta.getUniqueIdentifier());
                 continue;
             }
             long[] tableResult = syncInstancesForOntology(meta, space, schema, syncGraph);
@@ -356,7 +356,7 @@ public class CdcFullSyncServiceImpl implements CdcFullSyncService {
             nodeDeleted += tableResult[3];
         }
 
-        // 全局孤儿清理：本体被禁用/删除、空间 apiName 变更等导致"按本体维度已无法覆盖"的残留文档
+        // 全局孤儿清理：对象被禁用/删除、空间 apiName 变更等导致"按对象维度已无法覆盖"的残留文档
         if (!filtered) {
             deleted += sweepGlobalInstanceOrphans(enabledMetas, spaceById);
         }
@@ -364,10 +364,10 @@ public class CdcFullSyncServiceImpl implements CdcFullSyncService {
     }
 
     /**
-     * 单个本体维度：找出其全部主表（主键属性数据源表），分页读取行数据 upsert 实例文档，
-     * 再按"该本体现有文档 pk 集合 vs 本次期望 pk 集合"差集清理孤儿。
+     * 单个对象维度：找出其全部主表（主键属性数据源表），分页读取行数据 upsert 实例文档，
+     * 再按"该对象现有文档 pk 集合 vs 本次期望 pk 集合"差集清理孤儿。
      * <p>
-     * syncGraph 为真时，同一次分页读的结果顺带按表 upsert 图节点，并在本体内按主键集合差集清理图库孤儿节点。
+     * syncGraph 为真时，同一次分页读的结果顺带按表 upsert 图节点，并在对象内按主键集合差集清理图库孤儿节点。
      * <p>
      * 注意：不能按 {@code ontology_property.datasource_schema} 过滤（自动绑定路径不回填该列，
      * 停留在默认值 'public' 与真实 schema 不符），真实 schema 以所属空间 apiName 为准——
@@ -393,7 +393,7 @@ public class CdcFullSyncServiceImpl implements CdcFullSyncService {
         for (Map.Entry<String, List<OntologyProperty>> entry : propsByTable.entrySet()) {
             String table = entry.getKey();
             if (!Boolean.TRUE.equals(tableMetadataMapper.isTableExist(schema, table))) {
-                log.warn("本体[{}]主表[{}.{}]不存在，跳过（其存量实例文档将由孤儿清理删除）",
+                log.warn("对象[{}]主表[{}.{}]不存在，跳过（其存量实例文档将由孤儿清理删除）",
                         meta.getUniqueIdentifier(), schema, table);
                 continue;
             }
@@ -483,12 +483,12 @@ public class CdcFullSyncServiceImpl implements CdcFullSyncService {
             }
             offset += PAGE_SIZE;
         }
-        log.info("数据湖[{}.{}]本体[{}]实例全量写入 {} 条", schema, table, meta.getUniqueIdentifier(), synced);
+        log.info("数据湖[{}.{}]对象[{}]实例全量写入 {} 条", schema, table, meta.getUniqueIdentifier(), synced);
         return synced;
     }
 
     /**
-     * 本体维度孤儿清理：删除该 ontology_uid 下 pk 不在期望集合中的实例文档。
+     * 对象维度孤儿清理：删除该 ontology_uid 下 pk 不在期望集合中的实例文档。
      */
     private long deleteInstanceOrphans(String ontologyUid, Set<String> expectedPks) {
         List<String> existingPks = fetchInstanceDocs(
@@ -501,7 +501,7 @@ public class CdcFullSyncServiceImpl implements CdcFullSyncService {
     }
 
     /**
-     * 全局孤儿清理：逐篇校验实例文档仍可满足同步条件——所属本体启用、所属空间存在且
+     * 全局孤儿清理：逐篇校验实例文档仍可满足同步条件——所属对象启用、所属空间存在且
      * 文档 pk 以当前 schema（空间 apiName）为前缀（apiName 变更后旧 pk 文档即孤儿）。
      */
     private long sweepGlobalInstanceOrphans(Map<String, OntologyMeta> enabledMetas,

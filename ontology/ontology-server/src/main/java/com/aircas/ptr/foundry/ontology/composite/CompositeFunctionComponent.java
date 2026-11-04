@@ -15,7 +15,7 @@ import java.util.Map;
 
 /**
  * 函数编排"算子"节点。
- * <p>按被引用算子的类型分发执行（脚本函数算子走 Groovy {@code handle} 方法、基础函数算子走本体属性
+ * <p>按被引用算子的类型分发执行（脚本函数算子走 Groovy {@code handle} 方法、基础函数算子走对象属性
  * 通用查询、外部API函数算子按接口定义发起 HTTP 调用），再把返回值映射回画布上的输出端口；
  * 分发逻辑见 {@link CompositeFunctionInvoker}。</p>
  * <p>LiteFlow 的节点实例在注册时与节点 id 一一绑定，因此函数定义、参数定义等协作者通过构造器注入，

@@ -10,7 +10,7 @@ import lombok.experimental.SuperBuilder;
 import jakarta.validation.constraints.NotNull;
 
 /**
- * 行为分类删除请求。作用域为「本体空间」。
+ * 行为分类删除请求。作用域为「对象空间」。
  */
 @Data
 @AllArgsConstructor

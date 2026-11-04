@@ -58,7 +58,7 @@ public class FunctionCreateParam {
     @Schema(name = "referenceName", description = "外部函数：函数全限定名")
     private String referenceName;
 
-    @Schema(name = "ontologySpaceId", description = "所属本体空间 id")
+    @Schema(name = "ontologySpaceId", description = "所属对象空间 id")
     private Integer ontologySpaceId;
 
     /**

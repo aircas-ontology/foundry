@@ -26,6 +26,9 @@ public class DatasourceConnectionItemVO {
     @Schema(description = "数据源主键id")
     private Integer id;
 
+    @Schema(description = "归属的对象空间 id")
+    private Integer spaceId;
+
     @Schema(description = "数据源名称")
     private String name;
 

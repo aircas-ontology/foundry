@@ -34,7 +34,7 @@ import java.util.regex.Pattern;
  * <ul>
  *   <li>脚本里显式声明了函数时，按形参名从入参中取值调用该函数，函数返回值即节点出参；形参是解构写法
  *       （{@code {a, b}}）或唯一形参未命中任何入参名时，把整体入参对象作为实参传入；</li>
- *   <li>脚本没有声明函数时，直接执行脚本体：Groovy 取最后一个表达式的值，JavaScript 需在脚本里写 {@code return}。</li>
+ *   <li>脚本没有声明函数时，直接执行脚对象：Groovy 取最后一个表达式的值，JavaScript 需在脚本里写 {@code return}。</li>
  * </ul>
  *
  * <p>JavaScript 通过外部 {@code node} 可执行文件运行（JDK17 已移除 Nashorn，依赖里也没有

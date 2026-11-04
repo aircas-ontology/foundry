@@ -11,7 +11,7 @@ import lombok.experimental.SuperBuilder;
 @NoArgsConstructor
 @AllArgsConstructor
 @Accessors(chain = true)
-@Schema(description = "本体属性详细信息")
+@Schema(description = "对象属性详细信息")
 public class OntologyPropertyDetailVO extends OntologyPropertyInfoVO {
 
     @Schema(name = "datasourceColumnName", description = "数据源列名", example = "id")

@@ -18,7 +18,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
-@Tag(name = "本体属性管理")
+@Tag(name = "对象属性管理")
 @RestController
 @RequestMapping("/property")
 @RequiredArgsConstructor
@@ -45,14 +45,14 @@ public class OntologyPropertyController {
 
 
     @PutMapping("")
-    @Operation(summary = "单个更新本体属性")
+    @Operation(summary = "单个更新对象属性")
     public RestResult updateProperty(@RequestBody @Valid OntologyPropertyUpdateParam propertyUpdateParam) {
         ontologyPropertyService.updateProperty(propertyUpdateParam);
         return RestResult.success();
     }
 
     @PutMapping("/batch")
-    @Operation(summary = "批量更新本体属性")
+    @Operation(summary = "批量更新对象属性")
     public RestResult batchUpdateProperties(@RequestBody @Valid List<OntologyPropertyUpdateParam> params) {
         ontologyPropertyService.batchUpdateProperties(params);
         return RestResult.success();
@@ -60,7 +60,7 @@ public class OntologyPropertyController {
 
 
     @DeleteMapping("/{propertyUniqueIdentifier}")
-    @Operation(summary = "删除本体属性")
+    @Operation(summary = "删除对象属性")
     public RestResult deleteProperty(@PathVariable(name = "propertyUniqueIdentifier", required = true) String propertyUniqueIdentifier) {
         ontologyPropertyService.deleteProperty(propertyUniqueIdentifier);
         return RestResult.success();
@@ -68,14 +68,14 @@ public class OntologyPropertyController {
 
 
     @GetMapping("/info")
-    @Operation(summary = "根据本体identifier查询本体属性列表(用于展示)")
-    public RestResult<List<OntologyPropertyInfoVO>> getPropertyInfoByOntologyId(@RequestParam(required = true, name = "ontologyUniqueIdentifier") @Parameter(description = "本体uniqueIdentifier") @OntologyIdVerify String ontologyUniqueIdentifier) {
+    @Operation(summary = "根据对象identifier查询对象属性列表(用于展示)")
+    public RestResult<List<OntologyPropertyInfoVO>> getPropertyInfoByOntologyId(@RequestParam(required = true, name = "ontologyUniqueIdentifier") @Parameter(description = "对象uniqueIdentifier") @OntologyIdVerify String ontologyUniqueIdentifier) {
         return RestResult.ofData(ontologyPropertyService.getPropertyInfoByOntologyId(ontologyUniqueIdentifier));
     }
 
     @GetMapping("/detail")
-    @Operation(summary = "根据本体identifier查询本体属性详细（用于编辑属性）")
-    public RestResult<List<OntologyPropertyDetailVO>> getPropertyDetailByOntologyId(@RequestParam(required = true, name = "ontologyUniqueIdentifier") @Parameter(description = "本体uniqueIdentifier") @OntologyIdVerify String ontologyUniqueIdentifier) {
+    @Operation(summary = "根据对象identifier查询对象属性详细（用于编辑属性）")
+    public RestResult<List<OntologyPropertyDetailVO>> getPropertyDetailByOntologyId(@RequestParam(required = true, name = "ontologyUniqueIdentifier") @Parameter(description = "对象uniqueIdentifier") @OntologyIdVerify String ontologyUniqueIdentifier) {
         return RestResult.ofData(ontologyPropertyService.getPropertyDetailByOntologyId(ontologyUniqueIdentifier));
     }
 
@@ -104,7 +104,7 @@ public class OntologyPropertyController {
     @GetMapping("/visibility")
     @Operation(summary = "查询属性可见性")
     public RestResult<List<OntologyPropertyVisibilityVO>> getPropertyVisibility(@RequestParam(required = true, name = "ontologyUniqueIdentifier")
-                                                                                @Parameter(description = "本体uniqueIdentifier")
+                                                                                @Parameter(description = "对象uniqueIdentifier")
                                                                                 @OntologyIdVerify String ontologyUniqueIdentifier) {
         var res = ontologyPropertyService.getPropertyVisibility(ontologyUniqueIdentifier);
         return RestResult.ofData(res);
@@ -129,7 +129,7 @@ public class OntologyPropertyController {
     @GetMapping("/storage_group")
     @Operation(summary = "获得属性存储分组")
     public RestResult<List<String>> getStorageGroup(@RequestParam(required = true, name = "ontologyUniqueIdentifier")
-                                                    @Parameter(description = "本体uniqueIdentifier")
+                                                    @Parameter(description = "对象uniqueIdentifier")
                                                     @OntologyIdVerify String ontologyUniqueIdentifier) {
         var res = ontologyPropertyService.getStorageGroup(ontologyUniqueIdentifier);
         return RestResult.ofData(res);
@@ -162,7 +162,7 @@ public class OntologyPropertyController {
     @GetMapping("/category")
     @Operation(summary = "查询属性分类体系树")
     public RestResult<PropertyCategoryVO> getCategory(@RequestParam(required = true, name = "ontologyUniqueIdentifier")
-                                                      @Parameter(description = "本体uniqueIdentifier")
+                                                      @Parameter(description = "对象uniqueIdentifier")
                                                       @OntologyIdVerify String ontologyUniqueIdentifier) {
         var res = ontologyPropertyService.getCategory(ontologyUniqueIdentifier);
         return RestResult.ofData(res);
@@ -193,7 +193,7 @@ public class OntologyPropertyController {
     @GetMapping("/metadata_schema")
     @Operation(summary = "查询属性元数据schema")
     public RestResult<JsonNode> getMetadataSchema(@RequestParam(required = true, name = "ontologyUniqueIdentifier")
-                                                  @Parameter(description = "本体uniqueIdentifier")
+                                                  @Parameter(description = "对象uniqueIdentifier")
                                                   @OntologyIdVerify String ontologyUniqueIdentifier) {
         var res = ontologyPropertyService.getMetadataSchema(ontologyUniqueIdentifier);
         return RestResult.ofData(res);
@@ -202,7 +202,7 @@ public class OntologyPropertyController {
     @GetMapping("/metadata_schema/tree")
     @Operation(summary = "查询属性元数据schema树")
     public RestResult<PropertyMetadataSchemaVO> getMetadataSchemaTree(@RequestParam(required = true, name = "ontologyUniqueIdentifier")
-                                                                      @Parameter(description = "本体uniqueIdentifier")
+                                                                      @Parameter(description = "对象uniqueIdentifier")
                                                                       @OntologyIdVerify String ontologyUniqueIdentifier) {
         var res = ontologyPropertyService.getMetadataSchemaTree(ontologyUniqueIdentifier);
         return RestResult.ofData(res);

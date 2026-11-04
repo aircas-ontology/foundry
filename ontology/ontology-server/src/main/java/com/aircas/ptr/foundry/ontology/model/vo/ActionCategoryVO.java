@@ -12,7 +12,7 @@ import java.util.List;
 /**
  * 行为分类体系树节点 VO。
  * <p>
- * 与 {@link OntologyCategoryVO} 的区别在于叶子挂载的对象：本体分类下挂本体（OntologyMetaInfoVO），
+ * 与 {@link OntologyCategoryVO} 的区别在于叶子挂载的对象：对象分类下挂对象（OntologyMetaInfoVO），
  * 行为分类下挂行为（OntologyActionInfoVO）。
  */
 @Data

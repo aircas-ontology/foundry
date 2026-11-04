@@ -53,9 +53,9 @@ public class MetaCdcJobServiceImpl implements MetaCdcJobService {
         enrichMetaDTO(esOntologyMetaDTO);
         ontologyMetaRepository.save(esOntologyMetaDTO);
 
-        // 2. 实例文档（ontology_instance 索引）中来源于本体的字段：
-        //    ontology_name = 本体 displayName，api_name = 本体 apiName。
-        //    仅当这两个字段发生变化时，才回刷该本体下的全部数据湖实例对象。
+        // 2. 实例文档（ontology_instance 索引）中来源于对象的字段：
+        //    ontology_name = 对象 displayName，api_name = 对象 apiName。
+        //    仅当这两个字段发生变化时，才回刷该对象下的全部数据湖实例对象。
         boolean displayNameChanged = before != null
                 && !Objects.equals(before.getDisplayName(), after.getDisplayName());
         boolean apiNameChanged = before != null
@@ -77,7 +77,7 @@ public class MetaCdcJobServiceImpl implements MetaCdcJobService {
                 .build();
         var response = elasticsearchOperations.updateByQuery(updateQuery,
                 elasticsearchOperations.getIndexCoordinatesFor(EsOntologyInstanceDTO.class));
-        log.info("本体[{}]更新，回刷实例文档 ontology_name/api_name 受影响 {} 条",
+        log.info("对象[{}]更新，回刷实例文档 ontology_name/api_name 受影响 {} 条",
                 after.getUniqueIdentifier(), response.getUpdated());
         return true;
     }
@@ -87,23 +87,23 @@ public class MetaCdcJobServiceImpl implements MetaCdcJobService {
         if (ontologyMeta == null) {
             return false;
         }
-        // 1. 删除本体元数据文档
+        // 1. 删除对象元数据文档
         if (ontologyMeta.getId() != null) {
             ontologyMetaRepository.deleteById(ontologyMeta.getId());
         }
 
-        // 2. 级联删除该本体下所有由数据湖同步来的实例对象文档
+        // 2. 级联删除该对象下所有由数据湖同步来的实例对象文档
         DeleteQuery deleteQuery = DeleteQuery.builder(instanceQueryByOntologyUid(ontologyMeta.getUniqueIdentifier()))
                 .withRefresh(Boolean.TRUE)
                 .build();
         var response = elasticsearchOperations.delete(deleteQuery, EsOntologyInstanceDTO.class);
-        log.info("本体[{}]删除，级联删除实例文档 {} 条",
+        log.info("对象[{}]删除，级联删除实例文档 {} 条",
                 ontologyMeta.getUniqueIdentifier(), response.getDeleted());
         return true;
     }
 
     /**
-     * 构造"某本体下全部实例对象"的查询：按 ontology_uid（= 本体 unique_identifier）精确匹配。
+     * 构造"某对象下全部实例对象"的查询：按 ontology_uid（= 对象 unique_identifier）精确匹配。
      * 使用 by-query 方式可自动携带各分片 routing，满足 ontology_instance 索引 _routing.required 约束。
      */
     private Query instanceQueryByOntologyUid(String ontologyUid) {

@@ -12,10 +12,10 @@ import lombok.experimental.Accessors;
 @Accessors(chain = true)
 @NoArgsConstructor
 @AllArgsConstructor
-@Schema(description = "本体标识")
+@Schema(description = "对象标识")
 public class IdentifierVO {
 
 
-    @Schema(name = "uniqueIdentifier", description = "本体Identifier", example = "abcdef")
+    @Schema(name = "uniqueIdentifier", description = "对象Identifier", example = "abcdef")
     private String uniqueIdentifier;
 }

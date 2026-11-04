@@ -18,7 +18,7 @@ public class AutoBindDatasourceResultVO {
     @Schema(name = "boundCount", description = "本次新关联数据源的属性数")
     private int boundCount;
 
-    @Schema(name = "totalBoundCount", description = "本体下已关联数据源的属性总数（含本次新关联）")
+    @Schema(name = "totalBoundCount", description = "对象下已关联数据源的属性总数（含本次新关联）")
     private int totalBoundCount;
 
     @Schema(name = "blockedItems", description = "未能关联数据源的属性明细")

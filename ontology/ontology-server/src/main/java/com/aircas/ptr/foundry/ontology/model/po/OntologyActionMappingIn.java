@@ -1,5 +1,7 @@
 package com.aircas.ptr.foundry.ontology.model.po;
 
+import com.aircas.ptr.foundry.ontology.model.enums.ActionOutputModeEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.ActionParamSourceEnum;
 import com.baomidou.mybatisplus.annotation.*;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.AllArgsConstructor;
@@ -44,10 +46,41 @@ public class OntologyActionMappingIn {
     private String functionParamExpression;
 
     /**
+     * Column: parameter_name
+     * Remark: 参数的名字
+     */
+    private String parameterName;
+
+    /**
      * Column: property_unique_identifier
-     * Remark: 属性的唯一标识，如果为this, 则表示当前本体对象。
+     * Remark: 属性的唯一标识，如果为this, 则表示当前对象。
      */
     private String propertyUniqueIdentifier;
+
+    /**
+     * 输入来源：对象属性 / 对象 / List / 固定值 / 外部输入
+     */
+    private ActionParamSourceEnum sourceType;
+
+    /**
+     * 对象入参的子字段路径（相对该算子参数，点分层级，如 position.longitude），标量参数或整包取值为空
+     */
+    private String paramPath;
+
+    /**
+     * 输入来源配置（JSON）：固定值存字面量，List 存多个属性唯一标识
+     */
+    private String sourceConfig;
+
+    /**
+     * 出参行输出方式：RESULT_ONLY 仅返回 / WRITE_PROPERTY 写入属性；入参行为空
+     */
+    private ActionOutputModeEnum outputMode;
+
+    /**
+     * 该行参数关联的对象唯一标识；出参 WRITE_PROPERTY 时必填，入参行可省略
+     */
+    private String ontologyUniqueIdentifier;
 
     @JsonFormat(pattern = DATE_FORMAT_DEFAULT, timezone = "GMT+8")
     @TableField(fill = FieldFill.INSERT)

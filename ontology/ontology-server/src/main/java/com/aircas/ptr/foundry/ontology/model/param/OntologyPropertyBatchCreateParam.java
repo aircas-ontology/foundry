@@ -16,10 +16,10 @@ import java.util.List;
 @NoArgsConstructor
 @SuperBuilder
 @Accessors(chain = true)
-@Schema(description = "本体属性批量创建请求")
+@Schema(description = "对象属性批量创建请求")
 public class OntologyPropertyBatchCreateParam {
 
-    @Schema(name = "properties", description = "本体批量属性", required = true)
+    @Schema(name = "properties", description = "对象批量属性", required = true)
     @NotEmpty(message = "properties is empty")
     private List<OntologyPropertyCreateParam> properties;
 }

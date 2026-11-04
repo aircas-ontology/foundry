@@ -32,7 +32,7 @@ public class OntologySpaceCreateDTO {
     private List<OntologyLinkDTO> links;
 
     /**
-     * 空间级函数（按空间内本体 action 引用的 functionApi 去重收集）
+     * 空间级函数（按空间内对象 action 引用的 functionApi 去重收集）
      */
     private List<OntologyFunctionDTO> functions;
 

@@ -20,7 +20,7 @@ import jakarta.validation.Valid;
  * 行为分类体系管理。
  * <p>
  * 接口形态与 {@link OntologyCategoryController} 保持一致（POST 建树 / PUT 改名 / DELETE 删树 / GET 查树），
- * 作用域为「本体空间」，即同一空间共用一棵行为分类体系树。
+ * 作用域为「对象空间」，即同一空间共用一棵行为分类体系树。
  */
 @Tag(name = "行为分类体系管理")
 @RestController
@@ -59,7 +59,7 @@ public class ActionCategoryController {
     @GetMapping("/tree")
     @Operation(summary = "查询行为分类体系树")
     public RestResult<ActionCategoryVO> getActionCategoryTree(@RequestParam(required = true, name = "spaceId")
-                                                              @Parameter(description = "本体空间id")
+                                                              @Parameter(description = "对象空间id")
                                                               @SpaceIdVerify Integer spaceId) {
         ActionCategoryVO res = actionCategoryService.getActionCategoryTree(spaceId);
         return RestResult.ofData(res);

@@ -17,7 +17,7 @@ import jakarta.validation.constraints.Pattern;
 @NoArgsConstructor
 @AllArgsConstructor
 @Accessors(chain = true)
-@Schema(description = "本体属性基本信息")
+@Schema(description = "对象属性基本信息")
 public class OntologyPropertyInfoVO {
 
 
@@ -34,7 +34,7 @@ public class OntologyPropertyInfoVO {
     private Boolean isPrimaryKey;
 
     /**
-     * 是否为名称键，将该属性作为本体的显示名称，1是0否
+     * 是否为名称键，将该属性作为对象的显示名称，1是0否
      */
     @Schema(name = "isTitleKey", description = "是否为名称键")
     private Boolean isTitleKey;

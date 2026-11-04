@@ -13,13 +13,13 @@ import lombok.experimental.Accessors;
 @NoArgsConstructor
 @AllArgsConstructor
 @Accessors(chain = true)
-@Schema(description = "本体空间资源统计")
+@Schema(description = "对象空间资源统计")
 public class OntologySpaceStatisticVO {
 
-    @Schema(name = "spaceId", description = "本体空间id")
+    @Schema(name = "spaceId", description = "对象空间id")
     private Integer spaceId;
 
-    @Schema(name = "ontologyCount", description = "对象（本体）数量")
+    @Schema(name = "ontologyCount", description = "对象数量")
     private Integer ontologyCount;
 
     @Schema(name = "linkCount", description = "关系数量")

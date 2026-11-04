@@ -22,7 +22,7 @@ import java.util.Map;
  * <p>函数编排画布上的"函数节点"可以引用三类算子，三类算子都能接入编排工作流：</p>
  * <ul>
  *   <li>{@code CUSTOMIZE} 脚本函数算子：调用 Groovy {@code handle} 方法；</li>
- *   <li>{@code BASIC_QUERY} 基础函数算子：执行本体属性通用查询；</li>
+ *   <li>{@code BASIC_QUERY} 基础函数算子：执行对象属性通用查询；</li>
  *   <li>{@code EXTERNAL} 外部API函数算子：按接口定义发起 HTTP 调用。</li>
  * </ul>
  *
@@ -68,9 +68,18 @@ public class CompositeFunctionInvoker {
         Map<String, Object> paramMap = assembleParams(inputParams, inputs);
         return switch (function.getType()) {
             case CUSTOMIZE -> executeScriptFunction(function, paramMap, inputParams);
-            case BASIC_QUERY -> require(basicQueryOperator, "基础函数算子执行器").runAsNode(
-                    require(basicQueryOperator, "基础函数算子执行器")
-                            .parseConfig(function.getCode(), function.getApi()), paramMap);
+            case BASIC_QUERY -> {
+                // 对象标识是机制入参，不在 function_param 中声明（避免详情页把它当用户参数展示），
+                // assembleParams 会将其丢弃，这里从原始入参单独补回；未提供时维持原状
+                Map<String, Object> queryParams = new LinkedHashMap<>(paramMap);
+                Object ontologyIdentifier = inputs.get(BasicQueryOperator.PARAM_ONTOLOGY_IDENTIFIER);
+                if (ontologyIdentifier != null) {
+                    queryParams.put(BasicQueryOperator.PARAM_ONTOLOGY_IDENTIFIER, ontologyIdentifier);
+                }
+                yield require(basicQueryOperator, "基础函数算子执行器").runAsNode(
+                        require(basicQueryOperator, "基础函数算子执行器")
+                                .parseConfig(function.getCode(), function.getApi()), queryParams);
+            }
             case EXTERNAL -> require(externalApiOperator, "外部API算子执行器")
                     .runAsNode(function, nodePlan, paramMap);
             case COMPOSITE -> throw new BusinessException("编排节点[" + labelOf(nodePlan) + "]不能引用函数编排算子："

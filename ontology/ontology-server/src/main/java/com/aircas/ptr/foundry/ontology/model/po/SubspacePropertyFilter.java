@@ -39,7 +39,7 @@ public class SubspacePropertyFilter implements Serializable {
     private Integer spaceId;
 
     /**
-     * 子空间中新本体的唯一标识
+     * 子空间中新对象的唯一标识
      */
     private String ontologyUniqueIdentifier;
 

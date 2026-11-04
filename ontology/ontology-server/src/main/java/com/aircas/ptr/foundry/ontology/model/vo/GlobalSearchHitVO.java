@@ -32,10 +32,10 @@ public class GlobalSearchHitVO {
     @Schema(name = "desc", description = "描述：空间/对象/属性取 description，实例取 search_text，关系分组为空")
     private String desc;
 
-    @Schema(name = "spaceId", description = "所属本体空间 id")
+    @Schema(name = "spaceId", description = "所属对象空间 id")
     private Long spaceId;
 
-    @Schema(name = "objectId", description = "所属对象（本体 meta）id：对象命中为自身 id，属性/实例命中为所属对象 id，其余为 null")
+    @Schema(name = "objectId", description = "所属对象（对象 meta）id：对象命中为自身 id，属性/实例命中为所属对象 id，其余为 null")
     private Long objectId;
 
     @Schema(name = "instanceId", description = "实例 id（pk，{schema}.{table}.{ontology_uid}.{主键值}），仅实例命中时有值")
@@ -44,7 +44,7 @@ public class GlobalSearchHitVO {
     @Schema(name = "propertyId", description = "属性 id，仅属性命中时有值")
     private Long propertyId;
 
-    @Schema(name = "ontologyName", description = "所属对象（本体）名称，属性/实例/关系分组命中时有值")
+    @Schema(name = "ontologyName", description = "所属对象名称，属性/实例/关系分组命中时有值")
     private String ontologyName;
 
     @Schema(name = "spaceName", description = "所属空间名称")

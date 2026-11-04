@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 import jakarta.validation.Valid;
 import java.util.HashMap;
 
-@Tag(name = "本体rag flow")
+@Tag(name = "对象rag flow")
 @RestController
 @RequestMapping("/rag")
 @RequiredArgsConstructor
@@ -49,7 +49,7 @@ public class RagFlowController {
         return RestResult.ofData(res);
     }
 
-    @Operation(summary = "格式化构建本体")
+    @Operation(summary = "格式化构建对象")
     @PostMapping("/build")
     public RestResult<OntologyBuildDTO> buildFormattedOntology(@Valid @RequestBody OntologyBuildQueryParam param) throws Exception {
 

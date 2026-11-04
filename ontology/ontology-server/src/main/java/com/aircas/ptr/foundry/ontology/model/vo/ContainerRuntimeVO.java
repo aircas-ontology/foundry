@@ -32,7 +32,7 @@ public class ContainerRuntimeVO {
     @Schema(description = "容器实例归组键（启停操作凭此定位）")
     private String containerKey;
 
-    @Schema(description = "所属本体空间 id")
+    @Schema(description = "所属对象空间 id")
     private Integer ontologySpaceId;
 
     @Schema(description = "容器算子展示名")

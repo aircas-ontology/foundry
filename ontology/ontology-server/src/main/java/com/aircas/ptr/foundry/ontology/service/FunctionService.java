@@ -139,12 +139,14 @@ public interface FunctionService extends IService<Function> {
     CompositePlanBO compileComposite(String functionApi);
 
     /**
-     * 按 function api 批量取函数描述（每个 api 取最新版本），供行为出参冗余函数描述使用（一次查询，避免逐条查库）。
+     * 按「空间 + function api」批量取函数描述，同一 api 多版本时取版本号最大的那条，供行为列表冗余函数描述。
      * <p>
-     * api 不存在或描述为空的不会出现在返回结果中。
+     * 算子 api 只在空间内唯一，不带空间会命中其他空间的同名算子；一次查询完成，避免逐条查库。
+     * api 不存在、空间不匹配或描述为空的不会出现在返回结果中。
      *
+     * @param spaceId      函数所属对象空间id，为空时只按 api 匹配（早期无空间的行为用）
      * @param functionApis 函数 api 列表，允许为空
      * @return {@code functionApi -> description} 映射；无数据时返回空 Map，不返回 null
      */
-    Map<String, String> mapDescriptionByApi(List<String> functionApis);
+    Map<String, String> mapDescriptionByApi(Integer spaceId, List<String> functionApis);
 }

@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
+import com.aircas.ptr.foundry.ontology.model.enums.ActionStatusEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.SpaceTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import com.aircas.ptr.foundry.ontology.model.po.*;
@@ -53,7 +54,7 @@ public class OverviewServiceImpl implements OverviewService {
         var spaceType = SpaceTypeEnum.normalize(type);
         return OverviewCountVO.builder()
                 .spaceCount(Math.toIntExact(spaceMapper.selectCount(new LambdaQueryWrapper<OntologySpace>().eq(OntologySpace::getType, spaceType))))
-                .actionCount(Math.toIntExact(ontologyActionMapper.selectCount(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getStatus, Status.ENABLE.getValue()))))
+                .actionCount(Math.toIntExact(ontologyActionMapper.selectCount(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getStatus, ActionStatusEnum.PUBLISHED.getValue()))))
                 .linkCount(Math.toIntExact(ontologyLinkGroupMapper.selectCount(new LambdaQueryWrapper<OntologyLinkGroup>().eq(OntologyLinkGroup::getStatus, Status.ENABLE.getValue()))))
                 .propertyCount(Math.toIntExact(propertyMapper.selectCount(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getStatus, Status.ENABLE.getValue()))))
                 .groupCount(Math.toIntExact(groupMapper.selectCount(new QueryWrapper<>())))

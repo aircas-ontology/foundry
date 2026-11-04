@@ -62,12 +62,12 @@ public class OntologyLinkGroup implements Serializable {
     private Date updateTime;
 
     /**
-     * 开始本体unique identifier
+     * 开始对象unique identifier
      */
     private String ontologyUniqueIdentifierFrom;
 
     /**
-     * 结束本体unique identifier
+     * 结束对象unique identifier
      */
     private String ontologyUniqueIdentifierTo;
 
@@ -77,7 +77,7 @@ public class OntologyLinkGroup implements Serializable {
     private OntologyLinkTypeEnum type;
 
     /**
-     * 本体空间id
+     * 对象空间id
      */
     private Integer ontologySpaceId;
 

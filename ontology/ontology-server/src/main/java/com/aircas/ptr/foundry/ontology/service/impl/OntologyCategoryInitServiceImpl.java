@@ -1,5 +1,7 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
+import com.aircas.ptr.foundry.ontology.model.po.ActionCategory;
+import com.aircas.ptr.foundry.ontology.model.po.OntologyAction;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyCategory;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkCategory;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup;
@@ -7,6 +9,8 @@ import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
 import com.aircas.ptr.foundry.ontology.model.po.OntologySpace;
 import com.aircas.ptr.foundry.ontology.model.po.PropertyCategory;
+import com.aircas.ptr.foundry.ontology.service.ActionCategoryService;
+import com.aircas.ptr.foundry.ontology.service.OntologyActionService;
 import com.aircas.ptr.foundry.ontology.service.OntologyCategoryInitService;
 import com.aircas.ptr.foundry.ontology.service.OntologyCategoryService;
 import com.aircas.ptr.foundry.ontology.service.OntologyLinkCategoryService;
@@ -21,15 +25,18 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 /**
- * 本体/关系/属性分类树根节点初始化实现。
+ * 对象/关系/属性/行为分类树根节点初始化实现。
  *
- * <p>每个空间：建对象分类根节点“全部” + 关系分类根节点“全部”，回填本空间所有对象、关系；
- * 每个对象：建属性分类根节点“全部”，回填其所有属性。</p>
+ * <p>每个空间：建对象分类根节点“全部” + 关系分类根节点“全部” + 行为分类根节点“全部”，
+ * 回填本空间所有对象、关系、行为；每个对象：建属性分类根节点“全部”，回填其所有属性。</p>
  *
  * <p>所有写操作使用 mainTransactionManager，整体处于一个事务中（迁移型操作，要么全成功要么全回滚）。
  * 根节点采用“存在则复用、不存在才创建”的写法，保证接口可重复执行（幂等）。</p>
@@ -44,6 +51,8 @@ public class OntologyCategoryInitServiceImpl implements OntologyCategoryInitServ
     private final OntologySpaceService ontologySpaceService;
     private final OntologyCategoryService ontologyCategoryService;
     private final OntologyLinkCategoryService ontologyLinkCategoryService;
+    private final ActionCategoryService actionCategoryService;
+    private final OntologyActionService ontologyActionService;
     private final PropertyCategoryService propertyCategoryService;
     private final OntologyMetaService ontologyMetaService;
     private final OntologyLinkGroupService ontologyLinkGroupService;
@@ -56,15 +65,18 @@ public class OntologyCategoryInitServiceImpl implements OntologyCategoryInitServ
         int metaUpdated = 0;
         int linkUpdated = 0;
         int propertyUpdated = 0;
+        int actionUpdated = 0;
 
         List<OntologySpace> spaces = ontologySpaceService.list();
         for (OntologySpace space : spaces) {
             Integer spaceId = space.getId();
 
-            // 1. 本体对象分类树：建“全部”根节点
+            // 1. 对象分类树：建“全部”根节点
             Integer objRootId = getOrCreateOntologyCategoryRoot(spaceId);
             // 2. 关系分类树：建“全部”根节点
             Integer linkRootId = getOrCreateLinkCategoryRoot(spaceId);
+            // 2.1 行为分类树：建“全部”根节点
+            Integer actionRootId = getOrCreateActionCategoryRoot(spaceId);
 
             // 3. 本空间下所有对象的 categoryId 回填为对象分类根节点
             List<OntologyMeta> metasWithNullCategory = ontologyMetaService.list(
@@ -92,7 +104,7 @@ public class OntologyCategoryInitServiceImpl implements OntologyCategoryInitServ
                 linkUpdated += linksWithNullCategory.size();
             }
 
-            // 5. 每个本体对象：建属性分类根节点，并将其属性的 propertyCategoryId 回填
+            // 5. 每个对象：建属性分类根节点，并将其属性的 propertyCategoryId 回填
             List<OntologyMeta> allMetas = ontologyMetaService.list(
                     new LambdaQueryWrapper<OntologyMeta>()
                             .eq(OntologyMeta::getOntologySpaceId, spaceId));
@@ -115,9 +127,30 @@ public class OntologyCategoryInitServiceImpl implements OntologyCategoryInitServ
                 }
             }
 
+            // 6. 本空间下所有行为的 categoryId 回填为行为分类根节点
+            //    行为表的空间列不由分类服务维护，故经「对象 → 空间」解析
+            var ontologyIdentifiers = allMetas.stream()
+                    .map(OntologyMeta::getUniqueIdentifier)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList());
+            List<OntologyAction> actionsWithNullCategory = Collections.emptyList();
+            if (!ontologyIdentifiers.isEmpty()) {
+                actionsWithNullCategory = ontologyActionService.list(
+                        new LambdaQueryWrapper<OntologyAction>()
+                                .in(OntologyAction::getOntologyUniqueIdentifier, ontologyIdentifiers)
+                                .isNull(OntologyAction::getActionCategoryId));
+            }
+            for (OntologyAction action : actionsWithNullCategory) {
+                action.setActionCategoryId(actionRootId);
+            }
+            if (!actionsWithNullCategory.isEmpty()) {
+                ontologyActionService.updateBatchById(actionsWithNullCategory);
+                actionUpdated += actionsWithNullCategory.size();
+            }
+
             spaceCount++;
-            log.info("空间[{}] 分类树根节点初始化完成：对象分类回填 {} 个，关系分类回填 {} 个，属性分类回填 {} 个",
-                    spaceId, metasWithNullCategory.size(), linksWithNullCategory.size(), propertyUpdated);
+            log.info("空间[{}] 分类树根节点初始化完成：对象分类回填 {} 个，关系分类回填 {} 个，属性分类回填 {} 个，行为分类回填 {} 个",
+                    spaceId, metasWithNullCategory.size(), linksWithNullCategory.size(), propertyUpdated, actionUpdated);
         }
 
         Map<String, Integer> result = new LinkedHashMap<>();
@@ -125,6 +158,7 @@ public class OntologyCategoryInitServiceImpl implements OntologyCategoryInitServ
         result.put("metaUpdated", metaUpdated);
         result.put("linkUpdated", linkUpdated);
         result.put("propertyUpdated", propertyUpdated);
+        result.put("actionUpdated", actionUpdated);
         return result;
     }
 
@@ -161,6 +195,24 @@ public class OntologyCategoryInitServiceImpl implements OntologyCategoryInitServ
                 .path(ROOT_NAME)
                 .build();
         ontologyLinkCategoryService.save(root);
+        return root.getId();
+    }
+
+    private Integer getOrCreateActionCategoryRoot(Integer spaceId) {
+        List<ActionCategory> existing = actionCategoryService.list(
+                new LambdaQueryWrapper<ActionCategory>()
+                        .eq(ActionCategory::getOntologySpaceId, spaceId)
+                        .eq(ActionCategory::getParentId, 0));
+        if (!existing.isEmpty()) {
+            return existing.get(0).getId();
+        }
+        ActionCategory root = ActionCategory.builder()
+                .ontologySpaceId(spaceId)
+                .name(ROOT_NAME)
+                .parentId(0)
+                .path(ROOT_NAME)
+                .build();
+        actionCategoryService.save(root);
         return root.getId();
     }
 

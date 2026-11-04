@@ -104,7 +104,7 @@ public class OntologyCategoryServiceImpl extends ServiceImpl<OntologyCategoryMap
         var parentCategory = getOne(new LambdaQueryWrapper<OntologyCategory>()
                 .eq(OntologyCategory::getOntologySpaceId, param.getSpaceId())
                 .eq(OntologyCategory::getId, param.getCategoryId()));
-        PreconditionUtils.checkArgument(parentCategory != null, "本体分类节点" + param.getCategoryId() + "不存在", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(parentCategory != null, "对象分类节点" + param.getCategoryId() + "不存在", HttpStatus.BAD_REQUEST);
         // 查询所有关联节点（节点树）：精确匹配父节点自身，或以 "parentPath/" 为前缀的子孙节点
         var allCategories = list(new LambdaQueryWrapper<OntologyCategory>()
                 .eq(OntologyCategory::getOntologySpaceId, param.getSpaceId())
@@ -136,7 +136,7 @@ public class OntologyCategoryServiceImpl extends ServiceImpl<OntologyCategoryMap
         var parentCategory = getOne(new LambdaQueryWrapper<OntologyCategory>()
                 .eq(OntologyCategory::getOntologySpaceId, param.getSpaceId())
                 .eq(OntologyCategory::getId, param.getCategoryId()));
-        PreconditionUtils.checkArgument(parentCategory != null, "本体分类节点" + param.getCategoryId() + "不存在", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(parentCategory != null, "对象分类节点" + param.getCategoryId() + "不存在", HttpStatus.BAD_REQUEST);
 
         // 查询所有关联节点（节点树）：精确匹配父节点自身，或以 "parentPath/" 为前缀的子孙节点
         var allCategories = list(new LambdaQueryWrapper<OntologyCategory>()
@@ -149,7 +149,7 @@ public class OntologyCategoryServiceImpl extends ServiceImpl<OntologyCategoryMap
             var props = ontologyMetaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>()
                     .eq(OntologyMeta::getOntologySpaceId, param.getSpaceId())
                     .in(OntologyMeta::getOntologyCategoryId, categoryIds));
-            PreconditionUtils.checkArgument(CollectionUtils.isEmpty(props), "该分类节点下有关联的本体，不能删除", HttpStatus.FORBIDDEN);
+            PreconditionUtils.checkArgument(CollectionUtils.isEmpty(props), "该分类节点下有关联的对象，不能删除", HttpStatus.FORBIDDEN);
             removeByIds(categoryIds);
         }
 

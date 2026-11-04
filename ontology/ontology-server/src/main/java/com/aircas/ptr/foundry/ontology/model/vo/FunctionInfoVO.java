@@ -46,7 +46,7 @@ public class FunctionInfoVO {
     @Schema(name = "language", description = "脚本语言（仅 CUSTOMIZE/EXTERNAL 有意义）")
     private FunctionLanguageEnum language;
 
-    @Schema(name = "ontologySpaceId", description = "所属本体空间 id")
+    @Schema(name = "ontologySpaceId", description = "所属对象空间 id")
     private Integer ontologySpaceId;
 
     @Schema(name = "createTime", description = "创建时间")

@@ -18,7 +18,7 @@ import static com.aircas.ptr.foundry.ontology.constant.FunctionConstant.VERSION_
 
 /**
  * 基础查询算子测试执行请求。
- * <p>前端选择本体后，将创建时定义的变量名映射到实际属性 apiName。</p>
+ * <p>前端选择对象后，将创建时定义的变量名映射到实际属性 apiName。</p>
  */
 @Data
 @SuperBuilder
@@ -36,7 +36,7 @@ public class BasicQueryTestParam {
     @Pattern(regexp = VERSION_PATTERN, message = "版本号格式必须为 x.y.z（如 1.0.0）")
     private String version;
 
-    @Schema(name = "ontologyIdentifier", description = "测试本体 id", required = true)
+    @Schema(name = "ontologyIdentifier", description = "测试对象 id", required = true)
     @NotBlank(message = "ontologyIdentifier is empty")
     private String ontologyIdentifier;
 

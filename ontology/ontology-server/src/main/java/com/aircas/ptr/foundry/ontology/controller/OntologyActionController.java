@@ -6,6 +6,7 @@ import com.aircas.ptr.foundry.ontology.model.enums.ActionSchedulingTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.param.ActionCreateOrUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionSchedulingCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionSchedulingUpdateParam;
+import com.aircas.ptr.foundry.ontology.model.param.ActionTestParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyActionExecuteParam;
 import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.aircas.ptr.foundry.ontology.service.OntologyActionService;
@@ -19,7 +20,7 @@ import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
 
 
-@Tag(name = "本体行为")
+@Tag(name = "对象行为")
 @RestController
 @RequestMapping("/action")
 public class OntologyActionController {
@@ -44,35 +45,65 @@ public class OntologyActionController {
         return RestResult.success();
     }
 
-    @Operation(summary = "依据actionApi删除行为")
-    @DeleteMapping("/{actionApi}")
-    public RestResult delete(@PathVariable(required = true, name = "actionApi") String actionApi) {
-        //已经被行为调度的行为不可直接编辑，需要先暂停调度
-        ontologyActionService.deleteActionByApi(actionApi);
+    @Operation(summary = "发布行为（草稿 -> 已发布，发布后对智能体和调度可用）")
+    @PutMapping("/publish")
+    public RestResult publishAction(@RequestParam(required = true, name = "ontologySpaceId") @Parameter(description = "对象空间id") Integer ontologySpaceId,
+                                    @RequestParam(required = true, name = "actionApi") @Parameter(description = "行为api") String actionApi) {
+        ontologyActionService.publishAction(ontologySpaceId, actionApi);
         return RestResult.success();
     }
 
-    @Operation(summary = "分页获取本体下行为列表")
+    @Operation(summary = "撤回发布（已发布 -> 草稿）")
+    @PutMapping("/unpublish")
+    public RestResult unpublishAction(@RequestParam(required = true, name = "ontologySpaceId") @Parameter(description = "对象空间id") Integer ontologySpaceId,
+                                      @RequestParam(required = true, name = "actionApi") @Parameter(description = "行为api") String actionApi) {
+        ontologyActionService.unpublishAction(ontologySpaceId, actionApi);
+        return RestResult.success();
+    }
+
+
+    @Operation(summary = "依据actionApi删除行为")
+    @DeleteMapping("")
+    public RestResult delete(@RequestParam(required = true, name = "ontologySpaceId") @Parameter(description = "对象空间id") Integer ontologySpaceId,
+                             @RequestParam(required = true, name = "actionApi") @Parameter(description = "行为api") String actionApi) {
+        //已经被行为调度的行为不可直接编辑，需要先暂停调度
+        ontologyActionService.deleteActionByApi(ontologySpaceId, actionApi);
+        return RestResult.success();
+    }
+
+    @Operation(summary = "分页获取行为列表（支持按空间、对象、分类、关键词和状态筛选）")
     @GetMapping("/list")
-    public RestResult<Page<OntologyActionInfoVO>> pageGetActionByOntologyId(@RequestParam(required = true, name = "ontologyUniqIdentifier") @Parameter(description = "本体id") @OntologyIdVerify String ontologyUniqIdentifier,
+    public RestResult<Page<OntologyActionInfoVO>> pageGetActionByOntologyId(@RequestParam(required = false, name = "ontologySpaceId") @Parameter(description = "对象空间id") Integer ontologySpaceId,
+                                                                            @RequestParam(required = false, name = "ontologyId") @Parameter(description = "对象唯一标识符") String ontologyId,
+                                                                            @RequestParam(required = false, name = "categoryId") @Parameter(description = "行为分类id") Integer categoryId,
+                                                                            @RequestParam(required = false, name = "keyword") @Parameter(description = "关键词：行为名称、算子或描述") String keyword,
+                                                                            @RequestParam(required = false, name = "status") @Parameter(description = "行为状态：2 草稿，1 已发布，不传查全部") Integer status,
                                                                             @RequestParam(required = false, defaultValue = "1") Integer pageNum,
                                                                             @RequestParam(required = false, defaultValue = "10") Integer pageSize) {
 
-        return RestResult.ofData(ontologyActionService.pageGetActionByOntologyId(ontologyUniqIdentifier, pageNum, pageSize));
+        return RestResult.ofData(ontologyActionService.pageGetActionByOntologyId(ontologySpaceId, ontologyId, categoryId, keyword, status, pageNum, pageSize));
     }
 
 
     @Operation(summary = "根据actionApi获取行为详情")
     @GetMapping("")
-    public RestResult<OntologyActionDetailVO> getActionByApi(@RequestParam(required = true, name = "actionApi") @Parameter(description = "行为api") String actionApi) {
-        return RestResult.ofData(ontologyActionService.getActionByApi(actionApi));
+    public RestResult<OntologyActionDetailVO> getActionByApi(@RequestParam(required = true, name = "ontologySpaceId") @Parameter(description = "对象空间id") Integer ontologySpaceId,
+                                                             @RequestParam(required = true, name = "actionApi") @Parameter(description = "行为api") String actionApi) {
+        return RestResult.ofData(ontologyActionService.getActionByApi(ontologySpaceId, actionApi));
     }
 
-    @Operation(summary = "执行本体单个行为")
+    @Operation(summary = "执行对象单个行为")
     @PostMapping("/execute")
     public RestResult executeAction(@RequestBody @Valid OntologyActionExecuteParam param) {
         ontologyActionService.executeAction(param);
         return RestResult.success();
+    }
+
+
+    @Operation(summary = "行为测试（真实落库）")
+    @PostMapping("/test")
+    public RestResult<ActionTestResultVO> testAction(@RequestBody @Valid ActionTestParam param) {
+        return RestResult.ofData(ontologyActionService.testAction(param));
     }
 
 

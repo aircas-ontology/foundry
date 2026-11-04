@@ -15,10 +15,10 @@ import jakarta.validation.constraints.NotNull;
 @Accessors(chain = true)
 @NoArgsConstructor
 @AllArgsConstructor
-@Schema(description = "本体空间id Param")
+@Schema(description = "对象空间id Param")
 public class OntologySpaceIdParam {
 
-    @Schema(name = "spaceId", description = "本体空间id", example = "1", required = true)
+    @Schema(name = "spaceId", description = "对象空间id", example = "1", required = true)
     @NotNull(message = "spaceId is empty")
     @SpaceIdVerify
     private Integer spaceId;

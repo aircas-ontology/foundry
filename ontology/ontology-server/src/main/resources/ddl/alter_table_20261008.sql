@@ -25,7 +25,7 @@ comment on table ontology.ontology_subspace_property_filter is '子空间属性�
 
 comment on column ontology.ontology_subspace_property_filter.id is '主键自增';
 comment on column ontology.ontology_subspace_property_filter.space_id is '子空间 id（ontology_space.id）';
-comment on column ontology.ontology_subspace_property_filter.ontology_unique_identifier is '子空间中新本体的唯一标识';
+comment on column ontology.ontology_subspace_property_filter.ontology_unique_identifier is '子空间中新对象的唯一标识';
 comment on column ontology.ontology_subspace_property_filter.property_unique_identifier is '子空间中新属性的唯一标识';
 comment on column ontology.ontology_subspace_property_filter.source_property_unique_identifier is '源空间中被复制属性的唯一标识（冗余，便于追溯）';
 comment on column ontology.ontology_subspace_property_filter.filter_op is '筛选操作符，取值见 QueryOpEnum';

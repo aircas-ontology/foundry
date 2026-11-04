@@ -18,7 +18,7 @@ import java.util.List;
  * 与 {@link OntologyCategoryCreateParam} 同构：一次性提交一棵子树，
  * parentId 为 0 表示新建体系（当前空间下尚不存在任何行为分类）。
  * <p>
- * 作用域为「本体空间」，继承 {@link OntologySpaceIdParam}（spaceId 必填，并校验空间存在性）。
+ * 作用域为「对象空间」，继承 {@link OntologySpaceIdParam}（spaceId 必填，并校验空间存在性）。
  */
 @Data
 @AllArgsConstructor

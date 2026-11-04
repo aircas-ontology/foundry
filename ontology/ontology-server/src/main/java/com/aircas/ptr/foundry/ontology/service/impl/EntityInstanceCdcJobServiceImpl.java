@@ -33,10 +33,10 @@ import java.util.stream.Collectors;
 /**
  * 数据湖（entity_datasource 库）DML CDC -> ontology_instance 索引 + ArangoDB 图库同步。
  * <p>
- * 主表/从表判定：某表若是至少一个本体"主键属性"的数据源表
+ * 主表/从表判定：某表若是至少一个对象"主键属性"的数据源表
  * （ontology_property 中 datasource_schema + datasource_id 命中该表且 is_primary_key=1），
  * 则为主表，行数据同步为实例文档；否则视为从表（关联属性表），暂不同步。
- * 一条记录可能同时是多个本体的主表（如继承场景），逐一同步。
+ * 一条记录可能同时是多个对象的主表（如继承场景），逐一同步。
  * <p>
  * 图库侧同步的是实例节点（{@code node}）：实例关系边（{@code relation}）不由这里生成，
  * 图库只保留真实成立的边，由行为函数判定、手动激活或导入导出写入。
@@ -70,8 +70,8 @@ public class EntityInstanceCdcJobServiceImpl implements EntityInstanceCdcJobServ
         }
         List<OntologyProperty> pkProps = findPrimaryKeyProps(schema, table);
         if (pkProps.isEmpty()) {
-            // 从表：表中不含任何本体的主键属性字段，暂不同步
-            log.debug("表[{}.{}]非本体主表（从表），跳过实例同步", schema, table);
+            // 从表：表中不含任何对象的主键属性字段，暂不同步
+            log.debug("表[{}.{}]非对象主表（从表），跳过实例同步", schema, table);
             return true;
         }
         pkProps.forEach(pkProp -> syncInstance(schema, table, after, pkProp, true));
@@ -85,7 +85,7 @@ public class EntityInstanceCdcJobServiceImpl implements EntityInstanceCdcJobServ
         }
         List<OntologyProperty> pkProps = findPrimaryKeyProps(schema, table);
         if (pkProps.isEmpty()) {
-            log.debug("表[{}.{}]非本体主表（从表），跳过实例同步", schema, table);
+            log.debug("表[{}.{}]非对象主表（从表），跳过实例同步", schema, table);
             return true;
         }
         for (OntologyProperty pkProp : pkProps) {
@@ -113,7 +113,7 @@ public class EntityInstanceCdcJobServiceImpl implements EntityInstanceCdcJobServ
         }
         List<OntologyProperty> pkProps = findPrimaryKeyProps(schema, table);
         if (pkProps.isEmpty()) {
-            log.debug("表[{}.{}]非本体主表（从表），跳过实例删除", schema, table);
+            log.debug("表[{}.{}]非对象主表（从表），跳过实例删除", schema, table);
             return true;
         }
         for (OntologyProperty pkProp : pkProps) {
@@ -132,7 +132,7 @@ public class EntityInstanceCdcJobServiceImpl implements EntityInstanceCdcJobServ
      * 将一行主表数据写入（upsert）ontology_instance 索引。
      * save 走实体索引路径，routing 由 @Routing("pk") 从文档 pk 自动解析，满足 _routing.required。
      *
-     * @param rebuildNode 是否按本体属性回查后完整重建图节点（湖侧新增行 / 主键变更重建传 true）
+     * @param rebuildNode 是否按对象属性回查后完整重建图节点（湖侧新增行 / 主键变更重建传 true）
      */
     private void syncInstance(String schema, String table, Map<String, Object> row, OntologyProperty pkProp,
                               boolean rebuildNode) {
@@ -146,12 +146,12 @@ public class EntityInstanceCdcJobServiceImpl implements EntityInstanceCdcJobServ
                 .eq(OntologyMeta::getUniqueIdentifier, pkProp.getOntologyUniqueIdentifier())
                 .eq(OntologyMeta::getStatus, Status.ENABLE.getValue()));
         if (meta == null) {
-            log.warn("本体[{}]不存在或已删除，跳过表[{}.{}]实例同步",
+            log.warn("对象[{}]不存在或已删除，跳过表[{}.{}]实例同步",
                     pkProp.getOntologyUniqueIdentifier(), schema, table);
             return;
         }
         // 名称键与主键同表（业务约束），缺省时实例 name 取主键值（由转换器兜底）
-        // 同 findPrimaryKeyProps：不按 datasource_schema 过滤（自动绑定路径不回填该列），本体+表已足够定位
+        // 同 findPrimaryKeyProps：不按 datasource_schema 过滤（自动绑定路径不回填该列），对象+表已足够定位
         OntologyProperty titleProp = propertyMapper.selectList(new LambdaQueryWrapper<OntologyProperty>()
                         .eq(OntologyProperty::getOntologyUniqueIdentifier, meta.getUniqueIdentifier())
                         .eq(OntologyProperty::getIsTitleKey, 1)
@@ -175,13 +175,13 @@ public class EntityInstanceCdcJobServiceImpl implements EntityInstanceCdcJobServ
     /**
      * 单行实例 -> 图节点（展示名与实例文档 name 同口径，避免检索与图两侧名称不一致）。
      * <p>
-     * 湖侧新增行 / 主键变更重建走 {@code completeEntityNode}：它按本体主键属性取主键、按名称键属性取展示名，
+     * 湖侧新增行 / 主键变更重建走 {@code completeEntityNode}：它按对象主键属性取主键、按名称键属性取展示名，
      * 建（覆盖）节点。实例关系边不在这里生成——图库里只保留真实成立（ENABLE/DISABLE）的边，
      * 由行为函数判定、手动激活或导入导出点亮。
-     * 普通字段更新只刷展示名，不回查本体属性；若刷名时发现图库里其实没有该节点（例如图库被清过），
+     * 普通字段更新只刷展示名，不回查对象属性；若刷名时发现图库里其实没有该节点（例如图库被清过），
      * {@code upsertEntityNode} 会直接建出来。
      *
-     * @param rebuildNode 是否按本体属性回查后完整重建节点（湖侧新增行 / 主键变更重建传 true）
+     * @param rebuildNode 是否按对象属性回查后完整重建节点（湖侧新增行 / 主键变更重建传 true）
      */
     private void syncGraphNode(String ontologyUid, String table, Map<String, Object> row,
                                Object pkValue, String displayName, boolean rebuildNode) {
@@ -190,7 +190,7 @@ public class EntityInstanceCdcJobServiceImpl implements EntityInstanceCdcJobServ
         }
         try {
             if (rebuildNode) {
-                // 既有接口：按本体的主键属性/名称键属性回查后建（覆盖）节点
+                // 既有接口：按对象的主键属性/名称键属性回查后建（覆盖）节点
                 entityService.completeEntityNode(ontologyUid, row);
                 log.info("数据湖实例图节点同步, ontology={}, pk={}", ontologyUid, pkValue);
                 return;
@@ -235,13 +235,13 @@ public class EntityInstanceCdcJobServiceImpl implements EntityInstanceCdcJobServ
     }
 
     /**
-     * 查找以该表为主键数据源表、且真实 schema 命中事件 schema 的全部本体主键属性；
-     * 为空即该表为从表（或未被启用本体绑定）。
+     * 查找以该表为主键数据源表、且真实 schema 命中事件 schema 的全部对象主键属性；
+     * 为空即该表为从表（或未被启用对象绑定）。
      * <p>
      * 注意：不能按 {@code ontology_property.datasource_schema} 过滤。自动绑定路径
-     * （{@code autoBindDatasource}）用 resolveSchemaName（本体→空间.apiName）建表，
+     * （{@code autoBindDatasource}）用 resolveSchemaName（对象→空间.apiName）建表，
      * 但从不回填 datasource_schema，该列停留在 DDL 默认值 'public'，与真实 schema（如 space_a）不符。
-     * 因此先按表名捞出候选主键属性，再解析每个候选所属本体的真实 schema 与事件 schema 比对。
+     * 因此先按表名捞出候选主键属性，再解析每个候选所属对象的真实 schema 与事件 schema 比对。
      */
     private List<OntologyProperty> findPrimaryKeyProps(String schema, String table) {
         List<OntologyProperty> candidates = propertyMapper.selectList(new LambdaQueryWrapper<OntologyProperty>()
@@ -258,7 +258,7 @@ public class EntityInstanceCdcJobServiceImpl implements EntityInstanceCdcJobServ
         if (ontologyUids.isEmpty()) {
             return List.of();
         }
-        // 启用中的本体：uid -> ontologySpaceId
+        // 启用中的对象：uid -> ontologySpaceId
         Map<String, Integer> uidToSpaceId = metaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>()
                         .in(OntologyMeta::getUniqueIdentifier, ontologyUids)
                         .eq(OntologyMeta::getStatus, Status.ENABLE.getValue()))

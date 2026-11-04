@@ -21,8 +21,9 @@ public class OntologyIdValidator implements ConstraintValidator<OntologyIdVerify
 
     @Override
     public boolean isValid(String value, ConstraintValidatorContext context) {
+        // 空值跳过校验（参数可选时由业务层决定是查全部还是报错）
         if (StringUtils.isEmpty(value)) {
-            return false;
+            return true;
         }
         var meta = metaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, value).eq(OntologyMeta::getStatus, Status.ENABLE.getValue()));
         return meta != null;

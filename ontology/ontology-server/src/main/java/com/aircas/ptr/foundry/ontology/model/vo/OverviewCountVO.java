@@ -15,15 +15,15 @@ import lombok.NoArgsConstructor;
 public class OverviewCountVO {
 
     /**
-     * 本体数量统计
+     * 对象数量统计
      */
-    @Schema(description = "本体空间统计")
+    @Schema(description = "对象空间统计")
     private Integer spaceCount;
 
     /**
-     * 本体数量统计
+     * 对象数量统计
      */
-    @Schema(description = "本体数量统计")
+    @Schema(description = "对象数量统计")
     private Integer ontologyCount;
 
     /**
@@ -51,15 +51,15 @@ public class OverviewCountVO {
     private Integer functionCount;
 
     /**
-     * 本体属性统计
+     * 对象属性统计
      */
-    @Schema(description = "本体属性统计")
+    @Schema(description = "对象属性统计")
     private Integer propertyCount;
 
 
     /**
-     * 本体关系统计
+     * 对象关系统计
      */
-    @Schema(description = "本体关系统计")
+    @Schema(description = "对象关系统计")
     private Integer linkCount;
 }

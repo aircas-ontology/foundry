@@ -12,7 +12,7 @@ import lombok.experimental.SuperBuilder;
 @Accessors(chain = true)
 @NoArgsConstructor
 @AllArgsConstructor
-@Schema(description = "本体关系更新请求")
+@Schema(description = "对象关系更新请求")
 public class OntologyLinkUpdateParam extends IdentifierParam {
 
     @Schema(name = "name", required = false, description = "关系名称")

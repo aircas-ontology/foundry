@@ -26,7 +26,7 @@ public interface ContainerLifecycleService {
     /** 回查真实运行状态（docker inspect）并落库，处理被外部停止/崩溃的情况。 */
     FunctionContainerInstance refresh(String containerKey);
 
-    /** 按本体空间列出全部容器实例（启停管理页数据源；spaceId 为空则列全部）。 */
+    /** 按对象空间列出全部容器实例（启停管理页数据源；spaceId 为空则列全部）。 */
     List<FunctionContainerInstance> listBySpace(Integer spaceId);
 
     /**

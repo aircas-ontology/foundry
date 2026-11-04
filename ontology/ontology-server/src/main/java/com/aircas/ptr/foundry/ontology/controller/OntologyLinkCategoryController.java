@@ -54,10 +54,10 @@ public class OntologyLinkCategoryController {
     @Operation(summary = "查询关系分类体系树")
     public RestResult<OntologyLinkCategoryVO> getLinkCategoryTree(
             @RequestParam(required = true, name = "spaceId")
-            @Parameter(description = "本体空间id")
+            @Parameter(description = "对象空间id")
             @SpaceIdVerify Integer spaceId,
             @RequestParam(required = false, name = "ontologyUniqueIdentifierFrom")
-            @Parameter(description = "本体对象唯一标识，选填；传入时返回该对象作为源或目标任意一端关联的关系")
+            @Parameter(description = "对象唯一标识，选填；传入时返回该对象作为源或目标任意一端关联的关系")
             String ontologyUniqueIdentifierFrom) {
         OntologyLinkCategoryVO res = ontologyLinkCategoryService.getCategoryTree(spaceId, ontologyUniqueIdentifierFrom);
         return RestResult.ofData(res);

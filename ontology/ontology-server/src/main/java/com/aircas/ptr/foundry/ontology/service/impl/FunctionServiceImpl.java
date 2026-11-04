@@ -212,18 +212,28 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
 
 
     @Override
-    public Map<String, String> mapDescriptionByApi(List<String> functionApis) {
-        if (functionApis == null || functionApis.isEmpty()) {
+    public Map<String, String> mapDescriptionByApi(Integer spaceId, List<String> functionApis) {
+        List<String> apis = functionApis == null ? Collections.emptyList()
+                : functionApis.stream().filter(StringUtils::isNotBlank).distinct().collect(Collectors.toList());
+        if (apis.isEmpty()) {
             return new HashMap<>();
         }
-        // 版本管理后 api 不再唯一，同一 api 多个版本时描述取任意一条（toMap 保留先遇到的）；
-        // description 列可为 null，过滤空白描述，避免 Collectors.toMap 在 value 为 null 时抛 NPE
-        return list(new LambdaQueryWrapper<Function>()
-                        .select(Function::getApi, Function::getDescription)
-                        .in(Function::getApi, functionApis))
+        var wrapper = new LambdaQueryWrapper<Function>()
+                .select(Function::getApi, Function::getVersion, Function::getDescription)
+                .in(Function::getApi, apis);
+        // 算子 api 只在空间内唯一：限定了空间就只在该空间里取，无空间的早期行为退回只按 api 匹配
+        if (spaceId != null) {
+            wrapper.eq(Function::getOntologySpaceId, spaceId);
+        }
+        // description 列可为 null，过滤空白描述，避免 Collectors.toMap 在 value 为 null 时抛 NPE；
+        // 按版本升序排，同一 api 后到的更高版本覆盖前面的，与行为绑定算子取最新版本的口径一致
+        return list(wrapper)
                 .stream()
                 .filter(function -> StringUtils.isNotBlank(function.getDescription()))
-                .collect(Collectors.toMap(Function::getApi, Function::getDescription, (first, second) -> first));
+                .sorted(Comparator.comparing((Function f) -> f.getVersion() == null ? "" : f.getVersion(),
+                        FunctionServiceImpl::compareVersion))
+                .collect(Collectors.toMap(Function::getApi, Function::getDescription,
+                        (older, newer) -> newer, LinkedHashMap::new));
     }
 
 
@@ -337,7 +347,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         PreconditionUtils.checkArgument(function != null, "无效的函数api:" + api, HttpStatus.BAD_REQUEST);
         // 已发布状态不允许删除，需先下线
         requireUnpublished(function, "已发布的函数不能删除，请先下线");
-        //判断函数是否关联了行为，被本体行为使用到则不删除
+        //判断函数是否关联了行为，被对象行为使用到则不删除
         var ontologyActions = ontologyActionMapper.selectList(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getFunctionApi, api));
         PreconditionUtils.checkArgument(CollectionUtils.isEmpty(ontologyActions), "该函数已被行为关联" + api);
         //删除函数参数
@@ -842,7 +852,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         var function = requireVersionExists(spaceId, api, version);
         PreconditionUtils.checkArgument(function.getPublish() == FunctionConstant.PUBLISH_PUBLISHED,
                 "该版本不是发布状态：" + api + " " + function.getVersion(), HttpStatus.BAD_REQUEST);
-        //判断函数是否关联了行为，被本体行为使用到则不能下线
+        //判断函数是否关联了行为，被对象行为使用到则不能下线
         var ontologyActions = ontologyActionMapper.selectList(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getFunctionApi, api));
         PreconditionUtils.checkArgument(CollectionUtils.isEmpty(ontologyActions), "该函数已被行为关联，不能下线：" + api);
         function.setPublish(FunctionConstant.PUBLISH_UNPUBLISHED);
@@ -908,16 +918,10 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     @Override
     public Page<FunctionInfoVO> getFunctions(FunctionListQueryParam param) {
         var pageInfo = new Page<Function>(param.getPageNum(), param.getPageSize());
-        // 未明确查询函数编排时，默认排除函数编排
-        List<FunctionTypeEnum> excludeTypes = param.getExcludeTypes() != null
-                ? new ArrayList<>(param.getExcludeTypes()) : new ArrayList<>();
-        if (param.getType() != FunctionTypeEnum.COMPOSITE
-                && !excludeTypes.contains(FunctionTypeEnum.COMPOSITE)) {
-            excludeTypes.add(FunctionTypeEnum.COMPOSITE);
-        }
+        // 类型按传入值过滤：传什么查什么，不传就是全部类型（含函数编排），不再隐式排除任何类型
         // 版本分组分页：按 api 分组，每组仅展示版本号最大的一条（XML 内按 x.y.z 语义化比较）
         var functionPage = getBaseMapper().pageLatestVersion(pageInfo, param.getOntologySpaceId(), param.getDisplayName(),
-                param.getType(), excludeTypes, param.getPublishStatus(), param.getStartDate(), param.getEndDate());
+                param.getTypes(), param.getExcludeTypes(), param.getPublishStatus(), param.getStartDate(), param.getEndDate());
         var records = functionPage.getRecords().stream().<FunctionInfoVO>map(func ->
                 FunctionInfoVO.builder()
                         .functionApi(func.getApi())
@@ -1118,7 +1122,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         }
 
         // 仅持久化用户在 queryConfig 里声明的变量（聚合目标 + 过滤条件）作为入参，
-        // 不追加编排机制参数（本体标识、结果出参等），避免详情页把机制参数当成用户参数展示。
+        // 不追加编排机制参数（对象标识、结果出参等），避免详情页把机制参数当成用户参数展示。
         List<FunctionParamPO> params = new ArrayList<>();
         int order = 1;
         for (var entry : varTypeMap.entrySet()) {

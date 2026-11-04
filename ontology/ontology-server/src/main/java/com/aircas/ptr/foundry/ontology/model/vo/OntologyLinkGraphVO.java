@@ -14,16 +14,16 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Accessors(chain = true)
-@Schema(description = "本体关系图数据（本体-关系-本体）")
+@Schema(description = "对象关系图数据（对象-关系-对象）")
 public class OntologyLinkGraphVO {
 
-    @Schema(name = "centerUniqueIdentifier", description = "筛选的本体对象id，为空表示展示全部关系")
+    @Schema(name = "centerUniqueIdentifier", description = "筛选的对象id，为空表示展示全部关系")
     private String centerUniqueIdentifier;
 
-    @Schema(name = "nodes", description = "节点列表（本体对象）")
+    @Schema(name = "nodes", description = "节点列表（对象）")
     private List<GraphNode> nodes;
 
-    @Schema(name = "edges", description = "边列表（本体-关系-本体）")
+    @Schema(name = "edges", description = "边列表（对象-关系-对象）")
     private List<GraphEdge> edges;
 
     @Data
@@ -31,19 +31,19 @@ public class OntologyLinkGraphVO {
     @NoArgsConstructor
     @AllArgsConstructor
     @Accessors(chain = true)
-    @Schema(description = "图节点（本体对象）")
+    @Schema(description = "图节点（对象）")
     public static class GraphNode {
 
-        @Schema(name = "uniqueIdentifier", description = "本体uniqueIdentifier")
+        @Schema(name = "uniqueIdentifier", description = "对象uniqueIdentifier")
         private String uniqueIdentifier;
 
-        @Schema(name = "displayName", description = "本体名称")
+        @Schema(name = "displayName", description = "对象名称")
         private String displayName;
 
-        @Schema(name = "apiName", description = "本体api名称")
+        @Schema(name = "apiName", description = "对象api名称")
         private String apiName;
 
-        @Schema(name = "icon", description = "本体图标")
+        @Schema(name = "icon", description = "对象图标")
         private String icon;
     }
 
@@ -52,7 +52,7 @@ public class OntologyLinkGraphVO {
     @NoArgsConstructor
     @AllArgsConstructor
     @Accessors(chain = true)
-    @Schema(description = "图边（本体-关系-本体）")
+    @Schema(description = "图边（对象-关系-对象）")
     public static class GraphEdge {
 
         @Schema(name = "uniqueIdentifier", description = "关系uniqueIdentifier")
@@ -61,10 +61,10 @@ public class OntologyLinkGraphVO {
         @Schema(name = "name", description = "关系名称")
         private String name;
 
-        @Schema(name = "from", description = "起始本体uniqueIdentifier")
+        @Schema(name = "from", description = "起始对象uniqueIdentifier")
         private String from;
 
-        @Schema(name = "to", description = "目标本体uniqueIdentifier")
+        @Schema(name = "to", description = "目标对象uniqueIdentifier")
         private String to;
 
         @Schema(name = "categoryId", description = "关系分类id")

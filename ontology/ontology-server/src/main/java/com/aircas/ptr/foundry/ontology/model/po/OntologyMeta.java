@@ -65,18 +65,18 @@ public class OntologyMeta implements Serializable {
     private String icon;
 
     /**
-     * 本体名称
+     * 对象名称
      */
     private String displayName;
 
 
     /**
-     * 本体描述
+     * 对象描述
      */
     private String description;
 
     /**
-     * 在代码里用的本体名称
+     * 在代码里用的对象名称
      */
     private String apiName;
 
@@ -89,7 +89,7 @@ public class OntologyMeta implements Serializable {
     private String metaGroupId;
 
     /**
-     * 父本体的唯一标识符
+     * 父对象的唯一标识符
      */
     private String parentUniqueIdentifier;
 
@@ -99,12 +99,12 @@ public class OntologyMeta implements Serializable {
     private Boolean canGenerateEntity;
 
     /**
-     * 本体空间id
+     * 对象空间id
      */
     private Integer ontologySpaceId;
 
     /**
-     * 本体分类id
+     * 对象分类id
      */
     private Integer ontologyCategoryId;
 

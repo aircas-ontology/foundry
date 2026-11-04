@@ -16,7 +16,7 @@ import lombok.experimental.SuperBuilder;
 @Schema(description = "实体节点和关系删除参数")
 public class EntityNodeAndRelationsDeleteParam {
 
-    @Schema(name = "ontologyUniqueIdentifier", description = "本体id", example = "123")
+    @Schema(name = "ontologyUniqueIdentifier", description = "对象id", example = "123")
     @OntologyIdVerify
     private String ontologyUniqueIdentifier;
 

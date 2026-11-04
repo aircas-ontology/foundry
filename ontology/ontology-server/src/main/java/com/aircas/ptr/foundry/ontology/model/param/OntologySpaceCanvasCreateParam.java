@@ -12,19 +12,19 @@ import lombok.experimental.Accessors;
 
 import java.util.List;
 
-@Schema(description = "画布一键建空间请求：创建空间并批量创建对象、属性、关系")
+@Schema(description = "画布内容（对象、属性、关系）：POST /space/canvas 保存请求体与 GET /space/canvas 查询返回体共用此结构")
 @Data
 @Accessors(chain = true)
 @AllArgsConstructor
 @NoArgsConstructor
 public class OntologySpaceCanvasCreateParam {
 
-    @Schema(name = "spaceId", description = "本体空间id，传入则直接在该空间下创建对象、属性、关系，不再创建空间；不传则根据下方空间信息新建空间", example = "1")
+    @Schema(name = "spaceId", description = "对象空间id，传入则直接在该空间下创建对象、属性、关系，不再创建空间；不传则根据下方空间信息新建空间", example = "1")
     private Integer spaceId;
 
 
 
-    @Schema(name = "ontologies", description = "画布中的本体对象列表")
+    @Schema(name = "ontologies", description = "画布中的对象列表")
     @Valid
     private List<CanvasOntology> ontologies;
 
@@ -32,34 +32,34 @@ public class OntologySpaceCanvasCreateParam {
     @Valid
     private List<CanvasLink> links;
 
-    @Schema(description = "画布本体对象")
+    @Schema(description = "画布对象")
     @Data
     @Accessors(chain = true)
     @AllArgsConstructor
     @NoArgsConstructor
     public static class CanvasOntology {
 
-        @Schema(name = "displayName", description = "本体名称", required = true, example = "舰船aaa")
+        @Schema(name = "displayName", description = "对象名称", required = true, example = "舰船aaa")
         @NotBlank(message = "ontology displayName is empty")
         private String displayName;
 
-        @Schema(name = "apiName", description = "本体api名称", required = true, example = "ship")
+        @Schema(name = "apiName", description = "对象api名称", required = true, example = "ship")
         @NotBlank(message = "ontology apiName is empty")
-        @Pattern(regexp = "^[a-zA-Z_$][a-zA-Z0-9_$]{0,62}$", message = "本体apiName格式不合法")
+        @Pattern(regexp = "^[a-zA-Z_$][a-zA-Z0-9_$]{0,62}$", message = "对象apiName格式不合法")
         private String apiName;
 
-        @Schema(name = "description", description = "本体描述")
+        @Schema(name = "description", description = "对象描述")
         private String description;
 
-        @Schema(name = "iconUrl", description = "本体图标url")
+        @Schema(name = "iconUrl", description = "对象图标url")
         private String iconUrl;
 
-        @Schema(name = "properties", description = "本体属性列表")
+        @Schema(name = "properties", description = "对象属性列表")
         @Valid
         private List<CanvasProperty> properties;
     }
 
-    @Schema(description = "画布本体属性")
+    @Schema(description = "画布对象属性")
     @Data
     @Accessors(chain = true)
     @AllArgsConstructor
@@ -94,7 +94,7 @@ public class OntologySpaceCanvasCreateParam {
         private String defaultValue;
     }
 
-    @Schema(description = "画布本体关系")
+    @Schema(description = "画布对象关系")
     @Data
     @Accessors(chain = true)
     @AllArgsConstructor

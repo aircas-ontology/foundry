@@ -1,7 +1,7 @@
 package com.aircas.ptr.foundry.ontology.mcp.tools;
 
 import com.aircas.ptr.foundry.ontology.mcp.McpTools;
-import com.aircas.ptr.foundry.ontology.model.enums.Status;
+import com.aircas.ptr.foundry.ontology.model.enums.ActionStatusEnum;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyAction;
 import com.aircas.ptr.foundry.ontology.model.po.OntologySpace;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyActionInfoVO;
@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * 本体行为 MCP 工具。
+ * 对象行为 MCP 工具。
  *
  * <p>提供空间+行为名称的组合精确查询，由 {@code McpServerConfig} 通过 {@link McpTools} 标记接口自动收集。</p>
  */
@@ -32,7 +32,7 @@ public class OntologyActionMcpTools implements McpTools {
     private final OntologyActionService ontologyActionService;
 
     @Tool(description = """
-            按空间名称 + 行为名称精确查询本体行为。
+            按空间名称 + 行为名称精确查询对象行为。
             当用户已知空间和行为的名称，需要查找行为的详细信息时使用。
             先按空间名定位空间，再在该空间内按行为名精确匹配。
             行为名同时匹配 displayName 和 api（OR 关系）；不传行为名时返回该空间下的全部行为。
@@ -55,7 +55,7 @@ public class OntologyActionMcpTools implements McpTools {
         var spaceIds = spaces.stream().map(OntologySpace::getId).collect(Collectors.toList());
 
         var queryWrapper = new LambdaQueryWrapper<OntologyAction>()
-                .eq(OntologyAction::getStatus, Status.ENABLE.getValue())
+                .eq(OntologyAction::getStatus, ActionStatusEnum.PUBLISHED.getValue())
                 .in(OntologyAction::getOntologySpaceId, spaceIds);
         if (StringUtils.isNotEmpty(actionName)) {
             queryWrapper.and(w -> w.eq(OntologyAction::getDisplayName, actionName)

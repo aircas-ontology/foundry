@@ -25,8 +25,8 @@ public class OntologyInstanceConverter {
     /**
      * 组合文档唯一键：{schema}.{table_name}.{ontology_uid}.{主键列值}。
      * <p>
-     * 加入 ontology_uid 是因为同一张物理表可能被多个本体（如继承、手工把不同本体主键属性
-     * 绑到同一张表）当作主表，一行数据会派生出多篇"本体视角"的实例文档；若 pk 不含本体标识，
+     * 加入 ontology_uid 是因为同一张物理表可能被多个对象（如继承、手工把不同对象主键属性
+     * 绑到同一张表）当作主表，一行数据会派生出多篇"对象视角"的实例文档；若 pk 不含对象标识，
      * 这些文档 _id 相同会互相覆盖。含 ontology_uid 后每篇文档唯一。
      */
     public static String buildPk(String schema, String tableName, String ontologyUid, Object primaryKeyValue) {
@@ -61,8 +61,8 @@ public class OntologyInstanceConverter {
      * @param primaryKeyValue  行主键列值
      * @param titleValue       行名称键列值，可为空（为空时取主键值）
      * @param row              整行数据（列名 -> 值），用于拼接 search_text
-     * @param meta             行所属本体（可为空，未绑定本体的表不写实例文档时由调用方保证）
-     * @param space            本体所属空间（可为空）
+     * @param meta             行所属对象（可为空，未绑定对象的表不写实例文档时由调用方保证）
+     * @param space            对象所属空间（可为空）
      */
     public static EsOntologyInstanceDTO convert(String schema, String tableName, Object primaryKeyValue,
                                                 Object titleValue, Map<String, Object> row,

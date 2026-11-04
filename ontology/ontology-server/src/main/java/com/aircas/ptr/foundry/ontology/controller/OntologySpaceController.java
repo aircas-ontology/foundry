@@ -29,7 +29,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import java.util.List;
 
-@Tag(name = "本体空间管理")
+@Tag(name = "对象空间管理")
 @RestController
 @RequestMapping("/space")
 @RequiredArgsConstructor
@@ -42,7 +42,7 @@ public class OntologySpaceController {
 
 
     @GetMapping("/export")
-    @Operation(summary = "导出本体空间（含分类树、全部本体 schema，可选是否含实例数据）")
+    @Operation(summary = "导出对象空间（含分类树、全部对象 schema，可选是否含实例数据）")
     public void exportOntologySpace(@RequestParam(name = "spaceId") Integer spaceId,
                                     @RequestParam(name = "exportType", defaultValue = "INSTANCE")
                                     @Parameter(description = "导出类型：SCHEMA=仅结构, INSTANCE=含实例数据（默认）")
@@ -57,16 +57,16 @@ public class OntologySpaceController {
 
 
     @PostMapping("/import")
-    @Operation(summary = "本体空间导入创建")
+    @Operation(summary = "对象空间导入创建")
     public RestResult<List<String>> importOntologySpace(@RequestParam(required = true, name = "file") MultipartFile file) {
         var failedOntology = ontologySpaceService.importOntologySpace(file);
         return CollectionUtils.isNotEmpty(failedOntology) ?
-                new RestResult<>(ResultCode.ERROR, "本体批量导入失败", failedOntology) : RestResult.success();
+                new RestResult<>(ResultCode.ERROR, "对象批量导入失败", failedOntology) : RestResult.success();
     }
 
 
     @PostMapping
-    @Operation(summary = "创建本体空间")
+    @Operation(summary = "创建对象空间")
     public RestResult<Integer> createSpace(@RequestBody @Valid OntologySpaceCreateParam param) {
         var id = ontologySpaceService.createSpace(param);
         return RestResult.ofData(id);
@@ -79,6 +79,17 @@ public class OntologySpaceController {
         return RestResult.ofData(res);
     }
 
+    @GetMapping("/canvas")
+    @Operation(summary = "查询画布内容：返回空间下的全部对象、对象属性、对象关系",
+            description = "与 POST /space/canvas 请求体同一结构，前端渲染画布、编辑后可直接回传")
+    public RestResult<OntologySpaceCanvasCreateParam> getSpaceCanvasContent(
+            @RequestParam(required = true, name = "spaceId")
+            @Parameter(description = "对象空间id")
+            @SpaceIdVerify Integer spaceId) {
+        var res = ontologySpaceService.getSpaceCanvasContent(spaceId);
+        return RestResult.ofData(res);
+    }
+
     @PostMapping("/subspace")
     @Operation(summary = "基于父空间创建子空间",
             description = "创建子空间")
@@ -88,7 +99,7 @@ public class OntologySpaceController {
     }
 
     @PutMapping
-    @Operation(summary = "修改本体空间")
+    @Operation(summary = "修改对象空间")
     public RestResult updateSpace(@RequestBody @Valid OntologySpaceUpdateParam param) {
         ontologySpaceService.updateSpace(param);
         return RestResult.success();
@@ -96,7 +107,7 @@ public class OntologySpaceController {
 
 
     @GetMapping
-    @Operation(summary = "查询本体空间列表")
+    @Operation(summary = "查询对象空间列表")
     public RestResult<List<OntologySpaceVO>> querySpace(
             @RequestParam(required = false, defaultValue = "0")
             @Parameter(description = "类型：0=空间（默认），1=主题") Integer type) {
@@ -105,16 +116,16 @@ public class OntologySpaceController {
     }
 
     @GetMapping("/statistic")
-    @Operation(summary = "查询本体空间资源统计")
+    @Operation(summary = "查询对象空间资源统计")
     public RestResult<OntologySpaceStatisticVO> getStatistic(@RequestParam(required = true, name = "spaceId")
-                                                             @Parameter(description = "本体空间id")
+                                                             @Parameter(description = "对象空间id")
                                                              @SpaceIdVerify Integer spaceId) {
         OntologySpaceStatisticVO res = ontologySpaceService.getStatistic(spaceId);
         return RestResult.ofData(res);
     }
 
     @DeleteMapping("/{spaceId}")
-    @Operation(summary = "删除本体空间")
+    @Operation(summary = "删除对象空间")
     public RestResult deleteSpace(@PathVariable(required = true, name = "spaceId") Integer spaceId) {
         ontologySpaceService.deleteSpace(spaceId);
         return RestResult.success();

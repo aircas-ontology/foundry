@@ -15,13 +15,19 @@ import java.util.List;
 @NoArgsConstructor
 @SuperBuilder
 @Accessors(chain = true)
-@Schema(description = "本体行为详情")
+@Schema(description = "对象行为详情")
 public class OntologyActionDetailVO extends OntologyActionInfoVO {
 
     @Schema(description = "行为关系映射")
     private ActionLinkMappingParam linkMapping;
 
+    @Schema(name = "ontologySpaceId", description = "行为所属对象空间id，算子按 空间+api 定位", example = "1")
+    private Integer ontologySpaceId;
+
     @Schema(name = "mappingIns", description = "行为与函数参数映射")
     private List<ActionParamMappingVO> mappingIns;
+
+    @Schema(description = "函数参数定义（入参 + 出参列表，含类型、描述）")
+    private List<FunctionParamVO> functionParams;
 
 }

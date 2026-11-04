@@ -38,12 +38,12 @@ curl -u root:root -H 'Content-Type: application/json' \
 
 - **类型**：Document（文档集合）
 - **对应模型**：`EntityNode`（`@Document("node")`）
-- **用途**：存储本体实体节点
+- **用途**：存储对象实体节点
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
 | `_key` / `_id` / `_rev` | string | ArangoDB 系统字段 |
-| `ontologyUniqIdentifier` | string | 本体唯一标识 |
+| `ontologyUniqIdentifier` | string | 对象唯一标识 |
 | `tableName` | string | 数据源/表标识（datasourceId） |
 | `primaryKey` | any | 实体主键值 |
 | `displayName` | string | 展示名 |
@@ -82,7 +82,7 @@ curl -u root:root -H 'Content-Type: application/json' \
 | `_key` / `_id` / `_rev` | string | ArangoDB 系统字段 |
 | `_from` | string | 起点，格式 `node/<key>`，对应 `@From EntityNode` |
 | `_to` | string | 终点，格式 `node/<key>`，对应 `@To EntityNode` |
-| `ontologyLinkId` | string | 本体关系 id |
+| `ontologyLinkId` | string | 对象关系 id |
 | `type` | enum | `COMPOSITION` / `RECONNAISSANCE` / `STRIKE` / `COORDINATION` / `OTHER` |
 | `name` | string | 关系名称 |
 | `status` | enum | `ENABLE` / `DISABLE` / `DELETE` |
@@ -132,7 +132,7 @@ curl -u root:root -H 'Content-Type: application/json' \
 
 | 名称 | 类型 | 字段 | Unique | Sparse | 说明 |
 |---|---|---|---|---|---|
-| `node_ontologyUniqIdentifier_idx` | persistent | `ontologyUniqIdentifier` | false | false | 按本体唯一标识查节点 |
+| `node_ontologyUniqIdentifier_idx` | persistent | `ontologyUniqIdentifier` | false | false | 按对象唯一标识查节点 |
 | `node_primaryKey_idx` | persistent | `primaryKey` | false | false | 按实体主键查节点 |
 
 ```bash
@@ -149,7 +149,7 @@ curl -u root:root -H 'Content-Type: application/json' \
 
 | 名称 | 类型 | 字段 | Unique | Sparse | 说明 |
 |---|---|---|---|---|---|
-| `relation_ontologyLinkId` | persistent | `ontologyLinkId` | false | false | 按本体关系 id 查询/删除 |
+| `relation_ontologyLinkId` | persistent | `ontologyLinkId` | false | false | 按对象关系 id 查询/删除 |
 | `relation_startTime` | persistent | `startTime` | false | false | 可见窗口开始时间过滤 |
 | `relation_endTime` | persistent | `endTime` | false | false | 可见窗口结束时间过滤 |
 

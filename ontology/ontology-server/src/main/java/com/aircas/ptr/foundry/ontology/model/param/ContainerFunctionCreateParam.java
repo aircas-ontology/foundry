@@ -34,7 +34,7 @@ public class ContainerFunctionCreateParam {
     @Schema(name = "description", description = "描述公共前缀（与接口描述拼接）")
     private String description;
 
-    @Schema(name = "ontologySpaceId", description = "所属本体空间 id")
+    @Schema(name = "ontologySpaceId", description = "所属对象空间 id")
     private Integer ontologySpaceId;
 
     @Schema(name = "image", description = "上传镜像接口返回的镜像信息")
