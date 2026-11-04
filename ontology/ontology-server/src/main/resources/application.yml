@@ -153,7 +153,7 @@ minio:
 
 orekit:
   data:
-    path: "E:\\temp\\ontology\\foundry\\ontology\\ontology-server\\src\\main\\resources\\orekit-data"
+    path: "ontology/ontology-server/src/main/resources/orekit-data"
 
 
 
@@ -208,6 +208,15 @@ script-runner:
   typescript:
   timeout-ms: 5000
 
+# 函数脚本同步安全扫描。base-url 由各环境覆盖；默认关闭。
+# 其余协议参数（scan-path / media-type / 各上限 / 校验规则）默认值见 SemgrepScanProperties。
+function-security:
+  semgrep:
+    enabled: false
+    base-url:
+    connect-timeout-ms: 2000
+    read-timeout-ms: 25000
+
 # 容器算子：镜像 / 接口文档上传存储目录与大小限制。
 # image-dir / doc-dir 留空时默认落在 jar 包同级目录下的 container-images/ 与 interface-docs/。
 # arm-check-enabled 是否校验镜像为 ARM64 架构；无 ARM 环境本地测试可置 false 跳过校验。
@@ -219,10 +228,8 @@ container-operator:
   arm-check-enabled: true
   exec-host: 127.0.0.1
   exec-timeout-seconds: 30
+
 foundry:
   integration:
     cdc:
       enabled: true
-      sync:
-        enabled: true
-        cron: "0 0 * * * ?"

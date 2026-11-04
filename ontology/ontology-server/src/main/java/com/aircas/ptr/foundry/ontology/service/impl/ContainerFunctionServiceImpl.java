@@ -34,7 +34,7 @@ import com.aircas.ptr.foundry.ontology.utils.ContainerUploadRegistry;
 import com.aircas.ptr.foundry.ontology.utils.DockerImageInspector;
 import com.aircas.ptr.foundry.ontology.utils.DockerCommandExecutor;
 import com.aircas.ptr.foundry.ontology.utils.DockerRunCommandParser;
-import com.aircas.ptr.foundry.ontology.utils.OperatorFunctionFactory;
+import com.aircas.ptr.foundry.ontology.utils.OperatorFunctionUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -286,7 +286,7 @@ public class ContainerFunctionServiceImpl implements ContainerFunctionService {
                     .interfaces(List.of(itf))
                     .build();
 
-            Function function = OperatorFunctionFactory.operatorDefaults(
+            Function function = OperatorFunctionUtil.operatorDefaults(
                             derivedApi, CONTAINER_VERSION, joinDash(param.getDisplayName(), itf.getName()),
                             FunctionTypeEnum.CONTAINER, param.getOntologySpaceId(), FunctionModelEnum.OTHER)
                     .description(joinDesc(param.getDescription(), itf.getDescription()))
@@ -383,7 +383,7 @@ public class ContainerFunctionServiceImpl implements ContainerFunctionService {
 
     private FunctionParamPO buildParam(Long functionId, ContainerInterfaceParam p,
                                        FunctionParamCategoryEnum category, int order) {
-        return OperatorFunctionFactory.functionParamDefaults(
+        return OperatorFunctionUtil.functionParamDefaults(
                         functionId, p.getName(), p.getType(), category, order, p.getDescription())
                 .paramSchema(writeJson(Map.of(
                         "in", p.getIn() == null ? "" : p.getIn(),

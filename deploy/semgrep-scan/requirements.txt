@@ -1,0 +1,3 @@
+# Already supplied by the digest-locked base. Build verifies these versions offline.
+uvicorn==0.54.0
+ruamel.yaml==0.19.1
