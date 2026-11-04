@@ -77,7 +77,7 @@ public class OntologyMetaController {
     }
 
 
-    @Operation(summary = "资产构建对象")
+    @Operation(summary = "资产构建对象 ")
     @PostMapping("/build_object")
     public RestResult<IdentifierVO> buildObjectWithProperties(@RequestBody @Valid OntologyAssetBuildParam param) {
         String uniqIdentifier = ontologyMetaService.createOntologyWithProperties(param);
