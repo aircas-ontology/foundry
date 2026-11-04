@@ -1,8 +1,10 @@
 package com.aircas.ptr.foundry.ontology.controller;
 
 import com.aircas.ptr.foundry.common.base.RestResult;
+import com.aircas.ptr.foundry.ontology.controller.validator.SpaceIdVerify;
 import com.aircas.ptr.foundry.ontology.model.param.DatasourceConnectionParam;
 import com.aircas.ptr.foundry.ontology.model.vo.DatasourceConnectionItemVO;
+import com.aircas.ptr.foundry.ontology.model.vo.DatasourceSchemaVO;
 import com.aircas.ptr.foundry.ontology.model.vo.DatasourceTableDetailVO;
 import com.aircas.ptr.foundry.ontology.model.vo.DatasourceTableSummaryVO;
 import com.aircas.ptr.foundry.ontology.service.DatasourceConnectionService;
@@ -81,21 +83,31 @@ public class DatasourceConnectionController {
         return RestResult.success();
     }
 
-    @Operation(summary = "列出该数据源（外部库）的表：表名 / 表注释 / 字段数；「数据源构建对象」向导选表步骤用，"
+    @Operation(summary = "列出该对象空间对应数据源下的 schema 清单（按厂商分派：MySQL/MariaDB 走 getCatalogs()，其余走 getSchemas()；"
+            + "系统 schema 已过滤）；「数据源构建对象」向导选 schema 步骤用")
+    @GetMapping("/schema/list")
+    public RestResult<List<DatasourceSchemaVO>> listSchemas(
+            @RequestParam @SpaceIdVerify @Parameter(description = "对象空间 id") Integer spaceId) {
+        return RestResult.ofData(datasourceConnectionService.listSchemas(spaceId));
+    }
+
+    @Operation(summary = "列出该对象空间对应数据源下的表：表名 / 表注释 / 字段数；「数据源构建对象」向导选表步骤用，"
             + "与查数据湖空间内表的 /datasource/table 无关")
     @GetMapping("/table/list")
     public RestResult<List<DatasourceTableSummaryVO>> listTables(
-            @RequestParam @Parameter(description = "数据源 id") Integer datasourceId) {
-        return RestResult.ofData(datasourceConnectionService.listTablesWithColumnCount(datasourceId));
+            @RequestParam @SpaceIdVerify @Parameter(description = "对象空间 id") Integer spaceId,
+            @RequestParam @Parameter(description = "外部库 schema 名（MySQL/MariaDB 上作为 catalog；其余厂商作为 schema 参数）") String schemaName) {
+        return RestResult.ofData(datasourceConnectionService.listTablesWithColumnCount(spaceId, schemaName));
     }
 
-    @Operation(summary = "列出该数据源（外部库）多张表的列与主子表外键候选；外键只给本次传入表之间的关系，"
+    @Operation(summary = "列出该对象空间对应数据源下多张表的列与主子表外键候选；外键只给本次传入表之间的关系，"
             + "每张子表至多一条，origin=HEURISTIC 的是按同名列推断的、需要用户确认")
     @GetMapping("/table/columns")
     public RestResult<List<DatasourceTableDetailVO>> listTableColumns(
-            @RequestParam @Parameter(description = "数据源 id") Integer datasourceId,
+            @RequestParam @SpaceIdVerify @Parameter(description = "对象空间 id") Integer spaceId,
+            @RequestParam @Parameter(description = "外部库 schema 名（MySQL/MariaDB 上作为 catalog；其余厂商作为 schema 参数）") String schemaName,
             @RequestParam @Parameter(description = "表名，逗号分隔，区分大小写") List<String> tableNames) {
-        return RestResult.ofData(datasourceConnectionService.listTablesDetail(datasourceId, tableNames));
+        return RestResult.ofData(datasourceConnectionService.listTablesDetail(spaceId, schemaName, tableNames));
     }
 
     @Operation(summary = "测试连接（只建一次连接读库名与版本，不执行 SQL、不落库；"

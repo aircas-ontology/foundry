@@ -20,6 +20,10 @@ import lombok.experimental.Accessors;
 @Schema(description = "数据源连接配置入参")
 public class DatasourceConnectionParam {
 
+    @Schema(name = "spaceId", description = "归属的对象空间 id（每个空间至多一条数据源记录，重复报 400）", example = "1", required = true)
+
+    private Integer spaceId;
+
     @Schema(name = "name", description = "数据源名称（允许重复）", example = "生产订单库")
     @NotBlank(message = "数据源名称不能为空")
     @Size(max = 128, message = "数据源名称最长 128 字")
