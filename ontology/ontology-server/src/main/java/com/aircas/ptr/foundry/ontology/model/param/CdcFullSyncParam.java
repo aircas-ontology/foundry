@@ -35,4 +35,7 @@ public class CdcFullSyncParam {
 
     @Schema(name = "ontologyUids", description = "仅同步指定本体（unique_identifier 列表）的实例文档，缺省全部启用本体。仅作用于实例同步")
     private List<String> ontologyUids;
+
+    @Schema(name = "spaceIds", description = "仅同步指定空间（空间 ID 列表）的数据，缺省全部空间。作用于空间、元数据、属性、关系组、实例同步")
+    private List<Integer> spaceIds;
 }

@@ -16,8 +16,9 @@ public class EsOntologyMetaDTO {
     @Id
     private Long id;
 
-    /** api_name：keyword */
-    @Field(name = "api_name", type = FieldType.Keyword)
+    /** api_name：text + ik 分词 */
+    @Field(name = "api_name", type = FieldType.Text,
+            analyzer = "ik_max_word", searchAnalyzer = "ik_smart")
     private String apiName;
 
     /** description：text + ik 分词 */
@@ -34,7 +35,8 @@ public class EsOntologyMetaDTO {
     @Field(name = "ontology_space_id", type = FieldType.Long)
     private Long ontologySpaceId;
 
-    @Field(name = "space_name", type = FieldType.Text)
+    @Field(name = "space_name", type = FieldType.Text,
+            analyzer = "ik_max_word", searchAnalyzer = "ik_smart")
     private String spaceName;
 
     /** space_type：short，所属空间类型，0=空间，1=主题 */

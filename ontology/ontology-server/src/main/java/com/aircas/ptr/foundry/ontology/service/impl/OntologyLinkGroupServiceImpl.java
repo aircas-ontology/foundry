@@ -247,6 +247,7 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
                 query.eq(OntologyLinkGroup::getOntologyUniqueIdentifierTo, ontologyUniqueIdentifier);
                 break;
         }
+        query.orderByAsc(OntologyLinkGroup::getId);
 
         var links = list(query);
 

@@ -171,7 +171,8 @@ public class OntologyCategoryServiceImpl extends ServiceImpl<OntologyCategoryMap
             return null;
         }
         var metas = ontologyMetaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>()
-                .eq(OntologyMeta::getOntologySpaceId, spaceId));
+                .eq(OntologyMeta::getOntologySpaceId, spaceId)
+                .orderByAsc(OntologyMeta::getId));
 
         var metaMap = metas.stream()
                 .collect(Collectors.toMap(

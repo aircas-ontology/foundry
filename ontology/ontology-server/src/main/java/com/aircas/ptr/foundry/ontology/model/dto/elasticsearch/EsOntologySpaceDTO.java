@@ -16,8 +16,9 @@ public class EsOntologySpaceDTO {
     @Id
     private Long id;
 
-    /** api_name：keyword */
-    @Field(name = "api_name", type = FieldType.Keyword)
+    /** api_name：text + ik 分词 */
+    @Field(name = "api_name", type = FieldType.Text,
+            analyzer = "ik_max_word", searchAnalyzer = "ik_smart")
     private String apiName;
 
     /** description：text + ik 分词 */

@@ -131,11 +131,7 @@ public class GlobalSearchServiceImpl implements GlobalSearchService {
                         List<String> fields = INDEX_SEARCH_FIELDS.get(index);
                         bool.should(sh -> sh.bool(inner -> {
                             inner.must(m -> m.term(t -> t.field("_index").value(index)))
-                                    .must(m -> m.queryString(qs -> qs
-                                            .fields(fields)
-                                            .lenient(true)
-                                            .defaultOperator(Operator.Or)
-                                            .query(escapedKeyword)));
+                                    .must(buildPhraseBoostQuery(fields, escapedKeyword));
                             String spaceField = scopeIds == null ? null : INDEX_SPACE_FIELD.get(index);
                             if (spaceField != null) {
                                 inner.filter(f -> f.terms(t -> t.field(spaceField).terms(v -> v.value(scopeIds))));
@@ -377,5 +373,33 @@ public class GlobalSearchServiceImpl implements GlobalSearchService {
             sb.append(c);
         }
         return sb.toString();
+    }
+
+    /**
+     * 构建复合查询：keyword 完全匹配（高权重）+ 短语匹配（中权重）+ 分词匹配（低权重）。
+     */
+    private Query buildPhraseBoostQuery(List<String> fields, String keyword) {
+        return Query.of(q -> q.bool(bool -> {
+            for (String field : fields) {
+                // keyword 子字段：完全匹配，不分词，权重最高
+                bool.should(s -> s.match(m -> m
+                        .field(field + ".keyword")
+                        .query(keyword)
+                        .boost(20.0f)));
+                // 短语匹配：连续文本匹配，权重中等
+                bool.should(s -> s.matchPhrase(mp -> mp
+                        .field(field)
+                        .query(keyword)
+                        .boost(10.0f)));
+            }
+            // 分词匹配：任意分词命中，权重最低
+            bool.should(s -> s.queryString(qs -> qs
+                    .fields(fields)
+                    .lenient(true)
+                    .defaultOperator(Operator.Or)
+                    .query(keyword)
+                    .boost(1.0f)));
+            return bool;
+        }));
     }
 }

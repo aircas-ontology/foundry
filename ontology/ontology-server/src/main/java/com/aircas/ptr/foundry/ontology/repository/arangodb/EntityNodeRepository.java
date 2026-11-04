@@ -20,12 +20,15 @@ public interface EntityNodeRepository extends ArangoRepository<EntityNode, Strin
     EntityNode findOneByOntologyUniqIdentifier(@Param("ontologyUniqIdentifier") String ontologyUniqIdentifier);
 
 
-    EntityNode findByOntologyUniqIdentifierAndPrimaryKey(String ontologyUniqIdentifier,
-                                                         Object primaryKey);
+    @Query("FOR n IN node FILTER n.ontologyUniqIdentifier == @ontologyUniqIdentifier AND n.primaryKey == @primaryKey LIMIT 1 RETURN n")
+    EntityNode findByOntologyUniqIdentifierAndPrimaryKey(@Param("ontologyUniqIdentifier") String ontologyUniqIdentifier,
+                                                         @Param("primaryKey") Object primaryKey);
 
-    List<EntityNode> findByTableName(String tableName);
+    @Query("FOR n IN node FILTER n.tableName == @tableName RETURN n")
+    List<EntityNode> findByTableName(@Param("tableName") String tableName);
 
-    List<EntityNode> findByOntologyUniqIdentifier(String ontologyUniqIdentifier);
+    @Query("FOR n IN node FILTER n.ontologyUniqIdentifier == @ontologyUniqIdentifier RETURN n")
+    List<EntityNode> findByOntologyUniqIdentifier(@Param("ontologyUniqIdentifier") String ontologyUniqIdentifier);
 
     @Query("FOR n IN node FILTER n._id IN @nodeIds REMOVE n IN node")
     void deleteByIds(@Param("nodeIds") List<String> nodeIds);
