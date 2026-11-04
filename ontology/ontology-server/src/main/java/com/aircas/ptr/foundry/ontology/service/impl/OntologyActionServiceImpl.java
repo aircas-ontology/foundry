@@ -134,17 +134,26 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     @Override
     @Transactional(value = "mainTransactionManager")
     public void createAction(ActionCreateOrUpdateParam param) {
-        var meta = ontologyMetaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>()
-                .eq(OntologyMeta::getUniqueIdentifier, param.getOntologyIdentifier()));
-        PreconditionUtils.checkNotNull(meta, "无效的对象：" + param.getOntologyIdentifier(), HttpStatus.BAD_REQUEST);
+        // 应用行为可不传 ontologyIdentifier，从分类取空间 id
+        Integer spaceId = null;
+        if (StringUtils.isNotEmpty(param.getOntologyIdentifier())) {
+            var meta = ontologyMetaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>()
+                    .eq(OntologyMeta::getUniqueIdentifier, param.getOntologyIdentifier()));
+            PreconditionUtils.checkNotNull(meta, "无效的对象：" + param.getOntologyIdentifier(), HttpStatus.BAD_REQUEST);
+            spaceId = meta.getOntologySpaceId();
+        } else {
+            var category = actionCategoryMapper.selectById(param.getCategoryId());
+            PreconditionUtils.checkNotNull(category, "无效的行为分类：" + param.getCategoryId(), HttpStatus.BAD_REQUEST);
+            spaceId = category.getOntologySpaceId();
+        }
         var exist = getOne(new LambdaQueryWrapper<OntologyAction>()
                 .eq(OntologyAction::getApi, param.getActionApi())
-                .eq(OntologyAction::getOntologySpaceId, meta.getOntologySpaceId()));
+                .eq(OntologyAction::getOntologySpaceId, spaceId));
         PreconditionUtils.checkArgument(exist == null, "action api 已存在：" + param.getActionApi(), HttpStatus.BAD_REQUEST);
         var action = new OntologyAction();
         // 新建落草稿：需要显式发布才对外可用（行为测试不受此限制，草稿正是拿来试跑的）
         action.setStatus(ActionStatusEnum.DRAFT.getValue());
-        var definition = checkActionDefinition(action, param);
+        var definition = checkActionDefinition(action, param, spaceId);
         save(action);
         saveActionChildren(action.getId(), definition);
     }
@@ -152,16 +161,25 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     @Override
     @Transactional(value = "mainTransactionManager")
     public void updateAction(ActionCreateOrUpdateParam param) {
-        var meta = ontologyMetaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>()
-                .eq(OntologyMeta::getUniqueIdentifier, param.getOntologyIdentifier()));
-        PreconditionUtils.checkNotNull(meta, "无效的对象：" + param.getOntologyIdentifier(), HttpStatus.BAD_REQUEST);
+        // 应用行为可不传 ontologyIdentifier，从分类取空间 id
+        Integer spaceId = null;
+        if (StringUtils.isNotEmpty(param.getOntologyIdentifier())) {
+            var meta = ontologyMetaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>()
+                    .eq(OntologyMeta::getUniqueIdentifier, param.getOntologyIdentifier()));
+            PreconditionUtils.checkNotNull(meta, "无效的对象：" + param.getOntologyIdentifier(), HttpStatus.BAD_REQUEST);
+            spaceId = meta.getOntologySpaceId();
+        } else {
+            var category = actionCategoryMapper.selectById(param.getCategoryId());
+            PreconditionUtils.checkNotNull(category, "无效的行为分类：" + param.getCategoryId(), HttpStatus.BAD_REQUEST);
+            spaceId = category.getOntologySpaceId();
+        }
         var action = getOne(new LambdaQueryWrapper<OntologyAction>()
                 .eq(OntologyAction::getApi, param.getActionApi())
-                .eq(OntologyAction::getOntologySpaceId, meta.getOntologySpaceId()));
+                .eq(OntologyAction::getOntologySpaceId, spaceId));
         PreconditionUtils.checkArgument(action != null, "行为不存在", HttpStatus.BAD_REQUEST);
         // 编辑不改状态：草稿还是草稿、已发布还是已发布
         var originalStatus = action.getStatus();
-        var definition = checkActionDefinition(action, param);
+        var definition = checkActionDefinition(action, param, spaceId);
         action.setStatus(originalStatus);
         // 原地更新：行为 id 被关联关系、参数绑定和调度任务引用，删除重建会让它们失去引用
         updateById(action);
@@ -207,14 +225,11 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     /**
      * 校验行为定义：校验通过的类别写入 action，待落库的关联关系与参数绑定收集进返回值。
      */
-    private ActionDefinition checkActionDefinition(OntologyAction action, ActionCreateOrUpdateParam param) {
-        var meta = ontologyMetaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>()
-                .eq(OntologyMeta::getUniqueIdentifier, param.getOntologyIdentifier()));
-        PreconditionUtils.checkNotNull(meta, "无效的对象：" + param.getOntologyIdentifier(), HttpStatus.BAD_REQUEST);
+    private ActionDefinition checkActionDefinition(OntologyAction action, ActionCreateOrUpdateParam param, Integer spaceId) {
         // 归属的行为分类必须存在，且与对象同属一个对象空间
         var category = actionCategoryMapper.selectById(param.getCategoryId());
         PreconditionUtils.checkArgument(category != null, "无效的行为分类：" + param.getCategoryId(), HttpStatus.BAD_REQUEST);
-        PreconditionUtils.checkArgument(category.getOntologySpaceId().equals(meta.getOntologySpaceId()),
+        PreconditionUtils.checkArgument(category.getOntologySpaceId().equals(spaceId),
                 "行为分类不属于该对象所在的空间：" + category.getName(), HttpStatus.BAD_REQUEST);
 
         // 类别、输出方式必须由调用方明确传入：猜错会把行为建成另一种，执行时才暴露很难定位
@@ -225,7 +240,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             PreconditionUtils.checkArgument(param.getSubjectType() == null && param.getOperation() == null
                     && StringUtils.isEmpty(param.getStorageGroup()), "应用行为不需要行为类型、基础操作和存储分组", HttpStatus.BAD_REQUEST);
             PreconditionUtils.checkNotNull(param.getOutputMode(), "应用行为必须选择输出方式", HttpStatus.BAD_REQUEST);
-            checkFunctionAction(param, definition, APPLICATION_FUNCTION_TYPES, true, meta.getOntologySpaceId());
+            checkFunctionAction(param, definition, APPLICATION_FUNCTION_TYPES, true, spaceId);
             if (param.getOutputMode() == ActionOutputModeEnum.WRITE_PROPERTY) {
                 checkWritePropertyOutput(definition);
             }
@@ -245,7 +260,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 PreconditionUtils.checkArgument(param.getOutputMode() != ActionOutputModeEnum.WRITE_PROPERTY,
                         "基础算子行为只支持仅返回结果", HttpStatus.BAD_REQUEST);
                 checkFunctionAction(param, definition, Collections.singletonList(FunctionTypeEnum.BASIC_QUERY),
-                        false, meta.getOntologySpaceId());
+                        false, spaceId);
             }
             // 属性值、实例关系的输出即落库本身，没有回写方式；基础算子只读
             action.setOutputMode(subjectType == ActionSubjectTypeEnum.BASIC_OPERATOR
@@ -258,7 +273,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         action.setIcon(param.getIcon());
         action.setFunctionApi(param.getFunctionApi());
         action.setOntologyUniqueIdentifier(param.getOntologyIdentifier());
-        action.setOntologySpaceId(meta.getOntologySpaceId());
+        action.setOntologySpaceId(spaceId);
         action.setActionCategoryId(param.getCategoryId());
         action.setActionKind(kind);
         action.setSubjectType(param.getSubjectType());
