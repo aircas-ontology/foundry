@@ -5,6 +5,7 @@ import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.ontology.context.UserContextHolder;
 import com.aircas.ptr.foundry.ontology.model.dto.OntologySpaceCreateDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.OntologySpaceDTO;
+import com.aircas.ptr.foundry.ontology.model.enums.ActionKindEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyExportTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyLinkTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.SpaceTypeEnum;
@@ -600,9 +601,11 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
         // 函数算子数量
         var functionCount = functionMapper.selectCount(new LambdaQueryWrapper<Function>()
                 .eq(Function::getOntologySpaceId, spaceId));
-        // 行为数量
+        // 行为数量（行为树单独统计口径，不计入；类别为空的历史行为要保留，所以只排 TREE）
         var actionCount = actionMapper.selectCount(new LambdaQueryWrapper<OntologyAction>()
-                .eq(OntologyAction::getOntologySpaceId, spaceId));
+                .eq(OntologyAction::getOntologySpaceId, spaceId)
+                .and(w -> w.isNull(OntologyAction::getActionKind)
+                        .or().ne(OntologyAction::getActionKind, ActionKindEnum.TREE)));
         // 行为调度数量（调度规则 + 调度任务）
         var actionSchedulingCount = ruleMapper.selectCount(new LambdaQueryWrapper<ActionHandleRule>()
                 .eq(ActionHandleRule::getOntologySpaceId, spaceId))

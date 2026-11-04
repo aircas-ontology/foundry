@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.ontology.mcp.tools;
 
 import com.aircas.ptr.foundry.ontology.mcp.McpTools;
+import com.aircas.ptr.foundry.ontology.model.enums.ActionKindEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyAction;
 import com.aircas.ptr.foundry.ontology.model.po.OntologySpace;
@@ -57,6 +58,10 @@ public class OntologyActionMcpTools implements McpTools {
         var queryWrapper = new LambdaQueryWrapper<OntologyAction>()
                 .eq(OntologyAction::getStatus, Status.ENABLE.getValue())
                 .in(OntologyAction::getOntologySpaceId, spaceIds);
+        // 行为树不是单个可调用的动作，也没有绑定算子，暴露给 Agent 只会拿到一个无法执行的空工具。
+        // 类别为空的存量行为要保留，所以只排掉 TREE，不能写成 ne（SQL 里 NULL 不参与比较）
+        queryWrapper.and(w -> w.isNull(OntologyAction::getActionKind)
+                .or().ne(OntologyAction::getActionKind, ActionKindEnum.TREE));
         if (StringUtils.isNotEmpty(actionName)) {
             queryWrapper.and(w -> w.eq(OntologyAction::getDisplayName, actionName)
                     .or().eq(OntologyAction::getApi, actionName));

@@ -958,6 +958,9 @@ public class EntityServiceImpl implements EntityService {
     public ActionContextInfoDTO initActionContextInfoDTO(EntityActionExecuteParam param) {
 
         var actionDetailVO = actionService.getActionByApi(param.getActionApi());
+        // 行为树与行为同表，但它不绑算子也不写单条关系，按单个行为执行会报"算子不存在"这种误导提示
+        PreconditionUtils.checkArgument(actionDetailVO.getActionKind() != ActionKindEnum.TREE,
+                "行为树不能作为单个行为执行：" + param.getActionApi(), HttpStatus.BAD_REQUEST);
         // 算子 api 跨空间允许重名，执行必须按行为所属空间取，否则会跑到其他空间的同名算子上
         var functionDetailVO = functionService.getFunctionDetailByApi(actionDetailVO.getOntologySpaceId(),
                 actionDetailVO.getFunctionApi(), null);

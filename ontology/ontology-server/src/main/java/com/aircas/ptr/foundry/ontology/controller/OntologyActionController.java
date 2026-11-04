@@ -2,12 +2,14 @@ package com.aircas.ptr.foundry.ontology.controller;
 
 import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.controller.validator.OntologyIdVerify;
+import com.aircas.ptr.foundry.ontology.model.enums.ActionKindEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.ActionSchedulingTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.param.ActionCreateOrUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionSchedulingCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionSchedulingUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionTestParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyActionExecuteParam;
+import com.aircas.ptr.foundry.ontology.model.param.TreeExecuteParam;
 import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.aircas.ptr.foundry.ontology.service.OntologyActionService;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -18,6 +20,7 @@ import org.springframework.web.bind.annotation.*;
 
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
+import java.util.List;
 
 
 @Tag(name = "对象行为")
@@ -45,6 +48,15 @@ public class OntologyActionController {
         return RestResult.success();
     }
 
+    @Operation(summary = "发布或下线行为树")
+    @PostMapping("/publish")
+    public RestResult publishTree(@RequestParam(required = true, name = "actionApi") @Parameter(description = "行为树api") String actionApi,
+                                  @RequestParam(required = true, name = "status") @Parameter(description = "1 发布，0 下线") Integer status) {
+        ontologyActionService.publishTree(actionApi, status);
+        return RestResult.success();
+    }
+
+
     @Operation(summary = "依据actionApi删除行为")
     @DeleteMapping("/{actionApi}")
     public RestResult delete(@PathVariable(required = true, name = "actionApi") String actionApi) {
@@ -53,17 +65,18 @@ public class OntologyActionController {
         return RestResult.success();
     }
 
-    @Operation(summary = "分页获取行为列表（支持按空间、对象、分类、关键词和状态筛选）")
+    @Operation(summary = "分页获取行为列表（支持按空间、对象、分类、关键词、类别和状态筛选）")
     @GetMapping("/list")
     public RestResult<Page<OntologyActionInfoVO>> pageGetActionByOntologyId(@RequestParam(required = false, name = "ontologySpaceId") @Parameter(description = "对象空间id") Integer ontologySpaceId,
                                                                             @RequestParam(required = false, name = "ontologyId") @Parameter(description = "对象唯一标识符") String ontologyId,
                                                                             @RequestParam(required = false, name = "categoryId") @Parameter(description = "行为分类id") Integer categoryId,
                                                                             @RequestParam(required = false, name = "keyword") @Parameter(description = "关键词：行为名称、算子或描述") String keyword,
                                                                             @RequestParam(required = false, name = "status") @Parameter(description = "行为状态：1 启用，0 失效，不传查全部") Integer status,
+                                                                            @RequestParam(required = false, name = "actionKinds") @Parameter(description = "行为类别：BASE/APPLICATION/TREE，可多选，不传查全部") List<ActionKindEnum> actionKinds,
                                                                             @RequestParam(required = false, defaultValue = "1") Integer pageNum,
                                                                             @RequestParam(required = false, defaultValue = "10") Integer pageSize) {
 
-        return RestResult.ofData(ontologyActionService.pageGetActionByOntologyId(ontologySpaceId, ontologyId, categoryId, keyword, status, pageNum, pageSize));
+        return RestResult.ofData(ontologyActionService.pageGetActionByOntologyId(ontologySpaceId, ontologyId, categoryId, keyword, status, actionKinds, pageNum, pageSize));
     }
 
 
@@ -85,6 +98,13 @@ public class OntologyActionController {
     @PostMapping("/test")
     public RestResult<ActionTestResultVO> testAction(@RequestBody @Valid ActionTestParam param) {
         return RestResult.ofData(ontologyActionService.testAction(param));
+    }
+
+
+    @Operation(summary = "执行行为树（单轮，真实落库）")
+    @PostMapping("/tree/execute")
+    public RestResult<TreeExecuteResultVO> executeTree(@RequestBody @Valid TreeExecuteParam param) {
+        return RestResult.ofData(ontologyActionService.executeTree(param));
     }
 
 

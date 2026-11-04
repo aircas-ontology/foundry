@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
+import com.aircas.ptr.foundry.ontology.model.enums.ActionKindEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.SpaceTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import com.aircas.ptr.foundry.ontology.model.po.*;
@@ -53,7 +54,11 @@ public class OverviewServiceImpl implements OverviewService {
         var spaceType = SpaceTypeEnum.normalize(type);
         return OverviewCountVO.builder()
                 .spaceCount(Math.toIntExact(spaceMapper.selectCount(new LambdaQueryWrapper<OntologySpace>().eq(OntologySpace::getType, spaceType))))
-                .actionCount(Math.toIntExact(ontologyActionMapper.selectCount(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getStatus, Status.ENABLE.getValue()))))
+                // 行为总数不含行为树（同表存放）；类别为空的历史行为要保留，所以只排 TREE
+                .actionCount(Math.toIntExact(ontologyActionMapper.selectCount(new LambdaQueryWrapper<OntologyAction>()
+                        .eq(OntologyAction::getStatus, Status.ENABLE.getValue())
+                        .and(w -> w.isNull(OntologyAction::getActionKind)
+                                .or().ne(OntologyAction::getActionKind, ActionKindEnum.TREE)))))
                 .linkCount(Math.toIntExact(ontologyLinkGroupMapper.selectCount(new LambdaQueryWrapper<OntologyLinkGroup>().eq(OntologyLinkGroup::getStatus, Status.ENABLE.getValue()))))
                 .propertyCount(Math.toIntExact(propertyMapper.selectCount(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getStatus, Status.ENABLE.getValue()))))
                 .groupCount(Math.toIntExact(groupMapper.selectCount(new QueryWrapper<>())))
