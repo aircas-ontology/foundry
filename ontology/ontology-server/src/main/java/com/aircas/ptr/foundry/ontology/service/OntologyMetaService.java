@@ -4,6 +4,7 @@ import com.aircas.ptr.foundry.ontology.model.enums.OntologyExportTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.QuerySortEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyOrderByEnum;
 import com.aircas.ptr.foundry.ontology.model.dto.OntologyCreateDTO;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyAssetBuildParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyMetaCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
@@ -23,6 +24,25 @@ import java.util.List;
 public interface OntologyMetaService extends IService<OntologyMeta> {
 
     String createOntology(OntologyMetaCreateParam ontologyCreateParam);
+
+    /**
+     * 资产构建对象：先创建对象元数据，再在该对象下逐条创建属性，全程一个事务，任一步失败整单回滚。
+     *
+     * <p>与 {@link #createOntology(OntologyMetaCreateParam)} 的区别仅在于属性随请求一起落库，
+     * 免去前端「建对象拿 id → 再建属性」的两次调用。校验口径完全复用单个属性新增接口
+     * （{@code POST /property}），属性 apiName 重复、存储分组与对象 apiName 同名等问题同样报错回滚。</p>
+     *
+     * <p>分类兜底与画布落库一致：对象 categoryId 不传时挂到本空间对象分类根节点「全部」，
+     * 属性 categoryId 不传时挂到该对象属性分类根节点「全部」。</p>
+     *
+     * <p>属性可带 metadata，服务端会从所有属性的 metadata 自动推导并创建元数据 schema（单根树，
+     * 枚举值不推断），然后再创建属性。落库时序为「对象 → schema → 属性」。若同一字段在不同属性的
+     * metadata 里既是叶子又是分支（结构冲突），整单回滚。</p>
+     *
+     * @param param 对象信息 + 属性列表
+     * @return 新建对象的 uniqueIdentifier
+     */
+    String createOntologyWithProperties(OntologyAssetBuildParam param);
 
     List<OntologyGroupMetaVO> getByGroupId(String groupId, OntologyOrderByEnum orderBy, QuerySortEnum sort);
 

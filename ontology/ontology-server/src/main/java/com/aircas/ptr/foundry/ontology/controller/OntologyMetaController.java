@@ -7,6 +7,7 @@ import com.aircas.ptr.foundry.ontology.controller.validator.OntologyIdVerify;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyExportTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyOrderByEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.QuerySortEnum;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyAssetBuildParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyMetaCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.vo.IdentifierVO;
@@ -72,6 +73,14 @@ public class OntologyMetaController {
     @Operation(summary = "创建对象")
     public RestResult<IdentifierVO> createOntology(@RequestBody @Valid OntologyMetaCreateParam ontologyCreateParam) {
         String uniqIdentifier = ontologyMetaService.createOntology(ontologyCreateParam);
+        return RestResult.ofData(IdentifierVO.builder().uniqueIdentifier(uniqIdentifier).build());
+    }
+
+
+    @Operation(summary = "资产构建对象")
+    @PostMapping("/build_object")
+    public RestResult<IdentifierVO> buildObjectWithProperties(@RequestBody @Valid OntologyAssetBuildParam param) {
+        String uniqIdentifier = ontologyMetaService.createOntologyWithProperties(param);
         return RestResult.ofData(IdentifierVO.builder().uniqueIdentifier(uniqIdentifier).build());
     }
 
