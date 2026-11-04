@@ -539,12 +539,16 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             PreconditionUtils.checkArgument(!required, "该行为必须绑定一条对象关系", HttpStatus.BAD_REQUEST);
             return;
         }
-        var ontologyId = param.getOntologyIdentifier();
         var link = linkGroupMapper.selectOne(new LambdaQueryWrapper<OntologyLinkGroup>()
                 .eq(OntologyLinkGroup::getUniqueIdentifier, linkId));
-        PreconditionUtils.checkArgument(link != null && (ontologyId.equals(link.getOntologyUniqueIdentifierFrom())
-                        || ontologyId.equals(link.getOntologyUniqueIdentifierTo())),
-                "无效的对象关系：" + linkId, HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(link != null, "无效的对象关系：" + linkId, HttpStatus.BAD_REQUEST);
+        // 应用行为可不传 ontologyIdentifier（前端不选对象），此时跳过端点归属校验
+        var ontologyId = param.getOntologyIdentifier();
+        if (StringUtils.isNotEmpty(ontologyId)) {
+            PreconditionUtils.checkArgument(ontologyId.equals(link.getOntologyUniqueIdentifierFrom())
+                            || ontologyId.equals(link.getOntologyUniqueIdentifierTo()),
+                    "无效的对象关系：" + linkId, HttpStatus.BAD_REQUEST);
+        }
         definition.actionLink = OntologyActionLink.builder()
                 .ontologyLinkUniqueIdentifier(linkId)
                 .ontologyLinkParamExpression(linkMapping.getOntologyLinkFunctionParamExpression())
