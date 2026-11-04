@@ -8,6 +8,7 @@ import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import java.util.Map;
 
 @Data
@@ -17,6 +18,10 @@ import java.util.Map;
 @NoArgsConstructor
 @Schema(description = "行为测试请求")
 public class ActionTestParam {
+
+    @Schema(name = "ontologySpaceId", description = "对象空间id", example = "156", required = true)
+    @NotNull(message = "ontologySpaceId is null")
+    private Integer ontologySpaceId;
 
     @Schema(name = "actionApi", description = "行为api", example = "syncSpeed", required = true)
     @NotBlank(message = "actionApi is empty")

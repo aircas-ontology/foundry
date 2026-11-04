@@ -1011,7 +1011,7 @@ public class EntityServiceImpl implements EntityService {
 
     public ActionContextInfoDTO initActionContextInfoDTO(EntityActionExecuteParam param) {
 
-        var actionDetailVO = actionService.getActionByApi(param.getActionApi());
+        var actionDetailVO = actionService.getActionByApi(param.getOntologySpaceId(), param.getActionApi());
         // 属性值、实例关系行为不绑算子，上下文里没有算子定义，执行时按行为定义直接落库；
         // 算子 api 跨空间允许重名，取算子定义必须按行为所属空间，否则会跑到其他空间的同名算子上
         var functionDetailVO = StringUtils.isEmpty(actionDetailVO.getFunctionApi()) ? null

@@ -23,18 +23,19 @@ public interface OntologyActionService extends IService<OntologyAction> {
     void updateAction(ActionCreateOrUpdateParam param);
 
     /**
-     * 发布行为：草稿或已失效的行为置为已发布，才对智能体和调度可用。
+     * 发布行为：草稿的行为置为已发布，才对智能体和调度可用。
      * 绑算子的行为要求算子已发布，否则执行时取不到可用版本。
      *
-     * @param actionApi 行为 api
+     * @param ontologySpaceId 对象空间id
+     * @param actionApi       行为 api
      */
-    void publishAction(String actionApi);
+    void publishAction(Integer ontologySpaceId, String actionApi);
 
-    void deleteActionByApi(String actionApi);
+    void deleteActionByApi(Integer ontologySpaceId, String actionApi);
 
     Page<OntologyActionInfoVO> pageGetActionByOntologyId(Integer ontologySpaceId, String ontologyId, Integer categoryId, String keyword, Integer status, Integer pageNum, Integer pageSize);
 
-    OntologyActionDetailVO getActionByApi(String actionApi);
+    OntologyActionDetailVO getActionByApi(Integer ontologySpaceId, String actionApi);
 
     String executeAction(OntologyActionExecuteParam param);
 

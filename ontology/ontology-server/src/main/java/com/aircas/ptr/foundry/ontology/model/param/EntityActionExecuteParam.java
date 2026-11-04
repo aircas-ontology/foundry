@@ -17,6 +17,9 @@ import jakarta.validation.constraints.NotNull;
 @Schema(description = "实体行为执行请求")
 public class EntityActionExecuteParam extends EntityQueryParam {
 
+    @Schema(name = "ontologySpaceId", description = "对象空间id", example = "156")
+    @NotNull(message = "ontologySpaceId is null")
+    private Integer ontologySpaceId;
 
     @Schema(name = "actionApi", description = "actionApi", example = "compute")
     @NotBlank(message = "actionApi is null")

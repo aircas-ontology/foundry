@@ -319,7 +319,7 @@ comment on column ontology_action.description is '描述';
 
 comment on column ontology_action.display_name is '名称';
 
-comment on column ontology_action.status is '行为状态：2 草稿（未发布，智能体和调度不可用），1 已发布，0 已失效（定义跑不通，需重新编辑后发布）';
+comment on column ontology_action.status is '行为状态：2 草稿（未发布，智能体和调度不可用），1 已发布';
 
 comment on column ontology_action.handle_type is '动作执行类型；
 1：定时
