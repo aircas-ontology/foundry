@@ -294,7 +294,7 @@ create table if not exists ontology_action
     update_time                timestamp(6),
     description                varchar(255),
     display_name               varchar(50) default ''::character varying                                not null,
-    status                     smallint    default 1,
+    status                     smallint    default 2,
     handle_type                smallint    default 1,
     icon                       varchar(255),
     ontology_space_id          integer,
@@ -319,7 +319,7 @@ comment on column ontology_action.description is '描述';
 
 comment on column ontology_action.display_name is '名称';
 
-comment on column ontology_action.status is '状态，0标识删除，1标识可用';
+comment on column ontology_action.status is '行为状态：2 草稿（未发布，智能体和调度不可用），1 已发布';
 
 comment on column ontology_action.handle_type is '动作执行类型；
 1：定时

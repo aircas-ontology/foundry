@@ -9,7 +9,6 @@ import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
 
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
 @Data
@@ -17,11 +16,10 @@ import jakarta.validation.constraints.NotNull;
 @Accessors(chain = true)
 @NoArgsConstructor
 @AllArgsConstructor
-@Schema(description = "对象id Param")
+@Schema(description = "对象 id Param")
 public class OntologyIdentifierParam {
 
-    @NotBlank(message = "ontologyIdentifier is empty")
     @OntologyIdVerify
-    @Schema(name = "ontologyIdentifier", description = "对象id", example = "abcdef",required = true)
+    @Schema(name = "ontologyIdentifier", description = "对象 id（行为挂载的对象；应用行为可不传，从 linkMapping 推导）", example = "abcdef")
     private String ontologyIdentifier;
 }

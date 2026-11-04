@@ -1,7 +1,7 @@
 package com.aircas.ptr.foundry.ontology.mcp.tools;
 
 import com.aircas.ptr.foundry.ontology.mcp.McpTools;
-import com.aircas.ptr.foundry.ontology.model.enums.Status;
+import com.aircas.ptr.foundry.ontology.model.enums.ActionStatusEnum;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyAction;
 import com.aircas.ptr.foundry.ontology.model.po.OntologySpace;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyActionInfoVO;
@@ -55,7 +55,7 @@ public class OntologyActionMcpTools implements McpTools {
         var spaceIds = spaces.stream().map(OntologySpace::getId).collect(Collectors.toList());
 
         var queryWrapper = new LambdaQueryWrapper<OntologyAction>()
-                .eq(OntologyAction::getStatus, Status.ENABLE.getValue())
+                .eq(OntologyAction::getStatus, ActionStatusEnum.PUBLISHED.getValue())
                 .in(OntologyAction::getOntologySpaceId, spaceIds);
         if (StringUtils.isNotEmpty(actionName)) {
             queryWrapper.and(w -> w.eq(OntologyAction::getDisplayName, actionName)

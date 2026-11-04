@@ -213,13 +213,15 @@ public class ActionCategoryServiceImpl extends ServiceImpl<ActionCategoryMapper,
         var actions = CollectionUtils.isEmpty(ontologyIdentifiers)
                 ? Collections.<OntologyAction>emptyList()
                 : ontologyActionMapper.selectList(new LambdaQueryWrapper<OntologyAction>()
-                        .in(OntologyAction::getOntologyUniqueIdentifier, ontologyIdentifiers));
+                        .in(OntologyAction::getOntologyUniqueIdentifier, ontologyIdentifiers)
+                        // 与行为列表一致：分类节点下的行为也按最新创建在前
+                        .orderByDesc(OntologyAction::getId));
         var actionMap = actions.stream()
                 .filter(action -> action.getActionCategoryId() != null)
                 .collect(Collectors.groupingBy(OntologyAction::getActionCategoryId));
 
-        // 一次批量取函数描述，避免在递归装配 VO 时逐条查函数表
-        var functionDescMap = functionService.mapDescriptionByApi(actions.stream()
+        // 一次批量取函数描述，避免在递归装配 VO 时逐条查函数表；算子按本空间的版本取
+        var functionDescMap = functionService.mapDescriptionByApi(spaceId, actions.stream()
                 .map(OntologyAction::getFunctionApi)
                 .collect(Collectors.toList()));
 
@@ -260,6 +262,9 @@ public class ActionCategoryServiceImpl extends ServiceImpl<ActionCategoryMapper,
                             .icon(v.getIcon())
                             .functionApi(v.getFunctionApi())
                             .functionDescription(functionDescMap.get(v.getFunctionApi()))
+                            .status(v.getStatus())
+                            .createTime(v.getCreateTime())
+                            .updateTime(v.getUpdateTime())
                             .build())
                     .collect(Collectors.toList()));
         }

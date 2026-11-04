@@ -51,7 +51,7 @@ public class OntologyActionInfoVO {
     @Schema(name = "categoryId", description = "所属行为分类id", example = "1")
     private Integer categoryId;
 
-    @Schema(name = "status", description = "状态：1 可用，0 失效（定义后目标表新增了必填属性，需重新编辑发布）", example = "1")
+    @Schema(name = "status", description = "状态：2 草稿（未发布，智能体和调度不可用）/ 1 已发布", example = "1")
     private Integer status;
 
     @Schema(name = "actionKind", description = "行为类别：BASE 基础行为 / APPLICATION 应用行为", example = "BASE")
