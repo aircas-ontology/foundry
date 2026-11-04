@@ -800,8 +800,10 @@ public class EntityServiceImpl implements EntityService {
         }
         //插入新的实体关系（实体节点已存在）
         else {
-            var fromNode = nodeRepository.findByOntologyUniqIdentifierAndPrimaryKey(link.getOntologyUniqueIdentifierFrom(), param.getEntityPrimaryKeyFrom());
-            var toNode = nodeRepository.findByOntologyUniqIdentifierAndPrimaryKey(link.getOntologyUniqueIdentifierTo(), param.getEntityPrimaryKeyTo());
+            var fromPk = normalizePrimaryKey(param.getEntityPrimaryKeyFrom());
+            var toPk = normalizePrimaryKey(param.getEntityPrimaryKeyTo());
+            var fromNode = nodeRepository.findByOntologyUniqIdentifierAndPrimaryKey(link.getOntologyUniqueIdentifierFrom(), fromPk);
+            var toNode = nodeRepository.findByOntologyUniqIdentifierAndPrimaryKey(link.getOntologyUniqueIdentifierTo(), toPk);
             PreconditionUtils.checkArgument(fromNode != null && toNode != null, "实体节点不存在");
             var nearest = nearestWindow(param.getVisibilityWindows());
             relation = EntityRelation.builder()
@@ -1450,12 +1452,14 @@ public class EntityServiceImpl implements EntityService {
                 primaryKeyFrom, link.getOntologyUniqueIdentifierTo(), primaryKeyTo, linkGroupId);
 
         if (relation == null) {
-            var fromNode = nodeRepository.findByOntologyUniqIdentifierAndPrimaryKey(link.getOntologyUniqueIdentifierFrom(), primaryKeyFrom);
-            var toNode = nodeRepository.findByOntologyUniqIdentifierAndPrimaryKey(link.getOntologyUniqueIdentifierTo(), primaryKeyTo);
+            var fromPk = normalizePrimaryKey(primaryKeyFrom);
+            var toPk = normalizePrimaryKey(primaryKeyTo);
+            var fromNode = nodeRepository.findByOntologyUniqIdentifierAndPrimaryKey(link.getOntologyUniqueIdentifierFrom(), fromPk);
+            var toNode = nodeRepository.findByOntologyUniqIdentifierAndPrimaryKey(link.getOntologyUniqueIdentifierTo(), toPk);
             if (fromNode == null || toNode == null) {
                 //图库里的节点可能被清理过，缺端点时无法建边
                 log.warn("行为函数实例关系边落位跳过：端点节点不存在，link={}, fromPk={}, toPk={}",
-                        link.getUniqueIdentifier(), primaryKeyFrom, primaryKeyTo);
+                        link.getUniqueIdentifier(), fromPk, toPk);
             } else {
                 relationRepository.save(EntityRelation.builder()
                         .ontologyLinkId(link.getUniqueIdentifier())
@@ -1624,7 +1628,20 @@ public class EntityServiceImpl implements EntityService {
      * 与 {@link #syncNodes} 的转换口径保持一致，否则同一实例会被建出重复节点。
      */
     private Object normalizePrimaryKey(Object primaryKeyValue) {
-        return primaryKeyValue instanceof Integer ? Long.parseLong(primaryKeyValue.toString()) : primaryKeyValue;
+        if (primaryKeyValue == null) {
+            return null;
+        }
+        if (primaryKeyValue instanceof String str) {
+            try {
+                return Long.parseLong(str);
+            } catch (NumberFormatException e) {
+                return str;
+            }
+        }
+        if (primaryKeyValue instanceof Integer) {
+            return Long.parseLong(primaryKeyValue.toString());
+        }
+        return primaryKeyValue;
     }
 
     private EntityNode buildEntityNode(String ontologyUniqueIdentifier, String tableName,
