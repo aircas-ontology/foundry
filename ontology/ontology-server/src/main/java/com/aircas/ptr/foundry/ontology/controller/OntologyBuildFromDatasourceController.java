@@ -36,8 +36,7 @@ public class OntologyBuildFromDatasourceController {
 
     private final OntologyBuildFromDatasourceService ontologyBuildFromDatasourceService;
 
-    @Operation(summary = "用外部数据源勾选的表与列创建一个对象（主表建 apiName 表、子表按原名建表并写列映射；"
-            + "所有校验在任何建表动作前完成，列名跨主子表重复整单报错）")
+    @Operation(summary = "用外部数据源勾选的表与列创建一个对象")
     @PostMapping("/build_object")
     public RestResult<OntologyBuildFromDatasourceResultVO> buildObject(
             @RequestBody @Valid OntologyBuildFromDatasourceParam param) {

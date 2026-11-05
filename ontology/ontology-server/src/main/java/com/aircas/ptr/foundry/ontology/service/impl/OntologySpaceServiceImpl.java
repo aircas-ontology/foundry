@@ -12,11 +12,11 @@ import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyLinkCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyMetaCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyCreateParam;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologySpaceCanvasCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.CategoryNode;
 import com.aircas.ptr.foundry.ontology.model.param.OntologySpaceCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyCategoryCreateParam;
-import com.aircas.ptr.foundry.ontology.model.param.PropertyCategoryCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyLinkCategoryCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionCategoryCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologySpaceUpdateParam;
@@ -47,6 +47,7 @@ import com.aircas.ptr.foundry.ontology.service.PropertyCategoryService;
 import com.aircas.ptr.foundry.ontology.service.OntologySpaceService;
 import com.aircas.ptr.foundry.ontology.service.TableMetadataService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
@@ -90,6 +91,9 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Date;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Stream;
@@ -102,6 +106,19 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
 
     // 管理员可查看全部主题，不按创建人过滤
     private static final Set<String> TOPIC_ADMIN_USERNAMES = Set.of("admin", "admin1");
+
+    private static final String CONFLICT_TYPE_ONTOLOGY = "ONTOLOGY";
+    private static final String CONFLICT_TYPE_PROPERTY = "PROPERTY";
+    private static final String CONFLICT_TYPE_LINK = "LINK";
+    private static final String REASON_FIELD_CONFLICT = "FIELD_CONFLICT";
+    private static final String REASON_DELETED_BY_OTHERS = "DELETED_BY_OTHERS";
+    private static final String REASON_DELETE_CONFLICT = "DELETE_CONFLICT";
+    private static final String REASON_NAME_CONFLICT = "NAME_CONFLICT";
+    private static final String REASON_API_NAME_IMMUTABLE = "API_NAME_IMMUTABLE";
+    private static final String REASON_ENDPOINT_IMMUTABLE = "ENDPOINT_IMMUTABLE";
+    private static final String REASON_INVALID_BASE = "INVALID_BASE";
+    private static final String REASON_PROPERTY_DELETE_FORBIDDEN = "PROPERTY_DELETE_FORBIDDEN";
+    private static final String REASON_PARENT_DELETED = "PARENT_DELETED";
 
     private final OntologyMetaMapper metaMapper;
 
@@ -193,69 +210,643 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
     @Override
     public OntologySpaceCanvasCreateVO createSpaceWithCanvasContent(OntologySpaceCanvasCreateParam param) {
         Integer spaceId = param.getSpaceId();
-
-        var space = spaceMapper.selectById(spaceId);
+        PreconditionUtils.checkNotNull(spaceId, "spaceId is empty", HttpStatus.BAD_REQUEST);
+        // 锁空间行，让同一空间的画布保存串行执行，避免两个请求同时基于旧快照互相覆盖
+        var space = spaceMapper.selectOne(new LambdaQueryWrapper<OntologySpace>()
+                .eq(OntologySpace::getId, spaceId)
+                .last("FOR UPDATE"));
         PreconditionUtils.checkNotNull(space, "空间id不存在", HttpStatus.BAD_REQUEST);
 
-        /*var existingMetaList = metaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>()
-                .eq(OntologyMeta::getOntologySpaceId, spaceId));
-        PreconditionUtils.checkArgument(CollectionUtils.isEmpty(existingMetaList),
-                "该空间下已存在对象，无法创建画布", HttpStatus.BAD_REQUEST);*/
+        // ===== 数据库现状 =====
+        var dbMetas = metaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>()
+                .eq(OntologyMeta::getOntologySpaceId, spaceId)
+                .eq(OntologyMeta::getStatus, Status.ENABLE.getValue())
+                .orderByAsc(OntologyMeta::getId));
+        Map<String, OntologyMeta> dbMetaByUid = dbMetas.stream()
+                .collect(Collectors.toMap(OntologyMeta::getUniqueIdentifier, v -> v, (a, b) -> a));
+        List<OntologyProperty> dbProperties = dbMetas.isEmpty() ? Lists.newArrayList()
+                : propertyMapper.selectList(new LambdaQueryWrapper<OntologyProperty>()
+                .in(OntologyProperty::getOntologyUniqueIdentifier, dbMetaByUid.keySet())
+                .eq(OntologyProperty::getStatus, Status.ENABLE.getValue())
+                .orderByAsc(OntologyProperty::getId));
+        Map<String, OntologyProperty> dbPropertyByUid = dbProperties.stream()
+                .collect(Collectors.toMap(OntologyProperty::getUniqueIdentifier, v -> v, (a, b) -> a));
+        var dbLinks = linkMapper.selectList(new LambdaQueryWrapper<OntologyLinkGroup>()
+                .eq(OntologyLinkGroup::getOntologySpaceId, spaceId)
+                .eq(OntologyLinkGroup::getStatus, Status.ENABLE.getValue())
+                .orderByAsc(OntologyLinkGroup::getId));
+        Map<String, OntologyLinkGroup> dbLinkByUid = dbLinks.stream()
+                .collect(Collectors.toMap(OntologyLinkGroup::getUniqueIdentifier, v -> v, (a, b) -> a));
 
-        Integer defaultCategoryId = getOntologyCategoryRoot(spaceId);
-        Integer defaultLinkCategoryId = getLinkCategoryRoot(spaceId);
+        var structuralConflicts = new ArrayList<OntologySpaceCanvasCreateVO.CanvasConflict>();
+        var fieldConflicts = new ArrayList<OntologySpaceCanvasCreateVO.CanvasConflict>();
+        var base = param.getBase();
+        boolean createOnly = base == null;
+        // base 模式下 current 列表是"完整画布"，缺字段会被误判成全删，直接当结构错误拒绝
+        if (!createOnly && (param.getOntologies() == null || param.getLinks() == null)) {
+            addStructuralConflict(structuralConflicts, CONFLICT_TYPE_ONTOLOGY, null, null, null, null,
+                    REASON_INVALID_BASE, "带 base 保存时必须同时传完整的 ontologies 和 links 列表");
+        }
 
-        // create ontologies & properties, record apiName/displayName -> uniqueIdentifier for link resolution
-        Map<String, String> uidByApiName = new HashMap<>();
-        Map<String, String> uidByDisplayName = new HashMap<>();
-        if (CollectionUtils.isNotEmpty(param.getOntologies())) {
-            for (var canvasOntology : param.getOntologies()) {
-                var metaParam = new OntologyMetaCreateParam()
-                        .setDisplayName(canvasOntology.getDisplayName())
-                        .setApiName(canvasOntology.getApiName())
-                        .setDescription(canvasOntology.getDescription())
-                        .setIconUrl(canvasOntology.getIconUrl())
-                        .setCategoryId(defaultCategoryId);
-                metaParam.setSpaceId(spaceId);
-
-                var uniqueIdentifier = ontologyMetaService.createOntology(metaParam);
-                uidByApiName.put(canvasOntology.getApiName(), uniqueIdentifier);
-                uidByDisplayName.put(canvasOntology.getDisplayName(), uniqueIdentifier);
-
-                Integer defaultPropertyCategoryId = getPropertyCategoryRoot(uniqueIdentifier);
-
-                if (CollectionUtils.isNotEmpty(canvasOntology.getProperties())) {
-                    for (var canvasProperty : canvasOntology.getProperties()) {
-                        ontologyPropertyService.createProperty(
-                                buildPropertyCreateParam(uniqueIdentifier, canvasProperty, defaultPropertyCategoryId));
+        // ===== base / current 结构校验 =====
+        Map<String, OntologySpaceCanvasCreateParam.CanvasOntology> baseOntologyByUid = new LinkedHashMap<>();
+        Map<String, CanvasPropertyRef> basePropertyByUid = new LinkedHashMap<>();
+        Map<String, OntologySpaceCanvasCreateParam.CanvasLink> baseLinkByUid = new LinkedHashMap<>();
+        if (base != null) {
+            for (var baseOntology : safeList(base.getOntologies())) {
+                String uid = baseOntology.getUniqueIdentifier();
+                if (StringUtils.isBlank(uid)) {
+                    addStructuralConflict(structuralConflicts, CONFLICT_TYPE_ONTOLOGY, null,
+                            baseOntology.getApiName(), baseOntology.getDisplayName(), null,
+                            REASON_INVALID_BASE, "base 中的对象缺少 uniqueIdentifier");
+                    continue;
+                }
+                if (baseOntologyByUid.put(uid, baseOntology) != null) {
+                    addStructuralConflict(structuralConflicts, CONFLICT_TYPE_ONTOLOGY, uid,
+                            baseOntology.getApiName(), baseOntology.getDisplayName(), null,
+                            REASON_INVALID_BASE, "base 中对象 uniqueIdentifier 重复：" + uid);
+                }
+                for (var baseProperty : safeList(baseOntology.getProperties())) {
+                    String propertyUid = baseProperty.getUniqueIdentifier();
+                    if (StringUtils.isBlank(propertyUid)) {
+                        addStructuralConflict(structuralConflicts, CONFLICT_TYPE_PROPERTY, null,
+                                baseProperty.getApiName(), baseProperty.getDisplayName(), uid,
+                                REASON_INVALID_BASE, "base 中的属性缺少 uniqueIdentifier");
+                        continue;
                     }
+                    if (basePropertyByUid.put(propertyUid, new CanvasPropertyRef(uid, baseProperty)) != null) {
+                        addStructuralConflict(structuralConflicts, CONFLICT_TYPE_PROPERTY, propertyUid,
+                                baseProperty.getApiName(), baseProperty.getDisplayName(), uid,
+                                REASON_INVALID_BASE, "base 中属性 uniqueIdentifier 重复：" + propertyUid);
+                    }
+                }
+            }
+            for (var baseLink : safeList(base.getLinks())) {
+                String uid = baseLink.getUniqueIdentifier();
+                if (StringUtils.isBlank(uid)) {
+                    addStructuralConflict(structuralConflicts, CONFLICT_TYPE_LINK, null,
+                            baseLink.getApiName(), baseLink.getName(), null,
+                            REASON_INVALID_BASE, "base 中的关系缺少 uniqueIdentifier");
+                    continue;
+                }
+                if (baseLinkByUid.put(uid, baseLink) != null) {
+                    addStructuralConflict(structuralConflicts, CONFLICT_TYPE_LINK, uid,
+                            baseLink.getApiName(), baseLink.getName(), null,
+                            REASON_INVALID_BASE, "base 中关系 uniqueIdentifier 重复：" + uid);
                 }
             }
         }
 
-        // create links; each link is bound to the default relation category root
-        if (CollectionUtils.isNotEmpty(param.getLinks())) {
-            for (var canvasLink : param.getLinks()) {
-                var fromUid = resolveOntologyUid(canvasLink.getFromOntologyApiName(), uidByApiName, uidByDisplayName);
-                var toUid = resolveOntologyUid(canvasLink.getToOntologyApiName(), uidByApiName, uidByDisplayName);
-                // apiName is required by createLink; pass through the canvas value, fall back to a generated one
-                var linkApiName = StringUtils.isNotBlank(canvasLink.getApiName())
-                        ? canvasLink.getApiName()
-                        : ("relation_" + IdGenerator.generateUUID());
-                var linkParam = new OntologyLinkCreateParam()
-                        .setName(canvasLink.getName())
-                        .setApiName(linkApiName)
-                        .setOntologyUniqueIdentifierFrom(fromUid)
-                        .setOntologyUniqueIdentifierTo(toUid)
-                        .setType(OntologyLinkTypeEnum.OTHER)
-                        .setSpaceId(spaceId)
-                        .setCategoryId(defaultLinkCategoryId);
-                ontologyLinkGroupService.createLink(linkParam);
+        Map<String, OntologySpaceCanvasCreateParam.CanvasOntology> currentOntologyByUid = new LinkedHashMap<>();
+        Map<String, CanvasPropertyRef> currentPropertyByUid = new LinkedHashMap<>();
+        Map<String, OntologySpaceCanvasCreateParam.CanvasLink> currentLinkByUid = new LinkedHashMap<>();
+        var ontologyCreates = new ArrayList<OntologySpaceCanvasCreateParam.CanvasOntology>();
+        var propertyCreates = new ArrayList<CanvasPropertyCreate>();
+        var linkCreates = new ArrayList<OntologySpaceCanvasCreateParam.CanvasLink>();
+
+        for (var ontology : safeList(param.getOntologies())) {
+            String uid = ontology.getUniqueIdentifier();
+            if (StringUtils.isBlank(uid)) {
+                ontologyCreates.add(ontology);
+                // 空串同样是"新增"：统一成 null，后续按 ownerOntologyUid == null 判断归属
+                uid = null;
+            } else if (createOnly) {
+                addStructuralConflict(structuralConflicts, CONFLICT_TYPE_ONTOLOGY, uid,
+                        ontology.getApiName(), ontology.getDisplayName(), null,
+                        REASON_INVALID_BASE, "不传 base 时不能带 uniqueIdentifier");
+            } else if (!baseOntologyByUid.containsKey(uid)) {
+                addStructuralConflict(structuralConflicts, CONFLICT_TYPE_ONTOLOGY, uid,
+                        ontology.getApiName(), ontology.getDisplayName(), null,
+                        REASON_INVALID_BASE, "对象不在 base 中：" + uid);
+            } else if (currentOntologyByUid.put(uid, ontology) != null) {
+                addStructuralConflict(structuralConflicts, CONFLICT_TYPE_ONTOLOGY, uid,
+                        ontology.getApiName(), ontology.getDisplayName(), null,
+                        REASON_INVALID_BASE, "对象 uniqueIdentifier 重复：" + uid);
             }
+            for (var property : safeList(ontology.getProperties())) {
+                String propertyUid = property.getUniqueIdentifier();
+                if (StringUtils.isBlank(propertyUid)) {
+                    propertyCreates.add(new CanvasPropertyCreate(uid, ontology, property));
+                    continue;
+                }
+                if (createOnly) {
+                    addStructuralConflict(structuralConflicts, CONFLICT_TYPE_PROPERTY, propertyUid,
+                            property.getApiName(), property.getDisplayName(), uid,
+                            REASON_INVALID_BASE, "不传 base 时不能带 uniqueIdentifier");
+                    continue;
+                }
+                var baseRef = basePropertyByUid.get(propertyUid);
+                if (baseRef == null) {
+                    addStructuralConflict(structuralConflicts, CONFLICT_TYPE_PROPERTY, propertyUid,
+                            property.getApiName(), property.getDisplayName(), uid,
+                            REASON_INVALID_BASE, "属性不在 base 中：" + propertyUid);
+                    continue;
+                }
+                if (uid == null || !Objects.equals(baseRef.ownerOntologyUid, uid)) {
+                    addStructuralConflict(structuralConflicts, CONFLICT_TYPE_PROPERTY, propertyUid,
+                            property.getApiName(), property.getDisplayName(), uid,
+                            REASON_INVALID_BASE, "属性不能移动到其他对象下：" + propertyUid);
+                    continue;
+                }
+                if (currentPropertyByUid.put(propertyUid, new CanvasPropertyRef(uid, property)) != null) {
+                    addStructuralConflict(structuralConflicts, CONFLICT_TYPE_PROPERTY, propertyUid,
+                            property.getApiName(), property.getDisplayName(), uid,
+                            REASON_INVALID_BASE, "属性 uniqueIdentifier 重复：" + propertyUid);
+                }
+            }
+        }
+
+        for (var link : safeList(param.getLinks())) {
+            String uid = link.getUniqueIdentifier();
+            if (StringUtils.isBlank(uid)) {
+                linkCreates.add(link);
+                continue;
+            }
+            if (createOnly) {
+                addStructuralConflict(structuralConflicts, CONFLICT_TYPE_LINK, uid,
+                        link.getApiName(), link.getName(), null,
+                        REASON_INVALID_BASE, "不传 base 时不能带 uniqueIdentifier");
+                continue;
+            }
+            if (!baseLinkByUid.containsKey(uid)) {
+                addStructuralConflict(structuralConflicts, CONFLICT_TYPE_LINK, uid,
+                        link.getApiName(), link.getName(), null,
+                        REASON_INVALID_BASE, "关系不在 base 中：" + uid);
+                continue;
+            }
+            if (currentLinkByUid.put(uid, link) != null) {
+                addStructuralConflict(structuralConflicts, CONFLICT_TYPE_LINK, uid,
+                        link.getApiName(), link.getName(), null,
+                        REASON_INVALID_BASE, "关系 uniqueIdentifier 重复：" + uid);
+            }
+        }
+
+        // ===== 对象 diff =====
+        var ontologyUpdates = new ArrayList<CanvasOntologyUpdate>();
+        Map<String, CanvasOntologyUpdate> ontologyUpdateByUid = new LinkedHashMap<>();
+        var ontologyDeletes = new LinkedHashSet<String>();
+        for (var current : currentOntologyByUid.values()) {
+            String uid = current.getUniqueIdentifier();
+            var baseOntology = baseOntologyByUid.get(uid);
+            var db = dbMetaByUid.get(uid);
+            if (db == null) {
+                if (ontologyUserEdited(current, baseOntology)) {
+                    addFieldConflict(fieldConflicts, CONFLICT_TYPE_ONTOLOGY, uid, current.getApiName(),
+                            current.getDisplayName(), null, REASON_DELETED_BY_OTHERS,
+                            "该对象已被他人删除，本次修改未保存");
+                }
+                continue;
+            }
+            if (!Objects.equals(current.getApiName(), db.getApiName())) {
+                addStructuralConflict(structuralConflicts, CONFLICT_TYPE_ONTOLOGY, uid, current.getApiName(),
+                        current.getDisplayName(), null, REASON_API_NAME_IMMUTABLE,
+                        "对象 apiName 不允许修改，请删除后重建");
+                continue;
+            }
+            var merge = mergeOntology(baseOntology, current, db);
+            if (!merge.conflicts.isEmpty()) {
+                fieldConflicts.add(merge.toConflict(CONFLICT_TYPE_ONTOLOGY, uid,
+                        current.getApiName(), current.getDisplayName(), null));
+            }
+            if (!merge.writes.isEmpty()) {
+                var update = new CanvasOntologyUpdate(uid, merge.writes);
+                ontologyUpdates.add(update);
+                ontologyUpdateByUid.put(uid, update);
+            }
+        }
+        for (var entry : baseOntologyByUid.entrySet()) {
+            String uid = entry.getKey();
+            if (currentOntologyByUid.containsKey(uid)) {
+                continue;
+            }
+            var db = dbMetaByUid.get(uid);
+            if (db == null) {
+                continue;
+            }
+            if (ontologyDbChanged(db, entry.getValue())) {
+                addFieldConflict(fieldConflicts, CONFLICT_TYPE_ONTOLOGY, uid, db.getApiName(),
+                        db.getDisplayName(), null, REASON_DELETE_CONFLICT,
+                        "该对象在加载后已被他人修改，本次删除未执行");
+                continue;
+            }
+            ontologyDeletes.add(uid);
+        }
+
+        // ===== 属性 diff =====
+        var propertyDeletes = new LinkedHashSet<String>();
+        var propertyUpdates = new ArrayList<CanvasPropertyUpdate>();
+        Map<String, CanvasPropertyUpdate> propertyUpdateByUid = new LinkedHashMap<>();
+        Map<String, List<OntologySpaceCanvasCreateParam.CanvasProperty>> currentPropertiesByOwner = new HashMap<>();
+        for (var currentOntology : currentOntologyByUid.values()) {
+            currentPropertiesByOwner.put(currentOntology.getUniqueIdentifier(),
+                    safeList(currentOntology.getProperties()));
+        }
+        for (var currentOntology : safeList(param.getOntologies())) {
+            String ownerUid = currentOntology.getUniqueIdentifier();
+            var baseOntology = ownerUid == null ? null : baseOntologyByUid.get(ownerUid);
+            if (baseOntology == null) {
+                continue;
+            }
+            Set<String> currentPropertyUids = safeList(currentOntology.getProperties()).stream()
+                    .map(OntologySpaceCanvasCreateParam.CanvasProperty::getUniqueIdentifier)
+                    .filter(StringUtils::isNotBlank)
+                    .collect(Collectors.toSet());
+            for (var baseProperty : safeList(baseOntology.getProperties())) {
+                String propertyUid = baseProperty.getUniqueIdentifier();
+                if (StringUtils.isBlank(propertyUid) || currentPropertyUids.contains(propertyUid)) {
+                    continue;
+                }
+                var dbProperty = dbPropertyByUid.get(propertyUid);
+                if (dbProperty == null) {
+                    continue;
+                }
+                if (propertyDbChanged(dbProperty, baseProperty)) {
+                    addFieldConflict(fieldConflicts, CONFLICT_TYPE_PROPERTY, propertyUid,
+                            dbProperty.getApiName(), dbProperty.getDisplayName(), ownerUid,
+                            REASON_DELETE_CONFLICT, "该属性在加载后已被他人修改，本次删除未执行");
+                    continue;
+                }
+                // 同一保存里已有别的属性接手主键/标题键时允许删除（落库前先清旧标记再删）
+                var ownerProperties = currentPropertiesByOwner.get(ownerUid);
+                boolean primaryKeyLeftUncovered = isOne(dbProperty.getIsPrimaryKey())
+                        && !hasFinalKey(ownerUid, ownerProperties, basePropertyByUid, true);
+                boolean titleKeyLeftUncovered = isOne(dbProperty.getIsTitleKey())
+                        && !hasFinalKey(ownerUid, ownerProperties, basePropertyByUid, false);
+                if (primaryKeyLeftUncovered || titleKeyLeftUncovered) {
+                    addStructuralConflict(structuralConflicts, CONFLICT_TYPE_PROPERTY, propertyUid,
+                            dbProperty.getApiName(), dbProperty.getDisplayName(), ownerUid,
+                            REASON_PROPERTY_DELETE_FORBIDDEN, "主键和标题键属性不能删除");
+                    continue;
+                }
+                propertyDeletes.add(propertyUid);
+            }
+        }
+
+        for (var currentOntology : safeList(param.getOntologies())) {
+            String ownerUid = StringUtils.isBlank(currentOntology.getUniqueIdentifier())
+                    ? null : currentOntology.getUniqueIdentifier();
+            boolean ownerIsNew = ownerUid == null;
+            boolean ownerDeletedByOthers = !ownerIsNew && !dbMetaByUid.containsKey(ownerUid);
+            for (var currentProperty : safeList(currentOntology.getProperties())) {
+                String propertyUid = currentProperty.getUniqueIdentifier();
+                if (StringUtils.isBlank(propertyUid)) {
+                    if (ownerDeletedByOthers) {
+                        addStructuralConflict(structuralConflicts, CONFLICT_TYPE_PROPERTY, null,
+                                currentProperty.getApiName(), currentProperty.getDisplayName(), ownerUid,
+                                REASON_PARENT_DELETED, "属性所属对象已被他人删除，本次新增未执行");
+                    }
+                    continue;
+                }
+                var baseRef = basePropertyByUid.get(propertyUid);
+                if (baseRef == null) {
+                    // 结构校验阶段已记录 INVALID_BASE
+                    continue;
+                }
+                var dbProperty = dbPropertyByUid.get(propertyUid);
+                if (dbProperty == null) {
+                    if (propertyUserEdited(currentProperty, baseRef.property)) {
+                        addFieldConflict(fieldConflicts, CONFLICT_TYPE_PROPERTY, propertyUid,
+                                currentProperty.getApiName(), currentProperty.getDisplayName(), ownerUid,
+                                REASON_DELETED_BY_OTHERS, "该属性已被他人删除，本次修改未保存");
+                    }
+                    continue;
+                }
+                if (!Objects.equals(currentProperty.getApiName(), dbProperty.getApiName())) {
+                    addStructuralConflict(structuralConflicts, CONFLICT_TYPE_PROPERTY, propertyUid,
+                            currentProperty.getApiName(), currentProperty.getDisplayName(), ownerUid,
+                            REASON_API_NAME_IMMUTABLE, "属性 apiName 不允许修改，请删除后重建");
+                    continue;
+                }
+                var merge = mergeProperty(baseRef.property, currentProperty, dbProperty);
+                if (!merge.conflicts.isEmpty()) {
+                    fieldConflicts.add(merge.toConflict(CONFLICT_TYPE_PROPERTY, propertyUid,
+                            currentProperty.getApiName(), currentProperty.getDisplayName(), ownerUid));
+                }
+                if (!merge.writes.isEmpty()) {
+                    var update = new CanvasPropertyUpdate(propertyUid, dbProperty, merge.writes);
+                    propertyUpdates.add(update);
+                    propertyUpdateByUid.put(propertyUid, update);
+                }
+            }
+        }
+
+        // ===== 最终存活集合的唯一性校验 =====
+        Set<String> finalApiNames = new LinkedHashSet<>();
+        Map<String, String> displayNameToFinalApiName = new LinkedHashMap<>();
+        Set<String> ontologyApiNames = new HashSet<>();
+        Set<String> ontologyDisplayNames = new HashSet<>();
+        for (var db : dbMetas) {
+            String uid = db.getUniqueIdentifier();
+            if (ontologyDeletes.contains(uid)) {
+                continue;
+            }
+            var update = ontologyUpdateByUid.get(uid);
+            String displayName = update != null && update.writes.containsKey("displayName")
+                    ? (String) update.writes.get("displayName") : db.getDisplayName();
+            finalApiNames.add(db.getApiName());
+            displayNameToFinalApiName.put(displayName, db.getApiName());
+            if (!ontologyApiNames.add(db.getApiName())) {
+                addStructuralConflict(structuralConflicts, CONFLICT_TYPE_ONTOLOGY, uid, db.getApiName(),
+                        displayName, null, REASON_NAME_CONFLICT, "对象 apiName 重复：" + db.getApiName());
+            }
+            if (!ontologyDisplayNames.add(displayName)) {
+                addStructuralConflict(structuralConflicts, CONFLICT_TYPE_ONTOLOGY, uid, db.getApiName(),
+                        displayName, null, REASON_NAME_CONFLICT, "对象名称重复：" + displayName);
+            }
+        }
+        for (var create : ontologyCreates) {
+            finalApiNames.add(create.getApiName());
+            displayNameToFinalApiName.put(create.getDisplayName(), create.getApiName());
+            if (!ontologyApiNames.add(create.getApiName())) {
+                addStructuralConflict(structuralConflicts, CONFLICT_TYPE_ONTOLOGY, null, create.getApiName(),
+                        create.getDisplayName(), null, REASON_NAME_CONFLICT,
+                        "对象 apiName 重复：" + create.getApiName());
+            }
+            if (!ontologyDisplayNames.add(create.getDisplayName())) {
+                addStructuralConflict(structuralConflicts, CONFLICT_TYPE_ONTOLOGY, null, create.getApiName(),
+                        create.getDisplayName(), null, REASON_NAME_CONFLICT,
+                        "对象名称重复：" + create.getDisplayName());
+            }
+        }
+
+        Map<OntologySpaceCanvasCreateParam.CanvasOntology, String> newOntologyKeys = new IdentityHashMap<>();
+        for (int i = 0; i < ontologyCreates.size(); i++) {
+            newOntologyKeys.put(ontologyCreates.get(i), "new#" + i);
+        }
+        Map<String, Set<String>> propertyApiNames = new HashMap<>();
+        Map<String, Set<String>> propertyDisplayNames = new HashMap<>();
+        for (var dbProperty : dbProperties) {
+            String ownerUid = dbProperty.getOntologyUniqueIdentifier();
+            if (ontologyDeletes.contains(ownerUid) || propertyDeletes.contains(dbProperty.getUniqueIdentifier())) {
+                continue;
+            }
+            var update = propertyUpdateByUid.get(dbProperty.getUniqueIdentifier());
+            String displayName = update != null && update.writes.containsKey("displayName")
+                    ? (String) update.writes.get("displayName") : dbProperty.getDisplayName();
+            if (!propertyApiNames.computeIfAbsent(ownerUid, k -> new HashSet<>()).add(dbProperty.getApiName())) {
+                addStructuralConflict(structuralConflicts, CONFLICT_TYPE_PROPERTY, dbProperty.getUniqueIdentifier(),
+                        dbProperty.getApiName(), displayName, ownerUid, REASON_NAME_CONFLICT,
+                        "属性 apiName 重复：" + dbProperty.getApiName());
+            }
+            if (!propertyDisplayNames.computeIfAbsent(ownerUid, k -> new HashSet<>()).add(displayName)) {
+                addStructuralConflict(structuralConflicts, CONFLICT_TYPE_PROPERTY, dbProperty.getUniqueIdentifier(),
+                        dbProperty.getApiName(), displayName, ownerUid, REASON_NAME_CONFLICT,
+                        "属性名称重复：" + displayName);
+            }
+        }
+        for (var create : propertyCreates) {
+            String ownerKey = create.ownerOntologyUid != null
+                    ? create.ownerOntologyUid : newOntologyKeys.get(create.ownerOntology);
+            if (!propertyApiNames.computeIfAbsent(ownerKey, k -> new HashSet<>()).add(create.property.getApiName())) {
+                addStructuralConflict(structuralConflicts, CONFLICT_TYPE_PROPERTY, null,
+                        create.property.getApiName(), create.property.getDisplayName(),
+                        create.ownerOntologyUid, REASON_NAME_CONFLICT,
+                        "属性 apiName 重复：" + create.property.getApiName());
+            }
+            if (!propertyDisplayNames.computeIfAbsent(ownerKey, k -> new HashSet<>())
+                    .add(create.property.getDisplayName())) {
+                addStructuralConflict(structuralConflicts, CONFLICT_TYPE_PROPERTY, null,
+                        create.property.getApiName(), create.property.getDisplayName(),
+                        create.ownerOntologyUid, REASON_NAME_CONFLICT,
+                        "属性名称重复：" + create.property.getDisplayName());
+            }
+        }
+
+        // ===== 关系 diff =====
+        var linkDeletes = new LinkedHashSet<String>();
+        var linkUpdates = new ArrayList<CanvasLinkUpdate>();
+        var newLinkCreates = new ArrayList<CanvasLinkCreate>();
+        for (var current : currentLinkByUid.values()) {
+            String uid = current.getUniqueIdentifier();
+            var baseLink = baseLinkByUid.get(uid);
+            var dbLink = dbLinkByUid.get(uid);
+            if (dbLink == null) {
+                if (linkUserEdited(current, baseLink)) {
+                    addFieldConflict(fieldConflicts, CONFLICT_TYPE_LINK, uid, current.getApiName(),
+                            current.getName(), null, REASON_DELETED_BY_OTHERS,
+                            "该关系已被他人删除，本次修改未保存");
+                }
+                continue;
+            }
+            if (ontologyDeletes.contains(dbLink.getOntologyUniqueIdentifierFrom())
+                    || ontologyDeletes.contains(dbLink.getOntologyUniqueIdentifierTo())) {
+                continue;
+            }
+            String fromApiName = resolveFinalApiName(current.getFromOntologyApiName(),
+                    finalApiNames, displayNameToFinalApiName);
+            String toApiName = resolveFinalApiName(current.getToOntologyApiName(),
+                    finalApiNames, displayNameToFinalApiName);
+            if (fromApiName == null || toApiName == null) {
+                addStructuralConflict(structuralConflicts, CONFLICT_TYPE_LINK, uid, current.getApiName(),
+                        current.getName(), null, REASON_PARENT_DELETED, "关系端点对象不存在或已被删除");
+                continue;
+            }
+            var dbFrom = dbMetaByUid.get(dbLink.getOntologyUniqueIdentifierFrom());
+            var dbTo = dbMetaByUid.get(dbLink.getOntologyUniqueIdentifierTo());
+            if (!Objects.equals(fromApiName, dbFrom == null ? null : dbFrom.getApiName())
+                    || !Objects.equals(toApiName, dbTo == null ? null : dbTo.getApiName())) {
+                addStructuralConflict(structuralConflicts, CONFLICT_TYPE_LINK, uid, current.getApiName(),
+                        current.getName(), null, REASON_ENDPOINT_IMMUTABLE,
+                        "关系两端对象不允许修改，请删除后重建");
+                continue;
+            }
+            var merge = mergeLink(baseLink, current, dbLink);
+            if (!merge.conflicts.isEmpty()) {
+                fieldConflicts.add(merge.toConflict(CONFLICT_TYPE_LINK, uid,
+                        current.getApiName(), current.getName(), null));
+            }
+            if (!merge.writes.isEmpty()) {
+                linkUpdates.add(new CanvasLinkUpdate(uid, merge.writes));
+            }
+        }
+        for (var entry : baseLinkByUid.entrySet()) {
+            String uid = entry.getKey();
+            if (currentLinkByUid.containsKey(uid)) {
+                continue;
+            }
+            var dbLink = dbLinkByUid.get(uid);
+            if (dbLink == null) {
+                continue;
+            }
+            if (ontologyDeletes.contains(dbLink.getOntologyUniqueIdentifierFrom())
+                    || ontologyDeletes.contains(dbLink.getOntologyUniqueIdentifierTo())) {
+                continue;
+            }
+            if (linkDbChanged(dbLink, entry.getValue())) {
+                addFieldConflict(fieldConflicts, CONFLICT_TYPE_LINK, uid, dbLink.getApiName(),
+                        dbLink.getName(), null, REASON_DELETE_CONFLICT,
+                        "该关系在加载后已被他人修改，本次删除未执行");
+                continue;
+            }
+            linkDeletes.add(uid);
+        }
+        for (var create : linkCreates) {
+            String fromApiName = resolveFinalApiName(create.getFromOntologyApiName(),
+                    finalApiNames, displayNameToFinalApiName);
+            String toApiName = resolveFinalApiName(create.getToOntologyApiName(),
+                    finalApiNames, displayNameToFinalApiName);
+            if (fromApiName == null || toApiName == null) {
+                addStructuralConflict(structuralConflicts, CONFLICT_TYPE_LINK, null, create.getApiName(),
+                        create.getName(), null, REASON_PARENT_DELETED, "关系端点对象不存在或已被删除");
+                continue;
+            }
+            newLinkCreates.add(new CanvasLinkCreate(create, fromApiName, toApiName));
+        }
+
+        // ===== 结构性冲突：整单不写 =====
+        var allConflicts = new ArrayList<OntologySpaceCanvasCreateVO.CanvasConflict>();
+        allConflicts.addAll(structuralConflicts);
+        allConflicts.addAll(fieldConflicts);
+        if (!structuralConflicts.isEmpty()) {
+            return OntologySpaceCanvasCreateVO.builder()
+                    .spaceId(spaceId)
+                    .committed(false)
+                    .saved(zeroSummary())
+                    .conflicts(allConflicts)
+                    .canvas(getSpaceCanvasContent(spaceId))
+                    .build();
+        }
+
+        // ===== 落库：先删后建，最后建关系 =====
+        // deleteOntology 会级联删属性/关系，这里把它们也算进本次删除数量
+        var summary = zeroSummary()
+                .setDeletedPropertyCount((int) dbProperties.stream()
+                        .filter(p -> ontologyDeletes.contains(p.getOntologyUniqueIdentifier())).count())
+                .setDeletedLinkCount((int) dbLinks.stream()
+                        .filter(l -> ontologyDeletes.contains(l.getOntologyUniqueIdentifierFrom())
+                                || ontologyDeletes.contains(l.getOntologyUniqueIdentifierTo())).count());
+        for (String uid : linkDeletes) {
+            ontologyLinkGroupService.deleteLinkByLinkUniqueIdentifier(uid);
+            summary.setDeletedLinkCount(summary.getDeletedLinkCount() + 1);
+        }
+        for (String uid : propertyDeletes) {
+            clearPropertyKeysBeforeDelete(dbPropertyByUid.get(uid));
+            ontologyPropertyService.deleteProperty(uid);
+            summary.setDeletedPropertyCount(summary.getDeletedPropertyCount() + 1);
+        }
+        for (String uid : ontologyDeletes) {
+            ontologyMetaService.deleteOntology(uid);
+            summary.setDeletedOntologyCount(summary.getDeletedOntologyCount() + 1);
+        }
+        // 对象改名放在创建之前，避免"把 A 改名释放名称、再新建同名对象"被唯一索引拦下
+        for (var update : ontologyUpdates) {
+            var wrapper = new LambdaUpdateWrapper<OntologyMeta>()
+                    .eq(OntologyMeta::getUniqueIdentifier, update.uid)
+                    .set(OntologyMeta::getUpdateTime, new Date());
+            if (update.writes.containsKey("displayName")) {
+                wrapper.set(OntologyMeta::getDisplayName, update.writes.get("displayName"));
+            }
+            if (update.writes.containsKey("description")) {
+                wrapper.set(OntologyMeta::getDescription, update.writes.get("description"));
+            }
+            if (update.writes.containsKey("iconUrl")) {
+                wrapper.set(OntologyMeta::getIcon, update.writes.get("iconUrl"));
+            }
+            metaMapper.update(null, wrapper);
+            summary.setUpdatedOntologyCount(summary.getUpdatedOntologyCount() + 1);
+        }
+
+        Integer defaultOntologyCategoryId = ontologyCreates.isEmpty() ? null : getOntologyCategoryRoot(spaceId);
+        Map<OntologySpaceCanvasCreateParam.CanvasOntology, String> createdOntologyUid = new IdentityHashMap<>();
+        Map<String, String> uidByFinalApiName = new HashMap<>();
+        for (var db : dbMetas) {
+            if (!ontologyDeletes.contains(db.getUniqueIdentifier())) {
+                uidByFinalApiName.put(db.getApiName(), db.getUniqueIdentifier());
+            }
+        }
+        for (var create : ontologyCreates) {
+            var metaParam = new OntologyMetaCreateParam()
+                    .setDisplayName(create.getDisplayName())
+                    .setApiName(create.getApiName())
+                    .setDescription(create.getDescription())
+                    .setIconUrl(create.getIconUrl())
+                    .setCategoryId(defaultOntologyCategoryId);
+            metaParam.setSpaceId(spaceId);
+            String uid = ontologyMetaService.createOntology(metaParam);
+            createdOntologyUid.put(create, uid);
+            uidByFinalApiName.put(create.getApiName(), uid);
+            summary.setCreatedOntologyCount(summary.getCreatedOntologyCount() + 1);
+        }
+
+        // 先降后升：主键/标题键切换（含两个属性互换）时，先把所有要清掉的旧标记清掉，
+        // 否则 updateProperty/createProperty 的"主键已存在/标题键已存在"校验会中途报错
+        for (var update : propertyUpdates) {
+            if (!update.needsKeyClear()) {
+                continue;
+            }
+            var keyClearWrapper = new LambdaUpdateWrapper<OntologyProperty>()
+                    .eq(OntologyProperty::getUniqueIdentifier, update.uid)
+                    .set(OntologyProperty::getUpdateTime, new Date());
+            if (isOne(update.db.getIsPrimaryKey())) {
+                keyClearWrapper.set(OntologyProperty::getIsPrimaryKey, 0);
+            }
+            if (isOne(update.db.getIsTitleKey())) {
+                keyClearWrapper.set(OntologyProperty::getIsTitleKey, 0);
+            }
+            propertyMapper.update(null, keyClearWrapper);
+        }
+        for (var update : propertyUpdates) {
+            applyCanvasPropertyUpdate(update);
+            summary.setUpdatedPropertyCount(summary.getUpdatedPropertyCount() + 1);
+        }
+
+        Map<String, Integer> propertyCategoryRootByOwner = new HashMap<>();
+        for (var create : propertyCreates) {
+            String ownerUid = create.ownerOntologyUid != null
+                    ? create.ownerOntologyUid : createdOntologyUid.get(create.ownerOntology);
+            if (ownerUid == null) {
+                continue;
+            }
+            Integer categoryId = propertyCategoryRootByOwner
+                    .computeIfAbsent(ownerUid, this::getPropertyCategoryRoot);
+            var propertyParam = buildPropertyCreateParam(ownerUid, create.property, categoryId);
+            if (propertyParam.getDataType() == null) {
+                propertyParam.setDataType(OntologyDataTypeEnum.String);
+            }
+            ontologyPropertyService.createProperty(propertyParam);
+            summary.setCreatedPropertyCount(summary.getCreatedPropertyCount() + 1);
+        }
+
+        Integer defaultLinkCategoryId = newLinkCreates.isEmpty() ? null : getLinkCategoryRoot(spaceId);
+        for (var create : newLinkCreates) {
+            var linkApiName = StringUtils.isNotBlank(create.link.getApiName())
+                    ? create.link.getApiName()
+                    : ("relation_" + IdGenerator.generateUUID());
+            var linkParam = new OntologyLinkCreateParam()
+                    .setName(create.link.getName())
+                    .setApiName(linkApiName)
+                    .setDescription(create.link.getDescription())
+                    .setOntologyUniqueIdentifierFrom(uidByFinalApiName.get(create.fromApiName))
+                    .setOntologyUniqueIdentifierTo(uidByFinalApiName.get(create.toApiName))
+                    .setType(OntologyLinkTypeEnum.OTHER)
+                    .setSpaceId(spaceId)
+                    .setCategoryId(defaultLinkCategoryId);
+            ontologyLinkGroupService.createLink(linkParam);
+            summary.setCreatedLinkCount(summary.getCreatedLinkCount() + 1);
+        }
+        for (var update : linkUpdates) {
+            var wrapper = new LambdaUpdateWrapper<OntologyLinkGroup>()
+                    .eq(OntologyLinkGroup::getUniqueIdentifier, update.uid)
+                    .set(OntologyLinkGroup::getUpdateTime, new Date());
+            if (update.writes.containsKey("name")) {
+                wrapper.set(OntologyLinkGroup::getName, update.writes.get("name"));
+            }
+            if (update.writes.containsKey("apiName")) {
+                wrapper.set(OntologyLinkGroup::getApiName, update.writes.get("apiName"));
+            }
+            if (update.writes.containsKey("description")) {
+                wrapper.set(OntologyLinkGroup::getDescription, update.writes.get("description"));
+            }
+            linkMapper.update(null, wrapper);
+            summary.setUpdatedLinkCount(summary.getUpdatedLinkCount() + 1);
         }
 
         return OntologySpaceCanvasCreateVO.builder()
                 .spaceId(spaceId)
+                .committed(true)
+                .saved(summary)
+                .conflicts(allConflicts)
+                .canvas(getSpaceCanvasContent(spaceId))
                 .build();
     }
 
@@ -295,6 +886,7 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
 
         canvas.setOntologies(metas.stream()
                 .map(meta -> new OntologySpaceCanvasCreateParam.CanvasOntology()
+                        .setUniqueIdentifier(meta.getUniqueIdentifier())
                         .setDisplayName(meta.getDisplayName())
                         .setApiName(meta.getApiName())
                         .setDescription(meta.getDescription())
@@ -307,6 +899,7 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                 .filter(link -> apiNameByUid.containsKey(link.getOntologyUniqueIdentifierFrom())
                         && apiNameByUid.containsKey(link.getOntologyUniqueIdentifierTo()))
                 .map(link -> new OntologySpaceCanvasCreateParam.CanvasLink()
+                        .setUniqueIdentifier(link.getUniqueIdentifier())
                         .setName(link.getName())
                         .setApiName(link.getApiName())
                         .setDescription(link.getDescription())
@@ -318,6 +911,7 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
 
     private OntologySpaceCanvasCreateParam.CanvasProperty buildCanvasProperty(OntologyProperty property) {
         return new OntologySpaceCanvasCreateParam.CanvasProperty()
+                .setUniqueIdentifier(property.getUniqueIdentifier())
                 .setDisplayName(property.getDisplayName())
                 .setApiName(property.getApiName())
                 .setDataType(property.getPropertyType())
@@ -345,28 +939,394 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
         return propertyParam;
     }
 
+    private static <T> List<T> safeList(List<T> list) {
+        return list == null ? new ArrayList<>() : list;
+    }
+
+    private static boolean isOne(Integer value) {
+        return value != null && value == 1;
+    }
+
+    private static OntologySpaceCanvasCreateVO.CanvasSaveSummary zeroSummary() {
+        return OntologySpaceCanvasCreateVO.CanvasSaveSummary.builder().build();
+    }
+
+    private static void addStructuralConflict(List<OntologySpaceCanvasCreateVO.CanvasConflict> conflicts,
+                                              String type, String uid, String apiName, String displayName,
+                                              String parentOntologyUid, String reason, String message) {
+        addConflict(conflicts, type, uid, apiName, displayName, parentOntologyUid, reason, message);
+    }
+
+    private static void addFieldConflict(List<OntologySpaceCanvasCreateVO.CanvasConflict> conflicts,
+                                         String type, String uid, String apiName, String displayName,
+                                         String parentOntologyUid, String reason, String message) {
+        addConflict(conflicts, type, uid, apiName, displayName, parentOntologyUid, reason, message);
+    }
+
+    private static void addConflict(List<OntologySpaceCanvasCreateVO.CanvasConflict> conflicts,
+                                    String type, String uid, String apiName, String displayName,
+                                    String parentOntologyUid, String reason, String message) {
+        conflicts.add(OntologySpaceCanvasCreateVO.CanvasConflict.builder()
+                .type(type)
+                .uniqueIdentifier(uid)
+                .apiName(apiName)
+                .displayName(displayName)
+                .parentOntologyUniqueIdentifier(parentOntologyUid)
+                .reason(reason)
+                .message(message)
+                .build());
+    }
+
     /**
-     * 创建（或复用）对象的属性分类树根节点，让画布导入的属性都能挂到分类下。
+     * 字段级三段合并：current == null 表示前端未修改；用户没改的字段一律保留数据库现值，
+     * 双方都改且值不同才记冲突，冲突字段不写入。
      */
-    private Integer createDefaultPropertyCategoryRoot(String ontologyUniqueIdentifier) {
-        var existingRoot = propertyCategoryService.getOne(new LambdaQueryWrapper<PropertyCategory>()
-                .eq(PropertyCategory::getOntologyUniqueIdentifier, ontologyUniqueIdentifier)
-                .eq(PropertyCategory::getParentId, 0));
-        if (existingRoot != null) {
-            return existingRoot.getId();
+    private static void mergeField(CanvasFieldMerge merge, String fieldName,
+                                   Object baseValue, Object currentValue, Object dbValue) {
+        if (currentValue == null) {
+            return;
         }
-        var categoryParam = PropertyCategoryCreateParam.builder()
-                .parentId(0)
-                .name("全部")
-                .ontologyIdentifier(ontologyUniqueIdentifier)
-                .build();
-        ontologyPropertyService.createCategory(categoryParam);
-        var created = propertyCategoryService.getOne(new LambdaQueryWrapper<PropertyCategory>()
-                .eq(PropertyCategory::getOntologyUniqueIdentifier, ontologyUniqueIdentifier)
-                .eq(PropertyCategory::getParentId, 0)
-                .orderByDesc(PropertyCategory::getId));
-        PreconditionUtils.checkNotNull(created, "创建属性分类失败", HttpStatus.INTERNAL_SERVER_ERROR);
-        return created.getId();
+        boolean userChanged = !Objects.equals(currentValue, baseValue);
+        boolean otherChanged = !Objects.equals(dbValue, baseValue);
+        if (!userChanged) {
+            return;
+        }
+        if (!otherChanged) {
+            merge.writes.put(fieldName, currentValue);
+            return;
+        }
+        if (Objects.equals(currentValue, dbValue)) {
+            return;
+        }
+        merge.conflicts.add(OntologySpaceCanvasCreateVO.FieldConflict.builder()
+                .field(fieldName)
+                .baseValue(baseValue)
+                .currentValue(currentValue)
+                .dbValue(dbValue)
+                .build());
+    }
+
+    private static CanvasFieldMerge mergeOntology(OntologySpaceCanvasCreateParam.CanvasOntology base,
+                                                  OntologySpaceCanvasCreateParam.CanvasOntology current,
+                                                  OntologyMeta db) {
+        var merge = new CanvasFieldMerge();
+        mergeField(merge, "displayName",
+                base == null ? null : base.getDisplayName(), current.getDisplayName(), db.getDisplayName());
+        mergeField(merge, "description",
+                base == null ? null : base.getDescription(), current.getDescription(), db.getDescription());
+        mergeField(merge, "iconUrl",
+                base == null ? null : base.getIconUrl(), current.getIconUrl(), db.getIcon());
+        return merge;
+    }
+
+    private static CanvasFieldMerge mergeProperty(OntologySpaceCanvasCreateParam.CanvasProperty base,
+                                                  OntologySpaceCanvasCreateParam.CanvasProperty current,
+                                                  OntologyProperty db) {
+        var merge = new CanvasFieldMerge();
+        mergeField(merge, "displayName", base.getDisplayName(), current.getDisplayName(), db.getDisplayName());
+        mergeField(merge, "dataType", base.getDataType(), current.getDataType(), db.getPropertyType());
+        mergeField(merge, "storageGroup", base.getStorageGroup(), current.getStorageGroup(), db.getStorageGroup());
+        mergeField(merge, "description", base.getDescription(), current.getDescription(), db.getDescription());
+        mergeField(merge, "isPrimaryKey", base.getIsPrimaryKey(), current.getIsPrimaryKey(), isOne(db.getIsPrimaryKey()));
+        mergeField(merge, "isTitleKey", base.getIsTitleKey(), current.getIsTitleKey(), isOne(db.getIsTitleKey()));
+        mergeField(merge, "defaultValue", base.getDefaultValue(), current.getDefaultValue(), db.getDefaultValue());
+        return merge;
+    }
+
+    private static CanvasFieldMerge mergeLink(OntologySpaceCanvasCreateParam.CanvasLink base,
+                                              OntologySpaceCanvasCreateParam.CanvasLink current,
+                                              OntologyLinkGroup db) {
+        var merge = new CanvasFieldMerge();
+        mergeField(merge, "name", base.getName(), current.getName(), db.getName());
+        mergeField(merge, "apiName", base.getApiName(), current.getApiName(), db.getApiName());
+        mergeField(merge, "description", base.getDescription(), current.getDescription(), db.getDescription());
+        return merge;
+    }
+
+    private static boolean userChanged(Object currentValue, Object baseValue) {
+        return currentValue != null && !Objects.equals(currentValue, baseValue);
+    }
+
+    private static boolean ontologyUserEdited(OntologySpaceCanvasCreateParam.CanvasOntology current,
+                                              OntologySpaceCanvasCreateParam.CanvasOntology base) {
+        if (base == null) {
+            return true;
+        }
+        return userChanged(current.getDisplayName(), base.getDisplayName())
+                || userChanged(current.getDescription(), base.getDescription())
+                || userChanged(current.getIconUrl(), base.getIconUrl());
+    }
+
+    private static boolean ontologyDbChanged(OntologyMeta db, OntologySpaceCanvasCreateParam.CanvasOntology base) {
+        return !Objects.equals(db.getDisplayName(), base.getDisplayName())
+                || !Objects.equals(db.getDescription(), base.getDescription())
+                || !Objects.equals(db.getIcon(), base.getIconUrl());
+    }
+
+    private static boolean propertyUserEdited(OntologySpaceCanvasCreateParam.CanvasProperty current,
+                                              OntologySpaceCanvasCreateParam.CanvasProperty base) {
+        if (base == null) {
+            return true;
+        }
+        return userChanged(current.getDisplayName(), base.getDisplayName())
+                || userChanged(current.getDataType(), base.getDataType())
+                || userChanged(current.getStorageGroup(), base.getStorageGroup())
+                || userChanged(current.getDescription(), base.getDescription())
+                || userChanged(current.getIsPrimaryKey(), base.getIsPrimaryKey())
+                || userChanged(current.getIsTitleKey(), base.getIsTitleKey())
+                || userChanged(current.getDefaultValue(), base.getDefaultValue());
+    }
+
+    private static boolean propertyDbChanged(OntologyProperty db,
+                                             OntologySpaceCanvasCreateParam.CanvasProperty base) {
+        return !Objects.equals(db.getDisplayName(), base.getDisplayName())
+                || !Objects.equals(db.getPropertyType(), base.getDataType())
+                || !Objects.equals(db.getStorageGroup(), base.getStorageGroup())
+                || !Objects.equals(db.getDescription(), base.getDescription())
+                || !Objects.equals(isOne(db.getIsPrimaryKey()), base.getIsPrimaryKey())
+                || !Objects.equals(isOne(db.getIsTitleKey()), base.getIsTitleKey())
+                || !Objects.equals(db.getDefaultValue(), base.getDefaultValue());
+    }
+
+    private static boolean linkUserEdited(OntologySpaceCanvasCreateParam.CanvasLink current,
+                                          OntologySpaceCanvasCreateParam.CanvasLink base) {
+        if (base == null) {
+            return true;
+        }
+        return userChanged(current.getName(), base.getName())
+                || userChanged(current.getApiName(), base.getApiName())
+                || userChanged(current.getDescription(), base.getDescription())
+                || userChanged(current.getFromOntologyApiName(), base.getFromOntologyApiName())
+                || userChanged(current.getToOntologyApiName(), base.getToOntologyApiName());
+    }
+
+    private static boolean linkDbChanged(OntologyLinkGroup db,
+                                         OntologySpaceCanvasCreateParam.CanvasLink base) {
+        return !Objects.equals(db.getName(), base.getName())
+                || !Objects.equals(db.getApiName(), base.getApiName())
+                || !Objects.equals(db.getDescription(), base.getDescription());
+    }
+
+    /**
+     * 把前端给的对象标识解析成最终存活对象的 apiName：先按 apiName 匹配，再按显示名称匹配。
+     */
+    private static String resolveFinalApiName(String apiNameOrDisplayName,
+                                              Set<String> finalApiNames,
+                                              Map<String, String> displayNameToFinalApiName) {
+        if (StringUtils.isBlank(apiNameOrDisplayName)) {
+            return null;
+        }
+        if (finalApiNames.contains(apiNameOrDisplayName)) {
+            return apiNameOrDisplayName;
+        }
+        return displayNameToFinalApiName.get(apiNameOrDisplayName);
+    }
+
+    /**
+     * 合并后该对象是否还有属性承担主键/标题键：前端没传的开关按 base 值算。
+     */
+    private static boolean hasFinalKey(String ownerUid,
+                                       List<OntologySpaceCanvasCreateParam.CanvasProperty> currentProperties,
+                                       Map<String, CanvasPropertyRef> basePropertyByUid,
+                                       boolean primaryKey) {
+        for (var property : safeList(currentProperties)) {
+            Boolean value = primaryKey ? property.getIsPrimaryKey() : property.getIsTitleKey();
+            if (value == null) {
+                String uid = property.getUniqueIdentifier();
+                var baseRef = uid == null ? null : basePropertyByUid.get(uid);
+                if (baseRef == null || !Objects.equals(baseRef.ownerOntologyUid, ownerUid)) {
+                    continue;
+                }
+                value = primaryKey ? baseRef.property.getIsPrimaryKey() : baseRef.property.getIsTitleKey();
+            }
+            if (Boolean.TRUE.equals(value)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 删除主键/标题键属性前先把标记清掉：deleteProperty 以数据库现值为准拒绝删除，
+     * 而“换主键时删旧属性”需要这一步让位。
+     */
+    private void clearPropertyKeysBeforeDelete(OntologyProperty property) {
+        if (property == null) {
+            return;
+        }
+        boolean clearPrimaryKey = isOne(property.getIsPrimaryKey());
+        boolean clearTitleKey = isOne(property.getIsTitleKey());
+        if (!clearPrimaryKey && !clearTitleKey) {
+            return;
+        }
+        var wrapper = new LambdaUpdateWrapper<OntologyProperty>()
+                .eq(OntologyProperty::getUniqueIdentifier, property.getUniqueIdentifier())
+                .set(OntologyProperty::getUpdateTime, new Date());
+        if (clearPrimaryKey) {
+            wrapper.set(OntologyProperty::getIsPrimaryKey, 0);
+        }
+        if (clearTitleKey) {
+            wrapper.set(OntologyProperty::getIsTitleKey, 0);
+        }
+        propertyMapper.update(null, wrapper);
+    }
+
+    private void applyCanvasPropertyUpdate(CanvasPropertyUpdate update) {
+        var param = new OntologyPropertyUpdateParam()
+                .setDisplayName(update.finalDisplayName())
+                .setDataType(update.finalDataType())
+                .setDescription(update.finalDescription())
+                .setIsTitleKey(update.finalTitleKey())
+                .setIsPrimaryKey(update.finalPrimaryKey())
+                .setDefaultValue(update.finalDefaultValue())
+                .setStorageGroup(update.finalStorageGroup());
+        param.setUniqueIdentifier(update.uid);
+        ontologyPropertyService.updateProperty(param);
+    }
+
+    /** base/current 中的属性及其所属对象，用于校验“属性不能挪到别的对象下”。 */
+    private static class CanvasPropertyRef {
+
+        private final String ownerOntologyUid;
+
+        private final OntologySpaceCanvasCreateParam.CanvasProperty property;
+
+        private CanvasPropertyRef(String ownerOntologyUid,
+                                  OntologySpaceCanvasCreateParam.CanvasProperty property) {
+            this.ownerOntologyUid = ownerOntologyUid;
+            this.property = property;
+        }
+    }
+
+    /** 待新建的属性；所属对象是新建对象时此时还没有 uid。 */
+    private static class CanvasPropertyCreate {
+
+        private final String ownerOntologyUid;
+
+        private final OntologySpaceCanvasCreateParam.CanvasOntology ownerOntology;
+
+        private final OntologySpaceCanvasCreateParam.CanvasProperty property;
+
+        private CanvasPropertyCreate(String ownerOntologyUid,
+                                     OntologySpaceCanvasCreateParam.CanvasOntology ownerOntology,
+                                     OntologySpaceCanvasCreateParam.CanvasProperty property) {
+            this.ownerOntologyUid = ownerOntologyUid;
+            this.ownerOntology = ownerOntology;
+            this.property = property;
+        }
+    }
+
+    private static class CanvasOntologyUpdate {
+
+        private final String uid;
+
+        private final Map<String, Object> writes;
+
+        private CanvasOntologyUpdate(String uid, Map<String, Object> writes) {
+            this.uid = uid;
+            this.writes = writes;
+        }
+    }
+
+    private static class CanvasPropertyUpdate {
+
+        private final String uid;
+
+        private final OntologyProperty db;
+
+        private final Map<String, Object> writes;
+
+        private CanvasPropertyUpdate(String uid, OntologyProperty db, Map<String, Object> writes) {
+            this.uid = uid;
+            this.db = db;
+            this.writes = writes;
+        }
+
+        private String finalDisplayName() {
+            return (String) writes.getOrDefault("displayName", db.getDisplayName());
+        }
+
+        private OntologyDataTypeEnum finalDataType() {
+            return (OntologyDataTypeEnum) writes.getOrDefault("dataType", db.getPropertyType());
+        }
+
+        private String finalStorageGroup() {
+            return (String) writes.getOrDefault("storageGroup", db.getStorageGroup());
+        }
+
+        private String finalDescription() {
+            return (String) writes.getOrDefault("description", db.getDescription());
+        }
+
+        private String finalDefaultValue() {
+            return (String) writes.getOrDefault("defaultValue", db.getDefaultValue());
+        }
+
+        private Boolean finalPrimaryKey() {
+            return (Boolean) writes.getOrDefault("isPrimaryKey", isOne(db.getIsPrimaryKey()));
+        }
+
+        private Boolean finalTitleKey() {
+            return (Boolean) writes.getOrDefault("isTitleKey", isOne(db.getIsTitleKey()));
+        }
+
+        private boolean needsKeyClear() {
+            return (isOne(db.getIsPrimaryKey()) && !finalPrimaryKey())
+                    || (isOne(db.getIsTitleKey()) && !finalTitleKey());
+        }
+    }
+
+    private static class CanvasLinkUpdate {
+
+        private final String uid;
+
+        private final Map<String, Object> writes;
+
+        private CanvasLinkUpdate(String uid, Map<String, Object> writes) {
+            this.uid = uid;
+            this.writes = writes;
+        }
+    }
+
+    private static class CanvasLinkCreate {
+
+        private final OntologySpaceCanvasCreateParam.CanvasLink link;
+
+        private final String fromApiName;
+
+        private final String toApiName;
+
+        private CanvasLinkCreate(OntologySpaceCanvasCreateParam.CanvasLink link,
+                                 String fromApiName, String toApiName) {
+            this.link = link;
+            this.fromApiName = fromApiName;
+            this.toApiName = toApiName;
+        }
+    }
+
+    private static class CanvasFieldMerge {
+
+        private final Map<String, Object> writes = new LinkedHashMap<>();
+
+        private final List<OntologySpaceCanvasCreateVO.FieldConflict> conflicts = new ArrayList<>();
+
+        private OntologySpaceCanvasCreateVO.CanvasConflict toConflict(String type, String uid, String apiName,
+                                                                      String displayName,
+                                                                      String parentOntologyUid) {
+            String fieldNames = conflicts.stream()
+                    .map(OntologySpaceCanvasCreateVO.FieldConflict::getField)
+                    .collect(Collectors.joining(", "));
+            return OntologySpaceCanvasCreateVO.CanvasConflict.builder()
+                    .type(type)
+                    .uniqueIdentifier(uid)
+                    .apiName(apiName)
+                    .displayName(displayName)
+                    .parentOntologyUniqueIdentifier(parentOntologyUid)
+                    .reason(REASON_FIELD_CONFLICT)
+                    .fields(conflicts)
+                    .message(fieldNames + " 已被他人修改，本次未覆盖")
+                    .build();
+        }
     }
 
     /**
@@ -436,15 +1396,6 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                 .orderByDesc(ActionCategory::getId));
         PreconditionUtils.checkNotNull(created, "创建行为分类失败", HttpStatus.INTERNAL_SERVER_ERROR);
         return created.getId();
-    }
-
-    private String resolveOntologyUid(String apiNameOrDisplayName, Map<String, String> uidByApiName, Map<String, String> uidByDisplayName) {
-        var uid = uidByApiName.get(apiNameOrDisplayName);
-        if (uid == null) {
-            uid = uidByDisplayName.get(apiNameOrDisplayName);
-        }
-        PreconditionUtils.checkArgument(uid != null, "画布中不存在对象：" + apiNameOrDisplayName, HttpStatus.BAD_REQUEST);
-        return uid;
     }
 
     @Transactional(transactionManager = "mainTransactionManager")

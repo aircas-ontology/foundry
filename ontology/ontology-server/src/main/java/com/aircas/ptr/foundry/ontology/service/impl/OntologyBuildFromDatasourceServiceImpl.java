@@ -121,8 +121,7 @@ public class OntologyBuildFromDatasourceServiceImpl implements OntologyBuildFrom
         bindProperties(uniqueIdentifier, schema, objectApiName, specs);
 
         int pipeColumnCount = entityColumns.values().stream().mapToInt(List::size).sum() - specs.size();
-        String message = String.format("对象【%s】已创建：%d 个属性、%d 张实体表（%s）、%d 条主子表列映射、%d 个仅作关联用的管道列；"
-                        + "实体表当前没有实例数据，外部库数据需另行灌入，数据管道请再调 /property/notify_build_pipeline",
+        String message = String.format("对象【%s】已创建：%d 个属性、%d 张实体表（%s）、%d 条主子表列映射、%d 个仅作关联用的管道列；",
                 StringUtils.trim(param.getDisplayName()), specs.size(), entityTables.size(),
                 String.join("、", entityTables), mappingCount, pipeColumnCount);
         log.info("数据源构建对象完成 spaceId={}, schemaName={}, uid={}, {}",
@@ -328,9 +327,15 @@ public class OntologyBuildFromDatasourceServiceImpl implements OntologyBuildFrom
             String comment = StringUtils.trimToNull(live.getDescription());
             String displayName = StringUtils.defaultIfBlank(StringUtils.trim(selected.getDisplayName()),
                     StringUtils.defaultIfBlank(comment, selected.getColumnName()));
-            specs.add(new PropertySpec(selected.getColumnName(), displayName, comment,
-                    OntologyDataTypeEnum.valueOfJdbcType(live.getNativeType()), storageGroup,
-                    PK_COLUMN_NAME.equals(selected.getColumnName()) && MAIN_STORAGE_GROUP.equals(storageGroup)));
+            String description = StringUtils.defaultIfBlank(StringUtils.trim(selected.getDescription()), comment);
+            boolean platformPk = PK_COLUMN_NAME.equals(selected.getColumnName())
+                    && MAIN_STORAGE_GROUP.equals(storageGroup);
+            // 平台主键 id 在湖里是 id SERIAL PRIMARY KEY，外部库那列是什么类型都不跟
+            OntologyDataTypeEnum dataType = platformPk
+                    ? OntologyDataTypeEnum.Int
+                    : OntologyDataTypeEnum.valueOfJdbcType(live.getNativeType());
+            specs.add(new PropertySpec(selected.getColumnName(), displayName, description, dataType,
+                    storageGroup, platformPk));
         }
     }
 
