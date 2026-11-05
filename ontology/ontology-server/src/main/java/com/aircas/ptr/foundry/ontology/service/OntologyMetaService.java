@@ -5,6 +5,7 @@ import com.aircas.ptr.foundry.ontology.model.enums.QuerySortEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyOrderByEnum;
 import com.aircas.ptr.foundry.ontology.model.dto.OntologyCreateDTO;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyAssetBuildParam;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyBatchDeleteParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyMetaCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
@@ -51,6 +52,13 @@ public interface OntologyMetaService extends IService<OntologyMeta> {
     OntologyMetaStatisticVO getStatistic(String uniqueIdentifier);
 
     void deleteOntology(String uniqueIdentifier);
+
+    /**
+     * 批量删除对象及其所有关联数据（属性、关系、分类树、行为等）。
+     *
+     * @param param 包含 spaceId 和 ontologyIdentifiers 列表
+     */
+    void batchDeleteOntologies(OntologyBatchDeleteParam param);
 
     void updateMeta(OntologyUpdateParam updateParam);
 

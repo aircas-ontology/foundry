@@ -8,6 +8,7 @@ import com.aircas.ptr.foundry.ontology.model.enums.OntologyExportTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyOrderByEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.QuerySortEnum;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyAssetBuildParam;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyBatchDeleteParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyMetaCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.vo.IdentifierVO;
@@ -89,6 +90,13 @@ public class OntologyMetaController {
     @Operation(summary = "删除对象")
     public RestResult deleteOntology(@PathVariable(required = true, name = "ontologyIdentifier") @OntologyIdVerify String ontologyIdentifier) {
         ontologyMetaService.deleteOntology(ontologyIdentifier);
+        return RestResult.success();
+    }
+
+    @DeleteMapping("/batch")
+    @Operation(summary = "批量删除对象及其关联数据（属性、关系、分类树、行为等）")
+    public RestResult batchDeleteOntologies(@RequestBody @Valid OntologyBatchDeleteParam param) {
+        ontologyMetaService.batchDeleteOntologies(param);
         return RestResult.success();
     }
 

@@ -557,6 +557,55 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         lemmaService.remove(new LambdaQueryWrapper<OntologyLemma>().eq(OntologyLemma::getOntologyUniqueIdentifier, ontologyIdentifier));
     }
 
+    @Override
+    @Transactional(value = "mainTransactionManager")
+    public void batchDeleteOntologies(OntologyBatchDeleteParam param) {
+        var spaceId = param.getSpaceId();
+        var identifiers = param.getOntologyIdentifiers();
+
+        // 校验所有对象是否存在且属于该空间
+        var metaList = list(new LambdaQueryWrapper<OntologyMeta>()
+                .in(OntologyMeta::getUniqueIdentifier, identifiers)
+                .eq(OntologyMeta::getOntologySpaceId, spaceId));
+        PreconditionUtils.checkArgument(metaList.size() == identifiers.size(),
+                "部分对象不存在或不属于该空间", ResultCode.PARAM_ERROR, HttpStatus.BAD_REQUEST);
+
+        // 批量删除属性分类
+        propertyCategoryService.remove(new LambdaQueryWrapper<PropertyCategory>()
+                .in(PropertyCategory::getOntologyUniqueIdentifier, identifiers));
+
+        // 批量删除属性元数据 schema
+        propertyMetadataSchemaService.remove(new LambdaQueryWrapper<PropertyMetadataSchema>()
+                .in(PropertyMetadataSchema::getOntologyUniqueIdentifier, identifiers));
+
+        // 批量删除属性
+        ontologyPropertyService.remove(new LambdaQueryWrapper<OntologyProperty>()
+                .in(OntologyProperty::getOntologyUniqueIdentifier, identifiers));
+
+        // 批量删除关系（作为源或目标）
+        linkService.remove(new LambdaQueryWrapper<OntologyLinkGroup>()
+                .in(OntologyLinkGroup::getOntologyUniqueIdentifierFrom, identifiers).or()
+                .in(OntologyLinkGroup::getOntologyUniqueIdentifierTo, identifiers));
+
+        // 批量删除行为、参数、规则、任务
+        for (var identifier : identifiers) {
+            actionService.removeByOntologyIdentifier(identifier);
+        }
+
+        // 批量删除实体节点和边
+        for (var meta : metaList) {
+            entityService.deleteNodesAndRelationsByOntologyId(meta.getApiName());
+        }
+
+        // 批量删除百科信息
+        lemmaService.remove(new LambdaQueryWrapper<OntologyLemma>()
+                .in(OntologyLemma::getOntologyUniqueIdentifier, identifiers));
+
+        // 批量删除对象元数据
+        this.remove(new LambdaQueryWrapper<OntologyMeta>()
+                .in(OntologyMeta::getUniqueIdentifier, identifiers));
+    }
+
 
     @Override
     @Transactional(value = "mainTransactionManager")
