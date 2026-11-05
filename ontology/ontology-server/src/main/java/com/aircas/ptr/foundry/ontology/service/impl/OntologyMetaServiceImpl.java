@@ -2,6 +2,7 @@ package com.aircas.ptr.foundry.ontology.service.impl;
 
 import com.aircas.ptr.foundry.common.base.ResultCode;
 import com.aircas.ptr.foundry.common.constant.FunctionParamTypeEnum;
+import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import com.aircas.ptr.foundry.common.util.IdGenerator;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.ontology.converter.DataConverter;
@@ -166,21 +167,39 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
     @Override
     @Transactional(value = "chainedTransactionManager", rollbackFor = Exception.class)
     public String createOntologyWithProperties(OntologyAssetBuildParam param) {
-        // 对象分类兜底：不传则挂到本空间对象分类根节点（创建空间时默认生成的「全部」）
+        // 对象分类兜底：不传则挂到本空间对象分类根节点
         if (param.getCategoryId() == null) {
             param.setCategoryId(getOntologyCategoryRootId(param.getSpaceId()));
         }
         var uniqueIdentifier = createOntology(param);
 
+        // 确保 properties 不为 null
         var properties = param.getProperties();
-        if (CollectionUtils.isEmpty(properties)) {
-            return uniqueIdentifier;
+        if (properties == null) {
+            properties = new ArrayList<>();
+            param.setProperties(properties);
         }
 
-        // 从属性 metadata 推导并创建元数据 schema（必须在属性创建前，否则属性校验会失败）
+        // 无主键时自动生成 id 主键属性
+        boolean hasPrimaryKey = properties.stream()
+                .anyMatch(p -> Boolean.TRUE.equals(p.getIsPrimaryKey()));
+        if (!hasPrimaryKey) {
+            var idProperty = OntologyPropertyCreateParam.builder()
+                    .apiName("id")
+                    .displayName("ID")
+                    .dataType(OntologyDataTypeEnum.Int)
+                    .isPrimaryKey(true)
+                    .isTitleKey(false)
+                    .storageGroup("main")
+                    .description("自动生成的主键")
+                    .build();
+            properties.add(0, idProperty);
+        }
+
+        // 从属性 metadata 推导并创建元数据 schema
         createMetadataSchemaFromProperties(uniqueIdentifier, properties);
 
-        // 建对象时已默认生成属性分类根节点，这里取出来给未指定分类的属性兜底
+        // 属性分类兜底 + 逐个创建属性
         var defaultPropertyCategoryId = getPropertyCategoryRootId(uniqueIdentifier);
         for (var propertyParam : properties) {
             propertyParam.setOntologyIdentifier(uniqueIdentifier);
@@ -748,6 +767,42 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                     return parent;
                 }
         ).collect(Collectors.toList());
+    }
+
+    @Override
+    public List<OntologyMetaNodeVO> getInheritanceTree(Integer spaceId) {
+        var metaList = list(new LambdaQueryWrapper<OntologyMeta>()
+                .eq(OntologyMeta::getOntologySpaceId, spaceId)
+                .eq(OntologyMeta::getStatus, Status.ENABLE.getValue())
+                .orderByAsc(OntologyMeta::getId));
+        if (CollectionUtils.isEmpty(metaList)) {
+            return Collections.emptyList();
+        }
+        var metaMap = metaList.stream().collect(Collectors.toMap(
+                OntologyMeta::getUniqueIdentifier,
+                v -> OntologyMetaNodeVO.builder()
+                        .parentUniqueIdentifier(v.getParentUniqueIdentifier())
+                        .uniqueIdentifier(v.getUniqueIdentifier())
+                        .displayName(v.getDisplayName())
+                        .childNodes(new ArrayList<>())
+                        .build(),
+                (a, b) -> a));
+        return metaMap.values().stream()
+                .filter(v -> StringUtils.isEmpty(v.getParentUniqueIdentifier()))
+                .map(parent -> {
+                    buildInheritanceTree(parent, metaMap);
+                    return parent;
+                })
+                .collect(Collectors.toList());
+    }
+
+    private void buildInheritanceTree(OntologyMetaNodeVO parent, Map<String, OntologyMetaNodeVO> metaMap) {
+        metaMap.values().forEach(child -> {
+            if (StringUtils.equals(child.getParentUniqueIdentifier(), parent.getUniqueIdentifier())) {
+                parent.getChildNodes().add(child);
+                buildInheritanceTree(child, metaMap);
+            }
+        });
     }
 
     @SneakyThrows

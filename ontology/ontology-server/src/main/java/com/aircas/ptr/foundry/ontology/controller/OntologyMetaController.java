@@ -148,4 +148,10 @@ public class OntologyMetaController {
         return RestResult.ofData(ontologyMetaService.getOntologyTreeByByGroupId(groupId));
     }
 
+    @GetMapping("/inheritance_tree")
+    @Operation(summary = "查询空间内对象继承层级树")
+    public RestResult<List<OntologyMetaNodeVO>> getInheritanceTree(@RequestParam(name = "spaceId", required = true) @Parameter(description = "对象空间id") @com.aircas.ptr.foundry.ontology.controller.validator.SpaceIdVerify Integer spaceId) {
+        return RestResult.ofData(ontologyMetaService.getInheritanceTree(spaceId));
+    }
+
 }

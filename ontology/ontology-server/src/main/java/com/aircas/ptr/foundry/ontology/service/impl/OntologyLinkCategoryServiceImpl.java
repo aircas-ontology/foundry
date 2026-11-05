@@ -253,4 +253,11 @@ public class OntologyLinkCategoryServiceImpl extends ServiceImpl<OntologyLinkCat
         return vo;
     }
 
+    @Override
+    public List<OntologyLinkCategory> getCategoryList(Integer spaceId) {
+        return list(new LambdaQueryWrapper<OntologyLinkCategory>()
+                .eq(OntologyLinkCategory::getOntologySpaceId, spaceId)
+                .orderByAsc(OntologyLinkCategory::getId));
+    }
+
 }

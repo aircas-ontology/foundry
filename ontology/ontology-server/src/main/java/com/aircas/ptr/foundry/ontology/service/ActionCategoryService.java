@@ -7,6 +7,8 @@ import com.aircas.ptr.foundry.ontology.model.po.ActionCategory;
 import com.aircas.ptr.foundry.ontology.model.vo.ActionCategoryVO;
 import com.baomidou.mybatisplus.extension.service.IService;
 
+import java.util.List;
+
 /**
  * 行为分类体系树服务。
  */
@@ -31,4 +33,9 @@ public interface ActionCategoryService extends IService<ActionCategory> {
      * 查询本空间的行为分类体系树，叶子上挂载该分类下的行为。
      */
     ActionCategoryVO getActionCategoryTree(Integer spaceId);
+
+    /**
+     * 查询本空间的行为分类列表（扁平结构，不分页）。
+     */
+    List<ActionCategory> getCategoryList(Integer spaceId);
 }

@@ -3,6 +3,7 @@ package com.aircas.ptr.foundry.ontology.controller;
 import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.controller.validator.OntologyIdVerify;
 import com.aircas.ptr.foundry.ontology.model.param.*;
+import com.aircas.ptr.foundry.ontology.model.po.PropertyCategory;
 import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.aircas.ptr.foundry.ontology.service.OntologyPropertyService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -212,5 +213,14 @@ public class OntologyPropertyController {
     @Operation(summary = "根据categoryId查询属性列表")
     public RestResult<List<OntologyPropertyInfoVO>> getByCategoryId(@RequestParam(name = "categoryId", required = false) @Parameter(description = "属性分类id，不传则查询全部属性") Integer categoryId) {
         return RestResult.ofData(ontologyPropertyService.getByCategoryId(categoryId));
+    }
+
+    @GetMapping("/category/list")
+    @Operation(summary = "查询属性分类列表（扁平结构，不分页）")
+    public RestResult<List<PropertyCategory>> getPropertyCategoryList(@RequestParam(required = true, name = "ontologyUniqueIdentifier")
+                                                                      @Parameter(description = "对象uniqueIdentifier")
+                                                                      @OntologyIdVerify String ontologyUniqueIdentifier) {
+        var res = ontologyPropertyService.getPropertyCategoryList(ontologyUniqueIdentifier);
+        return RestResult.ofData(res);
     }
 }

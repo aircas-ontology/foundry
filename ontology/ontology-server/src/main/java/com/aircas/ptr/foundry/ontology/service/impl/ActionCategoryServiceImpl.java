@@ -278,4 +278,11 @@ public class ActionCategoryServiceImpl extends ServiceImpl<ActionCategoryMapper,
         return vo;
     }
 
+    @Override
+    public List<ActionCategory> getCategoryList(Integer spaceId) {
+        return list(new LambdaQueryWrapper<ActionCategory>()
+                .eq(ActionCategory::getOntologySpaceId, spaceId)
+                .orderByAsc(ActionCategory::getId));
+    }
+
 }

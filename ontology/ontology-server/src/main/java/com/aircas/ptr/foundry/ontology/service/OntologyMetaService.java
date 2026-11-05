@@ -91,6 +91,16 @@ public interface OntologyMetaService extends IService<OntologyMeta> {
 
     List<OntologyMetaNodeVO> getOntologyTreeByByGroupId(String groupId);
 
+    /**
+     * 查询指定空间的对象继承层级树。
+     *
+     * <p>基于 {@code parentUniqueIdentifier} 字段构建树形结构，返回所有根节点（无父对象的节点）及其子孙。</p>
+     *
+     * @param spaceId 对象空间 id
+     * @return 继承层级树的根节点列表
+     */
+    List<OntologyMetaNodeVO> getInheritanceTree(Integer spaceId);
+
 
     List<String> importOntologies(MultipartFile file);
 

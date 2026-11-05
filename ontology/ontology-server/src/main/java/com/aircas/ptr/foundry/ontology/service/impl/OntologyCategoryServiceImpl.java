@@ -190,6 +190,13 @@ public class OntologyCategoryServiceImpl extends ServiceImpl<OntologyCategoryMap
         return buildCategoryVO(roots.get(0), categoryMap, metaMap, displayMap);
     }
 
+    @Override
+    public List<OntologyCategory> getCategoryList(Integer spaceId) {
+        return list(new LambdaQueryWrapper<OntologyCategory>()
+                .eq(OntologyCategory::getOntologySpaceId, spaceId)
+                .orderByAsc(OntologyCategory::getId));
+    }
+
     private OntologyCategoryVO buildCategoryVO(OntologyCategory category,
                                                Map<Integer, List<OntologyCategory>> categoryMap,
                                                Map<Integer, List<OntologyMeta>> metaMap,

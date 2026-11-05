@@ -585,6 +585,14 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         return buildCategoryVO(roots.get(0), categoryMap, propMap);
     }
 
+    @Override
+    public List<PropertyCategory> getPropertyCategoryList(String ontologyUniqueIdentifier) {
+        return propertyCategoryService.list(
+                new LambdaQueryWrapper<PropertyCategory>()
+                        .eq(PropertyCategory::getOntologyUniqueIdentifier, ontologyUniqueIdentifier)
+                        .orderByAsc(PropertyCategory::getId));
+    }
+
     @Transactional(transactionManager = "mainTransactionManager")
     @Override
     public void deleteCategory(PropertyCategoryDeleteParam param) {
