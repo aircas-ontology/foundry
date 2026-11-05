@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.vo;
 
+import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.ActionOutputModeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.ActionParamSourceEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamCategoryEnum;
@@ -44,6 +45,12 @@ public class ActionParamMappingVO {
 
     @Schema(description = "参数对应的对象属性ID", required = true, example = "fdsfa-gfdsagf-dfs")
     private String propertyUniqueIdentifier;
+
+    @Schema(description = "参数对应属性的数据类型", example = "String")
+    private OntologyDataTypeEnum propertyType;
+
+    @Schema(description = "参数对应属性的显示名称", example = "推力")
+    private String displayName;
 
     @Schema(description = "出参行输出方式：RESULT_ONLY 仅返回 / WRITE_PROPERTY 写入对象属性；入参行为空")
     private ActionOutputModeEnum outputMode;

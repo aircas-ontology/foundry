@@ -245,6 +245,10 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         // 类别、输出方式必须由调用方明确传入：猜错会把行为建成另一种，执行时才暴露很难定位
         PreconditionUtils.checkNotNull(param.getActionKind(), "必须选择行为类别：基础行为/应用行为", HttpStatus.BAD_REQUEST);
         var kind = param.getActionKind();
+        // 只有应用行为可以脱离对象挂在空间上；基础行为都作用在某个对象的实例上，缺对象标识会建出执行不了的记录
+        if (kind == ActionKindEnum.BASE) {
+            PreconditionUtils.checkNotNull(param.getOntologyIdentifier(), "基础行为必须指定所属对象", HttpStatus.BAD_REQUEST);
+        }
         var definition = new ActionDefinition();
         if (kind == ActionKindEnum.APPLICATION) {
             PreconditionUtils.checkArgument(param.getSubjectType() == null && param.getOperation() == null
@@ -326,20 +330,24 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             return;
         }
         for (var mapping : param.getMappingIns()) {
-            var sourceType = mapping.getSourceType() == null ? ActionParamSourceEnum.PROPERTY : mapping.getSourceType();
+            var funcParam = paramMap.get(mapping.getFunctionParamId());
+            PreconditionUtils.checkArgument(funcParam != null, "无效的函数参数：" + mapping.getFunctionParamId(), HttpStatus.BAD_REQUEST);
+            var isInput = funcParam.getCategory().equals(FunctionParamCategoryEnum.INPUT);
+            // 出参没有取值来源：sourceType 只对入参生效，不能套用入参的默认值与属性必填校验
+            var sourceType = isInput
+                    ? (mapping.getSourceType() == null ? ActionParamSourceEnum.PROPERTY : mapping.getSourceType())
+                    : null;
             OntologyProperty property = null;
             if (StringUtils.isNotEmpty(mapping.getPropertyUniqueIdentifier())) {
                 property = ontologyPropertyService.getOne(new LambdaQueryWrapper<OntologyProperty>()
                         .eq(OntologyProperty::getUniqueIdentifier, mapping.getPropertyUniqueIdentifier()));
             }
             // 固定值和外部输入没有来源属性，其余来源必须指向一个真实属性
-            var needProperty = sourceType != ActionParamSourceEnum.FIXED && sourceType != ActionParamSourceEnum.EXTERNAL;
+            var needProperty = isInput && sourceType != ActionParamSourceEnum.FIXED && sourceType != ActionParamSourceEnum.EXTERNAL;
             PreconditionUtils.checkArgument(!needProperty || property != null,
                     "无效的行为参数：" + mapping.getPropertyUniqueIdentifier(), HttpStatus.BAD_REQUEST);
-            var funcParam = paramMap.get(mapping.getFunctionParamId());
-            PreconditionUtils.checkArgument(funcParam != null, "无效的函数参数：" + mapping.getFunctionParamId(), HttpStatus.BAD_REQUEST);
             var paramPath = normalizeParamPath(funcParam, mapping.getParamPath());
-            if (property != null && funcParam.getCategory().equals(FunctionParamCategoryEnum.INPUT)) {
+            if (property != null && isInput) {
                 var dataType = OntologyDataTypeEnum.valueOfDataType(resolveInputParamType(funcParam, paramPath));
                 // 对象/自定义类参数没有对应的属性数据类型，整包绑定时不做标量比对
                 PreconditionUtils.checkArgument(dataType == null || dataType.equals(OntologyDataTypeEnum.Array)
@@ -755,21 +763,26 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
 
             var propUniqIds = mappings.stream().map(v -> v.getPropertyUniqueIdentifier()).collect(Collectors.toList());
             var props = ontologyPropertyService.list(new LambdaQueryWrapper<OntologyProperty>().in(OntologyProperty::getUniqueIdentifier, propUniqIds));
-            var propMap = props.stream().collect(Collectors.toMap(v -> v.getUniqueIdentifier(), v -> v.getOntologyUniqueIdentifier()));
+            var propMap = props.stream().collect(Collectors.toMap(v -> v.getUniqueIdentifier(), v -> v));
 
-            var mappingVOS = mappings.stream().map(v -> ActionParamMappingVO.builder()
-                            .functionParamExpression(v.getFunctionParamExpression())
-                            .functionParamId(v.getFunctionParamId())
-                            .category(funcParamCategoryMap.get(v.getFunctionParamId()))
-                            .parameterName(v.getParameterName())
-                            .sourceType(v.getSourceType())
-                            .sourceConfig(v.getSourceConfig())
-                            .paramPath(v.getParamPath())
-                            .propertyUniqueIdentifier(v.getPropertyUniqueIdentifier())
-                            .ontologyUniqueIdentifier(StringUtils.isNotEmpty(v.getOntologyUniqueIdentifier())
-                                    ? v.getOntologyUniqueIdentifier() : propMap.get(v.getPropertyUniqueIdentifier()))
-                            .outputMode(v.getOutputMode())
-                            .build())
+            var mappingVOS = mappings.stream().map(v -> {
+                        var prop = propMap.get(v.getPropertyUniqueIdentifier());
+                        return ActionParamMappingVO.builder()
+                                .functionParamExpression(v.getFunctionParamExpression())
+                                .functionParamId(v.getFunctionParamId())
+                                .category(funcParamCategoryMap.get(v.getFunctionParamId()))
+                                .parameterName(v.getParameterName())
+                                .sourceType(v.getSourceType())
+                                .sourceConfig(v.getSourceConfig())
+                                .paramPath(v.getParamPath())
+                                .propertyUniqueIdentifier(v.getPropertyUniqueIdentifier())
+                                .propertyType(prop == null ? null : prop.getPropertyType())
+                                .displayName(prop == null ? null : prop.getDisplayName())
+                                .ontologyUniqueIdentifier(StringUtils.isNotEmpty(v.getOntologyUniqueIdentifier())
+                                        ? v.getOntologyUniqueIdentifier() : (prop == null ? null : prop.getOntologyUniqueIdentifier()))
+                                .outputMode(v.getOutputMode())
+                                .build();
+                    })
                     .collect(Collectors.toList());
             detailVO.setMappingIns(mappingVOS);
         }
