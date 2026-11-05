@@ -100,6 +100,9 @@ import java.util.stream.Stream;
 @Slf4j
 public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, OntologySpace> implements OntologySpaceService {
 
+    // 管理员可查看全部主题，不按创建人过滤
+    private static final Set<String> TOPIC_ADMIN_USERNAMES = Set.of("admin", "admin1");
+
     private final OntologyMetaMapper metaMapper;
 
     private final OntologyActionMapper actionMapper;
@@ -461,11 +464,12 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
         var userContext = UserContextHolder.get();
         List<OntologySpace> spaces;
         if (SpaceTypeEnum.TOPIC.getValue().equals(SpaceTypeEnum.normalize(type))) {
-            // 主题：按创建用户名过滤
+            // 主题：按创建用户名过滤，admin/admin1 不过滤
             var username = userContext == null ? null : userContext.getUsername();
+            var skipUserFilter = username != null && TOPIC_ADMIN_USERNAMES.contains(username);
             spaces = list(new LambdaQueryWrapper<OntologySpace>()
                     .eq(OntologySpace::getType, SpaceTypeEnum.TOPIC.getValue())
-                    .eq(OntologySpace::getUsername, username));
+                    .eq(!skipUserFilter, OntologySpace::getUsername, username));
         } else {
             // 空间：当前用户配置了绑定空间时仅返回该空间，未配置则返回全部空间
             var bindSpaceId = userContext == null ? null : userContext.getSpaceId();
