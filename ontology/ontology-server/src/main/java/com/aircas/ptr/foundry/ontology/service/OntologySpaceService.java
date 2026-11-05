@@ -56,6 +56,15 @@ public interface OntologySpaceService extends IService<OntologySpace> {
     List<String> importOntologySpace(MultipartFile file);
 
     /**
+     * 将空间数据导入到已存在的目标空间（不创建新空间，覆盖目标空间中同名/同API的对象）。
+     *
+     * @param targetSpaceId 目标空间ID
+     * @param file          导出文件（完整空间结构）
+     * @return 导入失败的对象名称列表
+     */
+    List<String> importOntologySpaceToTarget(Integer targetSpaceId, MultipartFile file);
+
+    /**
      * 导出指定对象空间（含分类树、全部对象 schema，按 exportType 决定是否含实例数据）。
      *
      * @param spaceId    对象空间 id
