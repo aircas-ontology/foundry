@@ -51,9 +51,10 @@ public class OntologyActionController {
 
     @Operation(summary = "发布或下线行为树")
     @PostMapping("/publish")
-    public RestResult publishTree(@RequestParam(required = true, name = "actionApi") @Parameter(description = "行为树api") String actionApi,
+    public RestResult publishTree(@RequestParam(required = true, name = "ontologySpaceId") @Parameter(description = "对象空间id") Integer ontologySpaceId,
+                                  @RequestParam(required = true, name = "actionApi") @Parameter(description = "行为树api") String actionApi,
                                   @RequestParam(required = true, name = "status") @Parameter(description = "1 发布，0 下线") Integer status) {
-        ontologyActionService.publishTree(actionApi, status);
+        ontologyActionService.publishTree(ontologySpaceId, actionApi, status);
         return RestResult.success();
     }
 

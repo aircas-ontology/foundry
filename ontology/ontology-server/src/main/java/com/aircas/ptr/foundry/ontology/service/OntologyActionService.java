@@ -48,11 +48,13 @@ public interface OntologyActionService extends IService<OntologyAction> {
 
     /**
      * 发布或下线行为树。行为没有版本，状态就是唯一开关；发布前会用库里的树定义重新校验一次。
+     * <p>行为 api 只在空间内唯一，发布必须带空间定位，避免跨空间同名树被误改状态。</p>
      *
-     * @param actionApi 行为树的 api
-     * @param status    1 发布，0 下线
+     * @param ontologySpaceId 行为树所属的对象空间id
+     * @param actionApi       行为树的 api
+     * @param status          1 发布，0 下线
      */
-    void publishTree(String actionApi, Integer status);
+    void publishTree(Integer ontologySpaceId, String actionApi, Integer status);
 
     /**
      * 分页查行为/行为树列表。

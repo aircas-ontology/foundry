@@ -172,7 +172,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         var definition = checkActionDefinition(action, param, spaceId);
         save(action);
         saveActionChildren(action.getId(), definition);
-        btTreeManager.invalidate(action.getApi());
+        btTreeManager.invalidate(action.getOntologySpaceId(), action.getApi());
     }
 
     @Override
@@ -203,16 +203,18 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         actionLinkMapper.delete(new LambdaQueryWrapper<OntologyActionLink>().eq(OntologyActionLink::getOntologyActionId, action.getId()));
         ontologyActionMappingInService.remove(new LambdaQueryWrapper<OntologyActionMappingIn>().eq(OntologyActionMappingIn::getOntologyActionId, action.getId()));
         saveActionChildren(action.getId(), definition);
-        btTreeManager.invalidate(action.getApi());
+        btTreeManager.invalidate(action.getOntologySpaceId(), action.getApi());
     }
 
     @Override
     @Transactional(value = "mainTransactionManager")
-    public void publishTree(String actionApi, Integer status) {
+    public void publishTree(Integer ontologySpaceId, String actionApi, Integer status) {
         PreconditionUtils.checkArgument(status != null
                         && (status == Status.ENABLE.getValue() || status == Status.DISABLE.getValue()),
                 "状态只能传 1 发布或 0 下线", HttpStatus.BAD_REQUEST);
-        var action = getOne(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getApi, actionApi));
+        var action = getOne(new LambdaQueryWrapper<OntologyAction>()
+                .eq(OntologyAction::getApi, actionApi)
+                .eq(OntologyAction::getOntologySpaceId, ontologySpaceId));
         PreconditionUtils.checkArgument(action != null, "行为不存在", HttpStatus.BAD_REQUEST);
         PreconditionUtils.checkArgument(action.getActionKind() == ActionKindEnum.TREE,
                 "只有行为树需要发布或下线", HttpStatus.BAD_REQUEST);
@@ -231,7 +233,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         }
         action.setStatus(status);
         updateById(action);
-        btTreeManager.invalidate(action.getApi());
+        btTreeManager.invalidate(action.getOntologySpaceId(), action.getApi());
     }
 
     @Override
@@ -406,7 +408,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         action.setDefinition(writeTreeDefinition(tree));
         // 新建的树是未发布状态，编辑不改状态：发布/下线是单独动作，不像行为那样「编辑即重新发布」
         if (action.getStatus() == null) {
-            action.setStatus(Status.DISABLE.getValue());
+            action.setStatus(ActionStatusEnum.DRAFT.getValue());
         }
     }
 
@@ -689,7 +691,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
      */
     @Override
     public TreeExecuteResultVO executeTree(TreeExecuteParam param) {
-        var compiled = btTreeManager.getTree(param.getTreeApi());
+        var compiled = btTreeManager.getTree(param.getOntologySpaceId(), param.getTreeApi());
         return executeTreeInstance(compiled, param.getEntityPrimaryKey(), param.getInputs());
     }
 
@@ -700,7 +702,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
      */
     @Override
     public TreeBatchExecuteResultVO executeTreeBatch(TreeBatchExecuteParam param) {
-        var compiled = btTreeManager.getTree(param.getTreeApi());
+        var compiled = btTreeManager.getTree(param.getOntologySpaceId(), param.getTreeApi());
         var shardTotal = param.getShardTotal();
         var shardIndex = param.getShardIndex();
         if (shardTotal == null) {
@@ -1022,9 +1024,11 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
 
     /**
      * 行为被行为树引用时不允许删除：树里存的是行为 api，删掉后只能等执行时才暴露悬空引用。
+     * <p>行为 api 只在空间内唯一，引用判定也必须限定在同一个空间，否则会误拦其他空间的同名行为。</p>
      */
-    private List<String> findTreesReferencingAction(String actionApi) {
+    private List<String> findTreesReferencingAction(Integer ontologySpaceId, String actionApi) {
         var trees = list(new LambdaQueryWrapper<OntologyAction>()
+                .eq(OntologyAction::getOntologySpaceId, ontologySpaceId)
                 .eq(OntologyAction::getActionKind, ActionKindEnum.TREE)
                 .select(OntologyAction::getApi, OntologyAction::getDefinition));
         return trees.stream()
@@ -1387,13 +1391,13 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         // 调度归属行为靠 action_handle_rule.action_id / action_handle_task.action_id，
         // 这两列已在 alter_table_20260909.sql 中删除，按 id 反查会直接报错，
         // 待确认该列是否为误删后再恢复「行为在调度中不可删除」的校验
-        var referencingTrees = findTreesReferencingAction(actionApi);
+        var referencingTrees = findTreesReferencingAction(action.getOntologySpaceId(), actionApi);
         PreconditionUtils.checkArgument(referencingTrees.isEmpty(),
                 "该行为被行为树引用，不能直接删除：" + String.join(", ", referencingTrees), HttpStatus.BAD_REQUEST);
         actionLinkMapper.delete(new LambdaQueryWrapper<OntologyActionLink>().eq(OntologyActionLink::getOntologyActionId, action.getId()));
         remove(new LambdaQueryWrapper<OntologyAction>().in(OntologyAction::getId, action.getId()));
         ontologyActionMappingInService.remove(new LambdaQueryWrapper<OntologyActionMappingIn>().in(OntologyActionMappingIn::getOntologyActionId, action.getId()));
-        btTreeManager.invalidate(actionApi);
+        btTreeManager.invalidate(action.getOntologySpaceId(), actionApi);
     }
 
     @Override

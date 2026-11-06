@@ -24,6 +24,11 @@ import java.util.Map;
 @Schema(description = "行为树执行请求")
 public class TreeExecuteParam {
 
+    @Schema(name = "ontologySpaceId", description = "行为树所属的对象空间id；行为api只在空间内唯一，同名树跨空间靠它区分",
+            example = "156", required = true)
+    @NotNull(message = "ontologySpaceId is null")
+    private Integer ontologySpaceId;
+
     @Schema(name = "treeApi", description = "行为树api", example = "tree.satellite.watch", required = true)
     @NotBlank(message = "treeApi is empty")
     private String treeApi;

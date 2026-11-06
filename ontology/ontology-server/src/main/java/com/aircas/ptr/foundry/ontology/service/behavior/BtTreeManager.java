@@ -3,7 +3,7 @@ package com.aircas.ptr.foundry.ontology.service.behavior;
 import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.ontology.model.enums.ActionKindEnum;
-import com.aircas.ptr.foundry.ontology.model.enums.Status;
+import com.aircas.ptr.foundry.ontology.model.enums.ActionStatusEnum;
 import com.aircas.ptr.foundry.ontology.model.param.BehaviorTreeDefinition;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyAction;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyActionMapper;
@@ -23,7 +23,7 @@ import java.util.Objects;
 
 /**
  * 行为树编译结果缓存。
- * <p>树没有版本，definition 一改就整棵重编译；按 api 缓存，保存、发布、删除时失效。
+ * <p>树没有版本，definition 一改就整棵重编译；按「空间 + api」缓存，保存、发布、删除时失效。
  * behavior3java 的节点不保存执行状态（isOpen、记忆位置都在 Blackboard 与 Tick 上），
  * 编译结果可以被多次执行复用。</p>
  */
@@ -43,30 +43,37 @@ public class BtTreeManager {
 
     /**
      * 取一棵可执行的树：校验存在、是树、已发布，未命中缓存则从库里的 definition 编译。
+     * <p>行为 api 只在空间内唯一，树也按空间定位，避免跨空间同名树互相覆盖缓存或取错定义。</p>
      */
-    public CompiledBehaviorTree getTree(String api) {
-        var cached = cache.getIfPresent(api);
+    public CompiledBehaviorTree getTree(Integer ontologySpaceId, String api) {
+        var cacheKey = cacheKey(ontologySpaceId, api);
+        var cached = cache.getIfPresent(cacheKey);
         if (cached != null) {
             return cached;
         }
-        var compiled = load(api);
-        cache.put(api, compiled);
+        var compiled = load(ontologySpaceId, api);
+        cache.put(cacheKey, compiled);
         return compiled;
     }
 
-    public void invalidate(String api) {
-        if (StringUtils.isNotBlank(api)) {
-            cache.invalidate(api);
+    public void invalidate(Integer ontologySpaceId, String api) {
+        if (ontologySpaceId != null && StringUtils.isNotBlank(api)) {
+            cache.invalidate(cacheKey(ontologySpaceId, api));
         }
     }
 
-    private CompiledBehaviorTree load(String api) {
+    private String cacheKey(Integer ontologySpaceId, String api) {
+        return ontologySpaceId + ":" + api;
+    }
+
+    private CompiledBehaviorTree load(Integer ontologySpaceId, String api) {
         var action = ontologyActionMapper.selectOne(new LambdaQueryWrapper<OntologyAction>()
-                .eq(OntologyAction::getApi, api));
+                .eq(OntologyAction::getApi, api)
+                .eq(OntologyAction::getOntologySpaceId, ontologySpaceId));
         PreconditionUtils.checkArgument(action != null, "无效的action api", HttpStatus.BAD_REQUEST);
         PreconditionUtils.checkArgument(action.getActionKind() == ActionKindEnum.TREE,
                 "按行为执行的接口不能跑行为树：" + api, HttpStatus.BAD_REQUEST);
-        PreconditionUtils.checkArgument(Objects.equals(action.getStatus(), Status.ENABLE.getValue()),
+        PreconditionUtils.checkArgument(Objects.equals(action.getStatus(), ActionStatusEnum.PUBLISHED.getValue()),
                 "行为树未发布，不能执行：" + api, HttpStatus.BAD_REQUEST);
         var definition = readDefinition(action.getDefinition(), api);
         var tree = BehaviorTreeCompiler.compile(api, definition);
