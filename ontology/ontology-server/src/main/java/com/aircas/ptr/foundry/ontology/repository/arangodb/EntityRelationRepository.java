@@ -90,6 +90,23 @@ public interface EntityRelationRepository extends ArangoRepository<EntityRelatio
             "    RETURN edge")
     List<EntityRelation> queryRelationsByLinkId(@Param("linkId") String linkId);
 
+    @Query("LET fromNode = (FOR n IN node" +
+            "    FILTER n.ontologyUniqIdentifier == @fromOntologyUniqueIdentifier AND n.primaryKey == @fromEntityPrimaryKey" +
+            "    LIMIT 1" +
+            "    RETURN n._id)[0]" +
+            " LET toNode = (FOR n IN node" +
+            "    FILTER n.ontologyUniqIdentifier == @toOntologyUniqueIdentifier AND n.primaryKey == @toEntityPrimaryKey" +
+            "    LIMIT 1" +
+            "    RETURN n._id)[0]" +
+            " FOR edge IN relation" +
+            "    FILTER (edge._from == fromNode AND edge._to == toNode)" +
+            "        OR (edge._from == toNode AND edge._to == fromNode)" +
+            "    RETURN edge")
+    List<EntityRelation> queryRelationsBetweenEntities(@Param("fromOntologyUniqueIdentifier") String fromOntologyUniqueIdentifier,
+                                                       @Param("fromEntityPrimaryKey") Object fromEntityPrimaryKey,
+                                                       @Param("toOntologyUniqueIdentifier") String toOntologyUniqueIdentifier,
+                                                       @Param("toEntityPrimaryKey") Object toEntityPrimaryKey);
+
     @Query("FOR edge IN relation" +
             "    FILTER edge.ontologyLinkId == @linkId AND edge.status != 'DELETE' " +
             "    LIMIT @limit" +

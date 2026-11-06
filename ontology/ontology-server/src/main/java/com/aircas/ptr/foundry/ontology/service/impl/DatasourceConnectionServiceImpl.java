@@ -387,6 +387,11 @@ public class DatasourceConnectionServiceImpl
         return result;
     }
 
+    @Override
+    public DatasourceConnection getBySpaceId(Integer spaceId) {
+        return requireDatasourceBySpace(spaceId);
+    }
+
     /**
      * 判断是否为 MySQL/MariaDB 系统 catalog（数据库名）。
      */

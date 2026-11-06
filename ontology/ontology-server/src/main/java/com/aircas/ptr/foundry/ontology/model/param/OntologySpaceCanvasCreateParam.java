@@ -47,12 +47,13 @@ public class OntologySpaceCanvasCreateParam {
         private String uniqueIdentifier;
 
         @Schema(name = "displayName", description = "对象名称", required = true, example = "舰船aaa")
-        @NotBlank(message = "ontology displayName is empty")
+        @NotBlank(message = "对象名称不能为空（displayName）")
         private String displayName;
 
         @Schema(name = "apiName", description = "对象api名称", required = true, example = "ship")
-        @NotBlank(message = "ontology apiName is empty")
-        @Pattern(regexp = "^[a-zA-Z_$][a-zA-Z0-9_$]{0,62}$", message = "对象apiName格式不合法")
+        @NotBlank(message = "对象 apiName 不能为空（apiName）")
+        @Pattern(regexp = "^$|^[a-zA-Z_$][a-zA-Z0-9_$]{0,62}$",
+                message = "对象 apiName 格式不合法（apiName）：需以字母、下划线或 $ 开头，只能包含字母、数字、下划线、$，长度不超过 63")
         private String apiName;
 
         @Schema(name = "description", description = "对象描述")
@@ -77,12 +78,13 @@ public class OntologySpaceCanvasCreateParam {
         private String uniqueIdentifier;
 
         @Schema(name = "displayName", description = "属性展示名称", required = true, example = "名称")
-        @NotBlank(message = "property displayName is empty")
+        @NotBlank(message = "属性名称不能为空（displayName）")
         private String displayName;
 
         @Schema(name = "apiName", description = "属性api名称", required = true, example = "name")
-        @NotBlank(message = "property apiName is empty")
-        @Pattern(regexp = "^[a-zA-Z_$][a-zA-Z0-9_$]{0,62}$", message = "属性apiName格式不合法")
+        @NotBlank(message = "属性 apiName 不能为空（apiName）")
+        @Pattern(regexp = "^$|^[a-zA-Z_$][a-zA-Z0-9_$]{0,62}$",
+                message = "属性 apiName 格式不合法（apiName）：需以字母、下划线或 $ 开头，只能包含字母、数字、下划线、$，长度不超过 63")
         private String apiName;
 
         @Schema(name = "dataType", description = "数据类型（OntologyDataTypeEnum名称），不传默认String", example = "String")
@@ -115,7 +117,7 @@ public class OntologySpaceCanvasCreateParam {
         private String uniqueIdentifier;
 
         @Schema(name = "name", description = "关系名称", required = true, example = "隶属于")
-        @NotBlank(message = "link name is empty")
+        @NotBlank(message = "关系名称不能为空（name）")
         private String name;
 
         @Schema(name = "apiName", description = "关系api名称", example = "lishuyu")
@@ -125,11 +127,11 @@ public class OntologySpaceCanvasCreateParam {
         private String description;
 
         @Schema(name = "fromOntologyApiName", description = "源对象api名称（也兼容传对象显示名称）", required = true, example = "ship")
-        @NotBlank(message = "fromOntologyApiName is empty")
+        @NotBlank(message = "关系起点对象不能为空（fromOntologyApiName）")
         private String fromOntologyApiName;
 
         @Schema(name = "toOntologyApiName", description = "目标对象api名称（也兼容传对象显示名称）", required = true, example = "country")
-        @NotBlank(message = "toOntologyApiName is empty")
+        @NotBlank(message = "关系终点对象不能为空（toOntologyApiName）")
         private String toOntologyApiName;
     }
 

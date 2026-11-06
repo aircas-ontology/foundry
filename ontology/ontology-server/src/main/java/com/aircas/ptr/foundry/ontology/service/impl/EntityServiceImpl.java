@@ -329,6 +329,18 @@ public class EntityServiceImpl implements EntityService {
 
 
     @Override
+    public List<EntityLinkPropertyVO> getEntityLinksBetween(String fromOntologyUniqueIdentifier, Object fromEntityPrimaryKey,
+                                                            String toOntologyUniqueIdentifier, Object toEntityPrimaryKey) {
+        var relations = relationRepository.queryRelationsBetweenEntities(
+                fromOntologyUniqueIdentifier, fromEntityPrimaryKey, toOntologyUniqueIdentifier, toEntityPrimaryKey);
+        if (CollectionUtils.isEmpty(relations)) {
+            return Lists.newArrayList();
+        }
+        return relations.stream().map(v -> DataConverter.convert(v)).collect(Collectors.toList());
+    }
+
+
+    @Override
     public List<EntityLinksVO> getAllLinksByEntityIds(List<EntityIdsQueryParam> params) {
         List<EntityLinksVO> res = Lists.newArrayList();
         params.stream().forEach(p -> {
