@@ -44,6 +44,7 @@ public class ActionParamMappingCreateParam {
     @Schema(description = "参数对应的对象", required = true, example = "fdsfa-gfdsagf-dfs")
     private String ontologyUniqueIdentifier;
 
-    @Schema(description = "出参行输出方式：RESULT_ONLY 仅返回 / WRITE_PROPERTY 写入对象属性；入参行不传", example = "WRITE_PROPERTY")
+    @Schema(description = "出参行输出方式：RESULT_ONLY 仅返回 / WRITE_PROPERTY 写入对象属性；入参行不传。" +
+            "应用行为只要有一行选了 WRITE_PROPERTY，就不能再绑定关系", example = "WRITE_PROPERTY")
     private ActionOutputModeEnum outputMode;
 }

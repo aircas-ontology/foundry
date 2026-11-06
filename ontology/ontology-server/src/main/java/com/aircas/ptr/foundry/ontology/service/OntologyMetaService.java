@@ -113,6 +113,15 @@ public interface OntologyMetaService extends IService<OntologyMeta> {
     List<String> importOntologies(MultipartFile file);
 
     /**
+     * 导入对象到指定空间（不验证 displayName 唯一性，自动使用目标空间 ID）。
+     *
+     * @param targetSpaceId 目标空间 ID
+     * @param file          导出的 JSON 文件
+     * @return 导入失败的对象 displayName 列表
+     */
+    List<String> importOntologiesToSpace(Integer targetSpaceId, MultipartFile file);
+
+    /**
      * 导出单个对象（含 schema、对象级关系，可选实例数据），结构对齐导入模板。
      *
      * <p>关系端点可能指向同空间其它对象，displayName 解析覆盖该对象所属空间的全部启用对象；
