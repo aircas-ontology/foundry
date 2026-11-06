@@ -157,10 +157,16 @@ public class OntologyCategoryServiceImpl extends ServiceImpl<OntologyCategoryMap
 
     @Override
     public OntologyCategoryVO getCategoryTree(Integer spaceId) {
+        long startTime = System.currentTimeMillis();
+        log.info("[getCategoryTree] spaceId={} 开始查询", spaceId);
+        
         // 按 id 升序取出，分组后每层 children 即为 id 从小到大
         var categories = list(new LambdaQueryWrapper<OntologyCategory>()
                 .eq(OntologyCategory::getOntologySpaceId, spaceId)
                 .orderByAsc(OntologyCategory::getId));
+        long categoryQueryTime = System.currentTimeMillis();
+        log.info("[getCategoryTree] spaceId={} 查询分类耗时={}ms, 分类数={}", spaceId, categoryQueryTime - startTime, categories.size());
+        
         if (CollectionUtils.isEmpty(categories)) {
             return null;
         }
@@ -173,6 +179,8 @@ public class OntologyCategoryServiceImpl extends ServiceImpl<OntologyCategoryMap
         var metas = ontologyMetaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>()
                 .eq(OntologyMeta::getOntologySpaceId, spaceId)
                 .orderByAsc(OntologyMeta::getId));
+        long metaQueryTime = System.currentTimeMillis();
+        log.info("[getCategoryTree] spaceId={} 查询对象耗时={}ms, 对象数={}", spaceId, metaQueryTime - categoryQueryTime, metas.size());
 
         var metaMap = metas.stream()
                 .collect(Collectors.toMap(
@@ -187,7 +195,14 @@ public class OntologyCategoryServiceImpl extends ServiceImpl<OntologyCategoryMap
                 ));
 
         var displayMap = metas.stream().collect(Collectors.toMap(OntologyMeta::getUniqueIdentifier, OntologyMeta::getDisplayName));
-        return buildCategoryVO(roots.get(0), categoryMap, metaMap, displayMap);
+        
+        long buildTreeStartTime = System.currentTimeMillis();
+        var result = buildCategoryVO(roots.get(0), categoryMap, metaMap, displayMap);
+        long buildTreeEndTime = System.currentTimeMillis();
+        log.info("[getCategoryTree] spaceId={} 构建分类树耗时={}ms", spaceId, buildTreeEndTime - buildTreeStartTime);
+        
+        log.info("[getCategoryTree] spaceId={} 总耗时={}ms", spaceId, buildTreeEndTime - startTime);
+        return result;
     }
 
     @Override

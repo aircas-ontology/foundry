@@ -3,10 +3,12 @@ package com.aircas.ptr.foundry.ontology.mcp.tools;
 import com.aircas.ptr.foundry.ontology.converter.DataConverter;
 import com.aircas.ptr.foundry.ontology.mcp.McpTools;
 import com.aircas.ptr.foundry.ontology.model.enums.Status;
+import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkCategory;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.model.po.OntologySpace;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkInfoVO;
+import com.aircas.ptr.foundry.ontology.service.OntologyLinkCategoryService;
 import com.aircas.ptr.foundry.ontology.service.OntologyLinkGroupService;
 import com.aircas.ptr.foundry.ontology.service.OntologyMetaService;
 import com.aircas.ptr.foundry.ontology.service.OntologySpaceService;
@@ -36,6 +38,7 @@ public class OntologyLinkMcpTools implements McpTools {
     private final OntologySpaceService ontologySpaceService;
     private final OntologyMetaService ontologyMetaService;
     private final OntologyLinkGroupService ontologyLinkGroupService;
+    private final OntologyLinkCategoryService ontologyLinkCategoryService;
 
     @Tool(description = """
             按空间名称 + 主体对象名称 + 客体对象名称 + 关系名称精确查询对象关系。
@@ -110,5 +113,15 @@ public class OntologyLinkMcpTools implements McpTools {
             var to = metaMap.get(link.getOntologyUniqueIdentifierTo());
             return DataConverter.convert(link, from, to);
         }).collect(Collectors.toList());
+    }
+
+    @Tool(description = """
+            根据对象空间 id（spaceId）查询该空间下的关系分类列表（扁平结构，不分页）。
+            当用户需要查看空间下所有关系分类的完整列表时使用。
+            返回分类 id、名称、父分类 id 等完整信息。
+            """)
+    public List<OntologyLinkCategory> listLinkCategories(
+            @ToolParam(description = "对象空间 id（spaceId）") Integer spaceId) {
+        return ontologyLinkCategoryService.getCategoryList(spaceId);
     }
 }

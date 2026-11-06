@@ -41,15 +41,8 @@ public class FileServiceImpl implements FileService {
         PreconditionUtils.checkArgument(!image.isEmpty(), "image is empty");
         String contentType = image.getContentType();
         PreconditionUtils.checkArgument(contentType != null && contentType.startsWith("image/"), "not image file");
-        // Generate thumbnail
-        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        Thumbnails.of(image.getInputStream())
-                .size(THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT)
-                .outputFormat("jpg")
-                .toOutputStream(outputStream);
-        ByteArrayInputStream thumbnailInputStream = new ByteArrayInputStream(outputStream.toByteArray());
-        //save to minio
-        var imageUrl = saveToMinio(image, thumbnailInputStream);
+        //save original image to minio (no compression)
+        var imageUrl = saveToMinio(image, image.getInputStream());
         return imageUrl.substring(0, imageUrl.indexOf("?"));
     }
 

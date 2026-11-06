@@ -130,7 +130,11 @@ public interface ObjectMapper extends BaseMapper<Object> {
                                                       @Param("primaryKeyColumn") String primaryKeyColumn,
                                                       @Param("primaryKeyValue") Object primaryKeyValue) {
         var records = queryByPrimaryKey(schemaName, tableName, columnNames, primaryKeyColumn, primaryKeyValue);
-        return populate(schemaName, Lists.newArrayList(records), tableName, columnNames).get(0);
+        if (records == null) {
+            return null;
+        }
+        var populated = populate(schemaName, Lists.newArrayList(records), tableName, columnNames);
+        return populated.isEmpty() ? null : populated.get(0);
     }
 
 

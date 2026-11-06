@@ -712,15 +712,17 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
 
 
     @Override
-    public List<OntologyMetaInfoVO> searchByKeyword(String keyword) {
+    public List<OntologyMetaInfoVO> searchByKeyword(String keyword, Integer spaceId) {
         var searchKeyword = StringUtils.isEmpty(keyword) ? "" : keyword;
-        var metaList = list(new LambdaQueryWrapper<OntologyMeta>()
+        var queryWrapper = new LambdaQueryWrapper<OntologyMeta>()
                 .eq(OntologyMeta::getStatus, Status.ENABLE.getValue())
+                .eq(spaceId != null, OntologyMeta::getOntologySpaceId, spaceId)
                 .and(wrapper -> wrapper
                         .or().like(OntologyMeta::getDescription, searchKeyword)
                         .or().like(OntologyMeta::getApiName, searchKeyword)
                         .or().like(OntologyMeta::getDisplayName, searchKeyword)
-                ))
+                );
+        var metaList = list(queryWrapper)
                 .stream().map(DataConverter::convert).collect(Collectors.toList());
 
         if (metaList.isEmpty()) {
