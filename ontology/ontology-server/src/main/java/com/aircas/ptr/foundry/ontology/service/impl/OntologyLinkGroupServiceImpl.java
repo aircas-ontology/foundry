@@ -12,6 +12,7 @@ import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkGraphVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkInfoVO;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkObjectsVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaInfoVO;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyActionLinkMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyLinkCategoryMapper;
@@ -121,6 +122,23 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
         var from = metaMap.get(link.getOntologyUniqueIdentifierFrom());
         var to = metaMap.get(link.getOntologyUniqueIdentifierTo());
         return DataConverter.convert(link, from, to);
+    }
+
+    @Override
+    public OntologyLinkObjectsVO getLinkObjectsByUniqueIdentifier(String uniqueIdentifier) {
+        var link = getOne(new LambdaQueryWrapper<OntologyLinkGroup>().eq(OntologyLinkGroup::getUniqueIdentifier, uniqueIdentifier));
+        PreconditionUtils.checkArgument(link != null, "关系不存在：" + uniqueIdentifier);
+        var ontologyIds = Lists.newArrayList(link.getOntologyUniqueIdentifierFrom(), link.getOntologyUniqueIdentifierTo());
+        var metaMap = ontologyMetaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>().in(OntologyMeta::getUniqueIdentifier, ontologyIds))
+                .stream().collect(Collectors.toMap(OntologyMeta::getUniqueIdentifier, v -> v));
+        var from = metaMap.get(link.getOntologyUniqueIdentifierFrom());
+        var to = metaMap.get(link.getOntologyUniqueIdentifierTo());
+        return OntologyLinkObjectsVO.builder()
+                .uniqueIdentifier(link.getUniqueIdentifier())
+                .name(link.getName())
+                .fromObject(from == null ? null : DataConverter.convert(from))
+                .toObject(to == null ? null : DataConverter.convert(to))
+                .build();
     }
 
     @Override
