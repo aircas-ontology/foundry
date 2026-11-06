@@ -473,6 +473,13 @@ public class EntityServiceImpl implements EntityService {
         var pk = primaryKeyProp.get();
         var pkColumns = propsMap.get(pk.getDatasourceId()).stream().map(v -> v.getDatasourceColumnName()).collect(Collectors.toList());
         var primaryData = objectMapper.queryDataByPrimaryKey(pk.getDatasourceSchema(), pk.getDatasourceId(), pkColumns, pk.getDatasourceColumnName(), param.getEntityPrimaryKey());
+        if (primaryData == null || primaryData.isEmpty()) {
+            return EntityPropertyRowDetailVO.builder()
+                    .ontologyUniqueIdentifier(param.getOntologyUniqueIdentifier())
+                    .entityPrimaryKey(param.getEntityPrimaryKey())
+                    .propertyGroups(Lists.newArrayList())
+                    .build();
+        }
         var propertyMap = propsMap.get(pk.getDatasourceId()).stream().collect(Collectors.toMap(v -> v.getDatasourceColumnName(), v -> v));
         var propertyInfoList = primaryData.entrySet().stream().<EntityPropertyRowDetailVO.PropertyInfo>map(entry -> {
             var colName = entry.getKey();
