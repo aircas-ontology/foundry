@@ -254,8 +254,10 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             PreconditionUtils.checkArgument(param.getSubjectType() == null && param.getOperation() == null
                     && StringUtils.isEmpty(param.getStorageGroup()), "应用行为不需要行为类型、基础操作和存储分组", HttpStatus.BAD_REQUEST);
             // outputMode 下沉到 mappingIns 每行：每个出参独立选 RESULT_ONLY / WRITE_PROPERTY
-            checkFunctionAction(param, definition, APPLICATION_FUNCTION_TYPES, true, spaceId);
+            checkFunctionAction(param, definition, APPLICATION_FUNCTION_TYPES, spaceId);
             checkWritePropertyOutput(definition);
+            // 写入对象属性与绑定关系互斥：出参已经指定落属性时，不允许再挂关系
+            checkOutputLinkExclusive(param, definition);
             action.setOutputMode(null);
         } else {
             var subjectType = param.getSubjectType();
@@ -272,7 +274,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 PreconditionUtils.checkArgument(param.getOutputMode() != ActionOutputModeEnum.WRITE_PROPERTY,
                         "基础算子行为只支持仅返回结果", HttpStatus.BAD_REQUEST);
                 checkFunctionAction(param, definition, Collections.singletonList(FunctionTypeEnum.BASIC_QUERY),
-                        false, spaceId);
+                        spaceId);
                 // 基础算子也不允许行级 WRITE_PROPERTY
                 PreconditionUtils.checkArgument(definition.mappings.stream()
                                 .noneMatch(m -> m.getOutputMode() == ActionOutputModeEnum.WRITE_PROPERTY),
@@ -300,13 +302,13 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
 
     /**
      * 绑定算子的行为（应用行为、基础算子行为）：校验算子类型、关联关系和入参绑定。
+     * <p>关系是可选项：应用行为在出参全是「仅输出结果」时可以绑一条关系，执行时据此补一条实例关系。</p>
      *
      * @param allowedTypes 该类别允许的算子类型
-     * @param linkRequired 应用行为必须绑定一条关系，执行时据此补一条实例关系
      * @param spaceId      行为所属空间，算子 api 仅在该空间内唯一
      */
     private void checkFunctionAction(ActionCreateOrUpdateParam param, ActionDefinition definition,
-                                     List<FunctionTypeEnum> allowedTypes, boolean linkRequired, Integer spaceId) {
+                                     List<FunctionTypeEnum> allowedTypes, Integer spaceId) {
         var funcApi = param.getFunctionApi();
         PreconditionUtils.checkArgument(StringUtils.isNotEmpty(funcApi), "行为必须绑定算子", HttpStatus.BAD_REQUEST);
         // 算子 api 只保证空间内唯一（跨空间允许重名），取最新版本必须先限定在本空间，否则会选中其他空间的同名算子
@@ -322,7 +324,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 "function api 不存在或算子类型不匹配：" + funcApi, HttpStatus.BAD_REQUEST);
         definition.funcParams = functionParamMapper.selectList(new LambdaQueryWrapper<FunctionParamPO>()
                 .eq(FunctionParamPO::getFunctionId, definition.func.getId()));
-        checkActionLink(param, definition, linkRequired);
+        checkActionLink(param, definition, false);
 
         var paramMap = definition.funcParams.stream()
                 .collect(Collectors.toMap(FunctionParamPO::getId, v -> v, (existingValue, newValue) -> existingValue));
@@ -436,6 +438,19 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                         .anyMatch(m -> m.getOutputMode() == ActionOutputModeEnum.WRITE_PROPERTY
                                 && outputParamIds.contains(m.getFunctionParamId())),
                 "输出方式为写入对象属性时，至少要绑定一个输出参数", HttpStatus.BAD_REQUEST);
+    }
+
+    /**
+     * 写入对象属性与绑定关系互斥：两者都是行为的落库目标，同时配置会既写属性又落关系边。
+     * <p>出参全部为「仅输出结果」时才允许选择关系，关系本身是可选填的。</p>
+     */
+    private void checkOutputLinkExclusive(ActionCreateOrUpdateParam param, ActionDefinition definition) {
+        var hasWriteProperty = definition.mappings.stream()
+                .anyMatch(m -> m.getOutputMode() == ActionOutputModeEnum.WRITE_PROPERTY);
+        PreconditionUtils.checkArgument(!hasWriteProperty
+                        || param.getLinkMapping() == null
+                        || StringUtils.isEmpty(param.getLinkMapping().getOntologyLinkUniqIdentifier()),
+                "输出参数写入对象属性时，不能再绑定关系", HttpStatus.BAD_REQUEST);
     }
 
     /** 属性值行为：对某个存储分组（物理表）做新增/修改/删除，不绑算子 */
@@ -893,7 +908,12 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 .eq(OntologyAction::getOntologySpaceId, param.getOntologySpaceId()));
         PreconditionUtils.checkArgument(action != null, "无效的action api", HttpStatus.BAD_REQUEST);
         // 草稿可以试跑（发布前正是要拿它验证定义）
-        PreconditionUtils.checkArgument(param.getEntityPrimaryKey() != null, "行为测试必须提供实体主键", HttpStatus.BAD_REQUEST);
+        // 属性值/实例关系行为按行为所属对象定位实例；绑算子的行为按映射涉及对象从 entityPrimaryKeys 取，缺实例在执行前校验
+        if (action.getActionKind() == ActionKindEnum.BASE
+                && (action.getSubjectType() == ActionSubjectTypeEnum.PROPERTY_VALUE
+                || action.getSubjectType() == ActionSubjectTypeEnum.LINK)) {
+            PreconditionUtils.checkArgument(param.getEntityPrimaryKey() != null, "行为测试必须提供实体主键", HttpStatus.BAD_REQUEST);
+        }
 
         var detail = getActionByApi(param.getOntologySpaceId(), param.getActionApi());
         if (action.getActionKind() == ActionKindEnum.BASE) {
@@ -1136,7 +1156,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 .actionApi(action.getApi())
                 .ontologySpaceId(action.getOntologySpaceId())
                 .ontologyUniqueIdentifier(action.getOntologyUniqueIdentifier())
-                .entityPrimaryKey(param.getEntityPrimaryKey());
+                .entityPrimaryKey(param.getEntityPrimaryKey())
+                .entityPrimaryKeys(param.getEntityPrimaryKeys());
         // 指定了对端实例时只跑这一对，否则会遍历关系下的全部实体
         if (detail.getLinkMapping() != null && param.getLinkEntityPrimaryKey() != null) {
             var linkGroup = linkGroupMapper.selectOne(new LambdaQueryWrapper<OntologyLinkGroup>()

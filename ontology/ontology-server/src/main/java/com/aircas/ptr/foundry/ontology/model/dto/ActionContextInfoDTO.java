@@ -39,6 +39,12 @@ public class ActionContextInfoDTO {
 
     private List<OntologyProperty> ontologyProperties;
 
+    /** 每个涉及对象选中的实例主键：对象id -> 实例主键；批量按实例遍历时为空，取单次传入的实体主键 */
+    private Map<String, Object> entityPrimaryKeys;
+
+    /** 涉及对象的属性定义：对象id -> 属性列表；出参按行所属对象回写时按它定位主键与数据源 */
+    private Map<String, List<OntologyProperty>> objectProperties;
+
     private EntityActionExecuteParam entityActionExecuteParam;
 
     //关系涉及的相关参数
