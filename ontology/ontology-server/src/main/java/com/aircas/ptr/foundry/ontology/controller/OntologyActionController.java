@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.*;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
 import java.util.List;
+import java.util.stream.Stream;
 
 
 @Tag(name = "对象行为")
@@ -91,11 +92,17 @@ public class OntologyActionController {
                                                                             @RequestParam(required = false, name = "categoryId") @Parameter(description = "行为分类id") Integer categoryId,
                                                                             @RequestParam(required = false, name = "keyword") @Parameter(description = "关键词：行为名称、算子或描述") String keyword,
                                                                             @RequestParam(required = false, name = "status") @Parameter(description = "行为状态：2 草稿，1 已发布，不传查全部") Integer status,
-                                                                            @RequestParam(required = false, name = "actionKinds") @Parameter(description = "行为类别：BASE/APPLICATION/TREE，可多选，不传查全部") List<ActionKindEnum> actionKinds,
+                                                                            @RequestParam(required = false, name = "actionKind") @Parameter(description = "行为类别：BASE/APPLICATION/TREE，不传查全部") ActionKindEnum actionKind,
+                                                                            @RequestParam(required = false, name = "actionKinds") @Parameter(description = "行为类别多选：BASE/APPLICATION/TREE；与 actionKind 同时传时合并，不传查全部") List<ActionKindEnum> actionKinds,
                                                                             @RequestParam(required = false, defaultValue = "1") Integer pageNum,
                                                                             @RequestParam(required = false, defaultValue = "10") Integer pageSize) {
 
-        return RestResult.ofData(ontologyActionService.pageGetActionByOntologyId(ontologySpaceId, ontologyId, categoryId, keyword, status, actionKinds, pageNum, pageSize));
+        // 单值和多选两个入口都支持，避免调用方按 actionKind 传时被静默忽略
+        var kinds = Stream.concat(
+                        actionKind == null ? Stream.<ActionKindEnum>empty() : Stream.of(actionKind),
+                        actionKinds == null ? Stream.<ActionKindEnum>empty() : actionKinds.stream())
+                .distinct().toList();
+        return RestResult.ofData(ontologyActionService.pageGetActionByOntologyId(ontologySpaceId, ontologyId, categoryId, keyword, status, kinds, pageNum, pageSize));
     }
 
 

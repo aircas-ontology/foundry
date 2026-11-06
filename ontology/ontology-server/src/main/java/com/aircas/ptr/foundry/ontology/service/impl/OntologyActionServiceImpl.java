@@ -1096,6 +1096,10 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             var sourceType = isInput
                     ? (mapping.getSourceType() == null ? ActionParamSourceEnum.PROPERTY : mapping.getSourceType())
                     : null;
+            // 基础算子的入参只能取对象属性或固定值：执行/调度链路没有外部入参入口，外部输入恒为 null
+            PreconditionUtils.checkArgument(!(sourceType == ActionParamSourceEnum.EXTERNAL
+                            && definition.func.getType() == FunctionTypeEnum.BASIC_QUERY),
+                    "基础算子不支持外部输入参数：" + funcParam.getParamName(), HttpStatus.BAD_REQUEST);
             OntologyProperty property = null;
             if (StringUtils.isNotEmpty(mapping.getPropertyUniqueIdentifier())) {
                 property = ontologyPropertyService.getOne(new LambdaQueryWrapper<OntologyProperty>()
