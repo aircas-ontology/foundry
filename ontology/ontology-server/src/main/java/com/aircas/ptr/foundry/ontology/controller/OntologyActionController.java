@@ -9,6 +9,7 @@ import com.aircas.ptr.foundry.ontology.model.param.ActionSchedulingCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionSchedulingUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionTestParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyActionExecuteParam;
+import com.aircas.ptr.foundry.ontology.model.param.TreeBatchExecuteParam;
 import com.aircas.ptr.foundry.ontology.model.param.TreeExecuteParam;
 import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.aircas.ptr.foundry.ontology.service.OntologyActionService;
@@ -105,6 +106,20 @@ public class OntologyActionController {
     @PostMapping("/tree/execute")
     public RestResult<TreeExecuteResultVO> executeTree(@RequestBody @Valid TreeExecuteParam param) {
         return RestResult.ofData(ontologyActionService.executeTree(param));
+    }
+
+
+    @Operation(summary = "批量执行行为树（按对象类型遍历实例，真实落库）")
+    @PostMapping("/tree/executeBatch")
+    public RestResult<TreeBatchExecuteResultVO> executeTreeBatch(@RequestBody @Valid TreeBatchExecuteParam param) {
+        return RestResult.ofData(ontologyActionService.executeTreeBatch(param));
+    }
+
+
+    @Operation(summary = "行为树编辑器目录：节点类型与本空间可绑定行为")
+    @GetMapping("/tree/node-defs")
+    public RestResult<TreeDefsVO> getTreeDefs(@RequestParam(required = true, name = "ontologySpaceId") @Parameter(description = "对象空间id") Integer ontologySpaceId) {
+        return RestResult.ofData(ontologyActionService.getTreeDefs(ontologySpaceId));
     }
 
 

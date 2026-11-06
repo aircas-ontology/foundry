@@ -8,6 +8,7 @@ import com.aircas.ptr.foundry.ontology.model.param.ActionSchedulingCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionSchedulingUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionTestParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyActionExecuteParam;
+import com.aircas.ptr.foundry.ontology.model.param.TreeBatchExecuteParam;
 import com.aircas.ptr.foundry.ontology.model.param.TreeExecuteParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyAction;
 import com.aircas.ptr.foundry.ontology.model.vo.*;
@@ -64,6 +65,22 @@ public interface OntologyActionService extends IService<OntologyAction> {
      * @return 整树状态 + 结束时黑板快照 + 逐节点结果
      */
     TreeExecuteResultVO executeTree(TreeExecuteParam param);
+
+    /**
+     * 批量执行行为树：按对象类型遍历实例数据，每条实例独立跑一遍整棵树。
+     * <p>单条实例失败不中断整批；明细默认只返回失败实例，需要成功明细时由 includeSuccess 打开。</p>
+     *
+     * @param param 树 api + 要遍历的对象类型 + 分片参数 + 共用的黑板入参
+     * @return 本次执行的实例数、成功失败计数与失败明细
+     */
+    TreeBatchExecuteResultVO executeTreeBatch(TreeBatchExecuteParam param);
+
+    /**
+     * 行为树编辑器目录：节点类型清单 + 本空间内可作为行为节点绑定的已发布行为。
+     *
+     * @param ontologySpaceId 对象空间id，可绑定行为只取该空间
+     */
+    TreeDefsVO getTreeDefs(Integer ontologySpaceId);
 
     Long createScheduling(ActionSchedulingCreateParam param);
 

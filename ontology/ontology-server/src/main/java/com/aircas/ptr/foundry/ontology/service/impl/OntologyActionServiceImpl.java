@@ -14,6 +14,10 @@ import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.ObjectMapper;
 import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.TableMetadataMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.*;
 import com.aircas.ptr.foundry.ontology.service.*;
+import com.aircas.ptr.foundry.ontology.service.behavior.BtTreeManager;
+import com.aircas.ptr.foundry.ontology.service.behavior.CompiledBehaviorTree;
+import com.aircas.ptr.foundry.ontology.service.behavior.TreeActionInvoker;
+import com.aircas.ptr.foundry.ontology.service.behavior.TreeExecutionRuntime;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.OrderItem;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -27,16 +31,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang.StringUtils;
 import org.springframework.context.annotation.Lazy;
-import org.springframework.context.expression.MapAccessor;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
-import org.springframework.expression.spel.support.DataBindingPropertyAccessor;
-import org.springframework.expression.spel.support.SimpleEvaluationContext;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import jakarta.annotation.Resource;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.EnumSet;
@@ -61,9 +63,6 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
 
     /** 行为树表达式解析器，保存期只解析语法；运行期求值走只读上下文 */
     private static final SpelExpressionParser TREE_EXPRESSION_PARSER = new SpelExpressionParser();
-
-    /** 黑板是 Map，表达式按黑板键取值靠它；禁写，防止表达式把黑板当变量池改 */
-    private static final MapAccessor TREE_MAP_ACCESSOR = new MapAccessor(false);
 
     /** 行为树里能做大小、等于比较的数值类型 */
     private static final Set<FunctionParamTypeEnum> TREE_NUMBER_TYPES =
@@ -125,6 +124,9 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     @Resource
     private XxlJobClient xxlJobClient;
 
+    @Resource
+    private BtTreeManager btTreeManager;
+
 
     private final com.fasterxml.jackson.databind.ObjectMapper jsonMapper = new com.fasterxml.jackson.databind.ObjectMapper();
 
@@ -154,6 +156,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         var definition = checkActionDefinition(action, param);
         save(action);
         saveActionChildren(action.getId(), definition);
+        btTreeManager.invalidate(action.getApi());
     }
 
     @Override
@@ -167,6 +170,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         actionLinkMapper.delete(new LambdaQueryWrapper<OntologyActionLink>().eq(OntologyActionLink::getOntologyActionId, action.getId()));
         ontologyActionMappingInService.remove(new LambdaQueryWrapper<OntologyActionMappingIn>().eq(OntologyActionMappingIn::getOntologyActionId, action.getId()));
         saveActionChildren(action.getId(), definition);
+        btTreeManager.invalidate(action.getApi());
     }
 
     @Override
@@ -194,6 +198,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         }
         action.setStatus(status);
         updateById(action);
+        btTreeManager.invalidate(action.getApi());
     }
 
     /**
@@ -589,324 +594,260 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         return jsonMapper.readValue(definition, BehaviorTreeDefinition.class);
     }
 
+
+
+
+    /**
+     * 执行行为树：一次执行只针对一条实例数据，全树共用；节点走 behavior3java 引擎，行为真实落库。
+     * <p>单轮求值，不产生 RUNNING；跨 Tick 的循环/冷却/限时按「跑一遍子节点」降级，结果里带说明。</p>
+     */
     @Override
     public TreeExecuteResultVO executeTree(TreeExecuteParam param) {
-        var tree = getOne(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getApi, param.getTreeApi()));
-        PreconditionUtils.checkArgument(tree != null, "无效的action api", HttpStatus.BAD_REQUEST);
-        PreconditionUtils.checkArgument(tree.getActionKind() == ActionKindEnum.TREE,
-                "按行为执行的接口不能跑行为树：" + param.getTreeApi(), HttpStatus.BAD_REQUEST);
-        PreconditionUtils.checkArgument(Objects.equals(tree.getStatus(), Status.ENABLE.getValue()),
-                "行为树未发布，不能执行：" + param.getTreeApi(), HttpStatus.BAD_REQUEST);
-        var definition = readTreeDefinition(tree.getDefinition());
-        PreconditionUtils.checkArgument(definition.getRoots().size() == 1,
-                "行为树定义不完整，根节点数量不是 1", HttpStatus.BAD_REQUEST);
-        var context = initTreeContext(definition, param, tree.getOntologySpaceId());
-        var rootResult = evaluateTreeNode(definition.getRoots().get(0), context);
-        return TreeExecuteResultVO.builder()
-                .treeApi(tree.getApi())
-                .state(rootResult.getState())
-                .blackboard(context.blackboard)
-                .nodes(Collections.singletonList(rootResult))
+        var compiled = btTreeManager.getTree(param.getTreeApi());
+        return executeTreeInstance(compiled, param.getEntityPrimaryKey(), param.getInputs());
+    }
+
+    /**
+     * 批量执行行为树：按对象类型遍历实例数据，每条实例独立初始化黑板后跑同一棵树，实例之间互不影响。
+     * <p>分片规则与行为批量执行一致（下标取模），供调度侧横向拆分；明细默认只返回失败实例，
+     * 避免万级实例时响应体过大。</p>
+     */
+    @Override
+    public TreeBatchExecuteResultVO executeTreeBatch(TreeBatchExecuteParam param) {
+        var compiled = btTreeManager.getTree(param.getTreeApi());
+        var shardTotal = param.getShardTotal();
+        var shardIndex = param.getShardIndex();
+        if (shardTotal == null) {
+            shardIndex = null;
+        } else {
+            PreconditionUtils.checkArgument(shardTotal > 0, "分片总数必须大于 0", HttpStatus.BAD_REQUEST);
+            PreconditionUtils.checkArgument(shardIndex != null && shardIndex >= 0 && shardIndex < shardTotal,
+                    "分片序号必须在 0 到 " + (shardTotal - 1) + " 之间", HttpStatus.BAD_REQUEST);
+        }
+        var primaryKeys = listTreeInstancePrimaryKeys(param.getOntologyUniqueIdentifier());
+        var includeSuccess = Boolean.TRUE.equals(param.getIncludeSuccess());
+        var results = new ArrayList<TreeBatchInstanceResultVO>();
+        var total = 0;
+        var successCount = 0;
+        for (var i = 0; i < primaryKeys.size(); i++) {
+            if (shardTotal != null && i % shardTotal != shardIndex) {
+                continue;
+            }
+            total++;
+            var entityPrimaryKey = primaryKeys.get(i);
+            TreeBatchInstanceResultVO instanceResult;
+            try {
+                var executed = executeTreeInstance(compiled, entityPrimaryKey, param.getInputs());
+                if (executed.getState() == BehaviorStateEnum.SUCCESS) {
+                    successCount++;
+                    if (!includeSuccess) {
+                        continue;
+                    }
+                    instanceResult = batchInstanceResult(entityPrimaryKey, executed, null);
+                } else {
+                    var failureMessage = firstFailureMessage(executed.getNodes());
+                    instanceResult = batchInstanceResult(entityPrimaryKey, executed,
+                            StringUtils.isBlank(failureMessage) ? "行为树执行失败" : failureMessage);
+                }
+            } catch (Exception e) {
+                // 单条实例失败不中断整批，原因按实例回传
+                log.warn("行为树批量执行失败, treeApi={}, entityPrimaryKey={}", param.getTreeApi(), entityPrimaryKey, e);
+                instanceResult = TreeBatchInstanceResultVO.builder()
+                        .entityPrimaryKey(entityPrimaryKey)
+                        .state(BehaviorStateEnum.FAILURE)
+                        .message(e instanceof BusinessException business ? business.getMessage() : e.getMessage())
+                        .build();
+            }
+            results.add(instanceResult);
+        }
+        return TreeBatchExecuteResultVO.builder()
+                .treeApi(compiled.api())
+                .total(total)
+                .successCount(successCount)
+                .failCount(total - successCount)
+                .results(results)
+                .build();
+    }
+
+    private TreeBatchInstanceResultVO batchInstanceResult(Object entityPrimaryKey, TreeExecuteResultVO executed, String message) {
+        return TreeBatchInstanceResultVO.builder()
+                .entityPrimaryKey(entityPrimaryKey)
+                .state(executed.getState())
+                .message(message)
+                .blackboard(executed.getBlackboard())
+                .nodes(executed.getNodes())
                 .build();
     }
 
     /**
-     * 初始化黑板：变量默认值打底，执行入参覆盖；黑板是节点唯一的数据来源。
+     * 行为树编辑器目录：节点类型（含子节点数量约束）+ 本空间内已发布、可作为行为节点绑定的行为。
      */
-    private TreeExecuteContext initTreeContext(BehaviorTreeDefinition definition, TreeExecuteParam param, Integer spaceId) {
-        var context = new TreeExecuteContext();
-        context.spaceId = spaceId;
-        context.entityPrimaryKey = param.getEntityPrimaryKey();
-        definition.getBlackboard().forEach(item -> context.blackboardItems.put(item.getKey(), item));
-        definition.getVariables().forEach(variable -> context.blackboard.put(variable.getName(), variable.getDefaultValue()));
-        var inputs = param.getInputs();
-        if (inputs == null) {
-            return context;
+    @Override
+    public TreeDefsVO getTreeDefs(Integer ontologySpaceId) {
+        PreconditionUtils.checkNotNull(ontologySpaceId, "必须传对象空间id", HttpStatus.BAD_REQUEST);
+        var nodes = Arrays.stream(BehaviorNodeKindEnum.values())
+                .map(this::treeControlNode)
+                .collect(Collectors.toList());
+        var actions = list(new LambdaQueryWrapper<OntologyAction>()
+                .eq(OntologyAction::getOntologySpaceId, ontologySpaceId)
+                .eq(OntologyAction::getStatus, Status.ENABLE.getValue())
+                // 类别为空的存量行为要保留，所以只排掉 TREE，不能写成 ne（SQL 里 NULL 不参与比较）
+                .and(w -> w.isNull(OntologyAction::getActionKind)
+                        .or().ne(OntologyAction::getActionKind, ActionKindEnum.TREE))
+                .orderByAsc(OntologyAction::getDisplayName));
+        var availableActions = actions.stream().map(this::toTreeAvailableAction).collect(Collectors.toList());
+        return TreeDefsVO.builder().nodes(nodes).availableActions(availableActions).build();
+    }
+
+    private TreeControlNodeVO treeControlNode(BehaviorNodeKindEnum kind) {
+        return TreeControlNodeVO.builder()
+                .kind(kind)
+                .name(kind.getName())
+                .category(kind.getCategory())
+                .maxChildren(switch (kind.getCategory()) {
+                    case COMPOSITE -> -1;
+                    case DECORATOR -> 1;
+                    case LEAF -> 0;
+                })
+                .build();
+    }
+
+    /** 可绑定行为的参数按算子定义给出：树把外部输入参数按参数名从黑板取值，前端据此做黑板键映射 */
+    private TreeAvailableActionVO toTreeAvailableAction(OntologyAction action) {
+        var builder = TreeAvailableActionVO.builder()
+                .actionApi(action.getApi())
+                .displayName(action.getDisplayName())
+                .actionKind(action.getActionKind())
+                .subjectType(action.getSubjectType())
+                .functionApi(action.getFunctionApi());
+        if (StringUtils.isBlank(action.getFunctionApi())) {
+            return builder.build();
         }
-        for (var entry : inputs.entrySet()) {
-            PreconditionUtils.checkArgument(context.blackboard.containsKey(entry.getKey()),
-                    "执行入参 " + entry.getKey() + " 不是本树声明的黑板键", HttpStatus.BAD_REQUEST);
-            var item = context.blackboardItems.get(entry.getKey());
-            // 绑了对象属性的键由行为写入，再接受外部入参会出现「传了但马上被覆盖」的假象
-            PreconditionUtils.checkArgument(item == null || StringUtils.isBlank(item.getBindPropertyUniqueIdentifier()),
-                    "黑板键 " + entry.getKey() + " 绑的是对象属性，值由行为写入，不接受执行入参", HttpStatus.BAD_REQUEST);
-            context.blackboard.put(entry.getKey(), entry.getValue());
+        try {
+            var function = functionService.getFunctionDetailByApi(action.getOntologySpaceId(), action.getFunctionApi(), null);
+            if (function == null || function.getParams() == null) {
+                return builder.build();
+            }
+            Map<FunctionParamCategoryEnum, List<FunctionParameterVO>> grouped = function.getParams().stream()
+                    .filter(param -> param.getCategory() != null)
+                    .collect(Collectors.groupingBy(FunctionParameterVO::getCategory));
+            return builder
+                    .inputParams(toTreeActionParams(grouped.get(FunctionParamCategoryEnum.INPUT)))
+                    .outputParams(toTreeActionParams(grouped.get(FunctionParamCategoryEnum.OUTPUT)))
+                    .build();
+        } catch (Exception e) {
+            // 算子可能已被删除或下架，行为仍要出现在目录里，只是暂时拿不到参数
+            log.warn("行为树节点目录取算子参数失败, actionApi={}, functionApi={}", action.getApi(), action.getFunctionApi(), e);
+            return builder.build();
         }
-        return context;
+    }
+
+    private List<TreeActionParamVO> toTreeActionParams(List<FunctionParameterVO> params) {
+        if (CollectionUtils.isEmpty(params)) {
+            return new ArrayList<>();
+        }
+        return params.stream()
+                .map(param -> TreeActionParamVO.builder()
+                        .name(param.getParamName())
+                        .type(param.getParamType())
+                        .description(param.getDescription())
+                        .build())
+                .collect(Collectors.toList());
     }
 
     /**
-     * 单轮求值：每个节点只求值一次，不产生 RUNNING，跨 Tick 的循环/冷却/限时按「跑一遍子节点」降级。
+     * 跑一条实例并还原结果树。每条实例一个运行时与黑板，编译结果可复用。
      */
-    private BehaviorNodeResultVO evaluateTreeNode(BehaviorTreeNode node, TreeExecuteContext context) {
-        var result = BehaviorNodeResultVO.builder()
+    private TreeExecuteResultVO executeTreeInstance(CompiledBehaviorTree compiled, Object entityPrimaryKey, Map<String, Object> inputs) {
+        var runtime = new TreeExecutionRuntime(compiled.definition(), entityPrimaryKey, inputs,
+                compiled.spaceId(), this::invokeTreeNodeAction);
+        compiled.tree().tick(runtime, runtime.getBehaviorBlackboard());
+        return buildTreeResult(compiled, runtime);
+    }
+
+    /**
+     * 结果树只还原真正执行到的节点：被短路跳过、没轮到的节点不出现，与单轮引擎的口径一致。
+     */
+    private TreeExecuteResultVO buildTreeResult(CompiledBehaviorTree compiled, TreeExecutionRuntime runtime) {
+        var nodes = compiled.definition().getRoots().stream()
+                .map(root -> buildNodeResult(root, runtime))
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+        var state = nodes.isEmpty() ? BehaviorStateEnum.FAILURE : nodes.get(0).getState();
+        return TreeExecuteResultVO.builder()
+                .treeApi(compiled.api())
+                .state(state)
+                .blackboard(new LinkedHashMap<>(runtime.getBlackboard()))
+                .nodes(nodes)
+                .build();
+    }
+
+    private BehaviorNodeResultVO buildNodeResult(BehaviorTreeNode node, TreeExecutionRuntime runtime) {
+        var trace = runtime.getTrace(node.getId());
+        if (trace == null) {
+            return null;
+        }
+        var children = node.getChildren().stream()
+                .map(child -> buildNodeResult(child, runtime))
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+        return BehaviorNodeResultVO.builder()
                 .nodeId(node.getId())
                 .kind(node.getKind())
                 .displayName(node.getDisplayName())
-                .state(BehaviorStateEnum.SUCCESS)
-                .children(new ArrayList<>())
+                .state(trace.getState() == null ? BehaviorStateEnum.SUCCESS : trace.getState())
+                .skipped(trace.isSkipped())
+                .message(trace.getMessage())
+                .children(children)
                 .build();
-        if (!node.isEnabled()) {
-            return result.setSkipped(true).setMessage("节点未启用，按跳过处理");
-        }
-        if (StringUtils.isNotBlank(node.getSkipIf())) {
-            var message = new String[1];
-            if (evalTreeCondition(node.getSkipIf(), context, message)) {
-                return result.setSkipped(true).setMessage(message[0] == null ? "跳过条件成立" : message[0]);
-            }
-            if (message[0] != null) {
-                return result.setState(BehaviorStateEnum.FAILURE).setMessage(message[0]);
-            }
-        }
-        switch (node.getKind().getCategory()) {
-            case COMPOSITE -> evaluateTreeComposite(node, context, result);
-            case DECORATOR -> evaluateTreeDecorator(node, context, result);
-            default -> evaluateTreeLeaf(node, context, result);
-        }
-        return result;
     }
 
-    private void evaluateTreeComposite(BehaviorTreeNode node, TreeExecuteContext context, BehaviorNodeResultVO result) {
-        var children = node.getChildren();
-        if (node.getKind() == BehaviorNodeKindEnum.PARALLEL) {
-            var config = readTreeConfig(node, BehaviorParallelConfig.class);
-            var successCount = 0;
-            var failureCount = 0;
-            for (var child : children) {
-                var childResult = evaluateTreeNode(child, context);
-                result.getChildren().add(childResult);
-                if (childResult.getState() == BehaviorStateEnum.SUCCESS) {
-                    successCount++;
-                } else {
-                    failureCount++;
-                }
+    private String firstFailureMessage(List<BehaviorNodeResultVO> nodes) {
+        for (var node : nodes) {
+            if (node.getState() == BehaviorStateEnum.FAILURE && StringUtils.isNotBlank(node.getMessage())) {
+                return node.getMessage();
             }
-            var allSuccess = failureCount == 0;
-            var anySuccess = successCount > 0;
-            var allFailure = successCount == 0;
-            var anyFailure = failureCount > 0;
-            var hit = switch (config.getPolicy()) {
-                case ALL_SUCCESS -> allSuccess;
-                case ANY_SUCCESS -> anySuccess;
-                case ALL_FAILURE -> allFailure;
-                case ANY_FAILURE -> anyFailure;
-            };
-            result.setState(hit ? BehaviorStateEnum.SUCCESS : BehaviorStateEnum.FAILURE);
-            return;
-        }
-        // 选择与顺序按短路语义：定论出现就不再跑后面的兄弟节点
-        var requireSuccess = node.getKind() == BehaviorNodeKindEnum.SEQUENCE;
-        for (var child : children) {
-            var childResult = evaluateTreeNode(child, context);
-            result.getChildren().add(childResult);
-            var childSuccess = childResult.getState() == BehaviorStateEnum.SUCCESS;
-            // 顺序碰到失败就定论，选择碰到成功就定论
-            if (requireSuccess != childSuccess) {
-                result.setState(childSuccess ? BehaviorStateEnum.SUCCESS : BehaviorStateEnum.FAILURE);
-                return;
+            var childMessage = firstFailureMessage(node.getChildren());
+            if (StringUtils.isNotBlank(childMessage)) {
+                return childMessage;
             }
         }
-        // 顺序全成功即成功；选择全部失败即失败
-        result.setState(requireSuccess ? BehaviorStateEnum.SUCCESS : BehaviorStateEnum.FAILURE);
-    }
-
-    private void evaluateTreeDecorator(BehaviorTreeNode node, TreeExecuteContext context, BehaviorNodeResultVO result) {
-        var childResult = evaluateTreeNode(node.getChildren().get(0), context);
-        result.getChildren().add(childResult);
-        var childState = childResult.getState();
-        switch (node.getKind()) {
-            case INVERTER -> result.setState(childState == BehaviorStateEnum.SUCCESS
-                    ? BehaviorStateEnum.FAILURE : BehaviorStateEnum.SUCCESS);
-            case FORCE_SUCCESS -> result.setState(childState == BehaviorStateEnum.FAILURE
-                    ? BehaviorStateEnum.SUCCESS : childState);
-            case UNTIL_SUCCESS -> {
-                var config = readTreeConfig(node, BehaviorUntilConfig.class);
-                result.setState(childState == BehaviorStateEnum.SUCCESS
-                        ? BehaviorStateEnum.SUCCESS : config.getFinishState());
-                result.setMessage(singleRoundNote(childState == BehaviorStateEnum.SUCCESS
-                        ? null : "单轮只尝试一次，未达成即按收尾状态上报"));
-            }
-            case UNTIL_FAILURE -> {
-                var config = readTreeConfig(node, BehaviorUntilConfig.class);
-                result.setState(childState == BehaviorStateEnum.FAILURE
-                        ? BehaviorStateEnum.SUCCESS : config.getFinishState());
-                result.setMessage(singleRoundNote(childState == BehaviorStateEnum.FAILURE
-                        ? null : "单轮只尝试一次，未达成即按收尾状态上报"));
-            }
-            case REPEATER -> {
-                result.setState(childState);
-                result.setMessage(singleRoundNote(null));
-            }
-            case COOLDOWN -> {
-                result.setState(childState);
-                // 冷却窗口要记住上次执行时间，而变量只有 RUNTIME 作用域、不跨执行持久，这里只能视为未命中
-                result.setMessage(singleRoundNote("变量不跨执行持久，冷却期无法记住上次执行时间，按未命中处理"));
-            }
-            case TIME_LIMIT -> {
-                result.setState(childState);
-                result.setMessage(singleRoundNote("单轮执行为同步串行，限时不生效"));
-            }
-            default -> result.setState(childState);
-        }
-    }
-
-    private String singleRoundNote(String extra) {
-        return extra == null ? "单轮执行：本节点的跨 Tick 配置未生效" : "单轮执行：" + extra;
-    }
-
-    private void evaluateTreeLeaf(BehaviorTreeNode node, TreeExecuteContext context, BehaviorNodeResultVO result) {
-        switch (node.getKind()) {
-            case CONDITION -> {
-                var config = readTreeConfig(node, BehaviorConditionConfig.class);
-                var message = new String[1];
-                var hit = evalTreeCondition(config.getExpression(), context, message);
-                if (message[0] != null) {
-                    result.setState(BehaviorStateEnum.FAILURE).setMessage(message[0]);
-                } else {
-                    result.setState(hit ? BehaviorStateEnum.SUCCESS : BehaviorStateEnum.FAILURE);
-                }
-            }
-            case BLACKBOARD_CONDITION -> evaluateTreeBlackboardCondition(node, context, result);
-            default -> executeTreeNodeAction(node, context, result);
-        }
-    }
-
-    private void evaluateTreeBlackboardCondition(BehaviorTreeNode node, TreeExecuteContext context, BehaviorNodeResultVO result) {
-        var config = readTreeConfig(node, BehaviorBlackboardConditionConfig.class);
-        var actual = context.blackboard.get(config.getKey());
-        var reason = new String[1];
-        var hit = compareTreeValues(config.getOp(), actual, config.getValue(), reason);
-        if (reason[0] != null) {
-            result.setState(BehaviorStateEnum.FAILURE).setMessage(reason[0]);
-            return;
-        }
-        result.setState(hit ? BehaviorStateEnum.SUCCESS : BehaviorStateEnum.FAILURE);
-        if (!hit) {
-            result.setMessage("黑板条件不成立：" + config.getKey() + " " + config.getOp().getName() + " " + config.getValue());
-        }
-    }
-
-    /**
-     * 按比较方式比黑板值与配置值；类型对不上只把原因写进 messageBox 并返回不成立，由调用方定节点状态，不抛异常打断整棵树。
-     */
-    private boolean compareTreeValues(BehaviorCompareOpEnum op, Object actual, Object expect, String[] reason) {
-        if (op == BehaviorCompareOpEnum.IS_EMPTY) {
-            return isTreeEmptyValue(actual);
-        }
-        if (op == BehaviorCompareOpEnum.IS_NOT_EMPTY) {
-            return !isTreeEmptyValue(actual);
-        }
-        if (actual == null) {
-            reason[0] = "黑板值为空，无法参与 " + op.getName() + " 比较";
-            return false;
-        }
-        if (op == BehaviorCompareOpEnum.CONTAINS || op == BehaviorCompareOpEnum.NOT_CONTAINS) {
-            var contained = isTreeContained(actual, expect);
-            return op == BehaviorCompareOpEnum.CONTAINS ? contained : !contained;
-        }
-        if (op == BehaviorCompareOpEnum.EQ || op == BehaviorCompareOpEnum.NE) {
-            var equal = String.valueOf(actual).equals(String.valueOf(expect));
-            if (!equal) {
-                try {
-                    equal = Double.compare(Double.parseDouble(String.valueOf(actual)), Double.parseDouble(String.valueOf(expect))) == 0;
-                } catch (NumberFormatException ignored) {
-                    // 两边都不是数字，按字符串比过就够了
-                }
-            }
-            return op == BehaviorCompareOpEnum.EQ ? equal : !equal;
-        }
-        double left;
-        double right;
-        try {
-            left = Double.parseDouble(String.valueOf(actual));
-            right = Double.parseDouble(String.valueOf(expect));
-        } catch (NumberFormatException e) {
-            reason[0] = "黑板值 " + actual + " 不是数值，无法按 " + op.getName() + " 比较";
-            return false;
-        }
-        var compared = Double.compare(left, right);
-        return switch (op) {
-            case GT -> compared > 0;
-            case GE -> compared >= 0;
-            case LT -> compared < 0;
-            case LE -> compared <= 0;
-            default -> false;
-        };
-    }
-
-    private boolean isTreeEmptyValue(Object value) {
-        return value == null || StringUtils.isBlank(String.valueOf(value));
-    }
-
-    private boolean isTreeContained(Object actual, Object expect) {
-        if (actual instanceof List<?> list) {
-            return list.stream().anyMatch(item -> Objects.equals(String.valueOf(item), String.valueOf(expect)));
-        }
-        return String.valueOf(actual).contains(String.valueOf(expect));
-    }
-
-    /**
-     * 表达式求值：黑板作根对象、只读属性访问，不给类型构造和方法调用开口（用户在 UI 里写表达式）。
-     *
-     * @param messageBox 求值失败时把原因写进第 0 位，由调用方决定节点状态
-     */
-    private boolean evalTreeCondition(String expression, TreeExecuteContext context, String[] messageBox) {
-        try {
-            var evaluationContext = SimpleEvaluationContext
-                    .forPropertyAccessors(TREE_MAP_ACCESSOR, DataBindingPropertyAccessor.forReadOnlyAccess())
-                    .withRootObject(context.blackboard)
-                    .build();
-            return Boolean.TRUE.equals(TREE_EXPRESSION_PARSER.parseExpression(expression)
-                    .getValue(evaluationContext));
-        } catch (Exception e) {
-            messageBox[0] = "表达式求值失败：" + expression;
-            log.warn("行为树表达式求值失败, expression={}", expression, e);
-            return false;
-        }
+        return null;
     }
 
     /**
      * 行为节点：一次树执行共用一个实例主键，外部输入参数按参数名从黑板取，跑完再回填绑定了属性的黑板键。
      */
-    private void executeTreeNodeAction(BehaviorTreeNode node, TreeExecuteContext context, BehaviorNodeResultVO result) {
-        var config = readTreeConfig(node, BehaviorActionConfig.class);
+    private TreeActionInvoker.TreeActionOutcome invokeTreeNodeAction(Integer spaceId, BehaviorActionConfig config,
+                                                                    TreeExecutionRuntime runtime) {
         var boundApi = config.getActionApi();
         var bound = getOne(new LambdaQueryWrapper<OntologyAction>()
                 .eq(OntologyAction::getApi, boundApi)
-                .eq(OntologyAction::getOntologySpaceId, context.spaceId));
+                .eq(OntologyAction::getOntologySpaceId, spaceId));
         if (bound == null || bound.getActionKind() == ActionKindEnum.TREE
                 || !Objects.equals(bound.getStatus(), Status.ENABLE.getValue())) {
-            result.setState(BehaviorStateEnum.FAILURE).setMessage("绑定的行为不可用（不存在、未发布或是树）：" + boundApi);
-            return;
+            return new TreeActionInvoker.TreeActionOutcome(BehaviorStateEnum.FAILURE,
+                    "绑定的行为不可用（不存在、未发布或是树）：" + boundApi);
         }
         var testParam = ActionTestParam.builder()
                 .actionApi(boundApi)
-                .entityPrimaryKey(context.entityPrimaryKey)
+                .entityPrimaryKey(runtime.getEntityPrimaryKey())
                 .dataPrimaryKey(StringUtils.isBlank(config.getDataPrimaryKeyKey())
-                        ? null : context.blackboard.get(config.getDataPrimaryKeyKey()))
+                        ? null : runtime.getBlackboard().get(config.getDataPrimaryKeyKey()))
                 .linkEntityPrimaryKey(StringUtils.isBlank(config.getLinkEntityPrimaryKeyKey())
-                        ? null : context.blackboard.get(config.getLinkEntityPrimaryKeyKey()))
-                .params(treeExternalParams(bound, context))
+                        ? null : runtime.getBlackboard().get(config.getLinkEntityPrimaryKeyKey()))
+                .params(treeExternalParams(bound, runtime))
                 .build();
-        try {
-            var testResult = testAction(testParam);
-            var note = config.getTimeoutSeconds() == null && config.getRetryTimes() == null ? null
-                    : "单轮执行：行为是真实落库的，重试会重复写一条数据，超时与重试配置不生效";
-            var message = testResult.getMessage();
-            result.setMessage(StringUtils.isBlank(note) ? message
-                    : (StringUtils.isBlank(message) ? note : message + "；" + note));
-            refreshTreeBlackboard(bound, context);
-        } catch (Exception e) {
-            result.setState(BehaviorStateEnum.FAILURE)
-                    .setMessage("行为执行失败：" + (e instanceof BusinessException business ? business.getMessage() : e.getMessage()));
-            log.warn("行为树节点执行失败, nodeId={}, actionApi={}", node.getId(), boundApi, e);
-        }
+        var testResult = testAction(testParam);
+        refreshTreeBlackboard(bound, runtime);
+        // 超时与重试的降级说明由节点自己追加，这里只回执行结果
+        return new TreeActionInvoker.TreeActionOutcome(BehaviorStateEnum.SUCCESS, testResult.getMessage());
     }
 
     /**
      * 行为声明的外部输入参数按参数名从黑板取值；黑板里没有的键不传，与行为测试少传一个参数等价。
      */
-    private Map<String, Object> treeExternalParams(OntologyAction bound, TreeExecuteContext context) {
+    private Map<String, Object> treeExternalParams(OntologyAction bound, TreeExecutionRuntime runtime) {
         var mappings = ontologyActionMappingInService.list(new LambdaQueryWrapper<OntologyActionMappingIn>()
                 .eq(OntologyActionMappingIn::getOntologyActionId, bound.getId()));
         Map<String, Object> params = new LinkedHashMap<>();
@@ -914,23 +855,23 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 // 存量的来源为空按外部输入处理，与行为测试取值时的口径一致
                 .filter(mapping -> mapping.getSourceType() == null || mapping.getSourceType() == ActionParamSourceEnum.EXTERNAL)
                 .filter(mapping -> StringUtils.isNotBlank(mapping.getParameterName()))
-                .filter(mapping -> context.blackboard.containsKey(mapping.getParameterName()))
-                .forEach(mapping -> params.put(mapping.getParameterName(), context.blackboard.get(mapping.getParameterName())));
+                .filter(mapping -> runtime.getBlackboard().containsKey(mapping.getParameterName()))
+                .forEach(mapping -> params.put(mapping.getParameterName(), runtime.getBlackboard().get(mapping.getParameterName())));
         return params;
     }
 
     /**
-     * 写后替换：行为把值写进属性之后，用行上的最新值替换绑定了该属性的黑板键，之后节点读黑板就拿到的新值。
+     * 写后替换：行为把值写进属性之后，用行上的最新值替换绑定了该属性的黑板键。
      * 只回填「本棵树绑了这个对象属性」的键，其余黑板键不动。
      */
-    private void refreshTreeBlackboard(OntologyAction bound, TreeExecuteContext context) {
+    private void refreshTreeBlackboard(OntologyAction bound, TreeExecutionRuntime runtime) {
         var writesProperty = bound.getSubjectType() == ActionSubjectTypeEnum.PROPERTY_VALUE
                 || (bound.getActionKind() == ActionKindEnum.APPLICATION
                 && bound.getOutputMode() == ActionOutputModeEnum.WRITE_PROPERTY);
         if (!writesProperty || StringUtils.isBlank(bound.getOntologyUniqueIdentifier())) {
             return;
         }
-        var boundProps = context.blackboardItems.values().stream()
+        var boundProps = runtime.getBlackboardItems().values().stream()
                 .map(BehaviorBlackboardItem::getBindPropertyUniqueIdentifier)
                 .filter(StringUtils::isNotBlank)
                 .collect(Collectors.toSet());
@@ -939,7 +880,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         }
         var detail = entityService.getEntityPropertyRowDetail(EntityPropertyRowQueryParam.builder()
                 .ontologyUniqueIdentifier(bound.getOntologyUniqueIdentifier())
-                .entityPrimaryKey(context.entityPrimaryKey)
+                .entityPrimaryKey(runtime.getEntityPrimaryKey())
                 .sort(QuerySortEnum.ASC)
                 .build());
         if (detail == null || detail.getPropertyGroups() == null) {
@@ -958,27 +899,69 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                         }
                     }));
         });
-        context.blackboardItems.forEach((key, item) -> {
+        runtime.getBlackboardItems().forEach((key, item) -> {
             var bind = item.getBindPropertyUniqueIdentifier();
             if (StringUtils.isNotBlank(bind) && latestValues.containsKey(bind)) {
-                context.blackboard.put(key, latestValues.get(bind));
+                runtime.setBlackboardValue(key, latestValues.get(bind));
             }
         });
     }
 
     /**
-     * 一次树执行的上下文：黑板值 + 黑板项声明 + 执行的那条实例数据。
+     * 按对象类型取全部实例主键。行为树没有对象绑定，不能走 initActionContextInfoDTO（它会拒绝树），
+     * 直接从对象主键属性定位实体主表。
      */
-    private static class TreeExecuteContext {
-        /** 黑板键名 -> 当前值，节点唯一的数据来源 */
-        private final Map<String, Object> blackboard = new LinkedHashMap<>();
-        /** 黑板键名 -> 黑板项声明，写后替换时按 bindPropertyUniqueIdentifier 找 */
-        private final Map<String, BehaviorBlackboardItem> blackboardItems = new LinkedHashMap<>();
-        private Integer spaceId;
-        private Object entityPrimaryKey;
+    private List<Object> listTreeInstancePrimaryKeys(String ontologyUniqueIdentifier) {
+        var primaryProperty = ontologyPropertyService.list(new LambdaQueryWrapper<OntologyProperty>()
+                        .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier)
+                        .eq(OntologyProperty::getIsPrimaryKey, 1))
+                .stream().findFirst().orElse(null);
+        PreconditionUtils.checkNotNull(primaryProperty, "对象没有主键属性：" + ontologyUniqueIdentifier, HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(StringUtils.isNotEmpty(primaryProperty.getDatasourceColumnName()),
+                "对象主键未绑定数据源列：" + ontologyUniqueIdentifier, HttpStatus.BAD_REQUEST);
+        var hasDeletedField = tableMetadataMapper.isColumnExist(primaryProperty.getDatasourceSchema(),
+                primaryProperty.getDatasourceId(), "is_deleted");
+        var records = entityMapper.pageQuery(primaryProperty.getDatasourceSchema(), primaryProperty.getDatasourceId(),
+                Lists.newArrayList(primaryProperty.getDatasourceColumnName()), null, null,
+                Integer.MAX_VALUE, 0, hasDeletedField);
+        return records.stream()
+                .map(record -> record.get(primaryProperty.getDatasourceColumnName()))
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
     }
 
+    /**
+     * 行为被行为树引用时不允许删除：树里存的是行为 api，删掉后只能等执行时才暴露悬空引用。
+     */
+    private List<String> findTreesReferencingAction(String actionApi) {
+        var trees = list(new LambdaQueryWrapper<OntologyAction>()
+                .eq(OntologyAction::getActionKind, ActionKindEnum.TREE)
+                .select(OntologyAction::getApi, OntologyAction::getDefinition));
+        return trees.stream()
+                .filter(tree -> treeReferencesAction(readTreeDefinition(tree.getDefinition()).getRoots(), actionApi))
+                .map(OntologyAction::getApi)
+                .collect(Collectors.toList());
+    }
 
+    private boolean treeReferencesAction(List<BehaviorTreeNode> nodes, String actionApi) {
+        for (var node : nodes) {
+            if (node.getKind() == BehaviorNodeKindEnum.ACTION && node.getConfig() != null) {
+                // 草稿树可能存着不完全合法的配置，读不出来的节点跳过，不影响其余节点的判定
+                try {
+                    var config = jsonMapper.convertValue(node.getConfig(), BehaviorActionConfig.class);
+                    if (config != null && actionApi.equals(config.getActionApi())) {
+                        return true;
+                    }
+                } catch (IllegalArgumentException e) {
+                    log.warn("行为树节点配置解析失败, nodeId={}", node.getId());
+                }
+            }
+            if (treeReferencesAction(node.getChildren(), actionApi)) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     /**
      * 绑定算子的行为（应用行为、基础算子行为）：校验算子类型、关联关系和入参绑定。
@@ -1287,9 +1270,13 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         var actionHandleTask = actionHandleTaskService.getOne(new LambdaQueryWrapper<ActionHandleTask>()
                 .eq(ActionHandleTask::getActionId, action.getId()));
         PreconditionUtils.checkArgument(actionHandleRule == null && actionHandleTask == null, "该行为在调度中，不能直接删除", HttpStatus.BAD_REQUEST);
+        var referencingTrees = findTreesReferencingAction(actionApi);
+        PreconditionUtils.checkArgument(referencingTrees.isEmpty(),
+                "该行为被行为树引用，不能直接删除：" + String.join(", ", referencingTrees), HttpStatus.BAD_REQUEST);
         actionLinkMapper.delete(new LambdaQueryWrapper<OntologyActionLink>().eq(OntologyActionLink::getOntologyActionId, action.getId()));
         remove(new LambdaQueryWrapper<OntologyAction>().in(OntologyAction::getId, action.getId()));
         ontologyActionMappingInService.remove(new LambdaQueryWrapper<OntologyActionMappingIn>().in(OntologyActionMappingIn::getOntologyActionId, action.getId()));
+        btTreeManager.invalidate(actionApi);
     }
 
     @Override

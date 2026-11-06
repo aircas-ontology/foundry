@@ -73,6 +73,37 @@
             <groupId>com.alibaba.fastjson2</groupId>
             <artifactId>fastjson2</artifactId>
         </dependency>
+        <!-- 行为树执行引擎：提供标准 BT 的 tick 生命周期与 Sequence/Priority/MemSequence/MemPriority/Inverter。
+             只用到 BTTreeCfg + BehaviorTree.load，不调用 B3Loader（它按文件路径读树），
+             因此排除它自带的 fastjson（本工程用 fastjson2）以及会与 Spring Boot 日志桥冲突的 logback/slf4j。 -->
+        <dependency>
+            <groupId>com.github.silencesu</groupId>
+            <artifactId>behavior3java</artifactId>
+            <version>1.1.0</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>com.alibaba</groupId>
+                    <artifactId>fastjson</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>ch.qos.logback</groupId>
+                    <artifactId>logback-classic</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>ch.qos.logback</groupId>
+                    <artifactId>logback-core</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.slf4j</groupId>
+                    <artifactId>slf4j-api</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <!-- 行为树编译结果缓存：树定义无版本，发布/保存时失效即可 -->
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+        </dependency>
         <!--MyBatis-Plus Spring Boot 3-->
         <dependency>
             <groupId>com.baomidou</groupId>
