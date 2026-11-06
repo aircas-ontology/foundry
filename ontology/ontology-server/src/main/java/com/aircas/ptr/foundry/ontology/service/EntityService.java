@@ -30,6 +30,18 @@ public interface EntityService {
 
     List<EntityLinkPropertyVO> getEntityLinksByPrimaryKey(String ontologyUniqueIdentifier, Object entityPrimaryKey);
 
+    /**
+     * 查询两个实例之间的所有关联关系（正向边与反向边都返回）。
+     *
+     * @param fromOntologyUniqueIdentifier 开始对象唯一标识
+     * @param fromEntityPrimaryKey         开始实体主键值
+     * @param toOntologyUniqueIdentifier   结束对象唯一标识
+     * @param toEntityPrimaryKey           结束实体主键值
+     * @return 两实例之间的关系边，任一实例无图节点时为空列表
+     */
+    List<EntityLinkPropertyVO> getEntityLinksBetween(String fromOntologyUniqueIdentifier, Object fromEntityPrimaryKey,
+                                                     String toOntologyUniqueIdentifier, Object toEntityPrimaryKey);
+
     List<EntityPropertyDetailVO> getEntityDetail(String ontologyUniqueIdentifier, Object entityPrimaryKey);
 
     Page<EntityInfoVO> getEntities(String ontologyUniqueIdentifier, String propertyName, Object propertyValue, Integer pageNum, Integer pageSize, Boolean needFilterVisibility);

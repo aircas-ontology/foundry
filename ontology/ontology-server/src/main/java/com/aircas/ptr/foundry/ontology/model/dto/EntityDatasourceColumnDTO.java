@@ -39,6 +39,12 @@ public class EntityDatasourceColumnDTO {
     private String columnName;
 
     /**
+     * 该列对应的外部库原始列名（溯源用，仅「数据源构建对象」链路有值；
+     * 平台自增主键 id 没有来源列，为 null）
+     */
+    private String sourceColumnName;
+
+    /**
      * 列数据类型
      */
     private String datasourceColumnType;

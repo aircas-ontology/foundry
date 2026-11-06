@@ -24,6 +24,12 @@ public class EntityDatasourceDTO {
     private String tableName;
 
     /**
+     * 实体表对应的外部库原始表名（溯源用，仅「数据源构建对象」链路有值）
+     */
+    private String sourceTableName;
+
+
+    /**
      * 是否为主属性数据眼表（主属性表有且只有一个，其他关联属性表可以有多个）
      */
     private Boolean isMainDatasource;
