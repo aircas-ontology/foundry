@@ -63,7 +63,7 @@ public class ActionCreateOrUpdateParam extends OntologyIdentifierParam {
             + "基础算子固定 RESULT_ONLY，属性值和实例关系行为为空", example = "RESULT_ONLY")
     private ActionOutputModeEnum outputMode;
 
-    @Schema(description = "行为关系映射")
+    @Schema(description = "行为关系映射；应用行为出参全是 RESULT_ONLY 时可选填，存在 WRITE_PROPERTY 出参时不能绑定")
     private ActionLinkMappingParam linkMapping;
 
 

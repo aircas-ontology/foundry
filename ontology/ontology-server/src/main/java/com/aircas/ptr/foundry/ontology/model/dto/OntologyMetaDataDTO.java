@@ -27,4 +27,9 @@ public class OntologyMetaDataDTO {
     private Set<String> groupNames;
 
     private String categoryPath;
+
+    /**
+     * 父对象显示名称（继承层级树），导入时据此解析新空间中的父对象 uniqueIdentifier
+     */
+    private String parentOntologyDisplayName;
 }

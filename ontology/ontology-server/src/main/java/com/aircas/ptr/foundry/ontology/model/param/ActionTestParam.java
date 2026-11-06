@@ -27,8 +27,12 @@ public class ActionTestParam {
     @NotBlank(message = "actionApi is empty")
     private String actionApi;
 
-    @Schema(name = "entityPrimaryKey", description = "本实体主键：属性值行为定位实体、算子类行为取属性值都靠它", example = "1")
+    @Schema(name = "entityPrimaryKey", description = "行为所属对象的实例主键；只涉及一个对象时用它", example = "1")
     private Object entityPrimaryKey;
+
+    @Schema(name = "entityPrimaryKeys", description = "各对象选中的实例主键：对象id -> 实例主键；"
+            + "应用行为的入参/出参可能跨对象，映射涉及的对象都要提供", example = "{\"objectA\":1001,\"objectB\":2002}")
+    private Map<String, Object> entityPrimaryKeys;
 
     @Schema(name = "dataPrimaryKey", description = "分组表行的主键：属性值-修改/删除必填", example = "1")
     private Object dataPrimaryKey;

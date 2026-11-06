@@ -874,6 +874,111 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         return failedOntology;
     }
 
+    @SneakyThrows
+    @Override
+    public List<String> importOntologiesToSpace(Integer targetSpaceId, MultipartFile file) {
+        InputStream inputStream = file.getInputStream();
+        
+        // 尝试读取为完整空间结构，如果失败则按对象列表处理
+        List<OntologyCreateDTO> ontologyList;
+        try {
+            var spaceData = objectMapper.readValue(inputStream, new TypeReference<com.aircas.ptr.foundry.ontology.model.dto.OntologySpaceCreateDTO>() {});
+            ontologyList = spaceData.getOntologies();
+            if (ontologyList == null) {
+                ontologyList = Lists.newArrayList();
+            }
+        } catch (Exception e) {
+            // 如果不是完整空间结构，重新读取为对象列表
+            inputStream = file.getInputStream();
+            ontologyList = objectMapper.readValue(inputStream, new TypeReference<List<OntologyCreateDTO>>() {});
+        }
+        
+        List<String> failedOntology = Lists.newArrayList();
+        // 记录导入结果：displayName -> uniqueIdentifier，用于后续处理继承关系
+        Map<String, String> displayNameToUid = new HashMap<>();
+        // 记录有父对象的对象：displayName -> parentDisplayName
+        Map<String, String> parentRelations = new HashMap<>();
+
+        // 第一遍：删除冲突对象并导入
+        for (OntologyCreateDTO dto : ontologyList) {
+            try {
+                var metaData = dto.getMetadata();
+                if (metaData == null) {
+                    continue;
+                }
+                // 检查并删除冲突对象（按 displayName 或 apiName 匹配）
+                deleteConflictingOntology(targetSpaceId, metaData.getDisplayName(), metaData.getApiName());
+
+                var result = proxyService.importOntology(dto, targetSpaceId);
+                if (result != null) {
+                    // 查询新创建的对象 uniqueIdentifier
+                    var meta = getOne(new LambdaQueryWrapper<OntologyMeta>()
+                            .eq(OntologyMeta::getOntologySpaceId, targetSpaceId)
+                            .eq(OntologyMeta::getDisplayName, metaData.getDisplayName())
+                            .eq(OntologyMeta::getStatus, Status.ENABLE.getValue())
+                            .orderByDesc(OntologyMeta::getId)
+                            .last("LIMIT 1"));
+                    if (meta != null) {
+                        displayNameToUid.put(metaData.getDisplayName(), meta.getUniqueIdentifier());
+                    }
+                    // 记录继承关系
+                    if (StringUtils.isNotEmpty(metaData.getParentOntologyDisplayName())) {
+                        parentRelations.put(metaData.getDisplayName(), metaData.getParentOntologyDisplayName());
+                    }
+                }
+            } catch (Exception e) {
+                log.error("对象 {} 导入失败", dto.getMetadata().getDisplayName(), e);
+                failedOntology.add(dto.getMetadata().getDisplayName());
+            }
+        }
+
+        // 第二遍：处理继承关系
+        for (var entry : parentRelations.entrySet()) {
+            var childDisplayName = entry.getKey();
+            var parentDisplayName = entry.getValue();
+            var childUid = displayNameToUid.get(childDisplayName);
+            var parentUid = displayNameToUid.get(parentDisplayName);
+            if (childUid == null) {
+                log.warn("继承关系跳过：子对象 {} 不存在", childDisplayName);
+                continue;
+            }
+            if (parentUid == null) {
+                log.warn("继承关系跳过：父对象 {} 不存在", parentDisplayName);
+                continue;
+            }
+            // 更新 parentUniqueIdentifier
+            update(new LambdaUpdateWrapper<OntologyMeta>()
+                    .eq(OntologyMeta::getUniqueIdentifier, childUid)
+                    .set(OntologyMeta::getParentUniqueIdentifier, parentUid));
+            log.info("继承关系设置成功：{} -> {}", childDisplayName, parentDisplayName);
+        }
+
+        return failedOntology;
+    }
+
+    /**
+     * 删除目标空间中冲突的对象（按 displayName 或 apiName 匹配）
+     */
+    private void deleteConflictingOntology(Integer targetSpaceId, String displayName, String apiName) {
+        // 按 displayName 查找冲突对象
+        var conflictByDisplayName = getOne(new LambdaQueryWrapper<OntologyMeta>()
+                .eq(OntologyMeta::getOntologySpaceId, targetSpaceId)
+                .eq(OntologyMeta::getDisplayName, displayName));
+        if (conflictByDisplayName != null) {
+            log.info("删除冲突对象（displayName匹配）：{} ({})", displayName, conflictByDisplayName.getUniqueIdentifier());
+            deleteOntology(conflictByDisplayName.getUniqueIdentifier());
+            return;
+        }
+        // 按 apiName 查找冲突对象
+        var conflictByApiName = getOne(new LambdaQueryWrapper<OntologyMeta>()
+                .eq(OntologyMeta::getOntologySpaceId, targetSpaceId)
+                .eq(OntologyMeta::getApiName, apiName));
+        if (conflictByApiName != null) {
+            log.info("删除冲突对象（apiName匹配）：{} ({})", apiName, conflictByApiName.getUniqueIdentifier());
+            deleteOntology(conflictByApiName.getUniqueIdentifier());
+        }
+    }
+
 
     @Transactional(value = "mainTransactionManager")
     public Map<String, Object> importOntology(OntologyCreateDTO dto) {
@@ -1038,89 +1143,107 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                         .setSpaceId(space.getId())));
             }
         }
-        //保存函数
+        //保存函数（跳过已存在的函数，不验证唯一性）
         var funcs = dto.getFunctions();
         if (CollectionUtils.isNotEmpty(funcs)) {
             funcs.stream().forEach(f -> {
-                var input = f.getInputParams();
-                String inputParamString = "";
-                if (CollectionUtils.isNotEmpty(input)) {
-                    List<String> paramList = Lists.newArrayList();
-                    String paramFormat = "@FuncParam(name = \"%s\") %s %s";
-                    input.forEach(p -> paramList.add(String.format(paramFormat, p.getParamName(),
-                            FunctionParamTypeEnum.valueOf(p.getParamType().toUpperCase()).getVale(),
-                            p.getParamName())));
-                    inputParamString = String.join(",\n", paramList);
-                }
-                String codeTemplate = "import com.aircas.ptr.foundry.ontology.aspect.FuncParam\n" +
-                        "import com.aircas.ptr.foundry.ontology.model.vo.FunctionResultVO\n" +
-                        "import groovy.util.logging.Slf4j\n" +
-                        "\n" +
-                        "@Slf4j\n" +
-                        "class %s {\n\n" +
-                        "    FunctionResultVO handle(%s) {\n" +
-                        "        return FunctionResultVO.builder()\n" +
-                        "                .build()\n" +
-                        "    }\n" +
-                        "}";
-                String code = String.format(codeTemplate, f.getFunctionApi(), inputParamString);
+                try {
+                    var input = f.getInputParams();
+                    String inputParamString = "";
+                    if (CollectionUtils.isNotEmpty(input)) {
+                        List<String> paramList = Lists.newArrayList();
+                        String paramFormat = "@FuncParam(name = \"%s\") %s %s";
+                        input.forEach(p -> paramList.add(String.format(paramFormat, p.getParamName(),
+                                FunctionParamTypeEnum.valueOf(p.getParamType().toUpperCase()).getVale(),
+                                p.getParamName())));
+                        inputParamString = String.join(",\n", paramList);
+                    }
+                    String codeTemplate = "import com.aircas.ptr.foundry.ontology.aspect.FuncParam\n" +
+                            "import com.aircas.ptr.foundry.ontology.model.vo.FunctionResultVO\n" +
+                            "import groovy.util.logging.Slf4j\n" +
+                            "\n" +
+                            "@Slf4j\n" +
+                            "class %s {\n\n" +
+                            "    FunctionResultVO handle(%s) {\n" +
+                            "        return FunctionResultVO.builder()\n" +
+                            "                .build()\n" +
+                            "    }\n" +
+                            "}";
+                    String code = String.format(codeTemplate, f.getFunctionApi(), inputParamString);
 
-                functionService.createFunction(FunctionCreateParam.builder()
-                        .code(code)
-                        .description(f.getDescription())
-                        .functionApi(f.getFunctionApi())
-                        .displayName(f.getDisplayName())
-                        .model(f.getModel())
-                        .type(f.getType())
-                        .build());
+                    functionService.createFunction(FunctionCreateParam.builder()
+                            .code(code)
+                            .description(f.getDescription())
+                            .functionApi(f.getFunctionApi())
+                            .displayName(f.getDisplayName())
+                            .model(f.getModel())
+                            .type(f.getType())
+                            .build());
+                } catch (Exception e) {
+                    // 函数已存在或其他错误，跳过并记录警告
+                    log.warn("函数 {} 导入跳过：{}", f.getFunctionApi(), e.getMessage());
+                }
             });
         }
-        //保存行为
+        //保存行为（跳过已存在的行为，不验证唯一性）
         var actions = dto.getActions();
         if (CollectionUtils.isNotEmpty(actions)) {
             actions.forEach(action -> {
-                val relationIndex = action.getRelationIndex();
-                var linkUniqIdentifier = relationIndex == null ? null : relationMap.get(relationIndex);
-                ActionLinkMappingParam linkMapping = null;
-                //关系因端点对象缺失被跳过时不挂 linkMapping：行为本身仍应导入，且 createAction 会因 link 不存在而整条报错
-                if (linkUniqIdentifier != null) {
-                    linkMapping = ActionLinkMappingParam.builder()
-                            .ontologyLinkUniqIdentifier(linkUniqIdentifier)
-                            .build();
-                }
-                List<ActionParamMappingCreateParam> mappingIns = null;
-                var mapping = action.getMappingIns();
-                if (CollectionUtils.isNotEmpty(mapping)) {
-                    var detail = functionService.getFunctionDetailByApi(space.getId(), action.getFunctionApi(), null);
-                    var paramMap = detail.getParams().stream().collect(Collectors.toMap(v -> v.getParamName(), v -> v));
-
-                    mappingIns = mapping.stream().map(m -> {
-                        var ontologyMeta = getOne(new LambdaQueryWrapper<OntologyMeta>()
-                                .eq(OntologyMeta::getOntologySpaceId, space.getId())
-                                .eq(OntologyMeta::getDisplayName, m.getOntologyName()));
-                        var property = ontologyPropertyService.getOne(new LambdaQueryWrapper<OntologyProperty>()
-                                .eq(OntologyProperty::getDisplayName, m.getPropertyName())
-                                .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyMeta.getUniqueIdentifier()));
-
-                        return ActionParamMappingCreateParam.builder()
-                                .ontologyUniqueIdentifier(ontologyMeta.getUniqueIdentifier())
-                                .functionParamId(paramMap.get(m.getFunctionParamName()).getParamId())
-                                .propertyUniqueIdentifier(property.getUniqueIdentifier())
+                try {
+                    val relationIndex = action.getRelationIndex();
+                    var linkUniqIdentifier = relationIndex == null ? null : relationMap.get(relationIndex);
+                    ActionLinkMappingParam linkMapping = null;
+                    //关系因端点对象缺失被跳过时不挂 linkMapping：行为本身仍应导入，且 createAction 会因 link 不存在而整条报错
+                    if (linkUniqIdentifier != null) {
+                        linkMapping = ActionLinkMappingParam.builder()
+                                .ontologyLinkUniqIdentifier(linkUniqIdentifier)
                                 .build();
+                    }
+                    List<ActionParamMappingCreateParam> mappingIns = null;
+                    var mapping = action.getMappingIns();
+                    if (CollectionUtils.isNotEmpty(mapping)) {
+                        var detail = functionService.getFunctionDetailByApi(space.getId(), action.getFunctionApi(), null);
+                        var paramMap = detail.getParams().stream().collect(Collectors.toMap(v -> v.getParamName(), v -> v));
 
-                    }).collect(Collectors.toList());
+                        mappingIns = mapping.stream().map(m -> {
+                            var ontologyMeta = getOne(new LambdaQueryWrapper<OntologyMeta>()
+                                    .eq(OntologyMeta::getOntologySpaceId, space.getId())
+                                    .eq(OntologyMeta::getDisplayName, m.getOntologyName()));
+                            if (ontologyMeta == null) {
+                                log.warn("行为参数映射跳过：对象 {} 不存在", m.getOntologyName());
+                                return null;
+                            }
+                            var property = ontologyPropertyService.getOne(new LambdaQueryWrapper<OntologyProperty>()
+                                    .eq(OntologyProperty::getDisplayName, m.getPropertyName())
+                                    .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyMeta.getUniqueIdentifier()));
+                            if (property == null) {
+                                log.warn("行为参数映射跳过：属性 {} 不存在", m.getPropertyName());
+                                return null;
+                            }
 
+                            return ActionParamMappingCreateParam.builder()
+                                    .ontologyUniqueIdentifier(ontologyMeta.getUniqueIdentifier())
+                                    .functionParamId(paramMap.get(m.getFunctionParamName()).getParamId())
+                                    .propertyUniqueIdentifier(property.getUniqueIdentifier())
+                                    .build();
+
+                        }).filter(java.util.Objects::nonNull).collect(Collectors.toList());
+
+                    }
+
+                    actionService.createAction(ActionCreateOrUpdateParam.builder()
+                            .ontologyIdentifier(meta.getUniqueIdentifier())
+                            .actionApi(action.getActionApi())
+                            .description(action.getDescription())
+                            .displayName(action.getDisplayName())
+                            .functionApi(action.getFunctionApi())
+                            .linkMapping(linkMapping)
+                            .mappingIns(mappingIns)
+                            .build());
+                } catch (Exception e) {
+                    // 行为已存在或其他错误，跳过并记录警告
+                    log.warn("行为 {} 导入跳过：{}", action.getActionApi(), e.getMessage());
                 }
-
-                actionService.createAction(ActionCreateOrUpdateParam.builder()
-                        .ontologyIdentifier(meta.getUniqueIdentifier())
-                        .actionApi(action.getActionApi())
-                        .description(action.getDescription())
-                        .displayName(action.getDisplayName())
-                        .functionApi(action.getFunctionApi())
-                        .linkMapping(linkMapping)
-                        .mappingIns(mappingIns)
-                        .build());
 
             });
         }
@@ -1270,6 +1393,8 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 .ontologySpaceName(space.getDisplayName())
                 .groupNames(groupNames)
                 .categoryPath(meta.getOntologyCategoryId() == null ? null : ontologyCategoryPathMap.get(meta.getOntologyCategoryId()))
+                .parentOntologyDisplayName(StringUtils.isNotEmpty(meta.getParentUniqueIdentifier())
+                        ? uidToDisplayName.get(meta.getParentUniqueIdentifier()) : null)
                 .build();
 
         //属性分类树

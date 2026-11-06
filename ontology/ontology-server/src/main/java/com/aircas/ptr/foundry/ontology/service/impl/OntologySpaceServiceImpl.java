@@ -3,6 +3,7 @@ package com.aircas.ptr.foundry.ontology.service.impl;
 import com.aircas.ptr.foundry.common.util.IdGenerator;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.ontology.context.UserContextHolder;
+import com.aircas.ptr.foundry.ontology.model.dto.OntologyCreateDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.OntologySpaceCreateDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.OntologySpaceDTO;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyExportTypeEnum;
@@ -511,10 +512,12 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                     }
                     continue;
                 }
-                if (!Objects.equals(currentProperty.getApiName(), dbProperty.getApiName())) {
+                // 未绑定数据源的属性可以改 apiName；已绑定数据源的属性列映射按 apiName 走，不允许改
+                if (!Objects.equals(currentProperty.getApiName(), dbProperty.getApiName())
+                        && isDatasourceBound(dbProperty)) {
                     addStructuralConflict(structuralConflicts, CONFLICT_TYPE_PROPERTY, propertyUid,
                             currentProperty.getApiName(), currentProperty.getDisplayName(), ownerUid,
-                            REASON_API_NAME_IMMUTABLE, "属性 apiName 不允许修改，请删除后重建");
+                            REASON_API_NAME_IMMUTABLE, "属性已关联数据源，apiName 不允许修改，请先解除数据源绑定");
                     continue;
                 }
                 var merge = mergeProperty(baseRef.property, currentProperty, dbProperty);
@@ -583,10 +586,12 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
             var update = propertyUpdateByUid.get(dbProperty.getUniqueIdentifier());
             String displayName = update != null && update.writes.containsKey("displayName")
                     ? (String) update.writes.get("displayName") : dbProperty.getDisplayName();
-            if (!propertyApiNames.computeIfAbsent(ownerUid, k -> new HashSet<>()).add(dbProperty.getApiName())) {
+            String apiName = update != null && update.writes.containsKey("apiName")
+                    ? (String) update.writes.get("apiName") : dbProperty.getApiName();
+            if (!propertyApiNames.computeIfAbsent(ownerUid, k -> new HashSet<>()).add(apiName)) {
                 addStructuralConflict(structuralConflicts, CONFLICT_TYPE_PROPERTY, dbProperty.getUniqueIdentifier(),
-                        dbProperty.getApiName(), displayName, ownerUid, REASON_NAME_CONFLICT,
-                        "属性 apiName 重复：" + dbProperty.getApiName());
+                        apiName, displayName, ownerUid, REASON_NAME_CONFLICT,
+                        "属性 apiName 重复：" + apiName);
             }
             if (!propertyDisplayNames.computeIfAbsent(ownerUid, k -> new HashSet<>()).add(displayName)) {
                 addStructuralConflict(structuralConflicts, CONFLICT_TYPE_PROPERTY, dbProperty.getUniqueIdentifier(),
@@ -1024,6 +1029,7 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                                                   OntologyProperty db) {
         var merge = new CanvasFieldMerge();
         mergeField(merge, "displayName", base.getDisplayName(), current.getDisplayName(), db.getDisplayName());
+        mergeField(merge, "apiName", base.getApiName(), current.getApiName(), db.getApiName());
         mergeField(merge, "dataType", base.getDataType(), current.getDataType(), db.getPropertyType());
         mergeField(merge, "storageGroup", base.getStorageGroup(), current.getStorageGroup(), db.getStorageGroup());
         mergeField(merge, "description", base.getDescription(), current.getDescription(), db.getDescription());
@@ -1069,6 +1075,7 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
             return true;
         }
         return userChanged(current.getDisplayName(), base.getDisplayName())
+                || userChanged(current.getApiName(), base.getApiName())
                 || userChanged(current.getDataType(), base.getDataType())
                 || userChanged(current.getStorageGroup(), base.getStorageGroup())
                 || userChanged(current.getDescription(), base.getDescription())
@@ -1080,6 +1087,7 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
     private static boolean propertyDbChanged(OntologyProperty db,
                                              OntologySpaceCanvasCreateParam.CanvasProperty base) {
         return !Objects.equals(db.getDisplayName(), base.getDisplayName())
+                || !Objects.equals(db.getApiName(), base.getApiName())
                 || !Objects.equals(db.getPropertyType(), base.getDataType())
                 || !Objects.equals(db.getStorageGroup(), base.getStorageGroup())
                 || !Objects.equals(db.getDescription(), base.getDescription())
@@ -1182,6 +1190,20 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                 .setStorageGroup(update.finalStorageGroup());
         param.setUniqueIdentifier(update.uid);
         ontologyPropertyService.updateProperty(param);
+        // updateProperty 不支持改 apiName，这里补一次直接更新；只对未绑定数据源的属性放开
+        if (update.writes.containsKey("apiName")) {
+            var renameWrapper = new LambdaUpdateWrapper<OntologyProperty>()
+                    .eq(OntologyProperty::getUniqueIdentifier, update.uid)
+                    .set(OntologyProperty::getApiName, update.writes.get("apiName"))
+                    .set(OntologyProperty::getUpdateTime, new Date());
+            propertyMapper.update(null, renameWrapper);
+        }
+    }
+
+    /** 属性是否已绑定数据源列：绑定后 apiName 参与列映射，不能再改。 */
+    private static boolean isDatasourceBound(OntologyProperty property) {
+        return StringUtils.isNotBlank(property.getDatasourceId())
+                || StringUtils.isNotBlank(property.getDatasourceColumnName());
     }
 
     /** base/current 中的属性及其所属对象，用于校验“属性不能挪到别的对象下”。 */
@@ -1673,9 +1695,162 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                 }
             });
         }
+        //处理继承关系：所有对象导入完成后，根据 parentOntologyDisplayName 设置 parentUniqueIdentifier
+        importInheritanceRelations(spaceId, spaceCreateDTO.getOntologies());
         //import links：关系端点按对象显示名称解析为新对象id，必须在全部对象导入完成后创建
         importOntologyLinks(spaceId, spaceCreateDTO.getLinks(), pkMappingByOntologyName);
         return failedOntology;
+    }
+
+    @Transactional(transactionManager = "mainTransactionManager")
+    @Override
+    @SneakyThrows
+    public List<String> importOntologySpaceToTarget(Integer targetSpaceId, MultipartFile file) {
+        InputStream inputStream = file.getInputStream();
+        var spaceCreateDTO = jsonMapper.readValue(inputStream, new TypeReference<OntologySpaceCreateDTO>() {
+        });
+        
+        // 验证目标空间存在
+        var targetSpace = spaceMapper.selectById(targetSpaceId);
+        if (targetSpace == null) {
+            throw new BusinessException("目标空间不存在：" + targetSpaceId, HttpStatus.BAD_REQUEST);
+        }
+        
+        // 导入分类树（替换目标空间的分类结构）
+        var category = spaceCreateDTO.getOntologyCategory();
+        if (category != null) {
+            // 先删除目标空间的所有分类
+            var existingCategories = categoryService.list(new LambdaQueryWrapper<OntologyCategory>()
+                    .eq(OntologyCategory::getOntologySpaceId, targetSpaceId));
+            if (CollectionUtils.isNotEmpty(existingCategories)) {
+                categoryService.removeByIds(existingCategories.stream().map(OntologyCategory::getId).collect(Collectors.toList()));
+            }
+            // 用导出文件的分类树重新创建
+            category.setParentId(0);
+            category.setSpaceId(targetSpaceId);
+            categoryService.createCategory(category);
+        }
+        
+        // 导入关系分类树（替换目标空间的关系分类结构）
+        var linkCategory = spaceCreateDTO.getLinkCategory();
+        if (linkCategory != null) {
+            // 先删除目标空间的所有关系分类
+            var existingLinkCategories = ontologyLinkCategoryService.list(new LambdaQueryWrapper<OntologyLinkCategory>()
+                    .eq(OntologyLinkCategory::getOntologySpaceId, targetSpaceId));
+            if (CollectionUtils.isNotEmpty(existingLinkCategories)) {
+                ontologyLinkCategoryService.removeByIds(existingLinkCategories.stream().map(OntologyLinkCategory::getId).collect(Collectors.toList()));
+            }
+            // 用导出文件的关系分类树重新创建
+            linkCategory.setParentId(0);
+            linkCategory.setSpaceId(targetSpaceId);
+            ontologyLinkCategoryService.createCategory(linkCategory);
+        }
+        
+        // 导入对象（先删除冲突对象）
+        List<String> failedOntology = Lists.newArrayList();
+        Map<String, Map<String, Object>> pkMappingByOntologyName = new HashMap<>();
+        
+        if (CollectionUtils.isNotEmpty(spaceCreateDTO.getOntologies())) {
+            // 系统表对象列表，这些对象不应该被导入
+            Set<String> systemTables = Set.of("table_field_mapping");
+            
+            spaceCreateDTO.getOntologies().forEach(dto -> {
+                try {
+                    var metaData = dto.getMetadata();
+                    if (metaData == null) {
+                        return;
+                    }
+                    // 跳过系统表对象
+                    if (systemTables.contains(metaData.getApiName()) || systemTables.contains(metaData.getDisplayName())) {
+                        log.info("跳过系统表对象：{}", metaData.getDisplayName());
+                        return;
+                    }
+                    // 删除目标空间中冲突的对象（按 displayName 或 apiName 匹配）
+                    deleteConflictingOntologyInSpace(targetSpaceId, metaData.getDisplayName(), metaData.getApiName());
+                    
+                    var pkMapping = ontologyMetaService.importOntology(dto, targetSpaceId);
+                    if (pkMapping != null) {
+                        pkMappingByOntologyName.put(metaData.getDisplayName(), pkMapping);
+                    }
+                } catch (Exception e) {
+                    log.error("对象 {} 导入失败", dto.getMetadata().getDisplayName(), e);
+                    failedOntology.add(dto.getMetadata().getDisplayName());
+                }
+            });
+        }
+        
+        // 处理继承关系
+        importInheritanceRelations(targetSpaceId, spaceCreateDTO.getOntologies());
+        
+        // 导入关系
+        importOntologyLinks(targetSpaceId, spaceCreateDTO.getLinks(), pkMappingByOntologyName);
+        
+        return failedOntology;
+    }
+
+    /**
+     * 删除目标空间中冲突的对象（按 displayName 或 apiName 匹配）
+     */
+    private void deleteConflictingOntologyInSpace(Integer spaceId, String displayName, String apiName) {
+        // 按 displayName 查找冲突对象
+        var conflictByDisplayName = ontologyMetaService.getOne(new LambdaQueryWrapper<OntologyMeta>()
+                .eq(OntologyMeta::getOntologySpaceId, spaceId)
+                .eq(OntologyMeta::getDisplayName, displayName));
+        if (conflictByDisplayName != null) {
+            log.info("删除冲突对象（displayName匹配）：{} ({})", displayName, conflictByDisplayName.getUniqueIdentifier());
+            ontologyMetaService.deleteOntology(conflictByDisplayName.getUniqueIdentifier());
+            return;
+        }
+        // 按 apiName 查找冲突对象
+        var conflictByApiName = ontologyMetaService.getOne(new LambdaQueryWrapper<OntologyMeta>()
+                .eq(OntologyMeta::getOntologySpaceId, spaceId)
+                .eq(OntologyMeta::getApiName, apiName));
+        if (conflictByApiName != null) {
+            log.info("删除冲突对象（apiName匹配）：{} ({})", apiName, conflictByApiName.getUniqueIdentifier());
+            ontologyMetaService.deleteOntology(conflictByApiName.getUniqueIdentifier());
+        }
+    }
+
+    /**
+     * 导入对象继承关系：根据导出时的 parentOntologyDisplayName 解析新空间中的父对象 uniqueIdentifier 并更新
+     */
+    private void importInheritanceRelations(Integer spaceId, List<OntologyCreateDTO> ontologies) {
+        if (CollectionUtils.isEmpty(ontologies)) {
+            return;
+        }
+        // 收集有父对象的对象信息
+        var ontologiesWithParent = ontologies.stream()
+                .filter(dto -> dto.getMetadata() != null
+                        && org.apache.commons.lang3.StringUtils.isNotEmpty(dto.getMetadata().getParentOntologyDisplayName()))
+                .collect(Collectors.toList());
+        if (ontologiesWithParent.isEmpty()) {
+            return;
+        }
+        // 查询新空间中所有对象的 displayName -> uniqueIdentifier 映射
+        var displayNameToUid = metaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>()
+                        .eq(OntologyMeta::getOntologySpaceId, spaceId)
+                        .eq(OntologyMeta::getStatus, Status.ENABLE.getValue()))
+                .stream().collect(Collectors.toMap(OntologyMeta::getDisplayName, OntologyMeta::getUniqueIdentifier, (a, b) -> a));
+        // 逐个更新父对象关系
+        for (var dto : ontologiesWithParent) {
+            var childDisplayName = dto.getMetadata().getDisplayName();
+            var parentDisplayName = dto.getMetadata().getParentOntologyDisplayName();
+            var childUid = displayNameToUid.get(childDisplayName);
+            var parentUid = displayNameToUid.get(parentDisplayName);
+            if (childUid == null) {
+                log.warn("继承关系导入跳过：子对象 {} 在新空间不存在", childDisplayName);
+                continue;
+            }
+            if (parentUid == null) {
+                log.warn("继承关系导入跳过：父对象 {} 在新空间不存在", parentDisplayName);
+                continue;
+            }
+            // 更新 parentUniqueIdentifier
+            metaMapper.update(null, new LambdaUpdateWrapper<OntologyMeta>()
+                    .eq(OntologyMeta::getUniqueIdentifier, childUid)
+                    .set(OntologyMeta::getParentUniqueIdentifier, parentUid));
+            log.info("继承关系导入成功：{} -> {}", childDisplayName, parentDisplayName);
+        }
     }
 
     @Override

@@ -70,6 +70,16 @@ public class OntologyMetaController {
     }
 
 
+    @PostMapping("/import_to_space")
+    @Operation(summary = "导入对象到指定空间（不验证 displayName 唯一性，自动使用目标空间 ID）")
+    public RestResult importOntologiesToSpace(
+            @RequestParam(required = true, name = "spaceId") @Parameter(description = "目标空间 ID") Integer spaceId,
+            @RequestParam(required = true, name = "file") MultipartFile file) {
+        var failedOntology = ontologyMetaService.importOntologiesToSpace(spaceId, file);
+        return CollectionUtils.isNotEmpty(failedOntology) ? new RestResult(ResultCode.ERROR, "对象导入失败", failedOntology) : RestResult.success();
+    }
+
+
     @PostMapping
     @Operation(summary = "创建对象")
     public RestResult<IdentifierVO> createOntology(@RequestBody @Valid OntologyMetaCreateParam ontologyCreateParam) {

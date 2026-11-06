@@ -72,6 +72,17 @@ public class OntologySpaceController {
     }
 
 
+    @PostMapping("/import_to_space")
+    @Operation(summary = "将空间数据导入到已存在的目标空间（覆盖同名对象，保留分类树结构）")
+    public RestResult<List<String>> importOntologySpaceToTarget(
+            @RequestParam(required = true, name = "spaceId") @Parameter(description = "目标空间 ID") Integer spaceId,
+            @RequestParam(required = true, name = "file") MultipartFile file) {
+        var failedOntology = ontologySpaceService.importOntologySpaceToTarget(spaceId, file);
+        return CollectionUtils.isNotEmpty(failedOntology) ?
+                new RestResult<>(ResultCode.ERROR, "对象导入失败", failedOntology) : RestResult.success();
+    }
+
+
     @PostMapping
     @Operation(summary = "创建对象空间")
     public RestResult<Integer> createSpace(@RequestBody @Valid OntologySpaceCreateParam param) {
