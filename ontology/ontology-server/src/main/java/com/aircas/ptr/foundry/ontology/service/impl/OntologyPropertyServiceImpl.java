@@ -162,9 +162,11 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
             //check datasource columnName conflict
             if (p.getDatasource() != null) {
                 var datasource = p.getDatasource();
-                if (datasourceSet.contains(datasource.getDatasourceId() + datasource.getDatasourceColumnName())) {
+                var dsKey = datasource.getDatasourceId() + datasource.getDatasourceColumnName();
+                if (datasourceSet.contains(dsKey)) {
                     throw new BusinessException("属性数据源冲突：" + datasource.getDatasourceId() + ":" + datasource.getDatasourceColumnName(), HttpStatus.BAD_REQUEST);
                 }
+                datasourceSet.add(dsKey);
             }
             checkDatasourceColumnName(otherProps, p.getDatasource());
             //check titleKey

@@ -513,10 +513,12 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                     }
                     continue;
                 }
-                if (!Objects.equals(currentProperty.getApiName(), dbProperty.getApiName())) {
+                // 未绑定数据源的属性可以改 apiName；已绑定数据源的属性列映射按 apiName 走，不允许改
+                if (!Objects.equals(currentProperty.getApiName(), dbProperty.getApiName())
+                        && isDatasourceBound(dbProperty)) {
                     addStructuralConflict(structuralConflicts, CONFLICT_TYPE_PROPERTY, propertyUid,
                             currentProperty.getApiName(), currentProperty.getDisplayName(), ownerUid,
-                            REASON_API_NAME_IMMUTABLE, "属性 apiName 不允许修改，请删除后重建");
+                            REASON_API_NAME_IMMUTABLE, "属性已关联数据源，apiName 不允许修改，请先解除数据源绑定");
                     continue;
                 }
                 var merge = mergeProperty(baseRef.property, currentProperty, dbProperty);
@@ -585,10 +587,12 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
             var update = propertyUpdateByUid.get(dbProperty.getUniqueIdentifier());
             String displayName = update != null && update.writes.containsKey("displayName")
                     ? (String) update.writes.get("displayName") : dbProperty.getDisplayName();
-            if (!propertyApiNames.computeIfAbsent(ownerUid, k -> new HashSet<>()).add(dbProperty.getApiName())) {
+            String apiName = update != null && update.writes.containsKey("apiName")
+                    ? (String) update.writes.get("apiName") : dbProperty.getApiName();
+            if (!propertyApiNames.computeIfAbsent(ownerUid, k -> new HashSet<>()).add(apiName)) {
                 addStructuralConflict(structuralConflicts, CONFLICT_TYPE_PROPERTY, dbProperty.getUniqueIdentifier(),
-                        dbProperty.getApiName(), displayName, ownerUid, REASON_NAME_CONFLICT,
-                        "属性 apiName 重复：" + dbProperty.getApiName());
+                        apiName, displayName, ownerUid, REASON_NAME_CONFLICT,
+                        "属性 apiName 重复：" + apiName);
             }
             if (!propertyDisplayNames.computeIfAbsent(ownerUid, k -> new HashSet<>()).add(displayName)) {
                 addStructuralConflict(structuralConflicts, CONFLICT_TYPE_PROPERTY, dbProperty.getUniqueIdentifier(),
@@ -1026,6 +1030,7 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                                                   OntologyProperty db) {
         var merge = new CanvasFieldMerge();
         mergeField(merge, "displayName", base.getDisplayName(), current.getDisplayName(), db.getDisplayName());
+        mergeField(merge, "apiName", base.getApiName(), current.getApiName(), db.getApiName());
         mergeField(merge, "dataType", base.getDataType(), current.getDataType(), db.getPropertyType());
         mergeField(merge, "storageGroup", base.getStorageGroup(), current.getStorageGroup(), db.getStorageGroup());
         mergeField(merge, "description", base.getDescription(), current.getDescription(), db.getDescription());
@@ -1071,6 +1076,7 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
             return true;
         }
         return userChanged(current.getDisplayName(), base.getDisplayName())
+                || userChanged(current.getApiName(), base.getApiName())
                 || userChanged(current.getDataType(), base.getDataType())
                 || userChanged(current.getStorageGroup(), base.getStorageGroup())
                 || userChanged(current.getDescription(), base.getDescription())
@@ -1082,6 +1088,7 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
     private static boolean propertyDbChanged(OntologyProperty db,
                                              OntologySpaceCanvasCreateParam.CanvasProperty base) {
         return !Objects.equals(db.getDisplayName(), base.getDisplayName())
+                || !Objects.equals(db.getApiName(), base.getApiName())
                 || !Objects.equals(db.getPropertyType(), base.getDataType())
                 || !Objects.equals(db.getStorageGroup(), base.getStorageGroup())
                 || !Objects.equals(db.getDescription(), base.getDescription())
@@ -1184,6 +1191,20 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                 .setStorageGroup(update.finalStorageGroup());
         param.setUniqueIdentifier(update.uid);
         ontologyPropertyService.updateProperty(param);
+        // updateProperty 不支持改 apiName，这里补一次直接更新；只对未绑定数据源的属性放开
+        if (update.writes.containsKey("apiName")) {
+            var renameWrapper = new LambdaUpdateWrapper<OntologyProperty>()
+                    .eq(OntologyProperty::getUniqueIdentifier, update.uid)
+                    .set(OntologyProperty::getApiName, update.writes.get("apiName"))
+                    .set(OntologyProperty::getUpdateTime, new Date());
+            propertyMapper.update(null, renameWrapper);
+        }
+    }
+
+    /** 属性是否已绑定数据源列：绑定后 apiName 参与列映射，不能再改。 */
+    private static boolean isDatasourceBound(OntologyProperty property) {
+        return StringUtils.isNotBlank(property.getDatasourceId())
+                || StringUtils.isNotBlank(property.getDatasourceColumnName());
     }
 
     /** base/current 中的属性及其所属对象，用于校验“属性不能挪到别的对象下”。 */

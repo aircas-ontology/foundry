@@ -24,7 +24,7 @@ public class OntologyUpdateParam extends OntologyIdentifierParam {
     /**
      * 图标
      */
-    @Schema(name = "iconUrl", description = "对象图标", example = "飞机图标base64")
+    @Schema(name = "iconUrl", description = "对象图标URL", example = "http://minio:9000/ontology/thumbnail/xxx.jpg")
     private String icon;
 
     /**

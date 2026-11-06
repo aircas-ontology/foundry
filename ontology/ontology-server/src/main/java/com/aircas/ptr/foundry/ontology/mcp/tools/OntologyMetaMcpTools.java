@@ -31,8 +31,9 @@ public class OntologyMetaMcpTools implements McpTools {
             关键词为空时返回全部对象。
             """)
     public List<OntologyMetaInfoVO> searchOntologyMeta(
-            @ToolParam(description = "搜索关键词，可为空；为空时返回全部对象", required = false) String keyword) {
-        return ontologyMetaService.searchByKeyword(keyword);
+            @ToolParam(description = "搜索关键词，可为空；为空时返回全部对象", required = false) String keyword,
+            @ToolParam(description = "空间 ID，用于过滤搜索结果", required = false) Integer spaceId) {
+        return ontologyMetaService.searchByKeyword(keyword, spaceId);
     }
 
     @Tool(description = """

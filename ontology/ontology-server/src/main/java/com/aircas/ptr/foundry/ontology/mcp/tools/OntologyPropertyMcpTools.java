@@ -5,6 +5,7 @@ import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
 import com.aircas.ptr.foundry.ontology.model.po.OntologySpace;
+import com.aircas.ptr.foundry.ontology.model.po.PropertyCategory;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyPropertyInfoVO;
 import com.aircas.ptr.foundry.ontology.converter.DataConverter;
 import com.aircas.ptr.foundry.ontology.service.OntologyMetaService;
@@ -84,5 +85,15 @@ public class OntologyPropertyMcpTools implements McpTools {
         return properties.stream()
                 .map(DataConverter::convertToPropertyInfoVO)
                 .collect(Collectors.toList());
+    }
+
+    @Tool(description = """
+            根据对象唯一标识（ontologyUniqueIdentifier）查询该对象下的属性分类列表（扁平结构，不分页）。
+            当用户需要查看对象下所有属性分类的完整列表时使用。
+            返回分类 id、名称、父分类 id 等完整信息。
+            """)
+    public List<PropertyCategory> listPropertyCategories(
+            @ToolParam(description = "对象唯一标识（ontologyUniqueIdentifier）") String ontologyUniqueIdentifier) {
+        return ontologyPropertyService.getPropertyCategoryList(ontologyUniqueIdentifier);
     }
 }

@@ -3,9 +3,11 @@ package com.aircas.ptr.foundry.ontology.mcp.tools;
 import com.aircas.ptr.foundry.ontology.mcp.McpTools;
 import com.aircas.ptr.foundry.ontology.model.enums.ActionKindEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.ActionStatusEnum;
+import com.aircas.ptr.foundry.ontology.model.po.ActionCategory;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyAction;
 import com.aircas.ptr.foundry.ontology.model.po.OntologySpace;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyActionInfoVO;
+import com.aircas.ptr.foundry.ontology.service.ActionCategoryService;
 import com.aircas.ptr.foundry.ontology.service.OntologyActionService;
 import com.aircas.ptr.foundry.ontology.service.OntologySpaceService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -31,6 +33,7 @@ public class OntologyActionMcpTools implements McpTools {
 
     private final OntologySpaceService ontologySpaceService;
     private final OntologyActionService ontologyActionService;
+    private final ActionCategoryService actionCategoryService;
 
     @Tool(description = """
             按空间名称 + 行为名称精确查询对象行为。
@@ -82,5 +85,15 @@ public class OntologyActionMcpTools implements McpTools {
                         .functionApi(a.getFunctionApi())
                         .build())
                 .collect(Collectors.toList());
+    }
+
+    @Tool(description = """
+            根据对象空间 id（spaceId）查询该空间下的行为分类列表（扁平结构，不分页）。
+            当用户需要查看空间下所有行为分类的完整列表时使用。
+            返回分类 id、名称、父分类 id 等完整信息。
+            """)
+    public List<ActionCategory> listActionCategories(
+            @ToolParam(description = "对象空间 id（spaceId）") Integer spaceId) {
+        return actionCategoryService.getCategoryList(spaceId);
     }
 }
