@@ -82,6 +82,15 @@ public class OntologyEntityController {
     }
 
 
+    @PostMapping("/link_between")
+    @Operation(summary = "查询两个实体之间的关联关系（含正向与反向）")
+    public RestResult<List<EntityLinkPropertyVO>> getEntityLinksBetween(@RequestBody @Valid EntityLinkBetweenParam param) {
+        return RestResult.ofData(entityService.getEntityLinksBetween(
+                param.getOntologyUniqueIdentifierFrom(), param.getEntityPrimaryKeyFrom(),
+                param.getOntologyUniqueIdentifierTo(), param.getEntityPrimaryKeyTo()));
+    }
+
+
     @PostMapping("/action/execute")
     @Operation(summary = "执行实体的行为")
     public RestResult<String> executeAction(@RequestBody @Valid EntityActionExecuteParam param) throws Exception {

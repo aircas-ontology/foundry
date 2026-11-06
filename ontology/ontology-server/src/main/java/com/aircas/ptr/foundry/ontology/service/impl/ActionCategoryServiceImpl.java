@@ -2,6 +2,7 @@ package com.aircas.ptr.foundry.ontology.service.impl;
 
 import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
+import com.aircas.ptr.foundry.ontology.model.enums.ActionKindEnum;
 import com.aircas.ptr.foundry.ontology.model.param.ActionCategoryCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionCategoryDeleteParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionCategoryUpdateParam;
@@ -27,7 +28,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import jakarta.annotation.Resource;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -208,14 +208,16 @@ public class ActionCategoryServiceImpl extends ServiceImpl<ActionCategoryMapper,
             return null;
         }
 
-        // 以本空间下的对象集合收敛行为的挂载范围（行为到空间的归属经对象解析）
+        // 以本空间下的对象集合收敛行为的挂载范围（行为到空间的归属经对象解析）；
+        // 行为树没有对象id，同表后只能按空间并入，否则分类计数里看不到树
         var ontologyIdentifiers = listOntologyIdentifiersOfSpace(spaceId);
-        var actions = CollectionUtils.isEmpty(ontologyIdentifiers)
-                ? Collections.<OntologyAction>emptyList()
-                : ontologyActionMapper.selectList(new LambdaQueryWrapper<OntologyAction>()
-                        .in(OntologyAction::getOntologyUniqueIdentifier, ontologyIdentifiers)
-                        // 与行为列表一致：分类节点下的行为也按最新创建在前
-                        .orderByDesc(OntologyAction::getId));
+        var actions = ontologyActionMapper.selectList(new LambdaQueryWrapper<OntologyAction>()
+                .and(w -> w.in(CollectionUtils.isNotEmpty(ontologyIdentifiers),
+                                OntologyAction::getOntologyUniqueIdentifier, ontologyIdentifiers)
+                        .or(t -> t.eq(OntologyAction::getOntologySpaceId, spaceId)
+                                .eq(OntologyAction::getActionKind, ActionKindEnum.TREE)))
+                // 与行为列表一致：分类节点下的行为也按最新创建在前
+                .orderByDesc(OntologyAction::getId));
         var actionMap = actions.stream()
                 .filter(action -> action.getActionCategoryId() != null)
                 .collect(Collectors.groupingBy(OntologyAction::getActionCategoryId));

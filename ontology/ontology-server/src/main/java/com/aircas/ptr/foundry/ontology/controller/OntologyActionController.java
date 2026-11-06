@@ -2,12 +2,15 @@ package com.aircas.ptr.foundry.ontology.controller;
 
 import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.controller.validator.OntologyIdVerify;
+import com.aircas.ptr.foundry.ontology.model.enums.ActionKindEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.ActionSchedulingTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.param.ActionCreateOrUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionSchedulingCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionSchedulingUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionTestParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyActionExecuteParam;
+import com.aircas.ptr.foundry.ontology.model.param.TreeBatchExecuteParam;
+import com.aircas.ptr.foundry.ontology.model.param.TreeExecuteParam;
 import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.aircas.ptr.foundry.ontology.service.OntologyActionService;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -18,6 +21,8 @@ import org.springframework.web.bind.annotation.*;
 
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
+import java.util.List;
+import java.util.stream.Stream;
 
 
 @Tag(name = "对象行为")
@@ -42,6 +47,15 @@ public class OntologyActionController {
     public RestResult updateAction(@RequestBody @Valid ActionCreateOrUpdateParam param) {
         //已经被行为调度的行为不可直接编辑，需要先暂停调度
         ontologyActionService.updateAction(param);
+        return RestResult.success();
+    }
+
+    @Operation(summary = "发布或下线行为树")
+    @PostMapping("/publish")
+    public RestResult publishTree(@RequestParam(required = true, name = "ontologySpaceId") @Parameter(description = "对象空间id") Integer ontologySpaceId,
+                                  @RequestParam(required = true, name = "actionApi") @Parameter(description = "行为树api") String actionApi,
+                                  @RequestParam(required = true, name = "status") @Parameter(description = "1 发布，0 下线") Integer status) {
+        ontologyActionService.publishTree(ontologySpaceId, actionApi, status);
         return RestResult.success();
     }
 
@@ -71,17 +85,24 @@ public class OntologyActionController {
         return RestResult.success();
     }
 
-    @Operation(summary = "分页获取行为列表（支持按空间、对象、分类、关键词和状态筛选）")
+    @Operation(summary = "分页获取行为列表（支持按空间、对象、分类、关键词、类别和状态筛选）")
     @GetMapping("/list")
     public RestResult<Page<OntologyActionInfoVO>> pageGetActionByOntologyId(@RequestParam(required = false, name = "ontologySpaceId") @Parameter(description = "对象空间id") Integer ontologySpaceId,
                                                                             @RequestParam(required = false, name = "ontologyId") @Parameter(description = "对象唯一标识符") String ontologyId,
                                                                             @RequestParam(required = false, name = "categoryId") @Parameter(description = "行为分类id") Integer categoryId,
                                                                             @RequestParam(required = false, name = "keyword") @Parameter(description = "关键词：行为名称、算子或描述") String keyword,
                                                                             @RequestParam(required = false, name = "status") @Parameter(description = "行为状态：2 草稿，1 已发布，不传查全部") Integer status,
+                                                                            @RequestParam(required = false, name = "actionKind") @Parameter(description = "行为类别：BASE/APPLICATION/TREE，不传查全部") ActionKindEnum actionKind,
+                                                                            @RequestParam(required = false, name = "actionKinds") @Parameter(description = "行为类别多选：BASE/APPLICATION/TREE；与 actionKind 同时传时合并，不传查全部") List<ActionKindEnum> actionKinds,
                                                                             @RequestParam(required = false, defaultValue = "1") Integer pageNum,
                                                                             @RequestParam(required = false, defaultValue = "10") Integer pageSize) {
 
-        return RestResult.ofData(ontologyActionService.pageGetActionByOntologyId(ontologySpaceId, ontologyId, categoryId, keyword, status, pageNum, pageSize));
+        // 单值和多选两个入口都支持，避免调用方按 actionKind 传时被静默忽略
+        var kinds = Stream.concat(
+                        actionKind == null ? Stream.<ActionKindEnum>empty() : Stream.of(actionKind),
+                        actionKinds == null ? Stream.<ActionKindEnum>empty() : actionKinds.stream())
+                .distinct().toList();
+        return RestResult.ofData(ontologyActionService.pageGetActionByOntologyId(ontologySpaceId, ontologyId, categoryId, keyword, status, kinds, pageNum, pageSize));
     }
 
 
@@ -104,6 +125,27 @@ public class OntologyActionController {
     @PostMapping("/test")
     public RestResult<ActionTestResultVO> testAction(@RequestBody @Valid ActionTestParam param) {
         return RestResult.ofData(ontologyActionService.testAction(param));
+    }
+
+
+    @Operation(summary = "执行行为树（单轮，真实落库）")
+    @PostMapping("/tree/execute")
+    public RestResult<TreeExecuteResultVO> executeTree(@RequestBody @Valid TreeExecuteParam param) {
+        return RestResult.ofData(ontologyActionService.executeTree(param));
+    }
+
+
+    @Operation(summary = "批量执行行为树（按对象类型遍历实例，真实落库）")
+    @PostMapping("/tree/executeBatch")
+    public RestResult<TreeBatchExecuteResultVO> executeTreeBatch(@RequestBody @Valid TreeBatchExecuteParam param) {
+        return RestResult.ofData(ontologyActionService.executeTreeBatch(param));
+    }
+
+
+    @Operation(summary = "行为树编辑器目录：节点类型与本空间可绑定行为")
+    @GetMapping("/tree/node-defs")
+    public RestResult<TreeDefsVO> getTreeDefs(@RequestParam(required = true, name = "ontologySpaceId") @Parameter(description = "对象空间id") Integer ontologySpaceId) {
+        return RestResult.ofData(ontologyActionService.getTreeDefs(ontologySpaceId));
     }
 
 

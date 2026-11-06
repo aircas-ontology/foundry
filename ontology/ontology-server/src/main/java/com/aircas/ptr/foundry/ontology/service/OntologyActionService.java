@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.ontology.service;
 
 
+import com.aircas.ptr.foundry.ontology.model.enums.ActionKindEnum;
 import com.aircas.ptr.foundry.ontology.model.dto.ActionContextInfoDTO;
 import com.aircas.ptr.foundry.ontology.model.enums.ActionSchedulingTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.param.ActionCreateOrUpdateParam;
@@ -9,10 +10,14 @@ import com.aircas.ptr.foundry.ontology.model.param.ActionSchedulingUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.param.EntityActionExecuteParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionTestParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyActionExecuteParam;
+import com.aircas.ptr.foundry.ontology.model.param.TreeBatchExecuteParam;
+import com.aircas.ptr.foundry.ontology.model.param.TreeExecuteParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyAction;
 import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
+
+import java.util.List;
 
 public interface OntologyActionService extends IService<OntologyAction> {
 
@@ -41,7 +46,24 @@ public interface OntologyActionService extends IService<OntologyAction> {
 
     void deleteActionByApi(Integer ontologySpaceId, String actionApi);
 
-    Page<OntologyActionInfoVO> pageGetActionByOntologyId(Integer ontologySpaceId, String ontologyId, Integer categoryId, String keyword, Integer status, Integer pageNum, Integer pageSize);
+    /**
+     * 发布或下线行为树。行为没有版本，状态就是唯一开关；发布前会用库里的树定义重新校验一次。
+     * <p>行为 api 只在空间内唯一，发布必须带空间定位，避免跨空间同名树被误改状态。</p>
+     *
+     * @param ontologySpaceId 行为树所属的对象空间id
+     * @param actionApi       行为树的 api
+     * @param status          1 发布，0 下线
+     */
+    void publishTree(Integer ontologySpaceId, String actionApi, Integer status);
+
+    /**
+     * 分页查行为/行为树列表。
+     *
+     * @param actionKinds 行为类别，多选；不传查全部类别
+     */
+    Page<OntologyActionInfoVO> pageGetActionByOntologyId(Integer ontologySpaceId, String ontologyId, Integer categoryId,
+                                                         String keyword, Integer status, List<ActionKindEnum> actionKinds,
+                                                         Integer pageNum, Integer pageSize);
 
     OntologyActionDetailVO getActionByApi(Integer ontologySpaceId, String actionApi);
 
@@ -65,6 +87,32 @@ public interface OntologyActionService extends IService<OntologyAction> {
      * @return 本次落库动作说明；绑算子的行为附带算子返回结果
      */
     ActionTestResultVO testAction(ActionTestParam param);
+
+    /**
+     * 行为树执行：一次树执行只针对一条实例数据，全树共用它，节点跑通即真实落库。
+     * <p>
+     * 单轮求值，不产生 RUNNING：跨 Tick 的循环/冷却/限时按「跑一遍子节点」降级，结果里带说明。
+     *
+     * @param param 树 api + 实例主键 + 黑板键的执行入参
+     * @return 整树状态 + 结束时黑板快照 + 逐节点结果
+     */
+    TreeExecuteResultVO executeTree(TreeExecuteParam param);
+
+    /**
+     * 批量执行行为树：按对象类型遍历实例数据，每条实例独立跑一遍整棵树。
+     * <p>单条实例失败不中断整批；明细默认只返回失败实例，需要成功明细时由 includeSuccess 打开。</p>
+     *
+     * @param param 树 api + 要遍历的对象类型 + 分片参数 + 共用的黑板入参
+     * @return 本次执行的实例数、成功失败计数与失败明细
+     */
+    TreeBatchExecuteResultVO executeTreeBatch(TreeBatchExecuteParam param);
+
+    /**
+     * 行为树编辑器目录：节点类型清单 + 本空间内可作为行为节点绑定的已发布行为。
+     *
+     * @param ontologySpaceId 对象空间id，可绑定行为只取该空间
+     */
+    TreeDefsVO getTreeDefs(Integer ontologySpaceId);
 
     Long createScheduling(ActionSchedulingCreateParam param);
 

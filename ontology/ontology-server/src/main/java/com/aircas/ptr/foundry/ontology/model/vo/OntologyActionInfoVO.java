@@ -54,7 +54,7 @@ public class OntologyActionInfoVO {
     @Schema(name = "status", description = "状态：2 草稿（未发布，智能体和调度不可用）/ 1 已发布", example = "1")
     private Integer status;
 
-    @Schema(name = "actionKind", description = "行为类别：BASE 基础行为 / APPLICATION 应用行为", example = "BASE")
+    @Schema(name = "actionKind", description = "行为类别：BASE 基础行为 / APPLICATION 应用行为 / TREE 行为树", example = "BASE")
     private ActionKindEnum actionKind;
 
     @Schema(name = "subjectType", description = "基础行为类型：PROPERTY_VALUE 属性值 / LINK 实例关系 / BASIC_OPERATOR 基础算子")

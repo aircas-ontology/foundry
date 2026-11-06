@@ -78,6 +78,10 @@ public class OntologyBuildFromDatasourceParam extends OntologySpaceIdParam {
         @Pattern(regexp = "^[a-zA-Z_$][a-zA-Z0-9_$]{0,62}$", message = "表名不合法，无法作为属性存储分组")
         private String tableName;
 
+        @Schema(name = "sourceTableName", description = "原始表名（溯源用，随数据管道消息发给数据组织层）；不传回退 tableName",
+                example = "ship_weapon")
+        private String sourceTableName;
+
         @Schema(name = "master", description = "是否主表；不传按 false 处理", example = "true")
         private Boolean master;
 
@@ -106,6 +110,10 @@ public class OntologyBuildFromDatasourceParam extends OntologySpaceIdParam {
         @Schema(name = "description", description = "属性描述；不传时用外部库列注释，列注释为空时不填",
                 example = "舰船中文名称")
         private String description;
+
+        @Schema(name = "sourceColumnName", description = "原始列名（溯源用，随数据管道消息发给数据组织层）；不传回退 columnName",
+                example = "ship_name")
+        private String sourceColumnName;
     }
 
     @Schema(description = "子表 → 主表 外键列对")

@@ -158,4 +158,15 @@ public interface DatasourceConnectionService extends IService<DatasourceConnecti
      * @return schema 清单
      */
     List<DatasourceSchemaVO> listSchemas(Integer spaceId);
+
+    /**
+     * 按对象空间取唯一的数据源连接配置（每个空间至多一条）。
+     *
+     * <p>供「数据源构建对象」建完对象后拼数据管道消息时取数据源的 id / 名称 / dbType，
+     * 复用扫描接口同一套「不存在 404、多条 400」的校验口径。</p>
+     *
+     * @param spaceId 归属的对象空间 id
+     * @return 数据源连接配置
+     */
+    DatasourceConnection getBySpaceId(Integer spaceId);
 }

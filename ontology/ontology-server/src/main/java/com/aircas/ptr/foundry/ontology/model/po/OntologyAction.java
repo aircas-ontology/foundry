@@ -113,6 +113,12 @@ public class OntologyAction {
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private ActionOutputModeEnum outputMode;
 
+    /**
+     * Column: definition
+     * 行为树定义 JSON（节点树 + 黑板 + 变量），仅 action_kind=TREE 有值，行为为空
+     */
+    private String definition;
+
 
     private static final long serialVersionUID = 1L;
 }

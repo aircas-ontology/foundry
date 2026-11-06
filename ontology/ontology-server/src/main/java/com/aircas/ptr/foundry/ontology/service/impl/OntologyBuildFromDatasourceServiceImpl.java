@@ -2,9 +2,14 @@ package com.aircas.ptr.foundry.ontology.service.impl;
 
 import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
+import com.aircas.ptr.foundry.ontology.model.dto.EntityDatasourceColumnDTO;
+import com.aircas.ptr.foundry.ontology.model.dto.EntityDatasourceDTO;
+import com.aircas.ptr.foundry.ontology.model.dto.EntityDatasourceSchemaChangeEventDTO;
+import com.aircas.ptr.foundry.ontology.model.enums.DatasourceEventTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyBuildFromDatasourceParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyMetaCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyCreateParam;
+import com.aircas.ptr.foundry.ontology.model.po.DatasourceConnection;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
 import com.aircas.ptr.foundry.ontology.model.po.OntologySpace;
 import com.aircas.ptr.foundry.ontology.model.po.TableColumnDesc;
@@ -12,6 +17,7 @@ import com.aircas.ptr.foundry.ontology.model.po.TableDesc;
 import com.aircas.ptr.foundry.ontology.model.po.TableFieldMapping;
 import com.aircas.ptr.foundry.ontology.model.vo.DatasourceTableDetailVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyBuildFromDatasourceResultVO;
+import com.aircas.ptr.foundry.ontology.mq.producer.RabbitMQProducer;
 import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.TableFieldMappingMapper;
 import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.TableMetadataMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologySpaceMapper;
@@ -20,10 +26,13 @@ import com.aircas.ptr.foundry.ontology.service.OntologyBuildFromDatasourceServic
 import com.aircas.ptr.foundry.ontology.service.OntologyMetaService;
 import com.aircas.ptr.foundry.ontology.service.OntologyPropertyService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -63,6 +72,12 @@ public class OntologyBuildFromDatasourceServiceImpl implements OntologyBuildFrom
     private final DatasourceConnectionService datasourceConnectionService;
     private final TableMetadataMapper tableMetadataMapper;
     private final TableFieldMappingMapper tableFieldMappingMapper;
+    private final RabbitMQProducer producer;
+
+    @Value("${rabbitmq.routing-key}")
+    private String routingKey;
+
+    private final ObjectMapper jsonMapper = new ObjectMapper();
 
     @Transactional(transactionManager = "chainedTransactionManager", rollbackFor = Exception.class)
     @Override
@@ -81,6 +96,9 @@ public class OntologyBuildFromDatasourceServiceImpl implements OntologyBuildFrom
 
         Map<String, OntologyBuildFromDatasourceParam.SelectedTable> tables = normalizeTables(param.getTables());
         OntologyBuildFromDatasourceParam.SelectedTable master = requireMaster(tables);
+        // 子表勾选的 id 列直接丢弃：实体表建表自带 id SERIAL PRIMARY KEY，属性 apiName 又要全对象唯一，
+        // 子表的 id 注定建不成属性；主表的 id 仍作为平台主键属性保留
+        List<String> droppedChildIds = dropChildPlatformPkColumns(tables, master);
         List<String> childTables = tables.keySet().stream().filter(name -> !name.equals(master.getTableName())).toList();
         PreconditionUtils.checkArgument(!childTables.contains(objectApiName),
                 "子表名不能与对象apiName相同：" + objectApiName + "（属性存储分组不允许与对象同名）", HttpStatus.BAD_REQUEST);
@@ -99,7 +117,7 @@ public class OntologyBuildFromDatasourceServiceImpl implements OntologyBuildFrom
                 scanLiveColumns(param.getSpaceId(), param.getSchemaName(), new ArrayList<>(tables.keySet()));
         List<PropertySpec> specs = buildPropertySpecs(master, childTables, tables, liveColumns);
         // 建表列清单同样在 Phase 0 算完：外键引用的列不存在时，报错要早于任何写库动作
-        Map<String, List<TableColumnDesc>> entityColumns = buildEntityColumns(master, specs, foreignKeys, liveColumns);
+        Map<String, EntityColumns> entityColumns = buildEntityColumns(master, tables, specs, foreignKeys, liveColumns);
 
         // ---------- Phase 1：主库 ontology ----------
         var metaParam = new OntologyMetaCreateParam()
@@ -114,16 +132,24 @@ public class OntologyBuildFromDatasourceServiceImpl implements OntologyBuildFrom
 
         // ---------- Phase 2：数据湖 entity_datasource 的 {空间apiName} schema ----------
         tableMetadataMapper.initSpaceSchema(schema);
-        List<String> entityTables = createEntityTables(schema, objectApiName, param.getDisplayName(), entityColumns);
+        List<EntityTable> entityTables = createEntityTables(schema, objectApiName, param.getDisplayName(), entityColumns);
         int mappingCount = writeMappings(schema, objectApiName, foreignKeys);
 
         // ---------- Phase 3：属性回填数据源，让 genericQuery 能解析出 "schema"."table"."column" ----------
         bindProperties(uniqueIdentifier, schema, objectApiName, specs);
 
-        int pipeColumnCount = entityColumns.values().stream().mapToInt(List::size).sum() - specs.size();
-        String message = String.format("对象【%s】已创建：%d 个属性、%d 张实体表（%s）、%d 条主子表列映射、%d 个仅作关联用的管道列；",
+        // 通知数据组织层建数据管道；消息格式与 autoBindDatasource 一致，额外带上对象来源（数据源 / 外部 schema / 源表 / 源列）
+        notifyPipelineBuild(param, uniqueIdentifier, schema, entityColumns, entityTables);
+
+        int pipeColumnCount = entityColumns.values().stream()
+                .mapToInt(columns -> columns.ddlColumns().size()).sum() - specs.size();
+        List<String> entityTableNames = entityTables.stream().map(EntityTable::tableName).toList();
+        String droppedNote = droppedChildIds.isEmpty()
+                ? ""
+                : "，已跳过子表 id 列：" + String.join("、", droppedChildIds);
+        String message = String.format("对象【%s】已创建：%d 个属性、%d 张实体表（%s）、%d 条主子表列映射、%d 个仅作关联用的管道列%s；",
                 StringUtils.trim(param.getDisplayName()), specs.size(), entityTables.size(),
-                String.join("、", entityTables), mappingCount, pipeColumnCount);
+                String.join("、", entityTableNames), mappingCount, pipeColumnCount, droppedNote);
         log.info("数据源构建对象完成 spaceId={}, schemaName={}, uid={}, {}",
                 param.getSpaceId(), param.getSchemaName(), uniqueIdentifier, message);
 
@@ -132,7 +158,7 @@ public class OntologyBuildFromDatasourceServiceImpl implements OntologyBuildFrom
                 .apiName(objectApiName)
                 .displayName(StringUtils.trim(param.getDisplayName()))
                 .propertyCount(specs.size())
-                .entityTables(entityTables)
+                .entityTables(entityTableNames)
                 .mappingCount(mappingCount)
                 .message(message)
                 .build();
@@ -158,6 +184,7 @@ public class OntologyBuildFromDatasourceServiceImpl implements OntologyBuildFrom
         for (var table : requested) {
             String tableName = StringUtils.trim(table.getTableName());
             table.setTableName(tableName);
+            table.setSourceTableName(StringUtils.defaultIfBlank(StringUtils.trim(table.getSourceTableName()), tableName));
             PreconditionUtils.checkArgument(IDENTIFIER_PATTERN.matcher(tableName).matches(),
                     "表名不合法，无法作为属性存储分组：" + tableName, HttpStatus.BAD_REQUEST);
             PreconditionUtils.checkArgument(!tables.containsKey(tableName),
@@ -165,6 +192,8 @@ public class OntologyBuildFromDatasourceServiceImpl implements OntologyBuildFrom
             List<String> columns = table.getColumns().stream()
                     .map(column -> {
                         column.setColumnName(StringUtils.trim(column.getColumnName()));
+                        column.setSourceColumnName(StringUtils.defaultIfBlank(
+                                StringUtils.trim(column.getSourceColumnName()), column.getColumnName()));
                         return column.getColumnName();
                     })
                     .toList();
@@ -247,6 +276,32 @@ public class OntologyBuildFromDatasourceServiceImpl implements OntologyBuildFrom
     }
 
     /**
+     * 丢弃子表勾选的 {@code id} 列。实体表建表时每张表都自带 {@code id SERIAL PRIMARY KEY}，
+     * 属性 apiName 又要在一个对象内唯一，子表的 id 无法再落成属性；主表的 id 不受影响。
+     *
+     * @return 被丢弃的「子表.id」清单，供结果消息提示
+     */
+    private List<String> dropChildPlatformPkColumns(
+            Map<String, OntologyBuildFromDatasourceParam.SelectedTable> tables,
+            OntologyBuildFromDatasourceParam.SelectedTable master) {
+        List<String> dropped = new ArrayList<>();
+        for (var table : tables.values()) {
+            if (table.getTableName().equals(master.getTableName())) {
+                continue;
+            }
+            if (table.getColumns().stream().noneMatch(column -> PK_COLUMN_NAME.equals(column.getColumnName()))) {
+                continue;
+            }
+            table.setColumns(table.getColumns().stream()
+                    .filter(column -> !PK_COLUMN_NAME.equals(column.getColumnName()))
+                    .collect(Collectors.toCollection(ArrayList::new)));
+            dropped.add(table.getTableName() + "." + PK_COLUMN_NAME);
+            log.info("子表{}勾选了 id 列，与平台主键同名，已跳过该属性", table.getTableName());
+        }
+        return dropped;
+    }
+
+    /**
      * 列名查重：属性 apiName 在一个对象内必须唯一（跨主子表也不能重名），重名整单 400。
      * 主表未勾 id 时后台要补的平台主键也占这个名字，一并纳入查重。
      */
@@ -311,7 +366,7 @@ public class OntologyBuildFromDatasourceServiceImpl implements OntologyBuildFrom
                 .anyMatch(spec -> MAIN_STORAGE_GROUP.equals(spec.storageGroup()) && PK_COLUMN_NAME.equals(spec.apiName()));
         if (!masterHasId) {
             specs.add(new PropertySpec(PK_COLUMN_NAME, "主键", "主键", OntologyDataTypeEnum.Int,
-                    MAIN_STORAGE_GROUP, true));
+                    MAIN_STORAGE_GROUP, true, null));
         }
         return specs;
     }
@@ -335,44 +390,90 @@ public class OntologyBuildFromDatasourceServiceImpl implements OntologyBuildFrom
                     ? OntologyDataTypeEnum.Int
                     : OntologyDataTypeEnum.valueOfJdbcType(live.getNativeType());
             specs.add(new PropertySpec(selected.getColumnName(), displayName, description, dataType,
-                    storageGroup, platformPk));
+                    storageGroup, platformPk, selected.getSourceColumnName()));
         }
     }
 
     /**
-     * 组装每张实体表的建表列：勾成属性的列 + 外键两侧没勾成属性的「管道列」。
+     * 组装每张实体表的列：勾成属性的列 + 外键两侧没勾成属性的「管道列」。
      * 管道列不建属性，但必须建物理列，否则 genericQuery 按映射里的列名 JOIN 会找不到列。
+     *
+     * <p>每张表同时产出两份列清单：建表 DDL 用的（描述已按 SQL 转义）和拼数据管道消息用的
+     * （描述保持原文，并带上外部库原始列名 sourceColumnName）。</p>
      */
-    private Map<String, List<TableColumnDesc>> buildEntityColumns(
-            OntologyBuildFromDatasourceParam.SelectedTable master, List<PropertySpec> specs,
+    private Map<String, EntityColumns> buildEntityColumns(
+            OntologyBuildFromDatasourceParam.SelectedTable master,
+            Map<String, OntologyBuildFromDatasourceParam.SelectedTable> tables,
+            List<PropertySpec> specs,
             List<OntologyBuildFromDatasourceParam.ForeignKeyParam> foreignKeys,
             Map<String, Map<String, DatasourceTableDetailVO.Column>> liveColumns) {
-        Map<String, List<TableColumnDesc>> columnsByGroup = new LinkedHashMap<>();
-        specs.forEach(spec -> columnsByGroup.computeIfAbsent(spec.storageGroup(), group -> new ArrayList<>())
-                .add(toColumnDesc(spec.apiName(), spec.dataType(), spec.displayName())));
+        Map<String, EntityColumns> columnsByGroup = new LinkedHashMap<>();
+        for (var spec : specs) {
+            columnsByGroup.computeIfAbsent(spec.storageGroup(), group -> new EntityColumns(
+                            sourceTableName(group, master, tables), new ArrayList<>(), new ArrayList<>()))
+                    .ddlColumns().add(toColumnDesc(spec.apiName(), spec.dataType(), spec.displayName()));
+            columnsByGroup.get(spec.storageGroup()).eventColumns().add(toEventColumn(spec));
+        }
         for (var foreignKey : foreignKeys) {
-            addPipeColumn(columnsByGroup.computeIfAbsent(MAIN_STORAGE_GROUP, group -> new ArrayList<>()),
-                    master.getTableName(), foreignKey.getMasterColumn(), liveColumns);
-            addPipeColumn(columnsByGroup.computeIfAbsent(foreignKey.getChildTable(), group -> new ArrayList<>()),
-                    foreignKey.getChildTable(), foreignKey.getChildColumn(), liveColumns);
+            addPipeColumn(columnsByGroup.computeIfAbsent(MAIN_STORAGE_GROUP, group -> new EntityColumns(
+                            sourceTableName(MAIN_STORAGE_GROUP, master, tables), new ArrayList<>(), new ArrayList<>())),
+                    master.getTableName(), foreignKey.getMasterColumn(), liveColumns, null);
+            addPipeColumn(columnsByGroup.computeIfAbsent(foreignKey.getChildTable(), group -> new EntityColumns(
+                            sourceTableName(foreignKey.getChildTable(), master, tables), new ArrayList<>(), new ArrayList<>())),
+                    foreignKey.getChildTable(), foreignKey.getChildColumn(), liveColumns, foreignKey.getMasterColumn());
         }
         return columnsByGroup;
     }
 
     /**
-     * 追加一个只做关联用的管道列：已经是属性列的跳过，平台主键 id 由建表语句自带所以也跳过。
+     * 存储分组对应的外部库原始表名：主表取主表的 sourceTableName，其余分组就是子表名。
      */
-    private void addPipeColumn(List<TableColumnDesc> columns, String tableName, String columnName,
-                               Map<String, Map<String, DatasourceTableDetailVO.Column>> liveColumns) {
+    private String sourceTableName(String storageGroup,
+                                   OntologyBuildFromDatasourceParam.SelectedTable master,
+                                   Map<String, OntologyBuildFromDatasourceParam.SelectedTable> tables) {
+        return MAIN_STORAGE_GROUP.equals(storageGroup)
+                ? master.getSourceTableName()
+                : tables.get(storageGroup).getSourceTableName();
+    }
+
+    private EntityDatasourceColumnDTO toEventColumn(PropertySpec spec) {
+        return EntityDatasourceColumnDTO.builder()
+                .columnName(spec.apiName())
+                .sourceColumnName(spec.sourceColumnName())
+                .datasourceColumnType(OntologyDataTypeEnum.transfer2Pg(spec.dataType()))
+                .description(spec.displayName())
+                .isPrimaryKey(spec.primaryKey())
+                .isAssociateKey(false)
+                .build();
+    }
+
+    /**
+     * 追加一个只做关联用的管道列：已经是属性列的跳过，平台主键 id 由建表语句自带所以也跳过。
+     *
+     * @param associateColumnName 非空时把该列标记为关联列，指向主表被引用的列名（子表外键侧）
+     */
+    private void addPipeColumn(EntityColumns columns, String tableName, String columnName,
+                               Map<String, Map<String, DatasourceTableDetailVO.Column>> liveColumns,
+                               String associateColumnName) {
         if (PK_COLUMN_NAME.equals(columnName)
-                || columns.stream().anyMatch(column -> columnName.equalsIgnoreCase(column.getColumnName()))) {
+                || columns.ddlColumns().stream().anyMatch(column -> columnName.equalsIgnoreCase(column.getColumnName()))) {
             return;
         }
         DatasourceTableDetailVO.Column live = liveColumns.getOrDefault(tableName, Map.of()).get(columnName);
         PreconditionUtils.checkNotNull(live, String.format("外键引用的列%s.%s在外部库不存在（可能已改名或删除）",
                 tableName, columnName), HttpStatus.BAD_REQUEST);
-        columns.add(toColumnDesc(columnName, OntologyDataTypeEnum.valueOfJdbcType(live.getNativeType()),
-                StringUtils.trimToNull(live.getDescription())));
+        OntologyDataTypeEnum dataType = OntologyDataTypeEnum.valueOfJdbcType(live.getNativeType());
+        String description = StringUtils.trimToNull(live.getDescription());
+        columns.ddlColumns().add(toColumnDesc(columnName, dataType, description));
+        columns.eventColumns().add(EntityDatasourceColumnDTO.builder()
+                .columnName(columnName)
+                .sourceColumnName(columnName)
+                .datasourceColumnType(OntologyDataTypeEnum.transfer2Pg(dataType))
+                .description(description)
+                .isPrimaryKey(false)
+                .isAssociateKey(associateColumnName != null)
+                .associateColumnName(associateColumnName)
+                .build());
     }
 
     private TableColumnDesc toColumnDesc(String columnName, OntologyDataTypeEnum dataType, String description) {
@@ -409,8 +510,8 @@ public class OntologyBuildFromDatasourceServiceImpl implements OntologyBuildFrom
      * 在数据湖空间 schema 下建实体表：主表名取对象 apiName，子表名取子表原名（即存储分组名）。
      * 表已存在时走 addColumns，与 {@code autoBindDatasource} 的处置一致。
      */
-    private List<String> createEntityTables(String schema, String objectApiName, String objectDisplayName,
-                                            Map<String, List<TableColumnDesc>> columnsByGroup) {
+    private List<EntityTable> createEntityTables(String schema, String objectApiName, String objectDisplayName,
+                                                 Map<String, EntityColumns> columnsByGroup) {
         // 主表先建，子表后建：子表的列映射引用的是主表
         List<String> groups = new ArrayList<>();
         if (columnsByGroup.containsKey(MAIN_STORAGE_GROUP)) {
@@ -419,7 +520,7 @@ public class OntologyBuildFromDatasourceServiceImpl implements OntologyBuildFrom
         columnsByGroup.keySet().stream().filter(group -> !MAIN_STORAGE_GROUP.equals(group)).forEach(groups::add);
 
         String displayName = StringUtils.trim(objectDisplayName);
-        List<String> entityTables = new ArrayList<>();
+        List<EntityTable> entityTables = new ArrayList<>();
         for (String group : groups) {
             String tableName = entityTableName(group, objectApiName);
             TableDesc table = TableDesc.builder()
@@ -427,17 +528,61 @@ public class OntologyBuildFromDatasourceServiceImpl implements OntologyBuildFrom
                     .description(escapeSqlText(MAIN_STORAGE_GROUP.equals(group)
                             ? displayName : displayName + "_" + group))
                     .build();
-            List<TableColumnDesc> columns = columnsByGroup.get(group);
-            if (Boolean.TRUE.equals(tableMetadataMapper.isTableExist(schema, tableName))) {
+            List<TableColumnDesc> columns = columnsByGroup.get(group).ddlColumns();
+            boolean created = !Boolean.TRUE.equals(tableMetadataMapper.isTableExist(schema, tableName));
+            if (!created) {
                 tableMetadataMapper.addColumns(schema, tableName, columns);
                 log.info("实体表{}已存在，按本次勾选列与管道列补齐", tableName);
             } else {
                 // createTable 自带 id SERIAL PRIMARY KEY 并跳过任何名为 id 的列，无需在这里重复声明主键
                 tableMetadataMapper.createTable(schema, table, columns);
             }
-            entityTables.add(tableName);
+            entityTables.add(new EntityTable(group, tableName, created));
         }
         return entityTables;
+    }
+
+    /**
+     * 建对象完成后通知数据组织层建数据管道。消息结构与
+     * {@code autoBindDatasource} / {@code notify_build_pipeline} 完全一致，额外带上对象来源：
+     * 外部数据源（id / 名称 / dbType）、外部 schema、每张实体表的原始表名与每列的原始列名。
+     */
+    @SneakyThrows
+    private void notifyPipelineBuild(OntologyBuildFromDatasourceParam param, String uniqueIdentifier,
+                                     String lakeSchema, Map<String, EntityColumns> columnsByGroup,
+                                     List<EntityTable> entityTables) {
+        DatasourceConnection connection = datasourceConnectionService.getBySpaceId(param.getSpaceId());
+        for (var entityTable : entityTables) {
+            EntityColumns columns = columnsByGroup.get(entityTable.storageGroup());
+            List<EntityDatasourceColumnDTO> eventColumns = new ArrayList<>(columns.eventColumns());
+            // 湖内建表语句给每张表都自带 id SERIAL PRIMARY KEY；新建表的消息里补齐这一列，来源列留空（平台生成）
+            if (entityTable.created() && eventColumns.stream()
+                    .noneMatch(column -> Boolean.TRUE.equals(column.getIsPrimaryKey()))) {
+                eventColumns.add(EntityDatasourceColumnDTO.builder()
+                        .columnName(PK_COLUMN_NAME)
+                        .datasourceColumnType("int4")
+                        .description("主键")
+                        .isPrimaryKey(true)
+                        .isAssociateKey(false)
+                        .build());
+            }
+            var datasourceDTO = EntityDatasourceDTO.builder()
+                    .tableName("entity_datasource." + lakeSchema + "." + entityTable.tableName())
+                    .isMainDatasource(MAIN_STORAGE_GROUP.equals(entityTable.storageGroup()))
+                    .sourceTableName(columns.sourceTableName())
+                    .columns(eventColumns)
+                    .build();
+            var event = EntityDatasourceSchemaChangeEventDTO.builder()
+                    .ontologyUniqueIdentifier(uniqueIdentifier)
+                    .type(entityTable.created() ? DatasourceEventTypeEnum.CREATE_TABLE : DatasourceEventTypeEnum.ADD_COLUMN)
+                    .sourceDatasourceId(connection.getId())
+                    .sourceDatasourceName(connection.getName())
+                    .sourceDatasourceDbType(connection.getDbType())
+                    .sourceSchema(param.getSchemaName())
+                    .datasource(List.of(datasourceDTO))
+                    .build();
+            producer.sendMessage(routingKey, jsonMapper.writeValueAsString(event));
+        }
     }
 
     /**
@@ -519,5 +664,20 @@ public class OntologyBuildFromDatasourceServiceImpl implements OntologyBuildFrom
                                 String description,
                                 OntologyDataTypeEnum dataType,
                                 String storageGroup,
-                                boolean primaryKey) { }
+                                boolean primaryKey,
+                                String sourceColumnName) { }
+
+    /**
+     * 一张实体表要用的列清单：建表 DDL 用的（描述已按 SQL 转义）与拼数据管道消息用的
+     * （描述保持原文并带 sourceColumnName），外加这张实体表对应的外部库原始表名。
+     */
+    private record EntityColumns(String sourceTableName,
+                                 List<TableColumnDesc> ddlColumns,
+                                 List<EntityDatasourceColumnDTO> eventColumns) { }
+
+    /**
+     * 建完的一张实体表：存储分组（main / 子表名）、湖内物理表名，以及本次是否新建
+     * （已存在的表只补列，消息类型要发 ADD_COLUMN）。
+     */
+    private record EntityTable(String storageGroup, String tableName, boolean created) { }
 }

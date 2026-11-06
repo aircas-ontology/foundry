@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.ontology.model.vo;
 
 import com.aircas.ptr.foundry.ontology.model.param.ActionLinkMappingParam;
+import com.aircas.ptr.foundry.ontology.model.param.BehaviorTreeDefinition;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -29,5 +30,8 @@ public class OntologyActionDetailVO extends OntologyActionInfoVO {
 
     @Schema(description = "函数参数定义（入参 + 出参列表，含类型、描述）")
     private List<FunctionParamVO> functionParams;
+
+    @Schema(description = "行为树定义（黑板 + 变量 + 节点树），仅 actionKind=TREE 返回")
+    private BehaviorTreeDefinition treeDefinition;
 
 }
