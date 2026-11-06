@@ -13,8 +13,9 @@ import java.util.Map;
 
 /**
  * 行为树执行请求。
- * <p>一次树执行只带一个实例主键，全树共用（解释二）；黑板键值由 inputs 覆盖变量默认值。
- * 一棵树里的行为可以涉及多个对象类型，但它们都按这同一个主键定位各自的实例。</p>
+ * <p>实例主键可选：只有节点真正需要实例时才传——绑属性值/实例关系行为、入参取对象属性、黑板键绑了对象属性。
+ * 基础算子这类按对象做条件/聚合查询的行为直接带对象标识执行，不需要具体实例。
+ * 黑板键值由 inputs 覆盖变量默认值；一棵树里的行为可以涉及多个对象类型，需要实例时都按这同一个主键定位。</p>
  */
 @Data
 @SuperBuilder
@@ -33,8 +34,9 @@ public class TreeExecuteParam {
     @NotBlank(message = "treeApi is empty")
     private String treeApi;
 
-    @Schema(name = "entityPrimaryKey", description = "本次执行共用的实例主键", example = "1", required = true)
-    @NotNull(message = "entityPrimaryKey is null")
+    @Schema(name = "entityPrimaryKey",
+            description = "本次执行共用的实例主键；只有节点确实需要实例时才传（属性值/实例关系行为、入参取对象属性、黑板键绑对象属性），"
+                    + "基础算子按对象查询不需要", example = "1")
     private Object entityPrimaryKey;
 
     @Schema(name = "dataPrimaryKey",

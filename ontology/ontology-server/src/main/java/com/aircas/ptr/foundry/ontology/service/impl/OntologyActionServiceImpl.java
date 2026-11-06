@@ -958,6 +958,10 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
      * 只回填「本棵树绑了这个对象属性」的键，其余黑板键不动。
      */
     private void refreshTreeBlackboard(OntologyAction bound, TreeExecutionRuntime runtime) {
+        // 没有实例主键就没有可回填的实例数据；真写属性的行为在上一步已经因为缺实例失败了
+        if (runtime.getEntityPrimaryKey() == null) {
+            return;
+        }
         // 应用行为的回写方式下沉到每行：任一出参落属性，就说明这次执行可能改了实例属性
         var writesProperty = bound.getSubjectType() == ActionSubjectTypeEnum.PROPERTY_VALUE
                 || (bound.getActionKind() == ActionKindEnum.APPLICATION
@@ -1955,7 +1959,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         var contextInfoDTO = entityService.initActionContextInfoDTO(executeParam);
         contextInfoDTO.setExternalParams(param.getParams());
         var result = entityService.executeEntityAction(executeParam, contextInfoDTO, entityService.getLinkedEntities(contextInfoDTO));
-        return testResult(action, "已按行为定义执行算子并完成落库").setResult(result);
+        // 出参可能是 WRITE_PROPERTY 落库，也可能只是 RESULT_ONLY 返回，提示不描述落库
+        return testResult(action, "行为执行成功").setResult(result);
     }
 
     private ActionTestResultVO testResult(OntologyAction action, String message) {
