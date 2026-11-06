@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.ontology.mcp.tools;
 
 import com.aircas.ptr.foundry.ontology.mcp.McpTools;
+import com.aircas.ptr.foundry.ontology.model.po.OntologyCategory;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyCategoryVO;
 import com.aircas.ptr.foundry.ontology.service.OntologyCategoryService;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +37,16 @@ public class OntologyCategoryMcpTools implements McpTools {
         List<OntologyCategoryVO> flat = new ArrayList<>();
         flatten(tree, flat);
         return flat;
+    }
+
+    @Tool(description = """
+            根据对象空间 id（spaceId）查询该空间下的分类列表（扁平结构，不分页）。
+            当用户需要查看空间下所有对象分类的完整列表时使用。
+            返回分类 id、名称、父分类 id 等完整信息。
+            """)
+    public List<OntologyCategory> listCategoriesFlat(
+            @ToolParam(description = "对象空间 id（spaceId）") Integer spaceId) {
+        return ontologyCategoryService.getCategoryList(spaceId);
     }
 
     /**

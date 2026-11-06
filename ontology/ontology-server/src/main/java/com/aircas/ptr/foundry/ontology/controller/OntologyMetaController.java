@@ -131,8 +131,10 @@ public class OntologyMetaController {
 
     @GetMapping("/search")
     @Operation(summary = "搜索对象")
-    public RestResult<List<OntologyMetaInfoVO>> searchByKeyword(@RequestParam(name = "keyword", required = false) @Parameter(description = "搜索关键词") String keyword) {
-        return RestResult.ofData(ontologyMetaService.searchByKeyword(keyword));
+    public RestResult<List<OntologyMetaInfoVO>> searchByKeyword(
+            @RequestParam(name = "keyword", required = false) @Parameter(description = "搜索关键词") String keyword,
+            @RequestParam(name = "spaceId", required = false) @Parameter(description = "空间 ID，用于过滤") Integer spaceId) {
+        return RestResult.ofData(ontologyMetaService.searchByKeyword(keyword, spaceId));
     }
 
     @GetMapping("/category")
