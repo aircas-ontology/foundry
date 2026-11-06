@@ -71,10 +71,11 @@ public class ActionCreateOrUpdateParam {
     @Schema(description = "目标存储分组（分组名即物理表名，main 主表不允许）；仅行为类型=属性值时必填")
     private String storageGroup;
 
-    @Schema(description = "输出方式：RESULT_ONLY 仅返回结果 / WRITE_PROPERTY 写入对象属性；应用行为必填；属性值、实例关系行为不可传；基础算子固定为仅返回结果，可不传", example = "RESULT_ONLY")
+    @Schema(description = "已废弃：输出方式已下沉到 mappingIns 每行的 outputMode，应用行为不再需要顶层指定；"
+            + "基础算子固定 RESULT_ONLY，属性值和实例关系行为为空", example = "RESULT_ONLY")
     private ActionOutputModeEnum outputMode;
 
-    @Schema(description = "行为关系映射")
+    @Schema(description = "行为关系映射；应用行为出参全是 RESULT_ONLY 时可选填，存在 WRITE_PROPERTY 出参时不能绑定")
     private ActionLinkMappingParam linkMapping;
 
 

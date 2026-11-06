@@ -57,12 +57,29 @@ public class OntologyActionController {
         return RestResult.success();
     }
 
+    @Operation(summary = "发布行为（草稿 -> 已发布，发布后对智能体和调度可用）")
+    @PutMapping("/publish")
+    public RestResult publishAction(@RequestParam(required = true, name = "ontologySpaceId") @Parameter(description = "对象空间id") Integer ontologySpaceId,
+                                    @RequestParam(required = true, name = "actionApi") @Parameter(description = "行为api") String actionApi) {
+        ontologyActionService.publishAction(ontologySpaceId, actionApi);
+        return RestResult.success();
+    }
+
+    @Operation(summary = "撤回发布（已发布 -> 草稿）")
+    @PutMapping("/unpublish")
+    public RestResult unpublishAction(@RequestParam(required = true, name = "ontologySpaceId") @Parameter(description = "对象空间id") Integer ontologySpaceId,
+                                      @RequestParam(required = true, name = "actionApi") @Parameter(description = "行为api") String actionApi) {
+        ontologyActionService.unpublishAction(ontologySpaceId, actionApi);
+        return RestResult.success();
+    }
+
 
     @Operation(summary = "依据actionApi删除行为")
-    @DeleteMapping("/{actionApi}")
-    public RestResult delete(@PathVariable(required = true, name = "actionApi") String actionApi) {
+    @DeleteMapping("")
+    public RestResult delete(@RequestParam(required = true, name = "ontologySpaceId") @Parameter(description = "对象空间id") Integer ontologySpaceId,
+                             @RequestParam(required = true, name = "actionApi") @Parameter(description = "行为api") String actionApi) {
         //已经被行为调度的行为不可直接编辑，需要先暂停调度
-        ontologyActionService.deleteActionByApi(actionApi);
+        ontologyActionService.deleteActionByApi(ontologySpaceId, actionApi);
         return RestResult.success();
     }
 
@@ -72,7 +89,7 @@ public class OntologyActionController {
                                                                             @RequestParam(required = false, name = "ontologyId") @Parameter(description = "对象唯一标识符") String ontologyId,
                                                                             @RequestParam(required = false, name = "categoryId") @Parameter(description = "行为分类id") Integer categoryId,
                                                                             @RequestParam(required = false, name = "keyword") @Parameter(description = "关键词：行为名称、算子或描述") String keyword,
-                                                                            @RequestParam(required = false, name = "status") @Parameter(description = "行为状态：1 启用，0 失效，不传查全部") Integer status,
+                                                                            @RequestParam(required = false, name = "status") @Parameter(description = "行为状态：2 草稿，1 已发布，不传查全部") Integer status,
                                                                             @RequestParam(required = false, name = "actionKinds") @Parameter(description = "行为类别：BASE/APPLICATION/TREE，可多选，不传查全部") List<ActionKindEnum> actionKinds,
                                                                             @RequestParam(required = false, defaultValue = "1") Integer pageNum,
                                                                             @RequestParam(required = false, defaultValue = "10") Integer pageSize) {
@@ -83,8 +100,9 @@ public class OntologyActionController {
 
     @Operation(summary = "根据actionApi获取行为详情")
     @GetMapping("")
-    public RestResult<OntologyActionDetailVO> getActionByApi(@RequestParam(required = true, name = "actionApi") @Parameter(description = "行为api") String actionApi) {
-        return RestResult.ofData(ontologyActionService.getActionByApi(actionApi));
+    public RestResult<OntologyActionDetailVO> getActionByApi(@RequestParam(required = true, name = "ontologySpaceId") @Parameter(description = "对象空间id") Integer ontologySpaceId,
+                                                             @RequestParam(required = true, name = "actionApi") @Parameter(description = "行为api") String actionApi) {
+        return RestResult.ofData(ontologyActionService.getActionByApi(ontologySpaceId, actionApi));
     }
 
     @Operation(summary = "执行对象单个行为")

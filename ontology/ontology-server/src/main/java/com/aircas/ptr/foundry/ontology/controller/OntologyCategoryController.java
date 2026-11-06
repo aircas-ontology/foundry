@@ -6,6 +6,7 @@ import com.aircas.ptr.foundry.ontology.controller.validator.SpaceIdVerify;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyCategoryCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyCategoryDeleteParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyCategoryUpdateParam;
+import com.aircas.ptr.foundry.ontology.model.po.OntologyCategory;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyCategoryVO;
 import com.aircas.ptr.foundry.ontology.service.OntologyCategoryService;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -16,6 +17,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
+import java.util.List;
 
 @Tag(name = "对象分类体系管理")
 @RestController
@@ -56,6 +58,15 @@ public class OntologyCategoryController {
                                                           @Parameter(description = "对象空间id")
                                                           @SpaceIdVerify Integer spaceId) {
         OntologyCategoryVO res = ontologyCategoryService.getCategoryTree(spaceId);
+        return RestResult.ofData(res);
+    }
+
+    @GetMapping("/list")
+    @Operation(summary = "查询对象分类列表（扁平结构，不分页）")
+    public RestResult<List<OntologyCategory>> getCategoryList(@RequestParam(required = true, name = "spaceId")
+                                                              @Parameter(description = "对象空间id")
+                                                              @SpaceIdVerify Integer spaceId) {
+        List<OntologyCategory> res = ontologyCategoryService.getCategoryList(spaceId);
         return RestResult.ofData(res);
     }
 }

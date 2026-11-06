@@ -96,7 +96,7 @@ public class OntologyBuildFromDatasourceServiceImpl implements OntologyBuildFrom
 
         // 类型与列注释以现场扫描为准：向导页打开后外部库可能已经改过表
         Map<String, Map<String, DatasourceTableDetailVO.Column>> liveColumns =
-                scanLiveColumns(param.getDatasourceId(), new ArrayList<>(tables.keySet()));
+                scanLiveColumns(param.getSpaceId(), param.getSchemaName(), new ArrayList<>(tables.keySet()));
         List<PropertySpec> specs = buildPropertySpecs(master, childTables, tables, liveColumns);
         // 建表列清单同样在 Phase 0 算完：外键引用的列不存在时，报错要早于任何写库动作
         Map<String, List<TableColumnDesc>> entityColumns = buildEntityColumns(master, specs, foreignKeys, liveColumns);
@@ -121,12 +121,11 @@ public class OntologyBuildFromDatasourceServiceImpl implements OntologyBuildFrom
         bindProperties(uniqueIdentifier, schema, objectApiName, specs);
 
         int pipeColumnCount = entityColumns.values().stream().mapToInt(List::size).sum() - specs.size();
-        String message = String.format("对象【%s】已创建：%d 个属性、%d 张实体表（%s）、%d 条主子表列映射、%d 个仅作关联用的管道列；"
-                        + "实体表当前没有实例数据，外部库数据需另行灌入，数据管道请再调 /property/notify_build_pipeline",
+        String message = String.format("对象【%s】已创建：%d 个属性、%d 张实体表（%s）、%d 条主子表列映射、%d 个仅作关联用的管道列；",
                 StringUtils.trim(param.getDisplayName()), specs.size(), entityTables.size(),
                 String.join("、", entityTables), mappingCount, pipeColumnCount);
-        log.info("数据源构建对象完成 datasourceId={}, spaceId={}, uid={}, {}",
-                param.getDatasourceId(), param.getSpaceId(), uniqueIdentifier, message);
+        log.info("数据源构建对象完成 spaceId={}, schemaName={}, uid={}, {}",
+                param.getSpaceId(), param.getSchemaName(), uniqueIdentifier, message);
 
         return OntologyBuildFromDatasourceResultVO.builder()
                 .uniqueIdentifier(uniqueIdentifier)
@@ -276,10 +275,11 @@ public class OntologyBuildFromDatasourceServiceImpl implements OntologyBuildFrom
     /**
      * 现场重扫外部库，返回「表名 → 列名 → 列信息」；勾选的表已经不存在时直接 400。
      */
-    private Map<String, Map<String, DatasourceTableDetailVO.Column>> scanLiveColumns(Integer datasourceId,
+    private Map<String, Map<String, DatasourceTableDetailVO.Column>> scanLiveColumns(Integer spaceId,
+                                                                                     String schemaName,
                                                                                      List<String> tableNames) {
         Map<String, List<DatasourceTableDetailVO.Column>> scanned = datasourceConnectionService
-                .listTablesDetail(datasourceId, tableNames).stream()
+                .listTablesDetail(spaceId, schemaName, tableNames).stream()
                 .collect(Collectors.toMap(DatasourceTableDetailVO::getTableName,
                         DatasourceTableDetailVO::getColumns, (a, b) -> a, LinkedHashMap::new));
         Map<String, Map<String, DatasourceTableDetailVO.Column>> live = new LinkedHashMap<>();
@@ -327,9 +327,15 @@ public class OntologyBuildFromDatasourceServiceImpl implements OntologyBuildFrom
             String comment = StringUtils.trimToNull(live.getDescription());
             String displayName = StringUtils.defaultIfBlank(StringUtils.trim(selected.getDisplayName()),
                     StringUtils.defaultIfBlank(comment, selected.getColumnName()));
-            specs.add(new PropertySpec(selected.getColumnName(), displayName, comment,
-                    OntologyDataTypeEnum.valueOfJdbcType(live.getNativeType()), storageGroup,
-                    PK_COLUMN_NAME.equals(selected.getColumnName()) && MAIN_STORAGE_GROUP.equals(storageGroup)));
+            String description = StringUtils.defaultIfBlank(StringUtils.trim(selected.getDescription()), comment);
+            boolean platformPk = PK_COLUMN_NAME.equals(selected.getColumnName())
+                    && MAIN_STORAGE_GROUP.equals(storageGroup);
+            // 平台主键 id 在湖里是 id SERIAL PRIMARY KEY，外部库那列是什么类型都不跟
+            OntologyDataTypeEnum dataType = platformPk
+                    ? OntologyDataTypeEnum.Int
+                    : OntologyDataTypeEnum.valueOfJdbcType(live.getNativeType());
+            specs.add(new PropertySpec(selected.getColumnName(), displayName, description, dataType,
+                    storageGroup, platformPk));
         }
     }
 

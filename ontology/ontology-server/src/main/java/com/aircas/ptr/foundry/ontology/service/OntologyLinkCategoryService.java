@@ -7,6 +7,8 @@ import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkCategory;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkCategoryVO;
 import com.baomidou.mybatisplus.extension.service.IService;
 
+import java.util.List;
+
 public interface OntologyLinkCategoryService extends IService<OntologyLinkCategory> {
 
     void createCategory(OntologyLinkCategoryCreateParam param);
@@ -16,4 +18,6 @@ public interface OntologyLinkCategoryService extends IService<OntologyLinkCatego
     void deleteCategory(OntologyLinkCategoryDeleteParam param);
 
     OntologyLinkCategoryVO getCategoryTree(Integer spaceId, String ontologyUniqueIdentifierFrom);
+
+    List<OntologyLinkCategory> getCategoryList(Integer spaceId);
 }

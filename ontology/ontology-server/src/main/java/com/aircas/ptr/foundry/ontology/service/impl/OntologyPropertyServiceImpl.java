@@ -357,7 +357,9 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
 
     @Override
     public List<OntologyPropertyInfoVO> getPropertyInfoByOntologyId(String ontologyUniqueIdentifier) {
-        var props = list(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier));
+        var props = list(new LambdaQueryWrapper<OntologyProperty>()
+                .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier)
+                .orderByAsc(OntologyProperty::getId));
         return props.stream().map(DataConverter::convertToPropertyInfoVO).collect(Collectors.toList());
     }
 
@@ -368,6 +370,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         if (categoryId != null) {
             queryWrapper.eq(OntologyProperty::getPropertyCategoryId, categoryId);
         }
+        queryWrapper.orderByAsc(OntologyProperty::getId);
         var propList = list(queryWrapper);
         log.info("[getByCategoryId] categoryId={}, matched size={}", categoryId, propList.size());
         return propList.stream()
@@ -557,11 +560,11 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
 
     @Override
     public PropertyCategoryVO getCategory(String ontologyUniqueIdentifier) {
-        // 按 id 降序取出，分组后每层 children 即为 id 从大到小
+        // 按 id 升序取出，分组后每层 children 即为 id 从小到大
         var categories = propertyCategoryService.list(
                 new LambdaQueryWrapper<PropertyCategory>()
                         .eq(PropertyCategory::getOntologyUniqueIdentifier, ontologyUniqueIdentifier)
-                        .orderByDesc(PropertyCategory::getId));
+                        .orderByAsc(PropertyCategory::getId));
         if (CollectionUtils.isEmpty(categories)) {
             return null;
         }
@@ -580,6 +583,14 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                         p -> p.getPropertyCategoryId() != null ? p.getPropertyCategoryId() : rootCategoryId,
                         Collectors.mapping(DataConverter::convertToPropertyInfoVO, Collectors.toList())));
         return buildCategoryVO(roots.get(0), categoryMap, propMap);
+    }
+
+    @Override
+    public List<PropertyCategory> getPropertyCategoryList(String ontologyUniqueIdentifier) {
+        return propertyCategoryService.list(
+                new LambdaQueryWrapper<PropertyCategory>()
+                        .eq(PropertyCategory::getOntologyUniqueIdentifier, ontologyUniqueIdentifier)
+                        .orderByAsc(PropertyCategory::getId));
     }
 
     @Transactional(transactionManager = "mainTransactionManager")

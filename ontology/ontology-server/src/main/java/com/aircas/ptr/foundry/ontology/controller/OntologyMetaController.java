@@ -7,6 +7,8 @@ import com.aircas.ptr.foundry.ontology.controller.validator.OntologyIdVerify;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyExportTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyOrderByEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.QuerySortEnum;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyAssetBuildParam;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyBatchDeleteParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyMetaCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.vo.IdentifierVO;
@@ -68,6 +70,16 @@ public class OntologyMetaController {
     }
 
 
+    @PostMapping("/import_to_space")
+    @Operation(summary = "导入对象到指定空间（不验证 displayName 唯一性，自动使用目标空间 ID）")
+    public RestResult importOntologiesToSpace(
+            @RequestParam(required = true, name = "spaceId") @Parameter(description = "目标空间 ID") Integer spaceId,
+            @RequestParam(required = true, name = "file") MultipartFile file) {
+        var failedOntology = ontologyMetaService.importOntologiesToSpace(spaceId, file);
+        return CollectionUtils.isNotEmpty(failedOntology) ? new RestResult(ResultCode.ERROR, "对象导入失败", failedOntology) : RestResult.success();
+    }
+
+
     @PostMapping
     @Operation(summary = "创建对象")
     public RestResult<IdentifierVO> createOntology(@RequestBody @Valid OntologyMetaCreateParam ontologyCreateParam) {
@@ -76,10 +88,25 @@ public class OntologyMetaController {
     }
 
 
+    @Operation(summary = "资产构建对象")
+    @PostMapping("/build_object")
+    public RestResult<IdentifierVO> buildObjectWithProperties(@RequestBody @Valid OntologyAssetBuildParam param) {
+        String uniqIdentifier = ontologyMetaService.createOntologyWithProperties(param);
+        return RestResult.ofData(IdentifierVO.builder().uniqueIdentifier(uniqIdentifier).build());
+    }
+
+
     @DeleteMapping("/{ontologyIdentifier}")
     @Operation(summary = "删除对象")
     public RestResult deleteOntology(@PathVariable(required = true, name = "ontologyIdentifier") @OntologyIdVerify String ontologyIdentifier) {
         ontologyMetaService.deleteOntology(ontologyIdentifier);
+        return RestResult.success();
+    }
+
+    @DeleteMapping("/batch")
+    @Operation(summary = "批量删除对象及其关联数据（属性、关系、分类树、行为等）")
+    public RestResult batchDeleteOntologies(@RequestBody @Valid OntologyBatchDeleteParam param) {
+        ontologyMetaService.batchDeleteOntologies(param);
         return RestResult.success();
     }
 
@@ -137,6 +164,12 @@ public class OntologyMetaController {
     @Operation(summary = "根据groupId查询组内对象树")
     public RestResult<List<OntologyMetaNodeVO>> getOntologyTreeByByGroupId(@RequestParam(name = "groupId", required = false) @Parameter(description = "groupId") String groupId) {
         return RestResult.ofData(ontologyMetaService.getOntologyTreeByByGroupId(groupId));
+    }
+
+    @GetMapping("/inheritance_tree")
+    @Operation(summary = "查询空间内对象继承层级树")
+    public RestResult<List<OntologyMetaNodeVO>> getInheritanceTree(@RequestParam(name = "spaceId", required = true) @Parameter(description = "对象空间id") @com.aircas.ptr.foundry.ontology.controller.validator.SpaceIdVerify Integer spaceId) {
+        return RestResult.ofData(ontologyMetaService.getInheritanceTree(spaceId));
     }
 
 }

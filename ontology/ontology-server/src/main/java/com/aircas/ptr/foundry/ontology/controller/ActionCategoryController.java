@@ -5,6 +5,7 @@ import com.aircas.ptr.foundry.ontology.controller.validator.SpaceIdVerify;
 import com.aircas.ptr.foundry.ontology.model.param.ActionCategoryCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionCategoryDeleteParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionCategoryUpdateParam;
+import com.aircas.ptr.foundry.ontology.model.po.ActionCategory;
 import com.aircas.ptr.foundry.ontology.model.vo.ActionCategoryVO;
 import com.aircas.ptr.foundry.ontology.service.ActionCategoryService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -15,6 +16,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
+import java.util.List;
 
 /**
  * 行为分类体系管理。
@@ -62,6 +64,15 @@ public class ActionCategoryController {
                                                               @Parameter(description = "对象空间id")
                                                               @SpaceIdVerify Integer spaceId) {
         ActionCategoryVO res = actionCategoryService.getActionCategoryTree(spaceId);
+        return RestResult.ofData(res);
+    }
+
+    @GetMapping("/list")
+    @Operation(summary = "查询行为分类列表（扁平结构，不分页）")
+    public RestResult<List<ActionCategory>> getActionCategoryList(@RequestParam(required = true, name = "spaceId")
+                                                                  @Parameter(description = "对象空间id")
+                                                                  @SpaceIdVerify Integer spaceId) {
+        List<ActionCategory> res = actionCategoryService.getCategoryList(spaceId);
         return RestResult.ofData(res);
     }
 }

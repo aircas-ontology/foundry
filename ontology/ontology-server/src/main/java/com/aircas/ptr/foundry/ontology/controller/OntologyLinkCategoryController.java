@@ -6,6 +6,7 @@ import com.aircas.ptr.foundry.ontology.controller.validator.SpaceIdVerify;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyLinkCategoryCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyLinkCategoryDeleteParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyLinkCategoryUpdateParam;
+import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkCategory;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkCategoryVO;
 import com.aircas.ptr.foundry.ontology.service.OntologyLinkCategoryService;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -16,6 +17,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
+import java.util.List;
 
 @Tag(name = "关系分类体系管理")
 @RestController
@@ -60,6 +62,16 @@ public class OntologyLinkCategoryController {
             @Parameter(description = "对象唯一标识，选填；传入时返回该对象作为源或目标任意一端关联的关系")
             String ontologyUniqueIdentifierFrom) {
         OntologyLinkCategoryVO res = ontologyLinkCategoryService.getCategoryTree(spaceId, ontologyUniqueIdentifierFrom);
+        return RestResult.ofData(res);
+    }
+
+    @GetMapping("/list")
+    @Operation(summary = "查询关系分类列表（扁平结构，不分页）")
+    public RestResult<List<OntologyLinkCategory>> getLinkCategoryList(
+            @RequestParam(required = true, name = "spaceId")
+            @Parameter(description = "对象空间id")
+            @SpaceIdVerify Integer spaceId) {
+        List<OntologyLinkCategory> res = ontologyLinkCategoryService.getCategoryList(spaceId);
         return RestResult.ofData(res);
     }
 }

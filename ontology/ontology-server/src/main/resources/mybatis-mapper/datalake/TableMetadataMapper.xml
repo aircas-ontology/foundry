@@ -120,12 +120,14 @@
     <insert id="createTable">
         <!-- Create table: id SERIAL PRIMARY KEY + filtered columns -->
         CREATE TABLE IF NOT EXISTS "${schemaName}"."${table.tableName}" (
+        <trim suffixOverrides=",">
         id SERIAL PRIMARY KEY,
         <foreach collection="columns" item="col" separator=",">
             <if test="col.columnName != null and col.columnName.toLowerCase() != 'id'">
                  "${col.columnName}" ${col.type}
             </if>
         </foreach>
+        </trim>
         );
         <!-- Add comments -->
         COMMENT ON TABLE "${schemaName}"."${table.tableName}" IS '${table.description}';

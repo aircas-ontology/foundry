@@ -4,6 +4,7 @@
 
     <resultMap id="BaseResultMap" type="com.aircas.ptr.foundry.ontology.model.po.DatasourceConnection">
         <id column="id" property="id"/>
+        <result column="space_id" property="spaceId"/>
         <result column="name" property="name"/>
         <result column="db_type" property="dbType"/>
         <result column="driver_class" property="driverClass"/>
@@ -21,7 +22,7 @@
     </resultMap>
 
     <sql id="Base_Column_List">
-        id, name, db_type, driver_class, jdbc_url, host, port, db_name, schema_name,
+        id, space_id, name, db_type, driver_class, jdbc_url, host, port, db_name, schema_name,
         username, password, description, status, create_time, update_time
     </sql>
 

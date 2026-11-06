@@ -20,6 +20,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.collections4.CollectionUtils;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -28,6 +29,7 @@ import jakarta.servlet.http.HttpServletResponse;
 
 import jakarta.validation.Valid;
 import java.util.List;
+import java.util.Set;
 
 @Tag(name = "对象空间管理")
 @RestController
@@ -39,6 +41,11 @@ public class OntologySpaceController {
     private final OntologySpaceService ontologySpaceService;
 
     private final ObjectMapper objectMapper;
+
+    private static final Set<String> FIELD_LEVEL_CONFLICT_REASONS =
+            Set.of("FIELD_CONFLICT", "DELETED_BY_OTHERS", "DELETE_CONFLICT");
+    private static final Set<String> STATE_CONFLICT_REASONS =
+            Set.of("NAME_CONFLICT", "PROPERTY_DELETE_FORBIDDEN");
 
 
     @GetMapping("/export")
@@ -65,6 +72,17 @@ public class OntologySpaceController {
     }
 
 
+    @PostMapping("/import_to_space")
+    @Operation(summary = "将空间数据导入到已存在的目标空间（覆盖同名对象，保留分类树结构）")
+    public RestResult<List<String>> importOntologySpaceToTarget(
+            @RequestParam(required = true, name = "spaceId") @Parameter(description = "目标空间 ID") Integer spaceId,
+            @RequestParam(required = true, name = "file") MultipartFile file) {
+        var failedOntology = ontologySpaceService.importOntologySpaceToTarget(spaceId, file);
+        return CollectionUtils.isNotEmpty(failedOntology) ?
+                new RestResult<>(ResultCode.ERROR, "对象导入失败", failedOntology) : RestResult.success();
+    }
+
+
     @PostMapping
     @Operation(summary = "创建对象空间")
     public RestResult<Integer> createSpace(@RequestBody @Valid OntologySpaceCreateParam param) {
@@ -73,9 +91,38 @@ public class OntologySpaceController {
     }
 
     @PostMapping("/canvas")
-    @Operation(summary = "画布一键建空间：创建空间并批量创建对象、属性、关系")
+    @Operation(summary = "保存画布：与数据库做三段对比后落库")
     public RestResult<OntologySpaceCanvasCreateVO> createSpaceWithCanvasContent(@RequestBody @Valid OntologySpaceCanvasCreateParam param) {
-        var res = ontologySpaceService.createSpaceWithCanvasContent(param);
+        OntologySpaceCanvasCreateVO res;
+        try {
+            res = ontologySpaceService.createSpaceWithCanvasContent(param);
+        } catch (DataIntegrityViolationException e) {
+            // 极小概率：提交时撞上唯一索引（通常是别人同时改了名），转成冲突而不是 500
+            var conflict = OntologySpaceCanvasCreateVO.CanvasConflict.builder()
+                    .reason("NAME_CONFLICT")
+                    .message("保存时与唯一约束冲突，可能有其他人同时修改了名称，请刷新后重试")
+                    .build();
+            res = OntologySpaceCanvasCreateVO.builder()
+                    .spaceId(param.getSpaceId())
+                    .committed(false)
+                    .saved(OntologySpaceCanvasCreateVO.CanvasSaveSummary.builder().build())
+                    .conflicts(List.of(conflict))
+                    .canvas(param.getSpaceId() == null ? null
+                            : ontologySpaceService.getSpaceCanvasContent(param.getSpaceId()))
+                    .build();
+            return new RestResult<>(ResultCode.DUPLICATION, "画布保存失败，本次未写入任何数据", res);
+        }
+        if (Boolean.FALSE.equals(res.getCommitted())) {
+            // 结构冲突里，重名/删除主键这类是"与现状冲突"，其余是"请求本身不合法"
+            boolean conflictWithState = res.getConflicts().stream()
+                    .filter(c -> !FIELD_LEVEL_CONFLICT_REASONS.contains(c.getReason()))
+                    .allMatch(c -> STATE_CONFLICT_REASONS.contains(c.getReason()));
+            return new RestResult<>(conflictWithState ? ResultCode.DUPLICATION : ResultCode.PARAM_ERROR,
+                    "画布保存失败，存在无法合并的冲突，本次未写入任何数据", res);
+        }
+        if (CollectionUtils.isNotEmpty(res.getConflicts())) {
+            return new RestResult<>(ResultCode.DUPLICATION, "部分内容存在冲突，已保存可合并的修改", res);
+        }
         return RestResult.ofData(res);
     }
 

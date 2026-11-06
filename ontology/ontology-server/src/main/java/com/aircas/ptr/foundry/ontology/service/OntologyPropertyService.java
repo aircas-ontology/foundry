@@ -2,6 +2,7 @@ package com.aircas.ptr.foundry.ontology.service;
 
 import com.aircas.ptr.foundry.ontology.model.param.*;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
+import com.aircas.ptr.foundry.ontology.model.po.PropertyCategory;
 import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -45,6 +46,8 @@ public interface OntologyPropertyService extends IService<OntologyProperty> {
     void createCategory(PropertyCategoryCreateParam param);
 
     PropertyCategoryVO getCategory(String ontologyUniqueIdentifier);
+
+    List<PropertyCategory> getPropertyCategoryList(String ontologyUniqueIdentifier);
 
     void deleteCategory(PropertyCategoryDeleteParam param);
 

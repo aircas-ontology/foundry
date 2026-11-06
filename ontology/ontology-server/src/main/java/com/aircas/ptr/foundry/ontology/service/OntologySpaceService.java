@@ -20,6 +20,14 @@ public interface OntologySpaceService extends IService<OntologySpace> {
 
     Integer createSpace(OntologySpaceCreateParam param);
 
+    /**
+     * 保存画布：把请求里的完整画布与 {@code base}（加载时 GET 返回的快照）和数据库现状做三段对比，
+     * 字段级合并后落库。
+     *
+     * <p>字段级冲突不覆盖他人修改，其它字段继续保存（{@code committed=true}）；
+     * 结构级冲突（重名、改 apiName、改关系端点等）整单不写（{@code committed=false}）。
+     * 不传 {@code base} 时为纯新增模式，所有项都不能带 uniqueIdentifier。</p>
+     */
     OntologySpaceCanvasCreateVO createSpaceWithCanvasContent(OntologySpaceCanvasCreateParam param);
 
     /**
@@ -54,6 +62,15 @@ public interface OntologySpaceService extends IService<OntologySpace> {
     void deleteSpace(Integer spaceId);
 
     List<String> importOntologySpace(MultipartFile file);
+
+    /**
+     * 将空间数据导入到已存在的目标空间（不创建新空间，覆盖目标空间中同名/同API的对象）。
+     *
+     * @param targetSpaceId 目标空间ID
+     * @param file          导出文件（完整空间结构）
+     * @return 导入失败的对象名称列表
+     */
+    List<String> importOntologySpaceToTarget(Integer targetSpaceId, MultipartFile file);
 
     /**
      * 导出指定对象空间（含分类树、全部对象 schema，按 exportType 决定是否含实例数据）。

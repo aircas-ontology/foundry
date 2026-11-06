@@ -12,6 +12,7 @@ import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkGraphVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkInfoVO;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkObjectsVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaInfoVO;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyActionLinkMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyLinkCategoryMapper;
@@ -124,6 +125,23 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
     }
 
     @Override
+    public OntologyLinkObjectsVO getLinkObjectsByUniqueIdentifier(String uniqueIdentifier) {
+        var link = getOne(new LambdaQueryWrapper<OntologyLinkGroup>().eq(OntologyLinkGroup::getUniqueIdentifier, uniqueIdentifier));
+        PreconditionUtils.checkArgument(link != null, "关系不存在：" + uniqueIdentifier);
+        var ontologyIds = Lists.newArrayList(link.getOntologyUniqueIdentifierFrom(), link.getOntologyUniqueIdentifierTo());
+        var metaMap = ontologyMetaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>().in(OntologyMeta::getUniqueIdentifier, ontologyIds))
+                .stream().collect(Collectors.toMap(OntologyMeta::getUniqueIdentifier, v -> v));
+        var from = metaMap.get(link.getOntologyUniqueIdentifierFrom());
+        var to = metaMap.get(link.getOntologyUniqueIdentifierTo());
+        return OntologyLinkObjectsVO.builder()
+                .uniqueIdentifier(link.getUniqueIdentifier())
+                .name(link.getName())
+                .fromObject(from == null ? null : DataConverter.convert(from))
+                .toObject(to == null ? null : DataConverter.convert(to))
+                .build();
+    }
+
+    @Override
     public List<OntologyLinkInfoVO> getLinksByGroupId(String groupId) {
         if (StringUtils.isEmpty(groupId)) {
             var links = list(new LambdaQueryWrapper<>());
@@ -156,6 +174,7 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
         if (categoryId != null) {
             queryWrapper.eq(OntologyLinkGroup::getCategoryId, categoryId);
         }
+        queryWrapper.orderByAsc(OntologyLinkGroup::getId);
         var links = list(queryWrapper);
         if (CollectionUtils.isEmpty(links)) {
             return Lists.newArrayList();
@@ -246,6 +265,7 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
                 query.eq(OntologyLinkGroup::getOntologyUniqueIdentifierTo, ontologyUniqueIdentifier);
                 break;
         }
+        query.orderByAsc(OntologyLinkGroup::getId);
 
         var links = list(query);
 

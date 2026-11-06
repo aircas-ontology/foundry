@@ -775,31 +775,44 @@ public class EntityServiceImpl implements EntityService {
             var visibilityWindows = param.getVisibilityWindows();
             var status = param.getStatus();
             // 行为定义的「修改」只改填了的那几项，没填的保留边上原值，避免改状态顺手把已有时段抹掉
-            if (Boolean.TRUE.equals(param.getPartialUpdate())) {
-                if (CollectionUtils.isEmpty(visibilityWindows)) {
+            var partialUpdate = Boolean.TRUE.equals(param.getPartialUpdate());
+            var keepWindows = partialUpdate && CollectionUtils.isEmpty(visibilityWindows);
+            if (partialUpdate) {
+                if (keepWindows) {
                     visibilityWindows = relation.getTimeWindows();
                 }
                 if (status == null) {
                     status = relation.getStatus();
                 }
             }
-            Date startTime = null, endTime = null;
-            if (CollectionUtils.isNotEmpty(visibilityWindows)) {
-                startTime = visibilityWindows.get(0).getStartTime();
-                endTime = visibilityWindows.get(0).getEndTime();
+            // 一级起止时间是「最近的一个存续窗口」，数组存全部窗口；没改时段就保留边上原值
+            Date startTime;
+            Date endTime;
+            if (keepWindows) {
+                startTime = relation.getStartTime();
+                endTime = relation.getEndTime();
+            } else {
+                var nearest = nearestWindow(visibilityWindows);
+                startTime = nearest == null ? null : nearest.getStartTime();
+                endTime = nearest == null ? null : nearest.getEndTime();
             }
             relationRepository.updateRelation(startTime, endTime, visibilityWindows, status, relation.getId());
         }
         //插入新的实体关系（实体节点已存在）
         else {
-            var fromNode = nodeRepository.findByOntologyUniqIdentifierAndPrimaryKey(link.getOntologyUniqueIdentifierFrom(), param.getEntityPrimaryKeyFrom());
-            var toNode = nodeRepository.findByOntologyUniqIdentifierAndPrimaryKey(link.getOntologyUniqueIdentifierTo(), param.getEntityPrimaryKeyTo());
+            var fromPk = normalizePrimaryKey(param.getEntityPrimaryKeyFrom());
+            var toPk = normalizePrimaryKey(param.getEntityPrimaryKeyTo());
+            var fromNode = nodeRepository.findByOntologyUniqIdentifierAndPrimaryKey(link.getOntologyUniqueIdentifierFrom(), fromPk);
+            var toNode = nodeRepository.findByOntologyUniqIdentifierAndPrimaryKey(link.getOntologyUniqueIdentifierTo(), toPk);
             PreconditionUtils.checkArgument(fromNode != null && toNode != null, "实体节点不存在");
+            var nearest = nearestWindow(param.getVisibilityWindows());
             relation = EntityRelation.builder()
                     .ontologyLinkId(link.getUniqueIdentifier())
                     .from(fromNode)
                     .to(toNode)
                     .status(param.getStatus())
+                    .startTime(nearest == null ? null : nearest.getStartTime())
+                    .endTime(nearest == null ? null : nearest.getEndTime())
                     .timeWindows(param.getVisibilityWindows())
                     .createTime(new Date())
                     .updateTime(new Date())
@@ -808,6 +821,30 @@ public class EntityServiceImpl implements EntityService {
                     .build();
             relationRepository.save(relation);
         }
+    }
+
+    /**
+     * 取「最近的一个存续窗口」：未结束的窗口里开始最早的那个（正在生效的窗口自然排第一）；
+     * 全部窗口都已结束时取最晚结束的那个。
+     * <p>
+     * 图库边上的一级 startTime/endTime 用它，便于按单个时间区间过滤；
+     * 完整的多组时段仍留在 timeWindows 数组里，数组含被提到一级字段的那一段。
+     */
+    private VisibilityWindow nearestWindow(List<VisibilityWindow> windows) {
+        if (CollectionUtils.isEmpty(windows)) {
+            return null;
+        }
+        var now = new Date();
+        var nearest = windows.stream()
+                .filter(w -> w.getStartTime() != null && w.getEndTime() != null && !w.getEndTime().before(now))
+                .min(Comparator.comparing(VisibilityWindow::getStartTime))
+                .orElse(null);
+        if (nearest != null) {
+            return nearest;
+        }
+        return windows.stream().filter(w -> w.getEndTime() != null)
+                .max(Comparator.comparing(VisibilityWindow::getEndTime))
+                .orElse(null);
     }
 
 
@@ -927,20 +964,32 @@ public class EntityServiceImpl implements EntityService {
     }
 
     public List<List<EntityPropertyDetailVO>> getLinkedEntities(ActionContextInfoDTO infoDTO) {
+        // 不绑算子的行为只动一行属性或一条指定的边，遍历对端全部实例既无意义也昂贵
+        if (infoDTO.getFunctionDetailVO() == null) {
+            return null;
+        }
         if (infoDTO.getLink() != null) {
-            //如果行为影响关系，找到关联的对象
-            var linkedOntology = linkGroupMapper.selectOne(new LambdaQueryWrapper<OntologyLinkGroup>().eq(OntologyLinkGroup::getUniqueIdentifier, infoDTO.getLink().getOntologyLinkUniqIdentifier()))
-                    .getOntologyUniqueIdentifierTo();
+            //如果行为影响关系，找到关系另一端的对象
+            var linkGroup = linkGroupMapper.selectOne(new LambdaQueryWrapper<OntologyLinkGroup>()
+                    .eq(OntologyLinkGroup::getUniqueIdentifier, infoDTO.getLink().getOntologyLinkUniqIdentifier()));
+            PreconditionUtils.checkArgument(linkGroup != null, "无效的对象关系：" + infoDTO.getLink().getOntologyLinkUniqIdentifier(), HttpStatus.BAD_REQUEST);
+            var linkedOntology = counterpartOntology(linkGroup, infoDTO.getEntityActionExecuteParam().getOntologyUniqueIdentifier());
             infoDTO.setLinkToOntologyUniqueIdentifier(linkedOntology);
-            //如果已指定单个实体
+            //如果已指定单个实体：优先用关系对端专用参数，其次取各对象实例主键 map 中对端的那个
             var param = infoDTO.getEntityActionExecuteParam();
+            var linkedPrimaryKey = param.getLinkedEntityPrimaryKey();
+            if (linkedPrimaryKey == null && MapUtils.isNotEmpty(param.getEntityPrimaryKeys())) {
+                linkedPrimaryKey = param.getEntityPrimaryKeys().get(linkedOntology);
+            }
             Page<EntityInfoVO> entities;
             if (StringUtils.isNotEmpty(param.getLinkedOntologyUniqueIdentifier())
                     && param.getLinkedEntityPrimaryKey() != null) {
                 PreconditionUtils.checkArgument(StringUtils.equals(linkedOntology, param.getLinkedOntologyUniqueIdentifier()), "关联的对象id不一致");
+            }
+            if (linkedPrimaryKey != null) {
                 var primaryProp = propertyMapper.selectOne(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getIsPrimaryKey, 1)
                         .eq(OntologyProperty::getOntologyUniqueIdentifier, linkedOntology));
-                entities = getEntities(linkedOntology, primaryProp.getDisplayName(), param.getLinkedEntityPrimaryKey(), 1, Integer.MAX_VALUE, false);
+                entities = getEntities(linkedOntology, primaryProp.getDisplayName(), linkedPrimaryKey, 1, Integer.MAX_VALUE, false);
             } else {
                 //否则获取关联对象下的所有实体详情
                 entities = getEntities(linkedOntology, "", "", 1, Integer.MAX_VALUE, false);
@@ -955,23 +1004,50 @@ public class EntityServiceImpl implements EntityService {
     }
 
 
+    /**
+     * 关系的对端对象：行为挂在 From 侧时对端是 To，挂在 To 侧时对端是 From。
+     * 判断不出挂在哪一侧时沿用 To，与改造前的取值一致。
+     */
+    public String counterpartOntology(OntologyLinkGroup linkGroup, String selfOntology) {
+        if (StringUtils.isNotEmpty(selfOntology)
+                && StringUtils.equals(selfOntology, linkGroup.getOntologyUniqueIdentifierTo())) {
+            return linkGroup.getOntologyUniqueIdentifierFrom();
+        }
+        return linkGroup.getOntologyUniqueIdentifierTo();
+    }
+
+
     public ActionContextInfoDTO initActionContextInfoDTO(EntityActionExecuteParam param) {
 
-        var actionDetailVO = actionService.getActionByApi(param.getActionApi());
+        var actionDetailVO = actionService.getActionByApi(param.getOntologySpaceId(), param.getActionApi());
         // 行为树与行为同表，但它不绑算子也不写单条关系，按单个行为执行会报"算子不存在"这种误导提示
         PreconditionUtils.checkArgument(actionDetailVO.getActionKind() != ActionKindEnum.TREE,
                 "行为树不能作为单个行为执行：" + param.getActionApi(), HttpStatus.BAD_REQUEST);
-        // 算子 api 跨空间允许重名，执行必须按行为所属空间取，否则会跑到其他空间的同名算子上
-        var functionDetailVO = functionService.getFunctionDetailByApi(actionDetailVO.getOntologySpaceId(),
+        // 属性值、实例关系行为不绑算子，上下文里没有算子定义，执行时按行为定义直接落库；
+        // 算子 api 跨空间允许重名，取算子定义必须按行为所属空间，否则会跑到其他空间的同名算子上
+        var functionDetailVO = StringUtils.isEmpty(actionDetailVO.getFunctionApi()) ? null
+                : functionService.getFunctionDetailByApi(actionDetailVO.getOntologySpaceId(),
                 actionDetailVO.getFunctionApi(), null);
         var link = actionDetailVO.getLinkMapping();
         var mappings = actionDetailVO.getMappingIns();
         //src对象属性
         var ontologyProperties = propertyMapper.selectList(new LambdaQueryWrapper<OntologyProperty>()
                 .eq(OntologyProperty::getOntologyUniqueIdentifier, param.getOntologyUniqueIdentifier()));
+        // 应用行为的入参/出参可能指向其他对象：按映射收集涉及对象，补全各自属性与实例主键
+        var entityPrimaryKeys = resolveEntityPrimaryKeys(param);
+        var objectIds = collectMappingObjectIds(actionDetailVO);
+        if (StringUtils.isNotEmpty(param.getOntologyUniqueIdentifier())) {
+            objectIds.add(param.getOntologyUniqueIdentifier());
+        }
+        objectIds.addAll(entityPrimaryKeys.keySet());
+        var objectProperties = objectIds.isEmpty() ? new LinkedHashMap<String, List<OntologyProperty>>()
+                : propertyMapper.selectList(new LambdaQueryWrapper<OntologyProperty>()
+                                .in(OntologyProperty::getOntologyUniqueIdentifier, objectIds))
+                        .stream().collect(Collectors.groupingBy(OntologyProperty::getOntologyUniqueIdentifier));
 
         //构造函数的输入参数
-        var functionInputParams = functionDetailVO.getParams().stream()
+        var functionInputParams = functionDetailVO == null ? Lists.<FunctionParameterVO>newArrayList()
+                : functionDetailVO.getParams().stream()
                 .filter(v -> v.getCategory().equals(FunctionParamCategoryEnum.INPUT))
                 .sorted(Comparator.comparing(v -> v.getParamOrder()))
                 .collect(Collectors.toList());
@@ -983,12 +1059,97 @@ public class EntityServiceImpl implements EntityService {
                 .link(link)
                 .mappings(mappings)
                 .ontologyProperties(ontologyProperties)
+                .entityPrimaryKeys(entityPrimaryKeys)
+                .objectProperties(objectProperties)
                 .functionInputParams(functionInputParams)
                 .entityActionExecuteParam(param)
                 .build();
 
         return infoDTO;
 
+    }
+
+    /** 合并显式传入的各对象实例主键与单对象简写，显式 map 优先 */
+    private Map<String, Object> resolveEntityPrimaryKeys(EntityActionExecuteParam param) {
+        Map<String, Object> keys = new LinkedHashMap<>();
+        if (MapUtils.isNotEmpty(param.getEntityPrimaryKeys())) {
+            keys.putAll(param.getEntityPrimaryKeys());
+        }
+        if (StringUtils.isNotEmpty(param.getOntologyUniqueIdentifier()) && param.getEntityPrimaryKey() != null) {
+            keys.putIfAbsent(param.getOntologyUniqueIdentifier(), param.getEntityPrimaryKey());
+        }
+        if (StringUtils.isNotEmpty(param.getLinkedOntologyUniqueIdentifier()) && param.getLinkedEntityPrimaryKey() != null) {
+            keys.putIfAbsent(param.getLinkedOntologyUniqueIdentifier(), param.getLinkedEntityPrimaryKey());
+        }
+        return keys;
+    }
+
+    /** 从行为映射收集需要实例数据的对象：属性/对象/List 来源的入参，以及写入对象属性的出参 */
+    private Set<String> collectMappingObjectIds(OntologyActionDetailVO detail) {
+        Set<String> objectIds = new LinkedHashSet<>();
+        if (detail == null || CollectionUtils.isEmpty(detail.getMappingIns())) {
+            return objectIds;
+        }
+        for (var mapping : detail.getMappingIns()) {
+            var sourceType = mapping.getSourceType() == null ? ActionParamSourceEnum.PROPERTY : mapping.getSourceType();
+            var inputNeedsInstance = mapping.getCategory() == FunctionParamCategoryEnum.INPUT
+                    && (sourceType == ActionParamSourceEnum.PROPERTY
+                    || sourceType == ActionParamSourceEnum.OBJECT
+                    || sourceType == ActionParamSourceEnum.LIST);
+            var outputWritesProperty = mapping.getCategory() == FunctionParamCategoryEnum.OUTPUT
+                    && mapping.getOutputMode() == ActionOutputModeEnum.WRITE_PROPERTY;
+            if ((inputNeedsInstance || outputWritesProperty) && StringUtils.isNotEmpty(mapping.getOntologyUniqueIdentifier())) {
+                objectIds.add(mapping.getOntologyUniqueIdentifier());
+            }
+        }
+        return objectIds;
+    }
+
+    /**
+     * 取某个对象本次执行选中的实例主键：关系对端优先用本次遍历到的实例，
+     * 其余对象取显式传入的 map，最后回退到单对象参数。
+     */
+    private Object resolveEntityPrimaryKey(ActionContextInfoDTO context, EntityActionExecuteParam param, String objectId) {
+        if (StringUtils.equals(objectId, context.getLinkToOntologyUniqueIdentifier())
+                && context.getLinkEntityPrimaryKey() != null) {
+            return context.getLinkEntityPrimaryKey();
+        }
+        var keys = context.getEntityPrimaryKeys();
+        if (keys != null && keys.get(objectId) != null) {
+            return keys.get(objectId);
+        }
+        if (param != null && StringUtils.equals(objectId, param.getOntologyUniqueIdentifier())
+                && param.getEntityPrimaryKey() != null) {
+            return param.getEntityPrimaryKey();
+        }
+        return null;
+    }
+
+    /**
+     * 按映射涉及的对象逐个加载实例属性，属性id作为key合并。
+     * 缺实例时直接报出对象，避免把 null 静默传给算子或回写。
+     */
+    private Map<String, List<Object>> loadEntityDetailMap(ActionContextInfoDTO context, EntityActionExecuteParam param,
+                                                          String excludeObjectId) {
+        var details = Lists.<EntityPropertyDetailVO>newArrayList();
+        var objectIds = collectMappingObjectIds(context.getActionDetailVO());
+        if (param != null && StringUtils.isNotEmpty(param.getOntologyUniqueIdentifier())) {
+            objectIds.add(param.getOntologyUniqueIdentifier());
+        }
+        for (var objectId : objectIds) {
+            // 关系对端由本次遍历到的实例提供，不再按选中的单个实例取
+            if (StringUtils.equals(objectId, excludeObjectId)) {
+                continue;
+            }
+            var primaryKey = resolveEntityPrimaryKey(context, param, objectId);
+            PreconditionUtils.checkNotNull(primaryKey,
+                    "对象[" + objectId + "]未选择实例数据，无法执行行为："
+                            + (context.getActionDetailVO() == null ? "" : context.getActionDetailVO().getActionApi()),
+                    HttpStatus.BAD_REQUEST);
+            details.addAll(getEntityDetail(objectId, primaryKey));
+        }
+        return details.stream().collect(Collectors.toMap(EntityPropertyDetailVO::getPropertyUniqIdentifier,
+                EntityPropertyDetailVO::getPropertyValues, (list1, list2) -> list1));
     }
 
 
@@ -1002,13 +1163,17 @@ public class EntityServiceImpl implements EntityService {
         var functionDetailVO = infoDTO.getFunctionDetailVO();
         var ontologyProperties = infoDTO.getOntologyProperties();
 
+        // 不绑算子的行为按定义对单个实体落库，不进算子调用与结果回写链路
+        if (functionDetailVO == null) {
+            return actionService.executeBaseAction(param, infoDTO);
+        }
+
         List<String> executeResult = Lists.newArrayList();
 
         //存在关联关系,实体数据必须存在
         if (CollectionUtils.isNotEmpty(linkedEntities)) {
-            //获取源对象实体属性详情
-            var srcEntityDetailMap = getEntityDetail(param.getOntologyUniqueIdentifier(), param.getEntityPrimaryKey())
-                    .stream().collect(Collectors.toMap(v -> v.getPropertyUniqIdentifier(), v -> v.getPropertyValues()));
+            //获取映射涉及对象的实体属性详情；对端实例由下面的遍历逐个提供
+            var srcEntityDetailMap = loadEntityDetailMap(infoDTO, param, linkedOntology);
 
             //和关联对象下的所有实体计算关系
             var taskResults = taskProcessor.processTask(linkedEntities,
@@ -1033,6 +1198,8 @@ public class EntityServiceImpl implements EntityService {
                                         .actionDetailVO(actionDetailVO)
                                         .functionDetailVO(functionDetailVO)
                                         .ontologyProperties(ontologyProperties)
+                                        .entityPrimaryKeys(infoDTO.getEntityPrimaryKeys())
+                                        .objectProperties(infoDTO.getObjectProperties())
                                         .entityActionExecuteParam(param)
                                         .link(link)
                                         .linkEntityPrimaryKey(linkedEntityDetail.get(0).getEntityPrimaryKey())
@@ -1059,9 +1226,8 @@ public class EntityServiceImpl implements EntityService {
 
         //无关联关系
         else {
-            //获取源对象实体属性详情
-            var srcEntityDetailMap = getEntityDetail(param.getOntologyUniqueIdentifier(), param.getEntityPrimaryKey())
-                    .stream().collect(Collectors.toMap(v -> v.getPropertyUniqIdentifier(), v -> v.getPropertyValues()));
+            //获取映射涉及对象的实体属性详情
+            var srcEntityDetailMap = loadEntityDetailMap(infoDTO, param, null);
             //函数调用
             var contextInfoDTO = ActionContextInfoDTO.builder()
                     .functionInputParams(functionInputParams)
@@ -1071,6 +1237,8 @@ public class EntityServiceImpl implements EntityService {
                     .actionDetailVO(actionDetailVO)
                     .functionDetailVO(functionDetailVO)
                     .ontologyProperties(ontologyProperties)
+                    .entityPrimaryKeys(infoDTO.getEntityPrimaryKeys())
+                    .objectProperties(infoDTO.getObjectProperties())
                     .entityActionExecuteParam(param)
                     .build();
             var functionResultJson = callFunction(contextInfoDTO);
@@ -1289,10 +1457,9 @@ public class EntityServiceImpl implements EntityService {
     @SneakyThrows
     @Override
     public void updateEntityPropertyAndRelation(String jsonString, ActionContextInfoDTO actionContext) {
-        // 输出方式为仅返回结果时不回写属性；关系边只有应用行为才落，基础行为（含基础算子）不写库
-        if (actionContext.getActionDetailVO().getOutputMode() != ActionOutputModeEnum.RESULT_ONLY) {
-            writeFunctionOutputToProperties(jsonString, actionContext);
-        }
+        // 按行级 outputMode 回写：只有标记为 WRITE_PROPERTY 的出参行才写回属性
+        writeFunctionOutputToProperties(jsonString, actionContext);
+        // 关系边只有应用行为才落，基础行为（含基础算子）不写库
         if (actionContext.getActionDetailVO().getActionKind() != ActionKindEnum.BASE) {
             updateEntityRelationByFunction(jsonString, actionContext);
         }
@@ -1308,49 +1475,79 @@ public class EntityServiceImpl implements EntityService {
                 .map(v -> v.getParamId())
                 .collect(Collectors.toSet());
 
+        // 按行级 outputMode 过滤：只有标记 WRITE_PROPERTY 的出参行才回写
         var output = actionContext.getMappings().stream()
                 .filter(m -> m.getFunctionParamId() != null && outputParamIds.contains(m.getFunctionParamId()))
+                .filter(m -> m.getOutputMode() == ActionOutputModeEnum.WRITE_PROPERTY)
                 .filter(m -> StringUtils.isNotEmpty(m.getFunctionParamExpression()))
                 .collect(Collectors.toList());
-        //primary datasource
-        var primaryDatasource = actionContext.getOntologyProperties().stream().filter(v -> v.getIsPrimaryKey() == 1).findFirst().get().getDatasourceId();
-        var propMap = actionContext.getOntologyProperties().stream().collect(Collectors.toMap(v -> v.getUniqueIdentifier(), v -> v));
-        List<EntityUpdateParam.ColumnUpdate> columnUpdates = Lists.newArrayList();
-        Map<String, Map<String, Object>> insertMap = Maps.newHashMap();
+        if (output.isEmpty()) {
+            return;
+        }
+        // 出参行可以指向不同对象：属性表按对象合并，回写时各用自己的主键
+        var propMap = new LinkedHashMap<String, OntologyProperty>();
+        if (CollectionUtils.isNotEmpty(actionContext.getOntologyProperties())) {
+            actionContext.getOntologyProperties().forEach(p -> propMap.putIfAbsent(p.getUniqueIdentifier(), p));
+        }
+        if (MapUtils.isNotEmpty(actionContext.getObjectProperties())) {
+            actionContext.getObjectProperties().values()
+                    .forEach(list -> list.forEach(p -> propMap.putIfAbsent(p.getUniqueIdentifier(), p)));
+        }
+        var primaryPropByObject = propMap.values().stream()
+                .filter(v -> v.getIsPrimaryKey() == 1 && StringUtils.isNotEmpty(v.getOntologyUniqueIdentifier()))
+                .collect(Collectors.toMap(OntologyProperty::getOntologyUniqueIdentifier, v -> v, (a, b) -> a));
+        var param = actionContext.getEntityActionExecuteParam();
+        Map<String, List<EntityUpdateParam.ColumnUpdate>> columnUpdatesByObject = new LinkedHashMap<>();
+        Map<String, Map<String, Map<String, Object>>> insertMap = new LinkedHashMap<>();
         output.stream().forEach(out -> {
             Object actualValue = JsonPath.using(safeConfig).parse(jsonString).read(out.getFunctionParamExpression());
             var prop = propMap.get(out.getPropertyUniqueIdentifier());
+            if (prop == null) {
+                log.warn("行为写回属性不存在，跳过：{}", out.getPropertyUniqueIdentifier());
+                return;
+            }
+            var objectId = StringUtils.isNotEmpty(out.getOntologyUniqueIdentifier())
+                    ? out.getOntologyUniqueIdentifier() : prop.getOntologyUniqueIdentifier();
+            var primaryProp = primaryPropByObject.get(objectId);
+            PreconditionUtils.checkNotNull(primaryProp,
+                    "对象[" + objectId + "]未配置主键属性，无法写回", HttpStatus.BAD_REQUEST);
+            PreconditionUtils.checkNotNull(resolveEntityPrimaryKey(actionContext, param, objectId),
+                    "对象[" + objectId + "]未选择实例数据，无法写回", HttpStatus.BAD_REQUEST);
             //主数据源列
-            if (prop.getDatasourceId().equals(primaryDatasource)) {
-                columnUpdates.add(EntityUpdateParam.ColumnUpdate.builder()
-                        .datasourceColumnName(prop.getDatasourceColumnName())
-                        .columnValue(actualValue)
-                        .propertyUniqIdentifier(out.getPropertyUniqueIdentifier())
-                        .build());
+            if (prop.getDatasourceId().equals(primaryProp.getDatasourceId())) {
+                columnUpdatesByObject.computeIfAbsent(objectId, key -> Lists.newArrayList())
+                        .add(EntityUpdateParam.ColumnUpdate.builder()
+                                .datasourceColumnName(prop.getDatasourceColumnName())
+                                .columnValue(actualValue)
+                                .propertyUniqIdentifier(out.getPropertyUniqueIdentifier())
+                                .build());
             } else {
-                var map = insertMap.getOrDefault(prop.getDatasourceId(), new HashMap<String, Object>());
-                map.put(prop.getDatasourceColumnName(), actualValue);
-                insertMap.put(prop.getDatasourceId(), map);
+                insertMap.computeIfAbsent(objectId, key -> new LinkedHashMap<>())
+                        .computeIfAbsent(prop.getDatasourceId(), key -> new HashMap<>())
+                        .put(prop.getDatasourceColumnName(), actualValue);
             }
 
         });
-        //主数据源数据update
-        if (CollectionUtils.isNotEmpty(columnUpdates)) {
+        //主数据源数据update：逐对象用自己的主键
+        columnUpdatesByObject.forEach((objectId, columnUpdates) -> {
+            var primaryProp = primaryPropByObject.get(objectId);
             updateProperty(EntityUpdateParam.builder()
                     .columnUpdates(columnUpdates)
-                    .primaryKeyValue(actionContext.getEntityActionExecuteParam().getEntityPrimaryKey())
-                    .datasourceId(primaryDatasource)
+                    .primaryKeyValue(resolveEntityPrimaryKey(actionContext, param, objectId))
+                    .datasourceId(primaryProp.getDatasourceId())
                     .build());
-        }
-        //其他数据源数据insert
+        });
+        //其他数据源数据insert：逐对象用自己的主键与主键表结构
         if (MapUtils.isNotEmpty(insertMap)) {
-            var pkProp = actionContext.getOntologyProperties().stream().filter(v -> v.getIsPrimaryKey() == 1).findFirst().get();
-            insertMap.entrySet().forEach(entry -> {
-                //查询关联建，补全columns
-                var tableName = entry.getKey();
-                var mapping = tableFieldMappingMapper.selectByTargetTable(pkProp.getDatasourceSchema(), tableName);
-                entry.getValue().put(mapping.getTargetColumnName(), actionContext.getEntityActionExecuteParam().getEntityPrimaryKey());
-                objectMapper.insertObject(pkProp.getDatasourceSchema(), tableName, entry.getValue());
+            insertMap.forEach((objectId, byDatasource) -> {
+                var primaryProp = primaryPropByObject.get(objectId);
+                var primaryKey = resolveEntityPrimaryKey(actionContext, param, objectId);
+                byDatasource.forEach((tableName, columns) -> {
+                    //查询关联建，补全columns
+                    var mapping = tableFieldMappingMapper.selectByTargetTable(primaryProp.getDatasourceSchema(), tableName);
+                    columns.put(mapping.getTargetColumnName(), primaryKey);
+                    objectMapper.insertObject(primaryProp.getDatasourceSchema(), tableName, columns);
+                });
             });
         }
     }
@@ -1376,22 +1573,31 @@ public class EntityServiceImpl implements EntityService {
         }
 
         //根据函数的输出结果更新实体关系
-        EntityRelation relation = relationRepository.queryRelationByFromNodeAndToNode(actionContext.getEntityActionExecuteParam().getOntologyUniqueIdentifier(),
-                actionContext.getEntityActionExecuteParam().getEntityPrimaryKey(),
-                actionContext.getLinkToOntologyUniqueIdentifier(),
-                actionContext.getLinkEntityPrimaryKey(),
-                actionContext.getLink().getOntologyLinkUniqIdentifier());
+        var linkGroupId = actionContext.getLink().getOntologyLinkUniqIdentifier();
+        var link = linkGroupMapper.selectOne(new LambdaQueryWrapper<OntologyLinkGroup>().eq(OntologyLinkGroup::getUniqueIdentifier, linkGroupId));
+        PreconditionUtils.checkNotNull(link, "无效的对象关系：" + linkGroupId, HttpStatus.BAD_REQUEST);
+        // 边按图库里的 From/To 定向：行为对象挂在 To 侧时本端主键落在 To 上，不能一律当 From
+        var selfIsFrom = !StringUtils.equals(actionContext.getEntityActionExecuteParam().getOntologyUniqueIdentifier(),
+                link.getOntologyUniqueIdentifierTo());
+        // 本端主键同样按对象解析：只传各对象实例主键 map 时也能拿到本端实例
+        var selfPrimaryKey = resolveEntityPrimaryKey(actionContext, actionContext.getEntityActionExecuteParam(),
+                actionContext.getEntityActionExecuteParam().getOntologyUniqueIdentifier());
+        var counterpartPrimaryKey = actionContext.getLinkEntityPrimaryKey();
+        var primaryKeyFrom = selfIsFrom ? selfPrimaryKey : counterpartPrimaryKey;
+        var primaryKeyTo = selfIsFrom ? counterpartPrimaryKey : selfPrimaryKey;
+
+        EntityRelation relation = relationRepository.queryRelationByFromNodeAndToNode(link.getOntologyUniqueIdentifierFrom(),
+                primaryKeyFrom, link.getOntologyUniqueIdentifierTo(), primaryKeyTo, linkGroupId);
 
         if (relation == null) {
-            var link = linkGroupMapper.selectOne(new LambdaQueryWrapper<OntologyLinkGroup>().eq(OntologyLinkGroup::getUniqueIdentifier, actionContext.getLink().getOntologyLinkUniqIdentifier()));
-
-            var fromNode = nodeRepository.findByOntologyUniqIdentifierAndPrimaryKey(link.getOntologyUniqueIdentifierFrom(), actionContext.getEntityActionExecuteParam().getEntityPrimaryKey());
-            var toNode = nodeRepository.findByOntologyUniqIdentifierAndPrimaryKey(link.getOntologyUniqueIdentifierTo(), actionContext.getLinkEntityPrimaryKey());
+            var fromPk = normalizePrimaryKey(primaryKeyFrom);
+            var toPk = normalizePrimaryKey(primaryKeyTo);
+            var fromNode = nodeRepository.findByOntologyUniqIdentifierAndPrimaryKey(link.getOntologyUniqueIdentifierFrom(), fromPk);
+            var toNode = nodeRepository.findByOntologyUniqIdentifierAndPrimaryKey(link.getOntologyUniqueIdentifierTo(), toPk);
             if (fromNode == null || toNode == null) {
                 //图库里的节点可能被清理过，缺端点时无法建边
                 log.warn("行为函数实例关系边落位跳过：端点节点不存在，link={}, fromPk={}, toPk={}",
-                        link.getUniqueIdentifier(), actionContext.getEntityActionExecuteParam().getEntityPrimaryKey(),
-                        actionContext.getLinkEntityPrimaryKey());
+                        link.getUniqueIdentifier(), fromPk, toPk);
             } else {
                 relationRepository.save(EntityRelation.builder()
                         .ontologyLinkId(link.getUniqueIdentifier())
@@ -1560,7 +1766,20 @@ public class EntityServiceImpl implements EntityService {
      * 与 {@link #syncNodes} 的转换口径保持一致，否则同一实例会被建出重复节点。
      */
     private Object normalizePrimaryKey(Object primaryKeyValue) {
-        return primaryKeyValue instanceof Integer ? Long.parseLong(primaryKeyValue.toString()) : primaryKeyValue;
+        if (primaryKeyValue == null) {
+            return null;
+        }
+        if (primaryKeyValue instanceof String str) {
+            try {
+                return Long.parseLong(str);
+            } catch (NumberFormatException e) {
+                return str;
+            }
+        }
+        if (primaryKeyValue instanceof Integer) {
+            return Long.parseLong(primaryKeyValue.toString());
+        }
+        return primaryKeyValue;
     }
 
     private EntityNode buildEntityNode(String ontologyUniqueIdentifier, String tableName,

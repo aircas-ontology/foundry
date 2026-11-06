@@ -11,7 +11,6 @@ import lombok.experimental.SuperBuilder;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 
 import java.util.List;
@@ -23,7 +22,7 @@ import java.util.List;
  * 用该子表的表名（这也是数据湖里那张实体表的物理表名）。一次只建一个对象。</p>
  *
  * <p>列的原生类型不在请求体里传——服务端会重新连外部库扫一次，向导页的状态可能已经过期，
- * 以现场扫到的 {@code TYPE_NAME} 为准。</p>
+ * 以现场扫到的 {@code TYPE_NAME} 为准；例外是主表的平台主键 {@code id}，固定为 {@code Int}。</p>
  */
 @Data
 @SuperBuilder
@@ -35,6 +34,11 @@ public class OntologyBuildFromDatasourceParam extends OntologySpaceIdParam {
 
     @Schema(name = "categoryId", description = "对象分类 id（ontology_category.id），不传则不挂分类", example = "1")
     private Integer categoryId;
+
+    @Schema(name = "schemaName", description = "外部库 schema 名（向导第②步 /table/list 选定，本步用它重扫列复核类型）",
+            required = true, example = "public")
+    @NotBlank(message = "schemaName 必填：外部库 schema 名，与步骤②③选定的一致")
+    private String schemaName;
 
     @Schema(name = "displayName", description = "对象名称（中文展示名）", required = true, example = "舰船")
     @NotBlank(message = "displayName is empty")
@@ -48,11 +52,6 @@ public class OntologyBuildFromDatasourceParam extends OntologySpaceIdParam {
 
     @Schema(name = "description", description = "对象描述", example = "我方舰船")
     private String description;
-
-    @Schema(name = "datasourceId", description = "datasource_connection.id，仅用于连外部库复核列与类型",
-            required = true, example = "1")
-    @NotNull(message = "datasourceId is empty")
-    private Integer datasourceId;
 
     @Schema(name = "tables", description = "勾选的表；其中恰好一张 master=true 作为主表，只选一张表时它即主表",
             required = true)
@@ -103,6 +102,10 @@ public class OntologyBuildFromDatasourceParam extends OntologySpaceIdParam {
 
         @Schema(name = "displayName", description = "属性展示名；不传时用列注释，列注释也为空时用列名", example = "舰名")
         private String displayName;
+
+        @Schema(name = "description", description = "属性描述；不传时用外部库列注释，列注释为空时不填",
+                example = "舰船中文名称")
+        private String description;
     }
 
     @Schema(description = "子表 → 主表 外键列对")

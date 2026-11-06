@@ -2,6 +2,7 @@ package com.aircas.ptr.foundry.ontology.service.impl;
 
 import com.aircas.ptr.foundry.common.base.ResultCode;
 import com.aircas.ptr.foundry.common.constant.FunctionParamTypeEnum;
+import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import com.aircas.ptr.foundry.common.util.IdGenerator;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.ontology.converter.DataConverter;
@@ -46,10 +47,16 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -154,6 +161,185 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
             createOntologyByInherit(ontologyCreateParam, meta);
         }
         return meta.getUniqueIdentifier();
+    }
+
+
+    @Override
+    @Transactional(value = "chainedTransactionManager", rollbackFor = Exception.class)
+    public String createOntologyWithProperties(OntologyAssetBuildParam param) {
+        // 对象分类兜底：不传则挂到本空间对象分类根节点
+        if (param.getCategoryId() == null) {
+            param.setCategoryId(getOntologyCategoryRootId(param.getSpaceId()));
+        }
+        var uniqueIdentifier = createOntology(param);
+
+        // 确保 properties 不为 null
+        var properties = param.getProperties();
+        if (properties == null) {
+            properties = new ArrayList<>();
+            param.setProperties(properties);
+        }
+
+        // 无主键时自动生成 id 主键属性
+        boolean hasPrimaryKey = properties.stream()
+                .anyMatch(p -> Boolean.TRUE.equals(p.getIsPrimaryKey()));
+        if (!hasPrimaryKey) {
+            var idProperty = OntologyPropertyCreateParam.builder()
+                    .apiName("id")
+                    .displayName("ID")
+                    .dataType(OntologyDataTypeEnum.Int)
+                    .isPrimaryKey(true)
+                    .isTitleKey(false)
+                    .storageGroup("main")
+                    .description("自动生成的主键")
+                    .build();
+            properties.add(0, idProperty);
+        }
+
+        // 从属性 metadata 推导并创建元数据 schema
+        createMetadataSchemaFromProperties(uniqueIdentifier, properties);
+
+        // 属性分类兜底 + 逐个创建属性
+        var defaultPropertyCategoryId = getPropertyCategoryRootId(uniqueIdentifier);
+        for (var propertyParam : properties) {
+            propertyParam.setOntologyIdentifier(uniqueIdentifier);
+            if (propertyParam.getCategoryId() == null) {
+                propertyParam.setCategoryId(defaultPropertyCategoryId);
+            }
+            ontologyPropertyService.createProperty(propertyParam);
+        }
+        return uniqueIdentifier;
+    }
+
+    /**
+     * 从所有属性的 metadata 推导元数据 schema 并落库。
+     *
+     * <p>算法：递归遍历每个属性的 metadata JsonNode，收集所有路径（如 "密级/来源"），
+     * 然后按 BFS 顺序批量插入 property_metadata_schema 表（顶层 parentId=0，子层 parentId=父行 id）。
+     * 枚举值不推断（schema 叶子 enumValues 为 null），metadata 校验只检查键是否存在、不检查值内容。</p>
+     *
+     * <p>冲突检测：若同一字段在不同属性的 metadata 里既是叶子又是分支（如一个属性是 {"密级":"中"}，
+     * 另一个是 {"密级":{"来源":"雷达"}}），报错回滚。</p>
+     */
+    private void createMetadataSchemaFromProperties(String ontologyUniqueIdentifier,
+                                                     List<OntologyPropertyCreateParam> properties) {
+        Map<String, Set<String>> childrenByParent = new HashMap<>();
+        Set<String> leafPaths = new HashSet<>();
+        Set<String> branchPaths = new HashSet<>();
+
+        for (var propertyParam : properties) {
+            if (propertyParam.getMetadata() == null) continue;
+            collectPaths(propertyParam.getMetadata(), "", childrenByParent, leafPaths, branchPaths);
+        }
+
+        if (childrenByParent.isEmpty()) return;
+
+        // 冲突检测：同一字段不能既是叶子又是分支
+        List<String> conflicts = new ArrayList<>();
+        for (String path : leafPaths) {
+            if (branchPaths.contains(path)) {
+                conflicts.add(path);
+            }
+        }
+        PreconditionUtils.checkArgument(conflicts.isEmpty(),
+                "属性 metadata 结构冲突，同一字段既是叶子又是分支：" + conflicts, HttpStatus.BAD_REQUEST);
+
+        // BFS 插入 schema 行
+        Map<String, Integer> idByPath = new HashMap<>();
+        Queue<String> queue = new LinkedList<>();
+
+        // 顶层（parentId=0）
+        Set<String> topLevelNames = childrenByParent.getOrDefault("", Collections.emptySet());
+        List<PropertyMetadataSchema> topLevelRows = new ArrayList<>();
+        for (String name : topLevelNames) {
+            var row = PropertyMetadataSchema.builder()
+                    .ontologyUniqueIdentifier(ontologyUniqueIdentifier)
+                    .name(name)
+                    .parentId(0)
+                    .path(name)
+                    .build();
+            topLevelRows.add(row);
+            queue.add(name);
+        }
+        if (!topLevelRows.isEmpty()) {
+            propertyMetadataSchemaService.saveBatch(topLevelRows);
+            for (var row : topLevelRows) {
+                idByPath.put(row.getPath(), row.getId());
+            }
+        }
+
+        // 子层（parentId=父行 id）
+        while (!queue.isEmpty()) {
+            String parentPath = queue.poll();
+            Integer parentId = idByPath.get(parentPath);
+            Set<String> childNames = childrenByParent.getOrDefault(parentPath, Collections.emptySet());
+            List<PropertyMetadataSchema> childRows = new ArrayList<>();
+            for (String childName : childNames) {
+                String childPath = parentPath + "/" + childName;
+                var row = PropertyMetadataSchema.builder()
+                        .ontologyUniqueIdentifier(ontologyUniqueIdentifier)
+                        .name(childName)
+                        .parentId(parentId)
+                        .path(childPath)
+                        .build();
+                childRows.add(row);
+                queue.add(childPath);
+            }
+            if (!childRows.isEmpty()) {
+                propertyMetadataSchemaService.saveBatch(childRows);
+                for (var row : childRows) {
+                    idByPath.put(row.getPath(), row.getId());
+                }
+            }
+        }
+    }
+
+    /**
+     * 递归收集 metadata JsonNode 的所有路径。
+     *
+     * @param node              当前节点
+     * @param parentPath        父路径（根为 ""）
+     * @param childrenByParent  父路径 → 子字段名集合
+     * @param leafPaths         叶子路径集合
+     * @param branchPaths       分支路径集合（对象节点）
+     */
+    private void collectPaths(com.fasterxml.jackson.databind.JsonNode node, String parentPath,
+                              Map<String, Set<String>> childrenByParent,
+                              Set<String> leafPaths, Set<String> branchPaths) {
+        if (node.isObject()) {
+            branchPaths.add(parentPath);
+            Iterator<String> fieldNames = node.fieldNames();
+            while (fieldNames.hasNext()) {
+                String fieldName = fieldNames.next();
+                String childPath = parentPath.isEmpty() ? fieldName : parentPath + "/" + fieldName;
+                childrenByParent.computeIfAbsent(parentPath, k -> new HashSet<>()).add(fieldName);
+                collectPaths(node.get(fieldName), childPath, childrenByParent, leafPaths, branchPaths);
+            }
+        } else {
+            leafPaths.add(parentPath);
+        }
+    }
+
+    /**
+     * 查询空间的对象分类树根节点 id，口径同画布落库 getOntologyCategoryRoot。
+     */
+    private Integer getOntologyCategoryRootId(Integer spaceId) {
+        var root = categoryService.getOne(new LambdaQueryWrapper<OntologyCategory>()
+                .eq(OntologyCategory::getOntologySpaceId, spaceId)
+                .eq(OntologyCategory::getParentId, 0));
+        PreconditionUtils.checkNotNull(root, "对象分类根节点不存在", HttpStatus.INTERNAL_SERVER_ERROR);
+        return root.getId();
+    }
+
+    /**
+     * 查询对象的属性分类树根节点 id，口径同画布落库 getPropertyCategoryRoot。
+     */
+    private Integer getPropertyCategoryRootId(String ontologyUniqueIdentifier) {
+        var root = propertyCategoryService.getOne(new LambdaQueryWrapper<PropertyCategory>()
+                .eq(PropertyCategory::getOntologyUniqueIdentifier, ontologyUniqueIdentifier)
+                .eq(PropertyCategory::getParentId, 0));
+        PreconditionUtils.checkNotNull(root, "属性分类根节点不存在", HttpStatus.INTERNAL_SERVER_ERROR);
+        return root.getId();
     }
 
 
@@ -371,6 +557,55 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         lemmaService.remove(new LambdaQueryWrapper<OntologyLemma>().eq(OntologyLemma::getOntologyUniqueIdentifier, ontologyIdentifier));
     }
 
+    @Override
+    @Transactional(value = "mainTransactionManager")
+    public void batchDeleteOntologies(OntologyBatchDeleteParam param) {
+        var spaceId = param.getSpaceId();
+        var identifiers = param.getOntologyIdentifiers();
+
+        // 校验所有对象是否存在且属于该空间
+        var metaList = list(new LambdaQueryWrapper<OntologyMeta>()
+                .in(OntologyMeta::getUniqueIdentifier, identifiers)
+                .eq(OntologyMeta::getOntologySpaceId, spaceId));
+        PreconditionUtils.checkArgument(metaList.size() == identifiers.size(),
+                "部分对象不存在或不属于该空间", ResultCode.PARAM_ERROR, HttpStatus.BAD_REQUEST);
+
+        // 批量删除属性分类
+        propertyCategoryService.remove(new LambdaQueryWrapper<PropertyCategory>()
+                .in(PropertyCategory::getOntologyUniqueIdentifier, identifiers));
+
+        // 批量删除属性元数据 schema
+        propertyMetadataSchemaService.remove(new LambdaQueryWrapper<PropertyMetadataSchema>()
+                .in(PropertyMetadataSchema::getOntologyUniqueIdentifier, identifiers));
+
+        // 批量删除属性
+        ontologyPropertyService.remove(new LambdaQueryWrapper<OntologyProperty>()
+                .in(OntologyProperty::getOntologyUniqueIdentifier, identifiers));
+
+        // 批量删除关系（作为源或目标）
+        linkService.remove(new LambdaQueryWrapper<OntologyLinkGroup>()
+                .in(OntologyLinkGroup::getOntologyUniqueIdentifierFrom, identifiers).or()
+                .in(OntologyLinkGroup::getOntologyUniqueIdentifierTo, identifiers));
+
+        // 批量删除行为、参数、规则、任务
+        for (var identifier : identifiers) {
+            actionService.removeByOntologyIdentifier(identifier);
+        }
+
+        // 批量删除实体节点和边
+        for (var meta : metaList) {
+            entityService.deleteNodesAndRelationsByOntologyId(meta.getApiName());
+        }
+
+        // 批量删除百科信息
+        lemmaService.remove(new LambdaQueryWrapper<OntologyLemma>()
+                .in(OntologyLemma::getOntologyUniqueIdentifier, identifiers));
+
+        // 批量删除对象元数据
+        this.remove(new LambdaQueryWrapper<OntologyMeta>()
+                .in(OntologyMeta::getUniqueIdentifier, identifiers));
+    }
+
 
     @Override
     @Transactional(value = "mainTransactionManager")
@@ -517,6 +752,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         if (categoryId != null) {
             queryWrapper.eq(OntologyMeta::getOntologyCategoryId, categoryId);
         }
+        queryWrapper.orderByAsc(OntologyMeta::getId);
         var metaList = list(queryWrapper);
         log.info("[getByCategoryId] categoryId={}, matched size={}", categoryId, metaList.size());
         return metaList.stream()
@@ -582,6 +818,42 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         ).collect(Collectors.toList());
     }
 
+    @Override
+    public List<OntologyMetaNodeVO> getInheritanceTree(Integer spaceId) {
+        var metaList = list(new LambdaQueryWrapper<OntologyMeta>()
+                .eq(OntologyMeta::getOntologySpaceId, spaceId)
+                .eq(OntologyMeta::getStatus, Status.ENABLE.getValue())
+                .orderByAsc(OntologyMeta::getId));
+        if (CollectionUtils.isEmpty(metaList)) {
+            return Collections.emptyList();
+        }
+        var metaMap = metaList.stream().collect(Collectors.toMap(
+                OntologyMeta::getUniqueIdentifier,
+                v -> OntologyMetaNodeVO.builder()
+                        .parentUniqueIdentifier(v.getParentUniqueIdentifier())
+                        .uniqueIdentifier(v.getUniqueIdentifier())
+                        .displayName(v.getDisplayName())
+                        .childNodes(new ArrayList<>())
+                        .build(),
+                (a, b) -> a));
+        return metaMap.values().stream()
+                .filter(v -> StringUtils.isEmpty(v.getParentUniqueIdentifier()))
+                .map(parent -> {
+                    buildInheritanceTree(parent, metaMap);
+                    return parent;
+                })
+                .collect(Collectors.toList());
+    }
+
+    private void buildInheritanceTree(OntologyMetaNodeVO parent, Map<String, OntologyMetaNodeVO> metaMap) {
+        metaMap.values().forEach(child -> {
+            if (StringUtils.equals(child.getParentUniqueIdentifier(), parent.getUniqueIdentifier())) {
+                parent.getChildNodes().add(child);
+                buildInheritanceTree(child, metaMap);
+            }
+        });
+    }
+
     @SneakyThrows
     @Override
     public List<String> importOntologies(MultipartFile file) {
@@ -598,6 +870,111 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
             }
         });
         return failedOntology;
+    }
+
+    @SneakyThrows
+    @Override
+    public List<String> importOntologiesToSpace(Integer targetSpaceId, MultipartFile file) {
+        InputStream inputStream = file.getInputStream();
+        
+        // 尝试读取为完整空间结构，如果失败则按对象列表处理
+        List<OntologyCreateDTO> ontologyList;
+        try {
+            var spaceData = objectMapper.readValue(inputStream, new TypeReference<com.aircas.ptr.foundry.ontology.model.dto.OntologySpaceCreateDTO>() {});
+            ontologyList = spaceData.getOntologies();
+            if (ontologyList == null) {
+                ontologyList = Lists.newArrayList();
+            }
+        } catch (Exception e) {
+            // 如果不是完整空间结构，重新读取为对象列表
+            inputStream = file.getInputStream();
+            ontologyList = objectMapper.readValue(inputStream, new TypeReference<List<OntologyCreateDTO>>() {});
+        }
+        
+        List<String> failedOntology = Lists.newArrayList();
+        // 记录导入结果：displayName -> uniqueIdentifier，用于后续处理继承关系
+        Map<String, String> displayNameToUid = new HashMap<>();
+        // 记录有父对象的对象：displayName -> parentDisplayName
+        Map<String, String> parentRelations = new HashMap<>();
+
+        // 第一遍：删除冲突对象并导入
+        for (OntologyCreateDTO dto : ontologyList) {
+            try {
+                var metaData = dto.getMetadata();
+                if (metaData == null) {
+                    continue;
+                }
+                // 检查并删除冲突对象（按 displayName 或 apiName 匹配）
+                deleteConflictingOntology(targetSpaceId, metaData.getDisplayName(), metaData.getApiName());
+
+                var result = proxyService.importOntology(dto, targetSpaceId);
+                if (result != null) {
+                    // 查询新创建的对象 uniqueIdentifier
+                    var meta = getOne(new LambdaQueryWrapper<OntologyMeta>()
+                            .eq(OntologyMeta::getOntologySpaceId, targetSpaceId)
+                            .eq(OntologyMeta::getDisplayName, metaData.getDisplayName())
+                            .eq(OntologyMeta::getStatus, Status.ENABLE.getValue())
+                            .orderByDesc(OntologyMeta::getId)
+                            .last("LIMIT 1"));
+                    if (meta != null) {
+                        displayNameToUid.put(metaData.getDisplayName(), meta.getUniqueIdentifier());
+                    }
+                    // 记录继承关系
+                    if (StringUtils.isNotEmpty(metaData.getParentOntologyDisplayName())) {
+                        parentRelations.put(metaData.getDisplayName(), metaData.getParentOntologyDisplayName());
+                    }
+                }
+            } catch (Exception e) {
+                log.error("对象 {} 导入失败", dto.getMetadata().getDisplayName(), e);
+                failedOntology.add(dto.getMetadata().getDisplayName());
+            }
+        }
+
+        // 第二遍：处理继承关系
+        for (var entry : parentRelations.entrySet()) {
+            var childDisplayName = entry.getKey();
+            var parentDisplayName = entry.getValue();
+            var childUid = displayNameToUid.get(childDisplayName);
+            var parentUid = displayNameToUid.get(parentDisplayName);
+            if (childUid == null) {
+                log.warn("继承关系跳过：子对象 {} 不存在", childDisplayName);
+                continue;
+            }
+            if (parentUid == null) {
+                log.warn("继承关系跳过：父对象 {} 不存在", parentDisplayName);
+                continue;
+            }
+            // 更新 parentUniqueIdentifier
+            update(new LambdaUpdateWrapper<OntologyMeta>()
+                    .eq(OntologyMeta::getUniqueIdentifier, childUid)
+                    .set(OntologyMeta::getParentUniqueIdentifier, parentUid));
+            log.info("继承关系设置成功：{} -> {}", childDisplayName, parentDisplayName);
+        }
+
+        return failedOntology;
+    }
+
+    /**
+     * 删除目标空间中冲突的对象（按 displayName 或 apiName 匹配）
+     */
+    private void deleteConflictingOntology(Integer targetSpaceId, String displayName, String apiName) {
+        // 按 displayName 查找冲突对象
+        var conflictByDisplayName = getOne(new LambdaQueryWrapper<OntologyMeta>()
+                .eq(OntologyMeta::getOntologySpaceId, targetSpaceId)
+                .eq(OntologyMeta::getDisplayName, displayName));
+        if (conflictByDisplayName != null) {
+            log.info("删除冲突对象（displayName匹配）：{} ({})", displayName, conflictByDisplayName.getUniqueIdentifier());
+            deleteOntology(conflictByDisplayName.getUniqueIdentifier());
+            return;
+        }
+        // 按 apiName 查找冲突对象
+        var conflictByApiName = getOne(new LambdaQueryWrapper<OntologyMeta>()
+                .eq(OntologyMeta::getOntologySpaceId, targetSpaceId)
+                .eq(OntologyMeta::getApiName, apiName));
+        if (conflictByApiName != null) {
+            log.info("删除冲突对象（apiName匹配）：{} ({})", apiName, conflictByApiName.getUniqueIdentifier());
+            deleteOntology(conflictByApiName.getUniqueIdentifier());
+        }
     }
 
 
@@ -764,89 +1141,107 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                         .setSpaceId(space.getId())));
             }
         }
-        //保存函数
+        //保存函数（跳过已存在的函数，不验证唯一性）
         var funcs = dto.getFunctions();
         if (CollectionUtils.isNotEmpty(funcs)) {
             funcs.stream().forEach(f -> {
-                var input = f.getInputParams();
-                String inputParamString = "";
-                if (CollectionUtils.isNotEmpty(input)) {
-                    List<String> paramList = Lists.newArrayList();
-                    String paramFormat = "@FuncParam(name = \"%s\") %s %s";
-                    input.forEach(p -> paramList.add(String.format(paramFormat, p.getParamName(),
-                            FunctionParamTypeEnum.valueOf(p.getParamType().toUpperCase()).getVale(),
-                            p.getParamName())));
-                    inputParamString = String.join(",\n", paramList);
-                }
-                String codeTemplate = "import com.aircas.ptr.foundry.ontology.aspect.FuncParam\n" +
-                        "import com.aircas.ptr.foundry.ontology.model.vo.FunctionResultVO\n" +
-                        "import groovy.util.logging.Slf4j\n" +
-                        "\n" +
-                        "@Slf4j\n" +
-                        "class %s {\n\n" +
-                        "    FunctionResultVO handle(%s) {\n" +
-                        "        return FunctionResultVO.builder()\n" +
-                        "                .build()\n" +
-                        "    }\n" +
-                        "}";
-                String code = String.format(codeTemplate, f.getFunctionApi(), inputParamString);
+                try {
+                    var input = f.getInputParams();
+                    String inputParamString = "";
+                    if (CollectionUtils.isNotEmpty(input)) {
+                        List<String> paramList = Lists.newArrayList();
+                        String paramFormat = "@FuncParam(name = \"%s\") %s %s";
+                        input.forEach(p -> paramList.add(String.format(paramFormat, p.getParamName(),
+                                FunctionParamTypeEnum.valueOf(p.getParamType().toUpperCase()).getVale(),
+                                p.getParamName())));
+                        inputParamString = String.join(",\n", paramList);
+                    }
+                    String codeTemplate = "import com.aircas.ptr.foundry.ontology.aspect.FuncParam\n" +
+                            "import com.aircas.ptr.foundry.ontology.model.vo.FunctionResultVO\n" +
+                            "import groovy.util.logging.Slf4j\n" +
+                            "\n" +
+                            "@Slf4j\n" +
+                            "class %s {\n\n" +
+                            "    FunctionResultVO handle(%s) {\n" +
+                            "        return FunctionResultVO.builder()\n" +
+                            "                .build()\n" +
+                            "    }\n" +
+                            "}";
+                    String code = String.format(codeTemplate, f.getFunctionApi(), inputParamString);
 
-                functionService.createFunction(FunctionCreateParam.builder()
-                        .code(code)
-                        .description(f.getDescription())
-                        .functionApi(f.getFunctionApi())
-                        .displayName(f.getDisplayName())
-                        .model(f.getModel())
-                        .type(f.getType())
-                        .build());
+                    functionService.createFunction(FunctionCreateParam.builder()
+                            .code(code)
+                            .description(f.getDescription())
+                            .functionApi(f.getFunctionApi())
+                            .displayName(f.getDisplayName())
+                            .model(f.getModel())
+                            .type(f.getType())
+                            .build());
+                } catch (Exception e) {
+                    // 函数已存在或其他错误，跳过并记录警告
+                    log.warn("函数 {} 导入跳过：{}", f.getFunctionApi(), e.getMessage());
+                }
             });
         }
-        //保存行为
+        //保存行为（跳过已存在的行为，不验证唯一性）
         var actions = dto.getActions();
         if (CollectionUtils.isNotEmpty(actions)) {
             actions.forEach(action -> {
-                val relationIndex = action.getRelationIndex();
-                var linkUniqIdentifier = relationIndex == null ? null : relationMap.get(relationIndex);
-                ActionLinkMappingParam linkMapping = null;
-                //关系因端点对象缺失被跳过时不挂 linkMapping：行为本身仍应导入，且 createAction 会因 link 不存在而整条报错
-                if (linkUniqIdentifier != null) {
-                    linkMapping = ActionLinkMappingParam.builder()
-                            .ontologyLinkUniqIdentifier(linkUniqIdentifier)
-                            .build();
-                }
-                List<ActionParamMappingCreateParam> mappingIns = null;
-                var mapping = action.getMappingIns();
-                if (CollectionUtils.isNotEmpty(mapping)) {
-                    var detail = functionService.getFunctionDetailByApi(space.getId(), action.getFunctionApi(), null);
-                    var paramMap = detail.getParams().stream().collect(Collectors.toMap(v -> v.getParamName(), v -> v));
-
-                    mappingIns = mapping.stream().map(m -> {
-                        var ontologyMeta = getOne(new LambdaQueryWrapper<OntologyMeta>()
-                                .eq(OntologyMeta::getOntologySpaceId, space.getId())
-                                .eq(OntologyMeta::getDisplayName, m.getOntologyName()));
-                        var property = ontologyPropertyService.getOne(new LambdaQueryWrapper<OntologyProperty>()
-                                .eq(OntologyProperty::getDisplayName, m.getPropertyName())
-                                .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyMeta.getUniqueIdentifier()));
-
-                        return ActionParamMappingCreateParam.builder()
-                                .ontologyUniqueIdentifier(ontologyMeta.getUniqueIdentifier())
-                                .functionParamId(paramMap.get(m.getFunctionParamName()).getParamId())
-                                .propertyUniqueIdentifier(property.getUniqueIdentifier())
+                try {
+                    val relationIndex = action.getRelationIndex();
+                    var linkUniqIdentifier = relationIndex == null ? null : relationMap.get(relationIndex);
+                    ActionLinkMappingParam linkMapping = null;
+                    //关系因端点对象缺失被跳过时不挂 linkMapping：行为本身仍应导入，且 createAction 会因 link 不存在而整条报错
+                    if (linkUniqIdentifier != null) {
+                        linkMapping = ActionLinkMappingParam.builder()
+                                .ontologyLinkUniqIdentifier(linkUniqIdentifier)
                                 .build();
+                    }
+                    List<ActionParamMappingCreateParam> mappingIns = null;
+                    var mapping = action.getMappingIns();
+                    if (CollectionUtils.isNotEmpty(mapping)) {
+                        var detail = functionService.getFunctionDetailByApi(space.getId(), action.getFunctionApi(), null);
+                        var paramMap = detail.getParams().stream().collect(Collectors.toMap(v -> v.getParamName(), v -> v));
 
-                    }).collect(Collectors.toList());
+                        mappingIns = mapping.stream().map(m -> {
+                            var ontologyMeta = getOne(new LambdaQueryWrapper<OntologyMeta>()
+                                    .eq(OntologyMeta::getOntologySpaceId, space.getId())
+                                    .eq(OntologyMeta::getDisplayName, m.getOntologyName()));
+                            if (ontologyMeta == null) {
+                                log.warn("行为参数映射跳过：对象 {} 不存在", m.getOntologyName());
+                                return null;
+                            }
+                            var property = ontologyPropertyService.getOne(new LambdaQueryWrapper<OntologyProperty>()
+                                    .eq(OntologyProperty::getDisplayName, m.getPropertyName())
+                                    .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyMeta.getUniqueIdentifier()));
+                            if (property == null) {
+                                log.warn("行为参数映射跳过：属性 {} 不存在", m.getPropertyName());
+                                return null;
+                            }
 
+                            return ActionParamMappingCreateParam.builder()
+                                    .ontologyUniqueIdentifier(ontologyMeta.getUniqueIdentifier())
+                                    .functionParamId(paramMap.get(m.getFunctionParamName()).getParamId())
+                                    .propertyUniqueIdentifier(property.getUniqueIdentifier())
+                                    .build();
+
+                        }).filter(java.util.Objects::nonNull).collect(Collectors.toList());
+
+                    }
+
+                    actionService.createAction(ActionCreateOrUpdateParam.builder()
+                            .ontologyIdentifier(meta.getUniqueIdentifier())
+                            .actionApi(action.getActionApi())
+                            .description(action.getDescription())
+                            .displayName(action.getDisplayName())
+                            .functionApi(action.getFunctionApi())
+                            .linkMapping(linkMapping)
+                            .mappingIns(mappingIns)
+                            .build());
+                } catch (Exception e) {
+                    // 行为已存在或其他错误，跳过并记录警告
+                    log.warn("行为 {} 导入跳过：{}", action.getActionApi(), e.getMessage());
                 }
-
-                actionService.createAction(ActionCreateOrUpdateParam.builder()
-                        .ontologyIdentifier(meta.getUniqueIdentifier())
-                        .actionApi(action.getActionApi())
-                        .description(action.getDescription())
-                        .displayName(action.getDisplayName())
-                        .functionApi(action.getFunctionApi())
-                        .linkMapping(linkMapping)
-                        .mappingIns(mappingIns)
-                        .build());
 
             });
         }
@@ -996,6 +1391,8 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 .ontologySpaceName(space.getDisplayName())
                 .groupNames(groupNames)
                 .categoryPath(meta.getOntologyCategoryId() == null ? null : ontologyCategoryPathMap.get(meta.getOntologyCategoryId()))
+                .parentOntologyDisplayName(StringUtils.isNotEmpty(meta.getParentUniqueIdentifier())
+                        ? uidToDisplayName.get(meta.getParentUniqueIdentifier()) : null)
                 .build();
 
         //属性分类树

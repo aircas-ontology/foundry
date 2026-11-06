@@ -51,7 +51,7 @@ public class OntologyActionInfoVO {
     @Schema(name = "categoryId", description = "所属行为分类id", example = "1")
     private Integer categoryId;
 
-    @Schema(name = "status", description = "状态：1 可用，0 失效（定义后目标表新增了必填属性，需重新编辑发布）", example = "1")
+    @Schema(name = "status", description = "状态：2 草稿（未发布，智能体和调度不可用）/ 1 已发布", example = "1")
     private Integer status;
 
     @Schema(name = "actionKind", description = "行为类别：BASE 基础行为 / APPLICATION 应用行为 / TREE 行为树", example = "BASE")
@@ -66,7 +66,7 @@ public class OntologyActionInfoVO {
     @Schema(name = "storageGroup", description = "属性值操作的目标存储分组", example = "extra")
     private String storageGroup;
 
-    @Schema(name = "outputMode", description = "输出方式：RESULT_ONLY 仅返回结果 / WRITE_PROPERTY 写入对象属性", example = "RESULT_ONLY")
+    @Schema(name = "outputMode", description = "输出方式（仅基础算子行为有值 RESULT_ONLY）；应用行为已下沉到 mappingIns 每行独立选择", example = "RESULT_ONLY")
     private ActionOutputModeEnum outputMode;
 
     @Schema(name = "createTime", description = "创建时间")
