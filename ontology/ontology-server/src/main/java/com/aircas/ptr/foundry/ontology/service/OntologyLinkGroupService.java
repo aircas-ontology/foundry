@@ -6,6 +6,7 @@ import com.aircas.ptr.foundry.ontology.model.param.OntologyLinkUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkGraphVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkInfoVO;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkObjectsVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaInfoVO;
 import com.baomidou.mybatisplus.extension.service.IService;
 
@@ -27,6 +28,8 @@ public interface OntologyLinkGroupService extends IService<OntologyLinkGroup> {
     List<OntologyMetaInfoVO> getLinkedOntology(String ontologyUniqueIdentifier);
 
     OntologyLinkInfoVO getLinkByUniqueIdentifier(String uniqueIdentifier);
+
+    OntologyLinkObjectsVO getLinkObjectsByUniqueIdentifier(String uniqueIdentifier);
 
     List<OntologyLinkInfoVO> getLinksByGroupId(String groupId);
 

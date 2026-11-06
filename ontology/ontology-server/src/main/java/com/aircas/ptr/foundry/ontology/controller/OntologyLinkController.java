@@ -7,6 +7,7 @@ import com.aircas.ptr.foundry.ontology.model.param.OntologyLinkCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyLinkUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkGraphVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkInfoVO;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkObjectsVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaInfoVO;
 import com.aircas.ptr.foundry.ontology.service.OntologyLinkGroupService;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -48,6 +49,14 @@ public class OntologyLinkController {
     @Operation(summary = "根据link uniqid查询关系")
     public RestResult<OntologyLinkInfoVO> getLinkByUniqueIdentifier(@RequestParam(required = true, name = "uniqueIdentifier") @Parameter(description = "uniqueIdentifier") String uniqueIdentifier) {
         return RestResult.ofData(ontologyLinkGroupService.getLinkByUniqueIdentifier(uniqueIdentifier));
+    }
+
+
+    @GetMapping("/objects")
+    @Operation(summary = "根据关系id查询关系两侧的对象（对象名称、对象id等）")
+    public RestResult<OntologyLinkObjectsVO> getLinkObjectsByUniqueIdentifier(
+            @RequestParam(required = true, name = "uniqueIdentifier") @Parameter(description = "关系id（unique_identifier）") String uniqueIdentifier) {
+        return RestResult.ofData(ontologyLinkGroupService.getLinkObjectsByUniqueIdentifier(uniqueIdentifier));
     }
 
 
