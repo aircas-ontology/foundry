@@ -1127,13 +1127,15 @@ public class EntityServiceImpl implements EntityService {
 
     /**
      * 按映射涉及的对象逐个加载实例属性，属性id作为key合并。
-     * 缺实例时直接报出对象，避免把 null 静默传给算子或回写。
+     * <p>只有入参取对象属性、出参写属性才需要实例；入参全是固定值的（如基础算子的条件/聚合查询）不碰实例。
+     * 老数据的映射行没写对象id，回退到行为所属对象，保持改造前的取值口径。</p>
      */
     private Map<String, List<Object>> loadEntityDetailMap(ActionContextInfoDTO context, EntityActionExecuteParam param,
                                                           String excludeObjectId) {
         var details = Lists.<EntityPropertyDetailVO>newArrayList();
         var objectIds = collectMappingObjectIds(context.getActionDetailVO());
-        if (param != null && StringUtils.isNotEmpty(param.getOntologyUniqueIdentifier())) {
+        if (param != null && StringUtils.isNotEmpty(param.getOntologyUniqueIdentifier())
+                && legacyMappingNeedsInstance(context.getActionDetailVO())) {
             objectIds.add(param.getOntologyUniqueIdentifier());
         }
         for (var objectId : objectIds) {
@@ -1150,6 +1152,29 @@ public class EntityServiceImpl implements EntityService {
         }
         return details.stream().collect(Collectors.toMap(EntityPropertyDetailVO::getPropertyUniqIdentifier,
                 EntityPropertyDetailVO::getPropertyValues, (list1, list2) -> list1));
+    }
+
+    /** 映射行没写对象id、但取值或回写需要实例时，只能按行为所属对象补 */
+    private boolean legacyMappingNeedsInstance(OntologyActionDetailVO detail) {
+        if (detail == null || CollectionUtils.isEmpty(detail.getMappingIns())) {
+            return false;
+        }
+        for (var mapping : detail.getMappingIns()) {
+            if (StringUtils.isNotEmpty(mapping.getOntologyUniqueIdentifier())) {
+                continue;
+            }
+            var sourceType = mapping.getSourceType() == null ? ActionParamSourceEnum.PROPERTY : mapping.getSourceType();
+            var inputNeedsInstance = mapping.getCategory() == FunctionParamCategoryEnum.INPUT
+                    && (sourceType == ActionParamSourceEnum.PROPERTY
+                    || sourceType == ActionParamSourceEnum.OBJECT
+                    || sourceType == ActionParamSourceEnum.LIST);
+            var outputWritesProperty = mapping.getCategory() == FunctionParamCategoryEnum.OUTPUT
+                    && mapping.getOutputMode() == ActionOutputModeEnum.WRITE_PROPERTY;
+            if (inputNeedsInstance || outputWritesProperty) {
+                return true;
+            }
+        }
+        return false;
     }
 
 
