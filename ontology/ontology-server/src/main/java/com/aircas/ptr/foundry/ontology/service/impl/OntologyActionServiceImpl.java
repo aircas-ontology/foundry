@@ -692,7 +692,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     @Override
     public TreeExecuteResultVO executeTree(TreeExecuteParam param) {
         var compiled = btTreeManager.getTree(param.getOntologySpaceId(), param.getTreeApi());
-        return executeTreeInstance(compiled, param.getEntityPrimaryKey(), param.getInputs());
+        return executeTreeInstance(compiled, param.getEntityPrimaryKey(), param.getInputs(),
+                param.getDataPrimaryKey(), param.getLinkEntityPrimaryKey());
     }
 
     /**
@@ -725,7 +726,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             var entityPrimaryKey = primaryKeys.get(i);
             TreeBatchInstanceResultVO instanceResult;
             try {
-                var executed = executeTreeInstance(compiled, entityPrimaryKey, param.getInputs());
+                var executed = executeTreeInstance(compiled, entityPrimaryKey, param.getInputs(),
+                        param.getDataPrimaryKey(), param.getLinkEntityPrimaryKey());
                 if (executed.getState() == BehaviorStateEnum.SUCCESS) {
                     successCount++;
                     if (!includeSuccess) {
@@ -846,9 +848,10 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     /**
      * 跑一条实例并还原结果树。每条实例一个运行时与黑板，编译结果可复用。
      */
-    private TreeExecuteResultVO executeTreeInstance(CompiledBehaviorTree compiled, Object entityPrimaryKey, Map<String, Object> inputs) {
+    private TreeExecuteResultVO executeTreeInstance(CompiledBehaviorTree compiled, Object entityPrimaryKey, Map<String, Object> inputs,
+                                                    Object dataPrimaryKey, Object linkEntityPrimaryKey) {
         var runtime = new TreeExecutionRuntime(compiled.definition(), entityPrimaryKey, inputs,
-                compiled.spaceId(), this::invokeTreeNodeAction);
+                dataPrimaryKey, linkEntityPrimaryKey, compiled.spaceId(), this::invokeTreeNodeAction);
         compiled.tree().tick(runtime, runtime.getBehaviorBlackboard());
         return buildTreeResult(compiled, runtime);
     }
@@ -921,10 +924,11 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 .ontologySpaceId(spaceId)
                 .actionApi(boundApi)
                 .entityPrimaryKey(runtime.getEntityPrimaryKey())
+                // 节点配了黑板键就以节点为准，没配用执行请求里的默认值
                 .dataPrimaryKey(StringUtils.isBlank(config.getDataPrimaryKeyKey())
-                        ? null : runtime.getBlackboard().get(config.getDataPrimaryKeyKey()))
+                        ? runtime.getDataPrimaryKey() : runtime.getBlackboard().get(config.getDataPrimaryKeyKey()))
                 .linkEntityPrimaryKey(StringUtils.isBlank(config.getLinkEntityPrimaryKeyKey())
-                        ? null : runtime.getBlackboard().get(config.getLinkEntityPrimaryKeyKey()))
+                        ? runtime.getLinkEntityPrimaryKey() : runtime.getBlackboard().get(config.getLinkEntityPrimaryKeyKey()))
                 .params(treeExternalParams(bound, runtime))
                 .build();
         var testResult = testAction(testParam);

@@ -39,6 +39,12 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
 
     private final Object entityPrimaryKey;
 
+    /** 执行级默认的分组表行主键，节点没配黑板键时用它 */
+    private final Object dataPrimaryKey;
+
+    /** 执行级默认的关系对端实体主键，节点没配黑板键时用它 */
+    private final Object linkEntityPrimaryKey;
+
     private final Integer spaceId;
 
     private final TreeActionInvoker actionInvoker;
@@ -55,9 +61,12 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
     private final Blackboard behaviorBlackboard = new Blackboard();
 
     public TreeExecutionRuntime(BehaviorTreeDefinition definition, Object entityPrimaryKey, Map<String, Object> inputs,
+                                Object dataPrimaryKey, Object linkEntityPrimaryKey,
                                 Integer spaceId, TreeActionInvoker actionInvoker) {
         this.definition = definition;
         this.entityPrimaryKey = entityPrimaryKey;
+        this.dataPrimaryKey = dataPrimaryKey;
+        this.linkEntityPrimaryKey = linkEntityPrimaryKey;
         this.spaceId = spaceId;
         this.actionInvoker = actionInvoker;
         definition.getBlackboard().forEach(item -> blackboardItems.put(item.getKey(), item));
@@ -99,6 +108,14 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
     @Override
     public Object getEntityPrimaryKey() {
         return entityPrimaryKey;
+    }
+
+    public Object getDataPrimaryKey() {
+        return dataPrimaryKey;
+    }
+
+    public Object getLinkEntityPrimaryKey() {
+        return linkEntityPrimaryKey;
     }
 
     @Override

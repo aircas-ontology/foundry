@@ -46,6 +46,16 @@ public class TreeBatchExecuteParam {
     @Schema(name = "inputs", description = "黑板键的初始取值，所有实例共用；实例差异化数据通过黑板绑定对象属性获取")
     private Map<String, Object> inputs;
 
+    @Schema(name = "dataPrimaryKey",
+            description = "分组表行主键：属性值-修改/删除用来定位具体一行；所有实例共用，行为节点配置了黑板键时以节点为准",
+            example = "123")
+    private Object dataPrimaryKey;
+
+    @Schema(name = "linkEntityPrimaryKey",
+            description = "实例关系行为的对端实体主键；所有实例共用，行为节点配置了黑板键时以节点为准",
+            example = "2")
+    private Object linkEntityPrimaryKey;
+
     @Schema(name = "includeSuccess", description = "是否返回成功实例的明细，默认只返回失败明细", example = "false")
     private Boolean includeSuccess;
 }

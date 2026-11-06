@@ -37,6 +37,16 @@ public class TreeExecuteParam {
     @NotNull(message = "entityPrimaryKey is null")
     private Object entityPrimaryKey;
 
+    @Schema(name = "dataPrimaryKey",
+            description = "分组表行主键：属性值-修改/删除用来定位具体一行；作为全树默认值，行为节点配置了黑板键时以节点为准",
+            example = "123")
+    private Object dataPrimaryKey;
+
+    @Schema(name = "linkEntityPrimaryKey",
+            description = "实例关系行为的对端实体主键；作为全树默认值，行为节点配置了黑板键时以节点为准",
+            example = "2")
+    private Object linkEntityPrimaryKey;
+
     @Schema(name = "inputs", description = "黑板键的初始取值（黑板键名 -> 值），只允许覆盖已声明且未绑定对象属性的键")
     private Map<String, Object> inputs;
 }
