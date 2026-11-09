@@ -46,7 +46,9 @@ public class OntologyFunctionController {
     @PostMapping("/execute")
     @Operation(summary = "函数执行")
     public RestResult<String> executeFunction(@RequestBody @Valid FunctionExecuteParam param) {
-        return RestResult.ofData(functionService.executeFunction(param));
+        // 保留脚本算子的 FunctionResultVO 外壳：调用方要能拿到 startTime/endTime/timeWindows，
+        // 只透 data 会让这些字段在返回前就丢掉（行为回写那条路仍走剥壳版本）
+        return RestResult.ofData(functionService.executeFunction(param, true));
     }
 
 

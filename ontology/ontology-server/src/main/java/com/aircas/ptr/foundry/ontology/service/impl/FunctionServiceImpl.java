@@ -950,6 +950,12 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     @Override
     @SneakyThrows
     public String executeFunction(FunctionExecuteParam param) {
+        return executeFunction(param, false);
+    }
+
+    @Override
+    @SneakyThrows
+    public String executeFunction(FunctionExecuteParam param, boolean keepVoShell) {
         // ---- 分布式限流检查（跨实例，Redis） ----
         // 同空间同 api 才唯一，key 带上 spaceId，避免不同空间的同名算子共用一个限流桶
         String rateLimitKey = (param.getOntologySpaceId() == null ? "" : param.getOntologySpaceId() + ":")
@@ -964,7 +970,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         }
         runningFunctions.computeIfAbsent(param.getFunctionApi(), k -> new java.util.concurrent.atomic.AtomicInteger(0)).incrementAndGet();
         try {
-            return doExecuteFunction(param);
+            return doExecuteFunction(param, keepVoShell);
         } finally {
             java.util.concurrent.atomic.AtomicInteger count = runningFunctions.get(param.getFunctionApi());
             if (count != null && count.decrementAndGet() <= 0) {
@@ -977,7 +983,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     }
 
     @SneakyThrows
-    private String doExecuteFunction(FunctionExecuteParam param) {
+    private String doExecuteFunction(FunctionExecuteParam param, boolean keepVoShell) {
         //查询函数（指定版本，缺省取最新版本；同空间优先，未命中回退全局）
         var function = resolveVersion(param.getOntologySpaceId(), param.getFunctionApi(), param.getVersion());
         PreconditionUtils.checkArgument(function != null,
@@ -1044,8 +1050,9 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
             // 异步：保留包裹层与 taskId，供调用方后续轮询 /execute/result
             return resultJsonStr;
         }
-        // 同步：剥离 FunctionResultVO 包裹层，仅透传 data 内容（与外部API/容器/编排 三类算子响应形状一致）
-        return unwrapFunctionResultVO(resultNode, resultJsonStr);
+        // 同步：正式执行剥离 FunctionResultVO 包裹层，仅透传 data 内容（与外部API/容器/编排 三类算子响应形状一致）；
+        // 测试回显（keepVoShell）保留外壳，否则 startTime/endTime/timeWindows 在返回前就丢了
+        return keepVoShell ? resultJsonStr : unwrapFunctionResultVO(resultNode, resultJsonStr);
     }
 
     /**
@@ -1649,13 +1656,14 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
             case EXTERNAL:
             case COMPOSITE:
                 // 复用 executeFunction 逻辑：脚本走 runner 引擎，外部API走接口定义，编排走 LiteFlow 链
-                // 直接按原结构透传：CUSTOMIZE 保留脚本自己写的返回体，EXTERNAL/BASIC_QUERY/COMPOSITE 已不再包一层 VO
+                // 脚本算子测试保留脚本自己写的完整返回体（FunctionResultVO 的 startTime/endTime/timeWindows
+                // 只在外壳里，剥掉就丢）；外部API/编排本就不包外壳，形状不变
                 var executeParam = FunctionExecuteParam.builder()
                         .functionApi(param.getFunctionApi())
                         .version(function.getVersion())
                         .parameters(param.getParameters())
                         .build();
-                var resultJson = executeFunction(executeParam);
+                var resultJson = executeFunction(executeParam, function.getType() == FunctionTypeEnum.CUSTOMIZE);
                 // 尝试解析为 Map，失败则包装成 Map（支持数字、字符串等非对象返回值）
                 try {
                     return objectMapper.readValue(resultJson, new TypeReference<Map<String, Object>>() {
@@ -1725,11 +1733,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                         .inputMap(inputMap)
                         .build();
                 String resultJsonStr = scriptEngineRouter.route(language).execute(ctx);
-                // 与同步正式执行同规则：剥离 FunctionResultVO 包裹层，直接返回 data 内容
-                var draftRoot = objectMapper.readTree(resultJsonStr);
-                if (draftRoot != null && draftRoot.has("data")) {
-                    return objectMapper.treeToValue(draftRoot.get("data"), Object.class);
-                }
+                // 与已存库测试同规则：整层返回体回显，不剥 FunctionResultVO 外壳
                 try {
                     return objectMapper.readValue(resultJsonStr, new TypeReference<Map<String, Object>>() {
                     });
