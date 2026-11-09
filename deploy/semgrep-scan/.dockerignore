@@ -1,0 +1,10 @@
+.git
+.env
+.artifacts
+**/__pycache__
+**/*.pyc
+*.tar
+*.tar.gz
+.venv
+docs
+tests

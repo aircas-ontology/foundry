@@ -17,6 +17,8 @@ import com.aircas.ptr.foundry.ontology.model.bo.CompositePlanBO;
 import com.aircas.ptr.foundry.ontology.model.bo.CompositeValidationBO;
 import com.aircas.ptr.foundry.ontology.model.dto.ActionContextInfoDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.FunctionParamDTO;
+import com.aircas.ptr.foundry.ontology.model.dto.scan.FunctionPublishResult;
+import com.aircas.ptr.foundry.ontology.model.dto.scan.FunctionScanResult;
 import com.aircas.ptr.foundry.ontology.model.dto.RateLimitConfig;
 import com.aircas.ptr.foundry.ontology.model.dto.container.ContainerOperatorConfig;
 import com.aircas.ptr.foundry.ontology.model.dto.container.ContainerImageInfo;
@@ -30,6 +32,10 @@ import com.aircas.ptr.foundry.ontology.model.enums.FunctionModelEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionLanguageEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.Status;
+import com.aircas.ptr.foundry.ontology.model.enums.ScanErrorCodeEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.ScanPurposeEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.ScanSkipReasonEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.ScanStatusEnum;
 import com.aircas.ptr.foundry.ontology.model.param.BasicQueryConfig;
 import com.aircas.ptr.foundry.ontology.model.param.BasicQueryTestParam;
 import com.aircas.ptr.foundry.ontology.model.param.ContainerConfig;
@@ -75,8 +81,11 @@ import com.aircas.ptr.foundry.ontology.service.FunctionRateLimitTemplateService;
 import com.aircas.ptr.foundry.ontology.service.RateLimitService;
 import com.aircas.ptr.foundry.ontology.service.FunctionService;
 import com.aircas.ptr.foundry.ontology.service.GroovyService;
+import com.aircas.ptr.foundry.ontology.service.ScriptSecurityScanService;
+import com.aircas.ptr.foundry.ontology.exception.FunctionVersionConflictException;
+import com.aircas.ptr.foundry.ontology.exception.SemgrepScanException;
 import com.aircas.ptr.foundry.ontology.utils.DockerCommandExecutor;
-import com.aircas.ptr.foundry.ontology.utils.OperatorFunctionFactory;
+import com.aircas.ptr.foundry.ontology.utils.OperatorFunctionUtil;
 import com.aircas.ptr.foundry.ontology.utils.ScriptParamDescriptionExtractor;
 import com.aircas.ptr.foundry.ontology.utils.ScriptParamDescriptionExtractor.Descriptions;
 import com.aircas.ptr.foundry.ontology.utils.SchemaHandleUtil;
@@ -85,6 +94,7 @@ import com.aircas.ptr.foundry.ontology.utils.ContainerNodeIdentity;
 import com.aircas.ptr.foundry.ontology.utils.ContainerUploadRegistry;
 import com.aircas.ptr.foundry.ontology.utils.CompositeValidator;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -105,6 +115,8 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.sql.Timestamp;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -160,6 +172,9 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     @Resource
     private ScriptEngineRouter scriptEngineRouter;
 
+    @Resource
+    private ScriptSecurityScanService scriptSecurityScanService;
+
     @Lazy
     @Resource
     private EntityServiceImpl entityService;
@@ -202,7 +217,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     @Resource
     private RateLimitService rateLimitService;
 
-    private ObjectMapper objectMapper = new ObjectMapper()
+    private ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules()
             // 存进库的 fields 是 FunctionParamDTO 序列化结果（含 referenceType 等 VO 没有的字段），
             // 详情读回时反序列化为 FunctionParameterVO，需忽略未知字段，否则抛异常导致层级结构丢失
             .configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
@@ -309,12 +324,20 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 .functionApi(function.getApi())
                 .version(function.getVersion())
                 .publishStatus(function.getPublish())
+                .scanStatus(function.getScanStatus())
+                .scanResult(readScanResult(function))
                 .displayName(function.getDisplayName())
                 .description(function.getDescription() == null ? "" : function.getDescription())
                 .type(function.getType())
                 .language(function.getLanguage())
                 .model(function.getModel())
                 .ontologySpaceId(function.getOntologySpaceId())
+                .createTime(function.getCreateTime())
+                .updateTime(function.getUpdateTime())
+                .runningStatus(runningFunctions.contains(function.getApi())
+                        ? FunctionRuntimeStatusEnum.RUNNING
+                        : FunctionRuntimeStatusEnum.NOT_RUNNING)
+                .containerKey(function.getContainerKey())
                 .build();
     }
 
@@ -486,8 +509,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
 
 
     @Override
-    @Transactional(value = "mainTransactionManager")
-    public void createFunction(FunctionCreateParam param) {
+    public FunctionScanResult createFunction(FunctionCreateParam param) {
         // apiName 与函数名称必填（@NotBlank 已在 Controller 层校验，此处纵深防御，防绕过 Controller 直接调用服务）
         PreconditionUtils.checkArgument(StringUtils.isNotEmpty(param.getFunctionApi()),
                 "functionApi is empty", HttpStatus.BAD_REQUEST);
@@ -504,22 +526,37 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
             if (owner != null && !containerNodeIdentity.isSelf(owner.getNodeIp())
                     && !containerNodeForwarder.isForwardedRequest()) {
                 containerNodeForwarder.forward(owner.getNodeIp(), owner.getNodePort(), param, "创建");
-                return;
+                return FunctionScanResult.skipped(ScanSkipReasonEnum.NON_SCRIPT_OPERATOR);
             }
             ContainerFunctionCreateParam cp = buildContainerCreateParam(param);
             cp.setRateLimitTemplateId(rateLimitTemplate.getId());
             containerFunctionService.createContainerFunction(cp);
-            return;
+            return FunctionScanResult.skipped(ScanSkipReasonEnum.NON_SCRIPT_OPERATOR);
         }
-        // 非容器算子：校验 → 落一行 Function → 按类型建参数（编排骨架）
+        // 非容器算子：先完成校验和安全扫描，再写入函数与参数。
         FunctionModelEnum model = resolveModel(param);
         String version = checkVersionAndApiUnique(param);
-        FunctionLanguageEnum language = resolveLanguageAndValidate(param, version);
-        Function func = buildAndSaveFunction(param, model, version, language);
+        FunctionLanguageEnum language = resolveLanguage(param);
+        FunctionScanResult scanResult = scriptSecurityScanService.scan(
+                param.getType(), language, param.getCode(), ScanPurposeEnum.SAVE);
+        rejectRejectedSave(scanResult);
+        if (param.getType() == FunctionTypeEnum.CUSTOMIZE) {
+            validateScriptForSave(language, param.getFunctionApi(), version, param.getCode(), scanResult);
+        }
+
+        List<FunctionParamDTO> customizeParams = param.getType() == FunctionTypeEnum.CUSTOMIZE
+                ? resolveCustomizeParams(language, param.getCode(), param.getParameters())
+                : null;
+        Function func = buildAndSaveFunction(param, model, version, language, scanResult);
         applyRateLimitToFunction(func, rateLimitTemplate);
         // 同一 api 的所有版本共用同一个模板：新版本选定后，旧版本也同步更新
         syncRateLimitTemplateToAllVersions(func.getOntologySpaceId(), func.getApi(), rateLimitTemplate.getId());
-        saveTypedParams(func, param, language);
+        if (param.getType() == FunctionTypeEnum.CUSTOMIZE) {
+            saveResolvedCustomizeParams(func, customizeParams);
+        } else {
+            saveTypedParams(func, param, language);
+        }
+        return scanResult;
     }
 
     /**
@@ -570,24 +607,23 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     /**
      * 解析脚本语言并做落库前语法/编译校验：仅 CUSTOMIZE 脚本算子有意义，其他类型返回 null（存 NULL）。
      */
-    private FunctionLanguageEnum resolveLanguageAndValidate(FunctionCreateParam param, String version) {
+    private FunctionLanguageEnum resolveLanguage(FunctionCreateParam param) {
         if (param.getType() != FunctionTypeEnum.CUSTOMIZE) {
             return null;
         }
         PreconditionUtils.checkArgument(StringUtils.isNotBlank(param.getCode()),
-                "脚本算子必须提供 code", HttpStatus.BAD_REQUEST);
+                "自定义脚本代码不能为空", HttpStatus.BAD_REQUEST);
         FunctionLanguageEnum language = param.getLanguage() == null ? FunctionLanguageEnum.GROOVY : param.getLanguage();
-        //脚本函数落库前先做语法/编译校验（走对应 runner 的 /validate），失败即拒、不落库
-        validateScript(language, param.getFunctionApi(), version, param.getCode());
         return language;
     }
 
     /**
-     * 组装并保存 Function 主记录：新增版本默认未发布、状态启用（公共默认值统一走 OperatorFunctionFactory）。
+     * 组装并保存 Function 主记录：新增版本默认未发布、状态启用（公共默认值统一走 OperatorFunctionUtil）。
      * <p>language 仅 CUSTOMIZE 脚本算子有意义；基础查询/外部/容器算子存 NULL。</p>
      */
-    private Function buildAndSaveFunction(FunctionCreateParam param, FunctionModelEnum model, String version, FunctionLanguageEnum language) {
-        var func = OperatorFunctionFactory.operatorDefaults(
+    private Function buildAndSaveFunction(FunctionCreateParam param, FunctionModelEnum model, String version,
+                                          FunctionLanguageEnum language, FunctionScanResult scanResult) {
+        var func = OperatorFunctionUtil.operatorDefaults(
                         param.getFunctionApi(), version, param.getDisplayName(), param.getType(),
                         param.getOntologySpaceId(), model)
                 .description(param.getDescription())
@@ -598,6 +634,8 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 .model(model)
                 .status(Status.ENABLE.getValue())
                 .referenceName(param.getReferenceName())
+                .scanStatus(scanResult.status())
+                .scanResult(toScanJson(scanResult))
                 .ontologySpaceId(param.getOntologySpaceId())
                 .build();
         save(func);
@@ -773,7 +811,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
 
     @Override
     @Transactional(value = "mainTransactionManager")
-    public void updateFunction(FunctionUpdateParam param) {
+    public FunctionScanResult updateFunction(FunctionUpdateParam param) {
         var function = resolveVersion(param.getOntologySpaceId(), param.getFunctionApi(), param.getVersion());
         PreconditionUtils.checkArgument(function != null,
                 "函数版本不存在：" + param.getFunctionApi() + " " + param.getVersion(), HttpStatus.BAD_REQUEST);
@@ -787,53 +825,75 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         var ontologyActions = ontologyActionMapper.selectList(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getFunctionApi, function.getApi()));
         PreconditionUtils.checkArgument(CollectionUtils.isEmpty(ontologyActions),
                 "该函数已被行为关联，不能修改：" + function.getApi());
-        // 未发布：原地更新（版本号不可改，param.version 仅作定位）
-        //脚本函数更新前先校验新代码（语言锁定不可改，取 function.language）
+        Timestamp originalUpdateTime = toTimestamp(function.getUpdateTime());
+        String effectiveCode = resolveEffectiveCode(function, param);
+        FunctionScanResult scanResult = scriptSecurityScanService.scan(
+                function.getType(), function.getLanguage(), effectiveCode, ScanPurposeEnum.SAVE);
+        rejectRejectedSave(scanResult);
         if (function.getType() == FunctionTypeEnum.CUSTOMIZE) {
-            PreconditionUtils.checkArgument(StringUtils.isNotBlank(param.getCode()),
-                    "脚本算子更新必须提供 code", HttpStatus.BAD_REQUEST);
-            validateScript(function.getLanguage(), function.getApi(), function.getVersion(), param.getCode());
+            validateScriptForSave(function.getLanguage(), function.getApi(), function.getVersion(),
+                    effectiveCode, scanResult);
         }
-        applyEditableFields(function, param);
-        updateById(function);
-        // 限流模板变更：同一 api 的所有版本同步更新
+
+        List<FunctionParamDTO> customizeParams = function.getType() == FunctionTypeEnum.CUSTOMIZE
+                ? resolveCustomizeParams(function.getLanguage(), effectiveCode, param.getParameters())
+                : null;
+        applyEditableFields(function, param, effectiveCode);
+        function.setScanStatus(scanResult.status());
+        function.setScanResult(toScanJson(scanResult));
+
+        Function update = new Function()
+                .setScanStatus(function.getScanStatus())
+                .setScanResult(function.getScanResult());
+        LambdaUpdateWrapper<Function> updateWrapper = draftUpdateWrapper(function.getId(), originalUpdateTime)
+                .set(Function::getDescription, function.getDescription())
+                .set(Function::getReferenceName, function.getReferenceName())
+                .set(Function::getModel, function.getModel())
+                .set(Function::getCode, function.getCode());
+        requireConditionalUpdate(baseMapper.update(update, updateWrapper));
+        rebuildTypedParams(function, param, effectiveCode, customizeParams);
+
+        // 限流模板变更：同一空间内同一 api 的所有版本同步更新。
         if (param.getRateLimitTemplateId() != null) {
-            syncRateLimitTemplateToAllVersions(function.getOntologySpaceId(), function.getApi(), param.getRateLimitTemplateId());
+            syncRateLimitTemplateToAllVersions(function.getOntologySpaceId(), function.getApi(),
+                    param.getRateLimitTemplateId());
         }
-        // 参数重建：CUSTOMIZE 解析成功才删旧建新（解析失败保留原定义）；BASIC_QUERY/COMPOSITE/EXTERNAL 先删后建
+
+        // 数据库写入成功后清理脚本编译/产物缓存。
         if (function.getType() == FunctionTypeEnum.CUSTOMIZE) {
-            rebuildCustomizeParams(function.getApi(), function.getId(), function.getLanguage(), param.getCode(), param.getParameters());
-        } else if (function.getType() == FunctionTypeEnum.BASIC_QUERY) {
-            functionParamService.remove(new LambdaQueryWrapper<FunctionParamPO>().eq(FunctionParamPO::getFunctionId, function.getId()));
-            // 内部校验 queryConfig 非空并重写 code
-            createBasicQueryParams(function.getId(), param.getQueryConfig());
-        } else if (function.getType() == FunctionTypeEnum.COMPOSITE) {
-            functionParamService.remove(new LambdaQueryWrapper<FunctionParamPO>().eq(FunctionParamPO::getFunctionId, function.getId()));
-            // 未重新提交画布配置时沿用库中已存定义，避免画布被清空
-            CompositeConfig compositeConfig = param.getCompositeConfig() != null
-                    ? param.getCompositeConfig()
-                    : parseCompositeConfig(function.getCode());
-            createCompositeParams(function.getId(), function.getApi(), compositeConfig);
-        } else if (function.getType() == FunctionTypeEnum.EXTERNAL) {
-            functionParamService.remove(new LambdaQueryWrapper<FunctionParamPO>().eq(FunctionParamPO::getFunctionId, function.getId()));
-            // 未重新提交接口定义时沿用库中已存定义
-            ExternalApiConfig apiConfig = param.getApiConfig() != null
-                    ? param.getApiConfig()
-                    : parseExternalConfig(function.getCode(), function.getApi());
-            createExternalParams(function.getId(), apiConfig);
+            scriptEngineRouter.route(function.getLanguage()).invalidate(function.getLanguage(), function.getApi());
         }
-        //失效对应语言 runner 的编译/产物缓存
-        scriptEngineRouter.route(function.getLanguage()).invalidate(function.getLanguage(), function.getApi());
+        return scanResult;
     }
 
     @Override
     @Transactional(value = "mainTransactionManager")
-    public void publishFunction(Integer spaceId, String api, String version) {
+    public FunctionPublishResult publishFunction(Integer spaceId, String api, String version) {
         var function = requireVersionExists(spaceId, api, version);
         PreconditionUtils.checkArgument(function.getPublish() == FunctionConstant.PUBLISH_UNPUBLISHED,
                 "该版本已是发布状态：" + api + " " + function.getVersion(), HttpStatus.BAD_REQUEST);
-        function.setPublish(FunctionConstant.PUBLISH_PUBLISHED);
-        updateById(function);
+        Timestamp originalUpdateTime = toTimestamp(function.getUpdateTime());
+        FunctionScanResult currentResult = readScanResult(function);
+
+        if (currentResult.status() == ScanStatusEnum.REJECTED) {
+            return FunctionPublishResult.of(false, currentResult);
+        }
+
+        FunctionScanResult effectiveResult = currentResult;
+        if (requiresPublishRescan(function, currentResult)) {
+            effectiveResult = scriptSecurityScanService.scan(
+                    function.getType(), function.getLanguage(), function.getCode(), ScanPurposeEnum.PUBLISH);
+            if (effectiveResult.status() == ScanStatusEnum.REJECTED) {
+                return FunctionPublishResult.of(false, effectiveResult);
+            }
+            validatePublishAdmission(function, effectiveResult);
+        } else {
+            validatePublishAdmission(function, currentResult);
+        }
+
+        persistPublishDecision(function, originalUpdateTime, effectiveResult,
+                FunctionConstant.PUBLISH_PUBLISHED);
+        return FunctionPublishResult.of(true, effectiveResult);
     }
 
     @Override
@@ -865,7 +925,186 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 .code(code)
                 .build();
         scriptEngineRouter.route(lang).validate(ctx);
-}
+    }
+
+    private void validateScriptForSave(FunctionLanguageEnum language, String functionApi, String version,
+                                       String code, FunctionScanResult scanResult) {
+        try {
+            validateScript(language, functionApi, version, code);
+        } catch (RuntimeException exception) {
+            FunctionScanResult rejected = scanResult.status() == ScanStatusEnum.SKIPPED
+                    ? null
+                    : scanResult.rejectedWithError(ScanErrorCodeEnum.SCRIPT_VALIDATION_FAILED);
+            throw new SemgrepScanException(ScanErrorCodeEnum.SCRIPT_VALIDATION_FAILED, rejected, exception);
+        }
+    }
+
+    private static void rejectParseFailure(FunctionScanResult scanResult) {
+        if (scanResult.error() == null) {
+            return;
+        }
+        ScanErrorCodeEnum code;
+        try {
+            code = ScanErrorCodeEnum.valueOf(scanResult.error().code());
+        } catch (RuntimeException exception) {
+            throw new SemgrepScanException(ScanErrorCodeEnum.INVALID_SCAN_RESPONSE);
+        }
+        if (code == ScanErrorCodeEnum.PARSE_FAILED || code == ScanErrorCodeEnum.PARTIAL_PARSE) {
+            throw new SemgrepScanException(code, scanResult);
+        }
+        throw new SemgrepScanException(ScanErrorCodeEnum.INVALID_SCAN_RESPONSE);
+    }
+
+    /** REJECTED 仅作为本次响应返回，创建和修改均不得持久化或保存为草稿。 */
+    static void rejectRejectedSave(FunctionScanResult scanResult) {
+        rejectParseFailure(scanResult);
+        if (scanResult.status() == ScanStatusEnum.REJECTED) {
+            FunctionScanResult rejected = scanResult.rejectedWithError(ScanErrorCodeEnum.SECURITY_SCAN_REJECTED);
+            throw new SemgrepScanException(ScanErrorCodeEnum.SECURITY_SCAN_REJECTED, rejected);
+        }
+    }
+
+    private String resolveEffectiveCode(Function function, FunctionUpdateParam param) {
+        if (function.getType() != FunctionTypeEnum.CUSTOMIZE) {
+            return function.getCode();
+        }
+        if (param.getCode() == null) {
+            PreconditionUtils.checkArgument(StringUtils.isNotBlank(function.getCode()),
+                    "自定义脚本代码不能为空", HttpStatus.BAD_REQUEST);
+            return function.getCode();
+        }
+        PreconditionUtils.checkArgument(StringUtils.isNotBlank(param.getCode()),
+                "自定义脚本代码不能为空", HttpStatus.BAD_REQUEST);
+        return param.getCode();
+    }
+
+    private void saveResolvedCustomizeParams(Function function, List<FunctionParamDTO> resolved) {
+        if (CollectionUtils.isEmpty(resolved)) {
+            if (resolved == null) {
+                log.warn("脚本参数未能自动解析，跳过参数入库：functionApi={}, functionId={}, language={}",
+                        function.getApi(), function.getId(), function.getLanguage());
+            }
+            return;
+        }
+        saveParams(function.getId(), resolved);
+    }
+
+    private void rebuildTypedParams(Function function, FunctionUpdateParam param, String effectiveCode,
+                                    List<FunctionParamDTO> customizeParams) {
+        if (function.getType() == FunctionTypeEnum.CUSTOMIZE) {
+            if (customizeParams == null) {
+                log.warn("脚本参数未能自动解析，保留原有参数定义：functionApi={}, functionId={}, language={}",
+                        function.getApi(), function.getId(), function.getLanguage());
+                return;
+            }
+            functionParamService.remove(new LambdaQueryWrapper<FunctionParamPO>()
+                    .eq(FunctionParamPO::getFunctionId, function.getId()));
+            saveParams(function.getId(), customizeParams);
+        } else if (function.getType() == FunctionTypeEnum.BASIC_QUERY) {
+            functionParamService.remove(new LambdaQueryWrapper<FunctionParamPO>()
+                    .eq(FunctionParamPO::getFunctionId, function.getId()));
+            createBasicQueryParams(function.getId(), param.getQueryConfig());
+        } else if (function.getType() == FunctionTypeEnum.COMPOSITE) {
+            functionParamService.remove(new LambdaQueryWrapper<FunctionParamPO>()
+                    .eq(FunctionParamPO::getFunctionId, function.getId()));
+            CompositeConfig compositeConfig = param.getCompositeConfig() != null
+                    ? param.getCompositeConfig()
+                    : parseCompositeConfig(effectiveCode);
+            createCompositeParams(function.getId(), function.getApi(), compositeConfig);
+        } else if (function.getType() == FunctionTypeEnum.EXTERNAL) {
+            functionParamService.remove(new LambdaQueryWrapper<FunctionParamPO>()
+                    .eq(FunctionParamPO::getFunctionId, function.getId()));
+            ExternalApiConfig apiConfig = param.getApiConfig() != null
+                    ? param.getApiConfig()
+                    : parseExternalConfig(effectiveCode, function.getApi());
+            createExternalParams(function.getId(), apiConfig);
+        }
+    }
+
+    private boolean requiresPublishRescan(Function function, FunctionScanResult currentResult) {
+        if (function.getType() != FunctionTypeEnum.CUSTOMIZE
+                || !scriptSecurityScanService.isEnabled()
+                || currentResult.status() != ScanStatusEnum.SKIPPED) {
+            return false;
+        }
+        return currentResult.skipReason() == ScanSkipReasonEnum.FEATURE_DISABLED
+                || currentResult.skipReason() == ScanSkipReasonEnum.LEGACY_DATA;
+    }
+
+    private void validatePublishAdmission(Function function, FunctionScanResult result) {
+        if (result.status() == ScanStatusEnum.PASSED) {
+            return;
+        }
+        if (result.status() != ScanStatusEnum.SKIPPED) {
+            throw new SemgrepScanException(ScanErrorCodeEnum.INVALID_SCAN_RESPONSE);
+        }
+        boolean nonScriptAllowed = function.getType() != FunctionTypeEnum.CUSTOMIZE
+                && result.skipReason() == ScanSkipReasonEnum.NON_SCRIPT_OPERATOR;
+        boolean disabledScriptAllowed = function.getType() == FunctionTypeEnum.CUSTOMIZE
+                && !scriptSecurityScanService.isEnabled()
+                && (result.skipReason() == ScanSkipReasonEnum.FEATURE_DISABLED
+                || result.skipReason() == ScanSkipReasonEnum.LEGACY_DATA);
+        if (!nonScriptAllowed && !disabledScriptAllowed) {
+            throw new SemgrepScanException(ScanErrorCodeEnum.INVALID_SCAN_RESPONSE);
+        }
+    }
+
+    private void persistPublishDecision(Function function, Timestamp originalUpdateTime,
+                                        FunctionScanResult scanResult, int publish) {
+        Function update = new Function()
+                .setPublish(publish)
+                .setScanStatus(scanResult.status())
+                .setScanResult(toScanJson(scanResult));
+        int updated = baseMapper.update(update, draftUpdateWrapper(function.getId(), originalUpdateTime));
+        requireConditionalUpdate(updated);
+    }
+
+    private LambdaUpdateWrapper<Function> draftUpdateWrapper(Long id, Timestamp originalUpdateTime) {
+        LambdaUpdateWrapper<Function> wrapper = new LambdaUpdateWrapper<Function>()
+                .eq(Function::getId, id)
+                .eq(Function::getPublish, FunctionConstant.PUBLISH_UNPUBLISHED);
+        if (originalUpdateTime == null) {
+            return wrapper.isNull(Function::getUpdateTime);
+        }
+        return wrapper.eq(Function::getUpdateTime, originalUpdateTime);
+    }
+
+    private FunctionScanResult readScanResult(Function function) {
+        if (function.getScanResult() == null || function.getScanStatus() == null) {
+            throw new SemgrepScanException(ScanErrorCodeEnum.INVALID_SCAN_RESPONSE);
+        }
+        try {
+            FunctionScanResult result = objectMapper.treeToValue(function.getScanResult(), FunctionScanResult.class);
+            if (result.status() != function.getScanStatus()) {
+                throw new SemgrepScanException(ScanErrorCodeEnum.INVALID_SCAN_RESPONSE);
+            }
+            return result;
+        } catch (SemgrepScanException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new SemgrepScanException(ScanErrorCodeEnum.INVALID_SCAN_RESPONSE, exception);
+        }
+    }
+
+    private com.fasterxml.jackson.databind.JsonNode toScanJson(FunctionScanResult scanResult) {
+        return objectMapper.valueToTree(scanResult);
+    }
+
+    private void requireConditionalUpdate(int updated) {
+        if (updated != 1) {
+            throw new FunctionVersionConflictException();
+        }
+    }
+
+    private Timestamp toTimestamp(Date value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Timestamp timestamp) {
+            return timestamp;
+        }
+        return new Timestamp(value.getTime());
+    }
 
     @Override
     @SneakyThrows
@@ -908,21 +1147,22 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     @Override
     public Page<FunctionInfoVO> getFunctions(FunctionListQueryParam param) {
         var pageInfo = new Page<Function>(param.getPageNum(), param.getPageSize());
-        // 未明确查询函数编排时，默认排除函数编排
-        List<FunctionTypeEnum> excludeTypes = param.getExcludeTypes() != null
-                ? new ArrayList<>(param.getExcludeTypes()) : new ArrayList<>();
-        if (param.getType() != FunctionTypeEnum.COMPOSITE
-                && !excludeTypes.contains(FunctionTypeEnum.COMPOSITE)) {
-            excludeTypes.add(FunctionTypeEnum.COMPOSITE);
-        }
-        // 版本分组分页：按 api 分组，每组仅展示版本号最大的一条（XML 内按 x.y.z 语义化比较）
-        var functionPage = getBaseMapper().pageLatestVersion(pageInfo, param.getOntologySpaceId(), param.getDisplayName(),
-                param.getType(), excludeTypes, param.getPublishStatus(), param.getStartDate(), param.getEndDate());
-        var records = functionPage.getRecords().stream().<FunctionInfoVO>map(func ->
-                FunctionInfoVO.builder()
+        List<Function> latestFunctions = listLatestVersions(param);
+        long offset = (pageInfo.getCurrent() - 1) * pageInfo.getSize();
+        List<Function> pageRecords = offset >= latestFunctions.size()
+                ? Collections.emptyList()
+                : latestFunctions.subList((int) offset,
+                        (int) Math.min(offset + pageInfo.getSize(), latestFunctions.size()));
+        pageInfo.setTotal(latestFunctions.size()).setRecords(pageRecords);
+        var functionPage = pageInfo;
+        var records = functionPage.getRecords().stream().<FunctionInfoVO>map(func -> {
+            FunctionScanResult fullScanResult = readScanResult(func);
+            return FunctionInfoVO.builder()
                         .functionApi(func.getApi())
                         .version(func.getVersion())
                         .publishStatus(func.getPublish())
+                        .scanStatus(fullScanResult.status())
+                        .scanResult(fullScanResult.toSummary())
                         .displayName(func.getDisplayName())
                         .type(func.getType())
                         .language(func.getLanguage())
@@ -933,8 +1173,8 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                         .runningStatus(runningFunctions.containsKey(func.getApi())
                                 ? FunctionRuntimeStatusEnum.RUNNING
                                 : FunctionRuntimeStatusEnum.NOT_RUNNING)
-                        .build()
-        ).collect(Collectors.toList());
+                        .build();
+        }).collect(Collectors.toList());
 
         return new Page<FunctionInfoVO>()
                 .setRecords(records)
@@ -943,14 +1183,64 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 .setSize(functionPage.getSize());
     }
 
+    /**
+     * 使用 MyBatis-Plus 完成列表条件查询，再按 api 在内存中选出语义化版本号最大的一条。
+     */
+    private List<Function> listLatestVersions(FunctionListQueryParam param) {
+        // 未明确查询函数编排时，默认排除函数编排。
+        List<FunctionTypeEnum> excludeTypes = param.getExcludeTypes() == null
+                ? new ArrayList<>()
+                : new ArrayList<>(param.getExcludeTypes());
+        if (param.getType() != FunctionTypeEnum.COMPOSITE
+                && !excludeTypes.contains(FunctionTypeEnum.COMPOSITE)) {
+            excludeTypes.add(FunctionTypeEnum.COMPOSITE);
+        }
+        LambdaQueryWrapper<Function> queryWrapper = new LambdaQueryWrapper<Function>()
+                .eq(param.getOntologySpaceId() != null, Function::getOntologySpaceId, param.getOntologySpaceId())
+                .like(StringUtils.isNotEmpty(param.getDisplayName()), Function::getDisplayName, param.getDisplayName())
+                .eq(param.getType() != null, Function::getType, param.getType())
+                .notIn(CollectionUtils.isNotEmpty(excludeTypes), Function::getType, excludeTypes)
+                .eq(param.getPublishStatus() != null, Function::getPublish, param.getPublishStatus());
+        if (StringUtils.isNotEmpty(param.getStartDate())) {
+            queryWrapper.ge(Function::getCreateTime,
+                    Timestamp.valueOf(LocalDate.parse(param.getStartDate()).atStartOfDay()));
+        }
+        if (StringUtils.isNotEmpty(param.getEndDate())) {
+            queryWrapper.lt(Function::getCreateTime,
+                    Timestamp.valueOf(LocalDate.parse(param.getEndDate()).plusDays(1).atStartOfDay()));
+        }
+
+        Map<String, Function> latestByApi = new HashMap<>();
+        for (Function function : list(queryWrapper)) {
+            latestByApi.merge(function.getApi(), function,
+                    (current, candidate) -> compareVersion(current.getVersion(), candidate.getVersion()) >= 0
+                            ? current
+                            : candidate);
+        }
+        Comparator<Function> listOrder = Comparator
+                .comparing(Function::getUpdateTime, Comparator.nullsLast(Comparator.reverseOrder()))
+                .thenComparing(Function::getId, Comparator.nullsLast(Comparator.reverseOrder()));
+        return latestByApi.values().stream().sorted(listOrder).collect(Collectors.toList());
+    }
+
     @Override
     @SneakyThrows
     public String executeFunction(FunctionExecuteParam param) {
+        var function = resolveVersion(param.getOntologySpaceId(), param.getFunctionApi(), param.getVersion());
+        PreconditionUtils.checkArgument(function != null,
+                "函数版本不存在：" + param.getFunctionApi() + " " + param.getVersion(), HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(function.getPublish() == FunctionConstant.PUBLISH_PUBLISHED,
+                "函数版本未发布，禁止正式执行", HttpStatus.BAD_REQUEST);
+        return executeResolvedFunction(param, function);
+    }
+
+    @SneakyThrows
+    private String executeResolvedFunction(FunctionExecuteParam param, Function function) {
         // ---- 分布式限流检查（跨实例，Redis） ----
         // 同空间同 api 才唯一，key 带上 spaceId，避免不同空间的同名算子共用一个限流桶
-        String rateLimitKey = (param.getOntologySpaceId() == null ? "" : param.getOntologySpaceId() + ":")
-                + param.getFunctionApi() + ":" + param.getVersion();
-        int[] limits = resolveRateLimit(param.getOntologySpaceId(), param.getFunctionApi(), param.getVersion());
+        String rateLimitKey = (function.getOntologySpaceId() == null ? "" : function.getOntologySpaceId() + ":")
+                + function.getApi() + ":" + function.getVersion();
+        int[] limits = resolveRateLimit(function.getOntologySpaceId(), function.getApi(), function.getVersion());
         int tpsLimit = limits[0], maxConcurrency = limits[1];
         if (tpsLimit > 0 || maxConcurrency > 0) {
             boolean acquired = rateLimitService.acquire(rateLimitKey, tpsLimit, maxConcurrency);
@@ -960,7 +1250,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         }
         runningFunctions.computeIfAbsent(param.getFunctionApi(), k -> new java.util.concurrent.atomic.AtomicInteger(0)).incrementAndGet();
         try {
-            return doExecuteFunction(param);
+            return doExecuteFunction(param, function);
         } finally {
             java.util.concurrent.atomic.AtomicInteger count = runningFunctions.get(param.getFunctionApi());
             if (count != null && count.decrementAndGet() <= 0) {
@@ -973,11 +1263,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     }
 
     @SneakyThrows
-    private String doExecuteFunction(FunctionExecuteParam param) {
-        //查询函数（指定版本，缺省取最新版本；同空间优先，未命中回退全局）
-        var function = resolveVersion(param.getOntologySpaceId(), param.getFunctionApi(), param.getVersion());
-        PreconditionUtils.checkArgument(function != null,
-                "函数版本不存在：" + param.getFunctionApi() + " " + param.getVersion(), HttpStatus.BAD_REQUEST);
+    private String doExecuteFunction(FunctionExecuteParam param, Function function) {
         //查询输入参数
         var executeInputParams = functionParamService.list(
                 new LambdaQueryWrapper<FunctionParamPO>()
@@ -1307,7 +1593,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
 
     private FunctionParamPO externalParam(Long functionId, ExternalApiConfig.PortDefinition port,
                                           FunctionParamCategoryEnum category, int paramOrder) {
-        return OperatorFunctionFactory.functionParamDefaults(
+        return OperatorFunctionUtil.functionParamDefaults(
                         functionId, port.getName(), port.getType(), category, paramOrder, port.getDescription())
                 // OBJECT/LIST 端口的子字段与脚本函数同一套层级结构，共用 saveParams 那条序列化口径
                 .fields(portFieldsJson(port.getFields()))
@@ -1649,9 +1935,10 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 var executeParam = FunctionExecuteParam.builder()
                         .functionApi(param.getFunctionApi())
                         .version(function.getVersion())
+                        .ontologySpaceId(function.getOntologySpaceId())
                         .parameters(param.getParameters())
                         .build();
-                var resultJson = executeFunction(executeParam);
+                var resultJson = executeResolvedFunction(executeParam, function);
                 // 尝试解析为 Map，失败则包装成 Map（支持数字、字符串等非对象返回值）
                 try {
                     return objectMapper.readValue(resultJson, new TypeReference<Map<String, Object>>() {
@@ -1666,9 +1953,10 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 var containerExecuteParam = FunctionExecuteParam.builder()
                         .functionApi(param.getFunctionApi())
                         .version(function.getVersion())
+                        .ontologySpaceId(function.getOntologySpaceId())
                         .parameters(param.getParameters())
                         .build();
-                var containerResultJson = executeFunction(containerExecuteParam);
+                var containerResultJson = executeResolvedFunction(containerExecuteParam, function);
                 return objectMapper.readValue(containerResultJson, Object.class);
 
             default:
@@ -1856,7 +2144,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     /**
      * 将更新参数中的可编辑字段应用到函数实体（type 特有内容另处理）
      */
-    private void applyEditableFields(Function function, FunctionUpdateParam param) {
+    private void applyEditableFields(Function function, FunctionUpdateParam param, String effectiveCode) {
         function.setDescription(param.getDescription());
         // 修改时 api 与函数名称不可变更：api 仅用于定位不会变，displayName 不赋值保留原值
         if (param.getModel() != null) {
@@ -1866,7 +2154,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
             function.setReferenceName(param.getReferenceName());
         }
         if (function.getType() == FunctionTypeEnum.CUSTOMIZE) {
-            function.setCode(param.getCode());
+            function.setCode(effectiveCode);
         } else if (function.getType() == FunctionTypeEnum.BASIC_QUERY) {
             // code 由后续 createBasicQueryParams 序列化 queryConfig 重新写入，此处不覆盖旧值
             PreconditionUtils.checkArgument(param.getQueryConfig() != null,
@@ -1960,15 +2248,8 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
      */
     private FunctionParamPO buildCompositeParam(Long functionId, CompositeParameter parameter,
                                                 FunctionParamCategoryEnum category, int paramOrder) {
-        return FunctionParamPO.builder()
-                .functionId(functionId)
-                .paramName(parameter.getName())
-                .paramType(CompositeFunctionCatalog.toParamType(parameter.getType()))
-                .category(category)
-                .paramOrder(paramOrder)
-                .description(parameter.getDescription())
-                .createTime(new Date())
-                .updateTime(new Date())
+        return OperatorFunctionUtil.functionParamDefaults(
+                        functionId, parameter.getName(), parameter.getType(), category, paramOrder, parameter.getDescription())
                 .build();
     }
 

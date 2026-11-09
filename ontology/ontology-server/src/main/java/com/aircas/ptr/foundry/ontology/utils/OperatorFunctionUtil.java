@@ -6,13 +6,15 @@ import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import com.aircas.ptr.foundry.ontology.composite.CompositeFunctionCatalog;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamCategoryEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.ScanSkipReasonEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.ScanStatusEnum;
 import com.aircas.ptr.foundry.ontology.model.po.Function;
 import com.aircas.ptr.foundry.ontology.model.po.FunctionParamPO;
 
 import java.util.Date;
 
 /**
- * 算子（函数）记录创建的公共默认约定工厂。
+ * 算子（函数）记录创建的公共默认约定工具类。
  * <p>各类算子（自定义脚本 / 基础查询 / 外部API / 函数编排 / 容器）落 {@code function} 表时，
  * 「未发布 + 启用」这两个平台级默认值必须一致。历史上统一创建
  * （{@code FunctionServiceImpl.createFunction}）与容器创建
@@ -20,13 +22,16 @@ import java.util.Date;
  * 约定漂移风险大。此处收敛为单一入口：调用方拿到预置好的 builder，再补各自专有字段
  * （code / dockerConfig / language / containerKey / description 等）。</p>
  */
-public final class OperatorFunctionFactory {
+public final class OperatorFunctionUtil {
 
-    private OperatorFunctionFactory() {
+    private OperatorFunctionUtil() {
     }
 
     /**
-     * 预置算子行的公共默认：{@code publish = 未发布}、{@code status = 启用}。
+     * 预置算子行的公共默认：{@code publish = 未发布}、{@code status = 启用}，
+     * 并生成类型匹配的完整跳过扫描结果。阶段一尚未接入远端扫描，CUSTOMIZE
+     * 暂按默认关闭策略写入 FEATURE_DISABLED；后续扫描编排层会在 insert 前覆盖为
+     * 本次真实结果或相同的关闭结果。非脚本算子始终为 NON_SCRIPT_OPERATOR。
      * 其余随类型而异的字段由调用方在返回的 builder 上继续链式设置。
      *
      * @param api             算子 api
@@ -40,6 +45,9 @@ public final class OperatorFunctionFactory {
     public static Function.FunctionBuilder operatorDefaults(String api, String version, String displayName,
                                                             FunctionTypeEnum type, Integer ontologySpaceId,
                                                             FunctionModelEnum model) {
+        ScanSkipReasonEnum skipReason = type == FunctionTypeEnum.CUSTOMIZE
+                ? ScanSkipReasonEnum.FEATURE_DISABLED
+                : ScanSkipReasonEnum.NON_SCRIPT_OPERATOR;
         return Function.builder()
                 .api(api)
                 .version(version)
@@ -48,7 +56,9 @@ public final class OperatorFunctionFactory {
                 .ontologySpaceId(ontologySpaceId)
                 .model(model)
                 .publish(FunctionConstant.PUBLISH_UNPUBLISHED)
-                .status(Status.ENABLE.getValue());
+                .status(Status.ENABLE.getValue())
+                .scanStatus(ScanStatusEnum.SKIPPED)
+                .scanResult(FunctionScanResultUtil.skipped(skipReason));
     }
 
     /**

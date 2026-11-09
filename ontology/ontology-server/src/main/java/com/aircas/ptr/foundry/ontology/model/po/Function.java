@@ -3,7 +3,10 @@ package com.aircas.ptr.foundry.ontology.model.po;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionLanguageEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionModelEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.ScanStatusEnum;
+import com.aircas.ptr.foundry.ontology.repository.handler.JsonbTypeHandler;
 import com.baomidou.mybatisplus.annotation.*;
+import com.fasterxml.jackson.databind.JsonNode;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -13,6 +16,7 @@ import lombok.experimental.Accessors;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import java.sql.Timestamp;
 import java.util.Date;
 
 
@@ -22,7 +26,7 @@ import java.util.Date;
 @Accessors(chain = true)
 @NoArgsConstructor
 @AllArgsConstructor
-@TableName(value = "function")
+@TableName(value = "function", autoResultMap = true)
 public class Function {
 
 
@@ -37,7 +41,7 @@ public class Function {
      * 记录更新时间
      */
     @TableField(fill = FieldFill.INSERT_UPDATE)
-    private Date updateTime;
+    private Timestamp updateTime;
 
     /**
      * Column: api
@@ -108,6 +112,18 @@ public class Function {
     private FunctionModelEnum model;
 
     /**
+     * 当前代码最后一次有效安全扫描的持久化状态。
+     * FAILED 仅用于当次响应和日志，数据库约束禁止持久化。
+     */
+    private ScanStatusEnum scanStatus;
+
+    /**
+     * 当前代码最后一次有效安全扫描的完整固定契约。
+     */
+    @TableField(typeHandler = JsonbTypeHandler.class)
+    private JsonNode scanResult;
+
+    /**
      * 涉及的本体
      */
     private String objectTypes;
@@ -129,7 +145,6 @@ public class Function {
      * 结构见 {@link com.aircas.ptr.foundry.ontology.model.dto.container.ContainerOperatorConfig} 的 interfaces 字段
      */
     private String dockerConfig;
-
     /**
      * 选用的限流配置模板 ID。
      */

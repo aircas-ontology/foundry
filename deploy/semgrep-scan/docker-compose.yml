@@ -1,0 +1,38 @@
+name: foundry-semgrep-scan
+services:
+  semgrep-scan:
+    image: ${SCAN_IMAGE:-foundry/semgrep-scan:local}
+    platform: ${SCAN_PLATFORM:?Use build.ps1 or build.sh to select amd64 or arm64}
+    pull_policy: never
+    build:
+      context: .
+      args:
+        BASE_IMAGE: ${SEMGREP_BASE_IMAGE:?Use build.ps1 or build.sh to load base-image.json}
+    read_only: true
+    init: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    cpus: 2
+    mem_limit: 2g
+    pids_limit: 512
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=512m,mode=1777
+    ports:
+      - "${SCAN_BIND_ADDRESS:-0.0.0.0}:${SCAN_PORT:-18080}:8080"
+    networks: [scan_internal]
+    restart: unless-stopped
+    stop_grace_period: 30s
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8080/api/v1/health',timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+networks:
+  scan_internal:
+    internal: ${SCAN_NETWORK_INTERNAL:-false}
