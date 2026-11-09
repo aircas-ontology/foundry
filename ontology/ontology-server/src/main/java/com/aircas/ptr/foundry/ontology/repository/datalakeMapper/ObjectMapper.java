@@ -37,6 +37,17 @@ public interface ObjectMapper extends BaseMapper<Object> {
                                       @Param("tableName") String tableName,
                                       @Param("primaryKeyColumnName") String primaryKeyColumnName);
 
+    /**
+     * 按主键升序分页取主键值，lastKey 传上一页最后一个主键（keyset 分页，不用 OFFSET）。
+     * <p>批量执行按页处理实例，避免一次把整表主键读进内存；lastKey 为空表示第一页。</p>
+     */
+    List<Object> queryPrimaryKeyValuePage(@Param("schemaName") String schemaName,
+                                          @Param("tableName") String tableName,
+                                          @Param("primaryKeyColumnName") String primaryKeyColumnName,
+                                          @Param("lastKey") Object lastKey,
+                                          @Param("limit") Integer limit,
+                                          @Param("hasDeletedField") Boolean hasDeletedField);
+
     List<Map<String, Object>> queryPrimaryKeyAndTitleKeyValue(@Param("schemaName") String schemaName,
                                                               @Param("tableName") String tableName,
                                                               @Param("primaryKeyColumnName") String primaryKeyColumnName,
@@ -116,6 +127,26 @@ public interface ObjectMapper extends BaseMapper<Object> {
         var records = queryJoinTableData(schemaName, primaryKeyValue, joinTableName, joinTableColumnNames, joinTableKey, joinTableOrderBy, count, sort);
         return populate(schemaName, records, joinTableName, joinTableColumnNames);
     }
+
+    default List<Map<String, Object>> queryByJoinTablePage(String schemaName, Object primaryKeyValue, String joinTableName, List<String> joinTableColumnNames, String joinTableKey, String joinTableOrderBy, Integer limit, Integer offset, String sort) {
+        var records = queryJoinTableDataPage(schemaName, primaryKeyValue, joinTableName, joinTableColumnNames, joinTableKey, joinTableOrderBy, limit, offset, sort);
+        return populate(schemaName, records, joinTableName, joinTableColumnNames);
+    }
+
+    List<Map<String, Object>> queryJoinTableDataPage(@Param("schemaName") String schemaName,
+                                                     @Param("primaryKeyValue") Object primaryKeyValue,
+                                                     @Param("joinTableName") String joinTableName,
+                                                     @Param("joinTableColumnNames") List<String> joinTableColumnNames,
+                                                     @Param("joinTableKey") String joinTableKey,
+                                                     @Param("joinTableOrderBy") String joinTableOrderBy,
+                                                     @Param("limit") Integer limit,
+                                                     @Param("offset") Integer offset,
+                                                     @Param("sort") String sort);
+
+    Integer queryJoinTableCount(@Param("schemaName") String schemaName,
+                                @Param("primaryKeyValue") Object primaryKeyValue,
+                                @Param("joinTableName") String joinTableName,
+                                @Param("joinTableKey") String joinTableKey);
 
 
     Map<String, Object> queryByPrimaryKey(@Param("schemaName") String schemaName,

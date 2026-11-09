@@ -1013,6 +1013,102 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         return failedOntology;
     }
 
+    @SneakyThrows
+    @Override
+    public List<String> importOntologiesFromJson(String jsonContent) {
+        List<OntologyCreateDTO> ontologyList = objectMapper.readValue(jsonContent, new TypeReference<List<OntologyCreateDTO>>() {
+        });
+        List<String> failedOntology = Lists.newArrayList();
+        ontologyList.forEach(dto -> {
+            try {
+                proxyService.importOntology(dto);
+            } catch (Exception e) {
+                log.error("对象 {} 导入失败", dto.getMetadata().getDisplayName(), e);
+                failedOntology.add(dto.getMetadata().getDisplayName());
+            }
+        });
+        return failedOntology;
+    }
+
+    @SneakyThrows
+    @Override
+    public List<String> importOntologiesToSpaceFromJson(Integer targetSpaceId, String jsonContent) {
+        // 尝试读取为完整空间结构，如果失败则按对象列表处理
+        List<OntologyCreateDTO> ontologyList;
+        try {
+            var spaceData = objectMapper.readValue(jsonContent, new TypeReference<com.aircas.ptr.foundry.ontology.model.dto.OntologySpaceCreateDTO>() {});
+            ontologyList = spaceData.getOntologies();
+            if (ontologyList == null) {
+                ontologyList = Lists.newArrayList();
+            }
+        } catch (Exception e) {
+            // 如果不是完整空间结构，按对象列表处理
+            ontologyList = objectMapper.readValue(jsonContent, new TypeReference<List<OntologyCreateDTO>>() {});
+        }
+
+        List<String> failedOntology = Lists.newArrayList();
+        // 记录导入结果：displayName -> uniqueIdentifier，用于后续处理继承关系
+        Map<String, String> displayNameToUid = new HashMap<>();
+        // 记录有父对象的对象：displayName -> parentDisplayName
+        Map<String, String> parentRelations = new HashMap<>();
+
+        // 第一遍：删除冲突对象并导入
+        for (OntologyCreateDTO dto : ontologyList) {
+            try {
+                var metaData = dto.getMetadata();
+                if (metaData == null) {
+                    continue;
+                }
+                // 检查并删除冲突对象（按 displayName 或 apiName 匹配）
+                deleteConflictingOntology(targetSpaceId, metaData.getDisplayName(), metaData.getApiName());
+
+                var result = proxyService.importOntology(dto, targetSpaceId);
+                if (result != null) {
+                    // 查询新创建的对象 uniqueIdentifier
+                    var meta = getOne(new LambdaQueryWrapper<OntologyMeta>()
+                            .eq(OntologyMeta::getOntologySpaceId, targetSpaceId)
+                            .eq(OntologyMeta::getDisplayName, metaData.getDisplayName())
+                            .eq(OntologyMeta::getStatus, Status.ENABLE.getValue())
+                            .orderByDesc(OntologyMeta::getId)
+                            .last("LIMIT 1"));
+                    if (meta != null) {
+                        displayNameToUid.put(metaData.getDisplayName(), meta.getUniqueIdentifier());
+                    }
+                    // 记录继承关系
+                    if (StringUtils.isNotEmpty(metaData.getParentOntologyDisplayName())) {
+                        parentRelations.put(metaData.getDisplayName(), metaData.getParentOntologyDisplayName());
+                    }
+                }
+            } catch (Exception e) {
+                log.error("对象 {} 导入失败", dto.getMetadata().getDisplayName(), e);
+                failedOntology.add(dto.getMetadata().getDisplayName());
+            }
+        }
+
+        // 第二遍：处理继承关系
+        for (var entry : parentRelations.entrySet()) {
+            var childDisplayName = entry.getKey();
+            var parentDisplayName = entry.getValue();
+            var childUid = displayNameToUid.get(childDisplayName);
+            var parentUid = displayNameToUid.get(parentDisplayName);
+            if (childUid == null) {
+                log.warn("继承关系跳过：子对象 {} 不存在", childDisplayName);
+                continue;
+            }
+            if (parentUid == null) {
+                log.warn("继承关系跳过：父对象 {} 不存在", parentDisplayName);
+                continue;
+            }
+            // 更新 parentUniqueIdentifier
+            update(new LambdaUpdateWrapper<OntologyMeta>()
+                    .eq(OntologyMeta::getUniqueIdentifier, childUid)
+                    .set(OntologyMeta::getParentUniqueIdentifier, parentUid));
+            log.info("继承关系设置成功：{} -> {}", childDisplayName, parentDisplayName);
+        }
+
+        return failedOntology;
+    }
+
     /**
      * 删除目标空间中冲突的对象（按 displayName 或 apiName 匹配）
      */

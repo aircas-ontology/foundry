@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.ontology.mcp.tools;
 
 import com.aircas.ptr.foundry.ontology.mcp.McpTools;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyMetaCreateParam;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaInfoVO;
 import com.aircas.ptr.foundry.ontology.service.OntologyMetaService;
 import lombok.RequiredArgsConstructor;
@@ -9,6 +10,7 @@ import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.Set;
 
 /**
  * 对象元数据 MCP 工具。
@@ -67,5 +69,52 @@ public class OntologyMetaMcpTools implements McpTools {
             @ToolParam(description = "空间名称（apiName 或 displayName）") String spaceName,
             @ToolParam(description = "对象名称（apiName 或 displayName）") String objectName) {
         return ontologyMetaService.queryMetaBySpaceAndName(spaceName, objectName);
+    }
+
+    @Tool(description = """
+            创建新对象（Ontology）。
+            当用户需要新建一个对象、添加对象到对象空间时使用。
+            返回新创建对象的唯一标识（uniqueIdentifier）。
+            """)
+    public String createOntology(
+            @ToolParam(description = "对象空间 ID") Integer spaceId,
+            @ToolParam(description = "对象显示名称") String displayName,
+            @ToolParam(description = "对象 API 名称（代码中使用）") String apiName,
+            @ToolParam(description = "对象描述，可为空", required = false) String description,
+            @ToolParam(description = "分组 ID 列表，可为空", required = false) Set<String> groupIds,
+            @ToolParam(description = "继承的父对象唯一标识，可为空", required = false) String parentOntologyUniqueIdentifier,
+            @ToolParam(description = "分类 ID，可为空", required = false) Integer categoryId) {
+        OntologyMetaCreateParam param = new OntologyMetaCreateParam();
+        param.setSpaceId(spaceId);
+        param.setDisplayName(displayName);
+        param.setApiName(apiName);
+        param.setDescription(description);
+        param.setGroupIds(groupIds);
+        param.setParentOntologyUniqueIdentifier(parentOntologyUniqueIdentifier);
+        param.setCategoryId(categoryId);
+        return ontologyMetaService.createOntology(param);
+    }
+
+    @Tool(description = """
+            批量导入对象（从 JSON 字符串）。
+            当用户需要从导出的 JSON 数据批量导入对象时使用。
+            JSON 格式应与导出模板一致，包含对象的元数据、属性分类、属性 schema、属性列表和关系列表。
+            返回导入失败的对象显示名称列表；空列表表示全部成功。
+            """)
+    public List<String> importOntologiesFromJson(
+            @ToolParam(description = "对象导入 JSON 字符串（数组格式）") String jsonContent) {
+        return ontologyMetaService.importOntologiesFromJson(jsonContent);
+    }
+
+    @Tool(description = """
+            批量导入对象到指定空间（从 JSON 字符串）。
+            当用户需要将对象导入到特定空间时使用，会自动处理空间 ID 和名称唯一性。
+            JSON 格式应与导出模板一致。
+            返回导入失败的对象显示名称列表；空列表表示全部成功。
+            """)
+    public List<String> importOntologiesToSpaceFromJson(
+            @ToolParam(description = "目标空间 ID") Integer spaceId,
+            @ToolParam(description = "对象导入 JSON 字符串（数组格式）") String jsonContent) {
+        return ontologyMetaService.importOntologiesToSpaceFromJson(spaceId, jsonContent);
     }
 }

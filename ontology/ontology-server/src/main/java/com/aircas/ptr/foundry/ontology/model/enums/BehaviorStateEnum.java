@@ -7,7 +7,7 @@ import lombok.Getter;
  * 行为树节点的执行结果状态，落 JSON 存枚举名。
  * <p>
  * 引擎一次 Tick 返回 SUCCESS 或 FAILURE；RUNNING 表示节点仍在执行、下次 Tick 续跑，
- * P1 的单轮引擎不产生该状态，限时、冷却等依赖跨 Tick 的语义只能存下配置但不生效。
+ * 单轮引擎不产生该状态。
  */
 @AllArgsConstructor
 @Getter

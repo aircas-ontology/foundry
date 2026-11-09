@@ -1,7 +1,10 @@
 package com.aircas.ptr.foundry.ontology.mcp.tools;
 
+import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import com.aircas.ptr.foundry.ontology.mcp.McpTools;
 import com.aircas.ptr.foundry.ontology.model.enums.Status;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyCreateParam;
+import com.aircas.ptr.foundry.ontology.model.param.PropertyDatasourceParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
 import com.aircas.ptr.foundry.ontology.model.po.OntologySpace;
@@ -12,6 +15,7 @@ import com.aircas.ptr.foundry.ontology.service.OntologyMetaService;
 import com.aircas.ptr.foundry.ontology.service.OntologyPropertyService;
 import com.aircas.ptr.foundry.ontology.service.OntologySpaceService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -95,5 +99,49 @@ public class OntologyPropertyMcpTools implements McpTools {
     public List<PropertyCategory> listPropertyCategories(
             @ToolParam(description = "对象唯一标识（ontologyUniqueIdentifier）") String ontologyUniqueIdentifier) {
         return ontologyPropertyService.getPropertyCategoryList(ontologyUniqueIdentifier);
+    }
+
+    @Tool(description = """
+            为对象创建新属性。
+            当用户需要给对象添加属性、定义对象的字段结构时使用。
+            """)
+    public void createProperty(
+            @ToolParam(description = "对象唯一标识（ontologyUniqueIdentifier）") String ontologyUniqueIdentifier,
+            @ToolParam(description = "属性显示名称") String displayName,
+            @ToolParam(description = "属性 API 名称（代码中使用，格式：^[a-zA-Z_$][a-zA-Z0-9_$]{0,62}$）") String apiName,
+            @ToolParam(description = "数据类型，可选值：Bool、Int、Long、Float、Short、Byte、Double、Decimal、String、Date、Array、Map、Vector、Timestamp、MediaReference、TimeSeries、Attachment、Geohash、Geoshape、Cipher、Ontology") String dataType,
+            @ToolParam(description = "是否为主键") Boolean isPrimaryKey,
+            @ToolParam(description = "是否为标题键") Boolean isTitleKey,
+            @ToolParam(description = "存储分组名称（格式：^[a-zA-Z_$][a-zA-Z0-9_$]{0,62}$）") String storageGroup,
+            @ToolParam(description = "属性描述，可为空", required = false) String description,
+            @ToolParam(description = "属性标签，可为空", required = false) String tag,
+            @ToolParam(description = "默认值，可为空", required = false) String defaultValue,
+            @ToolParam(description = "属性分类 ID，可为空", required = false) Integer categoryId,
+            @ToolParam(description = "数据源配置（JSON 格式），可为空", required = false) String datasourceJson,
+            @ToolParam(description = "元数据（JSON 格式），可为空", required = false) JsonNode metadata) {
+        OntologyPropertyCreateParam param = new OntologyPropertyCreateParam();
+        param.setOntologyIdentifier(ontologyUniqueIdentifier);
+        param.setDisplayName(displayName);
+        param.setApiName(apiName);
+        param.setDataType(OntologyDataTypeEnum.valueOf(dataType));
+        param.setIsPrimaryKey(isPrimaryKey);
+        param.setIsTitleKey(isTitleKey);
+        param.setStorageGroup(storageGroup);
+        param.setDescription(description);
+        param.setTag(tag);
+        param.setDefaultValue(defaultValue);
+        param.setCategoryId(categoryId);
+        param.setMetadata(metadata);
+        // 如果有数据源配置，解析 JSON
+        if (StringUtils.isNotEmpty(datasourceJson)) {
+            try {
+                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                PropertyDatasourceParam datasource = mapper.readValue(datasourceJson, PropertyDatasourceParam.class);
+                param.setDatasource(datasource);
+            } catch (Exception e) {
+                throw new IllegalArgumentException("数据源配置 JSON 格式错误: " + e.getMessage());
+            }
+        }
+        ontologyPropertyService.createProperty(param);
     }
 }

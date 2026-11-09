@@ -43,8 +43,9 @@ public class ActionHandleTask {
 
     private ScheduleStatus status;
 
-    private Long actionId;
+    private String actionApi;
 
+    private String ontologyIdentifier;
 
     /**
      * 定时任务表达式

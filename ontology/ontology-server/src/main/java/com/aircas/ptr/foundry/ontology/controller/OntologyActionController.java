@@ -135,6 +135,13 @@ public class OntologyActionController {
     }
 
 
+    @Operation(summary = "行为树测试（草稿也可试跑，真实落库）")
+    @PostMapping("/tree/test")
+    public RestResult<TreeExecuteResultVO> testTree(@RequestBody @Valid TreeExecuteParam param) {
+        return RestResult.ofData(ontologyActionService.testTree(param));
+    }
+
+
     @Operation(summary = "批量执行行为树（按对象类型遍历实例，真实落库）")
     @PostMapping("/tree/executeBatch")
     public RestResult<TreeBatchExecuteResultVO> executeTreeBatch(@RequestBody @Valid TreeBatchExecuteParam param) {

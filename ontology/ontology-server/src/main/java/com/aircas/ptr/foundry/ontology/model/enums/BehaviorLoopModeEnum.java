@@ -6,8 +6,8 @@ import lombok.Getter;
 /**
  * 重复类节点的循环模式，落 JSON 存枚举名。
  * <p>
- * FIXED_TIMES 循环固定次数，次数取 times；INFINITE 无限循环，受节点超时时间约束；
- * UNTIL_CONDITION 按持续执行条件循环，条件空表示不启用。
+ * FIXED_TIMES 循环固定次数，次数取 times；INFINITE 与 UNTIL_CONDITION 都按节点持续执行条件决定是否继续，
+ * 区别只在静态配置的语义，运行期都必须填持续执行条件作为结束条件。
  */
 @AllArgsConstructor
 @Getter
