@@ -1684,10 +1684,12 @@ public class EntityServiceImpl implements EntityService {
                     .build());
         }
         //执行函数
+        // 取完整返回体（不剥 FunctionResultVO 外壳）：关系落库的判据 startTime/endTime/timeWindows 只在外壳上，
+        // 剥壳后在到达行为前就丢了。出参回写另有取值根处理，表达式口径不变，见 functionOutputRoot
         var functionResultJson = functionService.executeFunction(FunctionExecuteParam.builder()
                 .functionApi(actionContext.getActionDetailVO().getFunctionApi())
                 .parameters(parameters)
-                .build());
+                .build(), true);
 
         var functionResult = readFunctionResult(functionResultJson);
         //异步接口，需要保存调用时的上下文信息
@@ -1812,6 +1814,26 @@ public class EntityServiceImpl implements EntityService {
         }
     }
 
+    /**
+     * 出参取值根：脚本算子的完整返回体是 {@link FunctionResultVO} 外壳，取值路径按其中的 {@code data} 书写，
+     * 这里剥一层；外部API/容器/编排的返回本就没有外壳，{@code data} 是业务字段，不剥。
+     * <p>
+     * 取不到对象根（标量或空）时返回 null，回写整段跳过——路径在这样的根上永远取不到值，
+     * 硬写会把属性覆盖成 null。
+     */
+    @SneakyThrows
+    private String functionOutputRoot(String jsonString, FunctionTypeEnum functionType) {
+        if (StringUtils.isEmpty(jsonString)) {
+            return null;
+        }
+        // 显式 JsonNode，不写 var：readTree 在本版本 Jackson 下可能是泛型 <T extends TreeNode> T
+        com.fasterxml.jackson.databind.JsonNode root = jsonMapper.readTree(jsonString);
+        if (functionType == FunctionTypeEnum.CUSTOMIZE && root != null && root.isObject() && root.has("data")) {
+            root = root.get("data");
+        }
+        return root != null && root.isObject() ? jsonMapper.writeValueAsString(root) : null;
+    }
+
     /** 按出参绑定把算子输出写回对象属性：主表列走 update，分组表补一行 insert */
     private void writeFunctionOutputToProperties(String jsonString, ActionContextInfoDTO actionContext) {
         //更新实体属性值
@@ -1844,12 +1866,19 @@ public class EntityServiceImpl implements EntityService {
                 .filter(v -> v.getIsPrimaryKey() == 1 && StringUtils.isNotEmpty(v.getOntologyUniqueIdentifier()))
                 .collect(Collectors.toMap(OntologyProperty::getOntologyUniqueIdentifier, v -> v, (a, b) -> a));
         var param = actionContext.getEntityActionExecuteParam();
+        // 取值根先算一次：出参表达式一直是按算子 data 内容书写的，剥外壳后与改造前同一口径
+        var outputRoot = functionOutputRoot(jsonString, actionContext.getFunctionDetailVO().getType());
+        if (outputRoot == null) {
+            log.warn("行为出参回写跳过：算子返回体不是对象，action={}", param.getActionApi());
+            return;
+        }
+        var resultContext = JsonPath.using(safeConfig).parse(outputRoot);
         Map<String, List<EntityUpdateParam.ColumnUpdate>> columnUpdatesByObject = new LinkedHashMap<>();
         Map<String, Map<String, Map<String, Object>>> insertMap = new LinkedHashMap<>();
         // 指定了分组行主键的出参：对象 -> 分组表 -> (行主键 + 待更新列)，按行改而不是插新行
         Map<String, Map<String, RowUpdate>> updateRowMap = new LinkedHashMap<>();
         output.stream().forEach(out -> {
-            Object actualValue = JsonPath.using(safeConfig).parse(jsonString).read(out.getFunctionParamExpression());
+            Object actualValue = resultContext.read(out.getFunctionParamExpression());
             var prop = propMap.get(out.getPropertyUniqueIdentifier());
             if (prop == null) {
                 log.warn("行为写回属性不存在，跳过：{}", out.getPropertyUniqueIdentifier());
