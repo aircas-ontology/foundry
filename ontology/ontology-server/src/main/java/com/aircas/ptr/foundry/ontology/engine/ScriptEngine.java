@@ -27,7 +27,8 @@ public interface ScriptEngine {
     void validate(ScriptExecutionContext ctx);
 
     /**
-     * 统一执行：返回 output JSON（即 {@code FunctionResultVO} 的字段形态）。
+     * 统一执行：返回 output JSON。脚本按约定返回 {@code FunctionResultVO} 形态，
+     * 也可返回自定义类或标量；调用方统一按「有 {@code data} 键取 {@code data}，否则原样透传」消费。
      */
     String execute(ScriptExecutionContext ctx);
 
