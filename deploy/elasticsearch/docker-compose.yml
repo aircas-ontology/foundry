@@ -29,9 +29,3 @@ services:
       timeout: 10s
       retries: 5
       start_period: 30s
-    networks:
-      - kafka_default
-
-networks:
-  kafka_default:
-    external: true
