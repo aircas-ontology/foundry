@@ -133,6 +133,15 @@ public interface ObjectMapper extends BaseMapper<Object> {
         return populate(schemaName, records, joinTableName, joinTableColumnNames);
     }
 
+    /** 按分组行主键精确取一行：关联列必须是本实例，行不存在或属于别的实例时返回空 */
+    List<Map<String, Object>> queryJoinTableRow(@Param("schemaName") String schemaName,
+                                                @Param("primaryKeyValue") Object primaryKeyValue,
+                                                @Param("joinTableName") String joinTableName,
+                                                @Param("joinTableColumnNames") List<String> joinTableColumnNames,
+                                                @Param("joinTableKey") String joinTableKey,
+                                                @Param("rowKeyColumn") String rowKeyColumn,
+                                                @Param("rowKey") Object rowKey);
+
     List<Map<String, Object>> queryJoinTableDataPage(@Param("schemaName") String schemaName,
                                                      @Param("primaryKeyValue") Object primaryKeyValue,
                                                      @Param("joinTableName") String joinTableName,

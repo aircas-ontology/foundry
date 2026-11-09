@@ -41,6 +41,18 @@ public class BehaviorActionConfig {
     @Schema(name = "dataPrimaryKeyKey", description = "属性值-修改/删除行为定位分组表行用的黑板键名；行为不需要就留空", example = "extraRowId")
     private String dataPrimaryKeyKey;
 
+    @Schema(name = "inputDataPrimaryKeyKeys",
+            description = "应用行为入参按行读取时用：对象id -> (存储分组 -> 黑板键名)。"
+                    + "没配的分组沿用执行请求里的默认行主键或原口径（最新一行）",
+            example = "{\"3f2a9c1e-7b4d-4a86-9e21-5c8d1f0a6b34\":{\"weapon_load\":\"weaponRowId\"}}")
+    private Map<String, Map<String, String>> inputDataPrimaryKeyKeys;
+
+    @Schema(name = "outputDataPrimaryKeyKeys",
+            description = "应用行为出参按行写回时用：对象id -> (存储分组 -> 黑板键名)。"
+                    + "没配的分组沿用执行请求里的默认行主键或原口径（新增一行）",
+            example = "{\"a5e8c206-3f17-4d92-8b74-1c6f9d3e5028\":{\"duty_log\":\"dutyRowId\"}}")
+    private Map<String, Map<String, String>> outputDataPrimaryKeyKeys;
+
     @Schema(name = "linkEntityPrimaryKeyKey", description = "实例关系行为对端实体主键用的黑板键名；行为不需要就留空", example = "targetId")
     private String linkEntityPrimaryKeyKey;
 

@@ -59,6 +59,12 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
     /** 执行级默认的分组表行主键，节点没配黑板键时用它 */
     private final Object dataPrimaryKey;
 
+    /** 执行级默认的入参分组行主键：对象id -> (存储分组 -> 行主键)，应用行为按行取属性入参 */
+    private final Map<String, Map<String, Object>> inputDataPrimaryKeys;
+
+    /** 执行级默认的出参分组行主键：对象id -> (存储分组 -> 行主键)，应用行为按行写出参 */
+    private final Map<String, Map<String, Object>> outputDataPrimaryKeys;
+
     /** 执行级默认的关系对端实体主键，节点没配黑板键时用它 */
     private final Object linkEntityPrimaryKey;
 
@@ -97,14 +103,18 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
 
     public TreeExecutionRuntime(BehaviorTreeDefinition definition, String treeApi, Object entityPrimaryKey,
                                 Map<String, Object> entityPrimaryKeys,
-                                Map<String, Object> inputs, Object dataPrimaryKey, Object linkEntityPrimaryKey,
-                                Integer spaceId, TreeCooldownTracker cooldownTracker,
+                                Map<String, Object> inputs, Object dataPrimaryKey,
+                                Map<String, Map<String, Object>> inputDataPrimaryKeys,
+                                Map<String, Map<String, Object>> outputDataPrimaryKeys,
+                                Object linkEntityPrimaryKey, Integer spaceId, TreeCooldownTracker cooldownTracker,
                                 TreeBranchRunner branchRunner, TreeActionInvoker actionInvoker) {
         this.definition = definition;
         this.treeApi = treeApi;
         this.entityPrimaryKey = entityPrimaryKey;
         this.entityPrimaryKeys = entityPrimaryKeys == null ? Map.of() : entityPrimaryKeys;
         this.dataPrimaryKey = dataPrimaryKey;
+        this.inputDataPrimaryKeys = inputDataPrimaryKeys == null ? Map.of() : inputDataPrimaryKeys;
+        this.outputDataPrimaryKeys = outputDataPrimaryKeys == null ? Map.of() : outputDataPrimaryKeys;
         this.linkEntityPrimaryKey = linkEntityPrimaryKey;
         this.spaceId = spaceId;
         this.cooldownTracker = cooldownTracker;
@@ -178,6 +188,16 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
 
     public Object getDataPrimaryKey() {
         return dataPrimaryKey;
+    }
+
+    /** 执行级默认的入参分组行主键：对象id -> (存储分组 -> 行主键) */
+    public Map<String, Map<String, Object>> getInputDataPrimaryKeys() {
+        return inputDataPrimaryKeys;
+    }
+
+    /** 执行级默认的出参分组行主键：对象id -> (存储分组 -> 行主键) */
+    public Map<String, Map<String, Object>> getOutputDataPrimaryKeys() {
+        return outputDataPrimaryKeys;
     }
 
     public Object getLinkEntityPrimaryKey() {

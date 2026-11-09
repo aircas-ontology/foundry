@@ -53,6 +53,18 @@ public class TreeExecuteParam {
             example = "123")
     private Object dataPrimaryKey;
 
+    @Schema(name = "inputDataPrimaryKeys",
+            description = "入参按行读取：对象id -> (存储分组 -> 行主键)，作为全树的默认值；"
+                    + "应用行为的属性入参按它取行，节点配置了入参键时以节点为准；留空时取最新一行",
+            example = "{\"3f2a9c1e-7b4d-4a86-9e21-5c8d1f0a6b34\":{\"weapon_load\":11}}")
+    private Map<String, Map<String, Object>> inputDataPrimaryKeys;
+
+    @Schema(name = "outputDataPrimaryKeys",
+            description = "出参按行写回：对象id -> (存储分组 -> 行主键)，作为全树的默认值；"
+                    + "应用行为的 WRITE_PROPERTY 出参写到该行，节点配置了出参键时以节点为准；留空时新增一行",
+            example = "{\"a5e8c206-3f17-4d92-8b74-1c6f9d3e5028\":{\"duty_log\":12}}")
+    private Map<String, Map<String, Object>> outputDataPrimaryKeys;
+
     @Schema(name = "linkEntityPrimaryKey",
             description = "实例关系行为的对端实体主键；作为全树默认值，行为节点配置了黑板键时以节点为准",
             example = "2")

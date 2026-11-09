@@ -33,8 +33,19 @@ public class EntityActionExecuteParam extends EntityQueryParam {
     private Object dataPrimaryKey;
 
     @Schema(name = "entityPrimaryKeys", description = "各对象选中的实例主键：对象id -> 实例主键；"
-            + "应用行为的入参/出参可能跨对象，映射涉及的对象都要提供；单对象行为可继续只传 entityPrimaryKey")
+            + "应用行为的入参/出参可能跨对象，映射涉及的对象都要提供；单对象行为可继续只传 entityPrimaryKey；"
+            + "入参与出参默认落在同一实例上，要分开时用 inputEntities/outputEntities")
     private Map<String, Object> entityPrimaryKeys;
+
+    @Schema(name = "inputEntities", description = "入参方向的数据位置：对象id -> {实例主键, 存储分组->行主键}。"
+            + "只对该对象的属性/对象/List 入参生效，两个子字段可只给其一，都没给时沿用 entityPrimaryKeys/最新一行；"
+            + "关系两端与不绑算子的行为不支持按方向指定")
+    private Map<String, ActionInstanceTargetParam> inputEntities;
+
+    @Schema(name = "outputEntities", description = "出参方向的数据位置：对象id -> {实例主键, 存储分组->行主键}。"
+            + "只对该对象的 WRITE_PROPERTY 出参生效，两个子字段可只给其一，都没给时沿用 entityPrimaryKeys/新增一行；"
+            + "关系两端与不绑算子的行为不支持按方向指定")
+    private Map<String, ActionInstanceTargetParam> outputEntities;
 
     @Schema(name = "linkedOntologyUniqueIdentifier", description = "关联对象id", example = "123")
     private String linkedOntologyUniqueIdentifier;
