@@ -117,6 +117,26 @@ public interface ObjectMapper extends BaseMapper<Object> {
         return populate(schemaName, records, joinTableName, joinTableColumnNames);
     }
 
+    default List<Map<String, Object>> queryByJoinTablePage(String schemaName, Object primaryKeyValue, String joinTableName, List<String> joinTableColumnNames, String joinTableKey, String joinTableOrderBy, Integer limit, Integer offset, String sort) {
+        var records = queryJoinTableDataPage(schemaName, primaryKeyValue, joinTableName, joinTableColumnNames, joinTableKey, joinTableOrderBy, limit, offset, sort);
+        return populate(schemaName, records, joinTableName, joinTableColumnNames);
+    }
+
+    List<Map<String, Object>> queryJoinTableDataPage(@Param("schemaName") String schemaName,
+                                                     @Param("primaryKeyValue") Object primaryKeyValue,
+                                                     @Param("joinTableName") String joinTableName,
+                                                     @Param("joinTableColumnNames") List<String> joinTableColumnNames,
+                                                     @Param("joinTableKey") String joinTableKey,
+                                                     @Param("joinTableOrderBy") String joinTableOrderBy,
+                                                     @Param("limit") Integer limit,
+                                                     @Param("offset") Integer offset,
+                                                     @Param("sort") String sort);
+
+    Integer queryJoinTableCount(@Param("schemaName") String schemaName,
+                                @Param("primaryKeyValue") Object primaryKeyValue,
+                                @Param("joinTableName") String joinTableName,
+                                @Param("joinTableKey") String joinTableKey);
+
 
     Map<String, Object> queryByPrimaryKey(@Param("schemaName") String schemaName,
                                           @Param("tableName") String tableName,

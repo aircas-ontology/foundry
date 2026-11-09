@@ -100,6 +100,30 @@
     </select>
 
 
+    <select id="queryJoinTableDataPage" resultType="java.util.HashMap">
+        SELECT
+        <if test="joinTableColumnNames != null and joinTableColumnNames.size() > 0">
+            <foreach item="column" collection="joinTableColumnNames" separator=",">
+                t."${column}"
+            </foreach>
+        </if>
+        <if test="joinTableColumnNames == null or joinTableColumnNames.size() == 0">
+            t.*
+        </if>
+        FROM "${schemaName}"."${joinTableName}" t
+        WHERE t."${joinTableKey}" = #{primaryKeyValue}
+        ORDER BY t."${joinTableOrderBy}" ${sort}
+        LIMIT ${limit} OFFSET ${offset}
+    </select>
+
+
+    <select id="queryJoinTableCount" resultType="java.lang.Integer">
+        SELECT count(*)
+        FROM "${schemaName}"."${joinTableName}" t
+        WHERE t."${joinTableKey}" = #{primaryKeyValue}
+    </select>
+
+
     <select id="queryByPrimaryKey" resultType="java.util.HashMap">
         SELECT
         <if test="columnNames != null and columnNames.size() > 0">

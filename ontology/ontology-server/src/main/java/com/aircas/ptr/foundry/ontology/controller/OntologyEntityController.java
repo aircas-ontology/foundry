@@ -68,6 +68,12 @@ public class OntologyEntityController {
         return RestResult.ofData(entityService.getEntityPropertyRowDetail(param));
     }
 
+    @PostMapping("/row_detail/page")
+    @Operation(summary = "根据实体id和存储分组分页查询属性行（只查指定分组，返回该组当前页与总行数）")
+    public RestResult<Page<EntityPropertyRowDetailVO.PropertyGroupData>> getEntityPropertyRowDetailPage(@RequestBody @Valid EntityPropertyRowPageQueryParam param) {
+        return RestResult.ofData(entityService.getEntityPropertyRowDetailPage(param));
+    }
+
     @PostMapping("/link")
     @Operation(summary = "查询单对象单个实体所有关联关系")
     public RestResult<List<EntityLinkPropertyVO>> getEntityLinksByPrimaryKey(@RequestBody @Valid EntityQueryParam param) {

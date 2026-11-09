@@ -578,6 +578,100 @@ public class EntityServiceImpl implements EntityService {
                 .build();
     }
 
+    @Override
+    public Page<EntityPropertyRowDetailVO.PropertyGroupData> getEntityPropertyRowDetailPage(EntityPropertyRowPageQueryParam param) {
+
+        var pageNum = param.getPageNum();
+        var pageSize = param.getPageSize();
+        var offset = (pageNum - 1) * pageSize;
+
+        var props = propertyMapper.selectList(new LambdaQueryWrapper<OntologyProperty>()
+                        .eq(OntologyProperty::getOntologyUniqueIdentifier, param.getOntologyUniqueIdentifier()))
+                .stream()
+                .filter(v -> StringUtils.isNotEmpty(v.getDatasourceColumnName()))
+                .collect(Collectors.toList());
+        var primaryKeyProp = props.stream().filter(v -> v.getIsPrimaryKey() == 1).findFirst();
+        PreconditionUtils.checkArgument(primaryKeyProp.isPresent()
+                        && StringUtils.isNotEmpty(primaryKeyProp.get().getDatasourceId())
+                        && StringUtils.isNotEmpty(primaryKeyProp.get().getDatasourceColumnName()),
+                "主键不存在或未绑定数据源", HttpStatus.BAD_REQUEST);
+        var pk = primaryKeyProp.get();
+        var pkData = objectMapper.queryDataByPrimaryKey(pk.getDatasourceSchema(), pk.getDatasourceId(),
+                Lists.newArrayList(pk.getDatasourceColumnName()), pk.getDatasourceColumnName(), param.getEntityPrimaryKey());
+        PreconditionUtils.checkArgument(MapUtils.isNotEmpty(pkData), "实体" + param.getEntityPrimaryKey() + "不存在");
+
+        //定位存储分组对应的数据源表，一个分组只能绑一张表，否则分页无唯一口径
+        var storageGroup = param.getStorageGroup();
+        var groupProps = props.stream()
+                .filter(v -> StringUtils.equals(storageGroup, v.getStorageGroup()) && StringUtils.isNotEmpty(v.getDatasourceId()))
+                .collect(Collectors.toList());
+        PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(groupProps), "存储分组" + storageGroup + "不存在或未绑定数据源");
+        var datasourceIds = groupProps.stream().map(OntologyProperty::getDatasourceId).distinct().collect(Collectors.toList());
+        PreconditionUtils.checkArgument(datasourceIds.size() == 1, "存储分组" + storageGroup + "绑定了多个数据源，无法分页查询", HttpStatus.BAD_REQUEST);
+        var ds = datasourceIds.get(0);
+        var propertyMap = groupProps.stream().collect(Collectors.toMap(v -> v.getDatasourceColumnName(), v -> v));
+
+        //主表分组：实例本身只有一行，按主键查询，分页只影响返回的 total
+        if (ds.equals(pk.getDatasourceId())) {
+            var row = objectMapper.queryDataByPrimaryKey(pk.getDatasourceSchema(), ds, Lists.newArrayList(propertyMap.keySet()),
+                    pk.getDatasourceColumnName(), param.getEntityPrimaryKey());
+            var page = new Page<EntityPropertyRowDetailVO.PropertyGroupData>(pageNum, pageSize, row == null ? 0 : 1);
+            if (row != null) {
+                page.setRecords(Lists.newArrayList(buildRowGroupData(row, propertyMap, pk.getDatasourceColumnName(), param.getEntityPrimaryKey())));
+            }
+            return page;
+        }
+
+        //关联属性表：按实例主键过滤后分页
+        var tableMapping = tableFieldMappingMapper.selectBySourceAndTarget(pk.getDatasourceSchema(), pk.getDatasourceId(), ds);
+        PreconditionUtils.checkArgument(tableMapping != null, "存储分组" + storageGroup + "与主表未建立关联关系", HttpStatus.BAD_REQUEST);
+        var orderBy = tableMetadataMapper.queryPrimaryKeyColumnName(pk.getDatasourceSchema(), ds);
+        PreconditionUtils.checkArgument(StringUtils.isNotEmpty(orderBy), "存储分组" + storageGroup + "的数据源表缺少主键列", HttpStatus.BAD_REQUEST);
+        var columns = Lists.newArrayList(propertyMap.keySet());
+        columns.add(orderBy);
+        var total = objectMapper.queryJoinTableCount(pk.getDatasourceSchema(), param.getEntityPrimaryKey(),
+                tableMapping.getTargetTableName(), tableMapping.getTargetColumnName());
+        var rows = objectMapper.queryByJoinTablePage(pk.getDatasourceSchema(), param.getEntityPrimaryKey(),
+                tableMapping.getTargetTableName(), columns, tableMapping.getTargetColumnName(), orderBy,
+                pageSize, offset, param.getSort().getValue());
+        var page = new Page<EntityPropertyRowDetailVO.PropertyGroupData>(pageNum, pageSize, total == null ? 0 : total);
+        var records = Lists.<EntityPropertyRowDetailVO.PropertyGroupData>newArrayList();
+        for (var row : rows) {
+            records.add(buildRowGroupData(row, propertyMap, orderBy, null));
+        }
+        page.setRecords(records);
+        return page;
+    }
+
+    private EntityPropertyRowDetailVO.PropertyGroupData buildRowGroupData(Map<String, Object> row,
+                                                                          Map<String, OntologyProperty> propertyMap,
+                                                                          String dataPrimaryKeyColumn,
+                                                                          Object entityPrimaryKey) {
+        var groupData = new EntityPropertyRowDetailVO.PropertyGroupData();
+        var propertyInfos = Lists.<EntityPropertyRowDetailVO.PropertyInfo>newArrayList();
+        for (var entry : row.entrySet()) {
+            var col = entry.getKey();
+            if (col.equals(dataPrimaryKeyColumn)) {
+                groupData.setDataPrimaryKey(entityPrimaryKey == null ? entry.getValue() : entityPrimaryKey);
+                continue;
+            }
+            var p = propertyMap.get(col);
+            if (p == null) {
+                continue;
+            }
+            propertyInfos.add(EntityPropertyRowDetailVO.PropertyInfo.builder()
+                    .propertyDisplayName(p.getDisplayName())
+                    .propertyUniqIdentifier(p.getUniqueIdentifier())
+                    .propertyApiName(p.getApiName())
+                    .propertyValue(entry.getValue())
+                    .categoryId(p.getPropertyCategoryId())
+                    .metadata(p.getMetadata())
+                    .build());
+        }
+        groupData.setProps(propertyInfos);
+        return groupData;
+    }
+
     @Transactional(transactionManager = "datalakeTransactionManager")
     @Override
     public List<Object> createEntities(EntityCreateParam param) {
