@@ -31,6 +31,16 @@ public interface FunctionService extends IService<Function> {
 
     String executeFunction(FunctionExecuteParam param);
 
+    /**
+     * 执行算子。
+     *
+     * @param keepVoShell {@code true} 时脚本算子（CUSTOMIZE）返回的 {@code FunctionResultVO} 外壳整层透出
+     *                    （{@code data} 与 {@code startTime}/{@code endTime}/{@code timeWindows}/{@code description} 同层）；
+     *                    {@code false} 只透 {@code data} 内容。其他类型算子本就没有这层外壳，取值无影响。
+     *                    <p>行为侧的属性回写与关系可见窗口按剥壳后的 {@code data} 内容配置绑定路径，走单参版本。</p>
+     */
+    String executeFunction(FunctionExecuteParam param, boolean keepVoShell);
+
 
     /**
      * 按 空间 + api + 版本号 查函数详情；version 为空时取该空间内该 api 的最新版本。
