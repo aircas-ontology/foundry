@@ -817,13 +817,11 @@ public class EntityServiceImpl implements EntityService {
             }
             relationRepository.updateRelation(startTime, endTime, visibilityWindows, status, relation.getId());
         }
-        //插入新的实体关系（实体节点已存在）
+        //插入新的实体关系：图库缺端点节点时先补节点，建边不再依赖调用方预先同步
         else {
-            var fromPk = normalizePrimaryKey(param.getEntityPrimaryKeyFrom());
-            var toPk = normalizePrimaryKey(param.getEntityPrimaryKeyTo());
-            var fromNode = nodeRepository.findByOntologyUniqIdentifierAndPrimaryKey(link.getOntologyUniqueIdentifierFrom(), fromPk);
-            var toNode = nodeRepository.findByOntologyUniqIdentifierAndPrimaryKey(link.getOntologyUniqueIdentifierTo(), toPk);
-            PreconditionUtils.checkArgument(fromNode != null && toNode != null, "实体节点不存在");
+            var fromNode = findOrCreateEntityNode(link.getOntologyUniqueIdentifierFrom(), param.getEntityPrimaryKeyFrom());
+            var toNode = findOrCreateEntityNode(link.getOntologyUniqueIdentifierTo(), param.getEntityPrimaryKeyTo());
+            PreconditionUtils.checkArgument(fromNode != null && toNode != null, "关系端点实体主键不能为空", HttpStatus.BAD_REQUEST);
             var nearest = nearestWindow(param.getVisibilityWindows());
             relation = EntityRelation.builder()
                     .ontologyLinkId(link.getUniqueIdentifier())
@@ -868,19 +866,24 @@ public class EntityServiceImpl implements EntityService {
 
 
     /**
-     * 删除一条实例关系：按两端实体主键定位边并置为 DELETE 状态。
-     * 与算子回写链路一致，图库里的边靠状态失效，不做物理删除。
+     * 删除一条实例关系：按两端实体主键定位边并从图库物理删除。
+     * <p>
+     * 幂等：关系定义有效但边已不存在时直接返回，重复删除不报错。
      */
     public void deleteEntityRelation(String linkUniqIdentifier, Object entityPrimaryKeyFrom, Object entityPrimaryKeyTo) {
         var link = linkGroupMapper.selectOne(new LambdaQueryWrapper<OntologyLinkGroup>()
                 .eq(OntologyLinkGroup::getUniqueIdentifier, linkUniqIdentifier));
         PreconditionUtils.checkNotNull(link, "invalid link uniqIdentifier", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(entityPrimaryKeyFrom != null && entityPrimaryKeyTo != null,
+                "关系端点实体主键不能为空", HttpStatus.BAD_REQUEST);
         var relation = relationRepository.queryRelationByFromNodeAndToNode(link.getOntologyUniqueIdentifierFrom(),
-                entityPrimaryKeyFrom, link.getOntologyUniqueIdentifierTo(), entityPrimaryKeyTo, linkUniqIdentifier);
-        PreconditionUtils.checkNotNull(relation, "实例关系不存在", HttpStatus.BAD_REQUEST);
-        // 删除只翻状态：边上的时段是已有数据，原样保留，便于恢复和追溯
-        relationRepository.updateRelation(relation.getStartTime(), relation.getEndTime(),
-                relation.getTimeWindows(), Status.DELETE, relation.getId());
+                normalizePrimaryKey(entityPrimaryKeyFrom), link.getOntologyUniqueIdentifierTo(),
+                normalizePrimaryKey(entityPrimaryKeyTo), linkUniqIdentifier);
+        if (relation == null) {
+            return;
+        }
+        // deleteByIds 过滤的是 _id，取 getId()（映射 _key）会一条都删不掉
+        relationRepository.deleteByIds(Lists.newArrayList(relation.getArangoId()));
     }
 
 
@@ -1634,14 +1637,12 @@ public class EntityServiceImpl implements EntityService {
                 primaryKeyFrom, link.getOntologyUniqueIdentifierTo(), primaryKeyTo, linkGroupId);
 
         if (relation == null) {
-            var fromPk = normalizePrimaryKey(primaryKeyFrom);
-            var toPk = normalizePrimaryKey(primaryKeyTo);
-            var fromNode = nodeRepository.findByOntologyUniqIdentifierAndPrimaryKey(link.getOntologyUniqueIdentifierFrom(), fromPk);
-            var toNode = nodeRepository.findByOntologyUniqIdentifierAndPrimaryKey(link.getOntologyUniqueIdentifierTo(), toPk);
+            var fromNode = findOrCreateEntityNode(link.getOntologyUniqueIdentifierFrom(), primaryKeyFrom);
+            var toNode = findOrCreateEntityNode(link.getOntologyUniqueIdentifierTo(), primaryKeyTo);
             if (fromNode == null || toNode == null) {
-                //图库里的节点可能被清理过，缺端点时无法建边
-                log.warn("行为函数实例关系边落位跳过：端点节点不存在，link={}, fromPk={}, toPk={}",
-                        link.getUniqueIdentifier(), fromPk, toPk);
+                //端点主键为空时无法定位或补建节点，保持跳过
+                log.warn("行为函数实例关系边落位跳过：端点主键为空，link={}, fromPk={}, toPk={}",
+                        link.getUniqueIdentifier(), primaryKeyFrom, primaryKeyTo);
             } else {
                 relationRepository.save(EntityRelation.builder()
                         .ontologyLinkId(link.getUniqueIdentifier())
@@ -1720,6 +1721,60 @@ public class EntityServiceImpl implements EntityService {
         var node = nodeRepository.findByOntologyUniqIdentifierAndPrimaryKey(ontologyUniqueIdentifier, entityPrimaryKey);
         if (node != null) {
             nodeRepository.delete(node);
+        }
+    }
+
+    /**
+     * 取关系端点节点，图库缺节点时按对象主键补建。
+     * <p>
+     * 行为建边不要求调用方先同步节点；补建时表名取主键属性绑定的数据源，
+     * 展示名回查同数据源下的标题列，查不到回退主键字符串。
+     */
+    private EntityNode findOrCreateEntityNode(String ontologyUniqueIdentifier, Object primaryKeyValue) {
+        if (primaryKeyValue == null) {
+            return null;
+        }
+        var normalizedPk = normalizePrimaryKey(primaryKeyValue);
+        var exist = nodeRepository.findByOntologyUniqIdentifierAndPrimaryKey(ontologyUniqueIdentifier, normalizedPk);
+        if (exist != null) {
+            return exist;
+        }
+        var primaryProperty = propertyMapper.selectOne(new LambdaQueryWrapper<OntologyProperty>()
+                .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier)
+                .eq(OntologyProperty::getIsPrimaryKey, 1));
+        var tableName = primaryProperty == null ? null : primaryProperty.getDatasourceId();
+        var displayName = resolveNodeDisplayName(ontologyUniqueIdentifier, primaryProperty, normalizedPk);
+        return nodeRepository.save(buildEntityNode(ontologyUniqueIdentifier, tableName, normalizedPk, displayName));
+    }
+
+    /** 补节点展示名：主键表同数据源下的标题列有值就用标题，查询失败或无标题回退主键字符串 */
+    private String resolveNodeDisplayName(String ontologyUniqueIdentifier, OntologyProperty primaryProperty, Object primaryKeyValue) {
+        var fallback = String.valueOf(primaryKeyValue);
+        if (primaryProperty == null
+                || StringUtils.isEmpty(primaryProperty.getDatasourceId())
+                || StringUtils.isEmpty(primaryProperty.getDatasourceColumnName())) {
+            return fallback;
+        }
+        var titleProperty = propertyMapper.selectOne(new LambdaQueryWrapper<OntologyProperty>()
+                .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier)
+                .eq(OntologyProperty::getIsTitleKey, 1));
+        if (titleProperty == null
+                || !StringUtils.equals(titleProperty.getDatasourceId(), primaryProperty.getDatasourceId())
+                || StringUtils.isEmpty(titleProperty.getDatasourceColumnName())) {
+            return fallback;
+        }
+        try {
+            var row = objectMapper.queryDataByPrimaryKey(
+                    primaryProperty.getDatasourceSchema(),
+                    primaryProperty.getDatasourceId(),
+                    Lists.newArrayList(primaryProperty.getDatasourceColumnName(), titleProperty.getDatasourceColumnName()),
+                    primaryProperty.getDatasourceColumnName(),
+                    primaryKeyValue);
+            var titleValue = row == null ? null : row.get(titleProperty.getDatasourceColumnName());
+            return titleValue == null ? fallback : titleValue.toString();
+        } catch (RuntimeException e) {
+            log.warn("补建图节点回查展示名失败，回退主键：ontology={}, pk={}", ontologyUniqueIdentifier, primaryKeyValue, e);
+            return fallback;
         }
     }
 

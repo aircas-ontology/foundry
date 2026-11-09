@@ -1297,7 +1297,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         checkActionLink(param, definition, true);
         var visibilityWindows = param.getLinkMapping().getVisibilityWindows();
         if (operation == ActionOperationEnum.DELETE) {
-            // 删除只是把边置为删除态，状态和时段都不取定义里的值
+            // 删除执行物理删边，状态和时段都不取定义里的值
             definition.actionLink.setTargetStatus(null);
             definition.actionLink.setTimeWindows(null);
         } else {
@@ -1307,7 +1307,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 PreconditionUtils.checkArgument(targetStatus != null && targetStatus != Status.DELETE,
                         "实例关系-修改必须指定目标状态（启用/停用）", HttpStatus.BAD_REQUEST);
             } else {
-                // 新增允许直接建成删除态的边：删除态只是不生效，不是消失，语义交给使用者定
+                // 新增允许把边建成 DELETE 状态位（不生效但存在），物理删除只由基础操作 DELETE 触发
                 PreconditionUtils.checkNotNull(targetStatus, "实例关系-新增必须指定目标状态", HttpStatus.BAD_REQUEST);
                 PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(visibilityWindows),
                         "实例关系-新增必须填写持续时段", HttpStatus.BAD_REQUEST);
@@ -1918,7 +1918,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
 
         if (operation == ActionOperationEnum.DELETE) {
             entityService.deleteEntityRelation(linkId, primaryKeyFrom, primaryKeyTo);
-            return "已将实例关系[" + linkId + "]置为删除状态";
+            return "已删除实例关系[" + linkId + "]";
         }
         // 新增按定义写状态与时段；修改只改定义里填了的项，没填的保留边上原值
         var definedStatus = linkMapping.getTargetStatus();
