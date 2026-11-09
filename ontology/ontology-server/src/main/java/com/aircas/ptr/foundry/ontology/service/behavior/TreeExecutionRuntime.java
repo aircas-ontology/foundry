@@ -8,6 +8,8 @@ import com.aircas.ptr.foundry.ontology.model.param.BehaviorActionConfig;
 import com.aircas.ptr.foundry.ontology.model.param.BehaviorBlackboardConditionConfig;
 import com.aircas.ptr.foundry.ontology.model.param.BehaviorBlackboardItem;
 import com.aircas.ptr.foundry.ontology.model.param.BehaviorTreeDefinition;
+import com.aircas.ptr.foundry.ontology.model.param.BehaviorTreeNode;
+import com.aircas.ptr.foundry.ontology.service.behavior.nodes.OntologyTreeNodes;
 import com.github.silencesu.behavior3java.core.Blackboard;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang.StringUtils;
@@ -19,6 +21,7 @@ import org.springframework.http.HttpStatus;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.LinkedHashMap;
@@ -26,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
 /**
@@ -48,6 +52,9 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
     private final String treeApi;
 
     private final Object entityPrimaryKey;
+
+    /** 按对象分开给的实例主键，树里多个对象类型都没配节点实例键时用；对象优先于 entityPrimaryKey */
+    private final Map<String, Object> entityPrimaryKeys;
 
     /** 执行级默认的分组表行主键，节点没配黑板键时用它 */
     private final Object dataPrimaryKey;
@@ -78,21 +85,32 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
      */
     private final ThreadLocal<Deque<Long>> deadlines = new ThreadLocal<>();
 
+    /** 当前线程最近一次并行等待是否因限时结束；并行节点读它补节点说明 */
+    private final ThreadLocal<Boolean> branchTimedOut = ThreadLocal.withInitial(() -> Boolean.FALSE);
+
+    /** 单次执行的总步数预算：按节点数放大，让正常的多次循环不被误伤，同时拦住嵌套循环的乘性放大 */
+    private final int stepBudget;
+
+    private final AtomicInteger consumedSteps = new AtomicInteger();
+
     private final Blackboard behaviorBlackboard = new Blackboard();
 
     public TreeExecutionRuntime(BehaviorTreeDefinition definition, String treeApi, Object entityPrimaryKey,
+                                Map<String, Object> entityPrimaryKeys,
                                 Map<String, Object> inputs, Object dataPrimaryKey, Object linkEntityPrimaryKey,
                                 Integer spaceId, TreeCooldownTracker cooldownTracker,
                                 TreeBranchRunner branchRunner, TreeActionInvoker actionInvoker) {
         this.definition = definition;
         this.treeApi = treeApi;
         this.entityPrimaryKey = entityPrimaryKey;
+        this.entityPrimaryKeys = entityPrimaryKeys == null ? Map.of() : entityPrimaryKeys;
         this.dataPrimaryKey = dataPrimaryKey;
         this.linkEntityPrimaryKey = linkEntityPrimaryKey;
         this.spaceId = spaceId;
         this.cooldownTracker = cooldownTracker;
         this.branchRunner = branchRunner;
         this.actionInvoker = actionInvoker;
+        this.stepBudget = OntologyTreeNodes.MAX_LOOP_ITERATIONS * (countNodes(definition.getRoots()) + 1);
         definition.getBlackboard().forEach(item -> blackboardItems.put(item.getKey(), item));
         definition.getVariables().forEach(variable -> blackboard.put(variable.getName(), variable.getDefaultValue()));
         if (inputs != null) {
@@ -140,6 +158,22 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
     @Override
     public Object getEntityPrimaryKey() {
         return entityPrimaryKey;
+    }
+
+    /** 某个对象本次执行用的实例主键：按对象给的优先，没给回退执行级的 entityPrimaryKey */
+    public Object entityPrimaryKeyFor(String objectId) {
+        if (objectId != null) {
+            var value = entityPrimaryKeys.get(objectId);
+            if (value != null) {
+                return value;
+            }
+        }
+        return entityPrimaryKey;
+    }
+
+    /** 只取按对象传的实例主键，不回退执行级主键：关系对端必须是那个对象自己的实例 */
+    public Object mappedEntityPrimaryKey(String objectId) {
+        return objectId == null ? null : entityPrimaryKeys.get(objectId);
     }
 
     public Object getDataPrimaryKey() {
@@ -316,14 +350,50 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
     }
 
     @Override
-    public boolean tryRunCooldown(String nodeId, int intervalSeconds) {
-        return cooldownTracker.tryRun(spaceId, treeApi, nodeId, entityPrimaryKey, intervalSeconds);
+    public TreeCooldownTracker.CooldownDecision tryRunCooldown(String nodeId, int intervalSeconds, String entityPrimaryKeyKey) {
+        var scope = StringUtils.isBlank(entityPrimaryKeyKey) ? entityPrimaryKey : blackboard.get(entityPrimaryKeyKey);
+        return cooldownTracker.tryRun(spaceId, treeApi, nodeId, scope, intervalSeconds);
+    }
+
+    @Override
+    public boolean tryConsumeStep() {
+        return consumedSteps.incrementAndGet() <= stepBudget;
+    }
+
+    @Override
+    public int getStepBudget() {
+        return stepBudget;
+    }
+
+    private static int countNodes(List<BehaviorTreeNode> nodes) {
+        int count = 0;
+        for (var node : nodes) {
+            count += 1 + countNodes(node.getChildren());
+        }
+        return count;
     }
 
     @Override
     public List<BehaviorStateEnum> runBranches(List<Supplier<BehaviorStateEnum>> branches, int maxConcurrency)
             throws InterruptedException {
-        return branchRunner.run(branches, maxConcurrency);
+        var stack = deadlines.get();
+        long earliest = Long.MAX_VALUE;
+        if (stack != null) {
+            for (var deadline : stack) {
+                if (deadline != null && deadline < earliest) {
+                    earliest = deadline;
+                }
+            }
+        }
+        // 外层限时还在时，等待分支不能越过截止时间；没有限时传 -1
+        var result = branchRunner.run(branches, maxConcurrency, earliest == Long.MAX_VALUE ? -1L : earliest);
+        branchTimedOut.set(result.timedOut());
+        return result.states();
+    }
+
+    @Override
+    public boolean branchWaitTimedOut() {
+        return Boolean.TRUE.equals(branchTimedOut.get());
     }
 
     private BehaviorNodeTrace trace(String nodeId) {
@@ -378,8 +448,24 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
         };
     }
 
+    /** 集合/映射/数组按元素判空；空 List 的 toString 是「[]」，不能拿字符串判断 */
     private boolean isEmptyValue(Object value) {
-        return value == null || StringUtils.isBlank(String.valueOf(value));
+        if (value == null) {
+            return true;
+        }
+        if (value instanceof CharSequence text) {
+            return text.toString().isBlank();
+        }
+        if (value instanceof Collection<?> collection) {
+            return collection.isEmpty();
+        }
+        if (value instanceof Map<?, ?> map) {
+            return map.isEmpty();
+        }
+        if (value.getClass().isArray()) {
+            return java.lang.reflect.Array.getLength(value) == 0;
+        }
+        return false;
     }
 
     private boolean isContained(Object actual, Object expect) {

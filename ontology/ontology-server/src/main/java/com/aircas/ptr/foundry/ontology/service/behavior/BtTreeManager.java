@@ -74,6 +74,15 @@ public class BtTreeManager {
         }
     }
 
+    /** 删对象会连带删掉该空间下的树与行为，整空间的编译结果一起失效，避免残留缓存继续命中 */
+    public void invalidateSpace(Integer ontologySpaceId) {
+        if (ontologySpaceId == null) {
+            return;
+        }
+        var prefix = ontologySpaceId + ":";
+        cache.asMap().keySet().removeIf(key -> key.startsWith(prefix));
+    }
+
     private String cacheKey(Integer ontologySpaceId, String api) {
         return ontologySpaceId + ":" + api;
     }

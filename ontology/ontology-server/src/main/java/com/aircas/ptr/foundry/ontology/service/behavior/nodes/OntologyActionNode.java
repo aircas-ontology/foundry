@@ -41,6 +41,11 @@ public class OntologyActionNode extends Action {
                 runtime.setNodeMessage(nodeId, "已超过限时，本次不执行行为");
                 return B3Status.FAILURE;
             }
+            if (!runtime.tryConsumeStep()) {
+                runtime.setNodeMessage(nodeId, "达到本次执行的总步数上限 " + runtime.getStepBudget()
+                        + "，不再尝试执行行为（嵌套循环按相加计，不再相乘）");
+                return B3Status.FAILURE;
+            }
             attempt++;
             state = runtime.executeAction(nodeId, config);
             if (state != BehaviorStateEnum.FAILURE) {

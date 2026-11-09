@@ -4,6 +4,7 @@ import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
 
 import java.util.Collection;
 
@@ -57,4 +58,10 @@ public interface BehaviorTreeCooldownMapper {
             """)
     int deleteByTreeExceptNodes(@Param("spaceId") Integer spaceId, @Param("treeApi") String treeApi,
                                 @Param("nodeIds") Collection<String> nodeIds);
+
+    /**
+     * 冷却状态表是否已建。表缺失时保存/删除树要跳过清理，不能让辅助表把主流程事务打断。
+     */
+    @Select("SELECT to_regclass('ontology.ontology_behavior_tree_cooldown') IS NOT NULL")
+    Boolean existsTable();
 }

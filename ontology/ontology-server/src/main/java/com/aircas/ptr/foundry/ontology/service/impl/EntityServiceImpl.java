@@ -1241,6 +1241,11 @@ public class EntityServiceImpl implements EntityService {
         return null;
     }
 
+    /** 调用方显式传的某对象实例主键；没传返回 null，由调用处回退到推导 */
+    private Object endpointPrimaryKey(ActionContextInfoDTO context, String objectId) {
+        return context.getEntityPrimaryKeys() == null ? null : context.getEntityPrimaryKeys().get(objectId);
+    }
+
     /**
      * 按映射涉及的对象逐个加载实例属性，属性id作为key合并。
      * <p>只有入参取对象属性、出参写属性才需要实例；入参全是固定值的（如基础算子的条件/聚合查询）不碰实例。
@@ -1717,15 +1722,29 @@ public class EntityServiceImpl implements EntityService {
         var linkGroupId = actionContext.getLink().getOntologyLinkUniqIdentifier();
         var link = linkGroupMapper.selectOne(new LambdaQueryWrapper<OntologyLinkGroup>().eq(OntologyLinkGroup::getUniqueIdentifier, linkGroupId));
         PreconditionUtils.checkNotNull(link, "无效的对象关系：" + linkGroupId, HttpStatus.BAD_REQUEST);
-        // 边按图库里的 From/To 定向：行为对象挂在 To 侧时本端主键落在 To 上，不能一律当 From
-        var selfIsFrom = !StringUtils.equals(actionContext.getEntityActionExecuteParam().getOntologyUniqueIdentifier(),
-                link.getOntologyUniqueIdentifierTo());
-        // 本端主键同样按对象解析：只传各对象实例主键 map 时也能拿到本端实例
-        var selfPrimaryKey = resolveEntityPrimaryKey(actionContext, actionContext.getEntityActionExecuteParam(),
-                actionContext.getEntityActionExecuteParam().getOntologyUniqueIdentifier());
-        var counterpartPrimaryKey = actionContext.getLinkEntityPrimaryKey();
-        var primaryKeyFrom = selfIsFrom ? selfPrimaryKey : counterpartPrimaryKey;
-        var primaryKeyTo = selfIsFrom ? counterpartPrimaryKey : selfPrimaryKey;
+        // 调用方按对象把两端实例都给了时直接按关系定义的 From/To 用，不再从行为所属对象推方向；
+        // 批量/调度只给本端（对端逐个遍历）时沿用原推算
+        var explicitFrom = endpointPrimaryKey(actionContext, link.getOntologyUniqueIdentifierFrom());
+        // 自关系两端同为对象 id，map 只放本端，对端取本次遍历到的实例
+        var explicitTo = StringUtils.equals(link.getOntologyUniqueIdentifierFrom(), link.getOntologyUniqueIdentifierTo())
+                ? actionContext.getLinkEntityPrimaryKey()
+                : endpointPrimaryKey(actionContext, link.getOntologyUniqueIdentifierTo());
+        Object primaryKeyFrom;
+        Object primaryKeyTo;
+        if (explicitFrom != null && explicitTo != null) {
+            primaryKeyFrom = explicitFrom;
+            primaryKeyTo = explicitTo;
+        } else {
+            // 边按图库里的 From/To 定向：行为对象挂在 To 侧时本端主键落在 To 上，不能一律当 From
+            var selfIsFrom = !StringUtils.equals(actionContext.getEntityActionExecuteParam().getOntologyUniqueIdentifier(),
+                    link.getOntologyUniqueIdentifierTo());
+            // 本端主键同样按对象解析：只传各对象实例主键 map 时也能拿到本端实例
+            var selfPrimaryKey = resolveEntityPrimaryKey(actionContext, actionContext.getEntityActionExecuteParam(),
+                    actionContext.getEntityActionExecuteParam().getOntologyUniqueIdentifier());
+            var counterpartPrimaryKey = actionContext.getLinkEntityPrimaryKey();
+            primaryKeyFrom = selfIsFrom ? selfPrimaryKey : counterpartPrimaryKey;
+            primaryKeyTo = selfIsFrom ? counterpartPrimaryKey : selfPrimaryKey;
+        }
 
         EntityRelation relation = relationRepository.queryRelationByFromNodeAndToNode(link.getOntologyUniqueIdentifierFrom(),
                 primaryKeyFrom, link.getOntologyUniqueIdentifierTo(), primaryKeyTo, linkGroupId);

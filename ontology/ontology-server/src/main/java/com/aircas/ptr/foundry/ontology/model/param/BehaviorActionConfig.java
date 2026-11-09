@@ -6,9 +6,13 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 
+import java.util.Map;
+
 /**
  * 行为节点的配置。
- * <p>按 ontology_action.api 绑定同空间内已发布的行为；一次树执行只有一个实例主键，全树共用，
+ * <p>按 ontology_action.api 绑定同空间内已发布的行为；实例主键默认全树共用一个，
+ * 节点配置了 entityPrimaryKeyKey 时改用该黑板键的值，不同对象类型的节点因此能各用各的实例。
+ * 一个行为同时读写多个对象类型的属性时（应用行为没有所属对象），用 objectInstanceKeys 按对象各配一个键。
  * 行为的外部输入参数按参数名从黑板取值，分组表行主键与关系对端主键这两个装不下的取值
  * 由黑板键供给（配置里写键名）。
  * 失败重试在单次执行内同步进行，重试会重复落库，只应对可重复执行的行为开启；
@@ -23,6 +27,16 @@ public class BehaviorActionConfig {
 
     @Schema(name = "actionApi", description = "绑定的行为 api", example = "act.satellite.track")
     private String actionApi;
+
+    @Schema(name = "entityPrimaryKeyKey",
+            description = "本节点执行时的实例主键用哪个黑板键；留空用执行请求里的 entityPrimaryKey（推荐），"
+                    + "不同对象类型或需要不同实例的节点各配各的键", example = "satelliteId")
+    private String entityPrimaryKeyKey;
+
+    @Schema(name = "objectInstanceKeys",
+            description = "对象实例键：对象类型标识 -> 黑板键名。绑定的行为同时读写多个对象类型的属性时必填，"
+                    + "每个对象各取各的实例；只涉及一个对象时留空，沿用 entityPrimaryKeyKey 或执行请求里的 entityPrimaryKey")
+    private Map<String, String> objectInstanceKeys;
 
     @Schema(name = "dataPrimaryKeyKey", description = "属性值-修改/删除行为定位分组表行用的黑板键名；行为不需要就留空", example = "extraRowId")
     private String dataPrimaryKeyKey;

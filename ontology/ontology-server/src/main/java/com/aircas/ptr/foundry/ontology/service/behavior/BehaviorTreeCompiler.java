@@ -168,8 +168,11 @@ public final class BehaviorTreeCompiler {
         if (StringUtils.isNotBlank(node.getWhileCondition())) {
             props.put("whileCondition", node.getWhileCondition());
         }
-        // 并行节点要按分支定位 skipped 标记，把子节点标识按顺序带过去
-        if (node.getKind() == BehaviorNodeKindEnum.PARALLEL) {
+        // 并行节点要按分支定位 skipped 标记，循环节点要判断子节点是否被跳过，都把子节点标识按顺序带过去
+        if (node.getKind() == BehaviorNodeKindEnum.PARALLEL
+                || node.getKind() == BehaviorNodeKindEnum.REPEATER
+                || node.getKind() == BehaviorNodeKindEnum.UNTIL_SUCCESS
+                || node.getKind() == BehaviorNodeKindEnum.UNTIL_FAILURE) {
             props.put("childNodeIds", writeJson(node.getChildren().stream().map(BehaviorTreeNode::getId).toList()));
         }
         return props;

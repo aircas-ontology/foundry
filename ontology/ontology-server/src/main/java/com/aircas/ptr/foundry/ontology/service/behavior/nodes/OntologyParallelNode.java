@@ -117,6 +117,10 @@ public class OntologyParallelNode extends Composite {
             runtime.appendNodeMessage(nodeId, "并行结果：成功 " + success + " / 失败 " + failure
                     + "，不满足策略" + policy.getName());
         }
+        if (runtime.branchWaitTimedOut()) {
+            runtime.appendNodeMessage(nodeId, "等待超过外层限时，未完成的分支按失败计入；"
+                    + "这些分支里已经发起的行为可能仍在后台完成");
+        }
         return OntologyTreeNodes.toB3(state);
     }
 

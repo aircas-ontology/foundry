@@ -46,6 +46,18 @@ public interface BehaviorTreeRuntime {
     /** 当前线程上是否有任一限时节点的截止时间已过 */
     boolean deadlineExceeded();
 
+    /**
+     * 领取一步执行预算：循环每轮、行为每次尝试都消耗一步。
+     * <p>单节点的 1000 次上限仍然保留，但整棵树共享一份按节点数放大的预算，
+     * 所以嵌套循环的次数是相加而不是相乘，不会放大到千万次落库。</p>
+     *
+     * @return 还有预算返回 true；用完返回 false，循环/重试应停止并按失败上报
+     */
+    boolean tryConsumeStep();
+
+    /** 单次执行的总步数预算，用于节点说明 */
+    int getStepBudget();
+
     /** 当前线程的截止时间快照，并行分支换线程执行时据此继承外层限时 */
     List<Long> snapshotDeadlines();
 
@@ -70,10 +82,12 @@ public interface BehaviorTreeRuntime {
     BehaviorStateEnum executeAction(String nodeId, com.aircas.ptr.foundry.ontology.model.param.BehaviorActionConfig config);
 
     /**
-     * 冷却占位：允许执行时记录本次执行时间并返回 true；仍在冷却期返回 false。
+     * 冷却占位：允许执行时记录本次执行时间；仍在冷却期返回 inCooldown；状态表不可用时返回 unavailable。
      * <p>状态跨执行持久，同一棵树、同一节点、同一执行实例共享一份记录。</p>
+     *
+     * @param entityPrimaryKeyKey 计时用的实例主键黑板键名；留空用执行请求里的 entityPrimaryKey
      */
-    boolean tryRunCooldown(String nodeId, int intervalSeconds);
+    TreeCooldownTracker.CooldownDecision tryRunCooldown(String nodeId, int intervalSeconds, String entityPrimaryKeyKey);
 
     /**
      * 并发执行并行节点的分支，最多 maxConcurrency 个同时运行，按提交顺序返回结果。
@@ -81,4 +95,12 @@ public interface BehaviorTreeRuntime {
      */
     List<BehaviorStateEnum> runBranches(List<Supplier<BehaviorStateEnum>> branches, int maxConcurrency)
             throws InterruptedException;
+
+    /**
+     * 最近一次并行分支等待是否因限时提前结束。
+     * <p>超时后未完成的分支按失败计，但它们的写操作可能仍在后台完成，并行节点据此补节点说明。</p>
+     */
+    default boolean branchWaitTimedOut() {
+        return false;
+    }
 }

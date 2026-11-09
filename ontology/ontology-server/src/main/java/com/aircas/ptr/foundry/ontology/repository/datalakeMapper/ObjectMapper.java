@@ -37,6 +37,17 @@ public interface ObjectMapper extends BaseMapper<Object> {
                                       @Param("tableName") String tableName,
                                       @Param("primaryKeyColumnName") String primaryKeyColumnName);
 
+    /**
+     * 按主键升序分页取主键值，lastKey 传上一页最后一个主键（keyset 分页，不用 OFFSET）。
+     * <p>批量执行按页处理实例，避免一次把整表主键读进内存；lastKey 为空表示第一页。</p>
+     */
+    List<Object> queryPrimaryKeyValuePage(@Param("schemaName") String schemaName,
+                                          @Param("tableName") String tableName,
+                                          @Param("primaryKeyColumnName") String primaryKeyColumnName,
+                                          @Param("lastKey") Object lastKey,
+                                          @Param("limit") Integer limit,
+                                          @Param("hasDeletedField") Boolean hasDeletedField);
+
     List<Map<String, Object>> queryPrimaryKeyAndTitleKeyValue(@Param("schemaName") String schemaName,
                                                               @Param("tableName") String tableName,
                                                               @Param("primaryKeyColumnName") String primaryKeyColumnName,
