@@ -33,7 +33,6 @@ import com.aircas.ptr.foundry.ontology.service.FunctionService;
 import com.aircas.ptr.foundry.ontology.service.OntologyActionService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
@@ -123,9 +122,29 @@ public class EntityServiceImpl implements EntityService {
 
 
     /**
-     * 函数执行结果的自定义键由脚本决定，已由 FunctionResultVO 的 @JsonAnySetter 承接，此处保持默认严格解析。
+     * 函数执行结果的自定义键由脚本决定，已由 FunctionResultVO 的 @JsonAnySetter 承接；
+     * 根节点形状由 {@link #readFunctionResult} 先判，避免标量/数组结果按 VO 硬解失败。
      */
     private final com.fasterxml.jackson.databind.ObjectMapper jsonMapper = new com.fasterxml.jackson.databind.ObjectMapper();
+
+    /**
+     * 宽容解析算子执行结果。
+     * <p>同步执行时 {@code executeFunction} 已剥掉 {@code FunctionResultVO} 外壳，脚本返回标量
+     * （如 {@code a+b}）或数组时根节点不是对象，按 VO 反序列化会抛 MismatchedInputException。
+     * 解析出的 VO 只用于判断异步 taskId 与可见窗口（startTime/endTime）。</p>
+     * <p>非对象根返回 null，调用处因此<b>跳过</b>属性回写：标量/数组根没有可绑定的出参字段，
+     * 硬跑下去 JsonPath 取不到值，只会在 {@code updateProperty} 的 {@code Collectors.toMap}
+     * 上抛 NPE 或把 null 写进属性列。需要回写的脚本应返回对象。</p>
+     */
+    @SneakyThrows
+    private FunctionResultVO readFunctionResult(String resultJson) {
+        if (StringUtils.isEmpty(resultJson)) {
+            return null;
+        }
+        // 显式 JsonNode，不写 var：readTree 在本版本 Jackson 下可能是泛型 <T extends TreeNode> T
+        com.fasterxml.jackson.databind.JsonNode root = jsonMapper.readTree(resultJson);
+        return root == null || !root.isObject() ? null : jsonMapper.treeToValue(root, FunctionResultVO.class);
+    }
 
 
     @Override
@@ -1353,8 +1372,7 @@ public class EntityServiceImpl implements EntityService {
                                         .build();
                                 //执行函数
                                 String functionResultJson = callFunction(contextInfoDTO);
-                                var functionResult = jsonMapper.readValue(functionResultJson, new TypeReference<FunctionResultVO>() {
-                                });
+                                var functionResult = readFunctionResult(functionResultJson);
                                 //如果函数是同步执行，更新实体属性和关系
                                 if (functionResult != null && StringUtils.isEmpty(functionResult.getTaskId())) {
                                     updateEntityPropertyAndRelation(functionResultJson, contextInfoDTO);
@@ -1388,8 +1406,7 @@ public class EntityServiceImpl implements EntityService {
                     .entityActionExecuteParam(param)
                     .build();
             var functionResultJson = callFunction(contextInfoDTO);
-            var functionResult = jsonMapper.readValue(functionResultJson, new TypeReference<FunctionResultVO>() {
-            });
+            var functionResult = readFunctionResult(functionResultJson);
             //函数同步执行，更新结果
             if (functionResult != null && StringUtils.isEmpty(functionResult.getTaskId())) {
                 updateEntityPropertyAndRelation(functionResultJson, contextInfoDTO);
@@ -1487,8 +1504,7 @@ public class EntityServiceImpl implements EntityService {
                 .parameters(parameters)
                 .build());
 
-        var functionResult = jsonMapper.readValue(functionResultJson, new TypeReference<FunctionResultVO>() {
-        });
+        var functionResult = readFunctionResult(functionResultJson);
         //异步接口，需要保存调用时的上下文信息
         if (functionResult != null && StringUtils.isNotEmpty(functionResult.getTaskId())) {
             var executeResult = executeResultMapper.selectOne(new LambdaQueryWrapper<FunctionExecuteResult>().eq(FunctionExecuteResult::getTaskId, functionResult.getTaskId()));
@@ -1710,8 +1726,10 @@ public class EntityServiceImpl implements EntityService {
         if (actionContext.getLink() == null) {
             return;
         }
-        FunctionResultVO resultVO = jsonMapper.readValue(jsonString, new TypeReference<FunctionResultVO>() {
-        });
+        FunctionResultVO resultVO = readFunctionResult(jsonString);
+        if (resultVO == null) {
+            return;
+        }
         Date startTime = resultVO.getStartTime();
         Date endTime = resultVO.getEndTime();
         if (startTime == null || endTime == null) {
