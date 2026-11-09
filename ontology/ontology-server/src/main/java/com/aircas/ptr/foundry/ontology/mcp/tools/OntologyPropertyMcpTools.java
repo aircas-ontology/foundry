@@ -120,7 +120,7 @@ public class OntologyPropertyMcpTools implements McpTools {
             @ToolParam(description = "数据源配置（JSON 格式），可为空", required = false) String datasourceJson,
             @ToolParam(description = "元数据（JSON 格式），可为空", required = false) JsonNode metadata) {
         OntologyPropertyCreateParam param = new OntologyPropertyCreateParam();
-        param.setOntologyUniqueIdentifier(ontologyUniqueIdentifier);
+        param.setOntologyIdentifier(ontologyUniqueIdentifier);
         param.setDisplayName(displayName);
         param.setApiName(apiName);
         param.setDataType(OntologyDataTypeEnum.valueOf(dataType));
