@@ -3265,7 +3265,9 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         if (schedulingType.equals(ActionSchedulingTypeEnum.TASK)) {
             var taskParam = param.getTask();
             var actionHandleTask = ActionHandleTask.builder()
-                    .actionId(action.getId())
+                    .actionApi(action.getApi())
+                    .ontologyIdentifier(action.getOntologyUniqueIdentifier())
+                    .ontologySpaceId(action.getOntologySpaceId())
                     .cron(taskParam.getTaskCronExpression())
                     .name(param.getName())
                     .description(param.getDescription())
@@ -3305,7 +3307,9 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         if (schedulingType.equals(ActionSchedulingTypeEnum.TASK)) {
             var handleTask = actionHandleTaskService.getById(param.getId());
             PreconditionUtils.checkNotNull(handleTask, "定时调度任务不存在：" + param.getId());
-            handleTask.setActionId(action.getId())
+            handleTask.setActionApi(action.getApi())
+                    .setOntologyIdentifier(action.getOntologyUniqueIdentifier())
+                    .setOntologySpaceId(action.getOntologySpaceId())
                     .setDescription(param.getDescription())
                     .setCron(param.getTask().getTaskCronExpression())
                     .setName(param.getName());
@@ -3385,7 +3389,9 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         if (ActionSchedulingTypeEnum.TASK.equals(type)) {
             var handleTask = actionHandleTaskService.getById(id);
             PreconditionUtils.checkNotNull(handleTask, "定时调度任务不存在：" + id);
-            var action = actionMapper.selectOne(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getId, handleTask.getActionId()));
+            var action = actionMapper.selectOne(new LambdaQueryWrapper<OntologyAction>()
+                    .eq(OntologyAction::getApi, handleTask.getActionApi())
+                    .eq(OntologyAction::getOntologySpaceId, handleTask.getOntologySpaceId()));
             var ontology = ontologyMetaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, action.getOntologyUniqueIdentifier()));
             return ActionSchedulingDetailVO.builder()
                     .actionApi(action.getApi())
@@ -3414,9 +3420,9 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             return new Page<ActionSchedulingInfoVO>(pageNum, pageSize);
         }
 
-        var actionIds = records.stream().map(v -> v.getActionId()).collect(Collectors.toList());
-        var actionMap = actionMapper.selectList(new LambdaQueryWrapper<OntologyAction>().in(OntologyAction::getId, actionIds))
-                .stream().collect(Collectors.toMap(v -> v.getId(), v -> v, (existingValue, newValue) -> existingValue));
+        var actionApis = records.stream().map(v -> v.getActionApi()).collect(Collectors.toList());
+        var actionMap = actionMapper.selectList(new LambdaQueryWrapper<OntologyAction>().in(OntologyAction::getApi, actionApis))
+                .stream().collect(Collectors.toMap(v -> v.getApi(), v -> v, (existingValue, newValue) -> existingValue));
 
         var ontologyUniqIds = actionMap.values().stream().map(v -> v.getOntologyUniqueIdentifier()).collect(Collectors.toList());
         var ontologyMap = ontologyMetaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>().in(OntologyMeta::getUniqueIdentifier, ontologyUniqIds))
@@ -3424,8 +3430,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
 
 
         var vo = records.stream().<ActionSchedulingInfoVO>map(v -> {
-            var actionId = v.getActionId();
-            var action = actionMap.get(actionId);
+            var actionApi = v.getActionApi();
+            var action = actionMap.get(actionApi);
             var ontologyMeta = ontologyMap.get(action.getOntologyUniqueIdentifier());
             return ActionSchedulingInfoVO.builder()
                     .actionApi(action.getApi())
