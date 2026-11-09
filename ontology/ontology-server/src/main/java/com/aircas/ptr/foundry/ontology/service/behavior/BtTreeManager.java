@@ -42,18 +42,30 @@ public class BtTreeManager {
     private OntologyActionMapper ontologyActionMapper;
 
     /**
-     * 取一棵可执行的树：校验存在、是树、已发布，未命中缓存则从库里的 definition 编译。
-     * <p>行为 api 只在空间内唯一，树也按空间定位，避免跨空间同名树互相覆盖缓存或取错定义。</p>
+     * 取一棵可执行的树：每次命中缓存都回库核对状态与更新时间，未命中缓存则从库里的 definition 编译。
+     * <p>失效只在当前实例生效，其他实例的缓存看不到本地保存/发布；不核对的话，多实例部署下会继续
+     * 用旧的已发布定义或已下线的树执行。行为 api 只在空间内唯一，树也按空间定位。</p>
      */
     public CompiledBehaviorTree getTree(Integer ontologySpaceId, String api) {
         var cacheKey = cacheKey(ontologySpaceId, api);
         var cached = cache.getIfPresent(cacheKey);
-        if (cached != null) {
+        if (cached != null && isFresh(ontologySpaceId, api, cached)) {
             return cached;
         }
         var compiled = load(ontologySpaceId, api);
         cache.put(cacheKey, compiled);
         return compiled;
+    }
+
+    /**
+     * 试跑用：草稿树也能编译，且不进执行缓存，避免草稿定义覆盖已发布树。
+     * <p>调用方负责按保存期规则再校验一次定义，这里只保证存在且是树。</p>
+     */
+    public CompiledBehaviorTree compileForTest(Integer ontologySpaceId, String api) {
+        var action = findAction(ontologySpaceId, api);
+        PreconditionUtils.checkArgument(action.getActionKind() == ActionKindEnum.TREE,
+                "行为树测试只能传行为树 api：" + api, HttpStatus.BAD_REQUEST);
+        return compile(action);
     }
 
     public void invalidate(Integer ontologySpaceId, String api) {
@@ -66,18 +78,42 @@ public class BtTreeManager {
         return ontologySpaceId + ":" + api;
     }
 
-    private CompiledBehaviorTree load(Integer ontologySpaceId, String api) {
-        var action = ontologyActionMapper.selectOne(new LambdaQueryWrapper<OntologyAction>()
+    /**
+     * 缓存是否仍与库里的行为一致：状态还是已发布，且定义没有在别的实例被改过。
+     * 只查两列，执行前多一次轻量查询，换来的是一致性。
+     */
+    private boolean isFresh(Integer ontologySpaceId, String api, CompiledBehaviorTree cached) {
+        var latest = ontologyActionMapper.selectOne(new LambdaQueryWrapper<OntologyAction>()
+                .select(OntologyAction::getStatus, OntologyAction::getUpdateTime)
                 .eq(OntologyAction::getApi, api)
                 .eq(OntologyAction::getOntologySpaceId, ontologySpaceId));
-        PreconditionUtils.checkArgument(action != null, "无效的action api", HttpStatus.BAD_REQUEST);
+        return latest != null
+                && Objects.equals(latest.getStatus(), ActionStatusEnum.PUBLISHED.getValue())
+                && Objects.equals(latest.getUpdateTime(), cached.updateTime());
+    }
+
+    private CompiledBehaviorTree load(Integer ontologySpaceId, String api) {
+        var action = findAction(ontologySpaceId, api);
         PreconditionUtils.checkArgument(action.getActionKind() == ActionKindEnum.TREE,
                 "按行为执行的接口不能跑行为树：" + api, HttpStatus.BAD_REQUEST);
         PreconditionUtils.checkArgument(Objects.equals(action.getStatus(), ActionStatusEnum.PUBLISHED.getValue()),
                 "行为树未发布，不能执行：" + api, HttpStatus.BAD_REQUEST);
-        var definition = readDefinition(action.getDefinition(), api);
-        var tree = BehaviorTreeCompiler.compile(api, definition);
-        return new CompiledBehaviorTree(action.getApi(), action.getOntologySpaceId(), action.getStatus(), definition, tree);
+        return compile(action);
+    }
+
+    private OntologyAction findAction(Integer ontologySpaceId, String api) {
+        var action = ontologyActionMapper.selectOne(new LambdaQueryWrapper<OntologyAction>()
+                .eq(OntologyAction::getApi, api)
+                .eq(OntologyAction::getOntologySpaceId, ontologySpaceId));
+        PreconditionUtils.checkArgument(action != null, "无效的action api", HttpStatus.BAD_REQUEST);
+        return action;
+    }
+
+    private CompiledBehaviorTree compile(OntologyAction action) {
+        var definition = readDefinition(action.getDefinition(), action.getApi());
+        var tree = BehaviorTreeCompiler.compile(action.getApi(), definition);
+        return new CompiledBehaviorTree(action.getApi(), action.getOntologySpaceId(), action.getStatus(),
+                action.getUpdateTime(), definition, tree);
     }
 
     @SneakyThrows

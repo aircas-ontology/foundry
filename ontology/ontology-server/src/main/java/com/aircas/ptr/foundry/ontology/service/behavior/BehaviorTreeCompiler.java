@@ -22,6 +22,7 @@ import com.github.silencesu.behavior3java.config.BTTreeCfg;
 import com.github.silencesu.behavior3java.core.BaseNode;
 import com.github.silencesu.behavior3java.core.BehaviorTree;
 import lombok.SneakyThrows;
+import org.apache.commons.lang.StringUtils;
 import org.springframework.http.HttpStatus;
 
 import java.util.ArrayList;
@@ -69,7 +70,7 @@ public final class BehaviorTreeCompiler {
         cfg.setTitle(api);
         Map<String, BTNodeCfg> nodes = new LinkedHashMap<>();
         var sequence = new AtomicInteger();
-        var rootKey = compileNode(roots.get(0), nodes, sequence);
+        var rootKey = compileNode(roots.get(0), null, nodes, sequence);
         cfg.setRoot(rootKey);
         cfg.setNodes(nodes);
         var tree = new BehaviorTree();
@@ -79,8 +80,11 @@ public final class BehaviorTreeCompiler {
 
     /**
      * 编译一个定义节点，返回它在节点表里的 key（Guard 的 key，父节点连的是它）。
+     *
+     * @param parentKind 父定义节点的类型；Guard 据此决定「跳过」返回成功还是失败，根节点为空
      */
-    private static String compileNode(BehaviorTreeNode node, Map<String, BTNodeCfg> nodes, AtomicInteger sequence) {
+    private static String compileNode(BehaviorTreeNode node, BehaviorNodeKindEnum parentKind,
+                                      Map<String, BTNodeCfg> nodes, AtomicInteger sequence) {
         if (node.getKind() == null) {
             throw new BusinessException("行为树节点缺少类型：" + node.getId(), HttpStatus.BAD_REQUEST);
         }
@@ -96,11 +100,11 @@ public final class BehaviorTreeCompiler {
         if (node.getKind().getCategory() == BehaviorNodeCategoryEnum.COMPOSITE) {
             List<String> children = new ArrayList<>();
             for (var child : node.getChildren()) {
-                children.add(compileNode(child, nodes, sequence));
+                children.add(compileNode(child, node.getKind(), nodes, sequence));
             }
             body.setChildren(children);
         } else if (node.getKind().getCategory() == BehaviorNodeCategoryEnum.DECORATOR) {
-            body.setChild(compileNode(node.getChildren().get(0), nodes, sequence));
+            body.setChild(compileNode(node.getChildren().get(0), node.getKind(), nodes, sequence));
         }
         nodes.put(bodyKey, body);
 
@@ -112,8 +116,15 @@ public final class BehaviorTreeCompiler {
         Map<String, String> guardProps = new HashMap<>();
         guardProps.put("nodeId", node.getId());
         guardProps.put("enabled", String.valueOf(node.isEnabled()));
+        if (parentKind != null) {
+            guardProps.put("parentKind", parentKind.name());
+        }
         if (node.getSkipIf() != null) {
             guardProps.put("skipIf", node.getSkipIf());
+        }
+        // 循环节点要在每轮重新求值，所以 body 也带一份；Guard 只做首次进入前的判断
+        if (StringUtils.isNotBlank(node.getWhileCondition())) {
+            guardProps.put("whileCondition", node.getWhileCondition());
         }
         guard.setProperties(guardProps);
         nodes.put(guardKey, guard);
@@ -153,6 +164,13 @@ public final class BehaviorTreeCompiler {
         props.put("kind", node.getKind().name());
         if (node.getConfig() != null) {
             props.put("configJson", writeJson(node.getConfig()));
+        }
+        if (StringUtils.isNotBlank(node.getWhileCondition())) {
+            props.put("whileCondition", node.getWhileCondition());
+        }
+        // 并行节点要按分支定位 skipped 标记，把子节点标识按顺序带过去
+        if (node.getKind() == BehaviorNodeKindEnum.PARALLEL) {
+            props.put("childNodeIds", writeJson(node.getChildren().stream().map(BehaviorTreeNode::getId).toList()));
         }
         return props;
     }

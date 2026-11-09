@@ -91,12 +91,20 @@ public interface OntologyActionService extends IService<OntologyAction> {
     /**
      * 行为树执行：一次树执行只针对一条实例数据，全树共用它，节点跑通即真实落库。
      * <p>
-     * 单轮求值，不产生 RUNNING：跨 Tick 的循环/冷却/限时按「跑一遍子节点」降级，结果里带说明。
+     * 单轮求值，不产生 RUNNING；循环、冷却、限时、并行都在单次请求内生效。
      *
      * @param param 树 api + 实例主键 + 黑板键的执行入参
      * @return 整树状态 + 结束时黑板快照 + 逐节点结果
      */
     TreeExecuteResultVO executeTree(TreeExecuteParam param);
+
+    /**
+     * 行为树测试：草稿树也可以试跑，用于发布前验证编排；与正式执行一样真实落库。
+     *
+     * @param param 树 api + 实例主键 + 黑板键的执行入参
+     * @return 整树状态 + 结束时黑板快照 + 逐节点结果
+     */
+    TreeExecuteResultVO testTree(TreeExecuteParam param);
 
     /**
      * 批量执行行为树：按对象类型遍历实例数据，每条实例独立跑一遍整棵树。

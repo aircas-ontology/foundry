@@ -9,8 +9,8 @@ import lombok.experimental.SuperBuilder;
 
 /**
  * 冷却节点的配置。
- * <p>冷却窗口要记住上次执行时间，而变量作用域只有 RUNTIME、不跨执行持久，
- * 所以 P1 只校验并保存配置，执行时 hitResult 恒按未命中冷却处理。</p>
+ * <p>冷却状态按「树 + 节点 + 执行实例主键」持久化，跨请求、跨实例有效；距上次执行未满 intervalSeconds 时
+ * 不执行子节点，直接上报 hitResult。计时从子节点开始执行算起，子节点失败也不退还冷却时间。</p>
  */
 @Data
 @SuperBuilder
@@ -22,6 +22,6 @@ public class BehaviorCooldownConfig {
     @Schema(name = "intervalSeconds", description = "冷却时长（秒），必须大于 0")
     private Integer intervalSeconds;
 
-    @Schema(name = "hitResult", description = "处于冷却期时本节点上报的状态", example = "FAILURE")
+    @Schema(name = "hitResult", description = "处于冷却期时本节点上报的状态，只能是 SUCCESS 或 FAILURE", example = "FAILURE")
     private BehaviorStateEnum hitResult;
 }

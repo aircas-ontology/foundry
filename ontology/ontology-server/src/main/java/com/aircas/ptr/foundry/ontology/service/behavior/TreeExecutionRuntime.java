@@ -17,15 +17,22 @@ import org.springframework.expression.spel.support.DataBindingPropertyAccessor;
 import org.springframework.expression.spel.support.SimpleEvaluationContext;
 import org.springframework.http.HttpStatus;
 
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 
 /**
  * 一次树执行（单条实例）的运行时：黑板、节点执行痕迹、条件求值。
  * <p>黑板是节点唯一的数据来源，变量默认值打底、执行入参覆盖；行为执行后按黑板项绑定的对象属性回填。
- * 每次执行独立一个实例，behavior3java 的 Blackboard 只承载库内置节点的记忆状态。</p>
+ * 每次执行独立一个实例，behavior3java 的 Blackboard 只承载库内置节点的记忆状态。
+ * 并行节点的多个分支共用一个运行时，所以黑板与节点痕迹按并发访问处理。</p>
  */
 @Slf4j
 public class TreeExecutionRuntime implements BehaviorTreeRuntime {
@@ -37,6 +44,9 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
 
     private final BehaviorTreeDefinition definition;
 
+    /** 树 api，冷却节点按「树 + 节点 + 实例」定位持久化状态 */
+    private final String treeApi;
+
     private final Object entityPrimaryKey;
 
     /** 执行级默认的分组表行主键，节点没配黑板键时用它 */
@@ -47,27 +57,41 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
 
     private final Integer spaceId;
 
+    private final TreeCooldownTracker cooldownTracker;
+
+    private final TreeBranchRunner branchRunner;
+
     private final TreeActionInvoker actionInvoker;
 
-    /** 黑板键名 -> 当前值 */
-    private final Map<String, Object> blackboard = new LinkedHashMap<>();
+    /** 黑板键名 -> 当前值；并行分支会同时读写，用同步包装保留插入顺序 */
+    private final Map<String, Object> blackboard = Collections.synchronizedMap(new LinkedHashMap<>());
 
     /** 黑板键名 -> 黑板项声明，行为写后按 bindPropertyUniqueIdentifier 找 */
     private final Map<String, BehaviorBlackboardItem> blackboardItems = new LinkedHashMap<>();
 
-    /** 节点标识 -> 执行痕迹 */
-    private final Map<String, BehaviorNodeTrace> traces = new LinkedHashMap<>();
+    /** 节点标识 -> 执行痕迹；并行分支各写各的节点 */
+    private final Map<String, BehaviorNodeTrace> traces = new ConcurrentHashMap<>();
+
+    /**
+     * 当前线程上生效的限时截止时间。限时节点在本线程压栈，子树在并行分支线程执行时把快照带过去；
+     * 只用于「超时后不再发起新的行为」，不中断已经开始的行为。
+     */
+    private final ThreadLocal<Deque<Long>> deadlines = new ThreadLocal<>();
 
     private final Blackboard behaviorBlackboard = new Blackboard();
 
-    public TreeExecutionRuntime(BehaviorTreeDefinition definition, Object entityPrimaryKey, Map<String, Object> inputs,
-                                Object dataPrimaryKey, Object linkEntityPrimaryKey,
-                                Integer spaceId, TreeActionInvoker actionInvoker) {
+    public TreeExecutionRuntime(BehaviorTreeDefinition definition, String treeApi, Object entityPrimaryKey,
+                                Map<String, Object> inputs, Object dataPrimaryKey, Object linkEntityPrimaryKey,
+                                Integer spaceId, TreeCooldownTracker cooldownTracker,
+                                TreeBranchRunner branchRunner, TreeActionInvoker actionInvoker) {
         this.definition = definition;
+        this.treeApi = treeApi;
         this.entityPrimaryKey = entityPrimaryKey;
         this.dataPrimaryKey = dataPrimaryKey;
         this.linkEntityPrimaryKey = linkEntityPrimaryKey;
         this.spaceId = spaceId;
+        this.cooldownTracker = cooldownTracker;
+        this.branchRunner = branchRunner;
         this.actionInvoker = actionInvoker;
         definition.getBlackboard().forEach(item -> blackboardItems.put(item.getKey(), item));
         definition.getVariables().forEach(variable -> blackboard.put(variable.getName(), variable.getDefaultValue()));
@@ -88,8 +112,16 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
         return definition;
     }
 
+    /** 活的黑板视图；单次读写是线程安全的，遍历要改用 {@link #snapshotBlackboard()} */
     public Map<String, Object> getBlackboard() {
         return blackboard;
+    }
+
+    /** 黑板快照：并行分支写入结束后按顺序复制一份，避免遍历时被并发修改 */
+    public Map<String, Object> snapshotBlackboard() {
+        synchronized (blackboard) {
+            return new LinkedHashMap<>(blackboard);
+        }
     }
 
     public Map<String, BehaviorBlackboardItem> getBlackboardItems() {
@@ -144,7 +176,10 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
             return;
         }
         var trace = trace(nodeId);
-        trace.setMessage(StringUtils.isBlank(trace.getMessage()) ? message : trace.getMessage() + "；" + message);
+        // 并行节点的分支会同时追加说明，读改写必须串行
+        synchronized (trace) {
+            trace.setMessage(StringUtils.isBlank(trace.getMessage()) ? message : trace.getMessage() + "；" + message);
+        }
     }
 
     @Override
@@ -158,6 +193,78 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
         trace.setState(BehaviorStateEnum.SUCCESS);
         trace.setSkipped(true);
         trace.setMessage(message);
+    }
+
+    @Override
+    public void resetNodeTrace(String nodeId) {
+        var trace = trace(nodeId);
+        trace.setState(null);
+        trace.setSkipped(false);
+        trace.setMessage(null);
+    }
+
+    @Override
+    public boolean isNodeSkipped(String nodeId) {
+        var trace = traces.get(nodeId);
+        return trace != null && trace.isSkipped();
+    }
+
+    @Override
+    public void pushDeadline(long deadlineMillis) {
+        deadlineStack().push(deadlineMillis);
+    }
+
+    @Override
+    public void popDeadline() {
+        var stack = deadlines.get();
+        if (stack == null) {
+            return;
+        }
+        stack.pop();
+        if (stack.isEmpty()) {
+            deadlines.remove();
+        }
+    }
+
+    @Override
+    public boolean deadlineExceeded() {
+        var stack = deadlines.get();
+        if (stack == null || stack.isEmpty()) {
+            return false;
+        }
+        var now = System.currentTimeMillis();
+        for (var deadline : stack) {
+            if (now > deadline) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Override
+    public List<Long> snapshotDeadlines() {
+        var stack = deadlines.get();
+        return stack == null ? new ArrayList<>() : new ArrayList<>(stack);
+    }
+
+    @Override
+    public void applyDeadlines(List<Long> snapshot) {
+        if (snapshot == null || snapshot.isEmpty()) {
+            deadlines.remove();
+            return;
+        }
+        var stack = deadlineStack();
+        stack.clear();
+        stack.addAll(snapshot);
+    }
+
+    private Deque<Long> deadlineStack() {
+        var stack = deadlines.get();
+        if (stack == null) {
+            stack = new ArrayDeque<>();
+            deadlines.set(stack);
+        }
+        return stack;
     }
 
     @Override
@@ -206,6 +313,17 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
             log.warn("行为树节点执行失败, nodeId={}, actionApi={}", nodeId, config == null ? null : config.getActionApi(), e);
             return BehaviorStateEnum.FAILURE;
         }
+    }
+
+    @Override
+    public boolean tryRunCooldown(String nodeId, int intervalSeconds) {
+        return cooldownTracker.tryRun(spaceId, treeApi, nodeId, entityPrimaryKey, intervalSeconds);
+    }
+
+    @Override
+    public List<BehaviorStateEnum> runBranches(List<Supplier<BehaviorStateEnum>> branches, int maxConcurrency)
+            throws InterruptedException {
+        return branchRunner.run(branches, maxConcurrency);
     }
 
     private BehaviorNodeTrace trace(String nodeId) {

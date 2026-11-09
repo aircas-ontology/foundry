@@ -35,6 +35,7 @@ import org.apache.commons.lang.StringUtils;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
 import org.springframework.http.HttpStatus;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -51,6 +52,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.concurrent.Semaphore;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 @Service
@@ -71,6 +76,9 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     private static final Set<FunctionParamTypeEnum> TREE_NUMBER_TYPES =
             EnumSet.of(FunctionParamTypeEnum.INTEGER, FunctionParamTypeEnum.LONG,
                     FunctionParamTypeEnum.FLOAT, FunctionParamTypeEnum.DOUBLE);
+
+    /** 冷却状态表 scope_key 列宽，超长实例主键截断后参与唯一键 */
+    private static final int TREE_COOLDOWN_SCOPE_MAX_LENGTH = 255;
 
 
     @Resource
@@ -129,6 +137,12 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
 
     @Resource
     private BtTreeManager btTreeManager;
+
+    @Resource
+    private BehaviorTreeCooldownMapper behaviorTreeCooldownMapper;
+
+    @Resource(name = "behaviorTreeBranchExecutor")
+    private ThreadPoolTaskExecutor behaviorTreeBranchExecutor;
 
 
     private final com.fasterxml.jackson.databind.ObjectMapper jsonMapper = new com.fasterxml.jackson.databind.ObjectMapper();
@@ -203,6 +217,11 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         actionLinkMapper.delete(new LambdaQueryWrapper<OntologyActionLink>().eq(OntologyActionLink::getOntologyActionId, action.getId()));
         ontologyActionMappingInService.remove(new LambdaQueryWrapper<OntologyActionMappingIn>().eq(OntologyActionMappingIn::getOntologyActionId, action.getId()));
         saveActionChildren(action.getId(), definition);
+        if (action.getActionKind() == ActionKindEnum.TREE) {
+            // 定义改了，已经不存在的节点不该再留着冷却记录：节点标识被其他节点复用时会把旧冷却带过来
+            behaviorTreeCooldownMapper.deleteByTreeExceptNodes(spaceId, action.getApi(),
+                    collectTreeNodeIds(readTreeDefinition(action.getDefinition()).getRoots()));
+        }
         btTreeManager.invalidate(action.getOntologySpaceId(), action.getApi());
     }
 
@@ -230,8 +249,11 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                     .treeDefinition(readTreeDefinition(action.getDefinition()))
                     .build();
             checkTreeDefinition(new OntologyAction(), param);
+            action.setStatus(ActionStatusEnum.PUBLISHED.getValue());
+        } else {
+            // 对外仍用 1/0，落库统一回行为的两态，避免列表按 2 筛草稿时漏掉已下线的树
+            action.setStatus(ActionStatusEnum.DRAFT.getValue());
         }
-        action.setStatus(status);
         updateById(action);
         btTreeManager.invalidate(action.getOntologySpaceId(), action.getApi());
     }
@@ -243,6 +265,9 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 .eq(OntologyAction::getApi, actionApi)
                 .eq(OntologyAction::getOntologySpaceId, ontologySpaceId));
         PreconditionUtils.checkArgument(action != null, "行为不存在", HttpStatus.BAD_REQUEST);
+        // 树走 publishTree：发布前要按库里的定义重新校验，泛化的行为发布不能绕过
+        PreconditionUtils.checkArgument(action.getActionKind() != ActionKindEnum.TREE,
+                "行为树请使用发布或下线行为树接口", HttpStatus.BAD_REQUEST);
         checkBoundFunctionPublished(action);
         action.setStatus(ActionStatusEnum.PUBLISHED.getValue());
         updateById(action);
@@ -255,8 +280,15 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 .eq(OntologyAction::getApi, actionApi)
                 .eq(OntologyAction::getOntologySpaceId, ontologySpaceId));
         PreconditionUtils.checkArgument(action != null, "行为不存在", HttpStatus.BAD_REQUEST);
+        // 树的下线要同时失效编译缓存，否则缓存里的树仍会被执行
+        PreconditionUtils.checkArgument(action.getActionKind() != ActionKindEnum.TREE,
+                "行为树请使用发布或下线行为树接口", HttpStatus.BAD_REQUEST);
         PreconditionUtils.checkArgument(action.getStatus() == ActionStatusEnum.PUBLISHED.getValue(),
                 "该行为未在发布状态，无需撤回", HttpStatus.BAD_REQUEST);
+        // 行为树里的行为节点按 api 引用，撤回发布后已发布的树会在执行时失败，先让调用方处理引用它的树
+        var referencingTrees = findTreesReferencingAction(ontologySpaceId, actionApi);
+        PreconditionUtils.checkArgument(referencingTrees.isEmpty(),
+                "该行为被行为树引用，不能撤回发布：" + String.join("、", referencingTrees), HttpStatus.BAD_REQUEST);
         action.setStatus(ActionStatusEnum.DRAFT.getValue());
         updateById(action);
     }
@@ -508,24 +540,31 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 checkTreePositive(config.getTimes(), "节点 " + nodeId + " 的循环次数");
                 if (config.getLoopMode() == BehaviorLoopModeEnum.FIXED_TIMES) {
                     PreconditionUtils.checkNotNull(config.getTimes(), "节点 " + nodeId + " 选择固定次数时必须填写次数", HttpStatus.BAD_REQUEST);
+                } else {
+                    // 按条件与无限循环都靠持续执行条件结束，不填就等于没有终止条件
+                    PreconditionUtils.checkArgument(StringUtils.isNotBlank(node.getWhileCondition()),
+                            "节点 " + nodeId + " 选择" + config.getLoopMode().getName() + "时必须填写持续执行条件", HttpStatus.BAD_REQUEST);
                 }
             }
             case UNTIL_SUCCESS, UNTIL_FAILURE -> {
                 var config = readTreeConfig(node, BehaviorUntilConfig.class);
-                checkTreePositive(config.getMaxTimes(), "节点 " + nodeId + " 的最大重试次数");
+                checkTreeNonNegative(config.getMaxTimes(), "节点 " + nodeId + " 的最大重试次数");
                 PreconditionUtils.checkNotNull(config.getFinishState(), "节点 " + nodeId + " 必须选择次数耗尽后的收尾状态", HttpStatus.BAD_REQUEST);
+                checkTreeResultState(config.getFinishState(), "节点 " + nodeId + " 的收尾状态");
             }
             case COOLDOWN -> {
                 var config = readTreeConfig(node, BehaviorCooldownConfig.class);
                 PreconditionUtils.checkNotNull(config.getIntervalSeconds(), "节点 " + nodeId + " 必须填写冷却时长", HttpStatus.BAD_REQUEST);
                 checkTreePositive(config.getIntervalSeconds(), "节点 " + nodeId + " 的冷却时长");
                 PreconditionUtils.checkNotNull(config.getHitResult(), "节点 " + nodeId + " 必须选择冷却期内的结果状态", HttpStatus.BAD_REQUEST);
+                checkTreeResultState(config.getHitResult(), "节点 " + nodeId + " 的冷却期内结果状态");
             }
             case TIME_LIMIT -> {
                 var config = readTreeConfig(node, BehaviorTimeLimitConfig.class);
                 PreconditionUtils.checkNotNull(config.getLimitSeconds(), "节点 " + nodeId + " 必须填写限时时长", HttpStatus.BAD_REQUEST);
                 checkTreePositive(config.getLimitSeconds(), "节点 " + nodeId + " 的限时时长");
                 PreconditionUtils.checkNotNull(config.getTimeoutState(), "节点 " + nodeId + " 必须选择超时后的状态", HttpStatus.BAD_REQUEST);
+                checkTreeResultState(config.getTimeoutState(), "节点 " + nodeId + " 的超时状态");
             }
             case INVERTER, FORCE_SUCCESS -> PreconditionUtils.checkArgument(node.getConfig() == null,
                     "节点 " + nodeId + " 的" + node.getKind().getName() + "不需要额外配置", HttpStatus.BAD_REQUEST);
@@ -555,8 +594,13 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 var config = readTreeConfig(node, BehaviorActionConfig.class);
                 var boundApi = config.getActionApi();
                 PreconditionUtils.checkArgument(StringUtils.isNotBlank(boundApi), "行为节点 " + nodeId + " 必须绑定行为", HttpStatus.BAD_REQUEST);
-                checkTreePositive(config.getTimeoutSeconds(), "行为节点 " + nodeId + " 的超时时长");
-                checkTreePositive(config.getRetryTimes(), "行为节点 " + nodeId + " 的重试次数");
+                // 行为在单轮里同步执行并落库，无法安全中断已经开始的调用，超时没有可执行的语义；
+                // 0 或空表示「不限制」，沿用原配置口径，只有真配了正数才拒绝
+                PreconditionUtils.checkArgument(config.getTimeoutSeconds() == null || config.getTimeoutSeconds() <= 0,
+                        "行为节点 " + nodeId + " 不支持超时时长：单轮同步执行无法中断已经开始的行为，"
+                                + "不需要超时就传 0 或不传，需要限制后续步骤请改用限时节点",
+                        HttpStatus.BAD_REQUEST);
+                checkTreeNonNegative(config.getRetryTimes(), "行为节点 " + nodeId + " 的重试次数");
                 // 分组表行主键、关系对端主键只能从黑板取，键名没声明就等于运行时拿不到
                 checkTreeBlackboardKeyRef(nodeId, config.getDataPrimaryKeyKey(), blackboardTypes);
                 checkTreeBlackboardKeyRef(nodeId, config.getLinkEntityPrimaryKeyKey(), blackboardTypes);
@@ -580,6 +624,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
 
     /**
      * 行为节点绑定的行为必须已经建好、在本空间内且已发布；树不能套树，否则执行时形不成单轮语义。
+     * <p>行为发布后它绑的算子仍可能被下架，发布树时一并穿透校验，否则树发布成功、执行时才失败。</p>
      */
     private void checkTreeBoundAction(String nodeId, String boundApi, Integer spaceId) {
         var bound = getOne(new LambdaQueryWrapper<OntologyAction>()
@@ -590,6 +635,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 "行为节点只能绑定行为，不能嵌套行为树：" + boundApi, HttpStatus.BAD_REQUEST);
         PreconditionUtils.checkArgument(Objects.equals(bound.getStatus(), ActionStatusEnum.PUBLISHED.getValue()),
                 "行为节点 " + nodeId + " 绑定的行为未发布：" + boundApi, HttpStatus.BAD_REQUEST);
+        checkBoundFunctionPublished(bound);
     }
 
     /**
@@ -645,6 +691,20 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         PreconditionUtils.checkArgument(value == null || value > 0, label + "必须大于 0", HttpStatus.BAD_REQUEST);
     }
 
+    /** 重试次数允许 0（不重试），负数没有意义 */
+    private void checkTreeNonNegative(Integer value, String label) {
+        PreconditionUtils.checkArgument(value == null || value >= 0, label + "不能为负数", HttpStatus.BAD_REQUEST);
+    }
+
+    /**
+     * 节点的结果状态只允许成功/失败。单轮同步执行不会产生也不会恢复 RUNNING，
+     * 配成 RUNNING 会让一次执行的结果停在「还没跑完」，只能由调用方重跑，语义上是错的。
+     */
+    private void checkTreeResultState(BehaviorStateEnum state, String label) {
+        PreconditionUtils.checkArgument(state != BehaviorStateEnum.RUNNING,
+                label + "不能是 RUNNING：单轮同步执行不会恢复，请选择 SUCCESS 或 FAILURE", HttpStatus.BAD_REQUEST);
+    }
+
     /**
      * 判断 JSON 里的值能否按声明类型读出来；数字接受字符串写法，其余按类型匹配。
      */
@@ -689,11 +749,35 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
 
     /**
      * 执行行为树：一次执行只针对一条实例数据，全树共用；节点走 behavior3java 引擎，行为真实落库。
-     * <p>单轮求值，不产生 RUNNING；跨 Tick 的循环/冷却/限时按「跑一遍子节点」降级，结果里带说明。</p>
+     * <p>单轮求值，不产生 RUNNING；循环、冷却、限时、并行在单次请求内生效。</p>
      */
     @Override
     public TreeExecuteResultVO executeTree(TreeExecuteParam param) {
         var compiled = btTreeManager.getTree(param.getOntologySpaceId(), param.getTreeApi());
+        return executeTreeInstance(compiled, param.getEntityPrimaryKey(), param.getInputs(),
+                param.getDataPrimaryKey(), param.getLinkEntityPrimaryKey());
+    }
+
+    /**
+     * 行为树测试：草稿树也能试跑，用于发布前验证编排；真实落库，与正式执行共用同一套运行时。
+     * <p>草稿可能存着早于当前校验规则的配置，试跑前按保存期同一套规则再校验一遍，把悬空引用之类的问题先拦下。</p>
+     */
+    @Override
+    public TreeExecuteResultVO testTree(TreeExecuteParam param) {
+        var compiled = btTreeManager.compileForTest(param.getOntologySpaceId(), param.getTreeApi());
+        var action = getOne(new LambdaQueryWrapper<OntologyAction>()
+                .eq(OntologyAction::getApi, param.getTreeApi())
+                .eq(OntologyAction::getOntologySpaceId, param.getOntologySpaceId()));
+        PreconditionUtils.checkNotNull(action, "无效的action api", HttpStatus.BAD_REQUEST);
+        var definitionParam = ActionCreateOrUpdateParam.builder()
+                .actionApi(action.getApi())
+                .displayName(action.getDisplayName())
+                .categoryId(action.getActionCategoryId())
+                .ontologySpaceId(action.getOntologySpaceId())
+                .actionKind(ActionKindEnum.TREE)
+                .treeDefinition(compiled.definition())
+                .build();
+        checkTreeDefinition(new OntologyAction(), definitionParam);
         return executeTreeInstance(compiled, param.getEntityPrimaryKey(), param.getInputs(),
                 param.getDataPrimaryKey(), param.getLinkEntityPrimaryKey());
     }
@@ -852,10 +936,59 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
      */
     private TreeExecuteResultVO executeTreeInstance(CompiledBehaviorTree compiled, Object entityPrimaryKey, Map<String, Object> inputs,
                                                     Object dataPrimaryKey, Object linkEntityPrimaryKey) {
-        var runtime = new TreeExecutionRuntime(compiled.definition(), entityPrimaryKey, inputs,
-                dataPrimaryKey, linkEntityPrimaryKey, compiled.spaceId(), this::invokeTreeNodeAction);
+        var runtime = new TreeExecutionRuntime(compiled.definition(), compiled.api(), entityPrimaryKey, inputs,
+                dataPrimaryKey, linkEntityPrimaryKey, compiled.spaceId(),
+                this::tryRunTreeCooldown, this::runTreeBranches, this::invokeTreeNodeAction);
         compiled.tree().tick(runtime, runtime.getBehaviorBlackboard());
         return buildTreeResult(compiled, runtime);
+    }
+
+    /**
+     * 并行节点的分支统一走专用线程池，用信号量把同时执行的分支数限制到配置值。
+     * 线程池队列为 0，满了在调用线程跑，所以不会因为线程池饱和拒绝任务或互相等线程。
+     */
+    private List<BehaviorStateEnum> runTreeBranches(List<Supplier<BehaviorStateEnum>> branches, int maxConcurrency)
+            throws InterruptedException {
+        var permits = new Semaphore(maxConcurrency);
+        var futures = new ArrayList<Future<BehaviorStateEnum>>(branches.size());
+        try {
+            for (var branch : branches) {
+                futures.add(behaviorTreeBranchExecutor.submit(() -> {
+                    permits.acquire();
+                    try {
+                        return branch.get();
+                    } finally {
+                        permits.release();
+                    }
+                }));
+            }
+            var results = new ArrayList<BehaviorStateEnum>(futures.size());
+            for (var future : futures) {
+                try {
+                    results.add(future.get());
+                } catch (ExecutionException e) {
+                    // 分支自己兜异常，这里只可能是线程被中断等极端情况
+                    log.warn("行为树并行分支执行异常", e.getCause());
+                    results.add(BehaviorStateEnum.FAILURE);
+                }
+            }
+            return results;
+        } catch (InterruptedException e) {
+            futures.forEach(future -> future.cancel(true));
+            throw e;
+        }
+    }
+
+    /**
+     * 冷却占位：同一棵树、同一节点、同一执行实例只保留最近一次执行时间。
+     * upsert 自带间隔判断，并发执行时不会出现两次都读到旧时间后同时放行。
+     */
+    private boolean tryRunTreeCooldown(Integer spaceId, String treeApi, String nodeId, Object entityPrimaryKey, int intervalSeconds) {
+        var scopeKey = entityPrimaryKey == null ? "" : String.valueOf(entityPrimaryKey);
+        if (scopeKey.length() > TREE_COOLDOWN_SCOPE_MAX_LENGTH) {
+            scopeKey = scopeKey.substring(0, TREE_COOLDOWN_SCOPE_MAX_LENGTH);
+        }
+        return behaviorTreeCooldownMapper.tryAcquire(spaceId, treeApi, nodeId, scopeKey, intervalSeconds) > 0;
     }
 
     /**
@@ -870,7 +1003,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         return TreeExecuteResultVO.builder()
                 .treeApi(compiled.api())
                 .state(state)
-                .blackboard(new LinkedHashMap<>(runtime.getBlackboard()))
+                .blackboard(runtime.snapshotBlackboard())
                 .nodes(nodes)
                 .build();
     }
@@ -935,8 +1068,43 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 .build();
         var testResult = testAction(testParam);
         refreshTreeBlackboard(bound, runtime);
-        // 超时与重试的降级说明由节点自己追加，这里只回执行结果
+        // 有关系的执行按对端逐条 try/catch，异常只回一个空串；节点不能把这种结果当成功
+        var counterparts = countCounterpartOutcome(testResult.getResult());
+        if (counterparts != null && counterparts.failed > 0) {
+            return new TreeActionInvoker.TreeActionOutcome(BehaviorStateEnum.FAILURE,
+                    "对端执行失败：" + counterparts.failed + "/" + counterparts.total + " 条结果为空");
+        }
+        // 失败重试由行为节点自己控制，这里只回单次执行结果
         return new TreeActionInvoker.TreeActionOutcome(BehaviorStateEnum.SUCCESS, testResult.getMessage());
+    }
+
+    /**
+     * 行为执行结果按对端返回 JSON 数组；执行链路吞掉单条对端异常时该位置是空串。
+     * <p>只在能解析成数组时统计，基础行为没有结果串，解析失败也不影响节点状态。</p>
+     */
+    private CounterpartOutcome countCounterpartOutcome(String result) {
+        if (StringUtils.isBlank(result)) {
+            return null;
+        }
+        try {
+            var root = jsonMapper.readTree(result);
+            if (root == null || !root.isArray()) {
+                return null;
+            }
+            var failed = 0;
+            for (var item : root) {
+                if (item.isNull() || (item.isTextual() && StringUtils.isBlank(item.asText()))) {
+                    failed++;
+                }
+            }
+            return new CounterpartOutcome(root.size(), failed);
+        } catch (Exception e) {
+            log.warn("行为树节点执行结果解析失败", e);
+            return null;
+        }
+    }
+
+    private record CounterpartOutcome(int total, int failed) {
     }
 
     /**
@@ -1045,6 +1213,21 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 .filter(tree -> treeReferencesAction(readTreeDefinition(tree.getDefinition()).getRoots(), actionApi))
                 .map(OntologyAction::getApi)
                 .collect(Collectors.toList());
+    }
+
+    private Set<String> collectTreeNodeIds(List<BehaviorTreeNode> nodes) {
+        Set<String> ids = new HashSet<>();
+        collectTreeNodeIds(nodes, ids);
+        return ids;
+    }
+
+    private void collectTreeNodeIds(List<BehaviorTreeNode> nodes, Set<String> ids) {
+        for (var node : nodes) {
+            if (StringUtils.isNotBlank(node.getId())) {
+                ids.add(node.getId());
+            }
+            collectTreeNodeIds(node.getChildren(), ids);
+        }
     }
 
     private boolean treeReferencesAction(List<BehaviorTreeNode> nodes, String actionApi) {
@@ -1411,6 +1594,9 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         actionLinkMapper.delete(new LambdaQueryWrapper<OntologyActionLink>().eq(OntologyActionLink::getOntologyActionId, action.getId()));
         remove(new LambdaQueryWrapper<OntologyAction>().in(OntologyAction::getId, action.getId()));
         ontologyActionMappingInService.remove(new LambdaQueryWrapper<OntologyActionMappingIn>().in(OntologyActionMappingIn::getOntologyActionId, action.getId()));
+        if (action.getActionKind() == ActionKindEnum.TREE) {
+            behaviorTreeCooldownMapper.deleteByTree(action.getOntologySpaceId(), actionApi);
+        }
         btTreeManager.invalidate(action.getOntologySpaceId(), actionApi);
     }
 
