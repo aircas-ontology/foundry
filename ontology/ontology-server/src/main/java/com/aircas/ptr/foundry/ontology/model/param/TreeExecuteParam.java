@@ -15,7 +15,9 @@ import java.util.Map;
  * 行为树执行请求。
  * <p>实例主键可选：只有节点真正需要实例时才传——绑属性值/实例关系行为、入参取对象属性、黑板键绑了对象属性。
  * 基础算子这类按对象做条件/聚合查询的行为直接带对象标识执行，不需要具体实例。
- * 黑板键值由 inputs 覆盖变量默认值；一棵树里的行为可以涉及多个对象类型，需要实例时都按这同一个主键定位。</p>
+ * 黑板键值由 inputs 覆盖变量默认值；一棵树里的行为可以涉及多个对象类型，未配置节点级实例键时
+ * 都按这同一个主键定位，配置了 entityPrimaryKeyKey 的节点改用对应黑板键的值；
+ * 多个对象类型各要实例时用 entityPrimaryKeys 按对象分开传。</p>
  */
 @Data
 @SuperBuilder
@@ -36,8 +38,15 @@ public class TreeExecuteParam {
 
     @Schema(name = "entityPrimaryKey",
             description = "本次执行共用的实例主键；只有节点确实需要实例时才传（属性值/实例关系行为、入参取对象属性、黑板键绑对象属性），"
-                    + "基础算子按对象查询不需要", example = "1")
+                    + "基础算子按对象查询不需要；行为节点配置了 entityPrimaryKeyKey 时该节点改用对应黑板键的值",
+            example = "1")
     private Object entityPrimaryKey;
+
+    @Schema(name = "entityPrimaryKeys",
+            description = "按对象分别指定实例主键（对象标识 -> 实例主键）：树里多个对象类型都要实例、节点又没配实例键时用它，"
+                    + "同一个对象优先于 entityPrimaryKey；没列到的对象仍回退 entityPrimaryKey",
+            example = "{\"satellite\":1,\"groundStation\":2}")
+    private Map<String, Object> entityPrimaryKeys;
 
     @Schema(name = "dataPrimaryKey",
             description = "分组表行主键：属性值-修改/删除用来定位具体一行；作为全树默认值，行为节点配置了黑板键时以节点为准",

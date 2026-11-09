@@ -17,9 +17,9 @@ import lombok.experimental.SuperBuilder;
 @Schema(description = "行为树直到成功/失败节点配置")
 public class BehaviorUntilConfig {
 
-    @Schema(name = "maxTimes", description = "最大重试次数，0 或空表示不限；跨执行次数依赖运行时状态，P1 单轮引擎只按本轮次数计")
+    @Schema(name = "maxTimes", description = "最大重试次数，0 或空表示不重试；在单次执行内同步重试", example = "2")
     private Integer maxTimes;
 
-    @Schema(name = "finishState", description = "次数耗尽仍未达成时的收尾状态", example = "FAILURE")
+    @Schema(name = "finishState", description = "次数耗尽仍未达成时的收尾状态，只能是 SUCCESS 或 FAILURE", example = "FAILURE")
     private BehaviorStateEnum finishState;
 }

@@ -96,6 +96,8 @@ public interface EntityService {
 
     EntityPropertyRowDetailVO getEntityPropertyRowDetail(EntityPropertyRowQueryParam param);
 
+    Page<EntityPropertyRowDetailVO.PropertyGroupData> getEntityPropertyRowDetailPage(EntityPropertyRowPageQueryParam param);
+
     List<Object> createEntities(EntityCreateParam params);
 
     void insertEntityProperty(EntityPropertyInsertParam param);
