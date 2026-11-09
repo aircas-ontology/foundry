@@ -10,6 +10,7 @@ import com.aircas.ptr.foundry.ontology.model.param.OntologyCategoryUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyCategory;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyCategoryVO;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaStatisticVO;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyCategoryMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyMetaMapper;
 import com.aircas.ptr.foundry.ontology.service.OntologyCategoryService;
@@ -195,12 +196,17 @@ public class OntologyCategoryServiceImpl extends ServiceImpl<OntologyCategoryMap
                 ));
 
         var displayMap = metas.stream().collect(Collectors.toMap(OntologyMeta::getUniqueIdentifier, OntologyMeta::getDisplayName));
-        
-        long buildTreeStartTime = System.currentTimeMillis();
-        var result = buildCategoryVO(roots.get(0), categoryMap, metaMap, displayMap);
+
+        // 整个空间的对象计数一次批量取数，替代逐对象 4N 次查询
+        var statisticMap = ontologyMetaService.batchBuildStatistic(spaceId,
+                metas.stream().map(OntologyMeta::getUniqueIdentifier).collect(Collectors.toList()));
+        long statisticTime = System.currentTimeMillis();
+        log.info("[getCategoryTree] spaceId={} 批量统计耗时={}ms", spaceId, statisticTime - metaQueryTime);
+
+        var result = buildCategoryVO(roots.get(0), categoryMap, metaMap, displayMap, statisticMap);
         long buildTreeEndTime = System.currentTimeMillis();
-        log.info("[getCategoryTree] spaceId={} 构建分类树耗时={}ms", spaceId, buildTreeEndTime - buildTreeStartTime);
-        
+        log.info("[getCategoryTree] spaceId={} 构建分类树耗时={}ms", spaceId, buildTreeEndTime - statisticTime);
+
         log.info("[getCategoryTree] spaceId={} 总耗时={}ms", spaceId, buildTreeEndTime - startTime);
         return result;
     }
@@ -215,7 +221,8 @@ public class OntologyCategoryServiceImpl extends ServiceImpl<OntologyCategoryMap
     private OntologyCategoryVO buildCategoryVO(OntologyCategory category,
                                                Map<Integer, List<OntologyCategory>> categoryMap,
                                                Map<Integer, List<OntologyMeta>> metaMap,
-                                               Map<String, String> displayMap) {
+                                               Map<String, String> displayMap,
+                                               Map<String, OntologyMetaStatisticVO> statisticMap) {
 
         var vo = new OntologyCategoryVO()
                 .setCategoryId(category.getId())
@@ -226,7 +233,10 @@ public class OntologyCategoryServiceImpl extends ServiceImpl<OntologyCategoryMap
             var metaInfoVOList = metaList.stream().map(v -> {
                 var metaInfoVO = DataConverter.convert(v);
                 metaInfoVO.setParentOntologyDisplayName(displayMap.get(v.getParentUniqueIdentifier()));
-                ontologyMetaService.buildMetaInfoStatistic(metaInfoVO);
+                var statistic = statisticMap.get(v.getUniqueIdentifier());
+                metaInfoVO.setPropertyCount(statistic.getPropertyCount())
+                        .setRelationCount(statistic.getRelationCount())
+                        .setActionCount(statistic.getActionCount());
                 return metaInfoVO;
             }).collect(Collectors.toList());
             vo.setOntologyMetaInfos(metaInfoVOList);
@@ -235,7 +245,7 @@ public class OntologyCategoryServiceImpl extends ServiceImpl<OntologyCategoryMap
         var children = categoryMap.get(category.getId());
         if (CollectionUtils.isNotEmpty(children)) {
             vo.setChildren(children.stream()
-                    .map(child -> buildCategoryVO(child, categoryMap, metaMap, displayMap))
+                    .map(child -> buildCategoryVO(child, categoryMap, metaMap, displayMap, statisticMap))
                     .collect(Collectors.toList()));
         }
         return vo;
