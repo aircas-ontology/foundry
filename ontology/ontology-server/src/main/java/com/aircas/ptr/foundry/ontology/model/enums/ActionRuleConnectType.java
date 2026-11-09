@@ -3,6 +3,8 @@ package com.aircas.ptr.foundry.ontology.model.enums;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
+import java.util.Arrays;
+
 /**
  * @enumName: ActionRuleConnectType
  * @author: yangj
@@ -19,4 +21,14 @@ public enum ActionRuleConnectType {
 
     private final Integer code;
     private final String description;
+
+    public static ActionRuleConnectType fromCode(Integer code) {
+        if (code == null) {
+            return null;
+        }
+        return Arrays.stream(values())
+                .filter(e -> e.getCode().equals(code))
+                .findFirst()
+                .orElse(null);
+    }
 }
