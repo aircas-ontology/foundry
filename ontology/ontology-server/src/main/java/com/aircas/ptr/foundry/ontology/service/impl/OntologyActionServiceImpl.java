@@ -297,24 +297,26 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             checkTreeDefinition(action, param);
             return new ActionDefinition();
         }
-        // 原来由参数基类的 @NotBlank 兜底，共用入口后移到 service，提示文案保持一致
-        PreconditionUtils.checkArgument(StringUtils.isNotBlank(param.getOntologyIdentifier()), "ontologyIdentifier is empty", HttpStatus.BAD_REQUEST);
-        var meta = ontologyMetaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>()
-                .eq(OntologyMeta::getUniqueIdentifier, param.getOntologyIdentifier()));
-        PreconditionUtils.checkNotNull(meta, "无效的对象：" + param.getOntologyIdentifier(), HttpStatus.BAD_REQUEST);
-        // 归属的行为分类必须存在，且与对象同属一个对象空间
-        var category = actionCategoryMapper.selectById(param.getCategoryId());
-        PreconditionUtils.checkArgument(category != null, "无效的行为分类：" + param.getCategoryId(), HttpStatus.BAD_REQUEST);
-        PreconditionUtils.checkArgument(category.getOntologySpaceId().equals(spaceId),
-                "行为分类不属于该对象所在的空间：" + category.getName(), HttpStatus.BAD_REQUEST);
-
         // 类别、输出方式必须由调用方明确传入：猜错会把行为建成另一种，执行时才暴露很难定位
         PreconditionUtils.checkNotNull(param.getActionKind(), "必须选择行为类别：基础行为/应用行为", HttpStatus.BAD_REQUEST);
         var kind = param.getActionKind();
         // 只有应用行为可以脱离对象挂在空间上；基础行为都作用在某个对象的实例上，缺对象标识会建出执行不了的记录
         if (kind == ActionKindEnum.BASE) {
-            PreconditionUtils.checkNotNull(param.getOntologyIdentifier(), "基础行为必须指定所属对象", HttpStatus.BAD_REQUEST);
+            // 原来由参数基类的 @NotBlank 兜底，共用入口后移到 service，提示文案保持一致
+            PreconditionUtils.checkArgument(StringUtils.isNotBlank(param.getOntologyIdentifier()),
+                    "ontologyIdentifier is empty", HttpStatus.BAD_REQUEST);
         }
+        // 应用行为不传对象时不校验 meta：对象由 mappingIns 每行各自指定
+        if (StringUtils.isNotBlank(param.getOntologyIdentifier())) {
+            var meta = ontologyMetaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>()
+                    .eq(OntologyMeta::getUniqueIdentifier, param.getOntologyIdentifier()));
+            PreconditionUtils.checkNotNull(meta, "无效的对象：" + param.getOntologyIdentifier(), HttpStatus.BAD_REQUEST);
+        }
+        // 归属的行为分类必须存在，且与对象同属一个对象空间
+        var category = actionCategoryMapper.selectById(param.getCategoryId());
+        PreconditionUtils.checkArgument(category != null, "无效的行为分类：" + param.getCategoryId(), HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(category.getOntologySpaceId().equals(spaceId),
+                "行为分类不属于该对象所在的空间：" + category.getName(), HttpStatus.BAD_REQUEST);
         var definition = new ActionDefinition();
         if (kind == ActionKindEnum.APPLICATION) {
             PreconditionUtils.checkArgument(param.getSubjectType() == null && param.getOperation() == null
