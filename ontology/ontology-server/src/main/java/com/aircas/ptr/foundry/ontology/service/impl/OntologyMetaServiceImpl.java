@@ -22,7 +22,11 @@ import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaBriefVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaNodeVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaStatisticVO;
+import com.aircas.ptr.foundry.ontology.model.view.OntologyStatisticsCountView;
+import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyActionMapper;
+import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyLinkGroupMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyMetaMapper;
+import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyPropertyMapper;
 import com.aircas.ptr.foundry.ontology.service.*;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
@@ -107,6 +111,15 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
 
     @Resource
     private PropertyMetadataSchemaService propertyMetadataSchemaService;
+
+    @Resource
+    private OntologyPropertyMapper propertyMapper;
+
+    @Resource
+    private OntologyActionMapper actionMapper;
+
+    @Resource
+    private OntologyLinkGroupMapper linkGroupMapper;
 
     @Lazy
     @Resource
@@ -708,6 +721,50 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 .setPropertyCount(statistic.getPropertyCount())
                 .setRelationCount(statistic.getRelationCount())
                 .setActionCount(statistic.getActionCount());
+    }
+
+    /**
+     * 批量统计多个对象关联的核心资源数量：属性、关系、行为。
+     *
+     * <p>分类树一类接口需要对整个空间的对象出数，逐对象走 {@link #buildStatistic} 会产生 4N 次往返，
+     * 几百个对象时接口被拖到秒级。这里合并为属性计数、行为计数、关系分组计数共 3 次取数。</p>
+     *
+     * <p>不含实例数：树接口前端不展示实例数，而逐对象取实例数要对每张绑定表 count(*)，
+     * 是这条路径上唯一跟表大小挂钩的抖动来源。详情页仍走 {@link #buildStatistic} 拿全四项。</p>
+     *
+     * @param spaceId             对象所属空间 id；关系计数按该空间裁剪，与 {@link #buildStatistic} 口径一致
+     * @param ontologyIdentifiers 待统计的对象唯一标识
+     * @return key 为对象唯一标识，入参中的每个对象都有一条结果，无关联数据时为 0；entityCount 不填
+     */
+    public Map<String, OntologyMetaStatisticVO> batchBuildStatistic(Integer spaceId, List<String> ontologyIdentifiers) {
+        if (CollectionUtils.isEmpty(ontologyIdentifiers)) {
+            return Collections.emptyMap();
+        }
+
+        var propertyCntMap = toCountMap(propertyMapper.countGroupByOntology());
+        var actionCntMap = toCountMap(actionMapper.countGroupByOntology());
+        var linkCntMap = toCountMap(linkGroupMapper.countGroupByOntologyInSpace(spaceId, Status.ENABLE.getValue()));
+
+        var res = new HashMap<String, OntologyMetaStatisticVO>(ontologyIdentifiers.size());
+        for (var identifier : ontologyIdentifiers) {
+            res.put(identifier, OntologyMetaStatisticVO.builder()
+                    .uniqueIdentifier(identifier)
+                    .propertyCount(propertyCntMap.getOrDefault(identifier, 0))
+                    .relationCount(linkCntMap.getOrDefault(identifier, 0))
+                    .actionCount(actionCntMap.getOrDefault(identifier, 0))
+                    .build());
+        }
+        return res;
+    }
+
+    private Map<String, Integer> toCountMap(List<OntologyStatisticsCountView> counts) {
+        var res = new HashMap<String, Integer>(counts.size());
+        counts.forEach(count -> {
+            if (count.getOntologyUniqueIdentifier() != null && count.getCnt() != null) {
+                res.put(count.getOntologyUniqueIdentifier(), count.getCnt());
+            }
+        });
+        return res;
     }
 
 

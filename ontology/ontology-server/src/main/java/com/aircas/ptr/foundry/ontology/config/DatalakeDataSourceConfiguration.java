@@ -8,7 +8,7 @@ import com.baomidou.mybatisplus.core.config.GlobalConfig;
 import com.baomidou.mybatisplus.extension.plugins.MybatisPlusInterceptor;
 import com.baomidou.mybatisplus.extension.plugins.inner.PaginationInnerInterceptor;
 import com.baomidou.mybatisplus.extension.spring.MybatisSqlSessionFactoryBean;
-import org.apache.ibatis.logging.stdout.StdOutImpl;
+import org.apache.ibatis.logging.nologging.NoLoggingImpl;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -42,8 +42,7 @@ public class DatalakeDataSourceConfiguration {
         sessionFactoryBean.setMapperLocations(new PathMatchingResourcePatternResolver().getResources(resourcePath));
 
         MybatisConfiguration configuration = new MybatisConfiguration();
-        configuration.setLogImpl(StdOutImpl.class);
-        //configuration.setLogImpl(NoLoggingImpl.class);
+        configuration.setLogImpl(NoLoggingImpl.class);
         configuration.setMapUnderscoreToCamelCase(true);
         sessionFactoryBean.setConfiguration(configuration);
 
