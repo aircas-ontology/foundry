@@ -386,12 +386,22 @@ public class EntityServiceImpl implements EntityService {
 
     @Override
     public List<EntityPropertyDetailVO> getEntityDetail(String ontologyUniqueIdentifier, Object entityPrimaryKey) {
+        return getEntityDetail(ontologyUniqueIdentifier, entityPrimaryKey, null);
+    }
+
+    /**
+     * 取实例属性详情。rowKeysByGroup 指定的分组按行精确取值（分组名 -> 行主键），
+     * 没指定的分组沿用原口径（扩展表按主键倒序取最多 10 行）。
+     */
+    private List<EntityPropertyDetailVO> getEntityDetail(String ontologyUniqueIdentifier, Object entityPrimaryKey,
+                                                         Map<String, Object> rowKeysByGroup) {
         List<EntityPropertyDetailVO> res = Lists.newArrayList();
         var props = propertyMapper.selectList(new LambdaQueryWrapper<OntologyProperty>()
                         .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier))
                 .stream()
                 .filter(v -> StringUtils.isNotEmpty(v.getDatasourceColumnName()))
                 .collect(Collectors.toList());
+        checkGroupRowKeys(ontologyUniqueIdentifier, props, rowKeysByGroup);
 
         var primaryKeyProp = props.stream().filter(v -> v.getIsPrimaryKey() == 1).findFirst();
         if (!primaryKeyProp.isPresent() || StringUtils.isEmpty(primaryKeyProp.get().getDatasourceColumnName())) {
@@ -427,16 +437,38 @@ public class EntityServiceImpl implements EntityService {
                 }
                 var orderBy = tableMetadataMapper.queryPrimaryKeyColumnName(pk.getDatasourceSchema(), entry.getKey());
                 var columns = entry.getValue().stream().map(v -> v.getDatasourceColumnName()).collect(Collectors.toList());
-                var otherData = objectMapper.queryByJoinTable(
-                        pk.getDatasourceSchema(),
-                        entityPrimaryKey,
-                        tableMapping.getTargetTableName(),
-                        columns,
-                        tableMapping.getTargetColumnName(),
-                        orderBy,
-                        10,
-                        QuerySortEnum.DESC.getValue()
-                );
+                var storageGroup = entry.getValue().get(0).getStorageGroup();
+                var rowKey = rowKeyFor(rowKeysByGroup, storageGroup);
+                final List<Map<String, Object>> otherData;
+                if (rowKey != null) {
+                    // 指定了行就只取这一行：按关联列确认它确实属于本实例，避免读到别人的数据
+                    var row = objectMapper.queryJoinTableRow(
+                            pk.getDatasourceSchema(),
+                            entityPrimaryKey,
+                            tableMapping.getTargetTableName(),
+                            columns,
+                            tableMapping.getTargetColumnName(),
+                            orderBy,
+                            rowKey
+                    );
+                    PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(row),
+                            "存储分组[" + storageGroup + "]中行主键 " + rowKey + " 不存在或不属于实体 "
+                                    + entityPrimaryKey, HttpStatus.BAD_REQUEST);
+                    // 缺失的列补成 null，与多行取值路径的输出形状保持一致
+                    otherData = objectMapper.populate(pk.getDatasourceSchema(), row,
+                            tableMapping.getTargetTableName(), columns);
+                } else {
+                    otherData = objectMapper.queryByJoinTable(
+                            pk.getDatasourceSchema(),
+                            entityPrimaryKey,
+                            tableMapping.getTargetTableName(),
+                            columns,
+                            tableMapping.getTargetColumnName(),
+                            orderBy,
+                            10,
+                            QuerySortEnum.DESC.getValue()
+                    );
+                }
 
                 if (CollectionUtils.isNotEmpty(otherData)) {
                     var otherColumns = otherData.get(0).keySet().stream().collect(Collectors.toList());
@@ -1093,6 +1125,7 @@ public class EntityServiceImpl implements EntityService {
             infoDTO.setLinkToOntologyUniqueIdentifier(linkedOntology);
             //如果已指定单个实体：优先用关系对端专用参数，其次取各对象实例主键 map 中对端的那个
             var param = infoDTO.getEntityActionExecuteParam();
+            checkDirectionalEntitiesNotEndpoints(linkGroup, param);
             var linkedPrimaryKey = param.getLinkedEntityPrimaryKey();
             if (linkedPrimaryKey == null && MapUtils.isNotEmpty(param.getEntityPrimaryKeys())) {
                 linkedPrimaryKey = param.getEntityPrimaryKeys().get(linkedOntology);
@@ -1121,6 +1154,26 @@ public class EntityServiceImpl implements EntityService {
 
 
     /**
+     * 关系两端的实例由两端选择（测试的 from/to，或本端 + 对端参数）决定；按方向再指定一次会和两端选择打架，
+     * 直接报错而不是静默忽略。只按方向给分组行主键不受影响（对端出参按行写回照旧生效）。
+     */
+    private void checkDirectionalEntitiesNotEndpoints(OntologyLinkGroup linkGroup, EntityActionExecuteParam param) {
+        var endpoints = Set.of(linkGroup.getOntologyUniqueIdentifierFrom(), linkGroup.getOntologyUniqueIdentifierTo());
+        var conflict = Stream.of(param.getInputEntities(), param.getOutputEntities())
+                .filter(MapUtils::isNotEmpty)
+                .flatMap(targets -> targets.entrySet().stream())
+                .filter(entry -> entry.getValue() != null && entry.getValue().getEntityPrimaryKey() != null)
+                .map(Map.Entry::getKey)
+                .filter(endpoints::contains)
+                .findFirst()
+                .orElse(null);
+        if (conflict != null) {
+            throw new BusinessException("对象[" + conflict + "]是行为绑定关系的一端，实例主键请按关系两端传（from、to），"
+                    + "不能在 inputEntities、outputEntities 里再指定 entityPrimaryKey", HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    /**
      * 关系的对端对象：行为挂在 From 侧时对端是 To，挂在 To 侧时对端是 From。
      * 判断不出挂在哪一侧时沿用 To，与改造前的取值一致。
      */
@@ -1139,6 +1192,14 @@ public class EntityServiceImpl implements EntityService {
         // 行为树与行为同表，但它不绑算子也不写单条关系，按单个行为执行会报"算子不存在"这种误导提示
         PreconditionUtils.checkArgument(actionDetailVO.getActionKind() != ActionKindEnum.TREE,
                 "行为树不能作为单个行为执行：" + param.getActionApi(), HttpStatus.BAD_REQUEST);
+        // 属性值/实例关系行为只对单个实例改一行属性或一条边，读写天然同一个实例，按方向拆实例主键表达不出差别
+        if (actionDetailVO.getActionKind() == ActionKindEnum.BASE
+                && (ActionInstanceTargetParam.hasEntityPrimaryKey(param.getInputEntities())
+                || ActionInstanceTargetParam.hasEntityPrimaryKey(param.getOutputEntities()))) {
+            throw new BusinessException("属性值/实例关系行为只操作单个实例，"
+                    + "不支持用 inputEntities、outputEntities 的 entityPrimaryKey 按方向指定实例",
+                    HttpStatus.BAD_REQUEST);
+        }
         // 属性值、实例关系行为不绑算子，上下文里没有算子定义，执行时按行为定义直接落库；
         // 算子 api 跨空间允许重名，取算子定义必须按行为所属空间，否则会跑到其他空间的同名算子上
         var functionDetailVO = StringUtils.isEmpty(actionDetailVO.getFunctionApi()) ? null
@@ -1151,6 +1212,7 @@ public class EntityServiceImpl implements EntityService {
                 .eq(OntologyProperty::getOntologyUniqueIdentifier, param.getOntologyUniqueIdentifier()));
         // 应用行为的入参/出参可能指向其他对象：按映射收集涉及对象，补全各自属性与实例主键
         var entityPrimaryKeys = resolveEntityPrimaryKeys(param);
+        checkDirectionalEntities(actionDetailVO, param);
         var objectIds = collectMappingObjectIds(actionDetailVO);
         if (StringUtils.isNotEmpty(param.getOntologyUniqueIdentifier())) {
             objectIds.add(param.getOntologyUniqueIdentifier());
@@ -1200,8 +1262,45 @@ public class EntityServiceImpl implements EntityService {
         return keys;
     }
 
+    /**
+     * 按方向指定的**实例主键**必须落在真的会被读/写的对象上：对象 id 写错时静默回退到共用实例选择，
+     * 会把数据写到没打算动的实例上，直接报错。只给分组行主键的对象维持原口径（行主键在读写时各自校验）。
+     */
+    private void checkDirectionalEntities(OntologyActionDetailVO detail, EntityActionExecuteParam param) {
+        checkInstanceTargets(detail, param.getInputEntities(), true, "inputEntities", "入参读取");
+        checkInstanceTargets(detail, param.getOutputEntities(), false, "outputEntities", "出参写回");
+    }
+
+    private void checkInstanceTargets(OntologyActionDetailVO detail, Map<String, ActionInstanceTargetParam> targets,
+                                      Boolean inputOnly, String fieldName, String direction) {
+        if (MapUtils.isEmpty(targets)) {
+            return;
+        }
+        var objectIds = collectMappingObjectIds(detail, inputOnly);
+        // 老数据的映射行没写对象id，收集不到涉及对象，此时不做归属校验，保持原有取值口径
+        if (objectIds.isEmpty() && legacyMappingNeedsInstance(detail)) {
+            return;
+        }
+        targets.forEach((objectId, target) -> {
+            PreconditionUtils.checkArgument(target != null
+                            && (target.getEntityPrimaryKey() != null || MapUtils.isNotEmpty(target.getDataPrimaryKeys())),
+                    fieldName + " 里的对象[" + objectId + "]没给实例主键，也没给分组行主键", HttpStatus.BAD_REQUEST);
+            PreconditionUtils.checkArgument(target.getEntityPrimaryKey() == null || objectIds.contains(objectId),
+                    fieldName + " 里的对象[" + objectId + "]不参与" + direction + "，请检查对象id是否正确",
+                    HttpStatus.BAD_REQUEST);
+        });
+    }
+
     /** 从行为映射收集需要实例数据的对象：属性/对象/List 来源的入参，以及写入对象属性的出参 */
     private Set<String> collectMappingObjectIds(OntologyActionDetailVO detail) {
+        return collectMappingObjectIds(detail, null);
+    }
+
+    /**
+     * @param inputOnly true 只收属性入参涉及的对象，false 只收写出参涉及的对象，null 收两者；
+     *                  按方向拆实例主键时要区分对象是被读还是被写
+     */
+    private Set<String> collectMappingObjectIds(OntologyActionDetailVO detail, Boolean inputOnly) {
         Set<String> objectIds = new LinkedHashSet<>();
         if (detail == null || CollectionUtils.isEmpty(detail.getMappingIns())) {
             return objectIds;
@@ -1214,6 +1313,12 @@ public class EntityServiceImpl implements EntityService {
                     || sourceType == ActionParamSourceEnum.LIST);
             var outputWritesProperty = mapping.getCategory() == FunctionParamCategoryEnum.OUTPUT
                     && mapping.getOutputMode() == ActionOutputModeEnum.WRITE_PROPERTY;
+            if (Boolean.TRUE.equals(inputOnly) && !inputNeedsInstance) {
+                continue;
+            }
+            if (Boolean.FALSE.equals(inputOnly) && !outputWritesProperty) {
+                continue;
+            }
             if ((inputNeedsInstance || outputWritesProperty) && StringUtils.isNotEmpty(mapping.getOntologyUniqueIdentifier())) {
                 objectIds.add(mapping.getOntologyUniqueIdentifier());
             }
@@ -1226,9 +1331,22 @@ public class EntityServiceImpl implements EntityService {
      * 其余对象取显式传入的 map，最后回退到单对象参数。
      */
     private Object resolveEntityPrimaryKey(ActionContextInfoDTO context, EntityActionExecuteParam param, String objectId) {
+        return resolveEntityPrimaryKey(context, param, objectId, null);
+    }
+
+    /**
+     * targets 是调用方按方向（入参读取 / 出参写回）单独指定的数据位置，命中时优先于共用的 entityPrimaryKeys，
+     * 使同一对象可以读一个实例、写另一个实例；关系对端仍由本次遍历到的实例决定，不参与方向拆分。
+     */
+    private Object resolveEntityPrimaryKey(ActionContextInfoDTO context, EntityActionExecuteParam param, String objectId,
+                                          Map<String, ActionInstanceTargetParam> targets) {
         if (StringUtils.equals(objectId, context.getLinkToOntologyUniqueIdentifier())
                 && context.getLinkEntityPrimaryKey() != null) {
             return context.getLinkEntityPrimaryKey();
+        }
+        var target = targets == null ? null : targets.get(objectId);
+        if (target != null && target.getEntityPrimaryKey() != null) {
+            return target.getEntityPrimaryKey();
         }
         var keys = context.getEntityPrimaryKeys();
         if (keys != null && keys.get(objectId) != null) {
@@ -1239,6 +1357,18 @@ public class EntityServiceImpl implements EntityService {
             return param.getEntityPrimaryKey();
         }
         return null;
+    }
+
+    /** 调用方按入参方向指定的数据位置；没指定返回 null，读取回退到各对象共用的实例选择 */
+    private Map<String, ActionInstanceTargetParam> inputTargetsFor(ActionContextInfoDTO context) {
+        var param = context.getEntityActionExecuteParam();
+        return param == null ? null : param.getInputEntities();
+    }
+
+    /** 调用方按出参方向指定的数据位置；没指定返回 null，写回回退到各对象共用的实例选择 */
+    private Map<String, ActionInstanceTargetParam> outputTargetsFor(ActionContextInfoDTO context) {
+        var param = context.getEntityActionExecuteParam();
+        return param == null ? null : param.getOutputEntities();
     }
 
     /** 调用方显式传的某对象实例主键；没传返回 null，由调用处回退到推导 */
@@ -1255,24 +1385,79 @@ public class EntityServiceImpl implements EntityService {
                                                           String excludeObjectId) {
         var details = Lists.<EntityPropertyDetailVO>newArrayList();
         var objectIds = collectMappingObjectIds(context.getActionDetailVO());
+        // 只被出参写入的对象按出参方向选实例，其余按入参方向：同一对象可以读一个实例、写另一个实例
+        var readObjectIds = collectMappingObjectIds(context.getActionDetailVO(), true);
         if (param != null && StringUtils.isNotEmpty(param.getOntologyUniqueIdentifier())
                 && legacyMappingNeedsInstance(context.getActionDetailVO())) {
             objectIds.add(param.getOntologyUniqueIdentifier());
+            readObjectIds.add(param.getOntologyUniqueIdentifier());
         }
         for (var objectId : objectIds) {
             // 关系对端由本次遍历到的实例提供，不再按选中的单个实例取
             if (StringUtils.equals(objectId, excludeObjectId)) {
                 continue;
             }
-            var primaryKey = resolveEntityPrimaryKey(context, param, objectId);
+            var primaryKey = resolveEntityPrimaryKey(context, param, objectId, readObjectIds.contains(objectId)
+                    ? inputTargetsFor(context) : outputTargetsFor(context));
             PreconditionUtils.checkNotNull(primaryKey,
                     "对象[" + objectId + "]未选择实例数据，无法执行行为："
                             + (context.getActionDetailVO() == null ? "" : context.getActionDetailVO().getActionApi()),
                     HttpStatus.BAD_REQUEST);
-            details.addAll(getEntityDetail(objectId, primaryKey));
+            details.addAll(getEntityDetail(objectId, primaryKey, inputRowKeysFor(context, objectId)));
         }
         return details.stream().collect(Collectors.toMap(EntityPropertyDetailVO::getPropertyUniqIdentifier,
                 EntityPropertyDetailVO::getPropertyValues, (list1, list2) -> list1));
+    }
+
+    /**
+     * 某个对象指定的入参分组行主键（分组名 -> 行主键）。没指定返回空，读取回退到原口径：取最新一行。
+     */
+    private Map<String, Object> inputRowKeysFor(ActionContextInfoDTO context, String objectId) {
+        return rowKeysOf(inputTargetsFor(context), objectId);
+    }
+
+    private Map<String, Object> rowKeysOf(Map<String, ActionInstanceTargetParam> targets, String objectId) {
+        if (targets == null || StringUtils.isBlank(objectId)) {
+            return null;
+        }
+        var target = targets.get(objectId);
+        var byGroup = target == null ? null : target.getDataPrimaryKeys();
+        return MapUtils.isEmpty(byGroup) ? null : byGroup;
+    }
+
+    private Object rowKeyFor(Map<String, Object> rowKeysByGroup, String storageGroup) {
+        return rowKeysByGroup == null || StringUtils.isBlank(storageGroup)
+                ? null : rowKeysByGroup.get(storageGroup);
+    }
+
+    /**
+     * 某个对象指定的出参分组行主键。没指定返回空，写回回退到原口径：扩展表新增一行。
+     */
+    private Object outputRowKeyFor(ActionContextInfoDTO context, String objectId, String storageGroup) {
+        return rowKeyFor(rowKeysOf(outputTargetsFor(context), objectId), storageGroup);
+    }
+
+    /**
+     * 指定的分组名必须是对象真实存在的扩展分组：分组名写错时按行取值和按行写回都会静默退回原口径，
+     * 与其读错行不如直接报错。main 分组的行就是实例本身，传了也不参与按行处理。
+     */
+    private void checkGroupRowKeys(String ontologyUniqueIdentifier, List<OntologyProperty> props,
+                                   Map<String, Object> rowKeysByGroup) {
+        if (MapUtils.isEmpty(rowKeysByGroup)) {
+            return;
+        }
+        var groups = props.stream()
+                .map(OntologyProperty::getStorageGroup)
+                .filter(StringUtils::isNotBlank)
+                .collect(Collectors.toSet());
+        rowKeysByGroup.forEach((storageGroup, rowKey) -> {
+            if (StringUtils.isBlank(storageGroup) || "main".equals(storageGroup)) {
+                return;
+            }
+            PreconditionUtils.checkArgument(groups.contains(storageGroup),
+                    "对象[" + ontologyUniqueIdentifier + "]没有存储分组[" + storageGroup
+                            + "]，无法按指定行读取或写回属性", HttpStatus.BAD_REQUEST);
+        });
     }
 
     /** 映射行没写对象id、但取值或回写需要实例时，只能按行为所属对象补 */
@@ -1645,6 +1830,8 @@ public class EntityServiceImpl implements EntityService {
         var param = actionContext.getEntityActionExecuteParam();
         Map<String, List<EntityUpdateParam.ColumnUpdate>> columnUpdatesByObject = new LinkedHashMap<>();
         Map<String, Map<String, Map<String, Object>>> insertMap = new LinkedHashMap<>();
+        // 指定了分组行主键的出参：对象 -> 分组表 -> (行主键 + 待更新列)，按行改而不是插新行
+        Map<String, Map<String, RowUpdate>> updateRowMap = new LinkedHashMap<>();
         output.stream().forEach(out -> {
             Object actualValue = JsonPath.using(safeConfig).parse(jsonString).read(out.getFunctionParamExpression());
             var prop = propMap.get(out.getPropertyUniqueIdentifier());
@@ -1657,7 +1844,8 @@ public class EntityServiceImpl implements EntityService {
             var primaryProp = primaryPropByObject.get(objectId);
             PreconditionUtils.checkNotNull(primaryProp,
                     "对象[" + objectId + "]未配置主键属性，无法写回", HttpStatus.BAD_REQUEST);
-            PreconditionUtils.checkNotNull(resolveEntityPrimaryKey(actionContext, param, objectId),
+            PreconditionUtils.checkNotNull(resolveEntityPrimaryKey(actionContext, param, objectId,
+                            outputTargetsFor(actionContext)),
                     "对象[" + objectId + "]未选择实例数据，无法写回", HttpStatus.BAD_REQUEST);
             //主数据源列
             if (prop.getDatasourceId().equals(primaryProp.getDatasourceId())) {
@@ -1668,9 +1856,16 @@ public class EntityServiceImpl implements EntityService {
                                 .propertyUniqIdentifier(out.getPropertyUniqueIdentifier())
                                 .build());
             } else {
-                insertMap.computeIfAbsent(objectId, key -> new LinkedHashMap<>())
-                        .computeIfAbsent(prop.getDatasourceId(), key -> new HashMap<>())
-                        .put(prop.getDatasourceColumnName(), actualValue);
+                var rowKey = outputRowKeyFor(actionContext, objectId, prop.getStorageGroup());
+                if (rowKey != null) {
+                    updateRowMap.computeIfAbsent(objectId, key -> new LinkedHashMap<>())
+                            .computeIfAbsent(prop.getDatasourceId(), key -> new RowUpdate(rowKey))
+                            .columns().put(prop.getDatasourceColumnName(), actualValue);
+                } else {
+                    insertMap.computeIfAbsent(objectId, key -> new LinkedHashMap<>())
+                            .computeIfAbsent(prop.getDatasourceId(), key -> new HashMap<>())
+                            .put(prop.getDatasourceColumnName(), actualValue);
+                }
             }
 
         });
@@ -1679,15 +1874,52 @@ public class EntityServiceImpl implements EntityService {
             var primaryProp = primaryPropByObject.get(objectId);
             updateProperty(EntityUpdateParam.builder()
                     .columnUpdates(columnUpdates)
-                    .primaryKeyValue(resolveEntityPrimaryKey(actionContext, param, objectId))
+                    .primaryKeyValue(resolveEntityPrimaryKey(actionContext, param, objectId,
+                            outputTargetsFor(actionContext)))
                     .datasourceId(primaryProp.getDatasourceId())
                     .build());
         });
+        //其他数据源按行更新：先确认该行属于本实例，找不到就报错，不退回插新行
+        if (MapUtils.isNotEmpty(updateRowMap)) {
+            updateRowMap.forEach((objectId, byDatasource) -> {
+                var primaryProp = primaryPropByObject.get(objectId);
+                var entityPrimaryKey = resolveEntityPrimaryKey(actionContext, param, objectId,
+                        outputTargetsFor(actionContext));
+                byDatasource.forEach((datasourceId, update) -> {
+                    var schema = primaryProp.getDatasourceSchema();
+                    var mapping = tableFieldMappingMapper.selectByTargetTable(schema, datasourceId);
+                    PreconditionUtils.checkNotNull(mapping,
+                            "分组表未配置关联列，无法按行写回：" + datasourceId, HttpStatus.BAD_REQUEST);
+                    var rowKeyColumn = tableMetadataMapper.queryPrimaryKeyColumnName(schema, datasourceId);
+                    var existing = objectMapper.queryJoinTableRow(schema, entityPrimaryKey, datasourceId,
+                            Lists.newArrayList(rowKeyColumn), mapping.getTargetColumnName(),
+                            rowKeyColumn, update.rowKey());
+                    PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(existing),
+                            "分组表[" + datasourceId + "]中行主键 " + update.rowKey()
+                                    + " 不存在或不属于实体 " + entityPrimaryKey + "，无法按行写回",
+                            HttpStatus.BAD_REQUEST);
+                    List<EntityUpdateParam.ColumnUpdate> columnUpdates = update.columns().entrySet().stream()
+                            .<EntityUpdateParam.ColumnUpdate>map(entry -> EntityUpdateParam.ColumnUpdate.builder()
+                                    .propertyUniqIdentifier(resolvePropertyUniqIdentifier(propMap, datasourceId, entry.getKey()))
+                                    .datasourceColumnName(entry.getKey())
+                                    .columnValue(entry.getValue())
+                                    .build())
+                            .collect(Collectors.toList());
+                    updateProperty(EntityUpdateParam.builder()
+                            .schemaName(schema)
+                            .datasourceId(datasourceId)
+                            .primaryKeyValue(update.rowKey())
+                            .columnUpdates(columnUpdates)
+                            .build());
+                });
+            });
+        }
         //其他数据源数据insert：逐对象用自己的主键与主键表结构
         if (MapUtils.isNotEmpty(insertMap)) {
             insertMap.forEach((objectId, byDatasource) -> {
                 var primaryProp = primaryPropByObject.get(objectId);
-                var primaryKey = resolveEntityPrimaryKey(actionContext, param, objectId);
+                var primaryKey = resolveEntityPrimaryKey(actionContext, param, objectId,
+                        outputTargetsFor(actionContext));
                 byDatasource.forEach((tableName, columns) -> {
                     //查询关联建，补全columns
                     var mapping = tableFieldMappingMapper.selectByTargetTable(primaryProp.getDatasourceSchema(), tableName);
@@ -1696,6 +1928,24 @@ public class EntityServiceImpl implements EntityService {
                 });
             });
         }
+    }
+
+    /** 按行写回的待更新数据：行主键 + 该行要改的列 */
+    private record RowUpdate(Object rowKey, Map<String, Object> columns) {
+        private RowUpdate(Object rowKey) {
+            this(rowKey, new LinkedHashMap<>());
+        }
+    }
+
+    /** 回写列对应的属性标识；列名是唯一依据，找不到属性时用列名兜底（内部调用不做必填校验） */
+    private String resolvePropertyUniqIdentifier(Map<String, OntologyProperty> propMap, String datasourceId,
+                                                 String datasourceColumnName) {
+        return propMap.values().stream()
+                .filter(p -> Objects.equals(p.getDatasourceId(), datasourceId)
+                        && Objects.equals(p.getDatasourceColumnName(), datasourceColumnName))
+                .map(OntologyProperty::getUniqueIdentifier)
+                .findFirst()
+                .orElse(datasourceColumnName);
     }
 
     /**

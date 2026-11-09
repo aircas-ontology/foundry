@@ -31,10 +31,23 @@ public class ActionTestParam {
     private Object entityPrimaryKey;
 
     @Schema(name = "entityPrimaryKeys", description = "各对象选中的实例主键：对象id -> 实例主键；"
-            + "应用行为的入参/出参可能跨对象，映射涉及的对象都要提供；"
+            + "应用行为的入参/出参可能跨对象，映射涉及的对象都要提供；一个对象的入参与出参默认落在同一实例上，"
+            + "要分开时改用 inputEntities/outputEntities；"
             + "行为绑定关系时用保留键 from、to 分别传关系两端的实例主键，两者互不混用",
-            example = "{\"objectA\":1001,\"objectB\":2002,\"from\":1,\"to\":5}")
+            example = "{\"3f2a9c1e-7b4d-4a86-9e21-5c8d1f0a6b34\":1,\"a5e8c206-3f17-4d92-8b74-1c6f9d3e5028\":2}")
     private Map<String, Object> entityPrimaryKeys;
+
+    @Schema(name = "inputEntities", description = "入参方向的数据位置：对象id -> {实例主键, 存储分组->行主键}。"
+            + "只对该对象的属性/对象/List 入参生效，两个子字段可只给其一，都没给时沿用 entityPrimaryKeys/最新一行；"
+            + "关系两端（from/to）与不绑算子的行为不支持按方向指定",
+            example = "{\"3f2a9c1e-7b4d-4a86-9e21-5c8d1f0a6b34\":{\"entityPrimaryKey\":1,\"dataPrimaryKeys\":{\"weapon_load\":11}}}")
+    private Map<String, ActionInstanceTargetParam> inputEntities;
+
+    @Schema(name = "outputEntities", description = "出参方向的数据位置：对象id -> {实例主键, 存储分组->行主键}。"
+            + "只对该对象的 WRITE_PROPERTY 出参生效，两个子字段都可以只给其一，都没给时沿用 entityPrimaryKeys/新增一行；"
+            + "关系两端（from/to）与不绑算子的行为不支持按方向指定",
+            example = "{\"a5e8c206-3f17-4d92-8b74-1c6f9d3e5028\":{\"entityPrimaryKey\":2,\"dataPrimaryKeys\":{\"duty_log\":12}}}")
+    private Map<String, ActionInstanceTargetParam> outputEntities;
 
     @Schema(name = "dataPrimaryKey", description = "分组表行的主键：属性值-修改/删除必填", example = "1")
     private Object dataPrimaryKey;

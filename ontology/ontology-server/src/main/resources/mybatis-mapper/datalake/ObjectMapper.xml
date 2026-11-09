@@ -118,6 +118,23 @@
     </select>
 
 
+    <select id="queryJoinTableRow" resultType="java.util.HashMap">
+        SELECT
+        <if test="joinTableColumnNames != null and joinTableColumnNames.size() > 0">
+            <foreach item="column" collection="joinTableColumnNames" separator=",">
+                t."${column}"
+            </foreach>
+        </if>
+        <if test="joinTableColumnNames == null or joinTableColumnNames.size() == 0">
+            t.*
+        </if>
+        FROM "${schemaName}"."${joinTableName}" t
+        WHERE t."${joinTableKey}" = #{primaryKeyValue}
+          AND t."${rowKeyColumn}" = #{rowKey}
+        LIMIT 1
+    </select>
+
+
     <select id="queryJoinTableDataPage" resultType="java.util.HashMap">
         SELECT
         <if test="joinTableColumnNames != null and joinTableColumnNames.size() > 0">
