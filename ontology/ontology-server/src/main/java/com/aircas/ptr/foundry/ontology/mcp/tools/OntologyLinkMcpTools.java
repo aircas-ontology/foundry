@@ -2,7 +2,9 @@ package com.aircas.ptr.foundry.ontology.mcp.tools;
 
 import com.aircas.ptr.foundry.ontology.converter.DataConverter;
 import com.aircas.ptr.foundry.ontology.mcp.McpTools;
+import com.aircas.ptr.foundry.ontology.model.enums.OntologyLinkTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.Status;
+import com.aircas.ptr.foundry.ontology.model.param.OntologyLinkCreateParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkCategory;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
@@ -123,5 +125,31 @@ public class OntologyLinkMcpTools implements McpTools {
     public List<OntologyLinkCategory> listLinkCategories(
             @ToolParam(description = "对象空间 id（spaceId）") Integer spaceId) {
         return ontologyLinkCategoryService.getCategoryList(spaceId);
+    }
+
+    @Tool(description = """
+            创建对象之间的关系（Link）。
+            当用户需要在两个对象之间建立关联关系时使用。
+            关系有方向：从主体对象（from）指向客体对象（to）。
+            """)
+    public void createLink(
+            @ToolParam(description = "关系名称") String name,
+            @ToolParam(description = "关系 API 名称（代码中使用）") String apiName,
+            @ToolParam(description = "主体对象唯一标识（关系的起点）") String ontologyUniqueIdentifierFrom,
+            @ToolParam(description = "客体对象唯一标识（关系的终点）") String ontologyUniqueIdentifierTo,
+            @ToolParam(description = "关系类型，可选值：COMPOSITION（组合关系）、RECONNAISSANCE（侦察关系）、STRIKE（打击关系）、COORDINATION（协同关系）、POSSESSION（拥有关系）、ATTRIBUTION（归属关系）、OTHER（其他关系）") String type,
+            @ToolParam(description = "关系所属空间 ID") Integer spaceId,
+            @ToolParam(description = "关系分类 ID，可为空", required = false) Integer categoryId,
+            @ToolParam(description = "关系描述，可为空", required = false) String description) {
+        OntologyLinkCreateParam param = new OntologyLinkCreateParam();
+        param.setName(name);
+        param.setApiName(apiName);
+        param.setOntologyUniqueIdentifierFrom(ontologyUniqueIdentifierFrom);
+        param.setOntologyUniqueIdentifierTo(ontologyUniqueIdentifierTo);
+        param.setType(OntologyLinkTypeEnum.valueOf(type));
+        param.setSpaceId(spaceId);
+        param.setCategoryId(categoryId);
+        param.setDescription(description);
+        ontologyLinkGroupService.createLink(param);
     }
 }
