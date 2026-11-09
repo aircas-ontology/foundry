@@ -13,4 +13,23 @@
         GROUP BY ontology_space_id
     </select>
 
+    <!-- 分类树批量口径：对象作为关系任一端（源或目标）计一次。
+         先 UNION 去重 (对象标识, 关系id)，自环关系不会被算两遍，与原逐对象 "from = ? OR to = ?" 结果一致。 -->
+    <select id="countGroupByOntologyInSpace" resultType="com.aircas.ptr.foundry.ontology.model.view.OntologyStatisticsCountView">
+        SELECT t.ontology_unique_identifier AS ontologyUniqueIdentifier,
+               COUNT(*)                     AS cnt
+        FROM (SELECT ontology_unique_identifier_from AS ontology_unique_identifier, id
+              FROM ontology_link_group
+              WHERE status = #{status}
+                AND ontology_space_id = #{spaceId}
+                AND ontology_unique_identifier_from IS NOT NULL
+              UNION
+              SELECT ontology_unique_identifier_to AS ontology_unique_identifier, id
+              FROM ontology_link_group
+              WHERE status = #{status}
+                AND ontology_space_id = #{spaceId}
+                AND ontology_unique_identifier_to IS NOT NULL) t
+        GROUP BY t.ontology_unique_identifier
+    </select>
+
 </mapper>

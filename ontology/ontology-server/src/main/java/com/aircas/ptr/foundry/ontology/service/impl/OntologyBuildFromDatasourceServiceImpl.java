@@ -575,9 +575,6 @@ public class OntologyBuildFromDatasourceServiceImpl implements OntologyBuildFrom
             var event = EntityDatasourceSchemaChangeEventDTO.builder()
                     .ontologyUniqueIdentifier(uniqueIdentifier)
                     .type(entityTable.created() ? DatasourceEventTypeEnum.CREATE_TABLE : DatasourceEventTypeEnum.ADD_COLUMN)
-                    .sourceDatasourceId(connection.getId())
-                    .sourceDatasourceName(connection.getName())
-                    .sourceDatasourceDbType(connection.getDbType())
                     .sourceSchema(param.getSchemaName())
                     .datasource(List.of(datasourceDTO))
                     .build();
