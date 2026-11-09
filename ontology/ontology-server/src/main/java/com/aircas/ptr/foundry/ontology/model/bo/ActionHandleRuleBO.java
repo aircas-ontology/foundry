@@ -1,13 +1,8 @@
 package com.aircas.ptr.foundry.ontology.model.bo;
 
-import com.aircas.ptr.foundry.common.util.SnowflakeIdUtil;
 import com.aircas.ptr.foundry.ontology.model.po.ActionHandleRule;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
-
-import java.util.Date;
-
-import static com.aircas.ptr.foundry.ontology.model.enums.Status.ENABLE;
 
 /**
  * @className: ActionHandleRuleBO
@@ -20,11 +15,4 @@ import static com.aircas.ptr.foundry.ontology.model.enums.Status.ENABLE;
 @Data
 public class ActionHandleRuleBO extends ActionHandleRule {
 
-    public ActionHandleRuleBO() {
-
-        setId(SnowflakeIdUtil.get());
-        Date now = new Date();
-        setCreateTime(now);
-        setUpdateTime(now);
-    }
 }

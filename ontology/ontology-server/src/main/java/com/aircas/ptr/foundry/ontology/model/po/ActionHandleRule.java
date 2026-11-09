@@ -7,6 +7,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.experimental.Accessors;
 
 import jakarta.persistence.Entity;
 import java.util.Date;
@@ -24,6 +25,7 @@ import static com.aircas.ptr.foundry.common.constant.DateFormat.DATE_FORMAT_DEFA
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@Accessors(chain = true)
 @Entity
 @TableName(value = "action_handle_rule")
 public class ActionHandleRule {
@@ -41,7 +43,9 @@ public class ActionHandleRule {
 
     private ScheduleStatus status;
 
-    private Long actionId;
+    private String actionApi;
+
+    private String ontologyIdentifier;
 
     private String name;
 
