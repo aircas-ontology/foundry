@@ -9,7 +9,8 @@ import lombok.experimental.SuperBuilder;
 
 /**
  * 并行节点的配置。
- * <p>P1 单轮引擎串行执行全部子节点后按 policy 汇总，maxConcurrency 只保存不生效。</p>
+ * <p>所有子节点在单次执行内并发跑完，再按 policy 汇总；maxConcurrency 限制同时在跑的分支数，
+ * 单个节点最多 8 路。分支共享运行时黑板，写同一个键以最后写入为准。</p>
  */
 @Data
 @SuperBuilder
@@ -21,6 +22,6 @@ public class BehaviorParallelConfig {
     @Schema(name = "policy", description = "成败判定策略", example = "ALL_SUCCESS")
     private BehaviorParallelPolicyEnum policy;
 
-    @Schema(name = "maxConcurrency", description = "最大并发数，0 或空表示不限制；P1 只保存不生效")
+    @Schema(name = "maxConcurrency", description = "最大并发数，空表示按子节点数并发；单节点最多 8 路")
     private Integer maxConcurrency;
 }

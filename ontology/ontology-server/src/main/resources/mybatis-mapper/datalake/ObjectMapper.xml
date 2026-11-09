@@ -27,6 +27,24 @@
         FROM "${schemaName}"."${tableName}"
     </select>
 
+    <!-- 按主键升序 keyset 分页取主键值：批量执行逐页处理实例，lastKey 为空表示第一页；
+         空主键没法做游标，直接在 SQL 里排除，避免翻页时漏数据或原地打转 -->
+    <select id="queryPrimaryKeyValuePage" resultType="java.lang.Object">
+        SELECT "${primaryKeyColumnName}"
+        FROM "${schemaName}"."${tableName}"
+        <where>
+            "${primaryKeyColumnName}" IS NOT NULL
+            <if test="lastKey != null">
+                AND "${primaryKeyColumnName}" &gt; #{lastKey}
+            </if>
+            <if test="hasDeletedField">
+                AND "is_deleted" = 0
+            </if>
+        </where>
+        ORDER BY "${primaryKeyColumnName}"
+        LIMIT #{limit}
+    </select>
+
     <select id="queryPrimaryKeyAndTitleKeyValue" resultType="java.util.HashMap">
         SELECT
         "${primaryKeyColumnName}"
@@ -97,6 +115,30 @@
         <if test="count != null">
             LIMIT ${count}
         </if>
+    </select>
+
+
+    <select id="queryJoinTableDataPage" resultType="java.util.HashMap">
+        SELECT
+        <if test="joinTableColumnNames != null and joinTableColumnNames.size() > 0">
+            <foreach item="column" collection="joinTableColumnNames" separator=",">
+                t."${column}"
+            </foreach>
+        </if>
+        <if test="joinTableColumnNames == null or joinTableColumnNames.size() == 0">
+            t.*
+        </if>
+        FROM "${schemaName}"."${joinTableName}" t
+        WHERE t."${joinTableKey}" = #{primaryKeyValue}
+        ORDER BY t."${joinTableOrderBy}" ${sort}
+        LIMIT ${limit} OFFSET ${offset}
+    </select>
+
+
+    <select id="queryJoinTableCount" resultType="java.lang.Integer">
+        SELECT count(*)
+        FROM "${schemaName}"."${joinTableName}" t
+        WHERE t."${joinTableKey}" = #{primaryKeyValue}
     </select>
 
 

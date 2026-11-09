@@ -38,6 +38,19 @@ public class TreeAvailableActionVO {
     @Schema(name = "functionApi", description = "绑定的算子api，属性值和实例关系行为为空")
     private String functionApi;
 
+    @Schema(name = "requiresInstance", description = "执行该行为是否必须提供实体主键：属性值/实例关系行为，或算子入参取对象属性、出参写回属性")
+    private boolean requiresInstance;
+
+    @Schema(name = "objectIdentifier", description = "行为作用的对象类型，执行时按它选实例；应用行为为空")
+    private String objectIdentifier;
+
+    @Schema(name = "instanceObjects", description = "需要调用方提供实例主键的对象类型：入参取属性/对象/List 或出参写属性的对象。"
+            + "多于一个时行为节点必须按对象配实例键；关系对端不在其中，它由对端主键参数指定或整段遍历")
+    private List<String> instanceObjects = new ArrayList<>();
+
+    @Schema(name = "externalParams", description = "行为的外部输入参数（取值来源为外部输入），绑定到行为树时保存期会自动补同名黑板键")
+    private List<TreeActionParamVO> externalParams = new ArrayList<>();
+
     @Schema(name = "inputParams", description = "算子入参，按参数名从黑板取值")
     private List<TreeActionParamVO> inputParams = new ArrayList<>();
 

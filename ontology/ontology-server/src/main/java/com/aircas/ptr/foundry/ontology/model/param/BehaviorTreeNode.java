@@ -14,7 +14,7 @@ import java.util.List;
  * 行为树节点。
  * <p>每个节点固定三项公共配置 enabled/skipIf/whileCondition，其余按 kind 走强类型 config，
  * config 里出现该 kind 不认识的字段直接报错，不允许自由字段。
- * whileCondition 是跨 Tick 语义，P1 单轮引擎只存不生效。</p>
+ * whileCondition 在单轮里作为进入条件，循环节点还会在每轮执行前重新求值。</p>
  */
 @Data
 @SuperBuilder
@@ -38,7 +38,7 @@ public class BehaviorTreeNode {
     @Schema(name = "skipIf", description = "跳过条件，SpEL 表达式；空表达式表示不启用，运行时按黑板上下文求值")
     private String skipIf;
 
-    @Schema(name = "whileCondition", description = "持续执行条件，SpEL 表达式；P1 只保存不生效")
+    @Schema(name = "whileCondition", description = "持续执行条件，SpEL 表达式；作为节点进入条件，循环节点每轮重新求值")
     private String whileCondition;
 
     @Schema(name = "config", description = "类型专属配置，字段集合按 kind 白名单校验")
