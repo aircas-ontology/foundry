@@ -66,22 +66,35 @@ spring:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
   elasticsearch:
-    uris: http://172.16.18.62:9200
+    uris:
     connection-timeout: 5s
     socket-timeout: 30s
-
   data:
     elasticsearch:
       repositories:
         enabled: true
+    redis:
+      host:
+      port:
+      password:
+      database:
+  ai:
+    mcp:
+      server:
+        name: ontology-mcp-server
+        version: 1.0.0
+        type: sync
+
+mcp:
+  service-token:
 
 cdc:
   connect:
     rest:
-      url: http://172.16.18.62:8083
+      url:
   datasource:
-    hostname: 172.16.18.58
-    port: 35432
+    hostname:
+    port:
   ontology-topic-prefix: ontology_server
   ontology-meta: ontology.ontology_meta
   ontology-space: ontology.ontology_space
@@ -216,3 +229,4 @@ container-operator:
   arm-check-enabled: true
   exec-host: 127.0.0.1
   exec-timeout-seconds: 30
+

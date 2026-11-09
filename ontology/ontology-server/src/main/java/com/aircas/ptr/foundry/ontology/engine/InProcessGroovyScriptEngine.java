@@ -37,7 +37,7 @@ public class InProcessGroovyScriptEngine implements ScriptEngine {
 
     @Override
     public void validate(ScriptExecutionContext ctx) {
-        // parseGroovyCode 会编译源码并查找返回 FunctionResultVO 的 handle 方法，找不到即抛业务异常
+        // parseGroovyCode 会编译源码并查找 handle 方法，找不到即抛业务异常（返回类型不限）
         groovyService.parseGroovyCode(ctx.getCode());
     }
 

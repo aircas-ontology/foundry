@@ -40,11 +40,14 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -53,8 +56,6 @@ import java.util.stream.Collectors;
 public class GroovyServiceImpl implements GroovyService {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
-
-    private final static String FUNCTION_RESULT_REFERENCE_NAME = "com.aircas.ptr.foundry.ontology.model.vo.FunctionResultVO";
 
     /**
      * 按 functionApi 缓存。每个条目使用独立 ClassLoader，失效时可关闭，便于 GC 回收 Class（Metaspace）。
@@ -84,9 +85,9 @@ public class GroovyServiceImpl implements GroovyService {
         CompiledScript compiled = compile(code);
         try {
             Method handleMethod = findHandleMethod(compiled.clazz);
-            PreconditionUtils.checkArgument(
-                    handleMethod != null && StringUtils.equals(handleMethod.getReturnType().getName(), FUNCTION_RESULT_REFERENCE_NAME),
-                    "函数名称handle不存在或者返回类型错误");
+            // 返回类型不作限制：脚本可返回工程内 VO、脚本内自定义类或标量，
+            // 下游统一按「有 data 键取 data，没有则原样透传」消费
+            PreconditionUtils.checkNotNull(handleMethod, "函数名称handle不存在");
             JsonSchemaGenerator generator = new JsonSchemaGenerator(objectMapper);
             Parameter[] parameters = handleMethod.getParameters();
             List<FunctionParamDTO> funcParams = new ArrayList<>();
@@ -121,9 +122,18 @@ public class GroovyServiceImpl implements GroovyService {
             JavaType returnType = objectMapper.getTypeFactory().constructType(handleMethod.getGenericReturnType());
             JsonSchema returnSchema = generator.generateSchema(returnType);
             String json = objectMapper.writeValueAsString(returnSchema);
+            Class<?> returnClass = returnType.getRawClass();
+            FunctionParamTypeEnum returnParamType = FunctionParamTypeEnum.getByTypeName(returnClass.getName());
+            // 与入参同一口径：标量按类型落，List 落 LIST，其余（FunctionResultVO、自定义类）落 OBJECT
+            if (returnParamType == null && returnClass.isAssignableFrom(List.class)) {
+                returnParamType = FunctionParamTypeEnum.LIST;
+            }
+            if (returnParamType == null) {
+                returnParamType = FunctionParamTypeEnum.OBJECT;
+            }
             funcParams.add(FunctionParamDTO.builder()
                     .paramName("result")
-                    .paramType(FunctionParamTypeEnum.OBJECT)
+                    .paramType(returnParamType)
                     .category(FunctionParamCategoryEnum.OUTPUT)
                     .paramOrder(1)
                     .referenceType(returnType.getRawClass().getTypeName())
@@ -260,7 +270,7 @@ public class GroovyServiceImpl implements GroovyService {
     }
 
     /**
-     * 编译 Groovy 源码，在已加载类中查找含 handle 方法且返回 FunctionResultVO 的类。
+     * 编译 Groovy 源码，在已加载类中查找含 handle 方法的类（返回类型不限）。
      * 用于创建时反射解析参数（parseGroovyCode）、脚本函数（CUSTOMIZE）的进程内执行
      * （{@link com.aircas.ptr.foundry.ontology.engine.InProcessGroovyScriptEngine}）以及函数编排节点的进程内执行。
      */
@@ -271,8 +281,8 @@ public class GroovyServiceImpl implements GroovyService {
         source.setCachable(false);
         try {
             // parseClass 只返回脚本中第一个类；多 class 脚本需在本次 loader 已加载类中找 handle
-            loader.parseClass(source);
-            Class<?> handleClass = findHandleClass(loader);
+            Class<?> primaryClass = loader.parseClass(source);
+            Class<?> handleClass = findHandleClass(primaryClass, loader, code);
             PreconditionUtils.checkArgument(handleClass != null, "函数handle方法不存在");
             return new CompiledScript(codeHash, handleClass, loader);
         } catch (Exception e) {
@@ -288,22 +298,32 @@ public class GroovyServiceImpl implements GroovyService {
     }
 
     /**
-     * 脚本可定义多个类（如 VisibilityHandler + ComputeSateCoveToPoint）。
+     * 脚本可定义多个类（如 VisibilityHandler + ComputeSateCoveToPoint），入口类只按「声明了 handle」认定。
+     * 多个类都声明 handle 时取源码里 class 声明最靠前的那个，
+     * 与 {@code GroovyScriptParamParser} 静态解析选 handle 的顺序一致，避免解析用 A 类、执行用 B 类。
      * 当前使用独立 ClassLoader，getLoadedClasses 只会看到本次编译结果。
      */
-    private Class<?> findHandleClass(GroovyClassLoader loader) {
+    private Class<?> findHandleClass(Class<?> primaryClass, GroovyClassLoader loader, String code) {
+        if (primaryClass != null && findHandleMethod(primaryClass) != null) {
+            return primaryClass;
+        }
         Class<?>[] loadedClasses = loader.getLoadedClasses();
         if (loadedClasses == null || loadedClasses.length == 0) {
             return null;
         }
         return Arrays.stream(loadedClasses)
-                .filter(clz -> {
-                    Method handleMethod = findHandleMethod(clz);
-                    return handleMethod != null
-                            && StringUtils.equals(handleMethod.getReturnType().getName(), FUNCTION_RESULT_REFERENCE_NAME);
-                })
-                .findFirst()
+                .filter(clz -> findHandleMethod(clz) != null)
+                .min(Comparator.comparingInt((Class<?> clz) -> declarationIndex(code, clz)))
                 .orElse(null);
+    }
+
+    /** 类声明在源码中的位置；脚本生成类、内部类等匹配不到的排在最后。 */
+    private static int declarationIndex(String code, Class<?> clazz) {
+        String className = clazz.getName();
+        int dot = className.lastIndexOf('.');
+        String simpleName = dot >= 0 ? className.substring(dot + 1) : className;
+        Matcher matcher = Pattern.compile("\\bclass\\s+" + Pattern.quote(simpleName) + "\\b").matcher(code);
+        return matcher.find() ? matcher.start() : Integer.MAX_VALUE;
     }
 
     private Method findHandleMethod(Class<?> clazz) {

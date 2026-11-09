@@ -142,7 +142,9 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         ///主键，标题健，数据源校验
         var ontologyId = updateProperties.get(0).getOntologyUniqueIdentifier();
         //get ontology apiName
-        var apiName = metaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, ontologyId)).getApiName();
+        var ontologyMeta = metaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, ontologyId));
+        PreconditionUtils.checkNotNull(ontologyMeta, "对象不存在:" + ontologyId, HttpStatus.BAD_REQUEST);
+        var apiName = ontologyMeta.getApiName();
         var otherProps = list(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyId).notIn(OntologyProperty::getUniqueIdentifier, updateUniqIds));
         var datasourceSet = Sets.newHashSet();
         var hasTitleKey = false;
@@ -222,7 +224,9 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         //参数校验
         var ontologyId = params.get(0).getOntologyIdentifier();
         //get ontology apiName
-        var apiName = metaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, ontologyId)).getApiName();
+        var ontologyMeta = metaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, ontologyId));
+        PreconditionUtils.checkNotNull(ontologyMeta, "对象不存在:" + ontologyId, HttpStatus.BAD_REQUEST);
+        var apiName = ontologyMeta.getApiName();
 
         var properties = list(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyId));
 
@@ -310,7 +314,9 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         var ontologyId = param.getOntologyIdentifier();
         var properties = list(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyId));
         //get ontology apiName
-        var apiName = metaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, ontologyId)).getApiName();
+        var ontologyMeta = metaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, ontologyId));
+        PreconditionUtils.checkNotNull(ontologyMeta, "对象不存在:" + ontologyId, HttpStatus.BAD_REQUEST);
+        var apiName = ontologyMeta.getApiName();
         // check storage group
         PreconditionUtils.checkArgument(!StringUtils.equals(apiName, param.getStorageGroup()), "属性存储分组名称不能和对象apiName相同", HttpStatus.BAD_REQUEST);
         //check apiName
