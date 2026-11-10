@@ -200,7 +200,7 @@ public class CdcTaskInitServiceImpl implements CdcTaskInitService {
         requestBody.put("config", config);
 
         // 发送 POST 请求
-        TypeReference<ConnectorDTO> typeRef = new TypeReference<ConnectorDTO>() {
+        TypeReference<ConnectorDTO> typeRef = new TypeReference<>() {
         };
         ConnectorDTO response = HttpUtil.postJson(url, null, requestBody, typeRef);
         log.info("成功创建 CDC 连接器: {}, 响应数据: {}", connectorName, response);

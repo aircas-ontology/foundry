@@ -3,12 +3,17 @@ package com.aircas.ptr.foundry.ontology.model.vo;
 
 import com.aircas.ptr.foundry.ontology.model.enums.ActionSchedulingTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.ScheduleStatus;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
+
+import java.util.Date;
+
+import static com.aircas.ptr.foundry.common.constant.DateFormat.DATE_FORMAT_DEFAULT;
 
 @Data
 @AllArgsConstructor
@@ -46,5 +51,9 @@ public class ActionSchedulingInfoVO {
 
     @Schema(name = "status", description = "行为调度状态 START、STOP", required = true, example = "1")
     private ScheduleStatus status;
+
+    @Schema(name = "createTime", description = "创建时间", example = "2026-11-10 14:30:00")
+    @JsonFormat(pattern = DATE_FORMAT_DEFAULT, timezone = "GMT+8")
+    private Date createTime;
 
 }

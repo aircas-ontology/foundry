@@ -173,10 +173,11 @@ public class OntologyActionController {
 
     @Operation(summary = "分页查看行为调度列表")
     @GetMapping("/scheduling/list")
-    public RestResult<Page<ActionSchedulingInfoVO>> listScheduling(@RequestParam(required = false, defaultValue = "1") Integer pageNum,
+    public RestResult<Page<ActionSchedulingInfoVO>> listScheduling(@RequestParam(required = false, name = "spaceId") @Parameter(description = "对象空间id") Integer spaceId,
+                                                                   @RequestParam(required = false, defaultValue = "1") Integer pageNum,
                                                                    @RequestParam(required = false, defaultValue = "10") Integer pageSize) {
 
-        Page<ActionSchedulingInfoVO> result = ontologyActionService.listScheduling(pageNum, pageSize);
+        Page<ActionSchedulingInfoVO> result = ontologyActionService.listScheduling(pageNum, pageSize, spaceId);
         return RestResult.ofData(result);
     }
 
@@ -223,6 +224,13 @@ public class OntologyActionController {
     public RestResult stopScheduling(@PathVariable(name = "type") ActionSchedulingTypeEnum type, @PathVariable(name = "id") Long id) {
         ontologyActionService.stopScheduling(type, id);
         return RestResult.success();
+    }
+
+
+    @Operation(summary = "手动触发规则调度（评估规则并按命中执行行为）")
+    @PostMapping("/scheduling/rule/trigger/{id}")
+    public RestResult<RuleTriggerResultVO> triggerRuleScheduling(@PathVariable(name = "id") Long id) {
+        return RestResult.ofData(ontologyActionService.triggerRuleScheduling(id));
     }
 
 }

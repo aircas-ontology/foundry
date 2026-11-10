@@ -28,6 +28,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonMappingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.collect.Lists;
 import com.xxl.job.core.context.XxlJobHelper;
 import lombok.SneakyThrows;
@@ -49,6 +50,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Date;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -3535,6 +3537,22 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 log.error("createScheduling failed", e);
                 throw new BusinessException("远程调用xxl-job创建jobinfo失败");
             }
+        } else if (schedulingType.equals(ActionSchedulingTypeEnum.RULE)) {
+            var ruleParam = param.getRule();
+            PreconditionUtils.checkNotNull(ruleParam, "规则调度缺少 rule 配置", HttpStatus.BAD_REQUEST);
+            PreconditionUtils.checkNotNull(ruleParam.getRuleFlow(), "规则调度缺少 ruleFlow 配置", HttpStatus.BAD_REQUEST);
+            var actionHandleRule = ActionHandleRule.builder()
+                    .actionApi(action.getApi())
+                    .ontologyIdentifier(action.getOntologyUniqueIdentifier())
+                    .ontologySpaceId(action.getOntologySpaceId())
+                    .name(param.getName())
+                    .description(param.getDescription())
+                    .status(ScheduleStatus.STOP)
+                    .rules(writeRuleFlow(ruleParam.getRuleFlow()))
+                    .ruleConnectType(ruleParam.getRuleConnectType() == null ? null : ruleParam.getRuleConnectType().getCode())
+                    .build();
+            actionHandleRuleService.save(actionHandleRule);
+            id = actionHandleRule.getId();
         }
         return id;
     }
@@ -3575,6 +3593,20 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 log.error("updateJobInfo failed", e);
                 throw new BusinessException("远程调用xxl-job更新jobinfo失败");
             }
+        } else if (schedulingType.equals(ActionSchedulingTypeEnum.RULE)) {
+            var ruleParam = param.getRule();
+            PreconditionUtils.checkNotNull(ruleParam, "规则调度缺少 rule 配置", HttpStatus.BAD_REQUEST);
+            PreconditionUtils.checkNotNull(ruleParam.getRuleFlow(), "规则调度缺少 ruleFlow 配置", HttpStatus.BAD_REQUEST);
+            var handleRule = actionHandleRuleService.getById(param.getId());
+            PreconditionUtils.checkNotNull(handleRule, "规则调度任务不存在：" + param.getId());
+            handleRule.setActionApi(action.getApi())
+                    .setOntologyIdentifier(action.getOntologyUniqueIdentifier())
+                    .setOntologySpaceId(action.getOntologySpaceId())
+                    .setName(param.getName())
+                    .setDescription(param.getDescription())
+                    .setRules(writeRuleFlow(ruleParam.getRuleFlow()))
+                    .setRuleConnectType(ruleParam.getRuleConnectType() == null ? null : ruleParam.getRuleConnectType().getCode());
+            actionHandleRuleService.updateById(handleRule);
         }
     }
 
@@ -3592,6 +3624,10 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 log.error("removeScheduling failed", e);
                 throw new BusinessException("远程调用xxl-job删除任务失败");
             }
+        } else if (ActionSchedulingTypeEnum.RULE.equals(type)) {
+            var handleRule = actionHandleRuleService.getById(id);
+            PreconditionUtils.checkNotNull(handleRule, "规则调度任务不存在：" + id);
+            actionHandleRuleService.removeById(handleRule.getId());
         }
     }
 
@@ -3609,6 +3645,10 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 log.error("startScheduling failed", e);
                 throw new BusinessException("远程调用xxl-job启动任务失败");
             }
+        } else if (ActionSchedulingTypeEnum.RULE.equals(type)) {
+            var handleRule = actionHandleRuleService.getById(id);
+            PreconditionUtils.checkNotNull(handleRule, "规则调度任务不存在：" + id);
+            actionHandleRuleService.updateById(handleRule.setStatus(ScheduleStatus.START));
         }
     }
 
@@ -3626,6 +3666,10 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 log.error("stopScheduling failed", e);
                 throw new BusinessException("远程调用xxl-job暂停任务失败");
             }
+        } else if (ActionSchedulingTypeEnum.RULE.equals(type)) {
+            var handleRule = actionHandleRuleService.getById(id);
+            PreconditionUtils.checkNotNull(handleRule, "规则调度任务不存在：" + id);
+            actionHandleRuleService.updateById(handleRule.setStatus(ScheduleStatus.STOP));
         }
 
     }
@@ -3652,26 +3696,62 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                     .ontologyIdentifier(action.getOntologyUniqueIdentifier())
                     .taskVO(ActionHandleTaskInfoVO.builder().taskCronExpression(handleTask.getCron()).build())
                     .status(handleTask.getStatus())
+                    .createTime(handleTask.getCreateTime())
+                    .build();
+        } else if (ActionSchedulingTypeEnum.RULE.equals(type)) {
+            var handleRule = actionHandleRuleService.getById(id);
+            PreconditionUtils.checkNotNull(handleRule, "规则调度任务不存在：" + id);
+            var action = actionMapper.selectOne(new LambdaQueryWrapper<OntologyAction>()
+                    .eq(OntologyAction::getApi, handleRule.getActionApi())
+                    .eq(OntologyAction::getOntologySpaceId, handleRule.getOntologySpaceId()));
+            PreconditionUtils.checkNotNull(action, "调度绑定的行为不存在：" + handleRule.getActionApi(), HttpStatus.BAD_REQUEST);
+            var ontology = ontologyMetaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, action.getOntologyUniqueIdentifier()));
+            return ActionSchedulingDetailVO.builder()
+                    .actionApi(action.getApi())
+                    .actionName(action.getDisplayName())
+                    .ontologyName(ontology == null ? null : ontology.getDisplayName())
+                    .schedulingName(handleRule.getName())
+                    .id(handleRule.getId())
+                    .description(handleRule.getDescription())
+                    .type(ActionSchedulingTypeEnum.RULE)
+                    .ontologyIdentifier(action.getOntologyUniqueIdentifier())
+                    .status(handleRule.getStatus())
+                    .createTime(handleRule.getCreateTime())
+                    .ruleVO(ActionHandleRuleVO.builder()
+                            .ruleFlow(readRuleFlow(handleRule.getRules()))
+                            .ruleConnectType(ActionRuleConnectType.fromCode(handleRule.getRuleConnectType()))
+                            .build())
                     .build();
         }
         return null;
     }
 
     @Override
-    public Page<ActionSchedulingInfoVO> listScheduling(Integer pageNum, Integer pageSize) {
-        //todo 只考虑定时任务
-        var pageInfo = new Page<ActionHandleTask>(pageNum, pageSize).addOrder(OrderItem.desc("id"));
-        var pages = actionHandleTaskService.page(pageInfo);
-        var records = pages.getRecords();
-
-        if (CollectionUtils.isEmpty(records)) {
-            return new Page<ActionSchedulingInfoVO>(pageNum, pageSize);
+    public Page<ActionSchedulingInfoVO> listScheduling(Integer pageNum, Integer pageSize, Integer spaceId) {
+        var taskQuery = new LambdaQueryWrapper<ActionHandleTask>();
+        var ruleQuery = new LambdaQueryWrapper<ActionHandleRule>();
+        if (spaceId != null) {
+            taskQuery.eq(ActionHandleTask::getOntologySpaceId, spaceId);
+            ruleQuery.eq(ActionHandleRule::getOntologySpaceId, spaceId);
         }
+        var tasks = actionHandleTaskService.list(taskQuery);
+        var rules = actionHandleRuleService.list(ruleQuery);
 
-        List<String> actionApis = records.stream().map(ActionHandleTask::getActionApi)
-                .filter(StringUtils::isNotBlank).distinct().collect(Collectors.toList());
-        Map<String, OntologyAction> actionMap = actionApis.isEmpty() ? Map.of()
-                : actionMapper.selectList(new LambdaQueryWrapper<OntologyAction>().in(OntologyAction::getApi, actionApis))
+        List<String> actionApis = new ArrayList<>();
+        tasks.forEach(t -> {
+            if (StringUtils.isNotBlank(t.getActionApi())) {
+                actionApis.add(t.getActionApi());
+            }
+        });
+        rules.forEach(r -> {
+            if (StringUtils.isNotBlank(r.getActionApi())) {
+                actionApis.add(r.getActionApi());
+            }
+        });
+        var distinctApis = actionApis.stream().distinct().collect(Collectors.toList());
+
+        Map<String, OntologyAction> actionMap = distinctApis.isEmpty() ? Map.of()
+                : actionMapper.selectList(new LambdaQueryWrapper<OntologyAction>().in(OntologyAction::getApi, distinctApis))
                 .stream().collect(Collectors.toMap(v -> v.getApi(), v -> v, (existingValue, newValue) -> existingValue));
 
         List<String> ontologyUniqIds = actionMap.values().stream().map(OntologyAction::getOntologyUniqueIdentifier)
@@ -3680,33 +3760,56 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 : ontologyMetaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>().in(OntologyMeta::getUniqueIdentifier, ontologyUniqIds))
                 .stream().collect(Collectors.toMap(v -> v.getUniqueIdentifier(), v -> v, (existingValue, newValue) -> existingValue));
 
-
-        var vo = records.stream().<ActionSchedulingInfoVO>map(v -> {
-            var actionApi = v.getActionApi();
-            var action = actionMap.get(actionApi);
-            var ontologyMeta = action == null ? null : ontologyMap.get(action.getOntologyUniqueIdentifier());
-            if (action == null || ontologyMeta == null) {
-                return null;
+        List<ActionSchedulingInfoVO> all = new ArrayList<>();
+        for (var t : tasks) {
+            var vo = toSchedulingInfoVO(t.getActionApi(), t.getName(), t.getDescription(), t.getId(),
+                    ActionSchedulingTypeEnum.TASK, t.getStatus(), t.getCreateTime(), actionMap, ontologyMap);
+            if (vo != null) {
+                all.add(vo);
             }
-            return ActionSchedulingInfoVO.builder()
-                    .actionApi(action.getApi())
-                    .actionName(action.getDisplayName())
-                    .ontologyName(ontologyMeta.getDisplayName())
-                    .schedulingName(v.getName())
-                    .id(v.getId())
-                    .description(v.getDescription())
-                    .type(ActionSchedulingTypeEnum.TASK)
-                    .ontologyIdentifier(ontologyMeta.getUniqueIdentifier())
-                    .status(v.getStatus())
-                    .build();
+        }
+        for (var r : rules) {
+            var vo = toSchedulingInfoVO(r.getActionApi(), r.getName(), r.getDescription(), r.getId(),
+                    ActionSchedulingTypeEnum.RULE, r.getStatus(), r.getCreateTime(), actionMap, ontologyMap);
+            if (vo != null) {
+                all.add(vo);
+            }
+        }
 
-        }).filter(v -> v != null).collect(Collectors.toList());
+        all.sort(Comparator
+                .comparing(ActionSchedulingInfoVO::getCreateTime, Comparator.nullsLast(Comparator.<Date>reverseOrder()))
+                .thenComparing(ActionSchedulingInfoVO::getId, Comparator.nullsLast(Comparator.<Long>reverseOrder())));
 
+        long total = all.size();
+        int from = Math.max(0, (pageNum - 1) * pageSize);
+        int to = Math.min(all.size(), from + pageSize);
+        List<ActionSchedulingInfoVO> pageRecords = from >= all.size() ? List.of() : new ArrayList<>(all.subList(from, to));
 
         return new Page<ActionSchedulingInfoVO>(pageNum, pageSize)
-                .setTotal(pages.getTotal())
-                .setRecords(vo);
+                .setTotal(total)
+                .setRecords(pageRecords);
+    }
 
+    private ActionSchedulingInfoVO toSchedulingInfoVO(String actionApi, String name, String description, Long id,
+                                                      ActionSchedulingTypeEnum type, ScheduleStatus status, Date createTime,
+                                                      Map<String, OntologyAction> actionMap, Map<String, OntologyMeta> ontologyMap) {
+        var action = actionMap.get(actionApi);
+        var ontologyMeta = action == null ? null : ontologyMap.get(action.getOntologyUniqueIdentifier());
+        if (action == null || ontologyMeta == null) {
+            return null;
+        }
+        return ActionSchedulingInfoVO.builder()
+                .actionApi(action.getApi())
+                .actionName(action.getDisplayName())
+                .ontologyName(ontologyMeta.getDisplayName())
+                .schedulingName(name)
+                .id(id)
+                .description(description)
+                .type(type)
+                .ontologyIdentifier(ontologyMeta.getUniqueIdentifier())
+                .status(status)
+                .createTime(createTime)
+                .build();
     }
 
     @Override
@@ -3732,6 +3835,262 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         return new Page<SchedulingResultVO>(pageNum, pageSize)
                 .setTotal(pages.getTotal())
                 .setRecords(vo);
+    }
+
+    @Override
+    public RuleTriggerResultVO triggerRuleScheduling(Long id) {
+        var handleRule = actionHandleRuleService.getById(id);
+        PreconditionUtils.checkNotNull(handleRule, "规则调度任务不存在：" + id);
+        var action = actionMapper.selectOne(new LambdaQueryWrapper<OntologyAction>()
+                .eq(OntologyAction::getApi, handleRule.getActionApi())
+                .eq(OntologyAction::getOntologySpaceId, handleRule.getOntologySpaceId()));
+        PreconditionUtils.checkNotNull(action, "调度绑定的行为不存在：" + handleRule.getActionApi(), HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(StringUtils.isNotEmpty(action.getFunctionApi()),
+                "不绑定算子的行为不支持规则调度执行：" + handleRule.getActionApi(), HttpStatus.BAD_REQUEST);
+
+        var doc = readRuleFlow(handleRule.getRules());
+        PreconditionUtils.checkNotNull(doc, "规则内容为空或无法解析", HttpStatus.BAD_REQUEST);
+
+        var handleLog = ActionHandleLog.builder()
+                .actionHandleId(handleRule.getId())
+                .actionHandleType(ActionSchedulingTypeEnum.RULE)
+                .requestParam(handleRule.getRules())
+                .triggerTime(new Date())
+                .taskStatus(TaskStatusEnum.PENDING)
+                .build();
+        actionHandleLogMapper.insert(handleLog);
+
+        int evaluated = 0;
+        int matched = 0;
+        String msg;
+        try {
+            var instances = entityService.getEntities(action.getOntologyUniqueIdentifier(), "", "", 1, Integer.MAX_VALUE, false);
+            var records = instances == null ? null : instances.getRecords();
+            if (records != null) {
+                for (var instance : records) {
+                    evaluated++;
+                    var props = new HashMap<String, Object>();
+                    if (instance.getProperties() != null) {
+                        for (var p : instance.getProperties()) {
+                            if (p.getPropertyApiName() != null) {
+                                props.put(p.getPropertyApiName(), p.getPropertyValue());
+                            }
+                            if (p.getPropertyDisplayName() != null) {
+                                props.put(p.getPropertyDisplayName(), p.getPropertyValue());
+                            }
+                        }
+                    }
+                    if (evaluateSteps(doc.path("steps"), props, action.getOntologyUniqueIdentifier())) {
+                        matched++;
+                    }
+                }
+            }
+            if (matched > 0) {
+                var execMsg = executeAction(OntologyActionExecuteParam.builder()
+                        .ontologyUniqueIdentifier(action.getOntologyUniqueIdentifier())
+                        .actionApi(action.getApi())
+                        .build());
+                msg = "命中 " + matched + "/" + evaluated + " 个实例，已执行行为：" + execMsg;
+            } else {
+                msg = "评估 " + evaluated + " 个实例，无命中，未执行行为";
+            }
+            handleLog.setMsg(msg).setCompleteTime(new Date()).setTaskStatus(TaskStatusEnum.COMPLETED);
+            actionHandleLogMapper.updateById(handleLog);
+        } catch (Exception e) {
+            log.error("triggerRuleScheduling failed, id:" + id, e);
+            msg = "规则触发执行失败：" + e.getMessage();
+            handleLog.setMsg(msg).setCompleteTime(new Date()).setTaskStatus(TaskStatusEnum.FAILED);
+            actionHandleLogMapper.updateById(handleLog);
+        }
+
+        return RuleTriggerResultVO.builder()
+                .id(handleRule.getId())
+                .name(handleRule.getName())
+                .actionApi(action.getApi())
+                .evaluatedInstances(evaluated)
+                .matchedInstances(matched)
+                .executed(matched > 0)
+                .msg(msg)
+                .build();
+    }
+
+    /**
+     * 顺序评估规则步骤，命中（走到含行为的 actions 步骤）返回 true。
+     * switch 多路分支暂不支持，跳过不报错。
+     */
+    private boolean evaluateSteps(JsonNode steps, Map<String, Object> props, String boundObjectId) {
+        if (steps == null || !steps.isArray()) {
+            return false;
+        }
+        boolean matched = false;
+        for (var step : steps) {
+            var kind = step.path("kind").asText("");
+            switch (kind) {
+                case "branch" -> {
+                    if (evaluateCondition(step.path("condition"), props, boundObjectId)) {
+                        if (evaluateSteps(step.path("then"), props, boundObjectId)) {
+                            matched = true;
+                        }
+                    } else {
+                        var otherwise = step.path("otherwise");
+                        if (otherwise.isArray() && evaluateSteps(otherwise, props, boundObjectId)) {
+                            matched = true;
+                        }
+                    }
+                }
+                case "actions" -> {
+                    var actions = step.path("actions");
+                    if (actions.isArray() && actions.size() > 0) {
+                        matched = true;
+                    }
+                }
+                case "switch" -> {
+                    // 暂不支持 switch 多路分支
+                }
+                default -> {
+                }
+            }
+        }
+        return matched;
+    }
+
+    private boolean evaluateCondition(JsonNode condition, Map<String, Object> props, String boundObjectId) {
+        if (condition == null || condition.isMissingNode() || condition.isNull()) {
+            return false;
+        }
+        var type = condition.path("type").asText("");
+        if ("composite".equals(type)) {
+            var logic = condition.path("logic").asText("and");
+            var children = condition.path("children");
+            if (!children.isArray() || children.size() == 0) {
+                return false;
+            }
+            if ("or".equalsIgnoreCase(logic)) {
+                for (var child : children) {
+                    if (evaluateCondition(child, props, boundObjectId)) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+            for (var child : children) {
+                if (!evaluateCondition(child, props, boundObjectId)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        if ("leaf".equals(type)) {
+            var left = resolveValue(condition.path("left"), props, boundObjectId);
+            var right = resolveValue(condition.path("right"), props, boundObjectId);
+            return compareValues(left, right, condition.path("operator").asText(""));
+        }
+        return false;
+    }
+
+    /**
+     * 解析值节点：input 取字面量，variable 取当前实例属性值（仅绑定对象），function/expression 暂不支持返回 null。
+     */
+    private Object resolveValue(JsonNode node, Map<String, Object> props, String boundObjectId) {
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return null;
+        }
+        var kind = node.path("kind").asText("");
+        return switch (kind) {
+            case "input" -> node.path("text").isMissingNode() ? null : node.path("text").asText();
+            case "variable" -> {
+                var objectId = node.path("objectId").asText("");
+                if (!objectId.isEmpty() && !objectId.equals(boundObjectId)) {
+                    yield null;
+                }
+                var propertyId = node.path("propertyId").asText("");
+                if (props.containsKey(propertyId)) {
+                    yield props.get(propertyId);
+                }
+                var propertyName = node.path("propertyName").asText("");
+                if (!propertyName.isEmpty() && props.containsKey(propertyName)) {
+                    yield props.get(propertyName);
+                }
+                yield null;
+            }
+            default -> null;
+        };
+    }
+
+    private boolean compareValues(Object left, Object right, String operator) {
+        if (operator == null) {
+            return false;
+        }
+        switch (operator) {
+            case "contains":
+                return left != null && right != null && String.valueOf(left).contains(String.valueOf(right));
+            case "notContains":
+                return left != null && right != null && !String.valueOf(left).contains(String.valueOf(right));
+            case "prefixContains":
+                return left != null && right != null && String.valueOf(left).startsWith(String.valueOf(right));
+            default:
+                break;
+        }
+        if (left == null || right == null) {
+            return "neq".equals(operator);
+        }
+        Double ln = toNumber(left);
+        Double rn = toNumber(right);
+        if (ln != null && rn != null) {
+            int c = Double.compare(ln, rn);
+            return switch (operator) {
+                case "eq" -> c == 0;
+                case "neq" -> c != 0;
+                case "gt" -> c > 0;
+                case "lt" -> c < 0;
+                case "gte" -> c >= 0;
+                case "lte" -> c <= 0;
+                default -> false;
+            };
+        }
+        var ls = String.valueOf(left);
+        var rs = String.valueOf(right);
+        return switch (operator) {
+            case "eq" -> ls.equals(rs);
+            case "neq" -> !ls.equals(rs);
+            case "gt" -> ls.compareTo(rs) > 0;
+            case "lt" -> ls.compareTo(rs) < 0;
+            case "gte" -> ls.compareTo(rs) >= 0;
+            case "lte" -> ls.compareTo(rs) <= 0;
+            default -> false;
+        };
+    }
+
+    private Double toNumber(Object value) {
+        if (value instanceof Number n) {
+            return n.doubleValue();
+        }
+        try {
+            return Double.parseDouble(String.valueOf(value).trim());
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private String writeRuleFlow(JsonNode ruleFlow) {
+        try {
+            return jsonMapper.writeValueAsString(ruleFlow);
+        } catch (Exception e) {
+            log.error("规则内容序列化失败", e);
+            throw new BusinessException("规则内容序列化失败");
+        }
+    }
+
+    private JsonNode readRuleFlow(String rules) {
+        if (StringUtils.isEmpty(rules)) {
+            return null;
+        }
+        try {
+            return jsonMapper.readTree(rules);
+        } catch (Exception e) {
+            log.warn("规则内容解析失败: {}", rules, e);
+            return null;
+        }
     }
 
 

@@ -134,7 +134,15 @@ public interface OntologyActionService extends IService<OntologyAction> {
 
     ActionSchedulingDetailVO getSchedulingDetailById(Long id, ActionSchedulingTypeEnum type);
 
-    Page<ActionSchedulingInfoVO> listScheduling(Integer pageNum, Integer pageSize);
+    Page<ActionSchedulingInfoVO> listScheduling(Integer pageNum, Integer pageSize, Integer spaceId);
 
     Page<SchedulingResultVO> getSchedulingResult(Long id, ActionSchedulingTypeEnum type, Integer pageNum, Integer pageSize);
+
+    /**
+     * 手动触发规则调度：加载规则 DSL，逐实例评估，命中则执行绑定行为并写调用日志。
+     *
+     * @param id 规则调度id
+     * @return 评估与执行摘要
+     */
+    RuleTriggerResultVO triggerRuleScheduling(Long id);
 }
