@@ -129,12 +129,9 @@ public class EntityServiceImpl implements EntityService {
 
     /**
      * 宽容解析算子执行结果。
-     * <p>同步执行时 {@code executeFunction} 已剥掉 {@code FunctionResultVO} 外壳，脚本返回标量
-     * （如 {@code a+b}）或数组时根节点不是对象，按 VO 反序列化会抛 MismatchedInputException。
-     * 解析出的 VO 只用于判断异步 taskId 与可见窗口（startTime/endTime）。</p>
-     * <p>非对象根返回 null，调用处因此<b>跳过</b>属性回写：标量/数组根没有可绑定的出参字段，
-     * 硬跑下去 JsonPath 取不到值，只会在 {@code updateProperty} 的 {@code Collectors.toMap}
-     * 上抛 NPE 或把 null 写进属性列。需要回写的脚本应返回对象。</p>
+     * <p>脚本返回标量（如 {@code a+b}）或数组时根节点不是对象，按 VO 反序列化会抛
+     * MismatchedInputException，故非对象根返回 null。解析出的 VO 只用于判断异步 taskId
+     * 与可见窗口（startTime/endTime），不参与属性回写。</p>
      */
     @SneakyThrows
     private FunctionResultVO readFunctionResult(String resultJson) {
@@ -144,6 +141,19 @@ public class EntityServiceImpl implements EntityService {
         // 显式 JsonNode，不写 var：readTree 在本版本 Jackson 下可能是泛型 <T extends TreeNode> T
         com.fasterxml.jackson.databind.JsonNode root = jsonMapper.readTree(resultJson);
         return root == null || !root.isObject() ? null : jsonMapper.treeToValue(root, FunctionResultVO.class);
+    }
+
+    /**
+     * 算子是否为同步返回：同步则当场回写属性与关系，只有异步任务（带 taskId）才把落库交给回调。
+     * <p>返回体形状不影响这个判断——标量/数组根同样要走到回写里，绑定了 WRITE_PROPERTY 出参却
+     * 取不到值时由 {@link #writeFunctionOutputToProperties} 显式报错，不能静默跳过还回成功。</p>
+     */
+    private boolean isSyncFunctionResult(String resultJson) {
+        if (StringUtils.isEmpty(resultJson)) {
+            return false;
+        }
+        var functionResult = readFunctionResult(resultJson);
+        return functionResult == null || StringUtils.isEmpty(functionResult.getTaskId());
     }
 
 
@@ -1557,9 +1567,8 @@ public class EntityServiceImpl implements EntityService {
                                         .build();
                                 //执行函数
                                 String functionResultJson = callFunction(contextInfoDTO);
-                                var functionResult = readFunctionResult(functionResultJson);
                                 //如果函数是同步执行，更新实体属性和关系
-                                if (functionResult != null && StringUtils.isEmpty(functionResult.getTaskId())) {
+                                if (isSyncFunctionResult(functionResultJson)) {
                                     updateEntityPropertyAndRelation(functionResultJson, contextInfoDTO);
                                 }
                                 return functionResultJson;
@@ -1591,9 +1600,8 @@ public class EntityServiceImpl implements EntityService {
                     .entityActionExecuteParam(param)
                     .build();
             var functionResultJson = callFunction(contextInfoDTO);
-            var functionResult = readFunctionResult(functionResultJson);
             //函数同步执行，更新结果
-            if (functionResult != null && StringUtils.isEmpty(functionResult.getTaskId())) {
+            if (isSyncFunctionResult(functionResultJson)) {
                 updateEntityPropertyAndRelation(functionResultJson, contextInfoDTO);
             }
             executeResult.add(functionResultJson);
@@ -1684,10 +1692,12 @@ public class EntityServiceImpl implements EntityService {
                     .build());
         }
         //执行函数
+        // 取完整返回体（不剥 FunctionResultVO 外壳）：关系落库的判据 startTime/endTime/timeWindows 只在外壳上，
+        // 剥壳后在到达行为前就丢了；出参取值路径同样按这层完整返回体书写，与测试回显一致
         var functionResultJson = functionService.executeFunction(FunctionExecuteParam.builder()
                 .functionApi(actionContext.getActionDetailVO().getFunctionApi())
                 .parameters(parameters)
-                .build());
+                .build(), true);
 
         var functionResult = readFunctionResult(functionResultJson);
         //异步接口，需要保存调用时的上下文信息
@@ -1812,6 +1822,33 @@ public class EntityServiceImpl implements EntityService {
         }
     }
 
+    /**
+     * 出参取值：先按算子返回体的整体取（与测试回显看到的树同一口径）。
+     * <p>算子不强制按 {@code FunctionResultVO} 返回，返回体和取值路径里的 {@code data} 层可能对不上：
+     * 返回体没这层就把整包当 {@code data}，路径没写这层就按 {@code data} 节点取，两种错位都能命中；
+     * 脚本直接返回一个值（标量）时整包就是出参值。都取不到才返回 null 由调用方报错，
+     * 不能因为外壳不一致就静默不回写。</p>
+     */
+    @SneakyThrows
+    private Object readFunctionOutputValue(String jsonString, String expression) {
+        var value = JsonPath.using(safeConfig).parse(jsonString).read(expression);
+        if (value != null) {
+            return value;
+        }
+        // 显式 JsonNode，不写 var：readTree 在本版本 Jackson 下可能是泛型 <T extends TreeNode> T
+        com.fasterxml.jackson.databind.JsonNode root = jsonMapper.readTree(jsonString);
+        if (root == null || root.isNull()) {
+            return null;
+        }
+        if (!root.isObject() && !root.isArray()) {
+            return jsonMapper.treeToValue(root, Object.class);
+        }
+        String shifted = root.isObject() && root.has("data")
+                ? root.get("data").toString()
+                : "{\"data\":" + root + "}";
+        return JsonPath.using(safeConfig).parse(shifted).read(expression);
+    }
+
     /** 按出参绑定把算子输出写回对象属性：主表列走 update，分组表补一行 insert */
     private void writeFunctionOutputToProperties(String jsonString, ActionContextInfoDTO actionContext) {
         //更新实体属性值
@@ -1849,12 +1886,16 @@ public class EntityServiceImpl implements EntityService {
         // 指定了分组行主键的出参：对象 -> 分组表 -> (行主键 + 待更新列)，按行改而不是插新行
         Map<String, Map<String, RowUpdate>> updateRowMap = new LinkedHashMap<>();
         output.stream().forEach(out -> {
-            Object actualValue = JsonPath.using(safeConfig).parse(jsonString).read(out.getFunctionParamExpression());
             var prop = propMap.get(out.getPropertyUniqueIdentifier());
             if (prop == null) {
                 log.warn("行为写回属性不存在，跳过：{}", out.getPropertyUniqueIdentifier());
                 return;
             }
+            Object actualValue = readFunctionOutputValue(jsonString, out.getFunctionParamExpression());
+            // 取不到值不能继续：updateProperty 的 toMap 收 null 只会抛一个没有上下文的 NPE
+            PreconditionUtils.checkNotNull(actualValue, "出参回写取不到值：属性[" + prop.getDisplayName()
+                    + "]的取值路径 " + out.getFunctionParamExpression()
+                    + " 在算子返回结果里不存在或值为 null", HttpStatus.BAD_REQUEST);
             var objectId = StringUtils.isNotEmpty(out.getOntologyUniqueIdentifier())
                     ? out.getOntologyUniqueIdentifier() : prop.getOntologyUniqueIdentifier();
             var primaryProp = primaryPropByObject.get(objectId);
@@ -1892,6 +1933,7 @@ public class EntityServiceImpl implements EntityService {
                     .columnUpdates(columnUpdates)
                     .primaryKeyValue(resolveEntityPrimaryKey(actionContext, param, objectId,
                             outputTargetsFor(actionContext)))
+                    .schemaName(primaryProp.getDatasourceSchema())
                     .datasourceId(primaryProp.getDatasourceId())
                     .build());
         });
@@ -2788,6 +2830,23 @@ public class EntityServiceImpl implements EntityService {
         //删除实体关系和节点
         relationRepository.deleteRelationAndNodeByOntologyUniqueIdentifier(pkProp.getOntologyUniqueIdentifier());
 
+    }
+
+    @Override
+    @Transactional(value = "datalakeTransactionManager")
+    public void deleteDatalakeInstances(String ontologyUniqueIdentifier) {
+        //定位主键属性，其 datasourceSchema/datasourceId/datasourceColumnName 指向实例所在的物理表
+        var pkProp = propertyMapper.selectList(new LambdaQueryWrapper<OntologyProperty>()
+                .eq(OntologyProperty::getIsPrimaryKey, 1)
+                .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier))
+                .stream().findFirst().orElse(null);
+        if (pkProp == null
+                || StringUtils.isEmpty(pkProp.getDatasourceId())
+                || StringUtils.isEmpty(pkProp.getDatasourceSchema())
+                || StringUtils.isEmpty(pkProp.getDatasourceColumnName())) {
+            return;
+        }
+        deleteExistEntities(pkProp);
     }
 
     @Override

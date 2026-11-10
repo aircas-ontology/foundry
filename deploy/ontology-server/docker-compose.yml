@@ -5,6 +5,13 @@ services:
     restart: always
     image: eclipse-temurin:17-jdk        # 必须 JDK 非 JRE：Java 脚本函数在主程序内动态编译依赖 javac
     container_name: ontology-backend
+    # 封顶容器 stdout 日志：jar 内 logback 已把全量 INFO 落文件、stdout 只留 WARN+；
+    # 旧代码未 redeploy 前 stdout 仍刷 INFO，加此段兜底，防止 json.log 无限增长撑爆磁盘
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "3"
     network_mode: "host"
     #ports:
     #   - "38002:38002"

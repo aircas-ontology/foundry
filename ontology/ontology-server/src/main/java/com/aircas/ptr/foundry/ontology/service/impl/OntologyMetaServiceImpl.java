@@ -586,6 +586,11 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         PreconditionUtils.checkArgument(metaList.size() == identifiers.size(),
                 "部分对象不存在或不属于该空间", ResultCode.PARAM_ERROR, HttpStatus.BAD_REQUEST);
 
+        // 删除数据湖中的实例数据（须在删除属性之前：定位数据源表依赖主键属性仍存在）
+        for (var identifier : identifiers) {
+            entityService.deleteDatalakeInstances(identifier);
+        }
+
         // 批量删除属性分类
         propertyCategoryService.remove(new LambdaQueryWrapper<PropertyCategory>()
                 .in(PropertyCategory::getOntologyUniqueIdentifier, identifiers));

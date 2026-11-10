@@ -52,6 +52,11 @@ public class ActionParamMappingVO {
     @Schema(description = "参数对应属性的显示名称", example = "推力")
     private String displayName;
 
+    @Schema(description = "参数对应属性所在的存储分组（main 表示主表，其余为子表分组名）；"
+            + "按行取参/写回时 dataPrimaryKeys 的分组名就用它，与执行侧同源实时取自对象属性定义，属性换分组后这里跟着变",
+            example = "weapon_load")
+    private String storageGroup;
+
     @Schema(description = "出参行输出方式：RESULT_ONLY 仅返回 / WRITE_PROPERTY 写入对象属性；入参行为空")
     private ActionOutputModeEnum outputMode;
 

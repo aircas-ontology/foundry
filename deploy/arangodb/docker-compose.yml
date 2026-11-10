@@ -5,6 +5,15 @@ services:
     restart: always
     image: arangodb:latest
     container_name: arangodb
+    # 压到 warning：info 级会逐请求打一行，CDC 海量写图库时刷屏撑爆盘；warning 只留告警/错误
+    command: --log.level=warning
+    # 封顶 stdout 日志：arangodb 以 info 级别把每条请求写 stdout，CDC 逐行写图库时量极大；
+    # 不加此段则 docker 默认 json-file 不轮转，单文件可涨到几百 GB 撑爆磁盘
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "3"
     environment:
       ARANGO_ROOT_PASSWORD: root
       TZ: UTC

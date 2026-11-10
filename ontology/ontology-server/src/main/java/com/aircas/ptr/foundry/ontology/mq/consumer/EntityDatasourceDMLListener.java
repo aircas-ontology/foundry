@@ -55,7 +55,7 @@ public class EntityDatasourceDMLListener {
             return;
         }
         String op = envelope.getOp();
-        log.info("数据湖 CDC, op={}, table=[{}.{}]", op, schema, table);
+        log.debug("数据湖 CDC, op={}, table=[{}.{}]", op, schema, table);
         try {
             if (Objects.equals(op, "c") || Objects.equals(op, "r")) {
                 // r = 连接器快照阶段读到的存量行，按创建处理

@@ -167,7 +167,7 @@ public class EntityInstanceCdcJobServiceImpl implements EntityInstanceCdcJobServ
                 schema, table, pkValue, titleValue, row, meta, space);
         if (dto != null) {
             ontologyInstanceRepository.save(dto);
-            log.info("数据湖[{}.{}]实例文档同步成功, pk={}", schema, table, dto.getPk());
+            log.debug("数据湖[{}.{}]实例文档同步成功, pk={}", schema, table, dto.getPk());
             syncGraphNode(meta.getUniqueIdentifier(), table, row, pkValue, dto.getName(), rebuildNode);
         }
     }
@@ -192,12 +192,12 @@ public class EntityInstanceCdcJobServiceImpl implements EntityInstanceCdcJobServ
             if (rebuildNode) {
                 // 既有接口：按对象的主键属性/名称键属性回查后建（覆盖）节点
                 entityService.completeEntityNode(ontologyUid, row);
-                log.info("数据湖实例图节点同步, ontology={}, pk={}", ontologyUid, pkValue);
+                log.debug("数据湖实例图节点同步, ontology={}, pk={}", ontologyUid, pkValue);
                 return;
             }
             // 普通字段更新只刷展示名
             if (entityService.upsertEntityNode(ontologyUid, table, pkValue, displayName)) {
-                log.info("数据湖实例图节点补建（图库此前无此节点）, ontology={}, pk={}", ontologyUid, pkValue);
+                log.debug("数据湖实例图节点补建（图库此前无此节点）, ontology={}, pk={}", ontologyUid, pkValue);
             }
         } catch (Exception e) {
             log.error("数据湖实例图节点同步失败, ontology={}, pk={}", ontologyUid, pkValue, e);
@@ -213,7 +213,7 @@ public class EntityInstanceCdcJobServiceImpl implements EntityInstanceCdcJobServ
         }
         try {
             entityService.deleteEntityNodeAndRelations(ontologyUid, pkValue);
-            log.info("数据湖实例图节点及相邻关系边删除, ontology={}, pk={}", ontologyUid, pkValue);
+            log.debug("数据湖实例图节点及相邻关系边删除, ontology={}, pk={}", ontologyUid, pkValue);
         } catch (Exception e) {
             log.error("数据湖实例图节点删除失败, ontology={}, pk={}", ontologyUid, pkValue, e);
         }
@@ -231,7 +231,7 @@ public class EntityInstanceCdcJobServiceImpl implements EntityInstanceCdcJobServ
                 .withRefresh(Boolean.TRUE)
                 .build();
         var response = elasticsearchOperations.delete(deleteQuery, EsOntologyInstanceDTO.class);
-        log.info("数据湖实例文档删除, pk={}, 删除 {} 条", pk, response.getDeleted());
+        log.debug("数据湖实例文档删除, pk={}, 删除 {} 条", pk, response.getDeleted());
     }
 
     /**
