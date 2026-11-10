@@ -21,4 +21,7 @@ public class OntologyCategoryUpdateParam extends OntologyCategoryDeleteParam {
     @Schema(name = "name", description = "属性分类名称", example = "平台")
     @NotBlank(message = "name is empty")
     private String name;
+
+    @Schema(name = "parentId", description = "父节点id，不传表示不修改父节点；不能是自己，也不能是自己的下级节点", example = "1")
+    private Integer parentId;
 }

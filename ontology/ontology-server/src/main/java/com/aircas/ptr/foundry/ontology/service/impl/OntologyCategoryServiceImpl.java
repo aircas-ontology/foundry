@@ -102,32 +102,72 @@ public class OntologyCategoryServiceImpl extends ServiceImpl<OntologyCategoryMap
     @Override
     public void updateCategory(OntologyCategoryUpdateParam param) {
 
-        var parentCategory = getOne(new LambdaQueryWrapper<OntologyCategory>()
+        var category = getOne(new LambdaQueryWrapper<OntologyCategory>()
                 .eq(OntologyCategory::getOntologySpaceId, param.getSpaceId())
                 .eq(OntologyCategory::getId, param.getCategoryId()));
-        PreconditionUtils.checkArgument(parentCategory != null, "对象分类节点" + param.getCategoryId() + "不存在", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(category != null, "对象分类节点" + param.getCategoryId() + "不存在", HttpStatus.BAD_REQUEST);
+
+        var newParent = checkParentAndGet(category, param.getParentId());
+
         // 查询所有关联节点（节点树）：精确匹配父节点自身，或以 "parentPath/" 为前缀的子孙节点
         var allCategories = list(new LambdaQueryWrapper<OntologyCategory>()
                 .eq(OntologyCategory::getOntologySpaceId, param.getSpaceId())
-                .and(w -> w.eq(OntologyCategory::getPath, parentCategory.getPath())
+                .and(w -> w.eq(OntologyCategory::getPath, category.getPath())
                         .or()
-                        .likeRight(OntologyCategory::getPath, parentCategory.getPath() + "/")));
+                        .likeRight(OntologyCategory::getPath, category.getPath() + "/")));
         if (CollectionUtils.isNotEmpty(allCategories)) {
-            var paths = parentCategory.getPath().split("/");
+            var oldPath = category.getPath();
+            var paths = oldPath.split("/");
             paths[paths.length - 1] = param.getName();
-            var newPath = String.join("/", paths);
-            allCategories.forEach(category -> {
-                if (category.getId().equals(param.getCategoryId())) {
-                    category.setName(param.getName());
-                    category.setPath(newPath);
+            // 移动到新父节点下时，路径前缀整体换成新父节点的路径
+            var newPath = newParent == null ? String.join("/", paths) : newParent.getPath() + "/" + param.getName();
+            allCategories.forEach(node -> {
+                if (node.getId().equals(param.getCategoryId())) {
+                    node.setName(param.getName());
+                    node.setPath(newPath);
+                    if (newParent != null) {
+                        node.setParentId(newParent.getId());
+                    }
                 } else {
                     // 使用前缀替换，避免 String.replace() 替换所有匹配项
-                    var updatedPath = newPath + category.getPath().substring(parentCategory.getPath().length());
-                    category.setPath(updatedPath);
+                    var updatedPath = newPath + node.getPath().substring(oldPath.length());
+                    node.setPath(updatedPath);
                 }
             });
             updateBatchById(allCategories);
         }
+    }
+
+    /**
+     * 校验新的 parentId 并返回对应的父节点；parentId 为空或与当前父节点相同时返回 null，表示本次不移动节点。
+     */
+    private OntologyCategory checkParentAndGet(OntologyCategory category, Integer parentId) {
+
+        if (parentId == null || parentId.equals(category.getParentId())) {
+            return null;
+        }
+        PreconditionUtils.checkArgument(!parentId.equals(category.getId()), "parentId不能是自己", HttpStatus.BAD_REQUEST);
+        // 对象分类树只有一个根节点（parentId=0），移动成第二个根节点会让子树在树查询里丢失
+        PreconditionUtils.checkArgument(!parentId.equals(0), "parentId不能为0，对象分类树只支持一个根节点", HttpStatus.BAD_REQUEST);
+
+        var spaceCategories = list(new LambdaQueryWrapper<OntologyCategory>()
+                .eq(OntologyCategory::getOntologySpaceId, category.getOntologySpaceId()));
+        var categoryMap = spaceCategories.stream().collect(Collectors.toMap(OntologyCategory::getId, v -> v));
+        var newParent = categoryMap.get(parentId);
+        PreconditionUtils.checkArgument(newParent != null, "无效的parentId：" + parentId, HttpStatus.BAD_REQUEST);
+
+        // 沿新父节点的 parentId 父链上溯，命中自己即成环（visited 兼容已有的脏父链，保证循环能退出）
+        var visited = new HashSet<Integer>();
+        var currentId = newParent.getParentId();
+        while (currentId != null && currentId != 0 && visited.add(currentId)) {
+            PreconditionUtils.checkArgument(!currentId.equals(category.getId()), "parentId不能是自己的下级节点", HttpStatus.BAD_REQUEST);
+            var ancestor = categoryMap.get(currentId);
+            if (ancestor == null) {
+                break;
+            }
+            currentId = ancestor.getParentId();
+        }
+        return newParent;
     }
 
     @Transactional(transactionManager = "mainTransactionManager")
