@@ -75,7 +75,8 @@ public class ActionCreateOrUpdateParam {
             + "基础算子固定 RESULT_ONLY，属性值和实例关系行为为空", example = "RESULT_ONLY")
     private ActionOutputModeEnum outputMode;
 
-    @Schema(description = "行为关系映射；应用行为出参全是 RESULT_ONLY 时可选填，存在 WRITE_PROPERTY 出参时不能绑定")
+    @Schema(description = "行为关系映射；应用行为必填，出参写入对象属性与绑定关系可以并存（同一次执行既回写属性也补关系边）。"
+            + "基础行为里实例关系必填、属性值不需要，基础算子可选填")
     private ActionLinkMappingParam linkMapping;
 
 

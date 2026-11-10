@@ -45,7 +45,7 @@ public class FunctionTestParam {
     @Pattern(regexp = VERSION_PATTERN, message = "版本号格式必须为 x.y.z（如 1.0.0）")
     private String version;
 
-    @Schema(name = "ontologySpaceId", description = "对象空间id（跨空间允许同名 api，建议传以精确定位；不传则不限空间）")
+    @Schema(name = "ontologySpaceId", description = "对象空间id（已存库测试必传，算子 api 只在空间内唯一；草稿测试不查库可不传）")
     private Integer ontologySpaceId;
 
     // ========== 草稿测试专用 ==========

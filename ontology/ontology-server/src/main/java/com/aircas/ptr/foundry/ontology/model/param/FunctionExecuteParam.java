@@ -8,6 +8,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import java.util.List;
 
@@ -33,7 +34,8 @@ public class FunctionExecuteParam {
     @Schema(name = "parameters", description = "参数列表", required = true)
     private List<FunctionParameter> parameters;
 
-    @Schema(name = "ontologySpaceId", description = "对象空间id（跨空间允许同名 api，建议传以精确定位；不传则不限空间）")
+    @Schema(name = "ontologySpaceId", description = "对象空间id（必传，算子 api 只在空间内唯一）", required = true)
+    @NotNull(message = "ontologySpaceId is null")
     private Integer ontologySpaceId;
 
 

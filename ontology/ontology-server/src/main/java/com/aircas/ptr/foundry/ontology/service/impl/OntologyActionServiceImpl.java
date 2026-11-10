@@ -22,6 +22,7 @@ import com.aircas.ptr.foundry.ontology.service.behavior.TreeActionInvoker;
 import com.aircas.ptr.foundry.ontology.service.behavior.TreeBranchRunner;
 import com.aircas.ptr.foundry.ontology.service.behavior.TreeCooldownTracker;
 import com.aircas.ptr.foundry.ontology.service.behavior.TreeExecutionRuntime;
+import com.aircas.ptr.foundry.ontology.utils.FunctionOutputValueReader;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.OrderItem;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -95,6 +96,13 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
 
     /** 批量执行一页读取的实例数：实例主键分页拉取，避免一次把整表主键读进内存 */
     private static final int TREE_BATCH_PAGE_SIZE = 500;
+
+    /** 批量行为测试一次最多展开的组合数 */
+    private static final int MAX_TEST_COMBOS = 50;
+
+    /** 批量行为测试可以传数组的字段，与 TestAxis#field 对应 */
+    private static final String TEST_AXIS_FIELD_ENTITY_PRIMARY_KEYS = "entityPrimaryKeys";
+    private static final String TEST_AXIS_FIELD_INPUT_PARAMS = "inputParams";
 
 
     @Resource
@@ -424,10 +432,11 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             PreconditionUtils.checkArgument(param.getSubjectType() == null && param.getOperation() == null
                     && StringUtils.isEmpty(param.getStorageGroup()), "应用行为不需要行为类型、基础操作和存储分组", HttpStatus.BAD_REQUEST);
             // outputMode 下沉到 mappingIns 每行：每个出参独立选 RESULT_ONLY / WRITE_PROPERTY
-            checkFunctionAction(param, definition, APPLICATION_FUNCTION_TYPES, spaceId);
+            // 关系必填：出参写属性与绑定关系可以并存，同一次执行既回写属性也补关系边
+            checkFunctionAction(param, definition, APPLICATION_FUNCTION_TYPES, spaceId, true);
             checkWritePropertyOutput(definition);
-            // 写入对象属性与绑定关系互斥：出参已经指定落属性时，不允许再挂关系
-            checkOutputLinkExclusive(param, definition);
+            checkSubtableFullWrite(definition);
+            checkWildcardOutputGroups(definition);
             action.setOutputMode(null);
         } else {
             var subjectType = param.getSubjectType();
@@ -443,8 +452,9 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                         "基础算子行为不需要基础操作和存储分组", HttpStatus.BAD_REQUEST);
                 PreconditionUtils.checkArgument(param.getOutputMode() != ActionOutputModeEnum.WRITE_PROPERTY,
                         "基础算子行为只支持仅返回结果", HttpStatus.BAD_REQUEST);
+                // 基础算子行为仍不要求关系：它没有归属对象，执行链路也不落关系边
                 checkFunctionAction(param, definition, Collections.singletonList(FunctionTypeEnum.BASIC_QUERY),
-                        spaceId);
+                        spaceId, false);
                 // 基础算子也不允许行级 WRITE_PROPERTY
                 PreconditionUtils.checkArgument(definition.mappings.stream()
                                 .noneMatch(m -> m.getOutputMode() == ActionOutputModeEnum.WRITE_PROPERTY),
@@ -683,6 +693,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 checkTreeBlackboardKeyRef(nodeId, config.getLinkEntityPrimaryKeyKey(), blackboardTypes);
                 checkTreeRowKeyRefs(nodeId, config.getInputDataPrimaryKeyKeys(), blackboardTypes, "入参");
                 checkTreeRowKeyRefs(nodeId, config.getOutputDataPrimaryKeyKeys(), blackboardTypes, "出参");
+                checkTreeParamKeys(nodeId, config, boundApi, spaceId, blackboardTypes);
                 checkTreeNodeObjectInstanceKeys(nodeId, config, boundApi, spaceId, blackboardTypes);
                 if (actionApis.add(boundApi)) {
                     checkTreeBoundAction(nodeId, boundApi, spaceId);
@@ -754,6 +765,78 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                             + " 的实例数据，请在对象实例键里为它配置黑板键：该行为涉及多个对象类型，"
                             + "节点级实例主键只能定位其中一个", HttpStatus.BAD_REQUEST);
         }
+    }
+
+    /**
+     * 行为节点按算子参数指定的数据位置：参数名必须真是该算子这一方向的参数，引用的黑板键必须已声明。
+     * <p>不绑算子的行为没有参数名可对，配了直接拒绝；算子已下架取不到定义时不拦，
+     * 与取算子参数分类的保守口径一致，执行时单行为侧仍会按同一规则报错。</p>
+     */
+    private void checkTreeParamKeys(String nodeId, BehaviorActionConfig config, String boundApi, Integer spaceId,
+                                    Map<String, FunctionParamTypeEnum> blackboardTypes) {
+        checkTreeParamKeyRefs(nodeId, config.getInputParamKeys(), blackboardTypes, "入参");
+        checkTreeParamKeyRefs(nodeId, config.getOutputParamKeys(), blackboardTypes, "出参");
+        if (MapUtils.isEmpty(config.getInputParamKeys()) && MapUtils.isEmpty(config.getOutputParamKeys())) {
+            return;
+        }
+        var bound = getOne(new LambdaQueryWrapper<OntologyAction>()
+                .eq(OntologyAction::getApi, boundApi)
+                .eq(OntologyAction::getOntologySpaceId, spaceId));
+        // 悬空引用由 checkTreeBoundAction 报错，这里不抢先中断
+        if (bound == null) {
+            return;
+        }
+        PreconditionUtils.checkArgument(StringUtils.isNotBlank(bound.getFunctionApi()),
+                "行为节点 " + nodeId + " 绑定的行为 " + boundApi + " 不绑算子，"
+                        + "不支持用 inputParamKeys、outputParamKeys 按参数指定数据位置", HttpStatus.BAD_REQUEST);
+        checkTreeParamNames(nodeId, bound, config.getInputParamKeys(), FunctionParamCategoryEnum.INPUT,
+                "inputParamKeys", "入参");
+        checkTreeParamNames(nodeId, bound, config.getOutputParamKeys(), FunctionParamCategoryEnum.OUTPUT,
+                "outputParamKeys", "出参");
+    }
+
+    private void checkTreeParamNames(String nodeId, OntologyAction bound, Map<String, BehaviorActionParamKeys> nodeKeys,
+                                     FunctionParamCategoryEnum category, String fieldName, String cnLabel) {
+        if (MapUtils.isEmpty(nodeKeys)) {
+            return;
+        }
+        var names = treeFunctionParams(bound).stream()
+                .filter(param -> param.getCategory() == category)
+                .map(FunctionParameterVO::getParamName)
+                .filter(StringUtils::isNotBlank)
+                .collect(Collectors.toSet());
+        if (names.isEmpty()) {
+            return;
+        }
+        nodeKeys.keySet().forEach(paramName -> PreconditionUtils.checkArgument(names.contains(paramName),
+                "行为节点 " + nodeId + " 的 " + fieldName + " 里的" + cnLabel + "[" + paramName
+                        + "]不是行为 " + bound.getApi() + " 绑定算子的" + cnLabel + "，请检查名称是否正确",
+                HttpStatus.BAD_REQUEST));
+    }
+
+    /** 行为节点的参数键映射：参数名必须有，引用的实例主键、分组行主键黑板键必须已声明 */
+    private void checkTreeParamKeyRefs(String nodeId, Map<String, BehaviorActionParamKeys> nodeKeys,
+                                       Map<String, FunctionParamTypeEnum> blackboardTypes, String direction) {
+        if (nodeKeys == null) {
+            return;
+        }
+        nodeKeys.forEach((paramName, target) -> {
+            PreconditionUtils.checkArgument(StringUtils.isNotBlank(paramName),
+                    "行为节点 " + nodeId + " 的" + direction + "参数键缺少算子参数名", HttpStatus.BAD_REQUEST);
+            if (target == null) {
+                return;
+            }
+            checkTreeBlackboardKeyRef(nodeId, target.getEntityPrimaryKeyKey(), blackboardTypes);
+            if (target.getDataPrimaryKeyKeys() == null) {
+                return;
+            }
+            target.getDataPrimaryKeyKeys().forEach((storageGroup, key) -> {
+                PreconditionUtils.checkArgument(StringUtils.isNotBlank(storageGroup),
+                        "行为节点 " + nodeId + " 的" + direction + "参数键 " + paramName + " 缺少存储分组",
+                        HttpStatus.BAD_REQUEST);
+                checkTreeBlackboardKeyRef(nodeId, key, blackboardTypes);
+            });
+        });
     }
 
     /**
@@ -1107,6 +1190,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             Map<String, BehaviorActionConfig> nodeConfigs = new LinkedHashMap<>();
             var touchedGroups = actionExtensionGroups(bound);
             var writtenGroups = actionExtensionGroups(bound, true);
+            var touchedParams = treeActionParamObjects(bound, false);
+            var writtenParams = treeActionParamObjects(bound, true);
             for (var actionNode : actionNodes) {
                 var config = readTreeConfig(actionNode, BehaviorActionConfig.class);
                 nodeConfigs.put(actionNode.getId(), config);
@@ -1119,6 +1204,10 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                         touchedGroups, "入参", bound, actionNode.getId());
                 addTreeNodeRowKeyInputs(inputParams, items, defaults, config.getOutputDataPrimaryKeyKeys(),
                         writtenGroups, "出参", bound, actionNode.getId());
+                addTreeNodeParamKeyInputs(inputParams, items, defaults, config.getInputParamKeys(),
+                        touchedParams, touchedGroups, "入参", bound, actionNode.getId());
+                addTreeNodeParamKeyInputs(inputParams, items, defaults, config.getOutputParamKeys(),
+                        writtenParams, writtenGroups, "出参", bound, actionNode.getId());
                 var linkKey = StringUtils.trimToNull(config.getLinkEntityPrimaryKeyKey());
                 if (linkKey != null) {
                     addTreeNodeKeyInput(inputParams, items, defaults, linkKey, treeNodeLinkKeyRequired(bound),
@@ -1296,6 +1385,48 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     }
 
     /**
+     * 节点按算子参数配的实例主键、分组行主键同样登记进执行入参，调用方才知道要补哪个键的值。
+     * <p>必填判断按参数在该方向真绑了属性行、且分组确实被用到；配了但行为用不上的只登记备查，
+     * 与按对象配行主键的口径一致。</p>
+     */
+    private void addTreeNodeParamKeyInputs(Map<String, TreeExecuteInputVO> inputParams,
+                                           Map<String, BehaviorBlackboardItem> items,
+                                           Map<String, Object> defaults,
+                                           Map<String, BehaviorActionParamKeys> nodeKeys,
+                                           Map<String, Set<String>> objectsByParam,
+                                           Map<String, Set<String>> usedGroups,
+                                           String direction, OntologyAction bound, String nodeId) {
+        if (nodeKeys == null) {
+            return;
+        }
+        nodeKeys.forEach((paramName, target) -> {
+            if (StringUtils.isBlank(paramName) || target == null) {
+                return;
+            }
+            var objectIds = objectsByParam.getOrDefault(paramName, Collections.emptySet());
+            var label = "节点" + direction + "参数 " + paramName + " 的";
+            if (StringUtils.isNotBlank(target.getEntityPrimaryKeyKey())) {
+                addTreeNodeKeyInput(inputParams, items, defaults, target.getEntityPrimaryKeyKey(), !objectIds.isEmpty(),
+                        label + "实例主键" + (objectIds.isEmpty() ? "" : "（对象 " + String.join("、", objectIds) + "）")
+                                + "，行为 " + bound.getApi(), List.of(nodeId), bound.getApi());
+            }
+            if (target.getDataPrimaryKeyKeys() == null) {
+                return;
+            }
+            target.getDataPrimaryKeyKeys().forEach((storageGroup, key) -> {
+                if (StringUtils.isBlank(storageGroup) || StringUtils.isBlank(key)) {
+                    return;
+                }
+                var required = objectIds.stream().anyMatch(objectId ->
+                        usedGroups.getOrDefault(objectId, Collections.emptySet()).contains(storageGroup));
+                addTreeNodeKeyInput(inputParams, items, defaults, key, required,
+                        label + "分组行主键（分组 " + storageGroup + "），行为 " + bound.getApi(),
+                        List.of(nodeId), bound.getApi());
+            });
+        });
+    }
+
+    /**
      * 应用行为实际读写的扩展分组：对象id -> 分组名集合。
      * <p>只有扩展表需要行主键，main 分组的行就是实例本身；RESULT_ONLY 出参既不取也不写，不算用到分组。
      * 基础行为的分组行主键由 dataPrimaryKeyKey 单独管，不走这里。</p>
@@ -1370,22 +1501,64 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
 
     /** 算子参数分类：入参/出参；算子下架或取不到时返回空，由调用方按保守口径处理 */
     private Map<Long, FunctionParamCategoryEnum> functionParamCategories(OntologyAction bound) {
-        if (StringUtils.isBlank(bound.getFunctionApi())) {
-            return Collections.emptyMap();
+        return treeFunctionParams(bound).stream()
+                .filter(param -> param.getParamId() != null && param.getCategory() != null)
+                .collect(Collectors.toMap(FunctionParameterVO::getParamId, FunctionParameterVO::getCategory,
+                        (left, right) -> left));
+    }
+
+    /** 行为绑定算子的参数定义；不绑算子、算子已下架或取不到时返回空，调用方按不拦的口径处理 */
+    private List<FunctionParameterVO> treeFunctionParams(OntologyAction bound) {
+        if (bound == null || StringUtils.isBlank(bound.getFunctionApi())) {
+            return List.of();
         }
         try {
             var detail = functionService.getFunctionDetailByApi(bound.getOntologySpaceId(), bound.getFunctionApi(), null);
-            if (detail == null || detail.getParams() == null) {
-                return Collections.emptyMap();
-            }
-            return detail.getParams().stream()
-                    .filter(param -> param.getParamId() != null && param.getCategory() != null)
-                    .collect(Collectors.toMap(FunctionParameterVO::getParamId, FunctionParameterVO::getCategory,
-                            (left, right) -> left));
+            return detail == null || detail.getParams() == null ? List.of() : detail.getParams();
         } catch (Exception e) {
-            log.warn("取算子参数分类失败, actionApi={}, functionApi={}", bound.getApi(), bound.getFunctionApi(), e);
+            log.warn("取算子参数定义失败, actionApi={}, functionApi={}", bound.getApi(), bound.getFunctionApi(), e);
+            return List.of();
+        }
+    }
+
+    /**
+     * 按参数指定数据位置时的「算子参数名 -> 数据落在哪些对象上」：入参方向只算真从实例取属性的行，出参方向只算写属性的行。
+     * <p>映射行的 functionParamId 是顶层参数id，子字段行也归到同一个参数；行没写对象标识的存量数据回退行为所属对象。
+     * 不绑算子或算子取不到时返回空，这两种情况按参数指定本来就会被拒绝。</p>
+     */
+    private Map<String, Set<String>> treeActionParamObjects(OntologyAction bound, boolean writtenOnly) {
+        var params = treeFunctionParams(bound);
+        if (params.isEmpty()) {
             return Collections.emptyMap();
         }
+        Map<Long, String> paramNames = new LinkedHashMap<>();
+        params.forEach(param -> {
+            if (param.getParamId() != null && StringUtils.isNotBlank(param.getParamName())) {
+                paramNames.putIfAbsent(param.getParamId(), param.getParamName());
+            }
+        });
+        var categories = functionParamCategories(bound);
+        Map<String, Set<String>> objects = new LinkedHashMap<>();
+        ontologyActionMappingInService.list(new LambdaQueryWrapper<OntologyActionMappingIn>()
+                        .eq(OntologyActionMappingIn::getOntologyActionId, bound.getId())).forEach(mapping -> {
+                    var bindsInstance = writtenOnly
+                            ? mapping.getOutputMode() == ActionOutputModeEnum.WRITE_PROPERTY
+                            : mapping.getOutputMode() != ActionOutputModeEnum.WRITE_PROPERTY
+                                    && mappingBindsProperty(mapping, categories);
+                    if (!bindsInstance || mapping.getFunctionParamId() == null) {
+                        return;
+                    }
+                    var paramName = paramNames.get(mapping.getFunctionParamId());
+                    if (paramName == null) {
+                        return;
+                    }
+                    var objectId = StringUtils.isNotBlank(mapping.getOntologyUniqueIdentifier())
+                            ? mapping.getOntologyUniqueIdentifier() : bound.getOntologyUniqueIdentifier();
+                    if (StringUtils.isNotBlank(objectId)) {
+                        objects.computeIfAbsent(paramName, ignored -> new LinkedHashSet<>()).add(objectId);
+                    }
+                });
+        return objects;
     }
 
     /** 实例关系行为的对端是必填；应用行为绑的关系可以不传，表示遍历全部对端 */
@@ -1699,7 +1872,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 param.getEntityPrimaryKey(), param.getEntityPrimaryKeys(), param.getLinkEntityPrimaryKey(), true);
         return executeTreeInstance(compiled, definition, param.getEntityPrimaryKey(), param.getEntityPrimaryKeys(),
                 param.getInputs(), param.getDataPrimaryKey(), param.getInputDataPrimaryKeys(),
-                param.getOutputDataPrimaryKeys(), param.getLinkEntityPrimaryKey());
+                param.getOutputDataPrimaryKeys(), param.getInputParams(), param.getOutputParams(),
+                param.getLinkEntityPrimaryKey());
     }
 
     /**
@@ -1728,7 +1902,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 param.getEntityPrimaryKey(), param.getEntityPrimaryKeys(), param.getLinkEntityPrimaryKey(), true);
         return executeTreeInstance(compiled, definition, param.getEntityPrimaryKey(), param.getEntityPrimaryKeys(),
                 param.getInputs(), param.getDataPrimaryKey(), param.getInputDataPrimaryKeys(),
-                param.getOutputDataPrimaryKeys(), param.getLinkEntityPrimaryKey());
+                param.getOutputDataPrimaryKeys(), param.getInputParams(), param.getOutputParams(),
+                param.getLinkEntityPrimaryKey());
     }
 
     /**
@@ -1774,7 +1949,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 TreeBatchInstanceResultVO instanceResult;
                 try {
                     var executed = executeTreeInstance(compiled, definition, entityPrimaryKey, null, param.getInputs(),
-                            param.getDataPrimaryKey(), null, null, param.getLinkEntityPrimaryKey());
+                            param.getDataPrimaryKey(), null, null, null, null, param.getLinkEntityPrimaryKey());
                     if (executed.getState() == BehaviorStateEnum.SUCCESS) {
                         successCount++;
                         if (!includeSuccess) {
@@ -1912,9 +2087,12 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                                                     Object dataPrimaryKey,
                                                     Map<String, Map<String, Object>> inputDataPrimaryKeys,
                                                     Map<String, Map<String, Object>> outputDataPrimaryKeys,
+                                                    Map<String, ActionInstanceTargetParam> inputParams,
+                                                    Map<String, ActionInstanceTargetParam> outputParams,
                                                     Object linkEntityPrimaryKey) {
         var runtime = new TreeExecutionRuntime(definition, compiled.api(), entityPrimaryKey, entityPrimaryKeys, inputs,
-                dataPrimaryKey, inputDataPrimaryKeys, outputDataPrimaryKeys, linkEntityPrimaryKey, compiled.spaceId(),
+                dataPrimaryKey, inputDataPrimaryKeys, outputDataPrimaryKeys, inputParams, outputParams,
+                linkEntityPrimaryKey, compiled.spaceId(),
                 this::tryRunTreeCooldown, this::runTreeBranches, this::invokeTreeNodeAction);
         compiled.tree().tick(runtime, runtime.getBehaviorBlackboard());
         return buildTreeResult(compiled, runtime);
@@ -2092,7 +2270,10 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         }
         var inputRowKeys = treeNodeInputRowKeys(config, runtime);
         var outputRowKeys = treeNodeOutputRowKeys(config, runtime);
-        var testParam = ActionTestParam.builder()
+        // 按算子参数指定的数据位置比按对象更细，命中时在执行侧优先于对象级选择
+        var inputParamTargets = treeNodeParamTargets(runtime.getInputParams(), config.getInputParamKeys(), runtime);
+        var outputParamTargets = treeNodeParamTargets(runtime.getOutputParams(), config.getOutputParamKeys(), runtime);
+        var testParam = ActionInvokeParam.builder()
                 .ontologySpaceId(spaceId)
                 .actionApi(boundApi)
                 // 节点配了实例键就以节点为准，没配用执行请求里该对象/共用的实例主键
@@ -2105,14 +2286,17 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                         ? runtime.getDataPrimaryKey() : runtime.getBlackboard().get(config.getDataPrimaryKeyKey()))
                 .inputEntities(toInstanceTargets(inputRowKeys))
                 .outputEntities(toInstanceTargets(outputRowKeys))
+                .inputParams(inputParamTargets)
+                .outputParams(outputParamTargets)
                 .linkEntityPrimaryKey(treeNodeLinkValue(config, bound, runtime))
                 .params(treeExternalParams(bound, runtime))
                 .build();
-        var testResult = testAction(testParam);
+        // 树节点已经按对象把分组行主键包好，走内部入口，别绕回对外请求再剥掉一次
+        var testResult = runTestAction(testParam);
         // 行为已经落库：回读黑板失败只影响后续条件判断，不能把节点判失败，否则重试/UNTIL 会把同一行为再写一遍
         String refreshWarning = null;
         try {
-            refreshTreeBlackboard(bound, config, runtime, instanceObjects, outputRowKeys);
+            refreshTreeBlackboard(bound, config, runtime, instanceObjects, outputRowKeys, outputParamTargets);
         } catch (Exception e) {
             var reason = e instanceof BusinessException business ? business.getMessage()
                     : StringUtils.defaultIfBlank(e.getMessage(), e.getClass().getSimpleName());
@@ -2203,6 +2387,76 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     }
 
     /**
+     * 行为节点按算子参数指定的数据位置：执行请求里同名参数的默认值打底，节点配置的黑板键覆盖。
+     * <p>只配了键、黑板里没有值时按没指定处理（与该参数不传等价），不能把空目标传下去——
+     * 单行为侧会把它判成「既没实例主键也没分组行主键」的非法入参。</p>
+     */
+    private Map<String, ActionInstanceTargetParam> treeNodeParamTargets(
+            Map<String, ActionInstanceTargetParam> defaults,
+            Map<String, BehaviorActionParamKeys> nodeKeys, TreeExecutionRuntime runtime) {
+        Map<String, ActionInstanceTargetParam> targets = new LinkedHashMap<>();
+        if (defaults != null) {
+            defaults.forEach((paramName, target) -> {
+                if (StringUtils.isBlank(paramName) || target == null) {
+                    return;
+                }
+                if (target.getEntityPrimaryKey() == null && MapUtils.isEmpty(target.getDataPrimaryKeys())) {
+                    return;
+                }
+                targets.put(paramName, copyParamTarget(target));
+            });
+        }
+        if (nodeKeys != null) {
+            nodeKeys.forEach((paramName, keys) -> {
+                if (StringUtils.isBlank(paramName) || keys == null) {
+                    return;
+                }
+                var entityPrimaryKey = StringUtils.isBlank(keys.getEntityPrimaryKeyKey()) ? null
+                        : runtime.getBlackboard().get(keys.getEntityPrimaryKeyKey());
+                Map<String, Object> rowKeys = new LinkedHashMap<>();
+                if (keys.getDataPrimaryKeyKeys() != null) {
+                    keys.getDataPrimaryKeyKeys().forEach((storageGroup, key) -> {
+                        if (StringUtils.isBlank(storageGroup) || StringUtils.isBlank(key)) {
+                            return;
+                        }
+                        var value = runtime.getBlackboard().get(key);
+                        if (value != null) {
+                            rowKeys.put(storageGroup, value);
+                        }
+                    });
+                }
+                if (entityPrimaryKey == null && rowKeys.isEmpty()) {
+                    return;
+                }
+                var target = targets.computeIfAbsent(paramName,
+                        ignored -> ActionInstanceTargetParam.builder().dataPrimaryKeys(new LinkedHashMap<>()).build());
+                if (entityPrimaryKey != null) {
+                    target.setEntityPrimaryKey(entityPrimaryKey);
+                }
+                if (target.getDataPrimaryKeys() == null) {
+                    target.setDataPrimaryKeys(new LinkedHashMap<>());
+                }
+                target.getDataPrimaryKeys().putAll(rowKeys);
+            });
+        }
+        targets.values().forEach(target -> {
+            if (MapUtils.isEmpty(target.getDataPrimaryKeys())) {
+                target.setDataPrimaryKeys(null);
+            }
+        });
+        return targets.isEmpty() ? null : targets;
+    }
+
+    /** 复制一份可写的目标：执行请求里的默认值可能被多个节点共用，不能就地改 */
+    private ActionInstanceTargetParam copyParamTarget(ActionInstanceTargetParam source) {
+        return ActionInstanceTargetParam.builder()
+                .entityPrimaryKey(source.getEntityPrimaryKey())
+                .dataPrimaryKeys(source.getDataPrimaryKeys() == null ? null
+                        : new LinkedHashMap<>(source.getDataPrimaryKeys()))
+                .build();
+    }
+
+    /**
      * 行为执行结果按对端返回 JSON 数组；执行链路吞掉单条对端异常时该位置是空串。
      * <p>只在能解析成数组时统计，基础行为没有结果串，解析失败也不影响节点状态。</p>
      */
@@ -2251,10 +2505,12 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
      * 写后替换：行为把值写进属性之后，用行上的最新值替换绑定了该属性的黑板键。
      * <p>按对象逐个回填，实例主键用本节点解析出来的那一个（不是执行请求里的主键），
      * 否则节点级实例键定位的实例写完后，黑板会被另一个对象的值覆盖或干脆不回填。
-     * 分组表只回填本次写的那一行：按「对象+分组」给了行主键就只认那一行，没给就只认主表行。</p>
+     * 分组表只回填本次写的那一行：按「对象+分组」给了行主键就只认那一行，没给就只认主表行。
+     * 按出参指定了写回位置的，那条实例单独再回读一遍。</p>
      */
     private void refreshTreeBlackboard(OntologyAction bound, BehaviorActionConfig config, TreeExecutionRuntime runtime,
-                                       Set<String> instanceObjects, Map<String, Map<String, Object>> rowKeysByObject) {
+                                       Set<String> instanceObjects, Map<String, Map<String, Object>> rowKeysByObject,
+                                       Map<String, ActionInstanceTargetParam> outputParamTargets) {
         var boundProps = runtime.getBlackboardItems().values().stream()
                 .map(BehaviorBlackboardItem::getBindPropertyUniqueIdentifier)
                 .filter(StringUtils::isNotBlank)
@@ -2269,14 +2525,31 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         // 存量节点只配了单个分组行主键：它仍然适用于任意扩展表，保持改造前的回读口径
         var legacyRowKey = StringUtils.isBlank(config.getDataPrimaryKeyKey())
                 ? runtime.getDataPrimaryKey() : runtime.getBlackboard().get(config.getDataPrimaryKeyKey());
+        // 只有真按出参指定了写回位置才多查一次算子与映射行，没配时链路与改造前完全一致
+        var writeParamObjects = MapUtils.isEmpty(outputParamTargets)
+                ? Collections.<String, Set<String>>emptyMap() : treeActionParamObjects(bound, true);
         for (var objectId : writtenObjects) {
             var entityPrimaryKey = treeNodeInstanceValue(config, bound, objectId, instanceObjects, runtime);
+            var rowKeysByGroup = rowKeysByObject == null ? null : rowKeysByObject.get(objectId);
+            Map<String, Object> latestValues = new LinkedHashMap<>();
             // 定位不到实例就没有可回填的行；真写属性的行为在上一步已经因为缺实例失败了
-            if (entityPrimaryKey == null) {
+            if (entityPrimaryKey != null) {
+                latestValues.putAll(readTreeWrittenRowValues(objectId, entityPrimaryKey, rowKeysByGroup,
+                        legacyRowKey, boundProps));
+            }
+            // 按出参指定了写回位置时，被改的是那一条实例，对象级实例上可能一行都没动。
+            // 两处都回读：只按对象回读会把没被写的旧值写回黑板，只按出参回读又漏掉同一行为里没按参数指定的出参。
+            for (var target : paramTargetsForObject(outputParamTargets, writeParamObjects, objectId)) {
+                var targetPrimaryKey = target.getEntityPrimaryKey() != null ? target.getEntityPrimaryKey() : entityPrimaryKey;
+                if (targetPrimaryKey == null) {
+                    continue;
+                }
+                latestValues.putAll(readTreeWrittenRowValues(objectId, targetPrimaryKey,
+                        mergeTreeRowKeys(rowKeysByGroup, target.getDataPrimaryKeys()), legacyRowKey, boundProps));
+            }
+            if (latestValues.isEmpty()) {
                 continue;
             }
-            var rowKeysByGroup = rowKeysByObject == null ? null : rowKeysByObject.get(objectId);
-            var latestValues = readTreeWrittenRowValues(objectId, entityPrimaryKey, rowKeysByGroup, legacyRowKey, boundProps);
             runtime.getBlackboardItems().forEach((key, item) -> {
                 var bind = item.getBindPropertyUniqueIdentifier();
                 if (StringUtils.isNotBlank(bind) && latestValues.containsKey(bind)) {
@@ -2284,6 +2557,38 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 }
             });
         }
+    }
+
+    /** 出参写回位置命中某个对象的那些目标：只有该出参真有写属性的行落在这个对象上才算 */
+    private List<ActionInstanceTargetParam> paramTargetsForObject(Map<String, ActionInstanceTargetParam> targets,
+                                                                 Map<String, Set<String>> paramObjects,
+                                                                 String objectId) {
+        if (MapUtils.isEmpty(targets) || paramObjects.isEmpty()) {
+            return List.of();
+        }
+        List<ActionInstanceTargetParam> hits = new ArrayList<>();
+        targets.forEach((paramName, target) -> {
+            if (target == null) {
+                return;
+            }
+            if (paramObjects.getOrDefault(paramName, Collections.emptySet()).contains(objectId)) {
+                hits.add(target);
+            }
+        });
+        return hits;
+    }
+
+    /** 出参自己的行主键优先，没配的分组沿用对象级行主键 */
+    private Map<String, Object> mergeTreeRowKeys(Map<String, Object> objectRowKeys, Map<String, Object> paramRowKeys) {
+        if (MapUtils.isEmpty(paramRowKeys)) {
+            return objectRowKeys;
+        }
+        Map<String, Object> merged = new LinkedHashMap<>();
+        if (objectRowKeys != null) {
+            merged.putAll(objectRowKeys);
+        }
+        merged.putAll(paramRowKeys);
+        return merged;
     }
 
     /** 本次执行可能写了哪些对象的属性：属性值行为写自己挂的对象，出参落属性的按每行的对象算 */
@@ -2452,13 +2757,14 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
 
     /**
      * 绑定算子的行为（应用行为、基础算子行为）：校验算子类型、关联关系和入参绑定。
-     * <p>关系是可选项：应用行为在出参全是「仅输出结果」时可以绑一条关系，执行时据此补一条实例关系。</p>
+     * <p>关系是否必填由调用方按行为类别决定：应用行为必填，基础算子行为可选。</p>
      *
-     * @param allowedTypes 该类别允许的算子类型
-     * @param spaceId      行为所属空间，算子 api 仅在该空间内唯一
+     * @param allowedTypes  该类别允许的算子类型
+     * @param spaceId       行为所属空间，算子 api 仅在该空间内唯一
+     * @param linkRequired  本次是否必须绑定一条对象关系
      */
     private void checkFunctionAction(ActionCreateOrUpdateParam param, ActionDefinition definition,
-                                     List<FunctionTypeEnum> allowedTypes, Integer spaceId) {
+                                     List<FunctionTypeEnum> allowedTypes, Integer spaceId, boolean linkRequired) {
         var funcApi = param.getFunctionApi();
         PreconditionUtils.checkArgument(StringUtils.isNotEmpty(funcApi), "行为必须绑定算子", HttpStatus.BAD_REQUEST);
         // 算子 api 只保证空间内唯一（跨空间允许重名），取最新版本必须先限定在本空间，否则会选中其他空间的同名算子
@@ -2474,7 +2780,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 "function api 不存在或算子类型不匹配：" + funcApi, HttpStatus.BAD_REQUEST);
         definition.funcParams = functionParamMapper.selectList(new LambdaQueryWrapper<FunctionParamPO>()
                 .eq(FunctionParamPO::getFunctionId, definition.func.getId()));
-        checkActionLink(param, definition, false);
+        checkActionLink(param, definition, linkRequired);
 
         var paramMap = definition.funcParams.stream()
                 .collect(Collectors.toMap(FunctionParamPO::getId, v -> v, (existingValue, newValue) -> existingValue));
@@ -2595,16 +2901,121 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     }
 
     /**
-     * 写入对象属性与绑定关系互斥：两者都是行为的落库目标，同时配置会既写属性又落关系边。
-     * <p>出参全部为「仅输出结果」时才允许选择关系，关系本身是可选填的。</p>
+     * 出参写入子表时必须把该分组下的属性选全：子表写回是新增一行，漏一个属性就写出结构不完整的行。
+     * <p>main 分组改的是实例已有的那一行，漏绑只保留原值，不要求全选；分组表自己的主键由序列生成、
+     * 对象主键不在分组表里，都不参与绑定。按「对象 + 分组」分桶，同名分组在不同对象下是两张表。</p>
      */
-    private void checkOutputLinkExclusive(ActionCreateOrUpdateParam param, ActionDefinition definition) {
-        var hasWriteProperty = definition.mappings.stream()
-                .anyMatch(m -> m.getOutputMode() == ActionOutputModeEnum.WRITE_PROPERTY);
-        PreconditionUtils.checkArgument(!hasWriteProperty
-                        || param.getLinkMapping() == null
-                        || StringUtils.isEmpty(param.getLinkMapping().getOntologyLinkUniqIdentifier()),
-                "输出参数写入对象属性时，不能再绑定关系", HttpStatus.BAD_REQUEST);
+    private void checkSubtableFullWrite(ActionDefinition definition) {
+        var writeRows = definition.mappings.stream()
+                .filter(m -> m.getOutputMode() == ActionOutputModeEnum.WRITE_PROPERTY)
+                .filter(m -> StringUtils.isNotEmpty(m.getPropertyUniqueIdentifier()))
+                .collect(Collectors.toList());
+        if (writeRows.isEmpty()) {
+            return;
+        }
+        var writeProps = ontologyPropertyService.list(new LambdaQueryWrapper<OntologyProperty>()
+                        .in(OntologyProperty::getUniqueIdentifier, writeRows.stream()
+                                .map(OntologyActionMappingIn::getPropertyUniqueIdentifier)
+                                .distinct()
+                                .collect(Collectors.toList())))
+                .stream()
+                .collect(Collectors.toMap(OntologyProperty::getUniqueIdentifier, v -> v, (existingValue, newValue) -> existingValue));
+        // 按「对象 + 分组」分桶：同一分组名在不同对象下是两张表
+        Map<GroupKey, Set<String>> boundByGroup = new LinkedHashMap<>();
+        for (var row : writeRows) {
+            var prop = writeProps.get(row.getPropertyUniqueIdentifier());
+            if (prop == null) {
+                continue;
+            }
+            var storageGroup = prop.getStorageGroup();
+            if (StringUtils.isBlank(storageGroup) || MAIN_STORAGE_GROUP.equals(storageGroup)) {
+                continue;
+            }
+            var objectId = StringUtils.isNotEmpty(row.getOntologyUniqueIdentifier())
+                    ? row.getOntologyUniqueIdentifier() : prop.getOntologyUniqueIdentifier();
+            boundByGroup.computeIfAbsent(new GroupKey(objectId, storageGroup), ignored -> new LinkedHashSet<>())
+                    .add(prop.getUniqueIdentifier());
+        }
+        boundByGroup.forEach((group, boundIds) -> {
+            var missing = ontologyPropertyService.list(new LambdaQueryWrapper<OntologyProperty>()
+                            .eq(OntologyProperty::getOntologyUniqueIdentifier, group.objectId())
+                            .eq(OntologyProperty::getStorageGroup, group.storageGroup()))
+                    .stream()
+                    .filter(prop -> !Integer.valueOf(1).equals(prop.getIsPrimaryKey()))
+                    .filter(prop -> !boundIds.contains(prop.getUniqueIdentifier()))
+                    .map(OntologyProperty::getDisplayName)
+                    .collect(Collectors.joining("、"));
+            PreconditionUtils.checkArgument(StringUtils.isEmpty(missing),
+                    "出参写入子表[" + group.storageGroup() + "]必须绑定该分组下的全部属性，缺少：" + missing,
+                    HttpStatus.BAD_REQUEST);
+        });
+    }
+
+    /** 出参写回的子表归属：对象 + 存储分组 */
+    private record GroupKey(String objectId, String storageGroup) {
+    }
+
+    /**
+     * 通配出参（取值路径含 {@code [*]}）的创建侧校验：一列取一批值，逐元素往子表追加插行。
+     * <p>main 分组只有实例那一行，逐元素插行没有落点；同一「对象 + 分组」的各列要按元素成行，
+     * 指向不同数组或混用普通路径会写出每行列来自不同元素的错位行。这些都放在创建时报错，
+     * 不留到执行链路中途才炸。没填取值路径的绑定行执行时本来就跳过（该列补空），不参与混用判定。</p>
+     */
+    private void checkWildcardOutputGroups(ActionDefinition definition) {
+        var writeRows = definition.mappings.stream()
+                .filter(m -> m.getOutputMode() == ActionOutputModeEnum.WRITE_PROPERTY)
+                .filter(m -> StringUtils.isNotEmpty(m.getPropertyUniqueIdentifier()))
+                .filter(m -> StringUtils.isNotEmpty(m.getFunctionParamExpression()))
+                .collect(Collectors.toList());
+        if (writeRows.stream().noneMatch(m -> FunctionOutputValueReader.hasWildcard(m.getFunctionParamExpression()))) {
+            return;
+        }
+        var props = ontologyPropertyService.list(new LambdaQueryWrapper<OntologyProperty>()
+                        .in(OntologyProperty::getUniqueIdentifier, writeRows.stream()
+                                .map(OntologyActionMappingIn::getPropertyUniqueIdentifier)
+                                .distinct()
+                                .collect(Collectors.toList())))
+                .stream()
+                .collect(Collectors.toMap(OntologyProperty::getUniqueIdentifier, v -> v, (existingValue, newValue) -> existingValue));
+        Map<GroupKey, Set<String>> prefixesByGroup = new LinkedHashMap<>();
+        Map<GroupKey, List<String>> plainPropsByGroup = new LinkedHashMap<>();
+        for (var row : writeRows) {
+            var prop = props.get(row.getPropertyUniqueIdentifier());
+            if (prop == null) {
+                continue;
+            }
+            var wildcard = FunctionOutputValueReader.hasWildcard(row.getFunctionParamExpression());
+            var storageGroup = prop.getStorageGroup();
+            var onMain = StringUtils.isBlank(storageGroup) || MAIN_STORAGE_GROUP.equals(storageGroup);
+            PreconditionUtils.checkArgument(!wildcard || !onMain,
+                    "取值路径带 [*] 的出参只能写子表，属性[" + prop.getDisplayName() + "]在 main 分组上",
+                    HttpStatus.BAD_REQUEST);
+            if (onMain) {
+                continue;
+            }
+            var objectId = StringUtils.isNotEmpty(row.getOntologyUniqueIdentifier())
+                    ? row.getOntologyUniqueIdentifier() : prop.getOntologyUniqueIdentifier();
+            var group = new GroupKey(objectId, storageGroup);
+            if (wildcard) {
+                var pathProblem = FunctionOutputValueReader.wildcardPathProblem(row.getFunctionParamExpression());
+                PreconditionUtils.checkArgument(pathProblem == null,
+                        "属性[" + prop.getDisplayName() + "]的取值路径格式不对：" + pathProblem, HttpStatus.BAD_REQUEST);
+                prefixesByGroup.computeIfAbsent(group, ignored -> new LinkedHashSet<>())
+                        .add(FunctionOutputValueReader.loopPrefix(row.getFunctionParamExpression()));
+            } else {
+                plainPropsByGroup.computeIfAbsent(group, ignored -> new ArrayList<>()).add(prop.getDisplayName());
+            }
+        }
+        prefixesByGroup.forEach((group, prefixes) -> {
+            PreconditionUtils.checkArgument(prefixes.size() == 1,
+                    "子表[" + group.storageGroup() + "]的通配出参指向了不同的数组：" + String.join("、", prefixes)
+                            + "，同一张子表的各列要逐元素成行，取值路径的数组层必须一致", HttpStatus.BAD_REQUEST);
+            var plain = plainPropsByGroup.get(group);
+            PreconditionUtils.checkArgument(CollectionUtils.isEmpty(plain),
+                    "子表[" + group.storageGroup() + "]的通配出参列与普通出参列混用：" + String.join("、", plain)
+                            + "，逐元素插行时该分组每一列都要写成 " + prefixes.iterator().next()
+                            + "[*].字段名 的形式", HttpStatus.BAD_REQUEST);
+        });
     }
 
     /** 属性值行为：对某个存储分组（物理表）做新增/修改/删除，不绑算子 */
@@ -3073,14 +3484,43 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 HttpStatus.BAD_REQUEST);
     }
 
+    @Override
+    public ActionTestResultVO testAction(ActionTestParam param) {
+        var invokeParam = toInvokeParam(param);
+        // 入参方向把某个字段写成数组就是批量测试：展开成组合后逐组跑一遍。不传数组时与改造前完全一致
+        var testAxes = collectTestAxes(invokeParam);
+        return testAxes.isEmpty() ? runTestAction(invokeParam) : testActionCombos(invokeParam, testAxes);
+    }
+
+    /**
+     * 对外请求转内部调用参数。
+     * <p>按对象方向指定实例/行只有行为树在用（树级默认行主键），不放进对外的测试请求，
+     * 所以这里必然留空。</p>
+     */
+    private ActionInvokeParam toInvokeParam(ActionTestParam param) {
+        return ActionInvokeParam.builder()
+                .ontologySpaceId(param.getOntologySpaceId())
+                .actionApi(param.getActionApi())
+                .entityPrimaryKey(param.getEntityPrimaryKey())
+                .entityPrimaryKeys(param.getEntityPrimaryKeys())
+                .inputParams(param.getInputParams())
+                .outputParams(param.getOutputParams())
+                .dataPrimaryKey(param.getDataPrimaryKey())
+                .linkEntityPrimaryKey(param.getLinkEntityPrimaryKey())
+                .params(param.getParams())
+                .build();
+    }
+
     /**
      * 行为测试：用一条真实数据把行为定义跑一遍并落库。
      * <p>
      * 不加事务：属性值行为写数据湖、实例关系行为写图库、算子行为跨两者，
      * 且发现必填属性缺失时的失效标记必须独立提交，不能被随后的异常回滚掉。
+     * <p>
+     * 批量展开只在对外的 {@link #testAction(ActionTestParam)} 做：行为树节点也是走这里执行单条行为，
+     * 黑板里的值偶尔本来就是集合，不能在那条链路上悄悄炸成多组。
      */
-    @Override
-    public ActionTestResultVO testAction(ActionTestParam param) {
+    private ActionTestResultVO runTestAction(ActionInvokeParam param) {
         var action = getOne(new LambdaQueryWrapper<OntologyAction>()
                 .eq(OntologyAction::getApi, param.getActionApi())
                 .eq(OntologyAction::getOntologySpaceId, param.getOntologySpaceId()));
@@ -3103,11 +3543,9 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             throw new BusinessException("行为没有绑定关系，不需要传 from/to 实例主键", HttpStatus.BAD_REQUEST);
         }
         if (action.getActionKind() == ActionKindEnum.BASE) {
-            // 属性值/实例关系行为只对单个实例改一行属性或一条边，读写是同一个实例，按方向拆实例表达不出差别
-            if (ActionInstanceTargetParam.hasEntityPrimaryKey(param.getInputEntities())
-                    || ActionInstanceTargetParam.hasEntityPrimaryKey(param.getOutputEntities())) {
-                throw new BusinessException("属性值/实例关系行为只操作单个实例，"
-                        + "不支持用 inputEntities、outputEntities 的 entityPrimaryKey 按方向指定实例",
+            // 属性值/实例关系行为不绑算子，没有算子入参可指向
+            if (MapUtils.isNotEmpty(param.getInputParams()) || MapUtils.isNotEmpty(param.getOutputParams())) {
+                throw new BusinessException("属性值/实例关系行为不绑算子，不支持用 inputParams、outputParams 按参数指定数据位置",
                         HttpStatus.BAD_REQUEST);
             }
             if (action.getSubjectType() == ActionSubjectTypeEnum.PROPERTY_VALUE) {
@@ -3159,7 +3597,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     }
 
     /** 属性值行为测试：对目标存储分组对应的物理表真实增删改一行 */
-    private ActionTestResultVO testPropertyValueAction(OntologyAction action, OntologyActionDetailVO detail, ActionTestParam param) {
+    private ActionTestResultVO testPropertyValueAction(OntologyAction action, OntologyActionDetailVO detail, ActionInvokeParam param) {
         var executeParam = baseExecuteParam(action, param.getEntityPrimaryKey(), param.getDataPrimaryKey(), null);
         return testResult(action, runPropertyValueAction(action, detail.getMappingIns(), executeParam, param.getParams()));
     }
@@ -3300,7 +3738,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     }
 
     /** 实例关系行为测试：真实写入/改状态/失效图库的一条边；两端实例由 entityPrimaryKeys 的 from/to 给出 */
-    private ActionTestResultVO testLinkAction(OntologyAction action, OntologyActionDetailVO detail, ActionTestParam param) {
+    private ActionTestResultVO testLinkAction(OntologyAction action, OntologyActionDetailVO detail, ActionInvokeParam param) {
         var linkMapping = detail.getLinkMapping();
         PreconditionUtils.checkArgument(linkMapping != null, "行为没有绑定关系，无法执行", HttpStatus.BAD_REQUEST);
         var linkGroup = linkGroupMapper.selectOne(new LambdaQueryWrapper<OntologyLinkGroup>()
@@ -3319,7 +3757,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
      * <p>没传 from/to 时兼容旧写法：按对象 id 选实例，entityPrimaryKey/linkEntityPrimaryKey 补单端。
      * 缺任一端直接报错，不再退化成遍历全部对端。</p>
      */
-    private TestLinkEndpoints resolveTestLinkEndpoints(ActionTestParam param, OntologyAction action,
+    private TestLinkEndpoints resolveTestLinkEndpoints(ActionInvokeParam param, OntologyAction action,
                                                       OntologyLinkGroup linkGroup) {
         var fromObject = linkGroup.getOntologyUniqueIdentifierFrom();
         var toObject = linkGroup.getOntologyUniqueIdentifierTo();
@@ -3449,16 +3887,19 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
 
     /** 算子类行为测试：走既有执行链路，算子输出按输出方式真实回写 */
     @SneakyThrows
-    private ActionTestResultVO testFunctionAction(OntologyAction action, OntologyActionDetailVO detail, ActionTestParam param) {
+    private ActionTestResultVO testFunctionAction(OntologyAction action, OntologyActionDetailVO detail, ActionInvokeParam param) {
         var executeParamBuilder = EntityActionExecuteParam.builder()
                 .actionApi(action.getApi())
                 .ontologySpaceId(action.getOntologySpaceId())
                 .ontologyUniqueIdentifier(action.getOntologyUniqueIdentifier())
                 .entityPrimaryKey(param.getEntityPrimaryKey())
                 .entityPrimaryKeys(param.getEntityPrimaryKeys())
-                // 入参/出参各自的数据位置（实例主键 + 分组行主键）；没传时沿用 entityPrimaryKeys 与原口径
+                // 按对象方向给的数据位置：树执行的树级/节点级默认行主键走这里，对外测试请求不带
                 .inputEntities(param.getInputEntities())
-                .outputEntities(param.getOutputEntities());
+                .outputEntities(param.getOutputEntities())
+                // 按算子入参/出参指定的数据位置：入参读哪个实例/哪一行、出参写到哪个实例/哪一行
+                .inputParams(param.getInputParams())
+                .outputParams(param.getOutputParams());
         // 涉及关系时两端实例都由调用方给：测试只跑这一对，不遍历关系下的全部实体
         if (detail.getLinkMapping() != null) {
             var linkGroup = linkGroupMapper.selectOne(new LambdaQueryWrapper<OntologyLinkGroup>()
@@ -3490,6 +3931,268 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 .actionApi(action.getApi())
                 .message(message)
                 .build();
+    }
+
+    /**
+     * 批量行为测试的取值轴：入参方向某个字段传了数组，就是这个字段的一组候选值。
+     * <p>field 定位请求字段，key/subKey 定位字段里的具体一项，values 是校验过的标量候选值。</p>
+     */
+    private record TestAxis(String field, String key, String subKey, List<Object> values) {
+
+        String label() {
+            return axisLabel(field, key, subKey);
+        }
+    }
+
+    /** 取值轴的显示名，批量结果里按它回显每组选中的取值 */
+    private static String axisLabel(String field, String key, String subKey) {
+        if (TEST_AXIS_FIELD_ENTITY_PRIMARY_KEYS.equals(field)) {
+            // 关系两端在请求里就是保留键 from、to，不用再冠字段名
+            return TEST_LINK_FROM_KEY.equals(key) || TEST_LINK_TO_KEY.equals(key)
+                    ? key : field + "[" + key + "]";
+        }
+        return subKey == null
+                ? field + "[" + key + "].entityPrimaryKey"
+                : field + "[" + key + "].dataPrimaryKeys[" + subKey + "]";
+    }
+
+    /**
+     * 收集入参方向的数组取值：只有 entityPrimaryKeys（含关系两端 from、to）和 inputParams 参与。
+     * <p>params 不作为轴：LIST 类型入参的值本来就是数组，分不清是候选值还是参数本身。
+     * 出参方向出现数组直接拦下，一次执行只能有一个写回位置。</p>
+     */
+    private List<TestAxis> collectTestAxes(ActionInvokeParam param) {
+        var axes = new ArrayList<TestAxis>();
+        PreconditionUtils.checkArgument(!(param.getEntityPrimaryKey() instanceof List<?>),
+                "entityPrimaryKey 不支持传数组，多组实例请改用 entityPrimaryKeys（关系两端用 from、to）或 inputParams",
+                HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(!(param.getDataPrimaryKey() instanceof List<?>)
+                        && !(param.getLinkEntityPrimaryKey() instanceof List<?>),
+                "dataPrimaryKey、linkEntityPrimaryKey 不支持传数组，批量测试请用 entityPrimaryKeys 或 inputParams 传候选值",
+                HttpStatus.BAD_REQUEST);
+        checkOutputSideHasNoArray("outputParams", param.getOutputParams());
+        if (param.getEntityPrimaryKeys() != null) {
+            param.getEntityPrimaryKeys().forEach((objectId, value) ->
+                    addTestAxis(axes, TEST_AXIS_FIELD_ENTITY_PRIMARY_KEYS, objectId, null, value));
+        }
+        addTargetAxes(axes, TEST_AXIS_FIELD_INPUT_PARAMS, param.getInputParams());
+        return axes;
+    }
+
+    private void addTargetAxes(List<TestAxis> axes, String field, Map<String, ActionInstanceTargetParam> targets) {
+        if (targets == null) {
+            return;
+        }
+        targets.forEach((objectId, target) -> {
+            if (target == null) {
+                return;
+            }
+            addTestAxis(axes, field, objectId, null, target.getEntityPrimaryKey());
+            if (target.getDataPrimaryKeys() != null) {
+                target.getDataPrimaryKeys().forEach((group, value) -> addTestAxis(axes, field, objectId, group, value));
+            }
+        });
+    }
+
+    private void checkOutputSideHasNoArray(String field, Map<String, ActionInstanceTargetParam> targets) {
+        if (targets == null) {
+            return;
+        }
+        targets.forEach((objectId, target) -> {
+            if (target == null) {
+                return;
+            }
+            rejectTestAxis(target.getEntityPrimaryKey(), axisLabel(field, objectId, null));
+            if (target.getDataPrimaryKeys() != null) {
+                target.getDataPrimaryKeys().forEach((group, value) ->
+                        rejectTestAxis(value, axisLabel(field, objectId, group)));
+            }
+        });
+    }
+
+    private void rejectTestAxis(Object value, String label) {
+        PreconditionUtils.checkArgument(!(value instanceof List<?>),
+                label + " 不支持传数组：出参方向每组只能有一个写回位置", HttpStatus.BAD_REQUEST);
+    }
+
+    private void addTestAxis(List<TestAxis> axes, String field, String key, String subKey, Object value) {
+        if (!(value instanceof List<?> items)) {
+            return;
+        }
+        var label = axisLabel(field, key, subKey);
+        PreconditionUtils.checkArgument(!items.isEmpty(), label + " 的候选值不能是空数组", HttpStatus.BAD_REQUEST);
+        var values = new ArrayList<Object>(items.size());
+        for (var item : items) {
+            PreconditionUtils.checkNotNull(item, label + " 的候选值里有 null", HttpStatus.BAD_REQUEST);
+            PreconditionUtils.checkArgument(!(item instanceof List<?>),
+                    label + " 的候选值只能是标量，不支持嵌套数组", HttpStatus.BAD_REQUEST);
+            values.add(item);
+        }
+        axes.add(new TestAxis(field, key, subKey, values));
+    }
+
+    /** 按笛卡尔积展开组合，越靠后的取值轴变化越快 */
+    private List<List<Object>> expandTestCombos(List<TestAxis> axes) {
+        var total = 1;
+        for (var axis : axes) {
+            total *= axis.values().size();
+        }
+        PreconditionUtils.checkArgument(total <= MAX_TEST_COMBOS,
+                "批量测试最多 " + MAX_TEST_COMBOS + " 组组合，当前候选值会展开出 " + total + " 组（"
+                        + describeTestAxes(axes) + "），请减少候选值", HttpStatus.BAD_REQUEST);
+        var combos = new ArrayList<List<Object>>(total);
+        var cursor = new int[axes.size()];
+        for (int index = 0; index < total; index++) {
+            var combo = new ArrayList<Object>(axes.size());
+            for (int axisIndex = 0; axisIndex < axes.size(); axisIndex++) {
+                combo.add(axes.get(axisIndex).values().get(cursor[axisIndex]));
+            }
+            combos.add(combo);
+            for (int axisIndex = axes.size() - 1; axisIndex >= 0; axisIndex--) {
+                if (++cursor[axisIndex] < axes.get(axisIndex).values().size()) {
+                    break;
+                }
+                cursor[axisIndex] = 0;
+            }
+        }
+        return combos;
+    }
+
+    private String describeTestAxes(List<TestAxis> axes) {
+        return axes.stream()
+                .map(axis -> axis.label() + "=" + axis.values().size())
+                .collect(Collectors.joining("、"));
+    }
+
+    /**
+     * 批量行为测试：逐组把标量化的请求交给单组测试，复用它的全部校验与执行链路。
+     * <p>每组各自落库、各自记成败，一组失败不影响其余组合，也不回滚已经写进去的数据——
+     * 单组测试本来就不加事务。</p>
+     */
+    private ActionTestResultVO testActionCombos(ActionInvokeParam param, List<TestAxis> axes) {
+        var action = getOne(new LambdaQueryWrapper<OntologyAction>()
+                .eq(OntologyAction::getApi, param.getActionApi())
+                .eq(OntologyAction::getOntologySpaceId, param.getOntologySpaceId()));
+        PreconditionUtils.checkArgument(action != null, "无效的action api", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(action.getActionKind() != ActionKindEnum.BASE,
+                "属性值/实例关系行为只操作单个实例，不支持批量测试", HttpStatus.BAD_REQUEST);
+        var combos = expandTestCombos(axes);
+        var cases = new ArrayList<ActionTestCaseResultVO>(combos.size());
+        var results = new ArrayList<String>(combos.size());
+        var failed = 0;
+        for (int index = 0; index < combos.size(); index++) {
+            var comboValues = combos.get(index);
+            var single = copyTestParam(param);
+            for (int axisIndex = 0; axisIndex < axes.size(); axisIndex++) {
+                applyTestAxis(single, axes.get(axisIndex), comboValues.get(axisIndex));
+            }
+            String result = null;
+            String error = null;
+            try {
+                result = runTestAction(single).getResult();
+                if (isBlankFunctionResult(result)) {
+                    error = "算子没有返回结果，通常是算子内部报错后被执行链路吞掉，请看算子执行日志";
+                }
+            } catch (BusinessException e) {
+                error = e.getMessage();
+            } catch (Exception e) {
+                log.error("批量行为测试单组执行失败，actionApi={}，组合={}", action.getApi(), comboValues, e);
+                error = "执行异常：" + e.getMessage();
+            }
+            if (error != null) {
+                result = null;
+                failed++;
+            }
+            results.add(result);
+            cases.add(ActionTestCaseResultVO.builder()
+                    .seq(index + 1)
+                    .combo(comboValuesMap(axes, comboValues))
+                    .result(result)
+                    .error(error)
+                    .build());
+        }
+        var succeeded = combos.size() - failed;
+        return testResult(action, "共 " + combos.size() + " 组组合，成功 " + succeeded + " / 失败 " + failed)
+                .setResult(toResultsJson(results))
+                .setCases(cases);
+    }
+
+    private Map<String, Object> comboValuesMap(List<TestAxis> axes, List<Object> values) {
+        var combo = new LinkedHashMap<String, Object>();
+        for (int index = 0; index < axes.size(); index++) {
+            combo.put(axes.get(index).label(), values.get(index));
+        }
+        return combo;
+    }
+
+    @SneakyThrows
+    private String toResultsJson(List<String> results) {
+        return jsonMapper.writeValueAsString(results);
+    }
+
+    /**
+     * 算子返回是否整组皆空：执行链路会把算子自己抛的异常吞成空字符串，
+     * 批量时不显式判出来就成了「算子报错却报成功」。
+     */
+    private boolean isBlankFunctionResult(String result) {
+        if (StringUtils.isEmpty(result)) {
+            return true;
+        }
+        try {
+            var items = jsonMapper.readValue(result, new TypeReference<List<String>>() {
+            });
+            return items.stream().allMatch(StringUtils::isEmpty);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /** 复制一份测试请求，只把会被逐组覆盖的入参结构换成可变副本，原请求保持不动 */
+    private ActionInvokeParam copyTestParam(ActionInvokeParam param) {
+        return ActionInvokeParam.builder()
+                .ontologySpaceId(param.getOntologySpaceId())
+                .actionApi(param.getActionApi())
+                .entityPrimaryKey(param.getEntityPrimaryKey())
+                .entityPrimaryKeys(param.getEntityPrimaryKeys() == null
+                        ? null : new LinkedHashMap<>(param.getEntityPrimaryKeys()))
+                .inputEntities(param.getInputEntities())
+                .outputEntities(param.getOutputEntities())
+                .inputParams(copyTestTargets(param.getInputParams()))
+                .outputParams(param.getOutputParams())
+                .dataPrimaryKey(param.getDataPrimaryKey())
+                .linkEntityPrimaryKey(param.getLinkEntityPrimaryKey())
+                .params(param.getParams())
+                .build();
+    }
+
+    private Map<String, ActionInstanceTargetParam> copyTestTargets(Map<String, ActionInstanceTargetParam> targets) {
+        if (targets == null) {
+            return null;
+        }
+        var copy = new LinkedHashMap<String, ActionInstanceTargetParam>();
+        targets.forEach((key, target) -> copy.put(key, target == null ? null : ActionInstanceTargetParam.builder()
+                .entityPrimaryKey(target.getEntityPrimaryKey())
+                .dataPrimaryKeys(target.getDataPrimaryKeys() == null
+                        ? null : new LinkedHashMap<>(target.getDataPrimaryKeys()))
+                .build()));
+        return copy;
+    }
+
+    private void applyTestAxis(ActionInvokeParam param, TestAxis axis, Object value) {
+        switch (axis.field()) {
+            case TEST_AXIS_FIELD_ENTITY_PRIMARY_KEYS -> param.getEntityPrimaryKeys().put(axis.key(), value);
+            case TEST_AXIS_FIELD_INPUT_PARAMS -> applyTestTargetAxis(param.getInputParams(), axis, value);
+            default -> throw new BusinessException("未知的批量测试取值轴：" + axis.label(), HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    private void applyTestTargetAxis(Map<String, ActionInstanceTargetParam> targets, TestAxis axis, Object value) {
+        var target = targets.get(axis.key());
+        if (axis.subKey() == null) {
+            target.setEntityPrimaryKey(value);
+        } else {
+            target.getDataPrimaryKeys().put(axis.subKey(), value);
+        }
     }
 
     @Override

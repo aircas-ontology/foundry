@@ -225,7 +225,8 @@ public class GroovyScriptParamParser implements ScriptParamParser {
                     .category(FunctionParamCategoryEnum.OUTPUT)
                     .source("ANNOTATION")
                     .fields(ctx.expander.expandFields(projectClass, FunctionParamCategoryEnum.OUTPUT,
-                            new LinkedHashSet<>(), 1))
+                            new LinkedHashSet<>(), 1, typeVarBindings(projectClass, returnType),
+                            (className, category, visited, depth) -> expandScriptType(className, category, ctx, visited, depth)))
                     .build());
             return;
         }
@@ -288,6 +289,64 @@ public class GroovyScriptParamParser implements ScriptParamParser {
     private ClassNode lookupScriptClass(String typeText, ParseContext ctx) {
         ClassNode exact = ctx.classByName.get(typeText);
         return exact != null ? exact : ctx.classByName.get(simpleName(typeText));
+    }
+
+    /**
+     * 泛型形参名到脚本写的泛型实参文本的绑定（如 {@code T → List<OrbitInfo>}）。
+     * <p>反射只认得 {@code FunctionResultVO<T>} 里的类型变量，实参只写在脚本签名上；按声明顺序配对，
+     * 没写实参、通配符或 Object 的留给下一位，展开时按未绑定处理，与改造前口径一致。</p>
+     */
+    private Map<String, String> typeVarBindings(Class<?> projectClass, ClassNode returnType) {
+        GenericsType[] arguments = returnType == null ? null : returnType.getGenericsTypes();
+        var variables = projectClass.getTypeParameters();
+        if (arguments == null || arguments.length == 0 || variables.length == 0) {
+            return Map.of();
+        }
+        Map<String, String> bindings = new LinkedHashMap<>();
+        for (int i = 0; i < variables.length && i < arguments.length; i++) {
+            ClassNode argument = arguments[i].getType();
+            if (argument == null || isObjectType(argument)) {
+                continue;
+            }
+            bindings.put(variables[i].getName(), genericTypeText(argument));
+        }
+        return bindings;
+    }
+
+    /** 带泛型实参的类型文本（{@code List<OrbitInfo>}）；{@link #typeNodeText} 会把泛型丢掉，这里要留着才能定位元素类 */
+    private String genericTypeText(ClassNode type) {
+        if (type == null) {
+            return "";
+        }
+        if (type.isArray()) {
+            return genericTypeText(type.getComponentType()) + "[]";
+        }
+        String base = simpleName(type.getName());
+        GenericsType[] generics = type.getGenericsTypes();
+        if (generics == null || generics.length == 0) {
+            return base;
+        }
+        StringBuilder text = new StringBuilder(base).append('<');
+        for (int i = 0; i < generics.length; i++) {
+            if (i > 0) {
+                text.append(',');
+            }
+            text.append(genericTypeText(generics[i].getType()));
+        }
+        return text.append('>').toString();
+    }
+
+    /**
+     * 泛型实参指向脚本内类（如 {@code class OrbitInfo}）时的字段展开：这类只存在于脚本源码里、
+     * 不在 classpath 上，反射拿不到，只能按 AST 展开。不是脚本内类时返回 null，由调用方回落工程内类。
+     */
+    private List<ScriptParsedParam> expandScriptType(String className, FunctionParamCategoryEnum category,
+                                                     ParseContext ctx, Set<String> visited, int depth) {
+        ClassNode node = lookupScriptClass(className, ctx);
+        if (node == null || !visited.add(node.getName())) {
+            return null;
+        }
+        return expandFields(node, category, "ANNOTATION", ctx, visited, depth);
     }
 
     private void inferInputsFromBody(MethodNode handle, List<ScriptParsedParam> out) {

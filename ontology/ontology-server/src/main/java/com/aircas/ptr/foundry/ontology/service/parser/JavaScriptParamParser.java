@@ -18,6 +18,8 @@ import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
+import com.github.javaparser.ast.type.Type;
+import com.github.javaparser.ast.type.WildcardType;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -162,7 +164,8 @@ public class JavaScriptParamParser implements ScriptParamParser {
                     .category(FunctionParamCategoryEnum.OUTPUT)
                     .source("ANNOTATION")
                     .fields(expander.expandFields(projectClass, FunctionParamCategoryEnum.OUTPUT,
-                            new LinkedHashSet<>(), 1))
+                            new LinkedHashSet<>(), 1, typeVarBindings(projectClass, handle.getType()),
+                            (className, category, visited, depth) -> expandScriptType(className, category, classByName, expander, visited, depth)))
                     .build());
             return;
         }
@@ -221,6 +224,46 @@ public class JavaScriptParamParser implements ScriptParamParser {
             }
         }
         return fields;
+    }
+
+    /**
+     * 泛型形参名到脚本写的泛型实参文本的绑定（如 {@code T → List<OrbitInfo>}）。
+     * <p>反射只认得 {@code FunctionResultVO<T>} 里的类型变量，实参只写在脚本签名上；按声明顺序配对，
+     * 通配符与 Object 视为未绑定，展开口径与改造前一致。</p>
+     */
+    private Map<String, String> typeVarBindings(Class<?> projectClass, Type returnType) {
+        List<Type> arguments = new ArrayList<>();
+        if (returnType instanceof ClassOrInterfaceType genericType) {
+            genericType.getTypeArguments().ifPresent(arguments::addAll);
+        }
+        var variables = projectClass.getTypeParameters();
+        if (arguments.isEmpty() || variables.length == 0) {
+            return Map.of();
+        }
+        Map<String, String> bindings = new LinkedHashMap<>();
+        for (int i = 0; i < variables.length && i < arguments.size(); i++) {
+            Type argument = arguments.get(i);
+            String argumentText = argument.asString();
+            if (argument instanceof WildcardType || "Object".equals(baseName(argumentText))) {
+                continue;
+            }
+            bindings.put(variables[i].getName(), argumentText);
+        }
+        return bindings;
+    }
+
+    /**
+     * 泛型实参指向脚本内类（如 {@code class OrbitInfo}）时的字段展开：这类只存在于脚本源码里、
+     * 不在 classpath 上，反射拿不到，只能按 AST 展开。不是脚本内类时返回 null，由调用方回落工程内类。
+     */
+    private List<ScriptParsedParam> expandScriptType(String className, FunctionParamCategoryEnum category,
+                                                     Map<String, ClassOrInterfaceDeclaration> classByName,
+                                                     ProjectClassExpander expander, Set<String> visited, int depth) {
+        ClassOrInterfaceDeclaration cls = resolveUserClass(className, classByName);
+        if (cls == null || !visited.add(cls.getNameAsString())) {
+            return null;
+        }
+        return expandFields(cls, category, "ANNOTATION", classByName, expander, visited, depth);
     }
 
     /** 启发层：扫描 handle 体内 {@code input.get("x")} 字面量键，作为入参。 */

@@ -31,14 +31,13 @@ import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyPropertyMap
 import com.aircas.ptr.foundry.ontology.service.EntityService;
 import com.aircas.ptr.foundry.ontology.service.FunctionService;
 import com.aircas.ptr.foundry.ontology.service.OntologyActionService;
+import com.aircas.ptr.foundry.ontology.utils.FunctionOutputValueReader;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
-import com.jayway.jsonpath.Configuration;
-import com.jayway.jsonpath.JsonPath;
-import com.jayway.jsonpath.Option;
 import jakarta.annotation.Resource;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -52,6 +51,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -79,6 +79,17 @@ public class EntityServiceImpl implements EntityService {
      * 图节点集合名，与 {@link EntityNode} 的 @Document 一致，用于拼接关系边的端点标识。
      */
     private static final String NODE_COLLECTION = "node";
+
+    /**
+     * 通配出参（取值路径含 {@code [*]}）单次批量写回的行数封顶：
+     * 超出说明算子返回了异常规模的数组，宁可报错也不把数据湖写爆。
+     */
+    private static final int MAX_WILDCARD_OUTPUT_ROWS = 100000;
+
+    /**
+     * 通配出参分批插入的批大小：一条 INSERT 塞几万行会顶到数据库的语句参数上限。
+     */
+    private static final int WILDCARD_INSERT_BATCH = 1000;
 
     @Resource
     private OntologyMetaMapper metaMapper;
@@ -117,8 +128,6 @@ public class EntityServiceImpl implements EntityService {
 
     @Resource
     private TaskProcessor taskProcessor;
-
-    private Configuration safeConfig = Configuration.builder().build().addOptions(Option.DEFAULT_PATH_LEAF_TO_NULL, Option.SUPPRESS_EXCEPTIONS);
 
 
     /**
@@ -1134,6 +1143,9 @@ public class EntityServiceImpl implements EntityService {
 
     @Override
     public String executeAction(EntityActionExecuteParam param) throws Exception {
+        // 按对象方向指定实例/行是内部载体（单行为测试给行为树用），对外执行请求不接受，传了也只是忽略
+        param.setInputEntities(null);
+        param.setOutputEntities(null);
         var infoDTO = initActionContextInfoDTO(param);
         //获取行为关联关系下的对象的实体详情
         List<List<EntityPropertyDetailVO>> linkedEntities = getLinkedEntities(infoDTO);
@@ -1242,6 +1254,7 @@ public class EntityServiceImpl implements EntityService {
         // 应用行为的入参/出参可能指向其他对象：按映射收集涉及对象，补全各自属性与实例主键
         var entityPrimaryKeys = resolveEntityPrimaryKeys(param);
         checkDirectionalEntities(actionDetailVO, param);
+        checkParamTargets(actionDetailVO, functionDetailVO, param);
         var objectIds = collectMappingObjectIds(actionDetailVO);
         if (StringUtils.isNotEmpty(param.getOntologyUniqueIdentifier())) {
             objectIds.add(param.getOntologyUniqueIdentifier());
@@ -1320,6 +1333,142 @@ public class EntityServiceImpl implements EntityService {
         });
     }
 
+    /** 该绑定行取值时是否需要实例数据：入参且来源为对象属性/对象/List（固定值与外部输入不需要） */
+    private boolean isInstanceInputRow(ActionParamMappingVO mapping) {
+        var sourceType = mapping.getSourceType() == null ? ActionParamSourceEnum.PROPERTY : mapping.getSourceType();
+        return mapping.getCategory() == FunctionParamCategoryEnum.INPUT
+                && (sourceType == ActionParamSourceEnum.PROPERTY
+                || sourceType == ActionParamSourceEnum.OBJECT
+                || sourceType == ActionParamSourceEnum.LIST);
+    }
+
+    /** 该出参绑定行是否要把值写回对象属性：只有这种行才有「写到哪个实例、哪一行」可言 */
+    private boolean isPropertyWriteOutputRow(ActionParamMappingVO mapping) {
+        return mapping.getCategory() == FunctionParamCategoryEnum.OUTPUT
+                && mapping.getOutputMode() == ActionOutputModeEnum.WRITE_PROPERTY;
+    }
+
+    /**
+     * 某个算子参数在当前绑定里需要数据位置的对象。
+     * <p>子字段绑定行也记顶层参数 id，所以一个参数名可能对应多条绑定、跨多个对象；
+     * 老数据的绑定行没写对象 id，按行为所属对象算。</p>
+     */
+    private Set<String> paramDataObjectIds(List<ActionParamMappingVO> mappings, List<FunctionParameterVO> params,
+                                            String paramName, Predicate<ActionParamMappingVO> needsTarget,
+                                            String legacyObjectId) {
+        var paramIds = CollectionUtils.isEmpty(params) ? Set.<Long>of()
+                : params.stream().filter(p -> StringUtils.equals(paramName, p.getParamName()))
+                .map(FunctionParameterVO::getParamId).filter(Objects::nonNull).collect(Collectors.toSet());
+        Set<String> objectIds = new LinkedHashSet<>();
+        if (paramIds.isEmpty() || CollectionUtils.isEmpty(mappings)) {
+            return objectIds;
+        }
+        for (var mapping : mappings) {
+            if (!needsTarget.test(mapping) || mapping.getFunctionParamId() == null
+                    || !paramIds.contains(mapping.getFunctionParamId())) {
+                continue;
+            }
+            var objectId = StringUtils.isNotEmpty(mapping.getOntologyUniqueIdentifier())
+                    ? mapping.getOntologyUniqueIdentifier() : legacyObjectId;
+            if (StringUtils.isNotEmpty(objectId)) {
+                objectIds.add(objectId);
+            }
+        }
+        return objectIds;
+    }
+
+    /** 一条绑定行所属的顶层算子参数名；行没记参数 id（不绑算子的行为）时返回 null */
+    private String paramNameOf(List<FunctionParameterVO> params, Long functionParamId) {
+        if (functionParamId == null || CollectionUtils.isEmpty(params)) {
+            return null;
+        }
+        return params.stream().filter(p -> functionParamId.equals(p.getParamId()))
+                .map(FunctionParameterVO::getParamName).findFirst().orElse(null);
+    }
+
+    /** 算子某方向的参数定义；行为不绑算子时返回空 */
+    private List<FunctionParameterVO> functionParamsOf(ActionContextInfoDTO context, FunctionParamCategoryEnum category) {
+        var functionDetailVO = context.getFunctionDetailVO();
+        if (functionDetailVO == null || CollectionUtils.isEmpty(functionDetailVO.getParams())) {
+            return List.of();
+        }
+        return functionDetailVO.getParams().stream()
+                .filter(v -> category.equals(v.getCategory()))
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 按算子参数（inputParams / outputParams）指定的数据位置校验。
+     * <p>参数名写错、该参数的绑定行不需要实例（入参）或不写属性（出参）、一个参数跨多对象却指定实例主键、
+     * 指定的是关系对端——这几种都会静默退回共用的实例选择，读写到调用方没打算碰的实例，直接报错。
+     * 关系两端本体的实例仍按 from/to 或本端选择：这两份参数只路由各自参数行的读或写，
+     * 不参与另一方向和关系落库的主键解析，所以允许落在端点对象上（与 inputEntities 不同）。</p>
+     */
+    private void checkParamTargets(OntologyActionDetailVO detail, FunctionDetailVO functionDetailVO,
+                                   EntityActionExecuteParam param) {
+        var inputTargets = param == null ? null : param.getInputParams();
+        var outputTargets = param == null ? null : param.getOutputParams();
+        if (MapUtils.isEmpty(inputTargets) && MapUtils.isEmpty(outputTargets)) {
+            return;
+        }
+        PreconditionUtils.checkArgument(functionDetailVO != null,
+                "不绑算子的行为不支持用 inputParams、outputParams 按参数指定数据位置：" + detail.getActionApi(),
+                HttpStatus.BAD_REQUEST);
+        var counterpartObject = relationCounterpartObject(detail, param);
+        var params = functionDetailVO.getParams();
+        checkDirectionTargets(detail, params, inputTargets, this::isInstanceInputRow,
+                FunctionParamCategoryEnum.INPUT, "inputParams", "入参", counterpartObject);
+        checkDirectionTargets(detail, params, outputTargets, this::isPropertyWriteOutputRow,
+                FunctionParamCategoryEnum.OUTPUT, "outputParams", "出参", counterpartObject);
+    }
+
+    private void checkDirectionTargets(OntologyActionDetailVO detail, List<FunctionParameterVO> allParams,
+                                       Map<String, ActionInstanceTargetParam> targets,
+                                       Predicate<ActionParamMappingVO> needsTarget,
+                                       FunctionParamCategoryEnum category, String fieldName, String cnLabel,
+                                       String counterpartObject) {
+        if (MapUtils.isEmpty(targets)) {
+            return;
+        }
+        var params = allParams.stream().filter(v -> v.getCategory() == category).collect(Collectors.toList());
+        var paramNames = params.stream().map(FunctionParameterVO::getParamName).collect(Collectors.toSet());
+        targets.forEach((paramName, target) -> {
+            PreconditionUtils.checkArgument(paramNames.contains(paramName),
+                    fieldName + " 里的" + cnLabel + "[" + paramName + "]不是该算子的" + cnLabel + "，请检查名称是否正确",
+                    HttpStatus.BAD_REQUEST);
+            PreconditionUtils.checkArgument(target != null
+                            && (target.getEntityPrimaryKey() != null || MapUtils.isNotEmpty(target.getDataPrimaryKeys())),
+                    fieldName + " 里的" + cnLabel + "[" + paramName + "]没给实例主键，也没给分组行主键", HttpStatus.BAD_REQUEST);
+            var objectIds = paramDataObjectIds(detail.getMappingIns(), params, paramName, needsTarget,
+                    detail.getOntologyUniqIdentifier());
+            PreconditionUtils.checkArgument(!objectIds.isEmpty(),
+                    cnLabel + "[" + paramName + "]的绑定没有" + ("入参".equals(cnLabel) ? "取对象属性" : "写入对象属性")
+                            + "的行，按" + cnLabel + "指定数据位置无效", HttpStatus.BAD_REQUEST);
+            var onlyObjectId = objectIds.size() == 1 ? objectIds.iterator().next() : null;
+            PreconditionUtils.checkArgument(!StringUtils.equals(onlyObjectId, counterpartObject),
+                    cnLabel + "[" + paramName + "]的数据落在关系对端对象[" + counterpartObject + "]上，"
+                            + "实例与分组行都由关系两端或本次遍历决定，不能按" + cnLabel + "指定", HttpStatus.BAD_REQUEST);
+            PreconditionUtils.checkArgument(target.getEntityPrimaryKey() == null || objectIds.size() == 1,
+                    cnLabel + "[" + paramName + "]的绑定跨多个对象，不能按" + cnLabel + "指定实例主键，请用 "
+                            + "entityPrimaryKeys 按对象传",
+                    HttpStatus.BAD_REQUEST);
+        });
+    }
+
+    /** 行为绑定关系时的对端对象；没绑关系返回 null */
+    private String relationCounterpartObject(OntologyActionDetailVO detail, EntityActionExecuteParam param) {
+        var link = detail.getLinkMapping();
+        if (link == null || StringUtils.isEmpty(link.getOntologyLinkUniqIdentifier())) {
+            return null;
+        }
+        var linkGroup = linkGroupMapper.selectOne(new LambdaQueryWrapper<OntologyLinkGroup>()
+                .eq(OntologyLinkGroup::getUniqueIdentifier, link.getOntologyLinkUniqIdentifier()));
+        if (linkGroup == null) {
+            return null;
+        }
+        return counterpartOntology(linkGroup, param.getOntologyUniqueIdentifier());
+    }
+
     /** 从行为映射收集需要实例数据的对象：属性/对象/List 来源的入参，以及写入对象属性的出参 */
     private Set<String> collectMappingObjectIds(OntologyActionDetailVO detail) {
         return collectMappingObjectIds(detail, null);
@@ -1335,11 +1484,7 @@ public class EntityServiceImpl implements EntityService {
             return objectIds;
         }
         for (var mapping : detail.getMappingIns()) {
-            var sourceType = mapping.getSourceType() == null ? ActionParamSourceEnum.PROPERTY : mapping.getSourceType();
-            var inputNeedsInstance = mapping.getCategory() == FunctionParamCategoryEnum.INPUT
-                    && (sourceType == ActionParamSourceEnum.PROPERTY
-                    || sourceType == ActionParamSourceEnum.OBJECT
-                    || sourceType == ActionParamSourceEnum.LIST);
+            var inputNeedsInstance = isInstanceInputRow(mapping);
             var outputWritesProperty = mapping.getCategory() == FunctionParamCategoryEnum.OUTPUT
                     && mapping.getOutputMode() == ActionOutputModeEnum.WRITE_PROPERTY;
             if (Boolean.TRUE.equals(inputOnly) && !inputNeedsInstance) {
@@ -1421,9 +1566,15 @@ public class EntityServiceImpl implements EntityService {
             objectIds.add(param.getOntologyUniqueIdentifier());
             readObjectIds.add(param.getOntologyUniqueIdentifier());
         }
+        var coveredObjects = paramCoveredObjects(context, param, excludeObjectId);
         for (var objectId : objectIds) {
             // 关系对端由本次遍历到的实例提供，不再按选中的单个实例取
             if (StringUtils.equals(objectId, excludeObjectId)) {
+                continue;
+            }
+            // 该对象需要实例的行（属性入参、写属性出参）已全部按参数各自指定了实例，共用视图不再加载它：
+            // 调用方只按参数传实例时不必再在 entityPrimaryKeys 里补一份，否则会被"未选择实例数据"拦住
+            if (coveredObjects.contains(objectId)) {
                 continue;
             }
             var primaryKey = resolveEntityPrimaryKey(context, param, objectId, readObjectIds.contains(objectId)
@@ -1436,6 +1587,107 @@ public class EntityServiceImpl implements EntityService {
         }
         return details.stream().collect(Collectors.toMap(EntityPropertyDetailVO::getPropertyUniqIdentifier,
                 EntityPropertyDetailVO::getPropertyValues, (list1, list2) -> list1));
+    }
+
+    /**
+     * 按算子入参单独加载的实例数据：入参名 -> (属性id -> 值)。
+     * <p>同一对象的两个属性入参要读不同实例时靠这份视图路由取值。入参只给了分组行主键时，
+     * 实例沿用对象级选择、行按指定的取；关系对端的实例随本次遍历变化，跳过它，取值自动回落共用视图。</p>
+     */
+    private Map<String, Map<String, List<Object>>> loadParamEntityDetailMaps(ActionContextInfoDTO context,
+                                                                             EntityActionExecuteParam param,
+                                                                             String excludeObjectId) {
+        var targets = param == null ? null : param.getInputParams();
+        if (MapUtils.isEmpty(targets)) {
+            return null;
+        }
+        var detail = context.getActionDetailVO();
+        var legacyObjectId = detail == null ? null : detail.getOntologyUniqIdentifier();
+        var actionApi = detail == null ? "" : detail.getActionApi();
+        Map<String, Map<String, List<Object>>> res = new LinkedHashMap<>();
+        targets.forEach((paramName, target) -> {
+            if (target == null) {
+                return;
+            }
+            var objectIds = paramDataObjectIds(context.getMappings(), context.getFunctionInputParams(),
+                    paramName, this::isInstanceInputRow, legacyObjectId);
+            var details = Lists.<EntityPropertyDetailVO>newArrayList();
+            for (var objectId : objectIds) {
+                if (StringUtils.equals(objectId, excludeObjectId)) {
+                    continue;
+                }
+                var primaryKey = target.getEntityPrimaryKey() != null ? target.getEntityPrimaryKey()
+                        : resolveEntityPrimaryKey(context, param, objectId, inputTargetsFor(context));
+                PreconditionUtils.checkNotNull(primaryKey,
+                        "入参[" + paramName + "]的对象[" + objectId + "]未选择实例数据，无法执行行为：" + actionApi,
+                        HttpStatus.BAD_REQUEST);
+                details.addAll(getEntityDetail(objectId, primaryKey, mergeRowKeys(target.getDataPrimaryKeys(),
+                        rowKeysOf(inputTargetsFor(context), objectId))));
+            }
+            if (!details.isEmpty()) {
+                res.put(paramName, details.stream().collect(Collectors.toMap(
+                        EntityPropertyDetailVO::getPropertyUniqIdentifier,
+                        EntityPropertyDetailVO::getPropertyValues, (list1, list2) -> list1)));
+            }
+        });
+        return res.isEmpty() ? null : res;
+    }
+
+    /**
+     * 需要数据位置的入参与出参已全部按参数各自指定了实例主键的对象。
+     * <p>对象级实例选择对这些对象没有意义，共用视图再按它取值只会拦住「只按参数传实例」的请求；
+     * 只要还有一条入参绑定或写属性出参没被点名，该对象就仍需共用视图。</p>
+     */
+    private Set<String> paramCoveredObjects(ActionContextInfoDTO context, EntityActionExecuteParam param,
+                                            String excludeObjectId) {
+        var inputTargets = param == null ? null : param.getInputParams();
+        var outputTargets = param == null ? null : param.getOutputParams();
+        if (MapUtils.isEmpty(inputTargets) && MapUtils.isEmpty(outputTargets)) {
+            return Set.of();
+        }
+        if (CollectionUtils.isEmpty(context.getMappings())) {
+            return Set.of();
+        }
+        var detail = context.getActionDetailVO();
+        var legacyObjectId = detail == null ? null : detail.getOntologyUniqIdentifier();
+        Set<String> needTargetObjects = new LinkedHashSet<>();
+        Set<String> uncoveredObjects = new HashSet<>();
+        for (var mapping : context.getMappings()) {
+            var isInputRow = isInstanceInputRow(mapping);
+            var isOutputRow = isPropertyWriteOutputRow(mapping);
+            if (!isInputRow && !isOutputRow) {
+                continue;
+            }
+            var objectId = StringUtils.isNotEmpty(mapping.getOntologyUniqueIdentifier())
+                    ? mapping.getOntologyUniqueIdentifier() : legacyObjectId;
+            if (StringUtils.isEmpty(objectId) || StringUtils.equals(objectId, excludeObjectId)) {
+                continue;
+            }
+            needTargetObjects.add(objectId);
+            var params = isInputRow ? context.getFunctionInputParams()
+                    : functionParamsOf(context, FunctionParamCategoryEnum.OUTPUT);
+            var targets = isInputRow ? inputTargets : outputTargets;
+            var paramName = paramNameOf(params, mapping.getFunctionParamId());
+            var target = paramName == null || targets == null ? null : targets.get(paramName);
+            if (target == null || target.getEntityPrimaryKey() == null) {
+                uncoveredObjects.add(objectId);
+            }
+        }
+        needTargetObjects.removeAll(uncoveredObjects);
+        return needTargetObjects;
+    }
+
+    /** 参数级分组行主键优先，某个分组没给时沿用对象级（inputEntities/outputEntities）里该分组的行主键 */
+    private Map<String, Object> mergeRowKeys(Map<String, Object> paramLevel, Map<String, Object> objectLevel) {
+        if (MapUtils.isEmpty(paramLevel)) {
+            return objectLevel;
+        }
+        if (MapUtils.isEmpty(objectLevel)) {
+            return paramLevel;
+        }
+        var merged = new LinkedHashMap<String, Object>(objectLevel);
+        merged.putAll(paramLevel);
+        return merged;
     }
 
     /**
@@ -1460,10 +1712,39 @@ public class EntityServiceImpl implements EntityService {
     }
 
     /**
-     * 某个对象指定的出参分组行主键。没指定返回空，写回回退到原口径：扩展表新增一行。
+     * 某个出参本次写回落到哪一行：按出参指定的分组行优先，没指定的分组沿用出参方向（outputEntities）里该对象的行。
+     * 都没指定返回空，写回回退到原口径：扩展表新增一行。
      */
-    private Object outputRowKeyFor(ActionContextInfoDTO context, String objectId, String storageGroup) {
-        return rowKeyFor(rowKeysOf(outputTargetsFor(context), objectId), storageGroup);
+    private Object outputRowKeyFor(ActionContextInfoDTO context, String objectId, String storageGroup,
+                                   String outParamName) {
+        var objectLevel = rowKeysOf(outputTargetsFor(context), objectId);
+        var paramTarget = paramTargetOf(outputParamTargetsFor(context), outParamName);
+        return rowKeyFor(paramTarget == null ? objectLevel
+                : mergeRowKeys(paramTarget.getDataPrimaryKeys(), objectLevel), storageGroup);
+    }
+
+    /** 调用方按算子出参指定的数据位置；没指定返回 null，写回回退到按对象的方向选择 */
+    private Map<String, ActionInstanceTargetParam> outputParamTargetsFor(ActionContextInfoDTO context) {
+        var param = context.getEntityActionExecuteParam();
+        return param == null ? null : param.getOutputParams();
+    }
+
+    /** 按算子参数指定的数据位置里该参数的条目；参数名为空或没指定该参数返回 null */
+    private ActionInstanceTargetParam paramTargetOf(Map<String, ActionInstanceTargetParam> targets, String paramName) {
+        return paramName == null || MapUtils.isEmpty(targets) ? null : targets.get(paramName);
+    }
+
+    /**
+     * 出参写回用的实例主键：按出参指定的实例优先（同一对象的两个出参各写一个实例靠它区分），
+     * 其次按出参方向指定的对象实例，最后回退到各对象共用的实例选择。
+     */
+    private Object resolveOutputPrimaryKey(ActionContextInfoDTO context, EntityActionExecuteParam param,
+                                           String objectId, String outParamName) {
+        var target = paramTargetOf(outputParamTargetsFor(context), outParamName);
+        if (target != null && target.getEntityPrimaryKey() != null) {
+            return target.getEntityPrimaryKey();
+        }
+        return resolveEntityPrimaryKey(context, param, objectId, outputTargetsFor(context));
     }
 
     /**
@@ -1534,6 +1815,8 @@ public class EntityServiceImpl implements EntityService {
         if (CollectionUtils.isNotEmpty(linkedEntities)) {
             //获取映射涉及对象的实体属性详情；对端实例由下面的遍历逐个提供
             var srcEntityDetailMap = loadEntityDetailMap(infoDTO, param, linkedOntology);
+            //按入参指定的实例数据同样不含对端，对端一律用本次遍历到的实例
+            var paramEntityDetailMaps = loadParamEntityDetailMaps(infoDTO, param, linkedOntology);
 
             //和关联对象下的所有实体计算关系
             var taskResults = taskProcessor.processTask(linkedEntities,
@@ -1554,6 +1837,7 @@ public class EntityServiceImpl implements EntityService {
                                         .functionInputParams(functionInputParams)
                                         .mappings(mappings)
                                         .entityDetailMap(mergedEntityDetailMap)
+                                        .paramEntityDetailMaps(paramEntityDetailMaps)
                                         .externalParams(infoDTO.getExternalParams())
                                         .actionDetailVO(actionDetailVO)
                                         .functionDetailVO(functionDetailVO)
@@ -1591,6 +1875,7 @@ public class EntityServiceImpl implements EntityService {
                     .functionInputParams(functionInputParams)
                     .mappings(mappings)
                     .entityDetailMap(srcEntityDetailMap)
+                    .paramEntityDetailMaps(loadParamEntityDetailMaps(infoDTO, param, null))
                     .externalParams(infoDTO.getExternalParams())
                     .actionDetailVO(actionDetailVO)
                     .functionDetailVO(functionDetailVO)
@@ -1678,7 +1963,7 @@ public class EntityServiceImpl implements EntityService {
             if (boundWhole) {
                 return FunctionParameter.builder()
                         .paramName(p.getParamName())
-                        .paramValue(resolveInputValue(paramMappings.get(0), p.getParamType(), actionContext))
+                        .paramValue(resolveInputValue(paramMappings.get(0), p.getParamType(), actionContext, p.getParamName()))
                         .build();
             }
             return assembleObjectParam(p, paramMappings, actionContext);
@@ -1696,6 +1981,7 @@ public class EntityServiceImpl implements EntityService {
         // 剥壳后在到达行为前就丢了；出参取值路径同样按这层完整返回体书写，与测试回显一致
         var functionResultJson = functionService.executeFunction(FunctionExecuteParam.builder()
                 .functionApi(actionContext.getActionDetailVO().getFunctionApi())
+                .ontologySpaceId(actionContext.getActionDetailVO().getOntologySpaceId())
                 .parameters(parameters)
                 .build(), true);
 
@@ -1726,14 +2012,15 @@ public class EntityServiceImpl implements EntityService {
         mappings.stream()
                 .filter(m -> StringUtils.isNotEmpty(m.getParamPath()))
                 .forEach(m -> insertFieldPath(root, m));
-        var fields = toFieldParams(root, param.getFields(), actionContext);
+        var fields = toFieldParams(root, param.getFields(), actionContext, param.getParamName());
         var builder = FunctionParameter.builder()
                 .paramName(param.getParamName())
                 .paramType(param.getParamType());
         mappings.stream()
                 .filter(m -> StringUtils.isEmpty(m.getParamPath()))
                 .findFirst()
-                .ifPresent(m -> builder.paramValue(resolveInputValue(m, param.getParamType(), actionContext)));
+                .ifPresent(m -> builder.paramValue(
+                        resolveInputValue(m, param.getParamType(), actionContext, param.getParamName())));
         return builder.fields(fields.isEmpty() ? null : fields).build();
     }
 
@@ -1747,7 +2034,7 @@ public class EntityServiceImpl implements EntityService {
 
     /** 按算子声明的字段树还原各层取值；声明里已不存在的子字段跳过，不让一条失效绑定拖垮整次执行 */
     private List<FunctionParameter> toFieldParams(ParamFieldNode node, List<FunctionParameterVO> declared,
-                                                  ActionContextInfoDTO actionContext) {
+                                                  ActionContextInfoDTO actionContext, String ownerParamName) {
         List<FunctionParameter> fields = Lists.newArrayList();
         node.children.forEach((name, child) -> {
             var declaredField = declared == null ? null : declared.stream()
@@ -1756,12 +2043,13 @@ public class EntityServiceImpl implements EntityService {
                 log.warn("算子入参不存在子字段：{}，已跳过该绑定", name);
                 return;
             }
-            var children = toFieldParams(child, declaredField.getFields(), actionContext);
+            var children = toFieldParams(child, declaredField.getFields(), actionContext, ownerParamName);
             var builder = FunctionParameter.builder()
                     .paramName(name)
                     .paramType(declaredField.getParamType());
             if (child.mapping != null) {
-                builder.paramValue(resolveInputValue(child.mapping, declaredField.getParamType(), actionContext));
+                builder.paramValue(resolveInputValue(child.mapping, declaredField.getParamType(), actionContext,
+                        ownerParamName));
             }
             if (!children.isEmpty()) {
                 builder.fields(children);
@@ -1781,8 +2069,11 @@ public class EntityServiceImpl implements EntityService {
     /**
      * 取一个入参的实参值：固定值取行为定义里的字面量，外部输入取行为测试时传入的值，
      * 其余来源从实体属性详情取。
+     * <p>ownerParamName 是该绑定行所属的顶层算子入参名：调用方按入参指定过实例时先取该入参自己的视图，
+     * 这样同一对象的两个属性入参可以各读一个实例；视图里没有该属性时回落到共用视图。</p>
      */
-    private Object resolveInputValue(ActionParamMappingVO mapping, FunctionParamTypeEnum paramType, ActionContextInfoDTO actionContext) {
+    private Object resolveInputValue(ActionParamMappingVO mapping, FunctionParamTypeEnum paramType,
+                                     ActionContextInfoDTO actionContext, String ownerParamName) {
         if (mapping.getSourceType() == ActionParamSourceEnum.FIXED) {
             return parseFixedValue(mapping.getSourceConfig());
         }
@@ -1790,12 +2081,25 @@ public class EntityServiceImpl implements EntityService {
             var externalParams = actionContext.getExternalParams();
             return externalParams == null ? null : externalParams.get(mapping.getParameterName());
         }
+        var paramScopedValues = paramScopedValues(actionContext, ownerParamName, mapping.getPropertyUniqueIdentifier());
         // 如果对象没有给属性绑定数据源，则获取的values为null，函数可能执行失败
-        List<Object> values = actionContext.getEntityDetailMap().get(mapping.getPropertyUniqueIdentifier());
+        List<Object> values = CollectionUtils.isNotEmpty(paramScopedValues) ? paramScopedValues
+                : actionContext.getEntityDetailMap().get(mapping.getPropertyUniqueIdentifier());
         if (CollectionUtils.isEmpty(values)) {
             return null;
         }
         return FunctionParamTypeEnum.LIST.equals(paramType) ? values : values.get(0);
+    }
+
+    /** 该入参按 inputParams 单独加载的视图里此属性的取值；没指定过这个入参或视图里没有该属性时返回 null，由调用处回落共用视图 */
+    private List<Object> paramScopedValues(ActionContextInfoDTO actionContext, String ownerParamName,
+                                           String propertyUniqueIdentifier) {
+        var paramMaps = actionContext.getParamEntityDetailMaps();
+        if (paramMaps == null || ownerParamName == null || propertyUniqueIdentifier == null) {
+            return null;
+        }
+        var scoped = paramMaps.get(ownerParamName);
+        return scoped == null ? null : scoped.get(propertyUniqueIdentifier);
     }
 
     /** 固定值按 JSON 字面量解析，前端直接传一段文本时按原样返回 */
@@ -1823,50 +2127,38 @@ public class EntityServiceImpl implements EntityService {
     }
 
     /**
-     * 出参取值：先按算子返回体的整体取（与测试回显看到的树同一口径）。
-     * <p>算子不强制按 {@code FunctionResultVO} 返回，返回体和取值路径里的 {@code data} 层可能对不上：
-     * 返回体没这层就把整包当 {@code data}，路径没写这层就按 {@code data} 节点取，两种错位都能命中；
-     * 脚本直接返回一个值（标量）时整包就是出参值。都取不到才返回 null 由调用方报错，
-     * 不能因为外壳不一致就静默不回写。</p>
+     * 按出参绑定把算子输出写回对象属性：主表列走 update，分组表补一行 insert。
+     * <p>写回按「对象 + 实例主键」分组，不是只按对象：同一对象的两个出参各写一个实例时（outputParams）
+     * 会分成两组，各自用自己的主键更新，不会把两行的值合并写到同一个实例。</p>
      */
-    @SneakyThrows
-    private Object readFunctionOutputValue(String jsonString, String expression) {
-        var value = JsonPath.using(safeConfig).parse(jsonString).read(expression);
-        if (value != null) {
-            return value;
-        }
-        // 显式 JsonNode，不写 var：readTree 在本版本 Jackson 下可能是泛型 <T extends TreeNode> T
-        com.fasterxml.jackson.databind.JsonNode root = jsonMapper.readTree(jsonString);
-        if (root == null || root.isNull()) {
-            return null;
-        }
-        if (!root.isObject() && !root.isArray()) {
-            return jsonMapper.treeToValue(root, Object.class);
-        }
-        String shifted = root.isObject() && root.has("data")
-                ? root.get("data").toString()
-                : "{\"data\":" + root + "}";
-        return JsonPath.using(safeConfig).parse(shifted).read(expression);
-    }
-
-    /** 按出参绑定把算子输出写回对象属性：主表列走 update，分组表补一行 insert */
     private void writeFunctionOutputToProperties(String jsonString, ActionContextInfoDTO actionContext) {
         //更新实体属性值
         //根据函数的输出结果更新源实体属性：通过json path获取value
         // 算子可以有多个出参，绑定了哪几个就回写哪几个；没填取值路径的绑定跳过，它本身无法定位出参
-        var outputParamIds = actionContext.getFunctionDetailVO().getParams().stream()
-                .filter(v -> v.getCategory().equals(FunctionParamCategoryEnum.OUTPUT))
-                .map(v -> v.getParamId())
-                .collect(Collectors.toSet());
+        PreconditionUtils.checkNotNull(actionContext.getFunctionDetailVO(),
+                "行为没有绑定算子，无法按出参回写属性", HttpStatus.BAD_REQUEST);
+        var functionOutputParams = functionParamsOf(actionContext, FunctionParamCategoryEnum.OUTPUT);
+        var outputParamIds = functionOutputParams.stream().map(FunctionParameterVO::getParamId)
+                .filter(Objects::nonNull).collect(Collectors.toSet());
 
         // 按行级 outputMode 过滤：只有标记 WRITE_PROPERTY 的出参行才回写
-        var output = actionContext.getMappings().stream()
-                .filter(m -> m.getFunctionParamId() != null && outputParamIds.contains(m.getFunctionParamId()))
+        var writeRows = actionContext.getMappings().stream()
                 .filter(m -> m.getOutputMode() == ActionOutputModeEnum.WRITE_PROPERTY)
                 .filter(m -> StringUtils.isNotEmpty(m.getFunctionParamExpression()))
                 .collect(Collectors.toList());
+        var output = writeRows.stream()
+                .filter(m -> m.getFunctionParamId() != null && outputParamIds.contains(m.getFunctionParamId()))
+                .collect(Collectors.toList());
         if (output.isEmpty()) {
-            return;
+            // 没有写属性行：仅返回结果的行为，正常跳过
+            if (writeRows.isEmpty()) {
+                return;
+            }
+            // 有写属性行却一条都对不上当前出参：算子重新保存会重建 function_param 主键，绑定行整体失效。
+            // 静默跳过会被当成已经写回，必须报错让人重新绑定出参
+            throw new BusinessException("出参写回失败：" + writeRows.size()
+                    + " 条写属性绑定已不指向算子当前出参（算子可能被重新保存过、参数已重建），请重新绑定出参",
+                    HttpStatus.BAD_REQUEST);
         }
         // 出参行可以指向不同对象：属性表按对象合并，回写时各用自己的主键
         var propMap = new LinkedHashMap<String, OntologyProperty>();
@@ -1881,68 +2173,92 @@ public class EntityServiceImpl implements EntityService {
                 .filter(v -> v.getIsPrimaryKey() == 1 && StringUtils.isNotEmpty(v.getOntologyUniqueIdentifier()))
                 .collect(Collectors.toMap(OntologyProperty::getOntologyUniqueIdentifier, v -> v, (a, b) -> a));
         var param = actionContext.getEntityActionExecuteParam();
-        Map<String, List<EntityUpdateParam.ColumnUpdate>> columnUpdatesByObject = new LinkedHashMap<>();
-        Map<String, Map<String, Map<String, Object>>> insertMap = new LinkedHashMap<>();
-        // 指定了分组行主键的出参：对象 -> 分组表 -> (行主键 + 待更新列)，按行改而不是插新行
-        Map<String, Map<String, RowUpdate>> updateRowMap = new LinkedHashMap<>();
+        Map<WriteTarget, List<EntityUpdateParam.ColumnUpdate>> columnUpdatesByTarget = new LinkedHashMap<>();
+        Map<WriteTarget, Map<String, Map<String, Object>>> insertMap = new LinkedHashMap<>();
+        // 指定了分组行主键的出参：写回目标 -> 分组表 -> (行主键 + 待更新列)，按行改而不是插新行
+        Map<WriteTarget, Map<String, RowUpdate>> updateRowMap = new LinkedHashMap<>();
+        // 取值路径含 [*] 的出参：按「写回目标 + 分组表 + 循环数组」攒成一组，最后逐元素 zip 成多行插子表
+        Map<WildcardKey, List<WildcardColumn>> wildcardGroups = new LinkedHashMap<>();
+        // 通配列共用一份解析结果：同一返回体按列各解析一次，列多、元素多时是纯重复开销
+        var wildcardRoot = output.stream()
+                .anyMatch(out -> FunctionOutputValueReader.hasWildcard(out.getFunctionParamExpression()))
+                ? FunctionOutputValueReader.parse(jsonString) : null;
         output.stream().forEach(out -> {
             var prop = propMap.get(out.getPropertyUniqueIdentifier());
             if (prop == null) {
                 log.warn("行为写回属性不存在，跳过：{}", out.getPropertyUniqueIdentifier());
                 return;
             }
-            Object actualValue = readFunctionOutputValue(jsonString, out.getFunctionParamExpression());
-            // 取不到值不能继续：updateProperty 的 toMap 收 null 只会抛一个没有上下文的 NPE
-            PreconditionUtils.checkNotNull(actualValue, "出参回写取不到值：属性[" + prop.getDisplayName()
-                    + "]的取值路径 " + out.getFunctionParamExpression()
-                    + " 在算子返回结果里不存在或值为 null", HttpStatus.BAD_REQUEST);
+            var outParamName = paramNameOf(functionOutputParams, out.getFunctionParamId());
+            // 通配出参不走向单值的 read：数组取到单个值时形状必然不匹配，会被当成「取不到值」报错
+            var wildcard = FunctionOutputValueReader.hasWildcard(out.getFunctionParamExpression());
+            Object actualValue = wildcard ? null
+                    : FunctionOutputValueReader.read(jsonString, out.getFunctionParamExpression(),
+                    outParamName, prop.getPropertyType());
             var objectId = StringUtils.isNotEmpty(out.getOntologyUniqueIdentifier())
                     ? out.getOntologyUniqueIdentifier() : prop.getOntologyUniqueIdentifier();
             var primaryProp = primaryPropByObject.get(objectId);
             PreconditionUtils.checkNotNull(primaryProp,
                     "对象[" + objectId + "]未配置主键属性，无法写回", HttpStatus.BAD_REQUEST);
-            PreconditionUtils.checkNotNull(resolveEntityPrimaryKey(actionContext, param, objectId,
-                            outputTargetsFor(actionContext)),
+            var entityPrimaryKey = resolveOutputPrimaryKey(actionContext, param, objectId, outParamName);
+            PreconditionUtils.checkNotNull(entityPrimaryKey,
                     "对象[" + objectId + "]未选择实例数据，无法写回", HttpStatus.BAD_REQUEST);
+            var writeTarget = new WriteTarget(objectId, entityPrimaryKey);
+            var toMainTable = prop.getDatasourceId().equals(primaryProp.getDatasourceId());
+            var rowKey = toMainTable ? null
+                    : outputRowKeyFor(actionContext, objectId, prop.getStorageGroup(), outParamName);
+            // 通配出参：一列取一批值，先攒着，最后和同组其它列逐元素成行插子表
+            if (wildcard) {
+                wildcardGroups.computeIfAbsent(new WildcardKey(writeTarget, prop.getDatasourceId(),
+                                FunctionOutputValueReader.loopPrefix(out.getFunctionParamExpression())),
+                        ignored -> new ArrayList<>())
+                        .add(new WildcardColumn(prop.getDatasourceColumnName(), prop.getDisplayName(),
+                                readWildcardValues(wildcardRoot, out, outParamName, prop, toMainTable, rowKey)));
+                return;
+            }
+            // 取不到值：改已有的行必须报错，用 null 会把原值抹掉；新增子表行没有原值，按空值补齐继续插
+            if (actualValue == null) {
+                PreconditionUtils.checkArgument(!toMainTable && rowKey == null,
+                        "出参回写取不到值：属性[" + prop.getDisplayName()
+                                + "]的取值路径 " + out.getFunctionParamExpression()
+                                + " 在算子返回结果里不存在或值为 null", HttpStatus.BAD_REQUEST);
+            }
             //主数据源列
-            if (prop.getDatasourceId().equals(primaryProp.getDatasourceId())) {
-                columnUpdatesByObject.computeIfAbsent(objectId, key -> Lists.newArrayList())
+            if (toMainTable) {
+                columnUpdatesByTarget.computeIfAbsent(writeTarget, key -> Lists.newArrayList())
                         .add(EntityUpdateParam.ColumnUpdate.builder()
                                 .datasourceColumnName(prop.getDatasourceColumnName())
                                 .columnValue(actualValue)
                                 .propertyUniqIdentifier(out.getPropertyUniqueIdentifier())
                                 .build());
             } else {
-                var rowKey = outputRowKeyFor(actionContext, objectId, prop.getStorageGroup());
                 if (rowKey != null) {
-                    updateRowMap.computeIfAbsent(objectId, key -> new LinkedHashMap<>())
+                    updateRowMap.computeIfAbsent(writeTarget, key -> new LinkedHashMap<>())
                             .computeIfAbsent(prop.getDatasourceId(), key -> new RowUpdate(rowKey))
                             .columns().put(prop.getDatasourceColumnName(), actualValue);
                 } else {
-                    insertMap.computeIfAbsent(objectId, key -> new LinkedHashMap<>())
+                    insertMap.computeIfAbsent(writeTarget, key -> new LinkedHashMap<>())
                             .computeIfAbsent(prop.getDatasourceId(), key -> new HashMap<>())
                             .put(prop.getDatasourceColumnName(), actualValue);
                 }
             }
 
         });
-        //主数据源数据update：逐对象用自己的主键
-        columnUpdatesByObject.forEach((objectId, columnUpdates) -> {
-            var primaryProp = primaryPropByObject.get(objectId);
+        //主数据源数据update：逐写回目标用自己的主键
+        columnUpdatesByTarget.forEach((target, columnUpdates) -> {
+            var primaryProp = primaryPropByObject.get(target.objectId());
             updateProperty(EntityUpdateParam.builder()
                     .columnUpdates(columnUpdates)
-                    .primaryKeyValue(resolveEntityPrimaryKey(actionContext, param, objectId,
-                            outputTargetsFor(actionContext)))
+                    .primaryKeyValue(target.entityPrimaryKey())
                     .schemaName(primaryProp.getDatasourceSchema())
                     .datasourceId(primaryProp.getDatasourceId())
                     .build());
         });
         //其他数据源按行更新：先确认该行属于本实例，找不到就报错，不退回插新行
         if (MapUtils.isNotEmpty(updateRowMap)) {
-            updateRowMap.forEach((objectId, byDatasource) -> {
-                var primaryProp = primaryPropByObject.get(objectId);
-                var entityPrimaryKey = resolveEntityPrimaryKey(actionContext, param, objectId,
-                        outputTargetsFor(actionContext));
+            updateRowMap.forEach((target, byDatasource) -> {
+                var primaryProp = primaryPropByObject.get(target.objectId());
+                var entityPrimaryKey = target.entityPrimaryKey();
                 byDatasource.forEach((datasourceId, update) -> {
                     var schema = primaryProp.getDatasourceSchema();
                     var mapping = tableFieldMappingMapper.selectByTargetTable(schema, datasourceId);
@@ -1972,20 +2288,181 @@ public class EntityServiceImpl implements EntityService {
                 });
             });
         }
-        //其他数据源数据insert：逐对象用自己的主键与主键表结构
+        //其他数据源数据insert：逐写回目标用自己的主键与主键表结构
         if (MapUtils.isNotEmpty(insertMap)) {
-            insertMap.forEach((objectId, byDatasource) -> {
-                var primaryProp = primaryPropByObject.get(objectId);
-                var primaryKey = resolveEntityPrimaryKey(actionContext, param, objectId,
-                        outputTargetsFor(actionContext));
+            insertMap.forEach((target, byDatasource) -> {
+                var primaryProp = primaryPropByObject.get(target.objectId());
+                var primaryKey = target.entityPrimaryKey();
                 byDatasource.forEach((tableName, columns) -> {
                     //查询关联建，补全columns
                     var mapping = tableFieldMappingMapper.selectByTargetTable(primaryProp.getDatasourceSchema(), tableName);
                     columns.put(mapping.getTargetColumnName(), primaryKey);
+                    fillUnwrittenColumns(primaryProp.getDatasourceSchema(), target.objectId(), tableName, columns, propMap);
                     objectMapper.insertObject(primaryProp.getDatasourceSchema(), tableName, columns);
                 });
             });
         }
+        insertWildcardRows(wildcardGroups, primaryPropByObject, propMap);
+    }
+
+    /**
+     * 通配出参取一批值：路径里的 {@code [*]} 表示对数组逐元素取同一列。
+     * <p>主表只有实例那一行、按分组行主键是改已有行，两者都和「逐元素插新行」冲突，先拦住；
+     * 取不到数组、整批全是 null（元素里没有这个字段）、元素形状与目标属性类型不匹配，都在落库前报错。
+     * 取到的值按属性类型转换（JSON 里的数字统一是 Integer/Double，列要求 int4/float4 时直接插会报类型不符）。</p>
+     */
+    private List<Object> readWildcardValues(JsonNode root, ActionParamMappingVO out, String outParamName,
+                                            OntologyProperty prop, boolean toMainTable, Object rowKey) {
+        PreconditionUtils.checkArgument(!toMainTable,
+                "取值路径带 [*] 的出参只能写子表，属性[" + prop.getDisplayName() + "]在主表上", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(rowKey == null,
+                "取值路径带 [*] 的出参按元素新增多行，不能同时指定分组表行主键：属性[" + prop.getDisplayName() + "]",
+                HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkNotNull(root,
+                "通配出参取不到数组：算子返回结果不是合法 JSON，属性[" + prop.getDisplayName() + "]",
+                HttpStatus.BAD_REQUEST);
+        var values = FunctionOutputValueReader.readMany(root, out.getFunctionParamExpression(), outParamName);
+        PreconditionUtils.checkArgument(values != null,
+                "通配出参取不到数组：属性[" + prop.getDisplayName() + "]的取值路径 "
+                        + out.getFunctionParamExpression() + " 在算子返回结果里定位不到数组", HttpStatus.BAD_REQUEST);
+        // 空数组是合法结果（这个时间段没有数据）：本次不插行，由落库侧 warn 后跳过，不当成形状错误
+        if (values.isEmpty()) {
+            return values;
+        }
+        PreconditionUtils.checkArgument(values.stream().anyMatch(Objects::nonNull),
+                "通配出参取不到值：属性[" + prop.getDisplayName() + "]的取值路径 "
+                        + out.getFunctionParamExpression() + " 在数组元素里没有对应字段", HttpStatus.BAD_REQUEST);
+        var sample = values.stream().filter(Objects::nonNull).findFirst().orElse(null);
+        PreconditionUtils.checkArgument(FunctionOutputValueReader.shapeMatches(sample, prop.getPropertyType()),
+                "通配出参的元素形状与属性类型不匹配：属性[" + prop.getDisplayName() + "]取不到标量值，"
+                        + "请把取值路径写到元素内的具体字段（如 " + out.getFunctionParamExpression() + ".字段名）",
+                HttpStatus.BAD_REQUEST);
+        return convertWildcardValues(values, prop);
+    }
+
+    /** 按属性类型转换整列取值：转换不了的元素直接报错，带上元素序号与属性名，避免插库时才抛类型不符 */
+    private List<Object> convertWildcardValues(List<Object> values, OntologyProperty prop) {
+        if (prop.getPropertyType() == null) {
+            return values;
+        }
+        List<Object> converted = new ArrayList<>(values.size());
+        for (int i = 0; i < values.size(); i++) {
+            Object value = values.get(i);
+            if (value == null) {
+                converted.add(null);
+                continue;
+            }
+            try {
+                converted.add(convertWildcardValue(value, prop.getPropertyType()));
+            } catch (RuntimeException e) {
+                throw new BusinessException("通配出参第 " + (i + 1) + " 个元素的值[" + value
+                        + "]无法转换为属性[" + prop.getDisplayName() + "]的类型 " + prop.getPropertyType(),
+                        HttpStatus.BAD_REQUEST);
+            }
+        }
+        return converted;
+    }
+
+    /** JSON 数字统一解析成 Integer/Long/Double，按属性类型转成列要的包装类型；非数字（字符串日期等）沿用统一的取值转换 */
+    private Object convertWildcardValue(Object value, OntologyDataTypeEnum type) {
+        if (value instanceof Number number) {
+            return switch (type) {
+                case Int -> number.intValue();
+                case Long -> number.longValue();
+                case Float -> number.floatValue();
+                case Double -> number.doubleValue();
+                case String -> number.toString();
+                default -> value;
+            };
+        }
+        return OntologyDataTypeEnum.convert(type, value);
+    }
+
+    /**
+     * 通配出参落库：同一「写回目标 + 分组表 + 循环数组」的列逐元素 zip 成行，追加插入子表。
+     * <p>各列长度必须一致：不一致说明有列的路径写错，截到最短会留下每行的列来自不同元素的错位行，
+     * 所以整组一行都不插。行数按 {@value #MAX_WILDCARD_OUTPUT_ROWS} 封顶、每 {@value #WILDCARD_INSERT_BATCH}
+     * 行一批插入，只插不删，重复执行按追加口径留多份。</p>
+     */
+    private void insertWildcardRows(Map<WildcardKey, List<WildcardColumn>> groups,
+                                    Map<String, OntologyProperty> primaryPropByObject,
+                                    Map<String, OntologyProperty> propMap) {
+        groups.forEach((key, columns) -> {
+            var primaryProp = primaryPropByObject.get(key.target().objectId());
+            var schema = primaryProp.getDatasourceSchema();
+            var tableName = key.tableName();
+            var mapping = tableFieldMappingMapper.selectByTargetTable(schema, tableName);
+            PreconditionUtils.checkNotNull(mapping,
+                    "分组表未配置关联列，通配出参无法批量写回：" + tableName, HttpStatus.BAD_REQUEST);
+            var sizes = columns.stream().map(column -> column.values().size()).distinct().toList();
+            PreconditionUtils.checkArgument(sizes.size() == 1,
+                    "通配出参各列取到的长度不一致，无法逐元素成行：" + describeWildcardColumns(columns)
+                            + "，请检查这些列的取值路径是否都指向同一个数组", HttpStatus.BAD_REQUEST);
+            var rows = sizes.get(0);
+            PreconditionUtils.checkArgument(rows <= MAX_WILDCARD_OUTPUT_ROWS,
+                    "通配出参一次写回 " + rows + " 行，超过上限 " + MAX_WILDCARD_OUTPUT_ROWS
+                            + " 行，请缩小算子的计算范围或分多次执行", HttpStatus.BAD_REQUEST);
+            if (rows == 0) {
+                log.warn("通配出参数组为空，本次不写行：对象={}, 实例={}, 表={}, 数组路径={}",
+                        key.target().objectId(), key.target().entityPrimaryKey(), tableName, key.loopPrefix());
+                return;
+            }
+            // 该分组表里没绑定的列先补 null，再逐元素覆盖已绑定列，保证插出来的行列齐全
+            var template = new LinkedHashMap<String, Object>();
+            fillUnwrittenColumns(schema, key.target().objectId(), tableName, template, propMap);
+            var batch = new ArrayList<Map<String, Object>>(WILDCARD_INSERT_BATCH);
+            for (int i = 0; i < rows; i++) {
+                var row = new LinkedHashMap<String, Object>(template);
+                for (var column : columns) {
+                    row.put(column.columnName(), column.values().get(i));
+                }
+                row.put(mapping.getTargetColumnName(), key.target().entityPrimaryKey());
+                batch.add(row);
+                if (batch.size() == WILDCARD_INSERT_BATCH) {
+                    objectMapper.batchInsertObject(schema, tableName, batch);
+                    batch = new ArrayList<>(WILDCARD_INSERT_BATCH);
+                }
+            }
+            if (!batch.isEmpty()) {
+                objectMapper.batchInsertObject(schema, tableName, batch);
+            }
+        });
+    }
+
+    /** 各列的取值条数，报错时用来指出是哪一列的路径短了 */
+    private String describeWildcardColumns(List<WildcardColumn> columns) {
+        return columns.stream()
+                .map(column -> column.displayName() + "=" + column.values().size() + "条")
+                .collect(Collectors.joining("、"));
+    }
+
+    /** 通配出参的分组键：写回目标 + 分组表 + 循环数组路径，同组内的列逐元素成行 */
+    private record WildcardKey(WriteTarget target, String tableName, String loopPrefix) {
+    }
+
+    /** 通配出参里的一列：列名、报错用的属性显示名、以及每个元素的取值 */
+    private record WildcardColumn(String columnName, String displayName, List<Object> values) {
+    }
+
+    /**
+     * 子表新增行的兜底补列：这个对象在该分组表里声明过、本次没有值的属性列补空，保证新增的行列齐全。
+     * <p>分组表自己的主键由表上的序列生成，补空会撞主键，要按真实列名排除；
+     * 匹配按「对象 + 表」精确来，不假设同名表在不同对象间可共用。</p>
+     */
+    private void fillUnwrittenColumns(String schema, String objectId, String tableName, Map<String, Object> columns,
+                                      Map<String, OntologyProperty> propMap) {
+        var rowKeyColumn = tableMetadataMapper.queryPrimaryKeyColumnName(schema, tableName);
+        propMap.values().stream()
+                .filter(prop -> Objects.equals(prop.getOntologyUniqueIdentifier(), objectId)
+                        && Objects.equals(prop.getDatasourceId(), tableName))
+                .filter(prop -> !Objects.equals(prop.getDatasourceColumnName(), rowKeyColumn))
+                .map(OntologyProperty::getDatasourceColumnName)
+                .filter(StringUtils::isNotEmpty)
+                .forEach(columnName -> columns.putIfAbsent(columnName, null));
+    }
+
+    /** 一次写回的目标：对象 + 本次落到该对象的实例主键；同一对象的不同出参可以写到不同实例 */
+    private record WriteTarget(String objectId, Object entityPrimaryKey) {
     }
 
     /** 按行写回的待更新数据：行主键 + 该行要改的列 */

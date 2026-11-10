@@ -33,19 +33,30 @@ public class EntityActionExecuteParam extends EntityQueryParam {
     private Object dataPrimaryKey;
 
     @Schema(name = "entityPrimaryKeys", description = "各对象选中的实例主键：对象id -> 实例主键；"
-            + "应用行为的入参/出参可能跨对象，映射涉及的对象都要提供；单对象行为可继续只传 entityPrimaryKey；"
-            + "入参与出参默认落在同一实例上，要分开时用 inputEntities/outputEntities")
+            + "应用行为的入参/出参可能跨对象，映射涉及的对象都要提供；单对象行为可继续只传 entityPrimaryKey")
     private Map<String, Object> entityPrimaryKeys;
 
-    @Schema(name = "inputEntities", description = "入参方向的数据位置：对象id -> {实例主键, 存储分组->行主键}。"
-            + "只对该对象的属性/对象/List 入参生效，两个子字段可只给其一，都没给时沿用 entityPrimaryKeys/最新一行；"
-            + "关系两端与不绑算子的行为不支持按方向指定")
+    /**
+     * 入参方向按对象给的数据位置：对象id -> {实例主键, 存储分组 -> 行主键}。
+     * <p>只有内部调用会填（单行为测试把行为树的树级/节点级默认行主键按对象传进来），
+     * 对外执行请求不接受，进来时在 {@code EntityServiceImpl#executeAction} 被剥掉。</p>
+     */
+    @Schema(hidden = true)
     private Map<String, ActionInstanceTargetParam> inputEntities;
 
-    @Schema(name = "outputEntities", description = "出参方向的数据位置：对象id -> {实例主键, 存储分组->行主键}。"
-            + "只对该对象的 WRITE_PROPERTY 出参生效，两个子字段可只给其一，都没给时沿用 entityPrimaryKeys/新增一行；"
-            + "关系两端与不绑算子的行为不支持按方向指定")
+    /** 出参方向按对象给的数据位置，同 {@link #inputEntities}，对外执行请求不接受 */
+    @Schema(hidden = true)
     private Map<String, ActionInstanceTargetParam> outputEntities;
+
+    @Schema(name = "inputParams", description = "按算子入参指定的数据位置：入参名 -> {实例主键, 存储分组->行主键}。"
+            + "同一对象的两个属性入参要读不同实例时用它；命中时优先于 entityPrimaryKeys，"
+            + "只影响该入参的读取，不影响出参写回和关系落库；关系对端与不绑算子的行为不支持")
+    private Map<String, ActionInstanceTargetParam> inputParams;
+
+    @Schema(name = "outputParams", description = "按算子出参指定的写回位置：出参名 -> {实例主键, 存储分组->行主键}。"
+            + "同一对象的两个 WRITE_PROPERTY 出参写到不同实例时用它；命中时优先于 entityPrimaryKeys，"
+            + "只影响该出参的写回；关系对端与不绑算子的行为不支持")
+    private Map<String, ActionInstanceTargetParam> outputParams;
 
     @Schema(name = "linkedOntologyUniqueIdentifier", description = "关联对象id", example = "123")
     private String linkedOntologyUniqueIdentifier;

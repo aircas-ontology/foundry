@@ -1331,6 +1331,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                             .displayName(f.getDisplayName())
                             .model(f.getModel())
                             .type(f.getType())
+                            .ontologySpaceId(space.getId())
                             .build());
                 } catch (Exception e) {
                     // 函数已存在或其他错误，跳过并记录警告

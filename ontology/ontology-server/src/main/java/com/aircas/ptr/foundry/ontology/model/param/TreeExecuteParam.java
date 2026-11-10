@@ -65,6 +65,20 @@ public class TreeExecuteParam {
             example = "{\"a5e8c206-3f17-4d92-8b74-1c6f9d3e5028\":{\"duty_log\":12}}")
     private Map<String, Map<String, Object>> outputDataPrimaryKeys;
 
+    @Schema(name = "inputParams",
+            description = "按算子入参指定数据位置：入参名 -> {实例主键, 存储分组 -> 行主键}，作为全树默认值；"
+                    + "同一对象的两个属性入参要读不同实例时用它，节点配置了入参键时以节点为准；"
+                    + "树里不同节点绑的行为参数名可能重名，按参数名的默认值会命中所有同名参数",
+            example = "{\"speed\":{\"entityPrimaryKey\":5,\"dataPrimaryKeys\":{\"weapon_load\":11}}}")
+    private Map<String, ActionInstanceTargetParam> inputParams;
+
+    @Schema(name = "outputParams",
+            description = "按算子出参指定写回位置：出参名 -> {实例主键, 存储分组 -> 行主键}，作为全树默认值；"
+                    + "同一对象的两个 WRITE_PROPERTY 出参要写到不同实例时用它，节点配置了出参键时以节点为准；"
+                    + "按参数名的默认值会命中所有绑定的同名出参",
+            example = "{\"price\":{\"entityPrimaryKey\":2},\"duty\":{\"entityPrimaryKey\":3,\"dataPrimaryKeys\":{\"duty_log\":12}}}")
+    private Map<String, ActionInstanceTargetParam> outputParams;
+
     @Schema(name = "linkEntityPrimaryKey",
             description = "实例关系行为的对端实体主键；作为全树默认值，行为节点配置了黑板键时以节点为准",
             example = "2")

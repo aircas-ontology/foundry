@@ -45,6 +45,7 @@ public class ActionParamMappingCreateParam {
     private String ontologyUniqueIdentifier;
 
     @Schema(description = "出参行输出方式：RESULT_ONLY 仅返回 / WRITE_PROPERTY 写入对象属性；入参行不传。" +
-            "应用行为只要有一行选了 WRITE_PROPERTY，就不能再绑定关系", example = "WRITE_PROPERTY")
+            "应用行为出参写属性与绑定关系可以并存。WRITE_PROPERTY 指向主表是改该实例已有的行，指向子表是新增一行，" +
+            "此时必须把该存储分组下的属性全部绑定（主键除外）", example = "WRITE_PROPERTY")
     private ActionOutputModeEnum outputMode;
 }

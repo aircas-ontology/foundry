@@ -44,42 +44,20 @@ public interface FunctionService extends IService<Function> {
 
     /**
      * 按 空间 + api + 版本号 查函数详情；version 为空时取该空间内该 api 的最新版本。
-     * <p>spaceId 为空表示不限空间（兼容旧调用）；同 api 在同空间内才唯一，跨空间允许重名。</p>
+     * <p>对外接口 spaceId 必传：算子 api 只在空间内唯一，不限空间按 api + version 取单条会命中多条同名函数。
+     * 仅早期无空间的行为绑定会以 null 进来，此时回退为不限空间。</p>
      */
     FunctionDetailVO getFunctionDetailByApi(Integer spaceId, String api, String version);
 
     /**
-     * 兼容旧调用：不限空间
-     */
-    default FunctionDetailVO getFunctionDetailByApi(String api, String version) {
-        return getFunctionDetailByApi(null, api, version);
-    }
-
-    /**
-     * 兼容旧调用：默认取该 api 的最新版本
-     */
-    default FunctionDetailVO getFunctionDetailByApi(String api) {
-        return getFunctionDetailByApi(null, api, null);
-    }
-
-    /**
-     * 按 spaceId + function api 查询其全部版本号，按语义化版本倒序排列（最新在前）；
-     * spaceId 为空表示不限空间，api 不存在时返回空列表
+     * 按 spaceId + function api 查询其全部版本号，按语义化版本倒序排列（最新在前）；api 不存在时返回空列表
      */
     List<String> listVersionsByApi(Integer spaceId, String api);
 
-    default List<String> listVersionsByApi(String api) {
-        return listVersionsByApi(null, api);
-    }
-
     /**
-     * 按 空间 + api + 版本号删除函数（version 必填，精确定位）。仅未发布状态可删除
+     * 按 空间 + api + 版本号删除函数（spaceId、version 均必传，精确定位）。仅未发布状态可删除
      */
     void deleteByApi(Integer spaceId, String api, String version);
-
-    default void deleteByApi(String api, String version) {
-        deleteByApi(null, api, version);
-    }
 
     /**
      * 多节点部署下，删除容器算子最后一个接口后，归属节点本地执行的清理：
@@ -100,22 +78,14 @@ public interface FunctionService extends IService<Function> {
     void updateFunction(FunctionUpdateParam param);
 
     /**
-     * 发布：未发布 → 已发布，发布后不可修改/删除
+     * 发布：未发布 → 已发布，发布后不可修改/删除（spaceId、version 均必传，精确定位）
      */
     void publishFunction(Integer spaceId, String api, String version);
 
-    default void publishFunction(String api, String version) {
-        publishFunction(null, api, version);
-    }
-
     /**
-     * 下线：已发布 → 未发布，下线后才可修改/删除
+     * 下线：已发布 → 未发布，下线后才可修改/删除（spaceId、version 均必传，精确定位）
      */
     void unpublishFunction(Integer spaceId, String api, String version);
-
-    default void unpublishFunction(String api, String version) {
-        unpublishFunction(null, api, version);
-    }
 
     FunctionExecuteResultVO getExecuteResult(String taskId);
 
@@ -143,10 +113,11 @@ public interface FunctionService extends IService<Function> {
     /**
      * 编译已落库的函数编排定义，返回 LiteFlow 执行链 EL 与逐节点运行期定义（不注册执行链）。
      *
+     * @param spaceId     编排函数所属对象空间id，为空表示不限空间（早期无空间数据）
      * @param functionApi 编排函数 api
      * @return 编译结果
      */
-    CompositePlanBO compileComposite(String functionApi);
+    CompositePlanBO compileComposite(Integer spaceId, String functionApi);
 
     /**
      * 按「空间 + function api」批量取函数描述，同一 api 多版本时取版本号最大的那条，供行为列表冗余函数描述。

@@ -58,7 +58,8 @@ public class FunctionCreateParam {
     @Schema(name = "referenceName", description = "外部函数：函数全限定名")
     private String referenceName;
 
-    @Schema(name = "ontologySpaceId", description = "所属对象空间 id")
+    @Schema(name = "ontologySpaceId", description = "所属对象空间 id（必传，算子只在空间内唯一，不带空间的算子无法在空间内查看/执行）", required = true)
+    @NotNull(message = "ontologySpaceId is null")
     private Integer ontologySpaceId;
 
     /**
