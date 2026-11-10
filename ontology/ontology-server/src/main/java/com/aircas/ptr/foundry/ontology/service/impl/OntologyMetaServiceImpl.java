@@ -433,7 +433,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                         .build())
                 .collect(Collectors.toList());
         ontologyPropertyService.saveBatch(childProps);
-        // 属性自动关联数据源：继承创建不再自动建子对象实体表，需手动调 /property/auto_bind_datasource
+        //  属性自动关联数据源：继承创建不再自动建子对象实体表，需手动调 /property/auto_bind_datasource
         // var childBindResult = ontologyPropertyService.autoBindDatasource(childIdentifier);
         // if (childBindResult != null && CollectionUtils.isNotEmpty(childBindResult.getBlockedItems())) {
         //     log.warn("子对象{}属性自动关联数据源部分跳过：{}", childIdentifier, childBindResult.getMessage());
