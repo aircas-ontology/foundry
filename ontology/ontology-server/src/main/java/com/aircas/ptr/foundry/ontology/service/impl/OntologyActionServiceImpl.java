@@ -1872,7 +1872,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 param.getEntityPrimaryKey(), param.getEntityPrimaryKeys(), param.getLinkEntityPrimaryKey(), true);
         return executeTreeInstance(compiled, definition, param.getEntityPrimaryKey(), param.getEntityPrimaryKeys(),
                 param.getInputs(), param.getDataPrimaryKey(), param.getInputDataPrimaryKeys(),
-                param.getOutputDataPrimaryKeys(), param.getInputParams(), param.getOutputParams(),
+                param.getOutputDataPrimaryKeys(), singleInputTargets(param.getInputParams()), param.getOutputParams(),
                 param.getLinkEntityPrimaryKey());
     }
 
@@ -1902,7 +1902,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 param.getEntityPrimaryKey(), param.getEntityPrimaryKeys(), param.getLinkEntityPrimaryKey(), true);
         return executeTreeInstance(compiled, definition, param.getEntityPrimaryKey(), param.getEntityPrimaryKeys(),
                 param.getInputs(), param.getDataPrimaryKey(), param.getInputDataPrimaryKeys(),
-                param.getOutputDataPrimaryKeys(), param.getInputParams(), param.getOutputParams(),
+                param.getOutputDataPrimaryKeys(), singleInputTargets(param.getInputParams()), param.getOutputParams(),
                 param.getLinkEntityPrimaryKey());
     }
 
@@ -2286,7 +2286,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                         ? runtime.getDataPrimaryKey() : runtime.getBlackboard().get(config.getDataPrimaryKeyKey()))
                 .inputEntities(toInstanceTargets(inputRowKeys))
                 .outputEntities(toInstanceTargets(outputRowKeys))
-                .inputParams(inputParamTargets)
+                .inputParams(wrapInputTargets(inputParamTargets))
                 .outputParams(outputParamTargets)
                 .linkEntityPrimaryKey(treeNodeLinkValue(config, bound, runtime))
                 .params(treeExternalParams(bound, runtime))
@@ -2454,6 +2454,17 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 .dataPrimaryKeys(source.getDataPrimaryKeys() == null ? null
                         : new LinkedHashMap<>(source.getDataPrimaryKeys()))
                 .build();
+    }
+
+    /** 树节点按参数只定位一个数据位置，测试请求里这个字段是候选数组，包成单元素数组传下去 */
+    private Map<String, List<ActionInstanceTargetParam>> wrapInputTargets(
+            Map<String, ActionInstanceTargetParam> targets) {
+        if (MapUtils.isEmpty(targets)) {
+            return null;
+        }
+        Map<String, List<ActionInstanceTargetParam>> wrapped = new LinkedHashMap<>();
+        targets.forEach((paramName, target) -> wrapped.put(paramName, new ArrayList<>(List.of(target))));
+        return wrapped;
     }
 
     /**
@@ -3898,7 +3909,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 .inputEntities(param.getInputEntities())
                 .outputEntities(param.getOutputEntities())
                 // 按算子入参/出参指定的数据位置：入参读哪个实例/哪一行、出参写到哪个实例/哪一行
-                .inputParams(param.getInputParams())
+                .inputParams(singleInputTargets(param.getInputParams()))
                 .outputParams(param.getOutputParams());
         // 涉及关系时两端实例都由调用方给：测试只跑这一对，不遍历关系下的全部实体
         if (detail.getLinkMapping() != null) {
@@ -3934,6 +3945,32 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     }
 
     /**
+     * 单次执行每个入参只能落在一个数据位置上：批量测试已经展开成单元素数组，
+     * 树执行/树试跑一次也只跑一个位置，这里取唯一元素交给执行侧。
+     */
+    private Map<String, ActionInstanceTargetParam> singleInputTargets(
+            Map<String, List<ActionInstanceTargetParam>> targets) {
+        if (MapUtils.isEmpty(targets)) {
+            return null;
+        }
+        Map<String, ActionInstanceTargetParam> single = new LinkedHashMap<>();
+        targets.forEach((paramName, candidates) -> {
+            if (candidates == null) {
+                return;
+            }
+            PreconditionUtils.checkArgument(!candidates.isEmpty(),
+                    "入参[" + paramName + "]的数据位置数组不能为空，只用一个位置时数组里放一个元素",
+                    HttpStatus.BAD_REQUEST);
+            PreconditionUtils.checkArgument(candidates.size() == 1,
+                    "入参[" + paramName + "]一次只能指定一个数据位置，数组里放一个元素即可",
+                    HttpStatus.BAD_REQUEST);
+            checkInputTargetElement("入参[" + paramName + "]", candidates.get(0));
+            single.put(paramName, candidates.get(0));
+        });
+        return single.isEmpty() ? null : single;
+    }
+
+    /**
      * 批量行为测试的取值轴：入参方向某个字段传了数组，就是这个字段的一组候选值。
      * <p>field 定位请求字段，key/subKey 定位字段里的具体一项，values 是校验过的标量候选值。</p>
      */
@@ -3951,14 +3988,18 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             return TEST_LINK_FROM_KEY.equals(key) || TEST_LINK_TO_KEY.equals(key)
                     ? key : field + "[" + key + "]";
         }
-        return subKey == null
-                ? field + "[" + key + "].entityPrimaryKey"
-                : field + "[" + key + "].dataPrimaryKeys[" + subKey + "]";
+        if (subKey == null) {
+            // 入参方向一个轴是一组完整数据位置；出参方向仍是单值，指到实例主键
+            return TEST_AXIS_FIELD_INPUT_PARAMS.equals(field)
+                    ? field + "[" + key + "]" : field + "[" + key + "].entityPrimaryKey";
+        }
+        return field + "[" + key + "].dataPrimaryKeys[" + subKey + "]";
     }
 
     /**
-     * 收集入参方向的数组取值：只有 entityPrimaryKeys（含关系两端 from、to）和 inputParams 参与。
-     * <p>params 不作为轴：LIST 类型入参的值本来就是数组，分不清是候选值还是参数本身。
+     * 收集入参方向的候选值：只有 entityPrimaryKeys（含关系两端 from、to）和 inputParams 参与。
+     * <p>inputParams 每个入参本身就是数据位置数组，一个元素是一组完整取值：只有一个元素时就是单次执行，
+     * 多个元素才作为一个轴参与组合。params 不作为轴：LIST 类型入参的值本来就是数组，分不清是候选值还是参数本身。
      * 出参方向出现数组直接拦下，一次执行只能有一个写回位置。</p>
      */
     private List<TestAxis> collectTestAxes(ActionInvokeParam param) {
@@ -3975,23 +4016,43 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             param.getEntityPrimaryKeys().forEach((objectId, value) ->
                     addTestAxis(axes, TEST_AXIS_FIELD_ENTITY_PRIMARY_KEYS, objectId, null, value));
         }
-        addTargetAxes(axes, TEST_AXIS_FIELD_INPUT_PARAMS, param.getInputParams());
+        addInputTargetAxes(axes, TEST_AXIS_FIELD_INPUT_PARAMS, param.getInputParams());
         return axes;
     }
 
-    private void addTargetAxes(List<TestAxis> axes, String field, Map<String, ActionInstanceTargetParam> targets) {
+    /** 入参方向的数据位置数组：一个元素就是一组完整取值，多个元素才展开成轴 */
+    private void addInputTargetAxes(List<TestAxis> axes, String field,
+                                    Map<String, List<ActionInstanceTargetParam>> targets) {
         if (targets == null) {
             return;
         }
-        targets.forEach((objectId, target) -> {
-            if (target == null) {
+        targets.forEach((paramName, candidates) -> {
+            if (candidates == null) {
                 return;
             }
-            addTestAxis(axes, field, objectId, null, target.getEntityPrimaryKey());
-            if (target.getDataPrimaryKeys() != null) {
-                target.getDataPrimaryKeys().forEach((group, value) -> addTestAxis(axes, field, objectId, group, value));
+            var label = axisLabel(field, paramName, null);
+            PreconditionUtils.checkArgument(!candidates.isEmpty(), label + " 的数据位置数组不能为空", HttpStatus.BAD_REQUEST);
+            for (var target : candidates) {
+                checkInputTargetElement(label, target);
+            }
+            if (candidates.size() > 1) {
+                axes.add(new TestAxis(field, paramName, null, new ArrayList<>(candidates)));
             }
         });
+    }
+
+    /** 一个数据位置元素自身必须是单值：数组只在外层表示多组候选值 */
+    private void checkInputTargetElement(String label, ActionInstanceTargetParam target) {
+        PreconditionUtils.checkNotNull(target, label + " 的数据位置数组里有 null", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(!(target.getEntityPrimaryKey() instanceof List<?>),
+                label + ".entityPrimaryKey 不能再嵌套数组，一个元素就是一组数据位置，多组请在外层数组放多个元素",
+                HttpStatus.BAD_REQUEST);
+        if (target.getDataPrimaryKeys() != null) {
+            target.getDataPrimaryKeys().forEach((group, value) -> PreconditionUtils.checkArgument(
+                    !(value instanceof List<?>),
+                    label + ".dataPrimaryKeys[" + group + "] 不能再嵌套数组，一个元素就是一组数据位置，多组请在外层数组放多个元素",
+                    HttpStatus.BAD_REQUEST));
+        }
     }
 
     private void checkOutputSideHasNoArray(String field, Map<String, ActionInstanceTargetParam> targets) {
@@ -4157,7 +4218,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                         ? null : new LinkedHashMap<>(param.getEntityPrimaryKeys()))
                 .inputEntities(param.getInputEntities())
                 .outputEntities(param.getOutputEntities())
-                .inputParams(copyTestTargets(param.getInputParams()))
+                .inputParams(copyTestTargetLists(param.getInputParams()))
                 .outputParams(param.getOutputParams())
                 .dataPrimaryKey(param.getDataPrimaryKey())
                 .linkEntityPrimaryKey(param.getLinkEntityPrimaryKey())
@@ -4165,16 +4226,16 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 .build();
     }
 
-    private Map<String, ActionInstanceTargetParam> copyTestTargets(Map<String, ActionInstanceTargetParam> targets) {
+    private Map<String, List<ActionInstanceTargetParam>> copyTestTargetLists(
+            Map<String, List<ActionInstanceTargetParam>> targets) {
         if (targets == null) {
             return null;
         }
-        var copy = new LinkedHashMap<String, ActionInstanceTargetParam>();
-        targets.forEach((key, target) -> copy.put(key, target == null ? null : ActionInstanceTargetParam.builder()
-                .entityPrimaryKey(target.getEntityPrimaryKey())
-                .dataPrimaryKeys(target.getDataPrimaryKeys() == null
-                        ? null : new LinkedHashMap<>(target.getDataPrimaryKeys()))
-                .build()));
+        var copy = new LinkedHashMap<String, List<ActionInstanceTargetParam>>();
+        targets.forEach((paramName, candidates) -> copy.put(paramName, candidates == null ? null
+                : candidates.stream()
+                .map(target -> target == null ? null : copyParamTarget(target))
+                .collect(Collectors.toCollection(ArrayList::new))));
         return copy;
     }
 
@@ -4186,13 +4247,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         }
     }
 
-    private void applyTestTargetAxis(Map<String, ActionInstanceTargetParam> targets, TestAxis axis, Object value) {
-        var target = targets.get(axis.key());
-        if (axis.subKey() == null) {
-            target.setEntityPrimaryKey(value);
-        } else {
-            target.getDataPrimaryKeys().put(axis.subKey(), value);
-        }
+    private void applyTestTargetAxis(Map<String, List<ActionInstanceTargetParam>> targets, TestAxis axis, Object value) {
+        targets.put(axis.key(), new ArrayList<>(List.of(copyParamTarget((ActionInstanceTargetParam) value))));
     }
 
     @Override

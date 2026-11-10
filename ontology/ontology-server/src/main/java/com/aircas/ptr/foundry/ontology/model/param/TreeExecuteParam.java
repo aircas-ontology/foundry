@@ -9,6 +9,7 @@ import lombok.experimental.SuperBuilder;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -66,11 +67,12 @@ public class TreeExecuteParam {
     private Map<String, Map<String, Object>> outputDataPrimaryKeys;
 
     @Schema(name = "inputParams",
-            description = "按算子入参指定数据位置：入参名 -> {实例主键, 存储分组 -> 行主键}，作为全树默认值；"
+            description = "按算子入参指定数据位置：入参名 -> 数据位置数组，与行为测试同一写法；"
+                    + "一次执行每个入参只用一个数据位置，数组里放一个元素即可；"
                     + "同一对象的两个属性入参要读不同实例时用它，节点配置了入参键时以节点为准；"
                     + "树里不同节点绑的行为参数名可能重名，按参数名的默认值会命中所有同名参数",
-            example = "{\"speed\":{\"entityPrimaryKey\":5,\"dataPrimaryKeys\":{\"weapon_load\":11}}}")
-    private Map<String, ActionInstanceTargetParam> inputParams;
+            example = "{\"max_mach\":[{\"entityPrimaryKey\":101,\"dataPrimaryKeys\":{\"duty_log\":11}}]}")
+    private Map<String, List<ActionInstanceTargetParam>> inputParams;
 
     @Schema(name = "outputParams",
             description = "按算子出参指定写回位置：出参名 -> {实例主键, 存储分组 -> 行主键}，作为全树默认值；"

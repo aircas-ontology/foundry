@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
 import java.util.Map;
 
 @Schema(description = "行为测试/执行时某个对象在某一个方向上的数据位置：选哪个实例、每个存储分组取/写哪一行。"
-        + "只有行为测试的入参方向允许把下面的值写成数组，作为批量测试的候选值参与组合")
+        + "一个值就是一组完整的数据位置；行为测试的入参方向把多个数据位置放进数组作为批量测试的候选值")
 @Data
 @Builder
 @AllArgsConstructor
@@ -17,13 +17,13 @@ import java.util.Map;
 public class ActionInstanceTargetParam {
 
     @Schema(name = "entityPrimaryKey", description = "该对象本次用的实例主键；不传时用 entityPrimaryKeys 里的实例；"
-            + "行为测试的入参方向可写成数组做多组取值",
+            + "行为测试的入参方向不要在这里传数组，多组取值请给外层数组放多个数据位置",
             example = "1")
     private Object entityPrimaryKey;
 
     @Schema(name = "dataPrimaryKeys", description = "存储分组 -> 子表行主键。入参方向只读该行，出参方向写到该行不再新增；"
             + "不传的分组沿用原口径（入参取最新一行，出参新增一行）；main 分组忽略；"
-            + "行为测试的入参方向可写成数组做多组取值",
+            + "行为测试的入参方向不要在这里传数组，多组取值请给外层数组放多个数据位置",
             example = "{\"weapon_load\":11}")
     private Map<String, Object> dataPrimaryKeys;
 

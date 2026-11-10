@@ -9,6 +9,7 @@ import lombok.experimental.SuperBuilder;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import java.util.List;
 import java.util.Map;
 
 @Data
@@ -16,8 +17,8 @@ import java.util.Map;
 @Accessors(chain = true)
 @AllArgsConstructor
 @NoArgsConstructor
-@Schema(description = "行为测试请求；把入参方向（entityPrimaryKeys、inputParams）的取值写成数组即批量测试，"
-        + "数组之间做笛卡尔积、最多 50 组，逐组执行并各自落库，失败组合在 cases 里记原因")
+@Schema(description = "行为测试请求；入参方向给出多个候选值即批量测试（entityPrimaryKeys 的值写成数组，"
+        + "inputParams 的每个入参放多个数据位置），候选值之间做笛卡尔积、最多 50 组，逐组执行并各自落库，失败组合在 cases 里记原因")
 public class ActionTestParam {
 
     @Schema(name = "ontologySpaceId", description = "对象空间id", example = "156", required = true)
@@ -39,13 +40,15 @@ public class ActionTestParam {
             example = "{\"3f2a9c1e-7b4d-4a86-9e21-5c8d1f0a6b34\":1,\"a5e8c206-3f17-4d92-8b74-1c6f9d3e5028\":2}")
     private Map<String, Object> entityPrimaryKeys;
 
-    @Schema(name = "inputParams", description = "按算子入参指定的数据位置：入参名 -> {实例主键, 存储分组->行主键}。"
-            + "入参读哪个实例、读子表哪一行都在这里给；命中时优先于 entityPrimaryKeys，"
-            + "只影响该入参的读取，不影响出参写回和关系落库；"
-            + "关系对端的实例由本次遍历决定，不支持按入参指定；不绑算子的行为也不支持；"
-            + "值可写成数组，作为批量测试的候选值参与组合",
-            example = "{\"speed\":{\"entityPrimaryKey\":5},\"load\":{\"entityPrimaryKey\":6,\"dataPrimaryKeys\":{\"weapon_load\":11}}}")
-    private Map<String, ActionInstanceTargetParam> inputParams;
+    @Schema(name = "inputParams", description = "按算子入参指定的数据位置：入参名 -> 数据位置数组。"
+            + "数组的一个元素就是一组完整取值：读哪个实例（entityPrimaryKey）、每个存储分组读哪一行（dataPrimaryKeys），"
+            + "只读一个位置时数组里放一个元素；放多个元素就是批量测试的候选值，元素之间做笛卡尔积、逐组执行；"
+            + "命中时优先于 entityPrimaryKeys，只影响该入参的读取，不影响出参写回和关系落库；"
+            + "关系对端的实例由本次遍历决定，不支持按入参指定；不绑算子的行为也不支持",
+            example = "{\"name\":[{\"entityPrimaryKey\":11}],"
+                    + "\"max_mach\":[{\"entityPrimaryKey\":101,\"dataPrimaryKeys\":{\"duty_log\":11}},"
+                    + "{\"entityPrimaryKey\":102,\"dataPrimaryKeys\":{\"duty_log\":12}}]}")
+    private Map<String, List<ActionInstanceTargetParam>> inputParams;
 
     @Schema(name = "outputParams", description = "按算子出参指定的写回位置：出参名 -> {实例主键, 存储分组->行主键}。"
             + "出参写到哪个实例、写子表哪一行都在这里给；命中时优先于 entityPrimaryKeys，"
