@@ -47,26 +47,37 @@ public class OntologyMetaController {
 
 
     @GetMapping("/export")
-    @Operation(summary = "导出单个对象（含 schema，可选是否含实例数据）")
-    public void exportOntology(@RequestParam(name = "uniqueIdentifier") @OntologyIdVerify String uniqueIdentifier,
+    @Operation(summary = "导出对象（含 schema，可选是否含实例数据），支持多个对象")
+    public void exportOntology(@RequestParam(name = "uniqueIdentifier")
+                               @Parameter(description = "对象uniqueIdentifier，多个用逗号分隔") String uniqueIdentifier,
                                @RequestParam(name = "exportType", defaultValue = "INSTANCE")
                                @Parameter(description = "导出类型：SCHEMA=仅结构, INSTANCE=含实例数据（默认）")
                                OntologyExportTypeEnum exportType,
                                HttpServletResponse response) throws Exception {
         var dtos = ontologyMetaService.exportOntology(uniqueIdentifier, exportType);
-        var apiName = CollectionUtils.isNotEmpty(dtos) && dtos.get(0).getMetadata() != null
+        var apiName = dtos.size() == 1 && dtos.get(0).getMetadata() != null
                 ? dtos.get(0).getMetadata().getApiName() : null;
+        String fileName;
+        if (dtos.size() > 1) {
+            fileName = "ontologies_" + dtos.size();
+        } else {
+            fileName = apiName == null || apiName.isEmpty() ? "ontology_" + uniqueIdentifier : apiName;
+        }
         var suffix = exportType == OntologyExportTypeEnum.SCHEMA ? "_schema" : "";
-        var fileName = (apiName == null || apiName.isEmpty() ? "ontology_" + uniqueIdentifier : apiName) + suffix + ".json";
-        DownloadUtil.writeJsonAttachment(response, jacksonObjectMapper, fileName, dtos);
+        DownloadUtil.writeJsonAttachment(response, jacksonObjectMapper, fileName + suffix + ".json", dtos);
     }
 
 
     @PostMapping("/import")
-    @Operation(summary = "对象批量导入创建")
-    public RestResult importOntologies(@RequestParam(required = true, name = "file") MultipartFile file) {
-        var failedOntology = ontologyMetaService.importOntologies(file);
-        return CollectionUtils.isNotEmpty(failedOntology) ? new RestResult(ResultCode.ERROR, "对象批量导入失败", failedOntology) : RestResult.success();
+    @Operation(summary = "对象批量导入创建，目标空间重名时自动加 _1 后缀另建新对象")
+    public RestResult importOntologies(
+            @RequestParam(required = false, name = "spaceId")
+            @Parameter(description = "目标空间 ID，不传则按 JSON 中的 ontologySpaceName 落位") Integer spaceId,
+            @RequestParam(required = true, name = "file") MultipartFile file) {
+        var result = ontologyMetaService.importOntologies(file, spaceId);
+        return CollectionUtils.isNotEmpty(result.getFailedOntologies())
+                ? new RestResult(ResultCode.ERROR, "对象批量导入失败", result)
+                : RestResult.ofData(result);
     }
 
 

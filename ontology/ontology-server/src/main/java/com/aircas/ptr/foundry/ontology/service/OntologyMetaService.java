@@ -11,6 +11,7 @@ import com.aircas.ptr.foundry.ontology.model.param.OntologyUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.model.po.OntologySpace;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyGroupMetaVO;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologyImportResultVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaBriefVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaNodeVO;
@@ -110,7 +111,20 @@ public interface OntologyMetaService extends IService<OntologyMeta> {
     List<OntologyMetaNodeVO> getInheritanceTree(Integer spaceId);
 
 
-    List<String> importOntologies(MultipartFile file);
+    /**
+     * 批量导入对象。
+     *
+     * <p>与 {@link #importOntologiesToSpace} 的覆盖式导入相反：目标空间已有同名对象时不删除、不报错，
+     * 而是在原名后追加 {@code _1}（仍冲突则递增）后另建一个新对象。</p>
+     *
+     * <p>关系不在对象导入当场创建，全部对象建完后统一创建：端点优先解析为本 JSON 内的新对象，
+     * 只有一端在本 JSON 内时另一端回目标空间查找，另一端找不到则跳过该关系。</p>
+     *
+     * @param file          导出或手写的对象 JSON
+     * @param targetSpaceId 目标空间 ID，为空时按 {@code metadata.ontologySpaceName} 解析空间
+     * @return 导入失败名单与本次改名映射
+     */
+    OntologyImportResultVO importOntologies(MultipartFile file, Integer targetSpaceId);
 
     /**
      * 从 JSON 字符串导入对象。
@@ -139,16 +153,17 @@ public interface OntologyMetaService extends IService<OntologyMeta> {
     List<String> importOntologiesToSpaceFromJson(Integer targetSpaceId, String jsonContent);
 
     /**
-     * 导出单个对象（含 schema、对象级关系，可选实例数据），结构对齐导入模板。
+     * 导出对象（含 schema、对象级关系，可选实例数据），结构对齐导入模板。
      *
-     * <p>关系端点可能指向同空间其它对象，displayName 解析覆盖该对象所属空间的全部启用对象；
+     * <p>关系端点可能指向同空间其它对象，displayName 解析覆盖对象所属空间的全部启用对象；
      * 不附带函数定义（函数为空间级资源，随空间导出给出）。</p>
      *
-     * @param uniqueIdentifier 对象唯一标识
-     * @param exportType       导出类型（SCHEMA=仅结构, INSTANCE=含实例数据）
-     * @return 单元素对象导出列表，relations 段带出该对象关联的关系，端点以 displayName 表达
+     * @param uniqueIdentifiers 对象唯一标识，多个用逗号分隔；须属于同一空间，不存在或已停用的跳过（全部取不到才报错）
+     * @param exportType        导出类型（SCHEMA=仅结构, INSTANCE=含实例数据）
+     * @return 对象导出列表，顺序与入参一致；relations 段带出对象关联的关系，端点以 displayName 表达，
+     * 两端都在本次导出列表内的关系只挂在首个涉及它的对象下
      */
-    List<OntologyCreateDTO> exportOntology(String uniqueIdentifier, OntologyExportTypeEnum exportType);
+    List<OntologyCreateDTO> exportOntology(String uniqueIdentifiers, OntologyExportTypeEnum exportType);
 
     /**
      * 导出指定空间的全部对象（含 schema，按 exportType 决定是否含实例数据）。

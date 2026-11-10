@@ -18,6 +18,7 @@ import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import com.aircas.ptr.foundry.ontology.model.param.*;
 import com.aircas.ptr.foundry.ontology.model.po.*;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyGroupMetaVO;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologyImportResultVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaBriefVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaNodeVO;
@@ -56,12 +57,14 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 
@@ -915,20 +918,190 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
 
     @SneakyThrows
     @Override
-    public List<String> importOntologies(MultipartFile file) {
+    public OntologyImportResultVO importOntologies(MultipartFile file, Integer targetSpaceId) {
         InputStream inputStream = file.getInputStream();
         List<OntologyCreateDTO> ontologyList = objectMapper.readValue(inputStream, new TypeReference<List<OntologyCreateDTO>>() {
         });
         List<String> failedOntology = Lists.newArrayList();
-        ontologyList.forEach(dto -> {
-            try {
-                proxyService.importOntology(dto);
-            } catch (Exception e) {
-                log.error("对象 {} 导入失败", dto.getMetadata().getDisplayName(), e);
-                failedOntology.add(dto.getMetadata().getDisplayName());
+        List<OntologyImportResultVO.RenamedItem> renamed = Lists.newArrayList();
+        //本 JSON 已建对象：空间 id -> (displayName -> 新对象 uid)，第二遍建关系时端点优先取它
+        Map<Integer, Map<String, String>> uidByJsonName = new HashMap<>();
+        //空间内已占用的名字，含本批次前序对象，逐个增量登记
+        Map<Integer, Set<String>> usedApiNames = new HashMap<>();
+        Map<Integer, Set<String>> usedDisplayNames = new HashMap<>();
+        //关系延后创建：端点可能指向排在后面的 JSON 对象，当场建解析不到
+        Map<Integer, List<OntologyRelationDTO>> pendingRelations = new LinkedHashMap<>();
+
+        for (OntologyCreateDTO dto : ontologyList) {
+            var metaData = dto.getMetadata();
+            if (metaData == null) {
+                continue;
             }
-        });
-        return failedOntology;
+            var jsonApiName = metaData.getApiName();
+            var jsonDisplayName = metaData.getDisplayName();
+            try {
+                var spaceId = resolveImportSpace(metaData, targetSpaceId).getId();
+                //重名直接落库会撞 ontology_meta 的 (space_id, api_name) 与 (space_id, display_name) 两条唯一索引
+                var apiName = nextFreeName(jsonApiName,
+                        usedApiNames.computeIfAbsent(spaceId, id -> listUsedNames(id, OntologyMeta::getApiName)));
+                var displayName = nextFreeName(jsonDisplayName,
+                        usedDisplayNames.computeIfAbsent(spaceId, id -> listUsedNames(id, OntologyMeta::getDisplayName)));
+                metaData.setApiName(apiName).setDisplayName(displayName);
+
+                var relations = dto.getRelations();
+                //摘掉 relations，避免 importOntology 内按空间 displayName 当场建关系，挂到空间里的同名老对象上
+                dto.setRelations(null);
+                if (CollectionUtils.isNotEmpty(relations)) {
+                    pendingRelations.computeIfAbsent(spaceId, id -> Lists.newArrayList()).addAll(relations);
+                }
+
+                proxyService.importOntology(dto, spaceId);
+
+                var created = getOne(new LambdaQueryWrapper<OntologyMeta>()
+                        .eq(OntologyMeta::getOntologySpaceId, spaceId)
+                        .eq(OntologyMeta::getDisplayName, displayName));
+                if (created != null) {
+                    var names = uidByJsonName.computeIfAbsent(spaceId, id -> new HashMap<>());
+                    names.put(displayName, created.getUniqueIdentifier());
+                    //关系端点写的是 JSON 里的原名，改名后原名与新名都要能解析到这个新对象
+                    names.putIfAbsent(jsonDisplayName, created.getUniqueIdentifier());
+                }
+                if (!StringUtils.equals(apiName, jsonApiName) || !StringUtils.equals(displayName, jsonDisplayName)) {
+                    log.info("对象重名，已改名：{}/{} -> {}/{}", jsonApiName, jsonDisplayName, apiName, displayName);
+                    renamed.add(OntologyImportResultVO.RenamedItem.builder()
+                            .kind("ONTOLOGY")
+                            .displayNameFrom(jsonDisplayName)
+                            .displayNameTo(displayName)
+                            .apiNameFrom(jsonApiName)
+                            .apiNameTo(apiName)
+                            .build());
+                }
+            } catch (Exception e) {
+                log.error("对象 {} 导入失败", jsonDisplayName, e);
+                failedOntology.add(jsonDisplayName);
+            }
+        }
+
+        pendingRelations.forEach((spaceId, relations) ->
+                importPendingRelations(spaceId, relations, uidByJsonName.getOrDefault(spaceId, Collections.emptyMap()), renamed));
+
+        return OntologyImportResultVO.builder()
+                .failedOntologies(failedOntology)
+                .renamed(renamed)
+                .build();
+    }
+
+    /**
+     * 解析导入目标空间：显式指定空间 id 优先，否则沿用 JSON 里的 ontologySpaceName。
+     */
+    private OntologySpace resolveImportSpace(OntologyMetaDataDTO metaData, Integer targetSpaceId) {
+        var space = targetSpaceId != null ? spaceService.getById(targetSpaceId)
+                : spaceService.getOne(new LambdaQueryWrapper<OntologySpace>()
+                        .eq(OntologySpace::getDisplayName, metaData.getOntologySpaceName()));
+        PreconditionUtils.checkNotNull(space, targetSpaceId != null ? "invalid ontology space id:" + targetSpaceId
+                : "invalid ontology space name:" + metaData.getOntologySpaceName());
+        return space;
+    }
+
+    /**
+     * 取一个未被占用的名字：原名被占用时依次追加 _1、_2，并登记进 used 供同批次后续对象使用。
+     */
+    private String nextFreeName(String base, Set<String> used) {
+        if (!used.contains(base)) {
+            used.add(base);
+            return base;
+        }
+        for (int seq = 1; ; seq++) {
+            var candidate = base + "_" + seq;
+            if (!used.contains(candidate)) {
+                used.add(candidate);
+                return candidate;
+            }
+        }
+    }
+
+    /**
+     * 空间内对象已占用的名字。唯一索引不含 status，停用对象同样占名，这里不按 status 过滤。
+     */
+    private Set<String> listUsedNames(Integer spaceId, Function<OntologyMeta, String> nameGetter) {
+        return list(new LambdaQueryWrapper<OntologyMeta>()
+                        .eq(OntologyMeta::getOntologySpaceId, spaceId))
+                .stream().map(nameGetter).collect(Collectors.toCollection(HashSet::new));
+    }
+
+    /**
+     * 导入的第二遍：全部对象已落库后创建关系。
+     *
+     * <p>端点先按本 JSON 内的对象解析，解析不到再回目标空间按 displayName 查找，仍找不到则跳过该关系。</p>
+     */
+    private void importPendingRelations(Integer spaceId, List<OntologyRelationDTO> relations,
+                                        Map<String, String> uidByJsonName,
+                                        List<OntologyImportResultVO.RenamedItem> renamed) {
+        var uidBySpaceName = list(new LambdaQueryWrapper<OntologyMeta>()
+                        .eq(OntologyMeta::getOntologySpaceId, spaceId)
+                        .eq(OntologyMeta::getStatus, Status.ENABLE.getValue()))
+                .stream().collect(Collectors.toMap(OntologyMeta::getDisplayName, OntologyMeta::getUniqueIdentifier, (a, b) -> a));
+        var links = linkService.list(new LambdaQueryWrapper<OntologyLinkGroup>()
+                .eq(OntologyLinkGroup::getOntologySpaceId, spaceId)
+                .eq(OntologyLinkGroup::getStatus, Status.ENABLE.getValue()));
+        //关系表无唯一约束，重名不会报错，这里只避免一次导入堆出同名关系
+        var usedNames = links.stream().map(OntologyLinkGroup::getName).collect(Collectors.toCollection(HashSet::new));
+        var usedApiNames = links.stream().map(OntologyLinkGroup::getApiName).collect(Collectors.toCollection(HashSet::new));
+        var linkRootCategoryId = getLinkCategoryRoot(spaceId);
+        for (var relation : relations) {
+            var fromName = relation.getOntologyNameFrom();
+            var toName = relation.getOntologyNameTo();
+            var fromUid = resolveRelationEndpoint(fromName, uidByJsonName, uidBySpaceName);
+            var toUid = resolveRelationEndpoint(toName, uidByJsonName, uidBySpaceName);
+            if (fromUid == null || toUid == null) {
+                log.warn("关系 {} 导入跳过：端点对象不存在，from={}, to={}", relation.getName(), fromName, toName);
+                continue;
+            }
+            var name = relation.getName();
+            var apiName = relation.getApiName();
+            //name 与 apiName 任一重名，两者一起加后缀，保持这一对名字同步
+            for (int seq = 1; usedNames.contains(name)
+                    || (StringUtils.isNotEmpty(apiName) && usedApiNames.contains(apiName)); seq++) {
+                name = relation.getName() + "_" + seq;
+                apiName = StringUtils.isEmpty(relation.getApiName()) ? null : relation.getApiName() + "_" + seq;
+            }
+            usedNames.add(name);
+            if (StringUtils.isNotEmpty(apiName)) {
+                usedApiNames.add(apiName);
+            }
+            if (!StringUtils.equals(name, relation.getName()) || !StringUtils.equals(apiName, relation.getApiName())) {
+                log.info("关系重名，已改名：{}/{} -> {}/{}", relation.getApiName(), relation.getName(), apiName, name);
+                renamed.add(OntologyImportResultVO.RenamedItem.builder()
+                        .kind("RELATION")
+                        .displayNameFrom(relation.getName())
+                        .displayNameTo(name)
+                        .apiNameFrom(relation.getApiName())
+                        .apiNameTo(apiName)
+                        .build());
+            }
+            //走 createLink 而非直接落库：与画布创建关系同一条路径，关系索引等副作用一并触发；实例关系边不在这里生成
+            linkService.createLink(new OntologyLinkCreateParam()
+                    .setName(name)
+                    .setApiName(StringUtils.defaultIfBlank(apiName, "relation_" + IdGenerator.generateUUID()))
+                    .setDescription(relation.getDescription())
+                    .setType(relation.getType() == null ? OntologyLinkTypeEnum.OTHER : relation.getType())
+                    .setOntologyUniqueIdentifierFrom(fromUid)
+                    .setOntologyUniqueIdentifierTo(toUid)
+                    .setCategoryId(linkRootCategoryId)
+                    .setSpaceId(spaceId));
+        }
+    }
+
+    /**
+     * 关系端点解析：本 JSON 内的新建对象优先，避免挂到目标空间里的同名老对象上。
+     */
+    private String resolveRelationEndpoint(String endpointName, Map<String, String> uidByJsonName,
+                                           Map<String, String> uidBySpaceName) {
+        if (StringUtils.isEmpty(endpointName)) {
+            return null;
+        }
+        var uid = uidByJsonName.get(endpointName);
+        return uid != null ? uid : uidBySpaceName.get(endpointName);
     }
 
     @SneakyThrows
@@ -1443,16 +1616,39 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
     }
 
     @Override
-    public List<OntologyCreateDTO> exportOntology(String uniqueIdentifier, OntologyExportTypeEnum exportType) {
-        var meta = getOne(new LambdaQueryWrapper<OntologyMeta>()
-                .eq(OntologyMeta::getUniqueIdentifier, uniqueIdentifier)
-                .eq(OntologyMeta::getStatus, Status.ENABLE.getValue()));
-        PreconditionUtils.checkNotNull(meta, "对象不存在或已停用:" + uniqueIdentifier);
-        var space = getSpaceOrThrow(meta.getOntologySpaceId());
+    public List<OntologyCreateDTO> exportOntology(String uniqueIdentifiers, OntologyExportTypeEnum exportType) {
+        var uids = Arrays.stream(StringUtils.split(StringUtils.defaultString(uniqueIdentifiers), ",，"))
+                .map(String::trim)
+                .filter(StringUtils::isNotEmpty)
+                .distinct()
+                .collect(Collectors.toList());
+        PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(uids), "无效的对象uniqueIdentifier:" + uniqueIdentifiers);
+
+        var metaMap = list(new LambdaQueryWrapper<OntologyMeta>()
+                        .in(OntologyMeta::getUniqueIdentifier, uids)
+                        .eq(OntologyMeta::getStatus, Status.ENABLE.getValue()))
+                .stream().collect(Collectors.toMap(OntologyMeta::getUniqueIdentifier, meta -> meta, (a, b) -> a));
+        var missing = uids.stream().filter(uid -> !metaMap.containsKey(uid)).collect(Collectors.toList());
+        if (CollectionUtils.isNotEmpty(missing)) {
+            log.warn("导出对象跳过不存在或已停用的对象: {}", missing);
+        }
+        //按入参顺序输出
+        var metas = new ArrayList<OntologyMeta>();
+        uids.forEach(uid -> {
+            var meta = metaMap.get(uid);
+            if (meta != null) {
+                metas.add(meta);
+            }
+        });
+        PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(metas), "对象不存在或已停用:" + uniqueIdentifiers);
+        PreconditionUtils.checkArgument(metas.stream().map(OntologyMeta::getOntologySpaceId).distinct().count() == 1,
+                "不支持导出分属不同空间的对象，请按空间分别导出");
+
+        var space = getSpaceOrThrow(metas.get(0).getOntologySpaceId());
         //关系端点可能指向同空间其它对象，displayName 解析需覆盖空间内全部启用对象
         var scopeMetas = listEnabledMetas(space);
-        //withRelations=true：关系随单对象导出；空间导出的关系由空间级 links 承载，不在此重复
-        return buildOntologies(space, Lists.newArrayList(meta), scopeMetas, exportType, true);
+        //withRelations=true：关系随对象导出；空间导出的关系由空间级 links 承载，不在此重复
+        return buildOntologies(space, metas, scopeMetas, exportType, true);
     }
 
     @Override
@@ -1513,8 +1709,11 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                         .eq(OntologyGroup::getOntologySpaceId, space.getId()))
                 .stream().collect(Collectors.toMap(OntologyGroup::getGroupId, OntologyGroup::getGroupName, (a, b) -> a));
 
+        //一次导出多个对象时，两端都在列表内的关系会被两个对象各自带出，共享该集合使每条关系只输出一次，否则导入建出重复关系
+        var exportedLinkIds = new HashSet<Long>();
         return metasToExport.stream()
-                .map(meta -> buildExportDTO(meta, space, ontologyCategoryPathMap, groupNameMap, uidToDisplayName, exportType, withRelations))
+                .map(meta -> buildExportDTO(meta, space, ontologyCategoryPathMap, groupNameMap, uidToDisplayName,
+                        exportType, withRelations, exportedLinkIds))
                 .collect(Collectors.toList());
     }
 
@@ -1523,7 +1722,8 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                                              Map<String, String> groupNameMap,
                                              Map<String, String> uidToDisplayName,
                                              OntologyExportTypeEnum exportType,
-                                             boolean withRelations) {
+                                             boolean withRelations,
+                                             Set<Long> exportedLinkIds) {
         var uid = meta.getUniqueIdentifier();
 
         //metadata
@@ -1583,7 +1783,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 .metadata(metadata)
                 .propertyCategory(propertyCategory)
                 .properties(properties)
-                .relations(withRelations ? exportOntologyRelations(uid, space.getId(), uidToDisplayName) : null)
+                .relations(withRelations ? exportOntologyRelations(uid, space.getId(), uidToDisplayName, exportedLinkIds) : null)
                 .instances(instances)
                 .build();
     }
@@ -1592,9 +1792,12 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
      * 导出该对象关联的关系（含以它为起点或终点的），端点以对象显示名称表达，导入时据此解析对象。
      *
      * <p>端点对象已停用/已删除时 displayName 解析不到，导入了也无法还原，不导出。</p>
+     *
+     * <p>同一次导出可能包含一条关系的两端，据 exportedLinkIds 只输出一次。</p>
      */
     private List<OntologyRelationDTO> exportOntologyRelations(String ontologyUniqueIdentifier, Integer spaceId,
-                                                              Map<String, String> uidToDisplayName) {
+                                                              Map<String, String> uidToDisplayName,
+                                                              Set<Long> exportedLinkIds) {
         var links = linkService.list(new LambdaQueryWrapper<OntologyLinkGroup>()
                 .eq(OntologyLinkGroup::getOntologySpaceId, spaceId)
                 .eq(OntologyLinkGroup::getStatus, Status.ENABLE.getValue())
@@ -1606,6 +1809,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         return links.stream()
                 .filter(link -> uidToDisplayName.containsKey(link.getOntologyUniqueIdentifierFrom())
                         && uidToDisplayName.containsKey(link.getOntologyUniqueIdentifierTo()))
+                .filter(link -> exportedLinkIds.add(link.getId()))
                 .map(link -> OntologyRelationDTO.builder()
                         .name(link.getName())
                         .apiName(link.getApiName())
