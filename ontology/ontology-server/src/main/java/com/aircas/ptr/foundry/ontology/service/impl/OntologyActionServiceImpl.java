@@ -3667,19 +3667,26 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             return new Page<ActionSchedulingInfoVO>(pageNum, pageSize);
         }
 
-        var actionApis = records.stream().map(v -> v.getActionApi()).collect(Collectors.toList());
-        var actionMap = actionMapper.selectList(new LambdaQueryWrapper<OntologyAction>().in(OntologyAction::getApi, actionApis))
+        List<String> actionApis = records.stream().map(ActionHandleTask::getActionApi)
+                .filter(StringUtils::isNotBlank).distinct().collect(Collectors.toList());
+        Map<String, OntologyAction> actionMap = actionApis.isEmpty() ? Map.of()
+                : actionMapper.selectList(new LambdaQueryWrapper<OntologyAction>().in(OntologyAction::getApi, actionApis))
                 .stream().collect(Collectors.toMap(v -> v.getApi(), v -> v, (existingValue, newValue) -> existingValue));
 
-        var ontologyUniqIds = actionMap.values().stream().map(v -> v.getOntologyUniqueIdentifier()).collect(Collectors.toList());
-        var ontologyMap = ontologyMetaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>().in(OntologyMeta::getUniqueIdentifier, ontologyUniqIds))
+        List<String> ontologyUniqIds = actionMap.values().stream().map(OntologyAction::getOntologyUniqueIdentifier)
+                .filter(StringUtils::isNotBlank).distinct().collect(Collectors.toList());
+        Map<String, OntologyMeta> ontologyMap = ontologyUniqIds.isEmpty() ? Map.of()
+                : ontologyMetaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>().in(OntologyMeta::getUniqueIdentifier, ontologyUniqIds))
                 .stream().collect(Collectors.toMap(v -> v.getUniqueIdentifier(), v -> v, (existingValue, newValue) -> existingValue));
 
 
         var vo = records.stream().<ActionSchedulingInfoVO>map(v -> {
             var actionApi = v.getActionApi();
             var action = actionMap.get(actionApi);
-            var ontologyMeta = ontologyMap.get(action.getOntologyUniqueIdentifier());
+            var ontologyMeta = action == null ? null : ontologyMap.get(action.getOntologyUniqueIdentifier());
+            if (action == null || ontologyMeta == null) {
+                return null;
+            }
             return ActionSchedulingInfoVO.builder()
                     .actionApi(action.getApi())
                     .actionName(action.getDisplayName())
@@ -3692,7 +3699,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                     .status(v.getStatus())
                     .build();
 
-        }).collect(Collectors.toList());
+        }).filter(v -> v != null).collect(Collectors.toList());
 
 
         return new Page<ActionSchedulingInfoVO>(pageNum, pageSize)

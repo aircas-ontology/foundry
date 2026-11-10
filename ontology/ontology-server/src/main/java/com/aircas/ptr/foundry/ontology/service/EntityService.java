@@ -28,6 +28,15 @@ public interface EntityService {
 
     void deleteNodesAndRelationsByOntologyId(String ontologyUniqueIdentifier);
 
+    /**
+     * 删除对象在数据湖中的实例数据：按主键属性绑定的数据源整表清空实体主表及其属性关联分组表。
+     * <p>必须在删除属性元数据之前调用，因为定位数据源表依赖主键属性仍在。对象未绑定数据源
+     * （无主键属性或缺 datasourceId/schema/列名）时静默跳过，不报错。</p>
+     *
+     * @param ontologyUniqueIdentifier 对象唯一标识
+     */
+    void deleteDatalakeInstances(String ontologyUniqueIdentifier);
+
     List<EntityLinkPropertyVO> getEntityLinksByPrimaryKey(String ontologyUniqueIdentifier, Object entityPrimaryKey);
 
     /**

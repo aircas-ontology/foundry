@@ -2833,6 +2833,23 @@ public class EntityServiceImpl implements EntityService {
     }
 
     @Override
+    @Transactional(value = "datalakeTransactionManager")
+    public void deleteDatalakeInstances(String ontologyUniqueIdentifier) {
+        //定位主键属性，其 datasourceSchema/datasourceId/datasourceColumnName 指向实例所在的物理表
+        var pkProp = propertyMapper.selectList(new LambdaQueryWrapper<OntologyProperty>()
+                .eq(OntologyProperty::getIsPrimaryKey, 1)
+                .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier))
+                .stream().findFirst().orElse(null);
+        if (pkProp == null
+                || StringUtils.isEmpty(pkProp.getDatasourceId())
+                || StringUtils.isEmpty(pkProp.getDatasourceSchema())
+                || StringUtils.isEmpty(pkProp.getDatasourceColumnName())) {
+            return;
+        }
+        deleteExistEntities(pkProp);
+    }
+
+    @Override
     public OntologyInstancesExportDTO exportInstances(String ontologyUniqueIdentifier) {
         var emptyResult = OntologyInstancesExportDTO.builder()
                 .nodes(Lists.<EntityNodeExportDTO>newArrayList())
