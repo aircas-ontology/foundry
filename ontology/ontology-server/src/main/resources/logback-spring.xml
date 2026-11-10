@@ -9,6 +9,11 @@
 
     <!-- 设置控制台日志输出 -->
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <!-- 控制台只输出 WARN+：避免每条 INFO 重复刷到 stdout（容器里会被收成 json.log 撑爆磁盘）；
+             完整 INFO 仍落 ALL 文件，同步进度可查 -->
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>WARN</level>
+        </filter>
         <encoder>
             <pattern>[%d{yyyy-MM-dd HH:mm:ss.SSS}] [%thread] [%X{logId}] [%-5level] %logger{36} - [%file:%line] %msg%n </pattern>
             <charset>UTF-8</charset>
@@ -17,15 +22,14 @@
 
     <!-- 设置所有级别的日志输出到一个文件 -->
     <appender name="ALL" class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <Prudent>true</Prudent>
-        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-            <!-- 日志保留天数 -->
-            <MaxHistory>7</MaxHistory>
+        <!-- 不用 Prudent：单进程写日志，prudent 会让按大小滚动失效（曾致单文件涨到上百 GB）；
+             totalSizeCap 给日志总量硬上限，避免 CDC 大量同步时日志撑爆磁盘 -->
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
             <fileNamePattern>${LOG_HOME}/%d{yyyy-MM-dd}/all.%i.log</fileNamePattern>
-            <timeBasedFileNamingAndTriggeringPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
-                <!-- 日志文件的最大大小 -->
-                <MaxFileSize>10MB</MaxFileSize>
-            </timeBasedFileNamingAndTriggeringPolicy>
+            <maxFileSize>100MB</maxFileSize>
+            <maxHistory>7</maxHistory>
+            <totalSizeCap>3GB</totalSizeCap>
+            <cleanHistoryOnStart>true</cleanHistoryOnStart>
         </rollingPolicy>
         <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
             <pattern>[%d{yyyy-MM-dd HH:mm:ss.SSS}] [%thread] [%X{logId}] [%-5level] %logger{36} - [%file:%line] %msg%n </pattern>

@@ -31,7 +31,7 @@ public class PropertyCdcJobServiceImpl implements PropertyCdcJobService {
         EsOntologyPropertyDTO esOntologyPropertyDTO = OntologyPropertyConverter.convert(after);
         enrichPropertyDTO(esOntologyPropertyDTO);
         ontologyPropertyRepository.save(esOntologyPropertyDTO);
-        log.info("save data success :{}", JSONObject.toJSONString(esOntologyPropertyDTO));
+        log.debug("save data success :{}", JSONObject.toJSONString(esOntologyPropertyDTO));
     }
 
     @Override
@@ -42,7 +42,7 @@ public class PropertyCdcJobServiceImpl implements PropertyCdcJobService {
         EsOntologyPropertyDTO esOntologyPropertyDTO = OntologyPropertyConverter.convert(after);
         enrichPropertyDTO(esOntologyPropertyDTO);
         ontologyPropertyRepository.save(esOntologyPropertyDTO);
-        log.info("update data success :{}", JSONObject.toJSONString(esOntologyPropertyDTO));
+        log.debug("update data success :{}", JSONObject.toJSONString(esOntologyPropertyDTO));
         return true;
     }
 
@@ -52,7 +52,7 @@ public class PropertyCdcJobServiceImpl implements PropertyCdcJobService {
             return false;
         }
         ontologyPropertyRepository.deleteById(before.getId());
-        log.info("delete data success, property id:{}", before.getId());
+        log.debug("delete data success, property id:{}", before.getId());
         return true;
     }
 

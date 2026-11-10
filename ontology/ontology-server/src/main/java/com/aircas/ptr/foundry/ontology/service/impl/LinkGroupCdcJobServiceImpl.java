@@ -42,7 +42,7 @@ public class LinkGroupCdcJobServiceImpl implements LinkGroupCdcJobService {
         EsOntologyLinkGroupDTO esOntologyLinkGroupDTO = OntologyLinkGroupConverter.convert(after);
         enrichLinkGroupDTO(esOntologyLinkGroupDTO);
         ontologyLinkGroupRepository.save(esOntologyLinkGroupDTO);
-        log.info("save data success :{}", JSONObject.toJSONString(esOntologyLinkGroupDTO));
+        log.debug("save data success :{}", JSONObject.toJSONString(esOntologyLinkGroupDTO));
     }
 
     @Override
@@ -53,7 +53,7 @@ public class LinkGroupCdcJobServiceImpl implements LinkGroupCdcJobService {
         EsOntologyLinkGroupDTO esOntologyLinkGroupDTO = OntologyLinkGroupConverter.convert(after);
         enrichLinkGroupDTO(esOntologyLinkGroupDTO);
         ontologyLinkGroupRepository.save(esOntologyLinkGroupDTO);
-        log.info("update data success :{}", JSONObject.toJSONString(esOntologyLinkGroupDTO));
+        log.debug("update data success :{}", JSONObject.toJSONString(esOntologyLinkGroupDTO));
         return true;
     }
 
@@ -63,7 +63,7 @@ public class LinkGroupCdcJobServiceImpl implements LinkGroupCdcJobService {
             return false;
         }
         ontologyLinkGroupRepository.deleteById(before.getId());
-        log.info("delete data success, link group id:{}", before.getId());
+        log.debug("delete data success, link group id:{}", before.getId());
         deleteGraphRelations(before.getUniqueIdentifier());
         return true;
     }

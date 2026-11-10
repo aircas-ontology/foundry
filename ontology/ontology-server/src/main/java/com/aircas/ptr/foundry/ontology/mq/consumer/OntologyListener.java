@@ -44,7 +44,7 @@ public class OntologyListener {
             return;
         }
         String op = ontologyMetaDTODebeziumEnvelopeDTO.getOp();
-        log.info("meta CDC, op={}, id={}", op,
+        log.debug("meta CDC, op={}, id={}", op,
                 ontologyMetaDTODebeziumEnvelopeDTO.getAfter() != null ? ontologyMetaDTODebeziumEnvelopeDTO.getAfter().getId() : null);
         // op=r 为 Debezium 快照读（initial snapshot），语义等同新增文档
         if(Objects.equals(op, "c") || Objects.equals(op, "r")){
@@ -65,7 +65,7 @@ public class OntologyListener {
             return;
         }
         String op = ontologySpaceDebeziumEnvelopeDTO.getOp();
-        log.info("space CDC, op={}, id={}", op,
+        log.debug("space CDC, op={}, id={}", op,
                 ontologySpaceDebeziumEnvelopeDTO.getAfter() != null ? ontologySpaceDebeziumEnvelopeDTO.getAfter().getId() : null);
         // op=r 为 Debezium 快照读（initial snapshot），语义等同新增文档
         if(Objects.equals(op, "c") || Objects.equals(op, "r")){
@@ -86,7 +86,7 @@ public class OntologyListener {
             return;
         }
         String op = ontologyPropertyDebeziumEnvelopeDTO.getOp();
-        log.info("property CDC, op={}, id={}", op,
+        log.debug("property CDC, op={}, id={}", op,
                 ontologyPropertyDebeziumEnvelopeDTO.getAfter() != null ? ontologyPropertyDebeziumEnvelopeDTO.getAfter().getId() : null);
         // op=r 为 Debezium 快照读（initial snapshot），语义等同新增文档
         if(Objects.equals(op, "c") || Objects.equals(op, "r")){
@@ -107,7 +107,7 @@ public class OntologyListener {
             return;
         }
         String op = ontologyLinkGroupDebeziumEnvelopeDTO.getOp();
-        log.info("linkGroup CDC, op={}, id={}", op,
+        log.debug("linkGroup CDC, op={}, id={}", op,
                 ontologyLinkGroupDebeziumEnvelopeDTO.getAfter() != null ? ontologyLinkGroupDebeziumEnvelopeDTO.getAfter().getId() : null);
         // op=r 为 Debezium 快照读（initial snapshot），语义等同新增文档
         if(Objects.equals(op, "c") || Objects.equals(op, "r")){
