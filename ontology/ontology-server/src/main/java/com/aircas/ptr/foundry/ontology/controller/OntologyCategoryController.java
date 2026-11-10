@@ -37,7 +37,7 @@ public class OntologyCategoryController {
     }
 
     @PutMapping
-    @Operation(summary = "修改对象分类名称")
+    @Operation(summary = "修改对象分类名称、父节点")
     public RestResult updateCategory(@RequestBody @Valid OntologyCategoryUpdateParam param) {
         ontologyCategoryService.updateCategory(param);
         return RestResult.success();

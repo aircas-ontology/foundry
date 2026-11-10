@@ -28,6 +28,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import jakarta.annotation.Resource;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -135,6 +136,8 @@ public class ActionCategoryServiceImpl extends ServiceImpl<ActionCategoryMapper,
         PreconditionUtils.checkArgument(currentCategory != null,
                 "行为分类节点" + param.getCategoryId() + "不存在", HttpStatus.BAD_REQUEST);
 
+        var newParent = checkParentAndGet(currentCategory, param.getParentId());
+
         // 查询所有关联节点（节点树）：精确匹配自身 + 带 "/" 边界的前缀匹配，
         // 使「舰艇机动」不会命中「舰艇机动性」这类同前缀兄弟节点。
         var allCategories = list(new LambdaQueryWrapper<ActionCategory>()
@@ -145,11 +148,15 @@ public class ActionCategoryServiceImpl extends ServiceImpl<ActionCategoryMapper,
         if (CollectionUtils.isNotEmpty(allCategories)) {
             var paths = currentCategory.getPath().split("/");
             paths[paths.length - 1] = param.getName();
-            var newPath = String.join("/", paths);
+            // 移动到新父节点下时，路径前缀整体换成新父节点的路径
+            var newPath = newParent == null ? String.join("/", paths) : newParent.getPath() + "/" + param.getName();
             var oldPath = currentCategory.getPath();
             allCategories.forEach(category -> {
                 if (category.getId().equals(param.getCategoryId())) {
                     category.setName(param.getName());
+                    if (newParent != null) {
+                        category.setParentId(newParent.getId());
+                    }
                 }
                 // 仅重写 path 的前缀部分，保留子孙路径的后半段
                 var categoryPath = category.getPath();
@@ -160,6 +167,38 @@ public class ActionCategoryServiceImpl extends ServiceImpl<ActionCategoryMapper,
             });
             updateBatchById(allCategories);
         }
+    }
+
+    /**
+     * 校验新的 parentId 并返回对应的父节点；parentId 为空或与当前父节点相同时返回 null，表示本次不移动节点。
+     */
+    private ActionCategory checkParentAndGet(ActionCategory category, Integer parentId) {
+
+        if (parentId == null || parentId.equals(category.getParentId())) {
+            return null;
+        }
+        PreconditionUtils.checkArgument(!parentId.equals(category.getId()), "parentId不能是自己", HttpStatus.BAD_REQUEST);
+        // 行为分类树只有一个根节点（parentId=0），移动成第二个根节点会让子树在树查询里丢失
+        PreconditionUtils.checkArgument(!parentId.equals(0), "parentId不能为0，行为分类树只支持一个根节点", HttpStatus.BAD_REQUEST);
+
+        var spaceCategories = list(new LambdaQueryWrapper<ActionCategory>()
+                .eq(ActionCategory::getOntologySpaceId, category.getOntologySpaceId()));
+        var categoryMap = spaceCategories.stream().collect(Collectors.toMap(ActionCategory::getId, v -> v));
+        var newParent = categoryMap.get(parentId);
+        PreconditionUtils.checkArgument(newParent != null, "无效的parentId：" + parentId, HttpStatus.BAD_REQUEST);
+
+        // 沿新父节点的 parentId 父链上溯，命中自己即成环（visited 兼容已有的脏父链，保证循环能退出）
+        var visited = new HashSet<Integer>();
+        var currentId = newParent.getParentId();
+        while (currentId != null && currentId != 0 && visited.add(currentId)) {
+            PreconditionUtils.checkArgument(!currentId.equals(category.getId()), "parentId不能是自己的下级节点", HttpStatus.BAD_REQUEST);
+            var ancestor = categoryMap.get(currentId);
+            if (ancestor == null) {
+                break;
+            }
+            currentId = ancestor.getParentId();
+        }
+        return newParent;
     }
 
     @Transactional(transactionManager = "mainTransactionManager")

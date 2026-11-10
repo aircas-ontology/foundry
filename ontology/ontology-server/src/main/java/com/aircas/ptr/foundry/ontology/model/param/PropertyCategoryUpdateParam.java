@@ -23,4 +23,7 @@ public class PropertyCategoryUpdateParam extends PropertyCategoryDeleteParam {
     @NotBlank(message = "name is empty")
     private String name;
 
+    @Schema(name = "parentId", description = "父节点id，不传表示不修改父节点；不能是自己，也不能是自己的下级节点", example = "1")
+    private Integer parentId;
+
 }

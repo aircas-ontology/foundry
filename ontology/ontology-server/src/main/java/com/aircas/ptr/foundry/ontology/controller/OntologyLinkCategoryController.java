@@ -37,7 +37,7 @@ public class OntologyLinkCategoryController {
     }
 
     @PutMapping
-    @Operation(summary = "修改关系分类名称")
+    @Operation(summary = "修改关系分类名称、父节点")
     public RestResult updateLinkCategory(@RequestBody @Valid OntologyLinkCategoryUpdateParam param) {
         ontologyLinkCategoryService.updateCategory(param);
         return RestResult.success();
