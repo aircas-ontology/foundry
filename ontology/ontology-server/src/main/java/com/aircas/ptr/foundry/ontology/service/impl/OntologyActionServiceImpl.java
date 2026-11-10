@@ -3639,11 +3639,12 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             var action = actionMapper.selectOne(new LambdaQueryWrapper<OntologyAction>()
                     .eq(OntologyAction::getApi, handleTask.getActionApi())
                     .eq(OntologyAction::getOntologySpaceId, handleTask.getOntologySpaceId()));
+            PreconditionUtils.checkNotNull(action, "调度绑定的行为不存在：" + handleTask.getActionApi(), HttpStatus.BAD_REQUEST);
             var ontology = ontologyMetaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, action.getOntologyUniqueIdentifier()));
             return ActionSchedulingDetailVO.builder()
                     .actionApi(action.getApi())
                     .actionName(action.getDisplayName())
-                    .ontologyName(ontology.getDisplayName())
+                    .ontologyName(ontology == null ? null : ontology.getDisplayName())
                     .schedulingName(handleTask.getName())
                     .id(handleTask.getId())
                     .description(handleTask.getDescription())
@@ -3714,7 +3715,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         var pageInfo = new Page<ActionHandleLog>(pageNum, pageSize).addOrder(OrderItem.desc("id"));
         var pages = actionHandleLogMapper.selectPage(pageInfo, new LambdaQueryWrapper<ActionHandleLog>()
                 .eq(ActionHandleLog::getActionHandleId, id)
-                .eq(ActionHandleLog::getActionHandleType, ActionSchedulingTypeEnum.TASK));
+                .eq(ActionHandleLog::getActionHandleType, type));
         var records = pages.getRecords();
         if (CollectionUtils.isEmpty(records)) {
             return new Page<>(pageNum, pageSize);
