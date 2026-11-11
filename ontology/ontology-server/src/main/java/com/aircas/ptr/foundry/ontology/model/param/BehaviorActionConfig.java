@@ -61,8 +61,9 @@ public class BehaviorActionConfig {
     private Map<String, BehaviorActionParamKeys> inputParamKeys;
 
     @Schema(name = "outputParamKeys",
-            description = "应用行为按算子出参指定写回位置时用：出参名 -> {实例主键黑板键, 存储分组 -> 行主键黑板键}。"
-                    + "同一对象的两个 WRITE_PROPERTY 出参要写到不同实例时用它，比 outputDataPrimaryKeyKeys 更细；"
+            description = "应用行为按出参指定写回位置时用：key -> {实例主键黑板键, 存储分组 -> 行主键黑板键}。"
+                    + "key 认一条写属性绑定行，从高到低三种写法：目标属性的属性唯一标识 > 该行的出参字段名 > 该行的顶层算子出参名；"
+                    + "同一算子出参的几个属性要写到不同实例时按字段名或属性唯一标识逐条点名，比 outputDataPrimaryKeyKeys 更细；"
                     + "命中时优先于该对象的实例键与行主键，不绑算子的行为配了会被拒绝",
             example = "{\"price\":{\"entityPrimaryKeyKey\":\"priceTargetId\"},\"duty\":{\"entityPrimaryKeyKey\":\"dutyTargetId\",\"dataPrimaryKeyKeys\":{\"duty_log\":\"dutyRowId\"}}}")
     private Map<String, BehaviorActionParamKeys> outputParamKeys;

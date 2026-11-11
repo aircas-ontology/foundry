@@ -50,11 +50,13 @@ public class ActionTestParam {
                     + "{\"entityPrimaryKey\":102,\"dataPrimaryKeys\":{\"duty_log\":12}}]}")
     private Map<String, List<ActionInstanceTargetParam>> inputParams;
 
-    @Schema(name = "outputParams", description = "按算子出参指定的写回位置：出参名 -> {实例主键, 存储分组->行主键}。"
-            + "出参写到哪个实例、写子表哪一行都在这里给；命中时优先于 entityPrimaryKeys，"
-            + "只影响该出参的写回，不影响属性入参读取和关系落库；关系对端与不绑算子的行为不支持；"
-            + "这里不支持数组，传了直接报错",
-            example = "{\"price\":{\"entityPrimaryKey\":2},\"duty\":{\"entityPrimaryKey\":3,\"dataPrimaryKeys\":{\"duty_log\":12}}}")
+    @Schema(name = "outputParams", description = "按出参绑定指定的写回位置：key -> {实例主键, 存储分组->行主键}。"
+            + "key 按写属性的那条出参绑定定位，从高到低三种写法：目标属性的属性唯一标识 > 该行的出参字段名 > 该行的顶层算子出参名；"
+            + "脚本算子往往只有一个顶层出参，几个字段要写到不同实例就按字段名（或属性唯一标识）逐个点名。"
+            + "字段名命中多条绑定且分属不同对象时会报错，改用属性唯一标识；"
+            + "命中时优先于 entityPrimaryKeys，只影响该行写回，不影响属性入参读取和关系落库；"
+            + "关系对端与不绑算子的行为不支持；这里不支持数组，传了直接报错",
+            example = "{\"name\":{\"entityPrimaryKey\":2},\"status\":{\"entityPrimaryKey\":3,\"dataPrimaryKeys\":{\"duty_log\":12}}}")
     private Map<String, ActionInstanceTargetParam> outputParams;
 
     @Schema(name = "dataPrimaryKey", description = "分组表行的主键：属性值-修改/删除必填；不支持数组", example = "1")

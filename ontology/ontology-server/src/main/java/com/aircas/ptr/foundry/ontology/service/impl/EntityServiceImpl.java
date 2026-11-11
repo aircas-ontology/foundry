@@ -1399,9 +1399,11 @@ public class EntityServiceImpl implements EntityService {
 
     /**
      * 按算子参数（inputParams / outputParams）指定的数据位置校验。
-     * <p>参数名写错、该参数的绑定行不需要实例（入参）或不写属性（出参）、一个参数跨多对象却指定实例主键、
-     * 指定的是关系对端——这几种都会静默退回共用的实例选择，读写到调用方没打算碰的实例，直接报错。
-     * 关系两端本体的实例仍按 from/to 或本端选择：这两份参数只路由各自参数行的读或写，
+     * <p>入参按算子入参名定位；出参按「哪条写属性绑定」定位，key 可以是属性唯一标识、绑定行的出参字段名
+     * 或顶层算子出参名（脚本算子往往只有一个顶层出参，属性级写回实例只能靠前两种）。
+     * key 写错、该 key 没有对应的绑定行、绑定跨多对象却指定实例主键、指定的是关系对端——
+     * 这几种都会静默退回共用的实例选择，读写到调用方没打算碰的实例，直接报错。
+     * 关系两端本体的实例仍按 from/to 或本端选择：这两份参数只路由各自行的读或写，
      * 不参与另一方向和关系落库的主键解析，所以允许落在端点对象上（与 inputEntities 不同）。</p>
      */
     private void checkParamTargets(OntologyActionDetailVO detail, FunctionDetailVO functionDetailVO,
@@ -1418,8 +1420,7 @@ public class EntityServiceImpl implements EntityService {
         var params = functionDetailVO.getParams();
         checkDirectionTargets(detail, params, inputTargets, this::isInstanceInputRow,
                 FunctionParamCategoryEnum.INPUT, "inputParams", "入参", counterpartObject);
-        checkDirectionTargets(detail, params, outputTargets, this::isPropertyWriteOutputRow,
-                FunctionParamCategoryEnum.OUTPUT, "outputParams", "出参", counterpartObject);
+        checkOutputTargets(detail, params, outputTargets, counterpartObject);
     }
 
     private void checkDirectionTargets(OntologyActionDetailVO detail, List<FunctionParameterVO> allParams,
@@ -1453,6 +1454,112 @@ public class EntityServiceImpl implements EntityService {
                             + "entityPrimaryKeys 按对象传",
                     HttpStatus.BAD_REQUEST);
         });
+    }
+
+    /**
+     * 校验 outputParams 的 key 是否指向该行为里真实存在的写属性出参绑定。
+     * <p>出参写回的单位是「一条绑定行 = 一个属性」，不是「一个算子出参」，所以同一份返回体的几个字段
+     * 可以各写一个实例。key 的匹配优先级：属性唯一标识 &gt; 绑定行的出参字段名 &gt; 该行所属的顶层算子出参名；
+     * 字段名命中多条绑定又分属不同对象时不猜实例，要求改用属性唯一标识。</p>
+     */
+    private void checkOutputTargets(OntologyActionDetailVO detail, List<FunctionParameterVO> allParams,
+                                    Map<String, ActionInstanceTargetParam> targets, String counterpartObject) {
+        if (MapUtils.isEmpty(targets)) {
+            return;
+        }
+        var outputParams = allParams.stream()
+                .filter(v -> v.getCategory() == FunctionParamCategoryEnum.OUTPUT)
+                .collect(Collectors.toList());
+        var writeRows = CollectionUtils.isEmpty(detail.getMappingIns()) ? List.<ActionParamMappingVO>of()
+                : detail.getMappingIns().stream().filter(this::isPropertyWriteOutputRow).collect(Collectors.toList());
+        var legacyObjectId = detail.getOntologyUniqIdentifier();
+        targets.forEach((key, target) -> {
+            PreconditionUtils.checkArgument(StringUtils.isNotBlank(key),
+                    "outputParams 的 key 不能为空", HttpStatus.BAD_REQUEST);
+            PreconditionUtils.checkArgument(target != null
+                            && (target.getEntityPrimaryKey() != null || MapUtils.isNotEmpty(target.getDataPrimaryKeys())),
+                    "outputParams 里的出参[" + key + "]没给实例主键，也没给分组行主键", HttpStatus.BAD_REQUEST);
+            var rows = writeRows.stream()
+                    .filter(row -> key.equals(outputTargetKeyOf(row, outputParams, targets)))
+                    .collect(Collectors.toList());
+            PreconditionUtils.checkArgument(!rows.isEmpty(),
+                    "outputParams 里的[" + key + "]没有命中任何写入对象属性的出参绑定"
+                            + "（或命中的绑定已被更精确的 key 点名）。可指定的写属性出参："
+                            + describeOutputWriteRows(writeRows, outputParams, legacyObjectId),
+                    HttpStatus.BAD_REQUEST);
+            PreconditionUtils.checkArgument(rows.stream().anyMatch(row -> StringUtils.isNotEmpty(row.getFunctionParamExpression())),
+                    "出参[" + key + "]命中的绑定都没配置取值路径，按它指定数据位置不会写回任何属性", HttpStatus.BAD_REQUEST);
+            var objectIds = rows.stream()
+                    .map(row -> StringUtils.isNotEmpty(row.getOntologyUniqueIdentifier())
+                            ? row.getOntologyUniqueIdentifier() : legacyObjectId)
+                    .filter(StringUtils::isNotEmpty)
+                    .distinct()
+                    .collect(Collectors.toList());
+            var onlyObjectId = objectIds.size() == 1 ? objectIds.get(0) : null;
+            PreconditionUtils.checkArgument(!StringUtils.equals(onlyObjectId, counterpartObject),
+                    "出参[" + key + "]的数据落在关系对端对象[" + counterpartObject + "]上，"
+                            + "实例与分组行都由关系两端或本次遍历决定，不能按出参指定", HttpStatus.BAD_REQUEST);
+            PreconditionUtils.checkArgument(target.getEntityPrimaryKey() == null || objectIds.size() == 1,
+                    "出参[" + key + "]命中多条绑定且分属对象[" + String.join("、", objectIds)
+                            + "]，不能按它指定实例主键，请改用各行的属性唯一标识作 key",
+                    HttpStatus.BAD_REQUEST);
+        });
+    }
+
+    /** 出参 key 与某条写属性绑定的匹配层级：3 属性唯一标识、2 出参字段名、1 顶层算子出参名、0 不匹配 */
+    private int outputTargetTier(ActionParamMappingVO row, List<FunctionParameterVO> outputParams, String key) {
+        if (StringUtils.isEmpty(key)) {
+            return 0;
+        }
+        if (key.equals(row.getPropertyUniqueIdentifier())) {
+            return 3;
+        }
+        if (key.equals(row.getParameterName())) {
+            return 2;
+        }
+        return key.equals(paramNameOf(outputParams, row.getFunctionParamId())) ? 1 : 0;
+    }
+
+    /**
+     * 一条写属性出参绑定归属 outputParams 里的哪个 key：取点名它的 key 中优先级最高的那个，
+     * 同优先级按请求里的出现顺序取第一个；没有 key 点名该行返回 null。
+     * <p>校验侧和写回侧共用它，报错里「这个 key 命中几条绑定」与实际「这几条按哪个实例写回」才是同一批。</p>
+     */
+    private String outputTargetKeyOf(ActionParamMappingVO row, List<FunctionParameterVO> outputParams,
+                                     Map<String, ActionInstanceTargetParam> targets) {
+        if (MapUtils.isEmpty(targets)) {
+            return null;
+        }
+        String bestKey = null;
+        var bestTier = 0;
+        for (var entry : targets.entrySet()) {
+            var tier = outputTargetTier(row, outputParams, entry.getKey());
+            if (tier > bestTier) {
+                bestTier = tier;
+                bestKey = entry.getKey();
+            }
+        }
+        return bestKey;
+    }
+
+    /** 报错时列出该行为可被 outputParams 指定的写属性出参，让调用方直接照抄 key */
+    private String describeOutputWriteRows(List<ActionParamMappingVO> rows, List<FunctionParameterVO> outputParams,
+                                           String legacyObjectId) {
+        if (rows.isEmpty()) {
+            return "无（该行为没有把出参写入对象属性的绑定）";
+        }
+        var limit = 10;
+        var shown = rows.stream().limit(limit).map(row -> {
+            var paramName = StringUtils.defaultIfBlank(row.getParameterName(),
+                    paramNameOf(outputParams, row.getFunctionParamId()));
+            var objectId = StringUtils.isNotEmpty(row.getOntologyUniqueIdentifier())
+                    ? row.getOntologyUniqueIdentifier() : legacyObjectId;
+            return StringUtils.defaultIfBlank(row.getPropertyUniqueIdentifier(), "无属性id")
+                    + "(" + StringUtils.defaultIfBlank(row.getDisplayName(), "未命名属性")
+                    + "，字段名=" + StringUtils.defaultIfBlank(paramName, "无")
+                    + "，对象=" + StringUtils.defaultIfBlank(objectId, "无") + ")";
+        }).collect(Collectors.joining("、"));
+        return rows.size() > limit ? shown + " 等 " + rows.size() + " 条" : shown;
     }
 
     /** 行为绑定关系时的对端对象；没绑关系返回 null */
@@ -1664,11 +1771,10 @@ public class EntityServiceImpl implements EntityService {
                 continue;
             }
             needTargetObjects.add(objectId);
-            var params = isInputRow ? context.getFunctionInputParams()
-                    : functionParamsOf(context, FunctionParamCategoryEnum.OUTPUT);
             var targets = isInputRow ? inputTargets : outputTargets;
-            var paramName = paramNameOf(params, mapping.getFunctionParamId());
-            var target = paramName == null || targets == null ? null : targets.get(paramName);
+            var target = isInputRow
+                    ? paramTargetOf(targets, paramNameOf(context.getFunctionInputParams(), mapping.getFunctionParamId()))
+                    : outputTargetFor(context, targets, mapping);
             if (target == null || target.getEntityPrimaryKey() == null) {
                 uncoveredObjects.add(objectId);
             }
@@ -1712,13 +1818,13 @@ public class EntityServiceImpl implements EntityService {
     }
 
     /**
-     * 某个出参本次写回落到哪一行：按出参指定的分组行优先，没指定的分组沿用出参方向（outputEntities）里该对象的行。
+     * 某个出参绑定本次写回落到哪一行：按该条绑定指定的分组行优先，没指定的分组沿用出参方向（outputEntities）里该对象的行。
      * 都没指定返回空，写回回退到原口径：扩展表新增一行。
      */
-    private Object outputRowKeyFor(ActionContextInfoDTO context, String objectId, String storageGroup,
-                                   String outParamName) {
+    private Object outputRowKeyFor(ActionContextInfoDTO context, ActionParamMappingVO row, String objectId,
+                                   String storageGroup) {
         var objectLevel = rowKeysOf(outputTargetsFor(context), objectId);
-        var paramTarget = paramTargetOf(outputParamTargetsFor(context), outParamName);
+        var paramTarget = outputTargetFor(context, row);
         return rowKeyFor(paramTarget == null ? objectLevel
                 : mergeRowKeys(paramTarget.getDataPrimaryKeys(), objectLevel), storageGroup);
     }
@@ -1734,13 +1840,28 @@ public class EntityServiceImpl implements EntityService {
         return paramName == null || MapUtils.isEmpty(targets) ? null : targets.get(paramName);
     }
 
+    /** 写回时按执行请求里的 outputParams 定位该条绑定，见 {@link #outputTargetFor(ActionContextInfoDTO, Map, ActionParamMappingVO)} */
+    private ActionInstanceTargetParam outputTargetFor(ActionContextInfoDTO context, ActionParamMappingVO row) {
+        return outputTargetFor(context, outputParamTargetsFor(context), row);
+    }
+
     /**
-     * 出参写回用的实例主键：按出参指定的实例优先（同一对象的两个出参各写一个实例靠它区分），
+     * 某条写属性出参绑定在 outputParams 里对应的数据位置；没有 key 点名该条绑定返回 null，写回退回按对象选实例。
+     */
+    private ActionInstanceTargetParam outputTargetFor(ActionContextInfoDTO context,
+                                                      Map<String, ActionInstanceTargetParam> targets,
+                                                      ActionParamMappingVO row) {
+        var key = outputTargetKeyOf(row, functionParamsOf(context, FunctionParamCategoryEnum.OUTPUT), targets);
+        return key == null ? null : targets.get(key);
+    }
+
+    /**
+     * 出参写回用的实例主键：按该条出参绑定指定的实例优先（同一对象的几个属性各写一个实例靠它区分），
      * 其次按出参方向指定的对象实例，最后回退到各对象共用的实例选择。
      */
     private Object resolveOutputPrimaryKey(ActionContextInfoDTO context, EntityActionExecuteParam param,
-                                           String objectId, String outParamName) {
-        var target = paramTargetOf(outputParamTargetsFor(context), outParamName);
+                                           ActionParamMappingVO row, String objectId) {
+        var target = outputTargetFor(context, row);
         if (target != null && target.getEntityPrimaryKey() != null) {
             return target.getEntityPrimaryKey();
         }
@@ -2200,13 +2321,13 @@ public class EntityServiceImpl implements EntityService {
             var primaryProp = primaryPropByObject.get(objectId);
             PreconditionUtils.checkNotNull(primaryProp,
                     "对象[" + objectId + "]未配置主键属性，无法写回", HttpStatus.BAD_REQUEST);
-            var entityPrimaryKey = resolveOutputPrimaryKey(actionContext, param, objectId, outParamName);
+            var entityPrimaryKey = resolveOutputPrimaryKey(actionContext, param, out, objectId);
             PreconditionUtils.checkNotNull(entityPrimaryKey,
                     "对象[" + objectId + "]未选择实例数据，无法写回", HttpStatus.BAD_REQUEST);
             var writeTarget = new WriteTarget(objectId, entityPrimaryKey);
             var toMainTable = prop.getDatasourceId().equals(primaryProp.getDatasourceId());
             var rowKey = toMainTable ? null
-                    : outputRowKeyFor(actionContext, objectId, prop.getStorageGroup(), outParamName);
+                    : outputRowKeyFor(actionContext, out, objectId, prop.getStorageGroup());
             // 通配出参：一列取一批值，先攒着，最后和同组其它列逐元素成行插子表
             if (wildcard) {
                 wildcardGroups.computeIfAbsent(new WildcardKey(writeTarget, prop.getDatasourceId(),

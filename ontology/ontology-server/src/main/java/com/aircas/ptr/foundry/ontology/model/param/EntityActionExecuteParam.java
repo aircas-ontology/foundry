@@ -53,9 +53,10 @@ public class EntityActionExecuteParam extends EntityQueryParam {
             + "只影响该入参的读取，不影响出参写回和关系落库；关系对端与不绑算子的行为不支持")
     private Map<String, ActionInstanceTargetParam> inputParams;
 
-    @Schema(name = "outputParams", description = "按算子出参指定的写回位置：出参名 -> {实例主键, 存储分组->行主键}。"
-            + "同一对象的两个 WRITE_PROPERTY 出参写到不同实例时用它；命中时优先于 entityPrimaryKeys，"
-            + "只影响该出参的写回；关系对端与不绑算子的行为不支持")
+    @Schema(name = "outputParams", description = "按出参绑定指定的写回位置：key -> {实例主键, 存储分组->行主键}。"
+            + "key 从高到低认属性唯一标识 > 该条绑定的出参字段名 > 该条绑定所属的顶层算子出参名；"
+            + "同一算子出参的几个属性写到不同实例时按字段名或属性唯一标识逐条点名；"
+            + "命中时优先于 entityPrimaryKeys，只影响该行写回；关系对端与不绑算子的行为不支持")
     private Map<String, ActionInstanceTargetParam> outputParams;
 
     @Schema(name = "linkedOntologyUniqueIdentifier", description = "关联对象id", example = "123")

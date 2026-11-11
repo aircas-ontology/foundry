@@ -75,10 +75,11 @@ public class TreeExecuteParam {
     private Map<String, List<ActionInstanceTargetParam>> inputParams;
 
     @Schema(name = "outputParams",
-            description = "按算子出参指定写回位置：出参名 -> {实例主键, 存储分组 -> 行主键}，作为全树默认值；"
-                    + "同一对象的两个 WRITE_PROPERTY 出参要写到不同实例时用它，节点配置了出参键时以节点为准；"
-                    + "按参数名的默认值会命中所有绑定的同名出参",
-            example = "{\"price\":{\"entityPrimaryKey\":2},\"duty\":{\"entityPrimaryKey\":3,\"dataPrimaryKeys\":{\"duty_log\":12}}}")
+            description = "按出参绑定指定写回位置：key -> {实例主键, 存储分组 -> 行主键}，作为全树默认值；"
+                    + "key 从高到低认属性唯一标识 > 该条绑定的出参字段名 > 该条绑定所属的顶层算子出参名，与行为测试同一写法；"
+                    + "同一算子出参的几个属性要写到不同实例时用它，节点配置了出参键时以节点为准；"
+                    + "按 key 的默认值会命中所有绑定的同名出参",
+            example = "{\"name\":{\"entityPrimaryKey\":2},\"status\":{\"entityPrimaryKey\":3,\"dataPrimaryKeys\":{\"duty_log\":12}}}")
     private Map<String, ActionInstanceTargetParam> outputParams;
 
     @Schema(name = "linkEntityPrimaryKey",

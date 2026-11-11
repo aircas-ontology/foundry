@@ -804,13 +804,25 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 .filter(param -> param.getCategory() == category)
                 .map(FunctionParameterVO::getParamName)
                 .filter(StringUtils::isNotBlank)
-                .collect(Collectors.toSet());
+                .collect(Collectors.toCollection(LinkedHashSet::new));
         if (names.isEmpty()) {
             return;
         }
+        // 出参写回的单位是一条绑定行，属性唯一标识与该行记的出参字段名同样能作 key
+        if (category == FunctionParamCategoryEnum.OUTPUT) {
+            ontologyActionMappingInService.list(new LambdaQueryWrapper<OntologyActionMappingIn>()
+                            .eq(OntologyActionMappingIn::getOntologyActionId, bound.getId())).forEach(mapping -> {
+                        if (mapping.getOutputMode() == ActionOutputModeEnum.WRITE_PROPERTY) {
+                            names.add(mapping.getPropertyUniqueIdentifier());
+                            names.add(mapping.getParameterName());
+                        }
+                    });
+            names.removeIf(StringUtils::isBlank);
+        }
         nodeKeys.keySet().forEach(paramName -> PreconditionUtils.checkArgument(names.contains(paramName),
                 "行为节点 " + nodeId + " 的 " + fieldName + " 里的" + cnLabel + "[" + paramName
-                        + "]不是行为 " + bound.getApi() + " 绑定算子的" + cnLabel + "，请检查名称是否正确",
+                        + "]不是行为 " + bound.getApi() + " 绑定算子的" + cnLabel
+                        + "，也不是该行为写入对象属性的出参（属性唯一标识或出参字段名），请检查名称是否正确",
                 HttpStatus.BAD_REQUEST));
     }
 
