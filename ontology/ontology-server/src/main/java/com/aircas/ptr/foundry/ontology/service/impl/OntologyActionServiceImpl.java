@@ -3458,6 +3458,23 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     @SneakyThrows
     @Override
     public String executeAction(OntologyActionExecuteParam param) {
+        // 定时调度存了整段实体执行参数（entity_json）：解析成 EntityActionExecuteParam，
+        // 按它指定的实例直接执行，不再按对象下全部实例遍历。缺省（没存 JSON）仍走下面的全量逻辑。
+        if (param instanceof XxlJobActionExecuteParam xxlParam && xxlParam.getScheduleId() != null) {
+            var scheduledTask = actionHandleTaskService.getById(xxlParam.getScheduleId());
+            if (scheduledTask != null && StringUtils.isNotBlank(scheduledTask.getEntityJson())) {
+                var executeParam = jsonMapper.readValue(scheduledTask.getEntityJson(), EntityActionExecuteParam.class);
+                var scheduledContextInfoDTO = entityService.initActionContextInfoDTO(executeParam);
+                entityService.executeEntityAction(executeParam, scheduledContextInfoDTO,
+                        entityService.getLinkedEntities(scheduledContextInfoDTO));
+                var scheduledMsg = "执行行为" + executeParam.getActionApi() + "成功, OntologyUniqueIdentifier:"
+                        + executeParam.getOntologyUniqueIdentifier() + ", entityPrimaryKey:" + executeParam.getEntityPrimaryKey();
+                log.info(scheduledMsg);
+                XxlJobHelper.log(scheduledMsg);
+                return jsonMapper.writeValueAsString(Lists.newArrayList(scheduledMsg));
+            }
+        }
+
         var meta = ontologyMetaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>()
                 .eq(OntologyMeta::getUniqueIdentifier, param.getOntologyUniqueIdentifier()));
         PreconditionUtils.checkNotNull(meta, "无效的对象：" + param.getOntologyUniqueIdentifier(), HttpStatus.BAD_REQUEST);
@@ -4326,6 +4343,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                     .ontologyIdentifier(action.getOntologyUniqueIdentifier())
                     .ontologySpaceId(action.getOntologySpaceId())
                     .cron(taskParam.getTaskCronExpression())
+                    .entityJson(taskParam.getEntityJson())
                     .name(param.getName())
                     .description(param.getDescription())
                     .status(ScheduleStatus.STOP)
@@ -4369,6 +4387,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                     .setOntologySpaceId(action.getOntologySpaceId())
                     .setDescription(param.getDescription())
                     .setCron(param.getTask().getTaskCronExpression())
+                    .setEntityJson(param.getTask().getEntityJson())
                     .setName(param.getName());
             actionHandleTaskService.updateById(handleTask);
             try {
@@ -4460,7 +4479,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                     .description(handleTask.getDescription())
                     .type(ActionSchedulingTypeEnum.TASK)
                     .ontologyIdentifier(action.getOntologyUniqueIdentifier())
-                    .taskVO(ActionHandleTaskInfoVO.builder().taskCronExpression(handleTask.getCron()).build())
+                    .taskVO(ActionHandleTaskInfoVO.builder().taskCronExpression(handleTask.getCron())
+                            .entityJson(handleTask.getEntityJson()).build())
                     .status(handleTask.getStatus())
                     .build();
         }

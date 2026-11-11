@@ -24,4 +24,7 @@ public class ActionHandleTaskInfoVO {
     @Schema(description = "任务执行周期表达式，在functionApi不为空时生效", example = "30 * * 1/1 * ? *")
     private String taskCronExpression;
 
+    @Schema(description = "实体执行参数 JSON，执行时反序列化成 EntityActionExecuteParam")
+    private String entityJson;
+
 }

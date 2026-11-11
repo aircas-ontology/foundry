@@ -56,6 +56,12 @@ public class ActionHandleTask {
 
     private String description;
 
+    /**
+     * 实体执行参数 JSON：定时调度触发时反序列化成 EntityActionExecuteParam，按它指定的实例执行；
+     * 为空则回退按对象下全部实例遍历执行。
+     */
+    private String entityJson;
+
     private String remark;
 
     /**
