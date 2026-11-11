@@ -699,6 +699,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 checkTreeRowKeyRefs(nodeId, config.getOutputDataPrimaryKeyKeys(), blackboardTypes, "出参");
                 checkTreeParamKeys(nodeId, config, boundApi, spaceId, blackboardTypes);
                 checkTreeNodeObjectInstanceKeys(nodeId, config, boundApi, spaceId, blackboardTypes);
+                checkTreeNodeWildcardRowKeys(nodeId, config, boundApi, spaceId);
                 if (actionApis.add(boundApi)) {
                     checkTreeBoundAction(nodeId, boundApi, spaceId);
                 }
@@ -853,6 +854,106 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 checkTreeBlackboardKeyRef(nodeId, key, blackboardTypes);
             });
         });
+    }
+
+    /**
+     * 行为节点的出参行主键不能落在被引用行为「按数组元素批量插行」的分组上。
+     * <p>通配出参（取值路径带 {@code [*]}）是一个元素插一行，执行侧禁止同时给分组行主键；节点配了行主键
+     * 表达的是「改这一行」，两者矛盾。行为的取值路径会在它自己重存时被补上 {@code [*]}，树定义里看不出这个变化，
+     * 不在这里拦就要等执行才报错，所以按被引用行为当前的绑定路径提前判定。</p>
+     * <p>只拦节点自己配的行主键：执行请求级的 outputDataPrimaryKeys、outputParams 运行时才知道，树定义里没有，拦不到。</p>
+     */
+    private void checkTreeNodeWildcardRowKeys(String nodeId, BehaviorActionConfig config, String boundApi, Integer spaceId) {
+        if (MapUtils.isEmpty(config.getOutputDataPrimaryKeyKeys()) && MapUtils.isEmpty(config.getOutputParamKeys())) {
+            return;
+        }
+        var bound = getOne(new LambdaQueryWrapper<OntologyAction>()
+                .eq(OntologyAction::getApi, boundApi)
+                .eq(OntologyAction::getOntologySpaceId, spaceId));
+        // 悬空引用由 checkTreeBoundAction 报错，这里不抢先中断
+        if (bound == null) {
+            return;
+        }
+        var wildcardRows = ontologyActionMappingInService.list(new LambdaQueryWrapper<OntologyActionMappingIn>()
+                        .eq(OntologyActionMappingIn::getOntologyActionId, bound.getId())).stream()
+                .filter(mapping -> mapping.getOutputMode() == ActionOutputModeEnum.WRITE_PROPERTY)
+                .filter(mapping -> StringUtils.isNotEmpty(mapping.getPropertyUniqueIdentifier()))
+                .filter(mapping -> FunctionOutputValueReader.hasWildcard(mapping.getFunctionParamExpression()))
+                .collect(Collectors.toList());
+        if (wildcardRows.isEmpty()) {
+            return;
+        }
+        var props = ontologyPropertyService.list(new LambdaQueryWrapper<OntologyProperty>()
+                        .in(OntologyProperty::getUniqueIdentifier, wildcardRows.stream()
+                                .map(OntologyActionMappingIn::getPropertyUniqueIdentifier)
+                                .distinct()
+                                .collect(Collectors.toList())))
+                .stream()
+                .collect(Collectors.toMap(OntologyProperty::getUniqueIdentifier, v -> v, (existingValue, newValue) -> existingValue));
+        Map<Long, String> paramNames = new LinkedHashMap<>();
+        treeFunctionParams(bound).forEach(param -> {
+            if (param.getParamId() != null && StringUtils.isNotBlank(param.getParamName())) {
+                paramNames.putIfAbsent(param.getParamId(), param.getParamName());
+            }
+        });
+        for (var row : wildcardRows) {
+            var prop = props.get(row.getPropertyUniqueIdentifier());
+            if (prop == null) {
+                continue;
+            }
+            var storageGroup = prop.getStorageGroup();
+            if (StringUtils.isBlank(storageGroup) || MAIN_STORAGE_GROUP.equals(storageGroup)) {
+                continue;
+            }
+            var objectId = StringUtils.isNotEmpty(row.getOntologyUniqueIdentifier())
+                    ? row.getOntologyUniqueIdentifier() : prop.getOntologyUniqueIdentifier();
+            var objectRowKeys = config.getOutputDataPrimaryKeyKeys() == null
+                    ? null : config.getOutputDataPrimaryKeyKeys().get(objectId);
+            checkTreeRowKeyNotWildcard(nodeId, bound, objectId, storageGroup,
+                    objectRowKeys == null ? null : objectRowKeys.get(storageGroup), "outputDataPrimaryKeyKeys");
+            // 按参数指定的行主键与对象级行主键在执行侧是合并生效的，两处都要判
+            var paramKey = treeOutputParamKeyOf(row, paramNames, config.getOutputParamKeys());
+            if (paramKey == null) {
+                continue;
+            }
+            var target = config.getOutputParamKeys().get(paramKey);
+            var paramRowKeys = target == null ? null : target.getDataPrimaryKeyKeys();
+            checkTreeRowKeyNotWildcard(nodeId, bound, objectId, storageGroup,
+                    paramRowKeys == null ? null : paramRowKeys.get(storageGroup),
+                    "outputParamKeys[" + paramKey + "].dataPrimaryKeyKeys");
+        }
+    }
+
+    /** 该分组配了行主键就拒绝：批量插行没有「要改的那一行」，报错要指到具体配置项和黑板键 */
+    private void checkTreeRowKeyNotWildcard(String nodeId, OntologyAction bound, String objectId, String storageGroup,
+                                            String rowKey, String configField) {
+        if (StringUtils.isBlank(rowKey)) {
+            return;
+        }
+        throw new BusinessException("行为节点 " + nodeId + " 绑定的行为 " + bound.getApi()
+                + " 按数组元素往子表[" + storageGroup + "]批量插行（出参取值路径带 [*]），不能再指定该分组的行主键："
+                + "请去掉 " + configField + " 里对象[" + objectId + "]分组[" + storageGroup + "]的黑板键 " + rowKey,
+                HttpStatus.BAD_REQUEST);
+    }
+
+    /** 节点 outputParamKeys 里点名这条写属性绑定的 key：与执行侧同一优先级（属性唯一标识 &gt; 出参字段名 &gt; 算子出参名） */
+    private String treeOutputParamKeyOf(OntologyActionMappingIn row, Map<Long, String> paramNames,
+                                        Map<String, BehaviorActionParamKeys> nodeKeys) {
+        if (MapUtils.isEmpty(nodeKeys)) {
+            return null;
+        }
+        String bestKey = null;
+        int bestTier = 0;
+        for (var key : nodeKeys.keySet()) {
+            int tier = key.equals(row.getPropertyUniqueIdentifier()) ? 3
+                    : key.equals(row.getParameterName()) ? 2
+                    : key.equals(paramNames.get(row.getFunctionParamId())) ? 1 : 0;
+            if (tier > bestTier) {
+                bestTier = tier;
+                bestKey = key;
+            }
+        }
+        return bestKey;
     }
 
     /**
