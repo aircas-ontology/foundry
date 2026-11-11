@@ -10,7 +10,7 @@ import lombok.experimental.SuperBuilder;
 import jakarta.validation.constraints.NotBlank;
 
 /**
- * 行为分类更新请求（重命名，级联重写子树的 path）。
+ * 行为分类更新请求（重命名或换父节点，级联重写子树的 path）。
  */
 @Data
 @AllArgsConstructor
@@ -23,4 +23,7 @@ public class ActionCategoryUpdateParam extends ActionCategoryDeleteParam {
     @Schema(name = "name", description = "行为分类名称", example = "轨道机动")
     @NotBlank(message = "name is empty")
     private String name;
+
+    @Schema(name = "parentId", description = "父节点id，不传表示不修改父节点；不能是自己，也不能是自己的下级节点", example = "1")
+    private Integer parentId;
 }

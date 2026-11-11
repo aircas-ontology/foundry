@@ -24,4 +24,7 @@ public class CompositeValidateParam {
 
     @Schema(name = "compositeConfig", description = "待校验的编排定义，为空时取 functionApi 已落库的定义")
     private CompositeConfig compositeConfig;
+
+    @Schema(name = "ontologySpaceId", description = "对象空间id（compositeConfig 为空、需按 functionApi 读库取定义时必传）")
+    private Integer ontologySpaceId;
 }

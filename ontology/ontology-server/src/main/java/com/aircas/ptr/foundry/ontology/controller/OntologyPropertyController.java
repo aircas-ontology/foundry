@@ -145,7 +145,7 @@ public class OntologyPropertyController {
     }
 
     @PutMapping("/category")
-    @Operation(summary = "修改属性分类名称")
+    @Operation(summary = "修改属性分类名称、父节点")
     public RestResult updateCategory(@RequestBody @Valid PropertyCategoryUpdateParam param) {
         ontologyPropertyService.updateCategory(param);
         return RestResult.success();

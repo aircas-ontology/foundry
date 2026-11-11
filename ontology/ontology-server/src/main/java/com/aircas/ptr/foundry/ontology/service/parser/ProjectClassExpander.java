@@ -121,13 +121,28 @@ final class ProjectClassExpander {
      */
     List<ScriptParsedParam> expandFields(Class<?> clazz, FunctionParamCategoryEnum category,
                                          Set<String> visited, int depth) {
+        return expandFields(clazz, category, visited, depth, Map.of(), null);
+    }
+
+    /**
+     * 同上，额外接收泛型实参绑定：脚本把返回类型写成 {@code FunctionResultVO<List<OrbitInfo>>} 时，
+     * 反射看到的 {@code data} 仍是类型变量 {@code T}，只有配上调用处写的实参才能展开下一级。
+     *
+     * @param typeVars     类型变量名 → 脚本写的泛型实参文本（如 {@code T → List<OrbitInfo>}），无绑定按擦除处理
+     * @param scriptTypes  实参指向脚本内类时的字段展开回调，可为 null
+     */
+    List<ScriptParsedParam> expandFields(Class<?> clazz, FunctionParamCategoryEnum category, Set<String> visited,
+                                         int depth, Map<String, String> typeVars, ScriptTypeExpansion scriptTypes) {
         List<ScriptParsedParam> fields = new ArrayList<>();
         if (clazz == null || depth > MAX_FIELD_DEPTH || !visited.add(clazz.getName())) {
             return fields;
         }
         for (Field field : SchemaHandleUtil.getInstanceFields(clazz)) {
             Type generic = field.getGenericType();
-            String typeText = generic instanceof TypeVariable ? ERASED_TYPE : generic.getTypeName();
+            // 类型变量优先按脚本写的实参落文本，没绑定才按擦除处理（与改造前一致）
+            String bound = generic instanceof TypeVariable<?> variable ? typeVars.get(variable.getName()) : null;
+            String typeText = bound != null ? bound
+                    : (generic instanceof TypeVariable ? ERASED_TYPE : generic.getTypeName());
             ScriptParsedParam.ScriptParsedParamBuilder fb = ScriptParsedParam.builder()
                     .name(field.getName())
                     .type(ScriptParamTypeMapper.map(dequalify(typeText)))
@@ -137,10 +152,66 @@ final class ProjectClassExpander {
             Class<?> nested = businessClassOf(generic);
             if (nested != null) {
                 fb.fields(expandFields(nested, category, visited, depth + 1));
+            } else if (bound != null) {
+                fb.fields(expandBoundType(bound, category, visited, depth + 1, scriptTypes));
             }
             fields.add(fb.build());
         }
         return fields;
+    }
+
+    /**
+     * 展开泛型实参指向的类型：先剥出业务类型名（集合取元素、Map 取值、数组取组件），
+     * 再依次试脚本内类和工程内类；两者都认不得时返回 null，保持「object 无下一级」的原口径。
+     */
+    private List<ScriptParsedParam> expandBoundType(String boundText, FunctionParamCategoryEnum category,
+                                                    Set<String> visited, int depth, ScriptTypeExpansion scriptTypes) {
+        String className = elementTypeOf(boundText);
+        if (scriptTypes != null) {
+            List<ScriptParsedParam> fromScript = scriptTypes.expand(className, category, visited, depth);
+            if (fromScript != null) {
+                return fromScript;
+            }
+        }
+        return expandFieldsByName(className, category, visited, depth);
+    }
+
+    /**
+     * 泛型实参文本里的业务类型名：逐层剥掉集合、Map 与数组外壳，{@code List<OrbitInfo>} → OrbitInfo、
+     * {@code Map<String, OrbitInfo>} → 值类型、{@code List<Map<String, OrbitInfo>>} 与 {@code OrbitInfo[]} 同样落到 OrbitInfo。
+     */
+    private static String elementTypeOf(String boundText) {
+        String text = boundText == null ? "" : boundText.trim();
+        int angle = text.indexOf('<');
+        if (angle > 0 && text.endsWith(">")) {
+            // 多参数泛型（Map<K,V>）取最后一个：List<E> 只有一个、Map 的值类型在最后，与单层时的口径一致
+            var arguments = topLevelArguments(text.substring(angle + 1, text.length() - 1));
+            return elementTypeOf(arguments.get(arguments.size() - 1));
+        }
+        if (text.endsWith("[]")) {
+            return elementTypeOf(text.substring(0, text.length() - 2));
+        }
+        return text;
+    }
+
+    /** 按尖括号深度切分泛型实参：{@code Map<String, List<OrbitInfo>>} 的实参是 {@code ["String", "List<OrbitInfo>"]} */
+    private static List<String> topLevelArguments(String arguments) {
+        List<String> parts = new ArrayList<>();
+        int depth = 0;
+        int start = 0;
+        for (int i = 0; i < arguments.length(); i++) {
+            char c = arguments.charAt(i);
+            if (c == '<') {
+                depth++;
+            } else if (c == '>') {
+                depth--;
+            } else if (c == ',' && depth == 0) {
+                parts.add(arguments.substring(start, i).trim());
+                start = i + 1;
+            }
+        }
+        parts.add(arguments.substring(start).trim());
+        return parts;
     }
 
     /** 候选全限定名列表：显式 import 优先，其次通配包拼接，最后原样（已是全限定名的场景）。 */

@@ -11,6 +11,7 @@ import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 
 import java.util.List;
@@ -36,7 +37,8 @@ public class FunctionUpdateParam {
     @Pattern(regexp = VERSION_PATTERN, message = "版本号格式必须为 x.y.z（如 1.0.0）")
     private String version;
 
-    @Schema(name = "ontologySpaceId", description = "对象空间id（跨空间允许同名 api，建议传以精确定位；不传则不限空间）")
+    @Schema(name = "ontologySpaceId", description = "对象空间id（必传，算子 api 只在空间内唯一）", required = true)
+    @NotNull(message = "ontologySpaceId is null")
     private Integer ontologySpaceId;
 
     @Schema(name = "description", description = "描述")

@@ -29,6 +29,13 @@ public class ActionContextInfoDTO {
     private Map<String, List<Object>> entityDetailMap;
 
     /**
+     * 按算子入参单独加载的实例数据：入参名 -> (属性id -> 值)。
+     * <p>只有请求里 inputParams 点到的入参有条目，用于同一对象的两个属性入参读不同实例；
+     * 其余入参继续用 entityDetailMap 的共用视图。异步回调时随上下文一起序列化。</p>
+     */
+    private Map<String, Map<String, List<Object>>> paramEntityDetailMaps;
+
+    /**
      * 来源为「外部输入」的参数取值（参数名 -> 值），只有行为测试接口会传入；定时执行为空
      */
     private Map<String, Object> externalParams;

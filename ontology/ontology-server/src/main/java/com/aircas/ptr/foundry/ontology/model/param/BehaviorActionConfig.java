@@ -53,6 +53,20 @@ public class BehaviorActionConfig {
             example = "{\"a5e8c206-3f17-4d92-8b74-1c6f9d3e5028\":{\"duty_log\":\"dutyRowId\"}}")
     private Map<String, Map<String, String>> outputDataPrimaryKeyKeys;
 
+    @Schema(name = "inputParamKeys",
+            description = "应用行为按算子入参指定数据位置时用：入参名 -> {实例主键黑板键, 存储分组 -> 行主键黑板键}。"
+                    + "同一对象的两个属性入参要读不同实例时用它，比 inputDataPrimaryKeyKeys 更细；"
+                    + "命中时优先于该对象的实例键与行主键，不绑算子的行为配了会被拒绝",
+            example = "{\"speed\":{\"entityPrimaryKeyKey\":\"speedSourceId\"},\"load\":{\"dataPrimaryKeyKeys\":{\"weapon_load\":\"loadRowId\"}}}")
+    private Map<String, BehaviorActionParamKeys> inputParamKeys;
+
+    @Schema(name = "outputParamKeys",
+            description = "应用行为按算子出参指定写回位置时用：出参名 -> {实例主键黑板键, 存储分组 -> 行主键黑板键}。"
+                    + "同一对象的两个 WRITE_PROPERTY 出参要写到不同实例时用它，比 outputDataPrimaryKeyKeys 更细；"
+                    + "命中时优先于该对象的实例键与行主键，不绑算子的行为配了会被拒绝",
+            example = "{\"price\":{\"entityPrimaryKeyKey\":\"priceTargetId\"},\"duty\":{\"entityPrimaryKeyKey\":\"dutyTargetId\",\"dataPrimaryKeyKeys\":{\"duty_log\":\"dutyRowId\"}}}")
+    private Map<String, BehaviorActionParamKeys> outputParamKeys;
+
     @Schema(name = "linkEntityPrimaryKeyKey", description = "实例关系行为对端实体主键用的黑板键名；行为不需要就留空", example = "targetId")
     private String linkEntityPrimaryKeyKey;
 

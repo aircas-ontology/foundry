@@ -43,7 +43,7 @@ public class ActionCategoryController {
 
 
     @PutMapping
-    @Operation(summary = "修改行为分类名称")
+    @Operation(summary = "修改行为分类名称、父节点")
     public RestResult updateActionCategory(@RequestBody @Valid ActionCategoryUpdateParam param) {
         actionCategoryService.updateActionCategory(param);
         return RestResult.success();

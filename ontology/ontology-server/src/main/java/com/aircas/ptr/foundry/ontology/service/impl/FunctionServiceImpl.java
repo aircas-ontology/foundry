@@ -1415,7 +1415,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
     @Override
     public Object testBasicQuery(BasicQueryTestParam param) {
         // 1. 获取函数版本并解析 queryConfig
-        var function = resolveVersion(param.getFunctionApi(), param.getVersion());
+        var function = resolveVersion(param.getOntologySpaceId(), param.getFunctionApi(), param.getVersion());
         PreconditionUtils.checkArgument(function != null, "函数版本不存在：" + param.getFunctionApi(), HttpStatus.BAD_REQUEST);
         PreconditionUtils.checkArgument(function.getType() == FunctionTypeEnum.BASIC_QUERY,
                 "该函数不是基础查询算子", HttpStatus.BAD_REQUEST);
@@ -1636,6 +1636,8 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         }
 
         // 已存库测试：按 空间 + api + version 查库
+        PreconditionUtils.checkArgument(param.getOntologySpaceId() != null,
+                "已存库测试必须传 ontologySpaceId（算子 api 只在空间内唯一）", HttpStatus.BAD_REQUEST);
         var function = resolveVersion(param.getOntologySpaceId(), param.getFunctionApi(), param.getVersion());
         PreconditionUtils.checkArgument(function != null, "函数版本不存在：" + param.getFunctionApi(), HttpStatus.BAD_REQUEST);
 
@@ -1645,6 +1647,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 var basicParam = BasicQueryTestParam.builder()
                         .functionApi(param.getFunctionApi())
                         .version(function.getVersion())
+                        .ontologySpaceId(function.getOntologySpaceId())
                         .ontologyIdentifier(param.getOntologyIdentifier())
                         .variableBindings(param.getVariableBindings())
                         .pageNum(param.getPageNum())
@@ -1661,6 +1664,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 var executeParam = FunctionExecuteParam.builder()
                         .functionApi(param.getFunctionApi())
                         .version(function.getVersion())
+                        .ontologySpaceId(function.getOntologySpaceId())
                         .parameters(param.getParameters())
                         .build();
                 var resultJson = executeFunction(executeParam, function.getType() == FunctionTypeEnum.CUSTOMIZE);
@@ -1678,6 +1682,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 var containerExecuteParam = FunctionExecuteParam.builder()
                         .functionApi(param.getFunctionApi())
                         .version(function.getVersion())
+                        .ontologySpaceId(function.getOntologySpaceId())
                         .parameters(param.getParameters())
                         .build();
                 var containerResultJson = executeFunction(containerExecuteParam);
@@ -1764,11 +1769,9 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
 // ==================== 版本管理私有方法 ====================
 
     /**
-     * 解析目标版本：version 为空时按 x.y.z 语义化比较取该 api 的最大版本
-     */
-    /**
      * 解析目标版本：version 为空时按 x.y.z 语义化比较取最大版本。
-     * <p>spaceId 非空时先在该空间内查找；未命中再回退到不限空间（兼容跨空间引用与历史无空间数据）。</p>
+     * <p>对外接口的 spaceId 一律必传（算子 api 只在空间内唯一）；为空表示调用方拿不到空间，
+     * 先在该空间内查找，未命中再回退到不限空间（兼容早期无空间的函数与行为）。</p>
      */
     private Function resolveVersion(Integer spaceId, String api, String version) {
         if (spaceId != null) {
@@ -1788,12 +1791,18 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         return resolveVersion(api, version);
     }
 
-    /** 兼容旧调用：不限空间 */
+    /**
+     * 兼容旧调用：不限空间。仅在调用方拿不到空间（早期无空间的函数/行为）时才会走到这里。
+     * <p>同 api + version 在多个空间同时存在时无法判断该取哪一个，显式报错，不再让 selectOne 抛多条异常。</p>
+     */
     private Function resolveVersion(String api, String version) {
         if (StringUtils.isNotEmpty(version)) {
-            return getOne(new LambdaQueryWrapper<Function>()
+            var matched = list(new LambdaQueryWrapper<Function>()
                     .eq(Function::getApi, api)
                     .eq(Function::getVersion, version));
+            PreconditionUtils.checkArgument(matched.size() <= 1,
+                    "函数 " + api + " " + version + " 在多个对象空间同时存在，请传 spaceId 定位", HttpStatus.BAD_REQUEST);
+            return matched.isEmpty() ? null : matched.get(0);
         }
         return listVersions(api).stream()
                 .max(Comparator.comparing(Function::getVersion, FunctionServiceImpl::compareVersion))
@@ -1891,16 +1900,18 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         var functionApi = param.getFunctionApi();
         if (config == null) {
             PreconditionUtils.checkArgument(StringUtils.isNotBlank(functionApi), "必须提供 compositeConfig 或 functionApi", HttpStatus.BAD_REQUEST);
-            config = loadStoredCompositeConfig(functionApi);
+            PreconditionUtils.checkArgument(param.getOntologySpaceId() != null,
+                    "按 functionApi 读取库中编排定义时 ontologySpaceId 必传（算子 api 只在空间内唯一）", HttpStatus.BAD_REQUEST);
+            config = loadStoredCompositeConfig(param.getOntologySpaceId(), functionApi);
         }
         checkNoSelfReference(config, functionApi);
         return compositeChainRegistry.validate(config);
     }
 
     @Override
-    public CompositePlanBO compileComposite(String functionApi) {
+    public CompositePlanBO compileComposite(Integer spaceId, String functionApi) {
         PreconditionUtils.checkArgument(StringUtils.isNotEmpty(functionApi), "functionApi不能为空", HttpStatus.BAD_REQUEST);
-        var function = loadCompositeFunction(functionApi);
+        var function = loadCompositeFunction(spaceId, functionApi);
         var config = parseCompositeConfig(function.getCode());
         PreconditionUtils.checkArgument(config != null, "函数编排定义为空：" + functionApi, HttpStatus.BAD_REQUEST);
         return compositeChainRegistry.compile(CompositeChainRegistry.chainNameOf(functionApi), config);
@@ -2042,15 +2053,15 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         return entryParams;
     }
 
-    private CompositeConfig loadStoredCompositeConfig(String functionApi) {
-        var function = loadCompositeFunction(functionApi);
+    private CompositeConfig loadStoredCompositeConfig(Integer spaceId, String functionApi) {
+        var function = loadCompositeFunction(spaceId, functionApi);
         CompositeConfig config = parseCompositeConfig(function.getCode());
         PreconditionUtils.checkArgument(config != null, "函数编排定义为空：" + functionApi, HttpStatus.BAD_REQUEST);
         return config;
     }
 
-    private Function loadCompositeFunction(String functionApi) {
-        var function = resolveVersion(functionApi, null);
+    private Function loadCompositeFunction(Integer spaceId, String functionApi) {
+        var function = resolveVersion(spaceId, functionApi, null);
         PreconditionUtils.checkArgument(function != null, "函数api不存在：" + functionApi, HttpStatus.BAD_REQUEST);
         PreconditionUtils.checkArgument(function.getType() == FunctionTypeEnum.COMPOSITE,
                 "该函数不是函数编排类型：" + functionApi, HttpStatus.BAD_REQUEST);
