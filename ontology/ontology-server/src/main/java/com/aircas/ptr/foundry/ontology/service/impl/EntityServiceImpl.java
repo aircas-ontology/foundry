@@ -1401,10 +1401,11 @@ public class EntityServiceImpl implements EntityService {
      * 按算子参数（inputParams / outputParams）指定的数据位置校验。
      * <p>入参按算子入参名定位；出参按「哪条写属性绑定」定位，key 可以是属性唯一标识、绑定行的出参字段名
      * 或顶层算子出参名（脚本算子往往只有一个顶层出参，属性级写回实例只能靠前两种）。
-     * key 写错、该 key 没有对应的绑定行、绑定跨多对象却指定实例主键、指定的是关系对端——
+     * key 写错、该 key 没有对应的绑定行、绑定跨多对象却指定实例主键——
      * 这几种都会静默退回共用的实例选择，读写到调用方没打算碰的实例，直接报错。
      * 关系两端本体的实例仍按 from/to 或本端选择：这两份参数只路由各自行的读或写，
-     * 不参与另一方向和关系落库的主键解析，所以允许落在端点对象上（与 inputEntities 不同）。</p>
+     * 不参与另一方向和关系落库的主键解析，所以允许落在端点对象上（与 inputEntities 不同）。
+     * 出参点名关系对端的实例不算冲突：写哪颗实例由该 key 决定，没点名的行才用本次遍历到的对端。</p>
      */
     private void checkParamTargets(OntologyActionDetailVO detail, FunctionDetailVO functionDetailVO,
                                    EntityActionExecuteParam param) {
@@ -1420,7 +1421,7 @@ public class EntityServiceImpl implements EntityService {
         var params = functionDetailVO.getParams();
         checkDirectionTargets(detail, params, inputTargets, this::isInstanceInputRow,
                 FunctionParamCategoryEnum.INPUT, "inputParams", "入参", counterpartObject);
-        checkOutputTargets(detail, params, outputTargets, counterpartObject);
+        checkOutputTargets(detail, params, outputTargets);
     }
 
     private void checkDirectionTargets(OntologyActionDetailVO detail, List<FunctionParameterVO> allParams,
@@ -1461,9 +1462,11 @@ public class EntityServiceImpl implements EntityService {
      * <p>出参写回的单位是「一条绑定行 = 一个属性」，不是「一个算子出参」，所以同一份返回体的几个字段
      * 可以各写一个实例。key 的匹配优先级：属性唯一标识 &gt; 绑定行的出参字段名 &gt; 该行所属的顶层算子出参名；
      * 字段名命中多条绑定又分属不同对象时不猜实例，要求改用属性唯一标识。</p>
+     * <p>写回目标是关系对端对象时照样按 key 指定的实例落库，不受 from/to 遍历影响：
+     * 关系两端选哪颗实例只决定关系边和入参读取，出参写到哪里由这条 key 决定。</p>
      */
     private void checkOutputTargets(OntologyActionDetailVO detail, List<FunctionParameterVO> allParams,
-                                    Map<String, ActionInstanceTargetParam> targets, String counterpartObject) {
+                                    Map<String, ActionInstanceTargetParam> targets) {
         if (MapUtils.isEmpty(targets)) {
             return;
         }
@@ -1495,10 +1498,6 @@ public class EntityServiceImpl implements EntityService {
                     .filter(StringUtils::isNotEmpty)
                     .distinct()
                     .collect(Collectors.toList());
-            var onlyObjectId = objectIds.size() == 1 ? objectIds.get(0) : null;
-            PreconditionUtils.checkArgument(!StringUtils.equals(onlyObjectId, counterpartObject),
-                    "出参[" + key + "]的数据落在关系对端对象[" + counterpartObject + "]上，"
-                            + "实例与分组行都由关系两端或本次遍历决定，不能按出参指定", HttpStatus.BAD_REQUEST);
             PreconditionUtils.checkArgument(target.getEntityPrimaryKey() == null || objectIds.size() == 1,
                     "出参[" + key + "]命中多条绑定且分属对象[" + String.join("、", objectIds)
                             + "]，不能按它指定实例主键，请改用各行的属性唯一标识作 key",

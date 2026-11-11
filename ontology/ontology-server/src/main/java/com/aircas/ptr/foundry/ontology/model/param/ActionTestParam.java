@@ -55,7 +55,8 @@ public class ActionTestParam {
             + "脚本算子往往只有一个顶层出参，几个字段要写到不同实例就按字段名（或属性唯一标识）逐个点名。"
             + "字段名命中多条绑定且分属不同对象时会报错，改用属性唯一标识；"
             + "命中时优先于 entityPrimaryKeys，只影响该行写回，不影响属性入参读取和关系落库；"
-            + "关系对端与不绑算子的行为不支持；这里不支持数组，传了直接报错",
+            + "写回目标是关系对端对象时同样按这里点名的实例落库，不被 from/to 遍历覆盖；不绑算子的行为不支持；"
+            + "这里不支持数组，传了直接报错",
             example = "{\"name\":{\"entityPrimaryKey\":2},\"status\":{\"entityPrimaryKey\":3,\"dataPrimaryKeys\":{\"duty_log\":12}}}")
     private Map<String, ActionInstanceTargetParam> outputParams;
 
