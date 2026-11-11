@@ -26,6 +26,9 @@ public class SchedulingResultVO {
     @Schema(name = "msg",description = "日志消息")
     private String msg;
 
+    @Schema(name = "executeResult",description = "执行结果")
+    private String executeResult;
+
     @Schema(name = "triggerTime",description = "触发时间")
     private Date triggerTime;
 

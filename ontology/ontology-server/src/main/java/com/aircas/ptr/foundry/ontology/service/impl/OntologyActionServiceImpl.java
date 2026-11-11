@@ -3569,8 +3569,16 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             if (scheduledTask != null && StringUtils.isNotBlank(scheduledTask.getEntityJson())) {
                 var executeParam = jsonMapper.readValue(scheduledTask.getEntityJson(), EntityActionExecuteParam.class);
                 var scheduledContextInfoDTO = entityService.initActionContextInfoDTO(executeParam);
-                entityService.executeEntityAction(executeParam, scheduledContextInfoDTO,
+                var executeResult = entityService.executeEntityAction(executeParam, scheduledContextInfoDTO,
                         entityService.getLinkedEntities(scheduledContextInfoDTO));
+                // 把本次执行结果回填到调度日志表（XxlJobHandler 已按 scheduleId 插入日志行，取最新一条）
+                var handleLog = actionHandleLogMapper.selectOne(new LambdaQueryWrapper<ActionHandleLog>()
+                        .eq(ActionHandleLog::getActionHandleId, xxlParam.getScheduleId())
+                        .orderByDesc(ActionHandleLog::getId)
+                        .last("limit 1"));
+                if (handleLog != null) {
+                    actionHandleLogMapper.updateById(handleLog.setExecuteResult(executeResult));
+                }
                 var scheduledMsg = "执行行为" + executeParam.getActionApi() + "成功, OntologyUniqueIdentifier:"
                         + executeParam.getOntologyUniqueIdentifier() + ", entityPrimaryKey:" + executeParam.getEntityPrimaryKey();
                 log.info(scheduledMsg);
@@ -4656,6 +4664,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         }
         var vo = records.stream().map(v -> SchedulingResultVO.builder()
                         .msg(v.getMsg())
+                        .executeResult(v.getExecuteResult())
                         .taskStatus(v.getTaskStatus())
                         .requestParam(v.getRequestParam())
                         .triggerTime(v.getTriggerTime())
