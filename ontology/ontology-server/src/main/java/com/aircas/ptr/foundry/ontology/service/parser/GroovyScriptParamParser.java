@@ -230,6 +230,20 @@ public class GroovyScriptParamParser implements ScriptParamParser {
                     .build());
             return;
         }
+        // 返回集合（List<OrbitPoint> / OrbitPoint[]）：外层类型名查不到脚本内类，元素类型才是业务结构
+        List<ScriptParsedParam> elementFields = expandCollectionElementFields(returnType, ctx);
+        if (elementFields != null) {
+            String collectionText = typeNodeText(returnType);
+            out.add(ScriptParsedParam.builder()
+                    .name("result")
+                    .type(ScriptParamTypeMapper.map(collectionText))
+                    .rawType(collectionText)
+                    .category(FunctionParamCategoryEnum.OUTPUT)
+                    .source("ANNOTATION")
+                    .fields(elementFields)
+                    .build());
+            return;
+        }
         if (!isObjectType(returnType) && !"void".equals(returnType.getName())) {
             // 返回标量：作为单个 result 输出
             String returnText = typeNodeText(returnType);
@@ -244,6 +258,22 @@ public class GroovyScriptParamParser implements ScriptParamParser {
         }
         // 启发层：返回 map 字面量 → 收集键
         inferOutputsFromBody(handle, out);
+    }
+
+    /**
+     * 返回类型是集合时的元素字段：先按脚本内类展开（AST），认不出再试工程内类（反射）。
+     * <p>元素类型不是业务结构（{@code List<String>}、{@code List<Map<String,Object>>}）时返回 null，
+     * 由调用方回落标量层，仍是原来那个没有下一级的 result。</p>
+     */
+    private List<ScriptParsedParam> expandCollectionElementFields(ClassNode returnType, ParseContext ctx) {
+        String elementType = extractCollectionElementType(returnType);
+        if (elementType == null) {
+            return null;
+        }
+        List<ScriptParsedParam> fields = expandScriptType(elementType, FunctionParamCategoryEnum.OUTPUT,
+                ctx, new LinkedHashSet<>(), 1);
+        return fields != null ? fields
+                : ctx.expander.expandFieldsByName(elementType, FunctionParamCategoryEnum.OUTPUT, new LinkedHashSet<>(), 1);
     }
 
     private List<ScriptParsedParam> expandFields(ClassNode userClass, FunctionParamCategoryEnum category, String source,
