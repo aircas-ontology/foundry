@@ -20,4 +20,8 @@ public class ActionHandleTaskParam {
     @NotNull(message = "taskCronExpression is null")
     private String taskCronExpression;
 
+    @Schema(description = "实体执行参数 JSON，执行时反序列化成 EntityActionExecuteParam；不传则按对象下全部实例遍历执行",
+            example = "{\"ontologySpaceId\":1,\"actionApi\":\"shipLocation\",\"ontologyUniqueIdentifier\":\"abcdef\",\"entityPrimaryKey\":\"3\"}")
+    private String entityJson;
+
 }

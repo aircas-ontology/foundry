@@ -20,7 +20,7 @@ public class CompositeBranchComponent extends NodeBooleanComponent {
         Map<String, Object> inputs = CompositeDataComponent.resolveInputs(this, request, nodePlan);
         request.record(nodePlan.getElId(), inputs);
         boolean outcome = CompositeExpressionEvaluator.evaluate(nodePlan.getBranchExpression(), inputs);
-        String port = outcome ? "true" : "false";
+        String port = Boolean.toString(outcome);
         Map<String, Object> outputs = new LinkedHashMap<>();
         outputs.put(port, passThrough(nodePlan.getBranchExpression(), inputs));
         request.putProduced(nodePlan.getElId(), outputs);
