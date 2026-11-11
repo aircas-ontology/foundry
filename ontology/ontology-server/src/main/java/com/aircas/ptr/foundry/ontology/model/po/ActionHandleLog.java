@@ -28,6 +28,8 @@ public class ActionHandleLog {
 
     private String msg;
 
+    private String executeResult;
+
     private Date triggerTime;
 
     private Date completeTime;

@@ -169,6 +169,19 @@ public class JavaScriptParamParser implements ScriptParamParser {
                     .build());
             return;
         }
+        // 返回集合（List<OrbitPoint>）：外层类型名查不到脚本内类，元素类型才是业务结构
+        List<ScriptParsedParam> elementFields = expandCollectionElementFields(handle.getType(), classByName, expander);
+        if (elementFields != null) {
+            out.add(ScriptParsedParam.builder()
+                    .name("result")
+                    .type(ScriptParamTypeMapper.map(returnType))
+                    .rawType(returnType)
+                    .category(FunctionParamCategoryEnum.OUTPUT)
+                    .source("ANNOTATION")
+                    .fields(elementFields)
+                    .build());
+            return;
+        }
         if (!"void".equalsIgnoreCase(returnType) && !isMapLike(returnType)) {
             out.add(ScriptParsedParam.builder()
                     .name("result")
@@ -179,6 +192,24 @@ public class JavaScriptParamParser implements ScriptParamParser {
                     .build());
         }
         // Map/Object 返回：Java 无 map 字面量，静态不可知，留空由前端补充
+    }
+
+    /**
+     * 返回类型是集合时的元素字段：先按脚本内类展开（AST），认不出再试工程内类（反射）。
+     * <p>元素类型不是业务结构（{@code List<String>}）时返回 null，由调用方回落标量层，
+     * 仍是原来那个没有下一级的 result。</p>
+     */
+    private List<ScriptParsedParam> expandCollectionElementFields(Type returnType,
+                                                                 Map<String, ClassOrInterfaceDeclaration> classByName,
+                                                                 ProjectClassExpander expander) {
+        String elementType = extractCollectionElementType(returnType);
+        if (elementType == null) {
+            return null;
+        }
+        List<ScriptParsedParam> fields = expandScriptType(elementType, FunctionParamCategoryEnum.OUTPUT,
+                classByName, expander, new LinkedHashSet<>(), 1);
+        return fields != null ? fields
+                : expander.expandFieldsByName(elementType, FunctionParamCategoryEnum.OUTPUT, new LinkedHashSet<>(), 1);
     }
 
     private List<ScriptParsedParam> expandFields(ClassOrInterfaceDeclaration cls, FunctionParamCategoryEnum category, String source,

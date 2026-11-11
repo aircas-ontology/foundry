@@ -59,6 +59,7 @@ create table if not exists action_handle_log
     id                 bigserial
     primary key,
     msg                text,
+    execute_result     text,
     trigger_time       timestamp(6) default CURRENT_TIMESTAMP(6),
     action_handle_id   bigint,
     action_handle_type varchar(64),
@@ -72,6 +73,8 @@ comment on table action_handle_log is '行为调度执行日志';
 comment on column action_handle_log.id is '主键id';
 
 comment on column action_handle_log.msg is '日志';
+
+comment on column action_handle_log.execute_result is '执行结果（行为执行返回的结果 JSON）';
 
 comment on column action_handle_log.trigger_time is '触发时间';
 
