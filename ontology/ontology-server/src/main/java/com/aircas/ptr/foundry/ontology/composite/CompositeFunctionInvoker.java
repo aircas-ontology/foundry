@@ -76,6 +76,11 @@ public class CompositeFunctionInvoker {
                 if (ontologyIdentifier != null) {
                     queryParams.put(BasicQueryOperator.PARAM_ONTOLOGY_IDENTIFIER, ontologyIdentifier);
                 }
+                // 实例主键同为机制入参：行为执行时按选中的实例查，编排节点没有这个入参时不拼条件
+                Object entityPrimaryKey = inputs.get(BasicQueryOperator.PARAM_ENTITY_PRIMARY_KEY);
+                if (entityPrimaryKey != null) {
+                    queryParams.put(BasicQueryOperator.PARAM_ENTITY_PRIMARY_KEY, entityPrimaryKey);
+                }
                 yield require(basicQueryOperator, "基础函数算子执行器").runAsNode(
                         require(basicQueryOperator, "基础函数算子执行器")
                                 .parseConfig(function.getCode(), function.getApi()), queryParams);

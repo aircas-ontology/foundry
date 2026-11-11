@@ -2096,6 +2096,14 @@ public class EntityServiceImpl implements EntityService {
                     .paramName(BasicQueryOperator.PARAM_ONTOLOGY_IDENTIFIER)
                     .paramValue(actionContext.getEntityActionExecuteParam().getOntologyUniqueIdentifier())
                     .build());
+            // 实例主键同为机制入参：基础算子行为按选中的实例查，查询会拼上「主键 = 该实例」；没给实例时维持原来的全量口径
+            var entityPrimaryKey = actionContext.getEntityActionExecuteParam().getEntityPrimaryKey();
+            if (entityPrimaryKey != null) {
+                parameters.add(FunctionParameter.builder()
+                        .paramName(BasicQueryOperator.PARAM_ENTITY_PRIMARY_KEY)
+                        .paramValue(entityPrimaryKey)
+                        .build());
+            }
         }
         //执行函数
         // 取完整返回体（不剥 FunctionResultVO 外壳）：关系落库的判据 startTime/endTime/timeWindows 只在外壳上，
@@ -3165,6 +3173,10 @@ public class EntityServiceImpl implements EntityService {
             joinedTables.add(dsId);
         }
         // 5. 构建 WHERE 部分
+        // 按实例查询：主键等值条件并进过滤树，与请求/算子原有条件是 AND，不替换也不改变原条件的括号语义
+        if (param.getEntityPrimaryKey() != null) {
+            param.setFilters(andPrimaryKeyFilter(param.getFilters(), pkProp.getApiName(), param.getEntityPrimaryKey()));
+        }
         // 先校验过滤值类型（属性存在性 + 数值/布尔/日期可解析），拦截空串等脏值，
         // 否则数值型空串会在 formatSqlValue 拼出 "col = " 残缺 SQL，抛数据库层语法错误
         if (param.getFilters() != null) {
@@ -3322,6 +3334,27 @@ public class EntityServiceImpl implements EntityService {
             firstGroup = false;
         }
         return sb.toString();
+    }
+
+    /**
+     * 把「主键 = 实例」并进过滤树：原有过滤整组括起来与新条件 AND，
+     * 原条件是 OR 时也不会因为直接平铺而被主键条件吞掉。
+     */
+    private FilterGroupParam andPrimaryKeyFilter(FilterGroupParam filters, String pkApiName, Object entityPrimaryKey) {
+        var pkNode = FilterNodeParam.builder()
+                .type(FilterNodeTypeEnum.FILTER)
+                .filter(PropertyFilterParam.builder()
+                        .propertyApiName(pkApiName)
+                        .op(QueryOpEnum.EQ)
+                        .value(entityPrimaryKey)
+                        .build())
+                .build();
+        List<FilterNodeParam> children = new ArrayList<>();
+        if (filters != null && CollectionUtils.isNotEmpty(filters.getChildren())) {
+            children.add(FilterNodeParam.builder().type(FilterNodeTypeEnum.GROUP).group(filters).build());
+        }
+        children.add(pkNode);
+        return FilterGroupParam.builder().logic(LogicEnum.AND).children(children).build();
     }
 
     private Set<String> collectFilterPropertyApiNames(FilterGroupParam group) {

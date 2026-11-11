@@ -42,6 +42,9 @@ public class BasicQueryOperator {
     /** 编排节点上代表"查询哪个对象"的约定入参名 */
     public static final String PARAM_ONTOLOGY_IDENTIFIER = "ontologyIdentifier";
 
+    /** 约定入参名：非空时查询范围限定到该实例，与配置里的过滤条件是 AND */
+    public static final String PARAM_ENTITY_PRIMARY_KEY = "entityPrimaryKey";
+
     /** 编排节点上可选的分页入参名 */
     public static final String PARAM_PAGE_NUM = "pageNum";
     public static final String PARAM_PAGE_SIZE = "pageSize";
@@ -74,13 +77,14 @@ public class BasicQueryOperator {
      * @param config             算子查询配置
      * @param ontologyIdentifier 目标对象标识
      * @param variableBindings   变量名 -&gt; 实际属性 apiName
+     * @param entityPrimaryKey   实例主键，非空时查询只覆盖该实例；null 时不额外限定
      * @param pageNum            分页号，null 时用默认值
      * @param pageSize           每页条数，null 时用默认值
      * @return 聚合模式返回 {@link BasicQueryResultVO}，查询模式返回分页结果
      */
     @SneakyThrows
     public Object run(BasicQueryConfig config, String ontologyIdentifier, Map<String, String> variableBindings,
-                      Integer pageNum, Integer pageSize) {
+                      Object entityPrimaryKey, Integer pageNum, Integer pageSize) {
         if (config == null) {
             throw new BusinessException("基础查询算子配置为空", HttpStatus.BAD_REQUEST);
         }
@@ -88,6 +92,7 @@ public class BasicQueryOperator {
 
         var queryParam = new EntityPropertyGenericQueryParam();
         queryParam.setOntologyIdentifier(ontologyIdentifier);
+        queryParam.setEntityPrimaryKey(entityPrimaryKey);
 
         // SELECT：通过变量绑定解析实际属性名
         String targetProp = null;
@@ -167,7 +172,7 @@ public class BasicQueryOperator {
      * 编排节点视角：把节点入参拆成对象标识 + 变量绑定，执行后整理成端口可直接取值的键值对。
      *
      * @param config 查询配置
-     * @param inputs 节点入参（含 {@code ontologyIdentifier}、变量、可选分页参数）
+     * @param inputs 节点入参（含 {@code ontologyIdentifier}、{@code entityPrimaryKey}、变量、可选分页参数）
      * @return {@code result} 为业务数据；聚合模式另有 {@code value/aggFunc/alias/targetProperty}，
      *         查询模式另有 {@code records/total}
      */
@@ -181,15 +186,16 @@ public class BasicQueryOperator {
         Map<String, String> bindings = new LinkedHashMap<>();
         for (Map.Entry<String, Object> entry : inputs.entrySet()) {
             String key = entry.getKey();
-            if (PARAM_ONTOLOGY_IDENTIFIER.equals(key) || PARAM_PAGE_NUM.equals(key) || PARAM_PAGE_SIZE.equals(key)) {
+            if (PARAM_ONTOLOGY_IDENTIFIER.equals(key) || PARAM_ENTITY_PRIMARY_KEY.equals(key)
+                    || PARAM_PAGE_NUM.equals(key) || PARAM_PAGE_SIZE.equals(key)) {
                 continue;
             }
             if (entry.getValue() != null) {
                 bindings.put(key, String.valueOf(entry.getValue()));
             }
         }
-        Object raw = run(config, ontologyIdentifier, bindings, intOf(inputs.get(PARAM_PAGE_NUM)),
-                intOf(inputs.get(PARAM_PAGE_SIZE)));
+        Object raw = run(config, ontologyIdentifier, bindings, inputs.get(PARAM_ENTITY_PRIMARY_KEY),
+                intOf(inputs.get(PARAM_PAGE_NUM)), intOf(inputs.get(PARAM_PAGE_SIZE)));
         return toPortValues(raw);
     }
 

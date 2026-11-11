@@ -28,6 +28,10 @@ public class EntityPropertyGenericQueryParam extends OntologyIdentifierParam {
     @NotNull(message = "selectProperties is empty")
     private List<OntologySelectPropertyParam> selectProperties;
 
+    /** 实例主键 */
+    @Schema(name = "entityPrimaryKey", description = "实例主键，非空时查询范围限定到该实例，与 filters 是并列的 AND 条件；不传=不限定", example = "1")
+    private Object entityPrimaryKey;
+
     /** 过滤树 */
     @Schema(name = "filters", description = "过滤树")
     private FilterGroupParam filters;

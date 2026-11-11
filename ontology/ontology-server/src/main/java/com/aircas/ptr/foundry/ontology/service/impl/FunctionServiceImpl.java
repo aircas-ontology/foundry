@@ -1419,8 +1419,10 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         PreconditionUtils.checkArgument(function != null, "函数版本不存在：" + param.getFunctionApi(), HttpStatus.BAD_REQUEST);
         PreconditionUtils.checkArgument(function.getType() == FunctionTypeEnum.BASIC_QUERY,
                 "该函数不是基础查询算子", HttpStatus.BAD_REQUEST);
+        // 函数级测试没有实例上下文，entityPrimaryKey 传 null：查询范围仍按算子配置，不按实例收敛
         return basicQueryOperator.run(basicQueryOperator.parseConfig(function.getCode(), function.getApi()),
-                param.getOntologyIdentifier(), param.getVariableBindings(), param.getPageNum(), param.getPageSize());
+                param.getOntologyIdentifier(), param.getVariableBindings(), null,
+                param.getPageNum(), param.getPageSize());
     }
 
     /***
