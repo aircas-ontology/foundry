@@ -50,6 +50,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.*;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -2485,10 +2486,10 @@ public class EntityServiceImpl implements EntityService {
 
     /**
      * 出参写回的值按目标属性的数据类型转换后再落库。
-     * <p>取值只负责从返回体里拿到值（JSON 数字统一是 Integer/Double、时间常被脚本写成字符串），
+     * <p>取值只负责从返回体里拿到值（JSON 数字统一是 Integer/Double、时间和布尔常被脚本写成字符串），
      * 原样进 SQL 会在插库时抛「column "time" is of type timestamp but expression is of type character varying」，
      * 这条异常又被按对端逐条执行的 try 吞成空结果，看上去就成了「算子没有返回结果」。通配与单值两条写回共用这里。
-     * 不支持转换的属性类型（布尔、日期外的其它类型、对象、List、Map）按原样透传，与改造前一致。</p>
+     * 时间、整型、长整型、浮点、双精度、Decimal、布尔按类型转；其余类型（对象、List、Map 等）原样透传，与改造前一致。</p>
      */
     private Object convertWriteValue(Object value, OntologyProperty prop) {
         if (value == null || prop.getPropertyType() == null) {
@@ -2502,10 +2503,58 @@ public class EntityServiceImpl implements EntityService {
                 case Float -> number.floatValue();
                 case Double -> number.doubleValue();
                 case String -> number.toString();
-                default -> DataConverter.convert2DataType(value, type);
+                default -> convertByTargetType(number, type, prop);
             };
         }
-        return DataConverter.convert2DataType(value, type);
+        return convertByTargetType(value, type, prop);
+    }
+
+    /**
+     * 按目标属性类型转换，转不了时报出值和属性名，不让 NumberFormatException 冒充「算子没有返回结果」。
+     * <p>字符串值补齐三种列：timestamp/date 走 {@link DataConverter} 的多格式解析；
+     * 数值列（Int/Long/Decimal）接受小数写法，脚本把数量写成 "500.0" 很常见，
+     * 直接 {@code Integer.parseInt} 会拒；布尔列必须换成 Boolean，
+     * 字符串进 boolean 列和进 timestamp 列是同一类错。</p>
+     */
+    private Object convertByTargetType(Object value, OntologyDataTypeEnum type, OntologyProperty prop) {
+        var convertible = switch (type) {
+            case Timestamp, Date, Float, Double, Decimal, Int, Long, Bool -> true;
+            default -> false;
+        };
+        if (!convertible) {
+            return value;
+        }
+        try {
+            if (value instanceof String text) {
+                var trimmed = text.trim();
+                switch (type) {
+                    case Bool -> {
+                        return switch (trimmed.toLowerCase()) {
+                            case "true", "1", "t", "yes" -> Boolean.TRUE;
+                            case "false", "0", "f", "no" -> Boolean.FALSE;
+                            default -> throw new IllegalArgumentException("不是布尔取值");
+                        };
+                    }
+                    case Decimal -> {
+                        return new BigDecimal(trimmed);
+                    }
+                    // 小数形式的整数写法（"500.0"）按整数收下，带真实小数位的不猜、报错
+                    case Int -> {
+                        return new BigDecimal(trimmed).intValueExact();
+                    }
+                    case Long -> {
+                        return new BigDecimal(trimmed).longValueExact();
+                    }
+                    default -> {
+                        return DataConverter.convert2DataType(value, type);
+                    }
+                }
+            }
+            return DataConverter.convert2DataType(value, type);
+        } catch (RuntimeException e) {
+            throw new BusinessException("出参写回的值[" + value + "]无法转换为属性["
+                    + prop.getDisplayName() + "]的类型 " + type + "，请检查该属性的取值路径", HttpStatus.BAD_REQUEST);
+        }
     }
 
     /**
