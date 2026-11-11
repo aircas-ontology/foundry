@@ -13,6 +13,8 @@ import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
+
 /**
  * 对象实体 MCP 工具。
  *
@@ -50,9 +52,9 @@ public class OntologyEntityMcpTools implements McpTools {
             """)
     public EntityPropertyRowDetailVO getEntityPropertyRowDetail(
             @ToolParam(description = "对象唯一标识（ontologyUniqueIdentifier）") String ontologyUniqueIdentifier,
-            @ToolParam(description = "实体主键值（entityPrimaryKey）") Object entityPrimaryKey,
+            @ToolParam(description = "实体主键值（entityPrimaryKey）；数字主键传数字字符串如 \"1\"，文本主键直接传文本") String entityPrimaryKey,
             @ToolParam(description = "排序方向，可选值：ASC（升序）、DESC（降序）；不传默认 DESC", required = false) String sort) {
-        if (StringUtils.isEmpty(ontologyUniqueIdentifier) || entityPrimaryKey == null) {
+        if (StringUtils.isEmpty(ontologyUniqueIdentifier) || StringUtils.isEmpty(entityPrimaryKey)) {
             return null;
         }
         QuerySortEnum sortEnum;
@@ -63,9 +65,32 @@ public class OntologyEntityMcpTools implements McpTools {
         }
         EntityPropertyRowQueryParam param = EntityPropertyRowQueryParam.builder()
                 .ontologyUniqueIdentifier(ontologyUniqueIdentifier)
-                .entityPrimaryKey(entityPrimaryKey)
+                .entityPrimaryKey(coercePrimaryKey(entityPrimaryKey))
                 .sort(sortEnum)
                 .build();
         return entityService.getEntityPropertyRowDetail(param);
+    }
+
+    /**
+     * 把主键字符串还原成合适的 Java 类型：能解析为整数用 {@link Long}，能解析为小数用 {@link BigDecimal}，
+     * 否则按文本处理。这样数字主键传给 SQL 仍是数字（{@code WHERE "ID" = 1} 可命中），文本主键仍是文本。
+     *
+     * <p>之所以 {@code @Tool} 的 {@code entityPrimaryKey} 声明为 {@link String} 而非 {@link Object}：
+     * Spring AI 的 {@code MethodToolCallback} 用 {@code parameter.getType().isAssignableFrom(ToolContext.class)}
+     * 判断是否向参数注入 ToolContext，而 {@code Object.isAssignableFrom(ToolContext)} 恒为 true，
+     * 任何 Object 类型参数都会被误注入 ToolContext，导致 MyBatis 报
+     * "Can't infer the SQL type to use for an instance of ToolContext"。</p>
+     */
+    private Object coercePrimaryKey(String raw) {
+        String s = raw.trim();
+        try {
+            return Long.parseLong(s);
+        } catch (NumberFormatException ignored) {
+        }
+        try {
+            return new BigDecimal(s);
+        } catch (NumberFormatException ignored) {
+        }
+        return s;
     }
 }
