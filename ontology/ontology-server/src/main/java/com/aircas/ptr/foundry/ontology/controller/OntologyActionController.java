@@ -14,6 +14,9 @@ import com.aircas.ptr.foundry.ontology.model.param.TreeExecuteParam;
 import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.aircas.ptr.foundry.ontology.service.OntologyActionService;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -158,6 +161,17 @@ public class OntologyActionController {
 
     @Operation(summary = "创建行为调度")
     @PostMapping("/scheduling")
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(
+            description = "行为调度创建请求；task 与 rule 按 type 二选一填充",
+            content = @Content(
+                    mediaType = "application/json",
+                    schema = @Schema(implementation = ActionSchedulingCreateParam.class),
+                    examples = {
+                            @ExampleObject(name = "rule", summary = "规则调度示例", value = """
+                                    {"ontologyIdentifier":"abcdef","actionApi":"shipLocation","name":"示例调度","description":"按规则触发","type":"RULE","rule":{"ruleConnectType":"AND","rules":[{"columnName":"longitude","columnValue":"20.0","condition":"CH"}]}}"""),
+                            @ExampleObject(name = "task", summary = "周期调度示例", value = """
+                                    {"ontologyIdentifier":"abcdef","actionApi":"shipLocation","name":"示例周期调度","description":"按 cron 周期触发","type":"TASK","task":{"taskCronExpression":"30 * * 1/1 * ? *"}}""")
+                    }))
     public RestResult<Long> createScheduling(@RequestBody @Valid ActionSchedulingCreateParam param) {
         var id = ontologyActionService.createScheduling(param);
         return RestResult.ofData(id);
@@ -165,6 +179,17 @@ public class OntologyActionController {
 
     @Operation(summary = "编辑行为调度")
     @PutMapping("/scheduling")
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(
+            description = "行为调度编辑请求；task 与 rule 按 type 二选一填充",
+            content = @Content(
+                    mediaType = "application/json",
+                    schema = @Schema(implementation = ActionSchedulingUpdateParam.class),
+                    examples = {
+                            @ExampleObject(name = "rule", summary = "规则调度示例", value = """
+                                    {"id":123,"ontologyIdentifier":"abcdef","actionApi":"shipLocation","name":"示例调度","description":"按规则触发","type":"RULE","rule":{"ruleConnectType":"AND","rules":[{"columnName":"longitude","columnValue":"20.0","condition":"CH"}]}}"""),
+                            @ExampleObject(name = "task", summary = "周期调度示例", value = """
+                                    {"id":123,"ontologyIdentifier":"abcdef","actionApi":"shipLocation","name":"示例周期调度","description":"按 cron 周期触发","type":"TASK","task":{"taskCronExpression":"30 * * 1/1 * ? *"}}""")
+                    }))
     public RestResult updateScheduling(@RequestBody @Valid ActionSchedulingUpdateParam param) {
         ontologyActionService.updateScheduling(param);
         return RestResult.success();
