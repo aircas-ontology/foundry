@@ -3177,10 +3177,13 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                     "子表[" + group.storageGroup() + "]的通配出参指向了不同的数组：" + String.join("、", prefixes)
                             + "，同一张子表的各列要逐元素成行，取值路径的数组层必须一致", HttpStatus.BAD_REQUEST);
             var plain = plainPropsByGroup.get(group);
-            PreconditionUtils.checkArgument(CollectionUtils.isEmpty(plain),
-                    "子表[" + group.storageGroup() + "]的通配出参列与普通出参列混用：" + String.join("、", plain)
-                            + "，逐元素插行时该分组每一列都要写成 " + prefixes.iterator().next()
-                            + "[*].字段名 的形式", HttpStatus.BAD_REQUEST);
+            // 整组都是通配列（补完 [*] 后的正常写法）时这里根本没有普通列，map 里就是 null；
+            // 报错文案要在真要报时才拼，否则校验通过也会被 String.join 的 null 参数炸成 500
+            if (CollectionUtils.isNotEmpty(plain)) {
+                throw new BusinessException("子表[" + group.storageGroup() + "]的通配出参列与普通出参列混用：" + String.join("、", plain)
+                        + "，逐元素插行时该分组每一列都要写成 " + prefixes.iterator().next()
+                        + "[*].字段名 的形式", HttpStatus.BAD_REQUEST);
+            }
         });
     }
 
