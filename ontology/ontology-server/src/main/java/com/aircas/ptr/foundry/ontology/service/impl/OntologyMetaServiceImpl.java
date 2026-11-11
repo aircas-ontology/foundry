@@ -929,6 +929,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         });
         List<String> failedOntology = Lists.newArrayList();
         List<OntologyImportResultVO.RenamedItem> renamed = Lists.newArrayList();
+        var importedOntologyCount = 0;
         //本 JSON 已建对象：空间 id -> (displayName -> 新对象 uid)，第二遍建关系时端点优先取它
         Map<Integer, Map<String, String>> uidByJsonName = new HashMap<>();
         //空间内已占用的名字，含本批次前序对象，逐个增量登记
@@ -961,6 +962,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 }
 
                 proxyService.importOntology(dto, spaceId);
+                importedOntologyCount++;
 
                 var created = getOne(new LambdaQueryWrapper<OntologyMeta>()
                         .eq(OntologyMeta::getOntologySpaceId, spaceId)
@@ -987,10 +989,19 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
             }
         }
 
-        pendingRelations.forEach((spaceId, relations) ->
-                importPendingRelations(spaceId, relations, uidByJsonName.getOrDefault(spaceId, Collections.emptyMap()), renamed));
+        var importedRelationCount = 0;
+        var pendingRelationCount = 0;
+        for (var entry : pendingRelations.entrySet()) {
+            var spaceId = entry.getKey();
+            pendingRelationCount += entry.getValue().size();
+            importedRelationCount += importPendingRelations(spaceId, entry.getValue(),
+                    uidByJsonName.getOrDefault(spaceId, Collections.emptyMap()), renamed);
+        }
 
         return OntologyImportResultVO.builder()
+                .importedOntologyCount(importedOntologyCount)
+                .importedRelationCount(importedRelationCount)
+                .skippedRelationCount(pendingRelationCount - importedRelationCount)
                 .failedOntologies(failedOntology)
                 .renamed(renamed)
                 .build();
@@ -1038,10 +1049,13 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
      * 导入的第二遍：全部对象已落库后创建关系。
      *
      * <p>端点先按本 JSON 内的对象解析，解析不到再回目标空间按 displayName 查找，仍找不到则跳过该关系。</p>
+     *
+     * @return 本空间实际建成的关系条数
      */
-    private void importPendingRelations(Integer spaceId, List<OntologyRelationDTO> relations,
-                                        Map<String, String> uidByJsonName,
-                                        List<OntologyImportResultVO.RenamedItem> renamed) {
+    private int importPendingRelations(Integer spaceId, List<OntologyRelationDTO> relations,
+                                       Map<String, String> uidByJsonName,
+                                       List<OntologyImportResultVO.RenamedItem> renamed) {
+        var createdCount = 0;
         var uidBySpaceName = list(new LambdaQueryWrapper<OntologyMeta>()
                         .eq(OntologyMeta::getOntologySpaceId, spaceId)
                         .eq(OntologyMeta::getStatus, Status.ENABLE.getValue()))
@@ -1094,7 +1108,9 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                     .setOntologyUniqueIdentifierTo(toUid)
                     .setCategoryId(linkRootCategoryId)
                     .setSpaceId(spaceId));
+            createdCount++;
         }
+        return createdCount;
     }
 
     /**

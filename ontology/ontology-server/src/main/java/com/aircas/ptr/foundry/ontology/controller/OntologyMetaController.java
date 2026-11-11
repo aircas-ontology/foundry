@@ -13,6 +13,7 @@ import com.aircas.ptr.foundry.ontology.model.param.OntologyMetaCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.vo.IdentifierVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyGroupMetaVO;
+import com.aircas.ptr.foundry.ontology.model.vo.OntologyImportResultVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaBriefVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaNodeVO;
@@ -31,6 +32,7 @@ import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import java.util.List;
+import java.util.stream.Collectors;
 
 
 @Tag(name = "对象管理")
@@ -75,9 +77,10 @@ public class OntologyMetaController {
             @Parameter(description = "目标空间 ID，不传则按 JSON 中的 ontologySpaceName 落位") Integer spaceId,
             @RequestParam(required = true, name = "file") MultipartFile file) {
         var result = ontologyMetaService.importOntologies(file, spaceId);
+        var message = buildImportMessage(result);
         return CollectionUtils.isNotEmpty(result.getFailedOntologies())
-                ? new RestResult(ResultCode.ERROR, "对象批量导入失败", result)
-                : RestResult.ofData(result);
+                ? new RestResult(ResultCode.ERROR, message, result)
+                : new RestResult(ResultCode.SUCCESS, message, result);
     }
 
 
@@ -183,6 +186,46 @@ public class OntologyMetaController {
     @Operation(summary = "查询空间内对象继承层级树")
     public RestResult<List<OntologyMetaNodeVO>> getInheritanceTree(@RequestParam(name = "spaceId", required = true) @Parameter(description = "对象空间id") @com.aircas.ptr.foundry.ontology.controller.validator.SpaceIdVerify Integer spaceId) {
         return RestResult.ofData(ontologyMetaService.getInheritanceTree(spaceId));
+    }
+
+    /**
+     * 导入结果提示文案，前端直接展示：导入数量 + 逐项改名明细 + 失败名单。
+     */
+    private String buildImportMessage(OntologyImportResultVO result) {
+        var message = new StringBuilder("成功导入对象")
+                .append(result.getImportedOntologyCount()).append("个、关系")
+                .append(result.getImportedRelationCount()).append("个");
+        if (result.getSkippedRelationCount() > 0) {
+            message.append("，跳过关系").append(result.getSkippedRelationCount()).append("个（端点对象不存在）");
+        }
+        var renamed = result.getRenamed();
+        if (CollectionUtils.isNotEmpty(renamed)) {
+            var ontologyDetail = formatRenamed(renamed, "ONTOLOGY");
+            if (!ontologyDetail.isEmpty()) {
+                message.append("；重命名对象：").append(ontologyDetail);
+            }
+            var relationDetail = formatRenamed(renamed, "RELATION");
+            if (!relationDetail.isEmpty()) {
+                message.append("；重命名关系：").append(relationDetail);
+            }
+        }
+        if (CollectionUtils.isNotEmpty(result.getFailedOntologies())) {
+            message.append("；导入失败对象：").append(String.join("、", result.getFailedOntologies()));
+        }
+        return message.toString();
+    }
+
+    private String formatRenamed(List<OntologyImportResultVO.RenamedItem> renamed, String kind) {
+        return renamed.stream()
+                .filter(item -> kind.equals(item.getKind()))
+                .map(item -> {
+                    var detail = item.getDisplayNameFrom() + "→" + item.getDisplayNameTo();
+                    if (item.getApiNameTo() != null && !item.getApiNameTo().equals(item.getApiNameFrom())) {
+                        detail = detail + "（apiName：" + item.getApiNameFrom() + "→" + item.getApiNameTo() + "）";
+                    }
+                    return detail;
+                })
+                .collect(Collectors.joining("、"));
     }
 
 }
