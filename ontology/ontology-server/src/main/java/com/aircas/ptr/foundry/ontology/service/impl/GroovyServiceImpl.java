@@ -46,6 +46,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -163,7 +164,7 @@ public class GroovyServiceImpl implements GroovyService {
             // OBJECT/LIST 类型直接透传（编排上游节点产出的对象/列表），其余按声明类型转换
             if (p.getParamType() != FunctionParamTypeEnum.OBJECT
                     && p.getParamType() != FunctionParamTypeEnum.LIST) {
-                return SchemaHandleUtil.convertValue(value, p.getTypeReferenceName());
+                return convertScriptParam(p, value, () -> SchemaHandleUtil.convertValue(value, p.getTypeReferenceName()));
             }
             return value;
         }).collect(Collectors.toList());
@@ -189,41 +190,8 @@ public class GroovyServiceImpl implements GroovyService {
                 // typeReferenceName 为空时，对于基本类型按 paramType 转换，其他类型直接透传
                 if (paramInfo.getParamType() != FunctionParamTypeEnum.OBJECT
                         && paramInfo.getParamType() != FunctionParamTypeEnum.LIST) {
-                    if (StringUtils.isNotEmpty(paramInfo.getTypeReferenceName())) {
-                        value = SchemaHandleUtil.convertValue(value, paramInfo.getTypeReferenceName());
-                    } else if (value instanceof Number number) {
-                        // 上游产出的数值类型与下游声明不一致时做窄化/宽化
-                        if (paramInfo.getParamType() == FunctionParamTypeEnum.INTEGER) {
-                            value = number.intValue();
-                        } else if (paramInfo.getParamType() == FunctionParamTypeEnum.DOUBLE) {
-                            value = number.doubleValue();
-                        } else if (paramInfo.getParamType() == FunctionParamTypeEnum.LONG) {
-                            value = number.longValue();
-                        } else if (paramInfo.getParamType() == FunctionParamTypeEnum.FLOAT) {
-                            value = number.floatValue();
-                        }
-                    } else if (value != null) {
-                        // typeReferenceName 为空但参数是基本类型，按 paramType 转换
-                        String valueStr = value.toString();
-                        if (paramInfo.getParamType() == FunctionParamTypeEnum.DOUBLE) {
-                            value = Double.parseDouble(valueStr);
-                        } else if (paramInfo.getParamType() == FunctionParamTypeEnum.INTEGER) {
-                            // 兼容浮点数形式的字符串（如 "100.0"）
-                            if (valueStr.contains(".")) {
-                                value = (int) Double.parseDouble(valueStr);
-                            } else {
-                                value = Integer.parseInt(valueStr);
-                            }
-                        } else if (paramInfo.getParamType() == FunctionParamTypeEnum.LONG) {
-                            if (valueStr.contains(".")) {
-                                value = (long) Double.parseDouble(valueStr);
-                            } else {
-                                value = Long.parseLong(valueStr);
-                            }
-                        } else if (paramInfo.getParamType() == FunctionParamTypeEnum.BOOL) {
-                            value = Boolean.parseBoolean(valueStr);
-                        }
-                    }
+                    var rawValue = value;
+                    value = convertScriptParam(paramInfo, rawValue, () -> convertByDeclaredType(paramInfo, rawValue));
                 }
                 paramValues.add(value);
             }
@@ -231,6 +199,55 @@ public class GroovyServiceImpl implements GroovyService {
         return paramValues.isEmpty()
                 ? groovyInstance.invokeMethod("handle", null)
                 : groovyInstance.invokeMethod("handle", paramValues.toArray(new Object[]{}));
+    }
+
+    /**
+     * 按参数声明类型转换脚本入参，转换失败时报出是哪个入参、期望什么类型、收到了什么。
+     * 原先 NumberFormatException 直接冒到全局异常处理器，接口只回 500「业务异常」，
+     * 传错值和算子内部报错看不出区别；值能正常转换时与改造前完全一致。
+     */
+    private Object convertScriptParam(FunctionParamPO paramInfo, Object value, Supplier<Object> converter) {
+        try {
+            return converter.get();
+        } catch (RuntimeException e) {
+            var expected = StringUtils.isNotEmpty(paramInfo.getTypeReferenceName())
+                    ? paramInfo.getTypeReferenceName() : paramInfo.getParamType().getVale();
+            throw new BusinessException("算子入参[" + paramInfo.getParamName() + "]类型转换失败：期望 "
+                    + expected + "，收到的值是 " + value, HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    /**
+     * 有 Java 类名时按类名转；没有类名时按参数类型做窄化或解析，
+     * 命中不到的类型（如 STRING、OBJECT 以外的自定义类）保持原值，与逐分支改造前一致。
+     */
+    private Object convertByDeclaredType(FunctionParamPO paramInfo, Object value) {
+        if (StringUtils.isNotEmpty(paramInfo.getTypeReferenceName())) {
+            return SchemaHandleUtil.convertValue(value, paramInfo.getTypeReferenceName());
+        }
+        if (value instanceof Number number) {
+            // 上游产出的数值类型与下游声明不一致时做窄化/宽化
+            return switch (paramInfo.getParamType()) {
+                case INTEGER -> number.intValue();
+                case DOUBLE -> number.doubleValue();
+                case LONG -> number.longValue();
+                case FLOAT -> number.floatValue();
+                default -> value;
+            };
+        }
+        if (value == null) {
+            return null;
+        }
+        // typeReferenceName 为空但参数是基本类型，按 paramType 转换
+        String valueStr = value.toString();
+        return switch (paramInfo.getParamType()) {
+            // 兼容浮点数形式的字符串（如 "100.0"）
+            case INTEGER -> valueStr.contains(".") ? (int) Double.parseDouble(valueStr) : Integer.parseInt(valueStr);
+            case LONG -> valueStr.contains(".") ? (long) Double.parseDouble(valueStr) : Long.parseLong(valueStr);
+            case DOUBLE -> Double.parseDouble(valueStr);
+            case BOOL -> Boolean.parseBoolean(valueStr);
+            default -> value;
+        };
     }
 
     @Override

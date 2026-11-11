@@ -2832,12 +2832,19 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             PreconditionUtils.checkArgument(!needProperty || property != null,
                     "无效的行为参数：" + mapping.getPropertyUniqueIdentifier(), HttpStatus.BAD_REQUEST);
             var paramPath = normalizeParamPath(funcParam, mapping.getParamPath());
-            if (property != null && isInput) {
-                var dataType = OntologyDataTypeEnum.valueOfDataType(resolveInputParamType(funcParam, paramPath));
+            // 固定值和外部输入的取值不来自属性，这两类即使带着历史残留的属性标识也不参与类型比对
+            boolean valueFromProperty = sourceType != ActionParamSourceEnum.FIXED
+                    && sourceType != ActionParamSourceEnum.EXTERNAL;
+            if (property != null && isInput && valueFromProperty) {
+                var paramType = resolveInputParamType(funcParam, paramPath);
+                var dataType = OntologyDataTypeEnum.valueOfDataType(paramType);
                 // 对象/自定义类参数没有对应的属性数据类型，整包绑定时不做标量比对
                 PreconditionUtils.checkArgument(dataType == null || dataType.equals(OntologyDataTypeEnum.Array)
-                                || property.getPropertyType().equals(dataType),
-                        "行为属性类型与函数参数类型不匹配：", HttpStatus.BAD_REQUEST);
+                                || property.getPropertyType().equals(dataType)
+                                || isInputTypeCompatible(paramType, property.getPropertyType()),
+                        "行为入参类型不兼容：算子入参[" + funcParam.getParamName() + "]是 " + paramType.getName()
+                                + "，属性[" + property.getDisplayName() + "]是 " + property.getPropertyType().getValue()
+                                + "，请改绑类型兼容的属性或调整算子形参类型", HttpStatus.BAD_REQUEST);
             }
             // 出参写回：按行级 outputMode 判断，WRITE_PROPERTY 要求属性存在且归属该行指定的对象
             if (funcParam.getCategory().equals(FunctionParamCategoryEnum.OUTPUT)
@@ -2892,6 +2899,38 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             fields = field.getFields() == null ? Lists.newArrayList() : field.getFields();
         }
         return currentType;
+    }
+
+    /** 数值属性类型：执行侧按算子形参声明类型对 Number 做窄化/宽化，互绑不改变含义 */
+    private static final Set<OntologyDataTypeEnum> NUMERIC_DATA_TYPES = Set.of(
+            OntologyDataTypeEnum.Int, OntologyDataTypeEnum.Short, OntologyDataTypeEnum.Byte,
+            OntologyDataTypeEnum.Long, OntologyDataTypeEnum.Float, OntologyDataTypeEnum.Double,
+            OntologyDataTypeEnum.Decimal);
+
+    /** 结构类属性：整列存的是 JSON 结构，转成标量形参只会得到一串文本，仍要求类型对得上 */
+    private static final Set<OntologyDataTypeEnum> STRUCTURED_DATA_TYPES = Set.of(
+            OntologyDataTypeEnum.Array, OntologyDataTypeEnum.Map, OntologyDataTypeEnum.Vector,
+            OntologyDataTypeEnum.TimeSeries, OntologyDataTypeEnum.Attachment,
+            OntologyDataTypeEnum.MediaReference, OntologyDataTypeEnum.Geohash,
+            OntologyDataTypeEnum.Geoshape, OntologyDataTypeEnum.Ontology);
+
+    /**
+     * 入参绑定的属性类型与算子形参类型是否兼容；完全相等的组合已在调用处放行，这里只放宽确实能转的：
+     * <ul>
+     *   <li>数值形参（整型/长整型/单浮点/双浮点）↔ 任何数值属性：主键是 Int 而形参写 Long、成本是 Decimal 而形参写 Double 都能取值；</li>
+     *   <li>字符串形参 ← 除结构类以外的属性：算子没有「时间」这种形参类型，时间戳/日期属性只能按文本传给脚本；</li>
+     *   <li>其余组合不放行，例如文本列喂给整型形参（列里能存下任何文本）、结构类属性喂给标量形参。</li>
+     * </ul>
+     */
+    private boolean isInputTypeCompatible(FunctionParamTypeEnum paramType, OntologyDataTypeEnum propertyType) {
+        if (paramType == null || propertyType == null) {
+            return true;
+        }
+        return switch (paramType) {
+            case INTEGER, LONG, FLOAT, DOUBLE -> NUMERIC_DATA_TYPES.contains(propertyType);
+            case STRING -> !STRUCTURED_DATA_TYPES.contains(propertyType);
+            default -> false;
+        };
     }
 
     /** function_param.fields 存的是 {@link FunctionParameterVO} 列表 JSON，解析不了说明算子参数定义本身已损坏，直接抛出 */
