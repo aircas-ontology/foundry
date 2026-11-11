@@ -67,6 +67,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 @Slf4j
@@ -4496,37 +4497,47 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     }
 
     @Override
-    public Page<ActionSchedulingInfoVO> listScheduling(Integer pageNum, Integer pageSize) {
-        //todo 只考虑定时任务
-        var pageInfo = new Page<ActionHandleTask>(pageNum, pageSize).addOrder(OrderItem.desc("id"));
-        var pages = actionHandleTaskService.page(pageInfo);
-        var records = pages.getRecords();
-
-        if (CollectionUtils.isEmpty(records)) {
+    public Page<ActionSchedulingInfoVO> listScheduling(Integer pageNum, Integer pageSize, String name, ActionSchedulingTypeEnum type) {
+        List<ActionHandleTask> tasks = List.of();
+        List<ActionHandleRule> rules = List.of();
+        if (type == null || ActionSchedulingTypeEnum.TASK.equals(type)) {
+            tasks = actionHandleTaskService.list(new LambdaQueryWrapper<ActionHandleTask>()
+                    .like(StringUtils.isNotBlank(name), ActionHandleTask::getName, name));
+        }
+        if (type == null || ActionSchedulingTypeEnum.RULE.equals(type)) {
+            rules = actionHandleRuleService.list(new LambdaQueryWrapper<ActionHandleRule>()
+                    .like(StringUtils.isNotBlank(name), ActionHandleRule::getName, name));
+        }
+        if (tasks.isEmpty() && rules.isEmpty()) {
             return new Page<ActionSchedulingInfoVO>(pageNum, pageSize);
         }
 
-        List<String> actionApis = records.stream().map(ActionHandleTask::getActionApi)
+        List<String> actionApis = Stream.concat(tasks.stream().map(ActionHandleTask::getActionApi),
+                        rules.stream().map(ActionHandleRule::getActionApi))
                 .filter(StringUtils::isNotBlank).distinct().collect(Collectors.toList());
         Map<String, OntologyAction> actionMap = actionApis.isEmpty() ? Map.of()
                 : actionMapper.selectList(new LambdaQueryWrapper<OntologyAction>().in(OntologyAction::getApi, actionApis))
                 .stream().collect(Collectors.toMap(v -> v.getApi(), v -> v, (existingValue, newValue) -> existingValue));
 
-        List<String> ontologyUniqIds = actionMap.values().stream().map(OntologyAction::getOntologyUniqueIdentifier)
+        List<String> ontologyUniqIds = Stream.concat(
+                        tasks.stream().map(v -> {
+                            var action = actionMap.get(v.getActionApi());
+                            return action == null ? null : action.getOntologyUniqueIdentifier();
+                        }),
+                        rules.stream().map(ActionHandleRule::getOntologyIdentifier))
                 .filter(StringUtils::isNotBlank).distinct().collect(Collectors.toList());
         Map<String, OntologyMeta> ontologyMap = ontologyUniqIds.isEmpty() ? Map.of()
                 : ontologyMetaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>().in(OntologyMeta::getUniqueIdentifier, ontologyUniqIds))
                 .stream().collect(Collectors.toMap(v -> v.getUniqueIdentifier(), v -> v, (existingValue, newValue) -> existingValue));
 
-
-        var vo = records.stream().<ActionSchedulingInfoVO>map(v -> {
-            var actionApi = v.getActionApi();
-            var action = actionMap.get(actionApi);
+        List<ActionSchedulingInfoVO> all = new ArrayList<>();
+        for (var v : tasks) {
+            var action = actionMap.get(v.getActionApi());
             var ontologyMeta = action == null ? null : ontologyMap.get(action.getOntologyUniqueIdentifier());
             if (action == null || ontologyMeta == null) {
-                return null;
+                continue;
             }
-            return ActionSchedulingInfoVO.builder()
+            all.add(ActionSchedulingInfoVO.builder()
                     .actionApi(action.getApi())
                     .actionName(action.getDisplayName())
                     .ontologyName(ontologyMeta.getDisplayName())
@@ -4536,15 +4547,34 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                     .type(ActionSchedulingTypeEnum.TASK)
                     .ontologyIdentifier(ontologyMeta.getUniqueIdentifier())
                     .status(v.getStatus())
-                    .build();
+                    .build());
+        }
+        for (var v : rules) {
+            var action = actionMap.get(v.getActionApi());
+            var ontologyMeta = ontologyMap.get(v.getOntologyIdentifier());
+            if (ontologyMeta == null) {
+                continue;
+            }
+            all.add(ActionSchedulingInfoVO.builder()
+                    .actionApi(v.getActionApi())
+                    .actionName(action == null ? null : action.getDisplayName())
+                    .ontologyName(ontologyMeta.getDisplayName())
+                    .schedulingName(v.getName())
+                    .id(v.getId())
+                    .description(v.getDescription())
+                    .type(ActionSchedulingTypeEnum.RULE)
+                    .ontologyIdentifier(ontologyMeta.getUniqueIdentifier())
+                    .status(v.getStatus())
+                    .build());
+        }
+        all.sort(Comparator.comparing(ActionSchedulingInfoVO::getId).reversed());
 
-        }).filter(v -> v != null).collect(Collectors.toList());
-
-
+        int total = all.size();
+        int from = Math.min((pageNum - 1) * pageSize, total);
+        int to = Math.min(from + pageSize, total);
         return new Page<ActionSchedulingInfoVO>(pageNum, pageSize)
-                .setTotal(pages.getTotal())
-                .setRecords(vo);
-
+                .setTotal(total)
+                .setRecords(all.subList(from, to));
     }
 
     @Override

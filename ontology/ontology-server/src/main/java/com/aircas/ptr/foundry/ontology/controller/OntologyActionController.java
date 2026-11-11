@@ -199,9 +199,11 @@ public class OntologyActionController {
     @Operation(summary = "分页查看行为调度列表")
     @GetMapping("/scheduling/list")
     public RestResult<Page<ActionSchedulingInfoVO>> listScheduling(@RequestParam(required = false, defaultValue = "1") Integer pageNum,
-                                                                   @RequestParam(required = false, defaultValue = "10") Integer pageSize) {
+                                                                   @RequestParam(required = false, defaultValue = "10") Integer pageSize,
+                                                                   @RequestParam(required = false) @Parameter(description = "调度名称，模糊匹配") String name,
+                                                                   @RequestParam(required = false) @Parameter(description = "TASK/RULE，不传查全部") ActionSchedulingTypeEnum type) {
 
-        Page<ActionSchedulingInfoVO> result = ontologyActionService.listScheduling(pageNum, pageSize);
+        Page<ActionSchedulingInfoVO> result = ontologyActionService.listScheduling(pageNum, pageSize, name, type);
         return RestResult.ofData(result);
     }
 
