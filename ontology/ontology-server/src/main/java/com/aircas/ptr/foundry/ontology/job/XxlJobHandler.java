@@ -57,7 +57,7 @@ public class XxlJobHandler {
                 }
             }
             log.info("行为调度执行入参：{}", requestParam);
-            XxlJobHelper.log("行为调度执行入参：%s", requestParam);
+            XxlJobHelper.log("行为调度执行入参：{}", requestParam);
             //插入执行日志
             handleLog = ActionHandleLog.builder()
                     .actionHandleId(executeParam.getScheduleId())
