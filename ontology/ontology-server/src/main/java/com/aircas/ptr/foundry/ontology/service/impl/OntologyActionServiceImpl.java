@@ -432,8 +432,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             PreconditionUtils.checkArgument(param.getSubjectType() == null && param.getOperation() == null
                     && StringUtils.isEmpty(param.getStorageGroup()), "应用行为不需要行为类型、基础操作和存储分组", HttpStatus.BAD_REQUEST);
             // outputMode 下沉到 mappingIns 每行：每个出参独立选 RESULT_ONLY / WRITE_PROPERTY
-            // 关系必填：出参写属性与绑定关系可以并存，同一次执行既回写属性也补关系边
-            checkFunctionAction(param, definition, APPLICATION_FUNCTION_TYPES, spaceId, true);
+            // 关系可选：绑了才在测试/执行时按两端落关系边，没绑只回写属性
+            checkFunctionAction(param, definition, APPLICATION_FUNCTION_TYPES, spaceId, false);
             checkWritePropertyOutput(definition);
             checkSubtableFullWrite(definition);
             checkWildcardOutputGroups(definition);
@@ -2780,7 +2780,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
 
     /**
      * 绑定算子的行为（应用行为、基础算子行为）：校验算子类型、关联关系和入参绑定。
-     * <p>关系是否必填由调用方按行为类别决定：应用行为必填，基础算子行为可选。</p>
+     * <p>关联关系可选：应用行为与基础算子行为都不强制绑定，绑了才在测试/执行时做关系操作。</p>
      *
      * @param allowedTypes  该类别允许的算子类型
      * @param spaceId       行为所属空间，算子 api 仅在该空间内唯一
