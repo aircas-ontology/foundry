@@ -2314,8 +2314,8 @@ public class EntityServiceImpl implements EntityService {
             // 通配出参不走向单值的 read：数组取到单个值时形状必然不匹配，会被当成「取不到值」报错
             var wildcard = FunctionOutputValueReader.hasWildcard(out.getFunctionParamExpression());
             Object actualValue = wildcard ? null
-                    : FunctionOutputValueReader.read(jsonString, out.getFunctionParamExpression(),
-                    outParamName, prop.getPropertyType());
+                    : convertWriteValue(FunctionOutputValueReader.read(jsonString, out.getFunctionParamExpression(),
+                            outParamName, prop.getPropertyType()), prop);
             var objectId = StringUtils.isNotEmpty(out.getOntologyUniqueIdentifier())
                     ? out.getOntologyUniqueIdentifier() : prop.getOntologyUniqueIdentifier();
             var primaryProp = primaryPropByObject.get(objectId);
@@ -2474,7 +2474,7 @@ public class EntityServiceImpl implements EntityService {
                 continue;
             }
             try {
-                converted.add(convertWildcardValue(value, prop.getPropertyType()));
+                converted.add(convertWriteValue(value, prop));
             } catch (RuntimeException e) {
                 throw new BusinessException("通配出参第 " + (i + 1) + " 个元素的值[" + value
                         + "]无法转换为属性[" + prop.getDisplayName() + "]的类型 " + prop.getPropertyType(),
@@ -2484,8 +2484,18 @@ public class EntityServiceImpl implements EntityService {
         return converted;
     }
 
-    /** JSON 数字统一解析成 Integer/Long/Double，按属性类型转成列要的包装类型；非数字（字符串日期等）沿用统一的取值转换 */
-    private Object convertWildcardValue(Object value, OntologyDataTypeEnum type) {
+    /**
+     * 出参写回的值按目标属性的数据类型转换后再落库。
+     * <p>取值只负责从返回体里拿到值（JSON 数字统一是 Integer/Double、时间常被脚本写成字符串），
+     * 原样进 SQL 会在插库时抛「column "time" is of type timestamp but expression is of type character varying」，
+     * 这条异常又被按对端逐条执行的 try 吞成空结果，看上去就成了「算子没有返回结果」。通配与单值两条写回共用这里。
+     * 不支持转换的属性类型（布尔、日期外的其它类型、对象、List、Map）按原样透传，与改造前一致。</p>
+     */
+    private Object convertWriteValue(Object value, OntologyProperty prop) {
+        if (value == null || prop.getPropertyType() == null) {
+            return value;
+        }
+        var type = prop.getPropertyType();
         if (value instanceof Number number) {
             return switch (type) {
                 case Int -> number.intValue();
@@ -2493,10 +2503,10 @@ public class EntityServiceImpl implements EntityService {
                 case Float -> number.floatValue();
                 case Double -> number.doubleValue();
                 case String -> number.toString();
-                default -> value;
+                default -> DataConverter.convert2DataType(value, type);
             };
         }
-        return OntologyDataTypeEnum.convert(type, value);
+        return DataConverter.convert2DataType(value, type);
     }
 
     /**
