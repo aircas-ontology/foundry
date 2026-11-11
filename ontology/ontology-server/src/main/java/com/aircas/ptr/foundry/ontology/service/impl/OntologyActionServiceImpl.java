@@ -4543,7 +4543,6 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         var schedulingType = param.getType();
         var meta = ontologyMetaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>()
                 .eq(OntologyMeta::getUniqueIdentifier, param.getOntologyIdentifier()));
-        PreconditionUtils.checkNotNull(meta, "无效的对象：" + param.getOntologyIdentifier(), HttpStatus.BAD_REQUEST);
         var action = actionMapper.selectOne(new LambdaQueryWrapper<OntologyAction>()
                 .eq(OntologyAction::getApi, param.getActionApi())
                 .eq(OntologyAction::getOntologySpaceId, meta.getOntologySpaceId()));

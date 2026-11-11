@@ -84,6 +84,7 @@ spring:
         name: ontology-mcp-server
         version: 1.0.0
         type: sync
+        protocol: STREAMABLE
 
 mcp:
   service-token:
