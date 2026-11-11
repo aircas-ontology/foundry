@@ -53,6 +53,7 @@ import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -437,6 +438,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             checkFunctionAction(param, definition, APPLICATION_FUNCTION_TYPES, spaceId, false);
             checkWritePropertyOutput(definition);
             checkSubtableFullWrite(definition);
+            // 数组出参写子表：路径按参数形状补 [*]，补完再校验通配分组，校验的就是最终入库的路径
+            fillListWildcardExpressions(definition);
             checkWildcardOutputGroups(definition);
             action.setOutputMode(null);
         } else {
@@ -2881,6 +2884,57 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     }
 
     /**
+     * 出参是数组（LIST）且写回目标是子表时，给取值路径补上 {@code [*]}。
+     * <p>参数树点出来的路径只有 {@code $.result.longitude} 这种形状，而 {@code result} 声明成 LIST 时它下面那些字段
+     * 是「元素字段」：按单值取只会拿到第一个元素，返回 5 条就静默少落 4 行，从落库数据上看不出是被截断还是本来只有 1 条。
+     * 这里按参数声明的形状补成 {@code $.result[*].longitude}，执行侧才走逐元素插行。</p>
+     * <p>不动的几种：主表只有实例那一行，取第一个元素就是它的值，补了反而会被「通配只能写子表」拒掉；
+     * 已经写了 {@code [*]} 或写了 {@code [0]} 这类下标的按用户原意保留；路径停在数组层本身
+     * （{@code $.result} 整包给 Array 属性）没有逐元素可言；下一段不是该出参声明的元素字段时认不出数组层，
+     * 宁可不补也不猜路径。</p>
+     */
+    private String wildcardListExpression(String expression, FunctionParamPO funcParam, OntologyProperty property) {
+        if (StringUtils.isBlank(expression) || funcParam.getParamType() != FunctionParamTypeEnum.LIST
+                || FunctionOutputValueReader.hasWildcard(expression)) {
+            return expression;
+        }
+        var storageGroup = property == null ? null : property.getStorageGroup();
+        var onMainTable = StringUtils.isBlank(storageGroup) || MAIN_STORAGE_GROUP.equals(storageGroup);
+        if (onMainTable) {
+            return expression;
+        }
+        var elementFieldNames = parseParamFields(funcParam).stream()
+                .map(FunctionParameterVO::getParamName)
+                .collect(Collectors.toSet());
+        var paramName = funcParam.getParamName();
+        int nameIndex = StringUtils.indexOf(expression, paramName + ".");
+        // 写了出参名就在那一层之后补；没写（$.longitude）就认根节点是数组层，插在 $ 之后
+        int insertAt = nameIndex >= 0 ? nameIndex + paramName.length()
+                : (expression.startsWith("$") ? 1 : -1);
+        if (insertAt < 0 || insertAt >= expression.length()) {
+            return expression;
+        }
+        var fieldName = segmentName(expression, insertAt);
+        if (fieldName == null || !elementFieldNames.contains(fieldName)) {
+            return expression;
+        }
+        return expression.substring(0, insertAt) + "[*]" + expression.substring(insertAt);
+    }
+
+    /** 取值路径从 from 起的字段名段（遇 {@code .} 或 {@code [} 截止）；下标写法或已到结尾返回 null */
+    private static String segmentName(String expression, int from) {
+        var start = expression.charAt(from) == '.' ? from + 1 : from;
+        if (start >= expression.length() || expression.charAt(start) == '[') {
+            return null;
+        }
+        int end = start;
+        while (end < expression.length() && expression.charAt(end) != '.' && expression.charAt(end) != '[') {
+            end++;
+        }
+        return expression.substring(start, end);
+    }
+
+    /**
      * 取一条入参绑定实际对应的声明类型。
      * <p>
      * 对象（自定义类）参数在 function_param 表里只有一行，子字段整体存在该行的 fields JSON 中、
@@ -3019,6 +3073,56 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     }
 
     /**
+     * 数组出参写子表的取值路径批量补 {@code [*]}：按「对象 + 分组」成批判定，整组的列都来自数组出参才补。
+     * <p>逐元素插行时同一行的每一列都取自同一个数组，组里只要有一列来自非数组出参，补完就成了
+     * 「通配列与普通列混用」；那种写法原本保存得下来，不能因为补路径把它变成报错，所以这种组整组保持原样。
+     * 主表分组同样跳过——主表只有实例那一行，取第一个元素就是它的值。</p>
+     */
+    private void fillListWildcardExpressions(ActionDefinition definition) {
+        var writeRows = definition.mappings.stream()
+                .filter(m -> m.getOutputMode() == ActionOutputModeEnum.WRITE_PROPERTY)
+                .filter(m -> StringUtils.isNotEmpty(m.getFunctionParamExpression()))
+                .filter(m -> StringUtils.isNotEmpty(m.getPropertyUniqueIdentifier()))
+                .collect(Collectors.toList());
+        if (writeRows.isEmpty()) {
+            return;
+        }
+        var props = ontologyPropertyService.list(new LambdaQueryWrapper<OntologyProperty>()
+                        .in(OntologyProperty::getUniqueIdentifier, writeRows.stream()
+                                .map(OntologyActionMappingIn::getPropertyUniqueIdentifier)
+                                .distinct()
+                                .collect(Collectors.toList())))
+                .stream()
+                .collect(Collectors.toMap(OntologyProperty::getUniqueIdentifier, v -> v, (existingValue, newValue) -> existingValue));
+        var paramMap = definition.funcParams.stream()
+                .collect(Collectors.toMap(FunctionParamPO::getId, v -> v, (existingValue, newValue) -> existingValue));
+        var rowsByGroup = new LinkedHashMap<GroupKey, List<OntologyActionMappingIn>>();
+        var propByRow = new IdentityHashMap<OntologyActionMappingIn, OntologyProperty>();
+        var paramByRow = new IdentityHashMap<OntologyActionMappingIn, FunctionParamPO>();
+        for (var row : writeRows) {
+            var prop = props.get(row.getPropertyUniqueIdentifier());
+            var funcParam = paramMap.get(row.getFunctionParamId());
+            if (prop == null || funcParam == null) {
+                continue;
+            }
+            var storageGroup = prop.getStorageGroup();
+            if (StringUtils.isBlank(storageGroup) || MAIN_STORAGE_GROUP.equals(storageGroup)) {
+                continue;
+            }
+            var objectId = StringUtils.isNotEmpty(row.getOntologyUniqueIdentifier())
+                    ? row.getOntologyUniqueIdentifier() : prop.getOntologyUniqueIdentifier();
+            rowsByGroup.computeIfAbsent(new GroupKey(objectId, storageGroup), ignored -> new ArrayList<>()).add(row);
+            propByRow.put(row, prop);
+            paramByRow.put(row, funcParam);
+        }
+        rowsByGroup.values().stream()
+                .filter(rows -> rows.stream().allMatch(row ->
+                        paramByRow.get(row).getParamType() == FunctionParamTypeEnum.LIST))
+                .forEach(rows -> rows.forEach(row -> row.setFunctionParamExpression(
+                        wildcardListExpression(row.getFunctionParamExpression(), paramByRow.get(row), propByRow.get(row)))));
+    }
+
+    /**
      * 通配出参（取值路径含 {@code [*]}）的创建侧校验：一列取一批值，逐元素往子表追加插行。
      * <p>main 分组只有实例那一行，逐元素插行没有落点；同一「对象 + 分组」的各列要按元素成行，
      * 指向不同数组或混用普通路径会写出每行列来自不同元素的错位行。这些都放在创建时报错，
@@ -3074,10 +3178,13 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                     "子表[" + group.storageGroup() + "]的通配出参指向了不同的数组：" + String.join("、", prefixes)
                             + "，同一张子表的各列要逐元素成行，取值路径的数组层必须一致", HttpStatus.BAD_REQUEST);
             var plain = plainPropsByGroup.get(group);
-            PreconditionUtils.checkArgument(CollectionUtils.isEmpty(plain),
-                    "子表[" + group.storageGroup() + "]的通配出参列与普通出参列混用：" + String.join("、", plain)
-                            + "，逐元素插行时该分组每一列都要写成 " + prefixes.iterator().next()
-                            + "[*].字段名 的形式", HttpStatus.BAD_REQUEST);
+            // 整组都是通配列（补完 [*] 后的正常写法）时这里根本没有普通列，map 里就是 null；
+            // 报错文案要在真要报时才拼，否则校验通过也会被 String.join 的 null 参数炸成 500
+            if (CollectionUtils.isNotEmpty(plain)) {
+                throw new BusinessException("子表[" + group.storageGroup() + "]的通配出参列与普通出参列混用：" + String.join("、", plain)
+                        + "，逐元素插行时该分组每一列都要写成 " + prefixes.iterator().next()
+                        + "[*].字段名 的形式", HttpStatus.BAD_REQUEST);
+            }
         });
     }
 
