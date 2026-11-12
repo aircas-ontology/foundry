@@ -136,7 +136,7 @@ public interface OntologyActionService extends IService<OntologyAction> {
 
     ActionSchedulingDetailVO getSchedulingDetailById(Long id, ActionSchedulingTypeEnum type);
 
-    Page<ActionSchedulingInfoVO> listScheduling(Integer pageNum, Integer pageSize, String name, ActionSchedulingTypeEnum type);
+    Page<ActionSchedulingInfoVO> listScheduling(Integer pageNum, Integer pageSize, String name, ActionSchedulingTypeEnum type, Integer ontologySpaceId);
 
     Page<SchedulingResultVO> getSchedulingResult(Long id, ActionSchedulingTypeEnum type, TaskStatusEnum taskStatus,
                                                  Date beginTime, Date endTime, Integer pageNum, Integer pageSize);

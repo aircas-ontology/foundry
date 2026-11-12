@@ -15,7 +15,11 @@ import jakarta.validation.constraints.NotNull;
 @NoArgsConstructor
 @SuperBuilder
 @Schema(description = "行为执行配置参数")
-public class ActionHandleConfigInfoParam extends OntologyIdentifierParam {
+public class ActionHandleConfigInfoParam {
+
+    /** 调度按 actionApi 定位行为，不校验对象 id；多对象行为回显的是逗号拼接串，无法通过单对象校验 */
+    @Schema(name = "ontologyIdentifier", description = "对象 id（行为挂载的对象；应用行为可不传，从 linkMapping 推导）", example = "abcdef")
+    private String ontologyIdentifier;
 
     @Schema(name = "actionApi", description = "行为api", required = true, example = "shipLocation")
     @NotBlank(message = "actionApi is empty")

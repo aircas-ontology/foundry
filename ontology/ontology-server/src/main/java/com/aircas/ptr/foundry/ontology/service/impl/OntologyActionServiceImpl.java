@@ -4091,7 +4091,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     }
 
     @Override
-    public Page<ActionSchedulingInfoVO> listScheduling(Integer pageNum, Integer pageSize, String name, ActionSchedulingTypeEnum type) {
+    public Page<ActionSchedulingInfoVO> listScheduling(Integer pageNum, Integer pageSize, String name, ActionSchedulingTypeEnum type, Integer ontologySpaceId) {
         List<ActionHandleTask> tasks = List.of();
         List<ActionHandleRule> rules = List.of();
         if (type == null || ActionSchedulingTypeEnum.TASK.equals(type)) {
@@ -4110,7 +4110,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                         rules.stream().map(ActionHandleRule::getActionApi))
                 .filter(StringUtils::isNotBlank).distinct().collect(Collectors.toList());
         Map<String, OntologyAction> actionMap = actionApis.isEmpty() ? Map.of()
-                : actionMapper.selectList(new LambdaQueryWrapper<OntologyAction>().in(OntologyAction::getApi, actionApis))
+                : actionMapper.selectList(new LambdaQueryWrapper<OntologyAction>().in(OntologyAction::getApi, actionApis)
+                        .eq(ontologySpaceId != null, OntologyAction::getOntologySpaceId, ontologySpaceId))
                 .stream().collect(Collectors.toMap(v -> v.getApi(), v -> v, (existingValue, newValue) -> existingValue));
 
         List<String> ontologyUniqIds = Stream.concat(
@@ -4145,6 +4146,10 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         }
         for (var v : rules) {
             var action = actionMap.get(v.getActionApi());
+            // 指定空间时 actionMap 只含该空间行为，查不到即不属于该空间
+            if (ontologySpaceId != null && action == null) {
+                continue;
+            }
             var ontologyMeta = ontologyMap.get(v.getOntologyIdentifier());
             if (ontologyMeta == null) {
                 continue;
