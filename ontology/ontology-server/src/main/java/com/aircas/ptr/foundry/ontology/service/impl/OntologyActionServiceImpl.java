@@ -431,6 +431,10 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         PreconditionUtils.checkArgument(category.getOntologySpaceId().equals(spaceId),
                 "行为分类不属于该对象所在的空间：" + category.getName(), HttpStatus.BAD_REQUEST);
         var definition = new ActionDefinition();
+        // 挂载对象就是行为的作业范围，绑定里一个对象都认不出时（全固定值入参）也留下它
+        if (StringUtils.isNotBlank(param.getOntologyIdentifier())) {
+            definition.objectIdentifiers.add(param.getOntologyIdentifier());
+        }
         if (kind == ActionKindEnum.APPLICATION) {
             PreconditionUtils.checkArgument(param.getSubjectType() == null && param.getOperation() == null
                     && StringUtils.isEmpty(param.getStorageGroup()), "应用行为不需要行为类型、基础操作和存储分组", HttpStatus.BAD_REQUEST);
@@ -482,6 +486,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         action.setSubjectType(param.getSubjectType());
         action.setActionOperation(param.getOperation());
         action.setStorageGroup(param.getStorageGroup());
+        action.setObjectUniqueIdentifiers(joinObjectIdentifiers(definition.objectIdentifiers));
         return definition;
     }
 
@@ -511,7 +516,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         checkTreeVariables(tree, blackboardTypes);
         var roots = tree.getRoots();
         PreconditionUtils.checkArgument(roots.size() == 1, "行为树必须且只能有一个根节点，当前 " + roots.size() + " 个", HttpStatus.BAD_REQUEST);
-        checkTreeNode(roots.get(0), spaceId, blackboardTypes, new HashSet<>(), new HashSet<>());
+        var boundApis = new HashSet<String>();
+        checkTreeNode(roots.get(0), spaceId, blackboardTypes, new HashSet<>(), boundApis);
 
         action.setApi(param.getActionApi());
         action.setDisplayName(param.getDisplayName());
@@ -527,6 +533,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         action.setStorageGroup(null);
         action.setOutputMode(null);
         action.setDefinition(writeTreeDefinition(tree));
+        // 树自己不指向对象，它涉及的对象就是各节点绑定的行为涉及的那些
+        action.setObjectUniqueIdentifiers(joinObjectIdentifiers(treeObjectIdentifiers(boundApis, spaceId)));
         // 新建的树是未发布状态，编辑不改状态：发布/下线是单独动作，不像行为那样「编辑即重新发布」
         if (action.getStatus() == null) {
             action.setStatus(ActionStatusEnum.DRAFT.getValue());
@@ -2965,6 +2973,13 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                                 && mapping.getOntologyUniqueIdentifier().equals(property.getOntologyUniqueIdentifier()),
                         "出参写回的属性必须属于该行指定的对象：" + mapping.getPropertyUniqueIdentifier(), HttpStatus.BAD_REQUEST);
             }
+            // 对象id 汇总：入参按来源属性所属对象，出参只认写回属性那些行；
+            // 固定值/外部输入没有来源属性、仅返回的出参不落库，都不算动了某个对象
+            var touchesProperty = property != null && (isInput ? valueFromProperty
+                    : mapping.getOutputMode() == ActionOutputModeEnum.WRITE_PROPERTY);
+            if (touchesProperty) {
+                definition.objectIdentifiers.add(property.getOntologyUniqueIdentifier());
+            }
             definition.mappings.add(OntologyActionMappingIn.builder()
                     .functionParamId(funcParam.getId())
                     .functionParamExpression(mapping.getFunctionParamExpression())
@@ -3416,6 +3431,9 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 .targetStatus(linkMapping.getTargetStatus())
                 .timeWindows(writeTimeWindows(linkMapping.getVisibilityWindows()))
                 .build();
+        // 关系行为执行时动的是两端实例（建边/改边/删边），两端对象都算这个行为涉及的对象
+        definition.objectIdentifiers.add(link.getOntologyUniqueIdentifierFrom());
+        definition.objectIdentifiers.add(link.getOntologyUniqueIdentifierTo());
     }
 
     /** 持续时段按 JSON 存在 ontology_action_link.time_windows，空列表与不填等价 */
@@ -3444,6 +3462,37 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         PreconditionUtils.checkArgument(!invalid, "持续时段需填写开始与结束时间，且结束时间晚于开始时间", HttpStatus.BAD_REQUEST);
     }
 
+    /**
+     * 行为的对象id 汇总列：空白与重复在这一步收掉，一个都没有时落 null（改绑定后可能真的一个对象都不碰）。
+     */
+    private String joinObjectIdentifiers(Set<String> identifiers) {
+        var joined = identifiers.stream()
+                .filter(StringUtils::isNotBlank)
+                .collect(Collectors.joining(","));
+        return joined.isEmpty() ? null : joined;
+    }
+
+    /**
+     * 树涉及的对象：把各节点绑定的行为自己那列并进来。
+     * <p>行为那列是保存时算的，改造前建的行为没有值，这类节点在这棵树上就少算一个对象，重新保存一次行为才补齐。</p>
+     */
+    private Set<String> treeObjectIdentifiers(Set<String> boundApis, Integer spaceId) {
+        var identifiers = new LinkedHashSet<String>();
+        if (boundApis.isEmpty()) {
+            return identifiers;
+        }
+        list(new LambdaQueryWrapper<OntologyAction>()
+                .eq(OntologyAction::getOntologySpaceId, spaceId)
+                .in(OntologyAction::getApi, boundApis))
+                .forEach(bound -> {
+                    var stored = bound.getObjectUniqueIdentifiers();
+                    if (StringUtils.isNotBlank(stored)) {
+                        identifiers.addAll(Arrays.asList(stored.split(",")));
+                    }
+                });
+        return identifiers;
+    }
+
     private void saveActionChildren(Long actionId, ActionDefinition definition) {
         if (definition.actionLink != null) {
             definition.actionLink.setOntologyActionId(actionId);
@@ -3463,6 +3512,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         private List<FunctionParamPO> funcParams = new ArrayList<>();
         private OntologyActionLink actionLink;
         private final List<OntologyActionMappingIn> mappings = new ArrayList<>();
+        /** 本次绑定里能认出对象的对象id，校验顺路收集，落库到行为的对象id汇总列 */
+        private final Set<String> objectIdentifiers = new LinkedHashSet<>();
     }
 
     @Override
