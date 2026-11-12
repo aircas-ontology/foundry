@@ -292,6 +292,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 .eq(OntologyAction::getApi, param.getActionApi())
                 .eq(OntologyAction::getOntologySpaceId, spaceId));
         PreconditionUtils.checkArgument(action != null, "行为不存在", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(!Objects.equals(action.getStatus(), ActionStatusEnum.PUBLISHED.getValue()),
+                "该行为已发布，不能编辑，请先撤回发布（行为树请先下线）", HttpStatus.BAD_REQUEST);
         // 编辑不改状态：草稿还是草稿、已发布还是已发布
         var originalStatus = action.getStatus();
         var definition = checkActionDefinition(action, param, spaceId);
