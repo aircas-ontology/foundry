@@ -104,12 +104,16 @@ def parse(code: str) -> list:
     params: list = []
 
     def _extract_collection_element(type_text):
-        """从集合类型注解中提取元素类型名（如 'List[Admin]' → 'Admin'），非集合返回 None。"""
+        """从集合类型注解中提取元素类型名（如 'List[Admin]' → 'Admin'），非集合返回 None。
+
+        多层集合剥到底（'List[List[Admin]]' → 'Admin'），与 Java/Groovy 解析器同口径。
+        """
         import re
         m = re.match(r'^(?:list|List|set|Set|collection|Iterable)\[(.+)\]$', type_text)
-        if m:
-            return m.group(1).strip()
-        return None
+        if not m:
+            return None
+        inner = m.group(1).strip()
+        return _extract_collection_element(inner) or inner
 
     def _expand_class(class_name, visited=None):
         """递归展开类字段，字段类型本身也是类时嵌套 fields。visited 防循环引用。"""
@@ -180,7 +184,12 @@ def parse(code: str) -> list:
             for key in _collect_return_keys(handle_fn, ast):
                 params.append({"name": key, "type": "object", "category": "OUTPUT", "source": "INFERRED"})
         elif rt_text != "None":
-            params.append({"name": "result", "type": rt_text, "category": "OUTPUT", "source": "ANNOTATION"})
+            # 返回集合（list[Admin] / List[Admin]）：外壳没有业务结构，元素类才是出参的下一级
+            elem_type = _extract_collection_element(rt_text)
+            node = {"name": "result", "type": rt_text, "category": "OUTPUT", "source": "ANNOTATION"}
+            if elem_type and elem_type in classes and classes[elem_type]:
+                node["fields"] = _expand_class(elem_type)
+            params.append(node)
     else:
         for key in _collect_return_keys(handle_fn, ast):
             params.append({"name": key, "type": "object", "category": "OUTPUT", "source": "INFERRED"})
