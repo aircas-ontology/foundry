@@ -5,12 +5,12 @@ import com.aircas.ptr.foundry.ontology.model.param.BehaviorActionConfig;
 
 /**
  * 行为节点真正执行一个已有行为的能力，由 OntologyActionService 实现：
- * 取绑定行为、按参数名从黑板取入参、调用行为执行链路落库、再把写回的属性刷新到黑板。
+ * 取绑定行为、按节点标识从执行请求取该节点的数据位置与入参、调用行为执行链路落库。
  */
 @FunctionalInterface
 public interface TreeActionInvoker {
 
-    TreeActionOutcome invoke(Integer spaceId, BehaviorActionConfig config, TreeExecutionRuntime runtime);
+    TreeActionOutcome invoke(String nodeId, Integer spaceId, BehaviorActionConfig config, TreeExecutionRuntime runtime);
 
     /**
      * @param state   节点状态

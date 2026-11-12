@@ -45,13 +45,13 @@ public class TreeAvailableActionVO {
     private String objectIdentifier;
 
     @Schema(name = "instanceObjects", description = "需要调用方提供实例主键的对象类型：入参取属性/对象/List 或出参写属性的对象。"
-            + "多于一个时行为节点必须按对象配实例键；关系对端不在其中，它由对端主键参数指定或整段遍历")
+            + "多于一个时执行请求用 entityPrimaryKeys 按对象传，或在该节点的 nodeExecutes 里单独传；关系对端不在其中，它由对端主键参数指定或按对端对象选实例")
     private List<String> instanceObjects = new ArrayList<>();
 
     @Schema(name = "externalParams", description = "行为的外部输入参数（取值来源为外部输入），绑定到行为树时保存期会自动补同名黑板键")
     private List<TreeActionParamVO> externalParams = new ArrayList<>();
 
-    @Schema(name = "inputParams", description = "算子入参，按参数名从黑板取值")
+    @Schema(name = "inputParams", description = "算子入参，按参数名从执行请求取值")
     private List<TreeActionParamVO> inputParams = new ArrayList<>();
 
     @Schema(name = "outputParams", description = "算子出参")

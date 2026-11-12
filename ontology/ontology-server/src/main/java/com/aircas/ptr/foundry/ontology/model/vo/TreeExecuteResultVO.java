@@ -28,7 +28,8 @@ public class TreeExecuteResultVO {
     @Schema(name = "state", description = "整棵树的根节点结果", example = "SUCCESS")
     private BehaviorStateEnum state;
 
-    @Schema(name = "blackboard", description = "执行结束时的黑板快照，包含行为写回的新值")
+    @Schema(name = "blackboard", description = "执行结束时的黑板快照：变量默认值被执行入参覆盖后的结果，"
+            + "绑对象属性的键是最后一次条件求值前从库里读到的值；行为不写黑板")
     private Map<String, Object> blackboard;
 
     @Schema(name = "nodes", description = "根节点执行结果，子节点逐级嵌套")

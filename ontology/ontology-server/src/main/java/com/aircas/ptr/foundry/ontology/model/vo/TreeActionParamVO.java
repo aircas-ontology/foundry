@@ -9,7 +9,7 @@ import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
 
 /**
- * 行为树可绑定行为的参数定义，前端据此把算子入参与黑板键对上。
+ * 行为树可绑定行为的参数定义，前端据此展示行为要的入参和出参。
  */
 @Data
 @SuperBuilder
@@ -19,7 +19,7 @@ import lombok.experimental.SuperBuilder;
 @Schema(description = "行为树可绑定行为的参数")
 public class TreeActionParamVO {
 
-    @Schema(name = "name", description = "参数名，行为的外部输入参数按它从黑板取值", example = "satelliteId")
+    @Schema(name = "name", description = "参数名，行为的外部输入参数按它从执行请求取值（nodeExecutes.params 优先，回退 inputs）", example = "satelliteId")
     private String name;
 
     @Schema(name = "type", description = "参数类型", example = "STRING")

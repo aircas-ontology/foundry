@@ -137,7 +137,8 @@ public class OntologyCategoryInitServiceImpl implements OntologyCategoryInitServ
             if (!ontologyIdentifiers.isEmpty()) {
                 actionsWithNullCategory = ontologyActionService.list(
                         new LambdaQueryWrapper<OntologyAction>()
-                                .in(OntologyAction::getOntologyUniqueIdentifier, ontologyIdentifiers)
+                                .apply("string_to_array(coalesce(ontology_unique_identifier, ''), ',') && string_to_array({0}, ',')",
+                                        String.join(",", ontologyIdentifiers))
                                 .isNull(OntologyAction::getActionCategoryId));
             }
             for (OntologyAction action : actionsWithNullCategory) {

@@ -8,17 +8,14 @@ import java.util.function.Supplier;
 /**
  * 行为树节点能看到的运行时能力。
  * <p>节点由 behavior3java 反射实例化，拿不到 Spring 容器；所有需要访问库表（执行行为、回读属性）
- * 的动作都通过本接口回到运行时办理，节点自己只负责 BT 的返回值语义。</p>
+ * 的动作都通过本接口回到运行时办理，节点自己只负责 BT 的返回值语义。
+ * 黑板只对条件求值可见：接口不提供读写黑板的方法，行为参数取值与属性刷新都留在运行时内部。</p>
  */
 public interface BehaviorTreeRuntime {
 
     Object getEntityPrimaryKey();
 
     Integer getSpaceId();
-
-    Object blackboardValue(String key);
-
-    void setBlackboardValue(String key, Object value);
 
     /** 节点说明：失败原因、单轮降级提示等，尽量只写一次 */
     void setNodeMessage(String nodeId, String message);
@@ -78,7 +75,7 @@ public interface BehaviorTreeRuntime {
      */
     Boolean evaluateBlackboardCondition(String nodeId, com.aircas.ptr.foundry.ontology.model.param.BehaviorBlackboardConditionConfig config);
 
-    /** 执行行为节点绑定的行为，真实落库并回填黑板 */
+    /** 执行行为节点绑定的行为，真实落库；行为不会改动黑板 */
     BehaviorStateEnum executeAction(String nodeId, com.aircas.ptr.foundry.ontology.model.param.BehaviorActionConfig config);
 
     /**

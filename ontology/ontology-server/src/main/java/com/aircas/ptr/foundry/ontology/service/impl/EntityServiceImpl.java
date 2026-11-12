@@ -1449,7 +1449,7 @@ public class EntityServiceImpl implements EntityService {
                             && (target.getEntityPrimaryKey() != null || MapUtils.isNotEmpty(target.getDataPrimaryKeys())),
                     fieldName + " 里的" + cnLabel + "[" + paramName + "]没给实例主键，也没给分组行主键", HttpStatus.BAD_REQUEST);
             var objectIds = paramDataObjectIds(detail.getMappingIns(), params, paramName, needsTarget,
-                    detail.getOntologyUniqIdentifier());
+                    legacyActionObject(detail.getOntologyUniqIdentifier()));
             PreconditionUtils.checkArgument(!objectIds.isEmpty(),
                     cnLabel + "[" + paramName + "]的绑定没有" + ("入参".equals(cnLabel) ? "取对象属性" : "写入对象属性")
                             + "的行，按" + cnLabel + "指定数据位置无效", HttpStatus.BAD_REQUEST);
@@ -1482,7 +1482,7 @@ public class EntityServiceImpl implements EntityService {
                 .collect(Collectors.toList());
         var writeRows = CollectionUtils.isEmpty(detail.getMappingIns()) ? List.<ActionParamMappingVO>of()
                 : detail.getMappingIns().stream().filter(this::isPropertyWriteOutputRow).collect(Collectors.toList());
-        var legacyObjectId = detail.getOntologyUniqIdentifier();
+        var legacyObjectId = legacyActionObject(detail.getOntologyUniqIdentifier());
         targets.forEach((key, target) -> {
             PreconditionUtils.checkArgument(StringUtils.isNotBlank(key),
                     "outputParams 的 key 不能为空", HttpStatus.BAD_REQUEST);
@@ -1715,7 +1715,7 @@ public class EntityServiceImpl implements EntityService {
             return null;
         }
         var detail = context.getActionDetailVO();
-        var legacyObjectId = detail == null ? null : detail.getOntologyUniqIdentifier();
+        var legacyObjectId = legacyActionObject(context, param);
         var actionApi = detail == null ? "" : detail.getActionApi();
         Map<String, Map<String, List<Object>>> res = new LinkedHashMap<>();
         targets.forEach((paramName, target) -> {
@@ -1761,8 +1761,7 @@ public class EntityServiceImpl implements EntityService {
         if (CollectionUtils.isEmpty(context.getMappings())) {
             return Set.of();
         }
-        var detail = context.getActionDetailVO();
-        var legacyObjectId = detail == null ? null : detail.getOntologyUniqIdentifier();
+        var legacyObjectId = legacyActionObject(context, param);
         Set<String> needTargetObjects = new LinkedHashSet<>();
         Set<String> uncoveredObjects = new HashSet<>();
         for (var mapping : context.getMappings()) {
@@ -1787,6 +1786,26 @@ public class EntityServiceImpl implements EntityService {
         }
         needTargetObjects.removeAll(uncoveredObjects);
         return needTargetObjects;
+    }
+
+    /**
+     * 早期绑定行没记对象 id 时的兜底对象：行为只存「挂载对象」列表，挂载一个对象时才有唯一答案。
+     * <p>挂了多个对象说明每条绑定各行其是，老行缺对象 id 就无从判断，只能按没写对象 id 处理。</p>
+     */
+    private String legacyActionObject(List<String> objectIdentifiers) {
+        return objectIdentifiers != null && objectIdentifiers.size() == 1 ? objectIdentifiers.get(0) : null;
+    }
+
+    /**
+     * 执行期的兜底对象：请求指定的对象最准（旧请求传的就是行为挂载的对象），
+     * 请求没指定时才退回行为挂载对象里唯一的那一个。
+     */
+    private String legacyActionObject(ActionContextInfoDTO context, EntityActionExecuteParam param) {
+        if (param != null && StringUtils.isNotEmpty(param.getOntologyUniqueIdentifier())) {
+            return param.getOntologyUniqueIdentifier();
+        }
+        var detail = context == null ? null : context.getActionDetailVO();
+        return detail == null ? null : legacyActionObject(detail.getOntologyUniqIdentifier());
     }
 
     /** 参数级分组行主键优先，某个分组没给时沿用对象级（inputEntities/outputEntities）里该分组的行主键 */

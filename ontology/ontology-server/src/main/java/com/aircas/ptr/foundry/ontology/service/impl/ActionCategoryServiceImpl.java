@@ -247,12 +247,13 @@ public class ActionCategoryServiceImpl extends ServiceImpl<ActionCategoryMapper,
             return null;
         }
 
-        // 以本空间下的对象集合收敛行为的挂载范围（行为到空间的归属经对象解析）；
+        // 以本空间下的对象集合收敛行为范围（行为到空间的归属经对象解析，挂载了多个对象时有一个在本空间就算）；
         // 行为树没有对象id，同表后只能按空间并入，否则分类计数里看不到树
         var ontologyIdentifiers = listOntologyIdentifiersOfSpace(spaceId);
         var actions = ontologyActionMapper.selectList(new LambdaQueryWrapper<OntologyAction>()
-                .and(w -> w.in(CollectionUtils.isNotEmpty(ontologyIdentifiers),
-                                OntologyAction::getOntologyUniqueIdentifier, ontologyIdentifiers)
+                .and(w -> w.apply(CollectionUtils.isNotEmpty(ontologyIdentifiers),
+                                "string_to_array(coalesce(ontology_unique_identifier, ''), ',') && string_to_array({0}, ',')",
+                                String.join(",", ontologyIdentifiers))
                         .or(t -> t.eq(OntologyAction::getOntologySpaceId, spaceId)
                                 .eq(OntologyAction::getActionKind, ActionKindEnum.TREE)))
                 // 与行为列表一致：分类节点下的行为也按最新创建在前

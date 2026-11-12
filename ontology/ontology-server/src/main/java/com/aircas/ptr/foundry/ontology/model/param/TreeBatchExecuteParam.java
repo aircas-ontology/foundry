@@ -43,16 +43,22 @@ public class TreeBatchExecuteParam {
     @Schema(name = "shardTotal", description = "分片总数；不传表示不分片", example = "4")
     private Integer shardTotal;
 
-    @Schema(name = "inputs", description = "黑板键的初始取值，所有实例共用；实例差异化数据通过黑板绑定对象属性获取")
+    @Schema(name = "inputs", description = "执行入参（键名 -> 值），所有实例共用；实例差异化数据通过黑板绑定对象属性获取")
     private Map<String, Object> inputs;
 
+    @Schema(name = "nodeExecutes", description = "按行为节点给的外部入参取值（节点标识 -> 节点执行数据），所有实例共用："
+            + "两个节点绑同一个行为、各要不同参数时用它。批量执行的实例由遍历逐条给出，这里只能传 params，"
+            + "定位实例的字段一律拒绝；需要按实例传数据请改用单次执行",
+            example = "{\"node-a1b2\":{\"params\":{\"ammoCount\":80}}}")
+    private Map<String, TreeNodeExecuteParam> nodeExecutes;
+
     @Schema(name = "dataPrimaryKey",
-            description = "分组表行主键：属性值-修改/删除用来定位具体一行；所有实例共用，行为节点配置了黑板键时以节点为准",
+            description = "分组表行主键：属性值-修改/删除用来定位具体一行；所有实例共用",
             example = "123")
     private Object dataPrimaryKey;
 
     @Schema(name = "linkEntityPrimaryKey",
-            description = "实例关系行为的对端实体主键；所有实例共用，行为节点配置了黑板键时以节点为准",
+            description = "实例关系行为的对端实体主键；所有实例共用",
             example = "2")
     private Object linkEntityPrimaryKey;
 

@@ -4,6 +4,7 @@ import com.aircas.ptr.foundry.ontology.model.enums.ActionKindEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.ActionOperationEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.ActionOutputModeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.ActionSubjectTypeEnum;
+import com.aircas.ptr.foundry.ontology.repository.handler.StringListCommaTypeHandler;
 import com.baomidou.mybatisplus.annotation.*;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.AllArgsConstructor;
@@ -17,6 +18,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.util.Date;
+import java.util.List;
 
 import static com.aircas.ptr.foundry.common.constant.DateFormat.DATE_FORMAT_DEFAULT;
 
@@ -25,7 +27,7 @@ import static com.aircas.ptr.foundry.common.constant.DateFormat.DATE_FORMAT_DEFA
 @SuperBuilder
 @Data
 @Entity
-@TableName(value = "ontology_action")
+@TableName(value = "ontology_action", autoResultMap = true)
 public class OntologyAction {
     /**
      * Column: api
@@ -41,8 +43,12 @@ public class OntologyAction {
 
     /**
      * Column: ontology_unique_identifier
+     * 行为的挂载对象id，逗号分隔，可以有多个：行为创建时选的对象、入参取值属性所属对象、出参写回对象、关系两端。
+     * 由创建/编辑时按当次绑定重算，认不出对象id的绑定（固定值、外部输入、仅返回的出参）不计入。
+     * 全空时写空串，否则改绑定后残留旧对象
      */
-    private String ontologyUniqueIdentifier;
+    @TableField(typeHandler = StringListCommaTypeHandler.class, updateStrategy = FieldStrategy.ALWAYS)
+    private List<String> ontologyUniqueIdentifier;
 
     /**
      * Column: id
@@ -112,15 +118,6 @@ public class OntologyAction {
      */
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private ActionOutputModeEnum outputMode;
-
-    /**
-     * Column: object_unique_identifiers
-     * 行为涉及的对象id，逗号分隔：行为挂载的对象、入参取值属性所属对象、出参写回对象、关系两端。
-     * 由创建/编辑时按当次绑定重算，认不出对象id的绑定（固定值、外部输入、仅返回的出参）不计入。
-     * 全空时也要能写回 null，否则改绑定后残留旧对象
-     */
-    @TableField(updateStrategy = FieldStrategy.ALWAYS)
-    private String objectUniqueIdentifiers;
 
     /**
      * Column: definition

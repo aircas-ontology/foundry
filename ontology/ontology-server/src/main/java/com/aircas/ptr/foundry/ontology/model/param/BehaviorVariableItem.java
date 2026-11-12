@@ -28,6 +28,7 @@ public class BehaviorVariableItem {
     @Schema(name = "scope", description = "作用域，目前只有 RUNTIME", example = "RUNTIME")
     private BehaviorVariableScopeEnum scope;
 
-    @Schema(name = "defaultValue", description = "默认值；执行时调用方传了同名键值则覆盖它，类型不符会报错")
+    @Schema(name = "defaultValue", description = "默认值；执行时调用方传了同名键值则覆盖它，类型不符会报错。"
+            + "行为声明的同名外部入参没从执行入参传值时也用它")
     private Object defaultValue;
 }

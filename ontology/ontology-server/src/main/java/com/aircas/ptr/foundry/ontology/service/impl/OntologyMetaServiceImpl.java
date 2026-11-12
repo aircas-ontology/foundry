@@ -464,7 +464,8 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         // 创建行为（不创建行为调度）
         List<OntologyActionMappingIn> mappingIns = Lists.newArrayList();
         List<OntologyActionLink> actionLinks = Lists.newArrayList();
-        var actionEntity = actionService.list(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getOntologyUniqueIdentifier, parentIdentifier));
+        var actionEntity = actionService.list(new LambdaQueryWrapper<OntologyAction>()
+                .apply("strpos(',' || ontology_unique_identifier || ',', concat(',', {0}, ',')) > 0", parentIdentifier));
 
         actionEntity.forEach(action -> {
             var ontologyAction = OntologyAction.builder().api(ontologyCreateParam.getApiName() + "_" + action.getApi())
@@ -472,7 +473,11 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                     .displayName(action.getDisplayName())
                     .functionApi(action.getFunctionApi())
                     .status(action.getStatus())
-                    .ontologyUniqueIdentifier(childIdentifier)
+                    // 挂载对象里父对象换成新建的子对象，其余对象照旧
+                    .ontologyUniqueIdentifier(action.getOntologyUniqueIdentifier() == null ? new ArrayList<>()
+                            : action.getOntologyUniqueIdentifier().stream()
+                            .map(id -> parentIdentifier.equals(id) ? childIdentifier : id)
+                            .distinct().collect(Collectors.toList()))
                     .icon(action.getIcon())
                     .build();
             actionService.save(ontologyAction);
@@ -690,7 +695,8 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
      */
     private OntologyMetaStatisticVO buildStatistic(String ontologyIdentifier, Integer spaceId) {
         var propCnt = ontologyPropertyService.count(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyIdentifier));
-        var actionCnt = actionService.count(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getOntologyUniqueIdentifier, ontologyIdentifier));
+        var actionCnt = actionService.count(new LambdaQueryWrapper<OntologyAction>()
+                .apply("strpos(',' || ontology_unique_identifier || ',', concat(',', {0}, ',')) > 0", ontologyIdentifier));
         // 关系口径：有效（status=1）+ 本空间 + 该对象在任意一端（源或目标）
         var linkQuery = new LambdaQueryWrapper<OntologyLinkGroup>()
                 .eq(OntologyLinkGroup::getStatus, Status.ENABLE.getValue())

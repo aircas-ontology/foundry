@@ -95,7 +95,7 @@ public interface OntologyActionService extends IService<OntologyAction> {
      * <p>
      * 单轮求值，不产生 RUNNING；循环、冷却、限时、并行都在单次请求内生效。
      *
-     * @param param 树 api + 实例主键 + 黑板键的执行入参
+     * @param param 树 api + 全树默认实例/数据位置 + 行为外部入参，可按节点用 nodeExecutes 覆盖
      * @return 整树状态 + 结束时黑板快照 + 逐节点结果
      */
     TreeExecuteResultVO executeTree(TreeExecuteParam param);
@@ -103,7 +103,7 @@ public interface OntologyActionService extends IService<OntologyAction> {
     /**
      * 行为树测试：草稿树也可以试跑，用于发布前验证编排；与正式执行一样真实落库。
      *
-     * @param param 树 api + 实例主键 + 黑板键的执行入参
+     * @param param 树 api + 全树默认实例/数据位置 + 行为外部入参，可按节点用 nodeExecutes 覆盖
      * @return 整树状态 + 结束时黑板快照 + 逐节点结果
      */
     TreeExecuteResultVO testTree(TreeExecuteParam param);
@@ -112,7 +112,7 @@ public interface OntologyActionService extends IService<OntologyAction> {
      * 批量执行行为树：按对象类型遍历实例数据，每条实例独立跑一遍整棵树。
      * <p>单条实例失败不中断整批；明细默认只返回失败实例，需要成功明细时由 includeSuccess 打开。</p>
      *
-     * @param param 树 api + 要遍历的对象类型 + 分片参数 + 共用的黑板入参
+     * @param param 树 api + 要遍历的对象类型 + 分片参数 + 共用的执行入参
      * @return 本次执行的实例数、成功失败计数与失败明细
      */
     TreeBatchExecuteResultVO executeTreeBatch(TreeBatchExecuteParam param);

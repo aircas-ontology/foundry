@@ -5,10 +5,12 @@
 
 
     <select id="countGroupByOntology" resultType="com.aircas.ptr.foundry.ontology.model.view.OntologyStatisticsCountView">
-        SELECT ontology_unique_identifier AS ontologyUniqueIdentifier,
+        SELECT oid AS ontologyUniqueIdentifier,
                COUNT(*) AS cnt
-        FROM ontology_action
-        GROUP BY ontology_unique_identifier
+        FROM ontology_action a
+        CROSS JOIN LATERAL unnest(string_to_array(COALESCE(a.ontology_unique_identifier, ''), ',')) AS oid
+        WHERE oid &lt;&gt; ''
+        GROUP BY oid
     </select>
 
 
