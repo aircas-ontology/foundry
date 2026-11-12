@@ -21,3 +21,12 @@ ALTER TABLE ontology.action_handle_log
     ADD COLUMN IF NOT EXISTS execute_result TEXT;
 
 COMMENT ON COLUMN ontology.action_handle_log.execute_result IS '执行结果（行为执行返回的结果 JSON）';
+
+-- -----------------------------------------------------------------------------
+-- action_handle_task 增加 period_type 列：区分周期调度类型（每天/每周/每月/Cron），
+-- 存枚举名 DAILY/WEEKLY/MONTHLY/CRON。允许为空，历史调度为空。
+-- -----------------------------------------------------------------------------
+ALTER TABLE ontology.action_handle_task
+    ADD COLUMN IF NOT EXISTS period_type VARCHAR(32);
+
+COMMENT ON COLUMN ontology.action_handle_task.period_type IS '周期调度类型：DAILY(每天)/WEEKLY(每周)/MONTHLY(每月)/CRON';

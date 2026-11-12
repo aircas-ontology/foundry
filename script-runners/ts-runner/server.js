@@ -204,17 +204,31 @@ function collectNamedTypes(src) {
 }
 
 /** 从数组类型中提取元素类型节点（Admin[] → Admin 类型节点，Array<Admin> → Admin 类型节点）。 */
-function extractArrayElementType(node) {
+function extractArrayElementType(node, src) {
   if (!node) return null;
   const target = ts.isParenthesizedTypeNode(node) ? node.type : node;
   if (ts.isArrayTypeNode(target)) return target.elementType;
   if (ts.isTypeReferenceNode(target)) {
     const name = target.typeName.getText(src);
-    if (/^Array$/i.test(name) && target.typeArguments && target.typeArguments.length) {
-      return target.typeArguments[0];
+    const args = target.typeArguments;
+    // async handle 的返回值写成 Promise<OrbitPoint[]>：外壳是 Promise，元素类型在里面
+    if (/^Promise$/i.test(name) && args && args.length) {
+      return extractArrayElementType(args[0], src);
+    }
+    // 与 normalizeTsType 认数组的口径一致：这几种泛型的第一个实参才是元素类型
+    if (/^(Array|ReadonlyArray|Set|Iterable)$/i.test(name) && args && args.length) {
+      return args[0];
     }
   }
   return null;
+}
+
+/** 返回类型是数组时的元素字段：元素是自定义类型才展开，标量元素返回 null 由调用方回落原标量口径。 */
+function expandArrayElementFields(node, named, src) {
+  const elemNode = extractArrayElementType(node, src);
+  if (!elemNode) return null;
+  const expanded = expandType(elemNode, named, src);
+  return expanded && expanded.fields && expanded.fields.length > 0 ? expanded.fields : null;
 }
 
 /** 递归展开一个类型节点为带嵌套 fields 的参数节点，无法展开返回 null。visited 防循环引用。 */
@@ -236,7 +250,7 @@ function expandType(node, named, src, visited) {
           if (nested && nested.fields) field.fields = nested.fields;
         } else if (typeText === 'array') {
           // 数组元素是自定义类 → 递归展开
-          const elemNode = extractArrayElementType(m.type);
+          const elemNode = extractArrayElementType(m.type, src);
           if (elemNode) {
             const elemTypeText = normalizeTsType(elemNode, src);
             if (elemTypeText.startsWith('ref:')) {
@@ -275,7 +289,7 @@ function expandType(node, named, src, visited) {
             if (nested && nested.fields) field.fields = nested.fields;
           }
         } else if (f.type === 'array' && f._rawType) {
-          const elemNode = extractArrayElementType(f._rawType);
+          const elemNode = extractArrayElementType(f._rawType, src);
           if (elemNode) {
             const elemTypeText = normalizeTsType(elemNode, src);
             if (elemTypeText.startsWith('ref:')) {
@@ -315,7 +329,7 @@ function expandTypeByName(name, named, src, visited) {
       }
     } else if (f.type === 'array' && f._rawType) {
       // 数组字段：通过原始类型节点提取元素类型并递归展开
-      const elemNode = extractArrayElementType(f._rawType);
+      const elemNode = extractArrayElementType(f._rawType, src);
       if (elemNode) {
         const elemTypeText = normalizeTsType(elemNode, src);
         if (elemTypeText.startsWith('ref:')) {
@@ -476,8 +490,12 @@ function parse(code) {
         category: 'OUTPUT', source: 'ANNOTATION', fields: expanded.fields
       });
     } else {
+      // 返回集合（OrbitPoint[] / Array<OrbitPoint>）：外壳没有业务结构，元素类型才是出参的下一级
+      const elementFields = expandArrayElementFields(handle.type, named, src);
       const scalar = normalizeTsType(handle.type, src);
-      if (scalar && scalar !== 'object' && !scalar.startsWith('ref:')) {
+      if (elementFields) {
+        params.push({ name: 'result', type: 'array', category: 'OUTPUT', source: 'ANNOTATION', fields: elementFields });
+      } else if (scalar && scalar !== 'object' && !scalar.startsWith('ref:')) {
         params.push({ name: 'result', type: scalar, category: 'OUTPUT', source: 'ANNOTATION' });
       } else {
         collectReturnKeys(handle).forEach((k) =>

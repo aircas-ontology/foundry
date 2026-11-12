@@ -4,6 +4,7 @@ import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.ontology.controller.validator.OntologyIdVerify;
 import com.aircas.ptr.foundry.ontology.model.enums.ActionKindEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.ActionSchedulingTypeEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.TaskStatusEnum;
 import com.aircas.ptr.foundry.ontology.model.param.ActionCreateOrUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionSchedulingCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionSchedulingUpdateParam;
@@ -20,10 +21,12 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
+import java.util.Date;
 import java.util.List;
 import java.util.stream.Stream;
 
@@ -229,10 +232,13 @@ public class OntologyActionController {
     @GetMapping("/scheduling/result")
     public RestResult<Page<SchedulingResultVO>> getSchedulingResult(@RequestParam(required = true, name = "id") @Parameter(description = "scheduling id") Long id,
                                                                     @RequestParam(required = true, name = "type") @Parameter(description = "TASK/RULE") ActionSchedulingTypeEnum type,
+                                                                    @RequestParam(required = false, name = "taskStatus") @Parameter(description = "执行状态过滤，可选") TaskStatusEnum taskStatus,
+                                                                    @RequestParam(required = false, name = "beginTime") @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") @Parameter(description = "触发时间起，yyyy-MM-dd HH:mm:ss，可选") Date beginTime,
+                                                                    @RequestParam(required = false, name = "endTime") @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") @Parameter(description = "触发时间止，yyyy-MM-dd HH:mm:ss，可选") Date endTime,
                                                                     @RequestParam(required = false, defaultValue = "1") Integer pageNum,
                                                                     @RequestParam(required = false, defaultValue = "10") Integer pageSize) {
 
-        Page<SchedulingResultVO> result = ontologyActionService.getSchedulingResult(id, type, pageNum, pageSize);
+        Page<SchedulingResultVO> result = ontologyActionService.getSchedulingResult(id, type, taskStatus, beginTime, endTime, pageNum, pageSize);
         return RestResult.ofData(result);
     }
 

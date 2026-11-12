@@ -17,6 +17,7 @@ import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
+import com.github.javaparser.ast.type.ArrayType;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.WildcardType;
@@ -334,6 +335,10 @@ public class JavaScriptParamParser implements ScriptParamParser {
 
     /** 从集合类型中提取泛型元素类型名（如 List<Admin> → "Admin"），非集合返回 null。 */
     private String extractCollectionElementType(com.github.javaparser.ast.type.Type type) {
+        // 数组写法（OrbitPoint[]）：组件类型就是元素类型，与 Groovy 解析器 isArray() 的口径一致
+        if (type instanceof ArrayType arrayType) {
+            return arrayType.getComponentType().asString();
+        }
         if (!(type instanceof ClassOrInterfaceType classType)) {
             return null;
         }

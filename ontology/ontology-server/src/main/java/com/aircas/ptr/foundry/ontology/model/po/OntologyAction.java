@@ -114,6 +114,15 @@ public class OntologyAction {
     private ActionOutputModeEnum outputMode;
 
     /**
+     * Column: object_unique_identifiers
+     * 行为涉及的对象id，逗号分隔：行为挂载的对象、入参取值属性所属对象、出参写回对象、关系两端。
+     * 由创建/编辑时按当次绑定重算，认不出对象id的绑定（固定值、外部输入、仅返回的出参）不计入。
+     * 全空时也要能写回 null，否则改绑定后残留旧对象
+     */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private String objectUniqueIdentifiers;
+
+    /**
      * Column: definition
      * 行为树定义 JSON（节点树 + 黑板 + 变量），仅 action_kind=TREE 有值，行为为空
      */

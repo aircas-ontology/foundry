@@ -23,6 +23,9 @@ import java.util.Date;
 @Schema(description = "调度结果查询VO")
 public class SchedulingResultVO {
 
+    @Schema(name = "id",description = "日志id")
+    private Long id;
+
     @Schema(name = "msg",description = "日志消息")
     private String msg;
 

@@ -50,6 +50,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Date;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -430,6 +431,10 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         PreconditionUtils.checkArgument(category.getOntologySpaceId().equals(spaceId),
                 "行为分类不属于该对象所在的空间：" + category.getName(), HttpStatus.BAD_REQUEST);
         var definition = new ActionDefinition();
+        // 挂载对象就是行为的作业范围，绑定里一个对象都认不出时（全固定值入参）也留下它
+        if (StringUtils.isNotBlank(param.getOntologyIdentifier())) {
+            definition.objectIdentifiers.add(param.getOntologyIdentifier());
+        }
         if (kind == ActionKindEnum.APPLICATION) {
             PreconditionUtils.checkArgument(param.getSubjectType() == null && param.getOperation() == null
                     && StringUtils.isEmpty(param.getStorageGroup()), "应用行为不需要行为类型、基础操作和存储分组", HttpStatus.BAD_REQUEST);
@@ -481,6 +486,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         action.setSubjectType(param.getSubjectType());
         action.setActionOperation(param.getOperation());
         action.setStorageGroup(param.getStorageGroup());
+        action.setObjectUniqueIdentifiers(joinObjectIdentifiers(definition.objectIdentifiers));
         return definition;
     }
 
@@ -510,7 +516,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         checkTreeVariables(tree, blackboardTypes);
         var roots = tree.getRoots();
         PreconditionUtils.checkArgument(roots.size() == 1, "行为树必须且只能有一个根节点，当前 " + roots.size() + " 个", HttpStatus.BAD_REQUEST);
-        checkTreeNode(roots.get(0), spaceId, blackboardTypes, new HashSet<>(), new HashSet<>());
+        var boundApis = new HashSet<String>();
+        checkTreeNode(roots.get(0), spaceId, blackboardTypes, new HashSet<>(), boundApis);
 
         action.setApi(param.getActionApi());
         action.setDisplayName(param.getDisplayName());
@@ -526,6 +533,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         action.setStorageGroup(null);
         action.setOutputMode(null);
         action.setDefinition(writeTreeDefinition(tree));
+        // 树自己不指向对象，它涉及的对象就是各节点绑定的行为涉及的那些
+        action.setObjectUniqueIdentifiers(joinObjectIdentifiers(treeObjectIdentifiers(boundApis, spaceId)));
         // 新建的树是未发布状态，编辑不改状态：发布/下线是单独动作，不像行为那样「编辑即重新发布」
         if (action.getStatus() == null) {
             action.setStatus(ActionStatusEnum.DRAFT.getValue());
@@ -699,6 +708,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 checkTreeRowKeyRefs(nodeId, config.getOutputDataPrimaryKeyKeys(), blackboardTypes, "出参");
                 checkTreeParamKeys(nodeId, config, boundApi, spaceId, blackboardTypes);
                 checkTreeNodeObjectInstanceKeys(nodeId, config, boundApi, spaceId, blackboardTypes);
+                checkTreeNodeWildcardRowKeys(nodeId, config, boundApi, spaceId);
                 if (actionApis.add(boundApi)) {
                     checkTreeBoundAction(nodeId, boundApi, spaceId);
                 }
@@ -853,6 +863,106 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 checkTreeBlackboardKeyRef(nodeId, key, blackboardTypes);
             });
         });
+    }
+
+    /**
+     * 行为节点的出参行主键不能落在被引用行为「按数组元素批量插行」的分组上。
+     * <p>通配出参（取值路径带 {@code [*]}）是一个元素插一行，执行侧禁止同时给分组行主键；节点配了行主键
+     * 表达的是「改这一行」，两者矛盾。行为的取值路径会在它自己重存时被补上 {@code [*]}，树定义里看不出这个变化，
+     * 不在这里拦就要等执行才报错，所以按被引用行为当前的绑定路径提前判定。</p>
+     * <p>只拦节点自己配的行主键：执行请求级的 outputDataPrimaryKeys、outputParams 运行时才知道，树定义里没有，拦不到。</p>
+     */
+    private void checkTreeNodeWildcardRowKeys(String nodeId, BehaviorActionConfig config, String boundApi, Integer spaceId) {
+        if (MapUtils.isEmpty(config.getOutputDataPrimaryKeyKeys()) && MapUtils.isEmpty(config.getOutputParamKeys())) {
+            return;
+        }
+        var bound = getOne(new LambdaQueryWrapper<OntologyAction>()
+                .eq(OntologyAction::getApi, boundApi)
+                .eq(OntologyAction::getOntologySpaceId, spaceId));
+        // 悬空引用由 checkTreeBoundAction 报错，这里不抢先中断
+        if (bound == null) {
+            return;
+        }
+        var wildcardRows = ontologyActionMappingInService.list(new LambdaQueryWrapper<OntologyActionMappingIn>()
+                        .eq(OntologyActionMappingIn::getOntologyActionId, bound.getId())).stream()
+                .filter(mapping -> mapping.getOutputMode() == ActionOutputModeEnum.WRITE_PROPERTY)
+                .filter(mapping -> StringUtils.isNotEmpty(mapping.getPropertyUniqueIdentifier()))
+                .filter(mapping -> FunctionOutputValueReader.hasWildcard(mapping.getFunctionParamExpression()))
+                .collect(Collectors.toList());
+        if (wildcardRows.isEmpty()) {
+            return;
+        }
+        var props = ontologyPropertyService.list(new LambdaQueryWrapper<OntologyProperty>()
+                        .in(OntologyProperty::getUniqueIdentifier, wildcardRows.stream()
+                                .map(OntologyActionMappingIn::getPropertyUniqueIdentifier)
+                                .distinct()
+                                .collect(Collectors.toList())))
+                .stream()
+                .collect(Collectors.toMap(OntologyProperty::getUniqueIdentifier, v -> v, (existingValue, newValue) -> existingValue));
+        Map<Long, String> paramNames = new LinkedHashMap<>();
+        treeFunctionParams(bound).forEach(param -> {
+            if (param.getParamId() != null && StringUtils.isNotBlank(param.getParamName())) {
+                paramNames.putIfAbsent(param.getParamId(), param.getParamName());
+            }
+        });
+        for (var row : wildcardRows) {
+            var prop = props.get(row.getPropertyUniqueIdentifier());
+            if (prop == null) {
+                continue;
+            }
+            var storageGroup = prop.getStorageGroup();
+            if (StringUtils.isBlank(storageGroup) || MAIN_STORAGE_GROUP.equals(storageGroup)) {
+                continue;
+            }
+            var objectId = StringUtils.isNotEmpty(row.getOntologyUniqueIdentifier())
+                    ? row.getOntologyUniqueIdentifier() : prop.getOntologyUniqueIdentifier();
+            var objectRowKeys = config.getOutputDataPrimaryKeyKeys() == null
+                    ? null : config.getOutputDataPrimaryKeyKeys().get(objectId);
+            checkTreeRowKeyNotWildcard(nodeId, bound, objectId, storageGroup,
+                    objectRowKeys == null ? null : objectRowKeys.get(storageGroup), "outputDataPrimaryKeyKeys");
+            // 按参数指定的行主键与对象级行主键在执行侧是合并生效的，两处都要判
+            var paramKey = treeOutputParamKeyOf(row, paramNames, config.getOutputParamKeys());
+            if (paramKey == null) {
+                continue;
+            }
+            var target = config.getOutputParamKeys().get(paramKey);
+            var paramRowKeys = target == null ? null : target.getDataPrimaryKeyKeys();
+            checkTreeRowKeyNotWildcard(nodeId, bound, objectId, storageGroup,
+                    paramRowKeys == null ? null : paramRowKeys.get(storageGroup),
+                    "outputParamKeys[" + paramKey + "].dataPrimaryKeyKeys");
+        }
+    }
+
+    /** 该分组配了行主键就拒绝：批量插行没有「要改的那一行」，报错要指到具体配置项和黑板键 */
+    private void checkTreeRowKeyNotWildcard(String nodeId, OntologyAction bound, String objectId, String storageGroup,
+                                            String rowKey, String configField) {
+        if (StringUtils.isBlank(rowKey)) {
+            return;
+        }
+        throw new BusinessException("行为节点 " + nodeId + " 绑定的行为 " + bound.getApi()
+                + " 按数组元素往子表[" + storageGroup + "]批量插行（出参取值路径带 [*]），不能再指定该分组的行主键："
+                + "请去掉 " + configField + " 里对象[" + objectId + "]分组[" + storageGroup + "]的黑板键 " + rowKey,
+                HttpStatus.BAD_REQUEST);
+    }
+
+    /** 节点 outputParamKeys 里点名这条写属性绑定的 key：与执行侧同一优先级（属性唯一标识 &gt; 出参字段名 &gt; 算子出参名） */
+    private String treeOutputParamKeyOf(OntologyActionMappingIn row, Map<Long, String> paramNames,
+                                        Map<String, BehaviorActionParamKeys> nodeKeys) {
+        if (MapUtils.isEmpty(nodeKeys)) {
+            return null;
+        }
+        String bestKey = null;
+        int bestTier = 0;
+        for (var key : nodeKeys.keySet()) {
+            int tier = key.equals(row.getPropertyUniqueIdentifier()) ? 3
+                    : key.equals(row.getParameterName()) ? 2
+                    : key.equals(paramNames.get(row.getFunctionParamId())) ? 1 : 0;
+            if (tier > bestTier) {
+                bestTier = tier;
+                bestKey = key;
+            }
+        }
+        return bestKey;
     }
 
     /**
@@ -2843,12 +2953,16 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 var paramType = resolveInputParamType(funcParam, paramPath);
                 var dataType = OntologyDataTypeEnum.valueOfDataType(paramType);
                 // 对象/自定义类参数没有对应的属性数据类型，整包绑定时不做标量比对
-                PreconditionUtils.checkArgument(dataType == null || dataType.equals(OntologyDataTypeEnum.Array)
-                                || property.getPropertyType().equals(dataType)
-                                || isInputTypeCompatible(paramType, property.getPropertyType()),
-                        "行为入参类型不兼容：算子入参[" + funcParam.getParamName() + "]是 " + paramType.getName()
-                                + "，属性[" + property.getDisplayName() + "]是 " + property.getPropertyType().getValue()
-                                + "，请改绑类型兼容的属性或调整算子形参类型", HttpStatus.BAD_REQUEST);
+                var compatible = dataType == null || dataType.equals(OntologyDataTypeEnum.Array)
+                        || property.getPropertyType().equals(dataType)
+                        || isInputTypeCompatible(paramType, property.getPropertyType());
+                // 形参类型可以整层为 null（子字段没声明类型），放行时也要能走过去，所以报错文案只在真要报时才拼
+                if (!compatible) {
+                    throw new BusinessException("行为入参类型不兼容：算子入参[" + funcParam.getParamName() + "]是 "
+                                    + paramType.getName() + "，属性[" + property.getDisplayName() + "]是 "
+                                    + property.getPropertyType().getValue() + "，请改绑类型兼容的属性或调整算子形参类型",
+                            HttpStatus.BAD_REQUEST);
+                }
             }
             // 出参写回：按行级 outputMode 判断，WRITE_PROPERTY 要求属性存在且归属该行指定的对象
             if (funcParam.getCategory().equals(FunctionParamCategoryEnum.OUTPUT)
@@ -2858,6 +2972,13 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 PreconditionUtils.checkArgument(StringUtils.isNotEmpty(mapping.getOntologyUniqueIdentifier())
                                 && mapping.getOntologyUniqueIdentifier().equals(property.getOntologyUniqueIdentifier()),
                         "出参写回的属性必须属于该行指定的对象：" + mapping.getPropertyUniqueIdentifier(), HttpStatus.BAD_REQUEST);
+            }
+            // 对象id 汇总：入参按来源属性所属对象，出参只认写回属性那些行；
+            // 固定值/外部输入没有来源属性、仅返回的出参不落库，都不算动了某个对象
+            var touchesProperty = property != null && (isInput ? valueFromProperty
+                    : mapping.getOutputMode() == ActionOutputModeEnum.WRITE_PROPERTY);
+            if (touchesProperty) {
+                definition.objectIdentifiers.add(property.getOntologyUniqueIdentifier());
             }
             definition.mappings.add(OntologyActionMappingIn.builder()
                     .functionParamId(funcParam.getId())
@@ -3310,6 +3431,9 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 .targetStatus(linkMapping.getTargetStatus())
                 .timeWindows(writeTimeWindows(linkMapping.getVisibilityWindows()))
                 .build();
+        // 关系行为执行时动的是两端实例（建边/改边/删边），两端对象都算这个行为涉及的对象
+        definition.objectIdentifiers.add(link.getOntologyUniqueIdentifierFrom());
+        definition.objectIdentifiers.add(link.getOntologyUniqueIdentifierTo());
     }
 
     /** 持续时段按 JSON 存在 ontology_action_link.time_windows，空列表与不填等价 */
@@ -3338,6 +3462,37 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         PreconditionUtils.checkArgument(!invalid, "持续时段需填写开始与结束时间，且结束时间晚于开始时间", HttpStatus.BAD_REQUEST);
     }
 
+    /**
+     * 行为的对象id 汇总列：空白与重复在这一步收掉，一个都没有时落 null（改绑定后可能真的一个对象都不碰）。
+     */
+    private String joinObjectIdentifiers(Set<String> identifiers) {
+        var joined = identifiers.stream()
+                .filter(StringUtils::isNotBlank)
+                .collect(Collectors.joining(","));
+        return joined.isEmpty() ? null : joined;
+    }
+
+    /**
+     * 树涉及的对象：把各节点绑定的行为自己那列并进来。
+     * <p>行为那列是保存时算的，改造前建的行为没有值，这类节点在这棵树上就少算一个对象，重新保存一次行为才补齐。</p>
+     */
+    private Set<String> treeObjectIdentifiers(Set<String> boundApis, Integer spaceId) {
+        var identifiers = new LinkedHashSet<String>();
+        if (boundApis.isEmpty()) {
+            return identifiers;
+        }
+        list(new LambdaQueryWrapper<OntologyAction>()
+                .eq(OntologyAction::getOntologySpaceId, spaceId)
+                .in(OntologyAction::getApi, boundApis))
+                .forEach(bound -> {
+                    var stored = bound.getObjectUniqueIdentifiers();
+                    if (StringUtils.isNotBlank(stored)) {
+                        identifiers.addAll(Arrays.asList(stored.split(",")));
+                    }
+                });
+        return identifiers;
+    }
+
     private void saveActionChildren(Long actionId, ActionDefinition definition) {
         if (definition.actionLink != null) {
             definition.actionLink.setOntologyActionId(actionId);
@@ -3357,6 +3512,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         private List<FunctionParamPO> funcParams = new ArrayList<>();
         private OntologyActionLink actionLink;
         private final List<OntologyActionMappingIn> mappings = new ArrayList<>();
+        /** 本次绑定里能认出对象的对象id，校验顺路收集，落库到行为的对象id汇总列 */
+        private final Set<String> objectIdentifiers = new LinkedHashSet<>();
     }
 
     @Override
@@ -4440,12 +4597,9 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     public Long createScheduling(ActionSchedulingCreateParam param) {
         //todo 目前只考虑定时调度
         var schedulingType = param.getType();
-        var meta = ontologyMetaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>()
-                .eq(OntologyMeta::getUniqueIdentifier, param.getOntologyIdentifier()));
-        PreconditionUtils.checkNotNull(meta, "无效的对象：" + param.getOntologyIdentifier(), HttpStatus.BAD_REQUEST);
+        // 行为与对象解绑：直接按 actionApi 查行为，用行为自身的空间，不再依赖对象 id
         var action = actionMapper.selectOne(new LambdaQueryWrapper<OntologyAction>()
-                .eq(OntologyAction::getApi, param.getActionApi())
-                .eq(OntologyAction::getOntologySpaceId, meta.getOntologySpaceId()));
+                .eq(OntologyAction::getApi, param.getActionApi()));
         PreconditionUtils.checkNotNull(action, "action不存在：" + param.getActionApi());
         // 属性值、实例关系行为没有算子，执行时会对对象下全部实例逐个落库，定时跑会造成重复数据，不支持调度
         PreconditionUtils.checkArgument(StringUtils.isNotEmpty(action.getFunctionApi()),
@@ -4459,6 +4613,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                     .ontologyIdentifier(action.getOntologyUniqueIdentifier())
                     .ontologySpaceId(action.getOntologySpaceId())
                     .cron(taskParam.getTaskCronExpression())
+                    .periodType(taskParam.getPeriodType())
                     .entityJson(taskParam.getEntityJson())
                     .name(param.getName())
                     .description(param.getDescription())
@@ -4486,12 +4641,9 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     @Override
     @Transactional
     public void updateScheduling(ActionSchedulingUpdateParam param) {
-        var meta = ontologyMetaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>()
-                .eq(OntologyMeta::getUniqueIdentifier, param.getOntologyIdentifier()));
-        PreconditionUtils.checkNotNull(meta, "无效的对象：" + param.getOntologyIdentifier(), HttpStatus.BAD_REQUEST);
+        // 行为与对象解绑：直接按 actionApi 查行为，不再校验对象 id
         var action = actionMapper.selectOne(new LambdaQueryWrapper<OntologyAction>()
-                .eq(OntologyAction::getApi, param.getActionApi())
-                .eq(OntologyAction::getOntologySpaceId, meta.getOntologySpaceId()));
+                .eq(OntologyAction::getApi, param.getActionApi()));
         PreconditionUtils.checkNotNull(action, "action不存在：" + param.getActionApi());
         //todo 目前只考虑定时调度
         var schedulingType = param.getType();
@@ -4503,6 +4655,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                     .setOntologySpaceId(action.getOntologySpaceId())
                     .setDescription(param.getDescription())
                     .setCron(param.getTask().getTaskCronExpression())
+                    .setPeriodType(param.getTask().getPeriodType())
                     .setEntityJson(param.getTask().getEntityJson())
                     .setName(param.getName());
             actionHandleTaskService.updateById(handleTask);
@@ -4596,6 +4749,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                     .type(ActionSchedulingTypeEnum.TASK)
                     .ontologyIdentifier(action.getOntologyUniqueIdentifier())
                     .taskVO(ActionHandleTaskInfoVO.builder().taskCronExpression(handleTask.getCron())
+                            .periodType(handleTask.getPeriodType())
                             .entityJson(handleTask.getEntityJson()).build())
                     .status(handleTask.getStatus())
                     .build();
@@ -4640,20 +4794,23 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         List<ActionSchedulingInfoVO> all = new ArrayList<>();
         for (var v : tasks) {
             var action = actionMap.get(v.getActionApi());
-            var ontologyMeta = action == null ? null : ontologyMap.get(action.getOntologyUniqueIdentifier());
-            if (action == null || ontologyMeta == null) {
+            if (action == null) {
                 continue;
             }
+            var ontologyMeta = ontologyMap.get(action.getOntologyUniqueIdentifier());
             all.add(ActionSchedulingInfoVO.builder()
                     .actionApi(action.getApi())
                     .actionName(action.getDisplayName())
-                    .ontologyName(ontologyMeta.getDisplayName())
+                    .ontologyName(ontologyMeta == null ? null : ontologyMeta.getDisplayName())
                     .schedulingName(v.getName())
                     .id(v.getId())
                     .description(v.getDescription())
                     .type(ActionSchedulingTypeEnum.TASK)
-                    .ontologyIdentifier(ontologyMeta.getUniqueIdentifier())
+                    .ontologyIdentifier(action.getOntologyUniqueIdentifier())
+                    .periodType(v.getPeriodType())
                     .status(v.getStatus())
+                    .createTime(v.getCreateTime())
+                    .updateTime(v.getUpdateTime())
                     .build());
         }
         for (var v : rules) {
@@ -4672,6 +4829,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                     .type(ActionSchedulingTypeEnum.RULE)
                     .ontologyIdentifier(ontologyMeta.getUniqueIdentifier())
                     .status(v.getStatus())
+                    .createTime(v.getCreateTime())
+                    .updateTime(v.getUpdateTime())
                     .build());
         }
         all.sort(Comparator.comparing(ActionSchedulingInfoVO::getId).reversed());
@@ -4685,17 +4844,22 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     }
 
     @Override
-    public Page<SchedulingResultVO> getSchedulingResult(Long id, ActionSchedulingTypeEnum type, Integer pageNum, Integer pageSize) {
+    public Page<SchedulingResultVO> getSchedulingResult(Long id, ActionSchedulingTypeEnum type, TaskStatusEnum taskStatus,
+                                                        Date beginTime, Date endTime, Integer pageNum, Integer pageSize) {
         //todo 只考虑定时任务
         var pageInfo = new Page<ActionHandleLog>(pageNum, pageSize).addOrder(OrderItem.desc("id"));
         var pages = actionHandleLogMapper.selectPage(pageInfo, new LambdaQueryWrapper<ActionHandleLog>()
                 .eq(ActionHandleLog::getActionHandleId, id)
-                .eq(ActionHandleLog::getActionHandleType, type));
+                .eq(ActionHandleLog::getActionHandleType, type)
+                .eq(taskStatus != null, ActionHandleLog::getTaskStatus, taskStatus)
+                .ge(beginTime != null, ActionHandleLog::getTriggerTime, beginTime)
+                .le(endTime != null, ActionHandleLog::getTriggerTime, endTime));
         var records = pages.getRecords();
         if (CollectionUtils.isEmpty(records)) {
             return new Page<>(pageNum, pageSize);
         }
         var vo = records.stream().map(v -> SchedulingResultVO.builder()
+                        .id(v.getId())
                         .msg(v.getMsg())
                         .executeResult(v.getExecuteResult())
                         .taskStatus(v.getTaskStatus())

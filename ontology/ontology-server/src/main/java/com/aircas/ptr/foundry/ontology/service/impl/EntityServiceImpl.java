@@ -92,6 +92,12 @@ public class EntityServiceImpl implements EntityService {
      */
     private static final int WILDCARD_INSERT_BATCH = 1000;
 
+    /**
+     * PostgreSQL 单条语句的绑定参数上限，{@code batchInsertObject} 每列每行各占一个，
+     * 用于按列数反推一批最多能插多少行。
+     */
+    private static final int MAX_BIND_PARAMS_PER_STATEMENT = 65535;
+
     @Resource
     private OntologyMetaMapper metaMapper;
 
@@ -2498,6 +2504,8 @@ public class EntityServiceImpl implements EntityService {
      * 原样进 SQL 会在插库时抛「column "time" is of type timestamp but expression is of type character varying」，
      * 这条异常又被按对端逐条执行的 try 吞成空结果，看上去就成了「算子没有返回结果」。通配与单值两条写回共用这里。
      * 时间、整型、长整型、浮点、双精度、Decimal、布尔按类型转；其余类型（对象、List、Map 等）原样透传，与改造前一致。</p>
+     * <p>数字值按它的文本形态走 {@link #convertByTargetType}：同一列用字符串写和用数字写必须同口径，
+     * 过去 {@code number.intValue()} 会把 500.9 静默截成 500、{@code 1} 进 boolean 列原样传下去留给插库报错。</p>
      */
     private Object convertWriteValue(Object value, OntologyProperty prop) {
         if (value == null || prop.getPropertyType() == null) {
@@ -2505,16 +2513,20 @@ public class EntityServiceImpl implements EntityService {
         }
         var type = prop.getPropertyType();
         if (value instanceof Number number) {
-            return switch (type) {
-                case Int -> number.intValue();
-                case Long -> number.longValue();
-                case Float -> number.floatValue();
-                case Double -> number.doubleValue();
-                case String -> number.toString();
-                default -> convertByTargetType(number, type, prop);
-            };
+            if (type == OntologyDataTypeEnum.String) {
+                return number.toString();
+            }
+            return isConvertibleTargetType(type) ? convertByTargetType(number.toString(), type, prop) : number;
         }
         return convertByTargetType(value, type, prop);
+    }
+
+    /** 有明确转换语义的列类型；结构类（对象、List、Map 等）没有标量形态，原样透传 */
+    private boolean isConvertibleTargetType(OntologyDataTypeEnum type) {
+        return switch (type) {
+            case Timestamp, Date, Float, Double, Decimal, Int, Long, Bool -> true;
+            default -> false;
+        };
     }
 
     /**
@@ -2525,11 +2537,7 @@ public class EntityServiceImpl implements EntityService {
      * 字符串进 boolean 列和进 timestamp 列是同一类错。</p>
      */
     private Object convertByTargetType(Object value, OntologyDataTypeEnum type, OntologyProperty prop) {
-        var convertible = switch (type) {
-            case Timestamp, Date, Float, Double, Decimal, Int, Long, Bool -> true;
-            default -> false;
-        };
-        if (!convertible) {
+        if (!isConvertibleTargetType(type)) {
             return value;
         }
         try {
@@ -2568,8 +2576,8 @@ public class EntityServiceImpl implements EntityService {
     /**
      * 通配出参落库：同一「写回目标 + 分组表 + 循环数组」的列逐元素 zip 成行，追加插入子表。
      * <p>各列长度必须一致：不一致说明有列的路径写错，截到最短会留下每行的列来自不同元素的错位行，
-     * 所以整组一行都不插。行数按 {@value #MAX_WILDCARD_OUTPUT_ROWS} 封顶、每 {@value #WILDCARD_INSERT_BATCH}
-     * 行一批插入，只插不删，重复执行按追加口径留多份。</p>
+     * 所以整组一行都不插。行数按 {@value #MAX_WILDCARD_OUTPUT_ROWS} 封顶、每批行数按分组表列数收敛
+     * （见 {@link #wildcardInsertBatchSize(int)}），只插不删，重复执行按追加口径留多份。</p>
      */
     private void insertWildcardRows(Map<WildcardKey, List<WildcardColumn>> groups,
                                     Map<String, OntologyProperty> primaryPropByObject,
@@ -2597,7 +2605,9 @@ public class EntityServiceImpl implements EntityService {
             // 该分组表里没绑定的列先补 null，再逐元素覆盖已绑定列，保证插出来的行列齐全
             var template = new LinkedHashMap<String, Object>();
             fillUnwrittenColumns(schema, key.target().objectId(), tableName, template, propMap);
-            var batch = new ArrayList<Map<String, Object>>(WILDCARD_INSERT_BATCH);
+            // 一批拼一条 INSERT，占位符数 = 行数 × 每行列数（外键列可能不在模板里，按 +1 取上限）
+            var batchSize = wildcardInsertBatchSize(template.size() + 1);
+            var batch = new ArrayList<Map<String, Object>>(batchSize);
             for (int i = 0; i < rows; i++) {
                 var row = new LinkedHashMap<String, Object>(template);
                 for (var column : columns) {
@@ -2605,15 +2615,26 @@ public class EntityServiceImpl implements EntityService {
                 }
                 row.put(mapping.getTargetColumnName(), key.target().entityPrimaryKey());
                 batch.add(row);
-                if (batch.size() == WILDCARD_INSERT_BATCH) {
+                if (batch.size() == batchSize) {
                     objectMapper.batchInsertObject(schema, tableName, batch);
-                    batch = new ArrayList<>(WILDCARD_INSERT_BATCH);
+                    batch = new ArrayList<>(batchSize);
                 }
             }
             if (!batch.isEmpty()) {
                 objectMapper.batchInsertObject(schema, tableName, batch);
             }
         });
+    }
+
+    /**
+     * 按列数收敛每批行数：PostgreSQL 单条语句最多 65535 个绑定参数，超了直接报「too many parameters」，
+     * 而前几批已经落库、只剩半批数据。列少的表仍按 {@value #WILDCARD_INSERT_BATCH} 行走。
+     */
+    private int wildcardInsertBatchSize(int columnCount) {
+        if (columnCount <= 0) {
+            return WILDCARD_INSERT_BATCH;
+        }
+        return Math.max(1, Math.min(WILDCARD_INSERT_BATCH, MAX_BIND_PARAMS_PER_STATEMENT / columnCount));
     }
 
     /** 各列的取值条数，报错时用来指出是哪一列的路径短了 */
