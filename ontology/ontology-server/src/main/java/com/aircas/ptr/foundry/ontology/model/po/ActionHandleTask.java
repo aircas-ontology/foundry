@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.po;
 
+import com.aircas.ptr.foundry.ontology.model.enums.ActionSchedulingPeriodTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.ScheduleStatus;
 import com.baomidou.mybatisplus.annotation.*;
 import com.fasterxml.jackson.annotation.JsonFormat;
@@ -51,6 +52,11 @@ public class ActionHandleTask {
      * 定时任务表达式
      */
     private String cron;
+
+    /**
+     * 周期调度类型：每天/每周/每月/Cron
+     */
+    private ActionSchedulingPeriodTypeEnum periodType;
 
     private String name;
 

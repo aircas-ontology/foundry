@@ -4,6 +4,7 @@ package com.aircas.ptr.foundry.ontology.service;
 import com.aircas.ptr.foundry.ontology.model.enums.ActionKindEnum;
 import com.aircas.ptr.foundry.ontology.model.dto.ActionContextInfoDTO;
 import com.aircas.ptr.foundry.ontology.model.enums.ActionSchedulingTypeEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.TaskStatusEnum;
 import com.aircas.ptr.foundry.ontology.model.param.ActionCreateOrUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionSchedulingCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionSchedulingUpdateParam;
@@ -17,6 +18,7 @@ import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
 
+import java.util.Date;
 import java.util.List;
 
 public interface OntologyActionService extends IService<OntologyAction> {
@@ -136,5 +138,6 @@ public interface OntologyActionService extends IService<OntologyAction> {
 
     Page<ActionSchedulingInfoVO> listScheduling(Integer pageNum, Integer pageSize, String name, ActionSchedulingTypeEnum type);
 
-    Page<SchedulingResultVO> getSchedulingResult(Long id, ActionSchedulingTypeEnum type, Integer pageNum, Integer pageSize);
+    Page<SchedulingResultVO> getSchedulingResult(Long id, ActionSchedulingTypeEnum type, TaskStatusEnum taskStatus,
+                                                 Date beginTime, Date endTime, Integer pageNum, Integer pageSize);
 }
