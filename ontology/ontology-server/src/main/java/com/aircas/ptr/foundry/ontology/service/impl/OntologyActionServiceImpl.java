@@ -2718,15 +2718,12 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         return singleActionObject(action);
     }
 
-    /** 调度必须落到一个对象上：调用方指定优先，没指定时只有挂载单个对象的行为才推得出 */
+    /** 调度按 actionApi 定位行为，对象 id 仅作展示：调用方指定优先，没指定时挂载单个对象才推得出，推不出存空 */
     private String scheduleObject(OntologyAction action, String requested) {
         if (StringUtils.isNotBlank(requested)) {
             return requested;
         }
-        var object = singleActionObject(action);
-        PreconditionUtils.checkArgument(object != null,
-                "行为挂载了多个对象，配置调度时必须指定 ontologyIdentifier：" + action.getApi(), HttpStatus.BAD_REQUEST);
-        return object;
+        return singleActionObject(action);
     }
 
     /**
