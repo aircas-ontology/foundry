@@ -17,7 +17,7 @@ public interface OntologyInstanceUrlMapper extends BaseMapper<OntologyInstanceUr
     /**
      * 按（空间 + 对象 + 实例）保存 URL：不存在则插入，已存在则覆盖 url 并把存入时间刷成本次时间。
      * <p>冲突目标依赖唯一索引 {@code uk_ontology_instance_url}，DDL 见
-     * {@code resources/ddl/alter_table_20261112.sql}。一条语句完成读判写，
+     * {@code resources/ddl/alter_table_20261112_1.sql}。一条语句完成读判写，
      * 并发提交同一实例时不会插入出两行。</p>
      *
      * @return 受影响行数，恒为 1
