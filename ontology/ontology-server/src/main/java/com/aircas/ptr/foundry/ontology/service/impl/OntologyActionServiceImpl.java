@@ -2944,12 +2944,16 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 var paramType = resolveInputParamType(funcParam, paramPath);
                 var dataType = OntologyDataTypeEnum.valueOfDataType(paramType);
                 // 对象/自定义类参数没有对应的属性数据类型，整包绑定时不做标量比对
-                PreconditionUtils.checkArgument(dataType == null || dataType.equals(OntologyDataTypeEnum.Array)
-                                || property.getPropertyType().equals(dataType)
-                                || isInputTypeCompatible(paramType, property.getPropertyType()),
-                        "行为入参类型不兼容：算子入参[" + funcParam.getParamName() + "]是 " + paramType.getName()
-                                + "，属性[" + property.getDisplayName() + "]是 " + property.getPropertyType().getValue()
-                                + "，请改绑类型兼容的属性或调整算子形参类型", HttpStatus.BAD_REQUEST);
+                var compatible = dataType == null || dataType.equals(OntologyDataTypeEnum.Array)
+                        || property.getPropertyType().equals(dataType)
+                        || isInputTypeCompatible(paramType, property.getPropertyType());
+                // 形参类型可以整层为 null（子字段没声明类型），放行时也要能走过去，所以报错文案只在真要报时才拼
+                if (!compatible) {
+                    throw new BusinessException("行为入参类型不兼容：算子入参[" + funcParam.getParamName() + "]是 "
+                                    + paramType.getName() + "，属性[" + property.getDisplayName() + "]是 "
+                                    + property.getPropertyType().getValue() + "，请改绑类型兼容的属性或调整算子形参类型",
+                            HttpStatus.BAD_REQUEST);
+                }
             }
             // 出参写回：按行级 outputMode 判断，WRITE_PROPERTY 要求属性存在且归属该行指定的对象
             if (funcParam.getCategory().equals(FunctionParamCategoryEnum.OUTPUT)
