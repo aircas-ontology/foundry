@@ -204,9 +204,10 @@ public class OntologyActionController {
     public RestResult<Page<ActionSchedulingInfoVO>> listScheduling(@RequestParam(required = false, defaultValue = "1") Integer pageNum,
                                                                    @RequestParam(required = false, defaultValue = "10") Integer pageSize,
                                                                    @RequestParam(required = false) @Parameter(description = "调度名称，模糊匹配") String name,
-                                                                   @RequestParam(required = false) @Parameter(description = "TASK/RULE，不传查全部") ActionSchedulingTypeEnum type) {
+                                                                   @RequestParam(required = false) @Parameter(description = "TASK/RULE，不传查全部") ActionSchedulingTypeEnum type,
+                                                                   @RequestParam(required = false) @Parameter(description = "空间 id，按行为所属空间过滤，不传查全部") Integer ontologySpaceId) {
 
-        Page<ActionSchedulingInfoVO> result = ontologyActionService.listScheduling(pageNum, pageSize, name, type);
+        Page<ActionSchedulingInfoVO> result = ontologyActionService.listScheduling(pageNum, pageSize, name, type, ontologySpaceId);
         return RestResult.ofData(result);
     }
 
