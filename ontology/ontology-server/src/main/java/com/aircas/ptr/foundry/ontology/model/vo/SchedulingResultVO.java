@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.ontology.model.vo;
 
 import com.aircas.ptr.foundry.ontology.model.enums.TaskStatusEnum;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -9,6 +10,8 @@ import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 
 import java.util.Date;
+
+import static com.aircas.ptr.foundry.common.constant.DateFormat.DATE_FORMAT_DEFAULT;
 
 /**
  * @author LiuYue
@@ -33,12 +36,14 @@ public class SchedulingResultVO {
     private String executeResult;
 
     @Schema(name = "triggerTime",description = "触发时间")
+    @JsonFormat(pattern = DATE_FORMAT_DEFAULT, timezone = "GMT+8")
     private Date triggerTime;
 
     @Schema(name = "requestParam",description = "请求参数")
     private String requestParam;
 
     @Schema(name = "completeTime",description = "完成时间")
+    @JsonFormat(pattern = DATE_FORMAT_DEFAULT, timezone = "GMT+8")
     private Date completeTime;
 
     @Schema(name = "taskStatus",description = "执行状态")

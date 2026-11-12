@@ -3984,6 +3984,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         if (schedulingType.equals(ActionSchedulingTypeEnum.TASK)) {
             var handleTask = actionHandleTaskService.getById(param.getId());
             PreconditionUtils.checkNotNull(handleTask, "定时调度任务不存在：" + param.getId());
+            PreconditionUtils.checkArgument(!ScheduleStatus.START.equals(handleTask.getStatus()), "周期调度已开启，请先暂停后再编辑");
             handleTask.setActionApi(action.getApi())
                     .setOntologyIdentifier(ontologyIdentifier)
                     .setOntologySpaceId(action.getOntologySpaceId())
