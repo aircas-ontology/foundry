@@ -299,7 +299,7 @@ public class ActionCategoryServiceImpl extends ServiceImpl<ActionCategoryMapper,
                     .map(v -> OntologyActionInfoVO.builder()
                             .actionApi(v.getApi())
                             .description(v.getDescription())
-                            .ontologyUniqIdentifier(v.getOntologyUniqueIdentifier())
+                            .ontologyUniqIdentifier(v.ontologyUniqueIdentifierText())
                             .displayName(v.getDisplayName())
                             .icon(v.getIcon())
                             .functionApi(v.getFunctionApi())

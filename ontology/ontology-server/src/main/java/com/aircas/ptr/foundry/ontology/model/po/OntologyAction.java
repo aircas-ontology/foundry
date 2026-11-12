@@ -50,6 +50,11 @@ public class OntologyAction {
     @TableField(typeHandler = StringListCommaTypeHandler.class, updateStrategy = FieldStrategy.ALWAYS)
     private List<String> ontologyUniqueIdentifier;
 
+    /** 接口回显用的逗号拼接形式，与列里存的一致；没有挂载对象时为空串 */
+    public String ontologyUniqueIdentifierText() {
+        return ontologyUniqueIdentifier == null ? "" : String.join(",", ontologyUniqueIdentifier);
+    }
+
     /**
      * Column: id
      */

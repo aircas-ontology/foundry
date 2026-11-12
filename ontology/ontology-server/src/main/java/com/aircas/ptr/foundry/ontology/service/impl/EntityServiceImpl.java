@@ -1789,11 +1789,19 @@ public class EntityServiceImpl implements EntityService {
     }
 
     /**
-     * 早期绑定行没记对象 id 时的兜底对象：行为只存「挂载对象」列表，挂载一个对象时才有唯一答案。
+     * 早期绑定行没记对象 id 时的兜底对象：挂载对象列是逗号分隔的对象id，只有一个时才有唯一答案。
      * <p>挂了多个对象说明每条绑定各行其是，老行缺对象 id 就无从判断，只能按没写对象 id 处理。</p>
      */
-    private String legacyActionObject(List<String> objectIdentifiers) {
-        return objectIdentifiers != null && objectIdentifiers.size() == 1 ? objectIdentifiers.get(0) : null;
+    private String legacyActionObject(String objectIdentifiers) {
+        if (StringUtils.isBlank(objectIdentifiers)) {
+            return null;
+        }
+        var identifiers = Arrays.stream(objectIdentifiers.split(","))
+                .map(String::trim)
+                .filter(StringUtils::isNotEmpty)
+                .distinct()
+                .collect(Collectors.toList());
+        return identifiers.size() == 1 ? identifiers.get(0) : null;
     }
 
     /**

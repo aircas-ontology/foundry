@@ -78,7 +78,7 @@ public class OntologyActionMcpTools implements McpTools {
         return actions.stream()
                 .map(a -> OntologyActionInfoVO.builder()
                         .icon(a.getIcon())
-                        .ontologyUniqIdentifier(a.getOntologyUniqueIdentifier())
+                        .ontologyUniqIdentifier(a.ontologyUniqueIdentifierText())
                         .actionApi(a.getApi())
                         .description(a.getDescription())
                         .displayName(a.getDisplayName())
