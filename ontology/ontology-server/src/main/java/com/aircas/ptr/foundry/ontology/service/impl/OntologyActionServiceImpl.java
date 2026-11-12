@@ -2811,6 +2811,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 .eq(OntologyAction::getApi, actionApi)
                 .eq(OntologyAction::getOntologySpaceId, ontologySpaceId));
         PreconditionUtils.checkArgument(action != null, "行为不存在", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(!Objects.equals(action.getStatus(), ActionStatusEnum.PUBLISHED.getValue()),
+                "该行为已发布，不能直接删除，请先撤回发布（行为树请先下线）", HttpStatus.BAD_REQUEST);
         // 调度归属行为靠 action_handle_rule.action_id / action_handle_task.action_id，
         // 这两列已在 alter_table_20260909.sql 中删除，按 id 反查会直接报错，
         // 待确认该列是否为误删后再恢复「行为在调度中不可删除」的校验
