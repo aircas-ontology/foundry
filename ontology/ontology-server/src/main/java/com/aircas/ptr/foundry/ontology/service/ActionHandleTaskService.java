@@ -2,7 +2,7 @@ package com.aircas.ptr.foundry.ontology.service;
 
 import com.aircas.ptr.foundry.ontology.model.bo.ActionHandleTaskBO;
 import com.aircas.ptr.foundry.ontology.model.po.ActionHandleTask;
-import com.baomidou.mybatisplus.extension.service.IService;
+import com.baomidou.mybatisplus.spring.service.IService;
 
 /**
  * @interfaceName: ActionHandleTaskService

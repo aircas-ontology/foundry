@@ -18,7 +18,7 @@ import com.aircas.ptr.foundry.ontology.model.vo.FunctionInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.EntityPropertyGenericQueryVO;
 import com.aircas.ptr.foundry.ontology.model.vo.FunctionResultVO;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.baomidou.mybatisplus.extension.service.IService;
+import com.baomidou.mybatisplus.spring.service.IService;
 import com.fasterxml.jackson.databind.JsonNode;
 
 import java.util.List;

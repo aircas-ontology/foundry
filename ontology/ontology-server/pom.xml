@@ -11,7 +11,7 @@
     </parent>
 
     <properties>
-        <java.version>17</java.version>
+        <java.version>21</java.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     </properties>
@@ -22,6 +22,11 @@
         <dependency>
             <groupId>org.springframework.kafka</groupId>
             <artifactId>spring-kafka</artifactId>
+        </dependency>
+        <!-- Boot 4 拆分后 KafkaProperties/KafkaAutoConfiguration 在此模块 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-kafka</artifactId>
         </dependency>
 
         <dependency>
@@ -55,7 +60,7 @@
         <!-- LiteFlow 规则引擎（函数编排），脚本组件使用 Groovy -->
         <dependency>
             <groupId>com.yomahub</groupId>
-            <artifactId>liteflow-spring-boot-starter</artifactId>
+            <artifactId>liteflow-spring-boot4-starter</artifactId>
         </dependency>
         <dependency>
             <groupId>com.yomahub</groupId>
@@ -63,10 +68,10 @@
         </dependency>
 
 
-        <!--Knife4j OpenAPI3 Jakarta（knife4j-next fork，适配 Spring Boot 3.5.x）-->
+        <!--Knife4j OpenAPI3 Boot4（knife4j-next fork，适配 Spring Boot 4.x）-->
         <dependency>
             <groupId>com.baizhukui</groupId>
-            <artifactId>knife4j-openapi3-jakarta-spring-boot-starter</artifactId>
+            <artifactId>knife4j-openapi3-boot4-spring-boot-starter</artifactId>
         </dependency>
         <!--fastjson2-->
         <dependency>
@@ -104,10 +109,16 @@
             <groupId>com.github.ben-manes.caffeine</groupId>
             <artifactId>caffeine</artifactId>
         </dependency>
-        <!--MyBatis-Plus Spring Boot 3-->
+        <!--MyBatis-Plus Spring Boot 4-->
         <dependency>
             <groupId>com.baomidou</groupId>
-            <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
+            <artifactId>mybatis-plus-spring-boot4-starter</artifactId>
+        </dependency>
+        <!-- 3.5.9+ 聚合包不再含 extension（ServiceImpl/分页插件等），需显式引入 -->
+        <dependency>
+            <groupId>com.baomidou</groupId>
+            <artifactId>mybatis-plus-extension</artifactId>
+            <version>${mybatis-plus.version}</version>
         </dependency>
         <dependency>
             <groupId>org.postgresql</groupId>
@@ -168,10 +179,10 @@
             <groupId>jakarta.persistence</groupId>
             <artifactId>jakarta.persistence-api</artifactId>
         </dependency>
-        <!-- Druid Spring Boot 3 -->
+        <!-- Druid Spring Boot 4 -->
         <dependency>
             <groupId>com.alibaba</groupId>
-            <artifactId>druid-spring-boot-3-starter</artifactId>
+            <artifactId>druid-spring-boot-4-starter</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -195,17 +206,17 @@
             <version>${mybatis-plus.version}</version>
         </dependency>
 
-        <!-- ArangoDB Spring Data (适配 Spring Data 3.x, 会自动引入兼容的 driver 版本) -->
+        <!-- ArangoDB Spring Data 5.x (适配 Spring Data 4.x / Boot 4, 会自动引入兼容的 driver 版本) -->
         <dependency>
             <groupId>com.arangodb</groupId>
             <artifactId>arangodb-spring-data</artifactId>
-            <version>4.4.0</version>
+            <version>5.0.0</version>
         </dependency>
 
         <dependency>
             <groupId>com.arangodb</groupId>
             <artifactId>arangodb-java-driver</artifactId>
-            <version>7.23.0</version>
+            <version>7.25.0</version>
         </dependency>
 
         <!-- Jakarta JSON-P implementation: required at runtime by jackson-datatype-jakarta-jsonp's
@@ -229,7 +240,7 @@
     </dependency>
     <dependency>
         <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-aop</artifactId>
+        <artifactId>spring-boot-starter-aspectj</artifactId>
         <version>${spring-boot.version}</version>
     </dependency>
     <dependency>
@@ -262,6 +273,12 @@
             <groupId>com.squareup.okhttp3</groupId>
             <artifactId>okhttp</artifactId>
             <version>4.12.0</version>
+        </dependency>
+
+        <!-- Boot 4 默认 Jackson 3；业务代码仍用 Jackson 2，此模块恢复 Jackson2 ObjectMapper 自动装配 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-jackson2</artifactId>
         </dependency>
 
         <dependency>
@@ -342,7 +359,6 @@
                     <executable>true</executable>
                     <mainClass>com.aircas.ptr.foundry.ontology.OntologyServerApplication</mainClass>
                     <jvmArguments>--add-opens java.base/java.lang=ALL-UNNAMED</jvmArguments>
-                    <loaderImplementation>CLASSIC</loaderImplementation>
                 </configuration>
                 <executions>
                     <execution>

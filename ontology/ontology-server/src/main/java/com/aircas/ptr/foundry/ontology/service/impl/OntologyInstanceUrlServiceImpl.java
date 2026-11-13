@@ -7,7 +7,7 @@ import com.aircas.ptr.foundry.ontology.model.vo.OntologyInstanceUrlVO;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyInstanceUrlMapper;
 import com.aircas.ptr.foundry.ontology.service.OntologyInstanceUrlService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.http.HttpStatus;

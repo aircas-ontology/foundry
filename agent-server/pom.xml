@@ -12,7 +12,7 @@
     </parent>
 
     <properties>
-        <java.version>17</java.version>
+        <java.version>21</java.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     </properties>
@@ -43,6 +43,12 @@
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
 
+        <!-- Boot 4 默认 Jackson 3；业务代码仍用 Jackson 2，此模块恢复 Jackson2 ObjectMapper 自动装配 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-jackson2</artifactId>
+        </dependency>
+
         <!-- Spring AI OpenAI 兼容 Starter：对接 DeepSeek（OpenAI 兼容接口，base-url 指向 https://api.deepseek.com）；版本由 spring-ai-bom 管理 -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
@@ -55,10 +61,10 @@
             <artifactId>spring-ai-starter-mcp-client-webflux</artifactId>
         </dependency>
 
-        <!-- Knife4j OpenAPI3 Jakarta（knife4j-next fork，适配 Spring Boot 3.5.x） -->
+        <!-- Knife4j OpenAPI3 Boot4（knife4j-next fork，适配 Spring Boot 4.x） -->
         <dependency>
             <groupId>com.baizhukui</groupId>
-            <artifactId>knife4j-openapi3-jakarta-spring-boot-starter</artifactId>
+            <artifactId>knife4j-openapi3-boot4-spring-boot-starter</artifactId>
         </dependency>
 
         <!-- Caffeine：SessionStateStore 本地 LRU + TTL 会话存储（版本由 Spring Boot BOM 管理） -->

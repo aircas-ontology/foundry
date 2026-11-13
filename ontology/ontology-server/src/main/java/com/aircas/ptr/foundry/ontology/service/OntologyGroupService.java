@@ -4,7 +4,7 @@ import com.aircas.ptr.foundry.ontology.model.param.OntologyGroupCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyGroupUpdatedParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyGroup;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyGroupInfoVO;
-import com.baomidou.mybatisplus.extension.service.IService;
+import com.baomidou.mybatisplus.spring.service.IService;
 
 import java.util.List;
 

@@ -15,7 +15,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.5.3</version>
+        <version>4.0.9</version>
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
 
@@ -25,29 +25,28 @@
         <module>agent-server</module>
     </modules>
     <properties>
-        <java.version>17</java.version>
+        <java.version>21</java.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <!-- 默认让归档条目与产物文件使用真实构建时刻（UTC），而非插件内置的 1980-02-01 纪元。
              代价是同一份源码两次构建产物字节级不再相同，需要可重现构建时用 -Dproject.build.outputTimestamp= 覆盖。 -->
         <maven.build.timestamp.format>yyyy-MM-dd'T'HH:mm:ss'Z'</maven.build.timestamp.format>
         <project.build.outputTimestamp>${maven.build.timestamp}</project.build.outputTimestamp>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-        <!-- knife4j-next 社区 fork，适配 Spring Boot 3.4/3.5，groupId 从 com.github.xiaoymin 改为 com.baizhukui，
-             包名、注解、配置键与官方 4.x 完全兼容，内部已管理匹配的 springdoc-openapi 版本 -->
-        <knife4j.version>5.6.0</knife4j.version>
+        <!-- knife4j-next 社区 fork，Boot4 专用 starter（内部已管理适配 Spring Boot 4.x 的 springdoc-openapi） -->
+        <knife4j.version>5.8.2</knife4j.version>
         <mybatis-generator-core.version>1.3.7</mybatis-generator-core.version>
         <mysql-connector-java.version>8.0.33</mysql-connector-java.version>
         <fastjson2.version>2.0.51</fastjson2.version>
-        <mybatis-plus.version>3.5.9</mybatis-plus.version>
+        <mybatis-plus.version>3.5.18</mybatis-plus.version>
         <postgresql.version>42.7.3</postgresql.version>
         <!-- druid-datasource -->
-        <com.alibaba.druid.version>1.2.23</com.alibaba.druid.version>
+        <com.alibaba.druid.version>1.2.28</com.alibaba.druid.version>
         <log4j.version>1.2.17</log4j.version>
         <poi.version>5.2.5</poi.version>
         <staxon.version>1.3</staxon.version>
         <ganymed-ssh2.version>build210</ganymed-ssh2.version>
         <junrar.version>7.5.5</junrar.version>
-        <pagehelper.version>2.1.0</pagehelper.version>
+        <pagehelper.version>4.1.1</pagehelper.version>
         <gt-shapefile.version>17.2</gt-shapefile.version>
         <gt-geojson.version>18.1</gt-geojson.version>
         <vividsolutions-jts-core.version>1.14.0</vividsolutions-jts-core.version>
@@ -56,19 +55,18 @@
         <commons-io.version>2.16.1</commons-io.version>
         <lombok.version>1.18.34</lombok.version>
         <commons-collections.version>3.2.2</commons-collections.version>
-        <spring-boot.version>3.5.3</spring-boot.version>
+        <spring-boot.version>4.0.9</spring-boot.version>
         <locationtech-jts-core.version>1.19.0</locationtech-jts-core.version>
         <owl-api-version>5.5.0</owl-api-version>
         <quartz.version>2.3.2</quartz.version>
         <truelicense.version>1.32</truelicense.version>
         <javassist.version>3.30.2-GA</javassist.version>
-        <!-- Spring AI -->
-        <spring-ai.version>1.1.2</spring-ai.version>
-        <spring-ai-alibaba.version>1.1.2.0</spring-ai-alibaba.version>
+        <!-- Spring AI 2.0.x 基线：Spring Boot 4.x / Framework 7 / Jackson 3 -->
+        <spring-ai.version>2.0.0</spring-ai.version>
         <!-- JWT -->
         <jjwt.version>0.12.6</jjwt.version>
         <!-- LiteFlow 函数编排规则引擎 -->
-        <liteflow.version>2.16.0</liteflow.version>
+        <liteflow.version>2.16.3</liteflow.version>
     </properties>
 
     <dependencies>
@@ -95,14 +93,6 @@
                 <groupId>org.springframework.ai</groupId>
                 <artifactId>spring-ai-bom</artifactId>
                 <version>${spring-ai.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-            <!-- Spring AI Alibaba BOM -->
-            <dependency>
-                <groupId>com.alibaba.cloud.ai</groupId>
-                <artifactId>spring-ai-alibaba-bom</artifactId>
-                <version>${spring-ai-alibaba.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -158,10 +148,10 @@
                 <artifactId>groovy-all</artifactId>
                 <version>3.0.22</version>
             </dependency>
-            <!-- LiteFlow 规则引擎：Spring Boot 3 自动装配 + Groovy 脚本组件支持 -->
+            <!-- LiteFlow 规则引擎：Spring Boot 4 自动装配 + Groovy 脚本组件支持 -->
             <dependency>
                 <groupId>com.yomahub</groupId>
-                <artifactId>liteflow-spring-boot-starter</artifactId>
+                <artifactId>liteflow-spring-boot4-starter</artifactId>
                 <version>${liteflow.version}</version>
             </dependency>
             <dependency>
@@ -185,10 +175,10 @@
                 <artifactId>mysql-connector-j</artifactId>
                 <version>${mysql-connector-java.version}</version>
             </dependency>
-            <!-- Knife4j OpenAPI3 Jakarta（knife4j-next fork，内部已集成适配 Spring Boot 3.5.x 的 springdoc-openapi） -->
+            <!-- Knife4j OpenAPI3 Boot4（knife4j-next fork，内部已集成适配 Spring Boot 4.x 的 springdoc-openapi） -->
             <dependency>
                 <groupId>com.baizhukui</groupId>
-                <artifactId>knife4j-openapi3-jakarta-spring-boot-starter</artifactId>
+                <artifactId>knife4j-openapi3-boot4-spring-boot-starter</artifactId>
                 <version>${knife4j.version}</version>
             </dependency>
             <!-- fastjson2 -->
@@ -197,10 +187,10 @@
                 <artifactId>fastjson2</artifactId>
                 <version>${fastjson2.version}</version>
             </dependency>
-            <!-- MyBatis-Plus Spring Boot 3 -->
+            <!-- MyBatis-Plus Spring Boot 4 -->
             <dependency>
                 <groupId>com.baomidou</groupId>
-                <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
+                <artifactId>mybatis-plus-spring-boot4-starter</artifactId>
                 <version>${mybatis-plus.version}</version>
             </dependency>
             <dependency>
@@ -208,10 +198,10 @@
                 <artifactId>postgresql</artifactId>
                 <version>${postgresql.version}</version>
             </dependency>
-            <!-- Druid Spring Boot 3 -->
+            <!-- Druid Spring Boot 4 -->
             <dependency>
                 <groupId>com.alibaba</groupId>
-                <artifactId>druid-spring-boot-3-starter</artifactId>
+                <artifactId>druid-spring-boot-4-starter</artifactId>
                 <version>${com.alibaba.druid.version}</version>
             </dependency>
             <dependency>

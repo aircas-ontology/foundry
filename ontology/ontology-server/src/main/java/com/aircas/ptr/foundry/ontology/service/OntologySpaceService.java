@@ -11,7 +11,7 @@ import com.aircas.ptr.foundry.ontology.model.vo.OntologySpaceCanvasCreateVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologySpaceStatisticVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologySpaceVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologySubspaceCreateVO;
-import com.baomidou.mybatisplus.extension.service.IService;
+import com.baomidou.mybatisplus.spring.service.IService;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;

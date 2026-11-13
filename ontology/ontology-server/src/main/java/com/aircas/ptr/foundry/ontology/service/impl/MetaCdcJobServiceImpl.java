@@ -17,7 +17,6 @@ import org.springframework.data.elasticsearch.client.elc.NativeQuery;
 import org.springframework.data.elasticsearch.core.RefreshPolicy;
 import org.springframework.data.elasticsearch.core.query.DeleteQuery;
 import org.springframework.data.elasticsearch.core.query.Query;
-import org.springframework.data.elasticsearch.core.query.ScriptType;
 import org.springframework.data.elasticsearch.core.query.UpdateQuery;
 import org.springframework.stereotype.Service;
 
@@ -71,7 +70,6 @@ public class MetaCdcJobServiceImpl implements MetaCdcJobService {
         UpdateQuery updateQuery = UpdateQuery.builder(instanceQueryByOntologyUid(after.getUniqueIdentifier()))
                 .withScript("ctx._source.ontology_name = params.ontologyName;"
                         + "ctx._source.api_name = params.apiName;")
-                .withScriptType(ScriptType.INLINE)
                 .withParams(params)
                 .withRefreshPolicy(RefreshPolicy.IMMEDIATE)
                 .build();

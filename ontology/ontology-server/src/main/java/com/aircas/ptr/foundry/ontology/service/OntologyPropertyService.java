@@ -4,7 +4,7 @@ import com.aircas.ptr.foundry.ontology.model.param.*;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
 import com.aircas.ptr.foundry.ontology.model.po.PropertyCategory;
 import com.aircas.ptr.foundry.ontology.model.vo.*;
-import com.baomidou.mybatisplus.extension.service.IService;
+import com.baomidou.mybatisplus.spring.service.IService;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.transaction.annotation.Transactional;
 

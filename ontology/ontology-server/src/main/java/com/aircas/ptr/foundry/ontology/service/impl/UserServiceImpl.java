@@ -11,7 +11,7 @@ import com.aircas.ptr.foundry.ontology.repository.mainMapper.UserMapper;
 import com.aircas.ptr.foundry.ontology.service.UserService;
 import com.aircas.ptr.foundry.ontology.utils.JwtUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;

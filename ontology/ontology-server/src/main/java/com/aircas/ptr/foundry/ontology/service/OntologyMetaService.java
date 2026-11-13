@@ -16,7 +16,7 @@ import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaBriefVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaNodeVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaStatisticVO;
-import com.baomidou.mybatisplus.extension.service.IService;
+import com.baomidou.mybatisplus.spring.service.IService;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;

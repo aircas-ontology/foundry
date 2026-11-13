@@ -16,7 +16,7 @@ import com.aircas.ptr.foundry.ontology.model.param.TreeExecuteParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyAction;
 import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.baomidou.mybatisplus.extension.service.IService;
+import com.baomidou.mybatisplus.spring.service.IService;
 
 import java.util.Date;
 import java.util.List;
