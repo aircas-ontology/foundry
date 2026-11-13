@@ -12,8 +12,8 @@ import java.util.Map;
 /**
  * 一个行为节点的执行数据。
  * <p>执行请求按节点标识给这一套值，用于两个节点绑同一个行为、各要不同实例或不同参数的场景。
- * 每个字段单独回退：本节点没给的字段沿用执行请求里的全树默认值，给了就以本节点为准，
- * 不影响树里其他节点。</p>
+ * 实例主键、数据位置、关系对端这些字段没给时沿用执行请求里的全树默认值；
+ * params（行为外部入参）只认本节点，没有全树默认值可回退，没给的执行前按缺失报错。</p>
  */
 @Data
 @SuperBuilder
@@ -61,7 +61,7 @@ public class TreeNodeExecuteParam {
     private Object linkEntityPrimaryKey;
 
     @Schema(name = "params", description = "本节点绑定的行为的外部输入参数取值（参数名 -> 值）；"
-            + "参数名要和行为声明的外部入参一致，不传的入参沿用执行请求 inputs 里的同名取值",
+            + "参数名要和行为声明的外部入参一致，声明了的参数必须给，没有全树默认值可回退",
             example = "{\"ammoCount\":80,\"targetId\":77}")
     private Map<String, Object> params;
 }

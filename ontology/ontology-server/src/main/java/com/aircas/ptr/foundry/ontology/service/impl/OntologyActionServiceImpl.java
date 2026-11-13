@@ -516,9 +516,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         var tree = param.getTreeDefinition();
         PreconditionUtils.checkNotNull(tree, "行为树必须提交树定义", HttpStatus.BAD_REQUEST);
 
-        // 绑定行为要的外部参数先补成树自己的黑板键，后面黑板/变量/节点校验才能看到完整契约
-        completeTreeExternalInputs(tree, spaceId);
-        var blackboardTypes = checkTreeBlackboard(tree);
+        // 黑板键只声明条件用的全局变量；行为外部入参由执行请求按节点传，不自动补成黑板键
+        var blackboardTypes = checkTreeBlackboard(tree, spaceId);
         checkTreeVariables(tree, blackboardTypes);
         var roots = tree.getRoots();
         PreconditionUtils.checkArgument(roots.size() == 1, "行为树必须且只能有一个根节点，当前 " + roots.size() + " 个", HttpStatus.BAD_REQUEST);
@@ -547,36 +546,138 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     }
 
     /**
-     * 黑板声明全局变量的键名。返回值是 键名 → 声明类型，后面变量和条件节点都按它校验。
+     * 黑板声明条件用的全局变量：键名、类型、取值来源（固定值/外部输入/对象属性）。
+     * 返回值是 键名 → 声明类型，后面变量和条件节点都按它校验。
+     * 历史定义没有 source 时按原字段推导并写回，保证详情和执行期看到同一份口径。
+     * <p>黑板不是必填：一棵只做行为调用、不做条件判断的树可以一个键都不声明；引用未声明键的节点仍会被单独拒绝。
+     * 三种来源各自带值的地方不同，只有固定值来源用本项的 value，其余来源填了直接拒绝，免得配了不生效。</p>
      */
-    private Map<String, FunctionParamTypeEnum> checkTreeBlackboard(BehaviorTreeDefinition tree) {
+    private Map<String, FunctionParamTypeEnum> checkTreeBlackboard(BehaviorTreeDefinition tree, Integer spaceId) {
+        Map<String, OntologyProperty> boundProperties = boundTreeProperties(tree);
         Map<String, FunctionParamTypeEnum> types = new LinkedHashMap<>();
         for (var item : tree.getBlackboard()) {
             PreconditionUtils.checkArgument(StringUtils.isNotBlank(item.getKey()), "黑板键名不能为空", HttpStatus.BAD_REQUEST);
             PreconditionUtils.checkArgument(!types.containsKey(item.getKey()), "黑板键名重复：" + item.getKey(), HttpStatus.BAD_REQUEST);
             PreconditionUtils.checkNotNull(item.getValueType(), "黑板键 " + item.getKey() + " 必须选择值类型", HttpStatus.BAD_REQUEST);
-            if (StringUtils.isNotBlank(item.getBindPropertyUniqueIdentifier())) {
-                var property = ontologyPropertyService.list(new LambdaQueryWrapper<OntologyProperty>()
-                        .eq(OntologyProperty::getUniqueIdentifier, item.getBindPropertyUniqueIdentifier()));
-                PreconditionUtils.checkArgument(!property.isEmpty(),
-                        "黑板键 " + item.getKey() + " 绑定的对象属性不存在：" + item.getBindPropertyUniqueIdentifier(), HttpStatus.BAD_REQUEST);
+            var source = item.resolvedSource();
+            item.setSource(source);
+            switch (source) {
+                case FIXED -> {
+                    PreconditionUtils.checkArgument(StringUtils.isBlank(item.getBindPropertyUniqueIdentifier()),
+                            "黑板键 " + item.getKey() + " 的值来源是固定值，不能再绑定对象属性", HttpStatus.BAD_REQUEST);
+                    PreconditionUtils.checkNotNull(item.getValue(),
+                            "黑板键 " + item.getKey() + " 的值来源是固定值，必须填写固定值", HttpStatus.BAD_REQUEST);
+                    PreconditionUtils.checkArgument(matchesTreeValueType(item.getValue(), item.getValueType()),
+                            "黑板键 " + item.getKey() + " 的固定值与声明类型 " + item.getValueType().name() + " 不匹配",
+                            HttpStatus.BAD_REQUEST);
+                }
+                case EXTERNAL -> {
+                    PreconditionUtils.checkArgument(
+                            StringUtils.isBlank(item.getBindPropertyUniqueIdentifier()),
+                            "黑板键 " + item.getKey() + " 的值来源是外部输入，不能再绑定对象属性", HttpStatus.BAD_REQUEST);
+                    checkTreeNoFixedValue(item);
+                }
+                case PROPERTY -> {
+                    checkTreeNoFixedValue(item);
+                    checkTreeBlackboardProperty(item, spaceId,
+                            boundProperties.get(item.getBindPropertyUniqueIdentifier()));
+                }
             }
             types.put(item.getKey(), item.getValueType());
         }
-        PreconditionUtils.checkArgument(!types.isEmpty(), "行为树至少要有一个黑板键", HttpStatus.BAD_REQUEST);
         return types;
     }
 
+    /** 固定值只属于固定值来源：别的来源填了要么被执行入参顶掉、要么被库里回读覆盖，留着只会误导 */
+    private void checkTreeNoFixedValue(BehaviorBlackboardItem item) {
+        PreconditionUtils.checkArgument(item.getValue() == null,
+                "黑板键 " + item.getKey() + " 的值来源是" + item.resolvedSource().getName() + "，取值不由固定值给，不要填固定值",
+                HttpStatus.BAD_REQUEST);
+    }
+
     /**
-     * 变量给黑板键名提供值，两边一一对应：键名集合不同、类型不一致，执行时一定读不到值或读错类型。
+     * 对象属性来源：必须选属性，且属性所属对象在本空间、类型与黑板键一致。
+     * 否则执行时要么读不到值，要么拿字符串和数值比较。
+     */
+    private void checkTreeBlackboardProperty(BehaviorBlackboardItem item, Integer spaceId, OntologyProperty property) {
+        var bind = item.getBindPropertyUniqueIdentifier();
+        PreconditionUtils.checkArgument(StringUtils.isNotBlank(bind),
+                "黑板键 " + item.getKey() + " 的值来源是对象属性，必须选择属性", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(property != null,
+                "黑板键 " + item.getKey() + " 绑定的对象属性不存在：" + bind, HttpStatus.BAD_REQUEST);
+        var meta = ontologyMetaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>()
+                .eq(OntologyMeta::getUniqueIdentifier, property.getOntologyUniqueIdentifier()));
+        PreconditionUtils.checkArgument(meta != null,
+                "黑板键 " + item.getKey() + " 绑定的属性所属对象不存在：" + property.getOntologyUniqueIdentifier(),
+                HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(spaceId.equals(meta.getOntologySpaceId()),
+                "黑板键 " + item.getKey() + " 绑定的属性不属于本空间的对象：" + meta.getUniqueIdentifier(),
+                HttpStatus.BAD_REQUEST);
+        var propertyType = toBlackboardValueType(property.getPropertyType());
+        PreconditionUtils.checkArgument(propertyType == item.getValueType(),
+                "黑板键 " + item.getKey() + " 的类型与绑定属性 " + bind + " 的类型不一致："
+                        + item.getValueType() + " != " + propertyType, HttpStatus.BAD_REQUEST);
+    }
+
+    /** 一次查出黑板里对象属性来源引用的属性，供保存期校验和实例要求复用 */
+    private Map<String, OntologyProperty> boundTreeProperties(BehaviorTreeDefinition tree) {
+        var propertyIds = tree.getBlackboard().stream()
+                .filter(item -> item.resolvedSource() == BehaviorBlackboardSourceEnum.PROPERTY)
+                .map(BehaviorBlackboardItem::getBindPropertyUniqueIdentifier)
+                .filter(StringUtils::isNotBlank)
+                .distinct()
+                .collect(Collectors.toList());
+        if (propertyIds.isEmpty()) {
+            return Map.of();
+        }
+        return ontologyPropertyService.list(new LambdaQueryWrapper<OntologyProperty>()
+                        .in(OntologyProperty::getUniqueIdentifier, propertyIds)
+                        .eq(OntologyProperty::getStatus, Status.ENABLE.getValue()))
+                .stream()
+                .collect(Collectors.toMap(OntologyProperty::getUniqueIdentifier, property -> property,
+                        (left, right) -> left));
+    }
+
+    /**
+     * 来源是对象属性的黑板键按所属对象归组：对象标识 -> 用到它的黑板键。
+     * 执行前要按对象选实例，这些键才读得到库里的值。
+     */
+    private Map<String, List<String>> treeBlackboardPropertyObjects(BehaviorTreeDefinition tree) {
+        var properties = boundTreeProperties(tree);
+        Map<String, List<String>> keysByObject = new LinkedHashMap<>();
+        for (var item : tree.getBlackboard()) {
+            if (item.resolvedSource() != BehaviorBlackboardSourceEnum.PROPERTY
+                    || StringUtils.isBlank(item.getKey())) {
+                continue;
+            }
+            var property = properties.get(item.getBindPropertyUniqueIdentifier());
+            if (property == null || StringUtils.isBlank(property.getOntologyUniqueIdentifier())) {
+                continue;
+            }
+            keysByObject.computeIfAbsent(property.getOntologyUniqueIdentifier(), ignored -> new ArrayList<>())
+                    .add(item.getKey());
+        }
+        return keysByObject;
+    }
+
+    /**
+     * 变量给黑板键提供兜底默认值，只校验给了的那些：键名必须已声明、类型必须一致，否则执行期读到 null 或读错类型。
+     * <p>只有外部输入来源的黑板键用变量默认值兜底：固定值取黑板项自己的 value，对象属性每次条件求值按实例重读，
+     * 给它们配默认值都读不到，保存期直接拒绝。也不要求覆盖每个键——外部输入可以没有兜底值，不传时该键就是空。</p>
      */
     private void checkTreeVariables(BehaviorTreeDefinition tree, Map<String, FunctionParamTypeEnum> blackboardTypes) {
+        Map<String, BehaviorBlackboardSourceEnum> sources = new LinkedHashMap<>();
+        tree.getBlackboard().forEach(item -> sources.putIfAbsent(item.getKey(), item.resolvedSource()));
         var names = new HashSet<String>();
         for (var item : tree.getVariables()) {
             PreconditionUtils.checkArgument(StringUtils.isNotBlank(item.getName()), "变量名不能为空", HttpStatus.BAD_REQUEST);
             PreconditionUtils.checkArgument(names.add(item.getName()), "变量名重复：" + item.getName(), HttpStatus.BAD_REQUEST);
             PreconditionUtils.checkArgument(blackboardTypes.containsKey(item.getName()),
                     "变量 " + item.getName() + " 没有同名黑板键，运行时读不到", HttpStatus.BAD_REQUEST);
+            var source = sources.get(item.getName());
+            PreconditionUtils.checkArgument(source == BehaviorBlackboardSourceEnum.EXTERNAL,
+                    "变量 " + item.getName() + " 对应的黑板键来源是" + source.getName()
+                            + "，只有外部输入来源的黑板键才用变量默认值", HttpStatus.BAD_REQUEST);
             var declared = blackboardTypes.get(item.getName());
             PreconditionUtils.checkArgument(item.getValueType() == declared,
                     "变量 " + item.getName() + " 的类型与黑板键不一致：" + item.getValueType() + " != " + declared, HttpStatus.BAD_REQUEST);
@@ -584,9 +685,6 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                     "变量作用域目前只支持 RUNTIME：" + item.getName(), HttpStatus.BAD_REQUEST);
             PreconditionUtils.checkArgument(matchesTreeValueType(item.getDefaultValue(), declared),
                     "变量 " + item.getName() + " 的默认值与声明类型 " + declared.name() + " 不匹配", HttpStatus.BAD_REQUEST);
-        }
-        for (var key : blackboardTypes.keySet()) {
-            PreconditionUtils.checkArgument(names.contains(key), "黑板键 " + key + " 缺少同名变量，没有初始值", HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -803,50 +901,6 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         checkBoundFunctionPublished(bound);
     }
 
-    /**
-     * 绑定行为声明为「外部输入」的入参在保存期补成树自己的黑板键。
-     * <p>键名取行为参数名——执行时按同名从执行入参取值；类型取算子参数类型，不绑算子的行为取属性类型。
-     * 已有同名键不动，类型以作者声明的为准。</p>
-     */
-    private void completeTreeExternalInputs(BehaviorTreeDefinition tree, Integer spaceId) {
-        var actionNodes = collectTreeActionNodes(tree.getRoots());
-        if (actionNodes.isEmpty()) {
-            return;
-        }
-        var blackboard = tree.getBlackboard();
-        var variables = tree.getVariables();
-        Set<String> declaredKeys = blackboard.stream()
-                .map(BehaviorBlackboardItem::getKey)
-                .filter(StringUtils::isNotBlank)
-                .collect(Collectors.toCollection(HashSet::new));
-        for (var actionApi : actionNodes.keySet()) {
-            var bound = getOne(new LambdaQueryWrapper<OntologyAction>()
-                    .eq(OntologyAction::getApi, actionApi)
-                    .eq(OntologyAction::getOntologySpaceId, spaceId));
-            // 行为不存在、未发布由 checkTreeBoundAction 报错，这里不抢先中断
-            if (bound == null) {
-                continue;
-            }
-            for (var param : treeExternalParamDefs(bound)) {
-                if (!declaredKeys.add(param.name())) {
-                    continue;
-                }
-                blackboard.add(BehaviorBlackboardItem.builder()
-                        .key(param.name())
-                        .valueType(param.type())
-                        .description("自动补全：行为 " + actionApi + " 的外部输入参数")
-                        .build());
-                variables.add(BehaviorVariableItem.builder()
-                        .name(param.name())
-                        .valueType(param.type())
-                        .scope(BehaviorVariableScopeEnum.RUNTIME)
-                        .build());
-            }
-        }
-        tree.setBlackboard(blackboard);
-        tree.setVariables(variables);
-    }
-
     /** 收集树里绑定的行为及对应节点：行为 api -> 绑定它的节点，用来描述入参与实例来源 */
     private Map<String, List<BehaviorTreeNode>> collectTreeActionNodes(List<BehaviorTreeNode> nodes) {
         Map<String, List<BehaviorTreeNode>> actionNodes = new LinkedHashMap<>();
@@ -952,23 +1006,11 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     }
 
     /**
-     * 按绑定行为反推执行入参要求：外部参数没有默认值就是必填，实例要求按对象逐条列出。
-     * <p>绑了对象属性的黑板键不参与行为执行，同一个键既是属性绑定又是外部入参时，执行前按冲突报错。</p>
+     * 按绑定行为反推执行要求：外部参数每个节点各给一份、都必须传，实例要求按对象逐条列出。
+     * <p>黑板键只管条件求值，不参与行为入参，也不在执行要求里列成必填项：来源是固定值的用黑板项自己的取值，
+     * 外部输入不传就没有值（条件按空判断），对象属性按库里的当前值刷新——所以属性所属的对象也要在执行前选好实例。</p>
      */
     private TreeExecuteInputsVO buildTreeExecuteInputs(BehaviorTreeDefinition tree, Integer spaceId) {
-        Map<String, BehaviorBlackboardItem> items = new LinkedHashMap<>();
-        tree.getBlackboard().forEach(item -> {
-            if (StringUtils.isNotBlank(item.getKey())) {
-                items.putIfAbsent(item.getKey(), item);
-            }
-        });
-        Map<String, Object> defaults = new LinkedHashMap<>();
-        tree.getVariables().forEach(variable -> {
-            if (StringUtils.isNotBlank(variable.getName())) {
-                defaults.putIfAbsent(variable.getName(), variable.getDefaultValue());
-            }
-        });
-
         Map<String, TreeExecuteInputVO> inputParams = new LinkedHashMap<>();
         List<TreeInstanceRequirementVO> instanceRequirements = new ArrayList<>();
         for (var entry : collectTreeActionNodes(tree.getRoots()).entrySet()) {
@@ -983,16 +1025,11 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             for (var param : treeExternalParamDefs(bound)) {
                 var vo = inputParams.get(param.name());
                 if (vo == null) {
-                    var item = items.get(param.name());
-                    var bindProperty = item != null && StringUtils.isNotBlank(item.getBindPropertyUniqueIdentifier());
-                    var defaultValue = defaults.get(param.name());
+                    // 每个节点只认自己的 nodeExecutes.params，没有全树同名值可以回退，所有外部入参都得传
                     vo = TreeExecuteInputVO.builder()
                             .key(param.name())
-                            .valueType(item == null ? param.type() : item.getValueType())
-                            .defaultValue(defaultValue)
-                            .bindProperty(bindProperty)
-                            // 外部入参的值只可能来自执行入参或变量默认值；黑板按属性刷新不参与行为执行
-                            .required(defaultValue == null)
+                            .valueType(param.type())
+                            .required(true)
                             .description(param.description())
                             .nodeIds(new ArrayList<>())
                             .actionApis(new ArrayList<>())
@@ -1044,6 +1081,20 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                         .build());
             }
         }
+        // 黑板属性键要读某个对象的实例属性，行为没要求过的对象也要单独列一条，实例同样按对象传
+        var requiredObjects = instanceRequirements.stream()
+                .map(TreeInstanceRequirementVO::getObjectIdentifier)
+                .filter(StringUtils::isNotBlank)
+                .collect(Collectors.toSet());
+        treeBlackboardPropertyObjects(tree).forEach((objectId, keys) -> {
+            if (!requiredObjects.add(objectId)) {
+                return;
+            }
+            instanceRequirements.add(TreeInstanceRequirementVO.builder()
+                    .objectIdentifier(objectId)
+                    .blackboardKeys(keys)
+                    .build());
+        });
         return TreeExecuteInputsVO.builder()
                 .entityPrimaryKeyRequired(!instanceRequirements.isEmpty())
                 .inputParams(new ArrayList<>(inputParams.values()))
@@ -1115,17 +1166,26 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     }
 
     /**
-     * 执行前把定义归一：旧树可能还没把绑定行为的外部参数补成黑板键，按现规则补一份再跑，
-     * 否则详情要求传参、运行时却因为键未声明拒绝。编译缓存里的定义不能改，这里用副本。
+     * 执行前复制一份定义并把历史定义缺失的黑板来源补齐，编译缓存里的定义不能改。
+     * 行为外部入参不再补成黑板键，只按执行请求 nodeExecutes 给。
      */
-    private BehaviorTreeDefinition prepareTreeDefinition(BehaviorTreeDefinition definition, Integer spaceId) {
+    private BehaviorTreeDefinition prepareTreeDefinition(BehaviorTreeDefinition definition) {
         var prepared = readTreeDefinition(writeTreeDefinition(definition));
-        completeTreeExternalInputs(prepared, spaceId);
+        normalizeTreeBlackboardSources(prepared);
         return prepared;
     }
 
+    /** 历史定义没有 source：绑了属性的按对象属性，否则按外部输入；只补内存里的副本，不改库 */
+    private void normalizeTreeBlackboardSources(BehaviorTreeDefinition tree) {
+        tree.getBlackboard().forEach(item -> {
+            if (item.getSource() == null) {
+                item.setSource(item.resolvedSource());
+            }
+        });
+    }
+
     /**
-     * 执行前按节点校验行为要的数据是否配齐：节点自己传了算节点的，没传算执行请求里的全树默认值，
+     * 执行前按节点校验行为要的数据是否配齐：行为外部入参只认节点自己的那份，没有全树默认值可回退，
      * 缺什么一次列清楚，避免行为拿着 null 跑出误导结果。
      *
      * @param requireInstances 实例是否必须由调用方给；批量执行的实例由遍历提供时传 false
@@ -1133,7 +1193,6 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     private void checkTreeExecuteInputs(BehaviorTreeDefinition tree, Integer spaceId, TreeExecutionRuntime runtime,
                                         boolean requireInstances) {
         var problems = new ArrayList<String>();
-        var conflicted = new LinkedHashSet<String>();
         var missingParams = new LinkedHashSet<String>();
         var unknownParams = new LinkedHashSet<String>();
         var missingInstances = new LinkedHashSet<String>();
@@ -1152,11 +1211,6 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             for (var node : entry.getValue()) {
                 var nodeId = node.getId();
                 for (var paramName : declaredParams) {
-                    var item = runtime.getBlackboardItems().get(paramName);
-                    if (item != null && StringUtils.isNotBlank(item.getBindPropertyUniqueIdentifier())) {
-                        conflicted.add(paramName + "（节点 " + nodeId + " 的行为 " + bound.getApi() + "）");
-                        continue;
-                    }
                     if (runtime.nodeParamValue(nodeId, paramName) == null) {
                         missingParams.add(paramName + "（节点 " + nodeId + "）");
                     }
@@ -1178,14 +1232,21 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 }
             }
         }
-        if (!conflicted.isEmpty()) {
-            problems.add("入参冲突：" + String.join("、", conflicted)
-                    + " 既是绑定行为的外部入参又绑了对象属性，属性键的值由条件求值时读取，不接受执行入参；"
-                    + "请取消该黑板键的属性绑定，或让行为换一个参数名");
+        if (requireInstances) {
+            var missingPropertyInstances = new LinkedHashSet<String>();
+            treeBlackboardPropertyObjects(tree).forEach((objectId, keys) -> {
+                if (runtime.executionEntityPrimaryKey(objectId) == null) {
+                    missingPropertyInstances.add(objectId + "（黑板键 " + String.join("、", keys) + "）");
+                }
+            });
+            if (!missingPropertyInstances.isEmpty()) {
+                problems.add("缺少实例：" + String.join("、", missingPropertyInstances)
+                        + "；来源是对象属性的黑板键要按对象选实例才能读到值，请用 entityPrimaryKey 或 entityPrimaryKeys 传");
+            }
         }
         if (!missingParams.isEmpty()) {
             problems.add("缺少行为入参：" + String.join("、", missingParams)
-                    + "；按参数名在执行请求的 inputs 或 nodeExecutes 里传");
+                    + "；每个节点只用自己 nodeExecutes[节点标识].params 里的值，请按节点补齐");
         }
         if (!unknownParams.isEmpty()) {
             problems.add("行为没有这些外部入参：" + String.join("、", unknownParams)
@@ -1224,9 +1285,12 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             return;
         }
         var detail = mismatched.stream()
-                .map(requirement -> "行为 " + requirement.getActionApi()
+                .map(requirement -> StringUtils.isNotBlank(requirement.getActionApi())
+                        ? "行为 " + requirement.getActionApi()
                         + "（对象 " + requirement.getObjectIdentifier()
-                        + "，节点 " + String.join("、", requirement.getNodeIds()) + "）")
+                        + "，节点 " + String.join("、", requirement.getNodeIds()) + "）"
+                        : "黑板键 " + String.join("、", requirement.getBlackboardKeys())
+                        + "（对象 " + requirement.getObjectIdentifier() + "）")
                 .distinct()
                 .collect(Collectors.joining("；"));
         throw new BusinessException("批量执行遍历的对象是 " + traversalObject
@@ -1263,7 +1327,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 || data.getLinkEntityPrimaryKey() != null);
     }
 
-    /** 行为的一个外部输入参数：名字用于黑板同名匹配，类型用于自动补键 */
+    /** 行为的一个外部输入参数：名字是 nodeExecutes.params 的键，类型和说明用于执行要求 */
     private record TreeExternalParam(String name, FunctionParamTypeEnum type, String description) {
     }
 
@@ -1383,7 +1447,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     @Override
     public TreeExecuteResultVO executeTree(TreeExecuteParam param) {
         var compiled = btTreeManager.getTree(param.getOntologySpaceId(), param.getTreeApi());
-        var definition = prepareTreeDefinition(compiled.definition(), param.getOntologySpaceId());
+        var definition = prepareTreeDefinition(compiled.definition());
         var runtime = buildTreeRuntime(compiled, definition, param);
         checkTreeExecuteInputs(definition, param.getOntologySpaceId(), runtime, true);
         return runTreeInstance(compiled, runtime);
@@ -1410,7 +1474,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 .build();
         checkTreeDefinition(new OntologyAction(), definitionParam);
         // 校验会把编译用的定义补成完整契约，试跑同样要求调用方补齐外部入参与实例
-        var definition = prepareTreeDefinition(compiled.definition(), param.getOntologySpaceId());
+        var definition = prepareTreeDefinition(compiled.definition());
         var runtime = buildTreeRuntime(compiled, definition, param);
         checkTreeExecuteInputs(definition, param.getOntologySpaceId(), runtime, true);
         return runTreeInstance(compiled, runtime);
@@ -1434,7 +1498,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                     "分片序号必须在 0 到 " + (shardTotal - 1) + " 之间", HttpStatus.BAD_REQUEST);
         }
         // 批量执行每条实例各带一个主键，这里只校验输入参数，实例由遍历结果提供
-        var definition = prepareTreeDefinition(compiled.definition(), param.getOntologySpaceId());
+        var definition = prepareTreeDefinition(compiled.definition());
         checkTreeBatchNodeExecutes(param);
         var plan = buildTreeExecuteInputs(definition, param.getOntologySpaceId());
         checkTreeExecuteInputs(definition, param.getOntologySpaceId(),
@@ -1901,9 +1965,9 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     }
 
     /**
-     * 行为声明的外部输入参数按参数名取值：节点单独传了用节点的，否则用全树同名值，
+     * 行为声明的外部输入参数按节点取值：每个节点只用自己 nodeExecutes[节点].params 里给的值，
      * 和详情接口列出的必填入参同一套定义。
-     * <p>黑板不参与行为执行：属性绑定的键会被条件求值刷新，拿它当参数值会让同一个行为每轮取到不同的值。</p>
+     * <p>黑板不参与行为执行：它是条件用的全局变量，和执行请求里的行为入参是两套东西。</p>
      */
     private Map<String, Object> treeExternalParams(String nodeId, OntologyAction bound, TreeExecutionRuntime runtime) {
         Map<String, Object> params = new LinkedHashMap<>();
@@ -1917,14 +1981,15 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     }
 
     /**
-     * 条件求值前把绑定了对象属性的黑板键按库里的当前值重读一遍。
+     * 条件求值前把来源是对象属性的黑板键按库里的当前值重读一遍。
      * <p>行为不写黑板，属性值只能通过这条路进黑板：绑同一个对象的键合并成一次回读，
      * 定位不到实例或行里没有这个属性时不动黑板值，把原因写进节点说明，
-     * 否则条件会拿着变量默认值判成执行。</p>
+     * 否则条件会拿着上一次求值留下的值判成执行。</p>
      */
     private void refreshTreeBlackboardProperties(String nodeId, TreeExecutionRuntime runtime) {
         var boundItems = runtime.getBlackboardItems().values().stream()
-                .filter(item -> StringUtils.isNotBlank(item.getBindPropertyUniqueIdentifier()))
+                .filter(item -> item.resolvedSource() == BehaviorBlackboardSourceEnum.PROPERTY
+                        && StringUtils.isNotBlank(item.getBindPropertyUniqueIdentifier()))
                 .collect(Collectors.toList());
         if (boundItems.isEmpty()) {
             return;
@@ -1969,7 +2034,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         }
         runtime.getBlackboardItems().forEach((key, item) -> {
             var bind = item.getBindPropertyUniqueIdentifier();
-            if (StringUtils.isNotBlank(bind) && latestValues.containsKey(bind)) {
+            if (item.resolvedSource() == BehaviorBlackboardSourceEnum.PROPERTY
+                    && StringUtils.isNotBlank(bind) && latestValues.containsKey(bind)) {
                 runtime.setBlackboardValue(key, latestValues.get(bind));
             }
         });
@@ -2933,8 +2999,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         // 行为树没有算子、关系和参数绑定，读回定义即可
         if (action.getActionKind() == ActionKindEnum.TREE) {
             var tree = readTreeDefinition(action.getDefinition());
-            // 早于自动补键规则保存的草稿在详情里按现行规则补全，保证详情与执行期用的是同一份契约
-            completeTreeExternalInputs(tree, action.getOntologySpaceId());
+            // 早于来源字段的草稿按原字段推导一次，让详情和执行期看到同一份来源
+            normalizeTreeBlackboardSources(tree);
             detailVO.setTreeDefinition(tree);
             detailVO.setExecuteInputs(buildTreeExecuteInputs(tree, action.getOntologySpaceId()));
             return detailVO;

@@ -2,6 +2,7 @@ package com.aircas.ptr.foundry.ontology.service.behavior;
 
 import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
+import com.aircas.ptr.foundry.ontology.model.enums.BehaviorBlackboardSourceEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.BehaviorCompareOpEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.BehaviorNodeKindEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.BehaviorStateEnum;
@@ -40,9 +41,9 @@ import java.util.stream.Collectors;
 
 /**
  * 一次树执行（单条实例）的运行时：黑板、节点执行痕迹、条件求值。
- * <p>黑板只是全局变量，用来决定节点执行不执行：变量默认值打底、执行入参覆盖，
- * 绑了对象属性的键在每次条件求值前按库里的当前值重新读一遍。行为既不读黑板也不写黑板，
- * 它需要的参数全部由执行请求传：全树共用一份按对象/参数名给，绑同一个行为的多个节点用 nodeExecutes 各给一套。
+ * <p>黑板只是全局变量，用来决定节点执行不执行：固定值取黑板项自己的取值，外部输入由 inputs 覆盖、没传时回落到变量默认值，
+ * 对象属性来源的键在每次条件求值前按库里的当前值重新读一遍。行为既不读黑板也不写黑板，
+ * 它需要的外部入参只认节点自己的 nodeExecutes[节点].params，两个节点绑同一个行为时各给一套。
  * 每次执行独立一个实例，behavior3java 的 Blackboard 只承载库内置节点的记忆状态。
  * 并行节点的多个分支共用一个运行时，所以黑板与节点痕迹按并发访问处理。</p>
  */
@@ -91,12 +92,6 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
      */
     private final Map<String, TreeNodeExecuteParam> nodeExecutes;
 
-    /**
-     * 行为参数的取值：变量默认值打底、执行入参覆盖，一次执行内不再变。
-     * <p>与 {@link #blackboard} 分开存：黑板会被条件求值按属性刷新，行为参数不能被那次刷新污染。</p>
-     */
-    private final Map<String, Object> paramInputs;
-
     private final Integer spaceId;
 
     private final TreeCooldownTracker cooldownTracker;
@@ -110,7 +105,7 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
     /** 黑板键名 -> 当前值；条件求值前按绑定属性刷新，并行分支同时读，用同步包装保留插入顺序 */
     private final Map<String, Object> blackboard = Collections.synchronizedMap(new LinkedHashMap<>());
 
-    /** 黑板键名 -> 黑板项声明，条件求值前按 bindPropertyUniqueIdentifier 找要重读的属性 */
+    /** 黑板键名 -> 黑板项声明，条件求值前按来源是对象属性的项找要重读的属性 */
     private final Map<String, BehaviorBlackboardItem> blackboardItems = new LinkedHashMap<>();
 
     /** 节点标识 -> 执行痕迹；并行分支各写各的节点 */
@@ -161,25 +156,26 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
         this.blackboardRefresher = blackboardRefresher;
         this.stepBudget = OntologyTreeNodes.MAX_LOOP_ITERATIONS * (countNodes(definition.getRoots()) + 1);
         definition.getBlackboard().forEach(item -> blackboardItems.put(item.getKey(), item));
-        Map<String, Object> paramValues = new LinkedHashMap<>();
         for (var variable : definition.getVariables()) {
             blackboard.put(variable.getName(), variable.getDefaultValue());
-            paramValues.put(variable.getName(), variable.getDefaultValue());
         }
+        // 固定值的取值写在黑板项自己身上，外部输入才用变量默认值兜底
+        blackboardItems.values().stream()
+                .filter(item -> item.resolvedSource() == BehaviorBlackboardSourceEnum.FIXED)
+                .forEach(item -> blackboard.put(item.getKey(), item.getValue()));
         if (inputs != null) {
             for (var entry : inputs.entrySet()) {
-                PreconditionUtils.checkArgument(blackboard.containsKey(entry.getKey()),
-                        "执行入参 " + entry.getKey() + " 不是本树声明的黑板键", HttpStatus.BAD_REQUEST);
+                // 按声明的黑板键判定：变量只给有初始值的键，没给变量的外部输入键同样要能传
                 var item = blackboardItems.get(entry.getKey());
-                // 绑了对象属性的键每次条件求值都按库里的当前值重读，接受外部入参只会让传进来的值被覆盖
-                PreconditionUtils.checkArgument(item == null || StringUtils.isBlank(item.getBindPropertyUniqueIdentifier()),
-                        "黑板键 " + entry.getKey() + " 绑的是对象属性，条件每次取的是库里的当前值，不接受执行入参",
+                PreconditionUtils.checkNotNull(item,
+                        "执行入参 " + entry.getKey() + " 不是本树声明的黑板键", HttpStatus.BAD_REQUEST);
+                // 只有外部输入来源的黑板键接受执行入参：固定值以声明为准，对象属性每次条件求值按库里重读
+                PreconditionUtils.checkArgument(item.resolvedSource() == BehaviorBlackboardSourceEnum.EXTERNAL,
+                        "黑板键 " + entry.getKey() + " 的取值来源不是外部输入，不接受执行入参",
                         HttpStatus.BAD_REQUEST);
                 blackboard.put(entry.getKey(), entry.getValue());
-                paramValues.put(entry.getKey(), entry.getValue());
             }
         }
-        this.paramInputs = Collections.unmodifiableMap(paramValues);
         checkNodeExecutesTargetsActionNodes(definition, this.nodeExecutes);
     }
 
@@ -245,7 +241,7 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
     }
 
     /** 某个对象本次执行用的实例主键：按对象给的优先，没给回退执行级的 entityPrimaryKey */
-    private Object entityPrimaryKeyFor(String objectId) {
+    public Object executionEntityPrimaryKey(String objectId) {
         if (objectId != null) {
             var value = entityPrimaryKeys.get(objectId);
             if (value != null) {
@@ -275,7 +271,7 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
         }
         var byObject = objectId == null || data.getEntityPrimaryKeys() == null
                 ? null : data.getEntityPrimaryKeys().get(objectId);
-        return byObject != null ? byObject : entityPrimaryKeyFor(objectId);
+        return byObject != null ? byObject : executionEntityPrimaryKey(objectId);
     }
 
     /** 本节点用的按对象实例主键：节点没配就用全树那份 */
@@ -328,13 +324,12 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
     }
 
     /**
-     * 本节点行为外部入参的取值：节点传了用节点的，否则用全树同名值。
-     * <p>节点没配 params 或该参数名没传值时都回退，传了 null 等同没传。</p>
+     * 本节点行为外部入参的取值：只认该节点 nodeExecutes[节点].params，没有全树默认值可回退。
+     * <p>传了 null 等同没传，执行前校验会按缺失报错。</p>
      */
     public Object nodeParamValue(String nodeId, String paramName) {
         var params = nodeData(nodeId).getParams();
-        var value = params == null ? null : params.get(paramName);
-        return value != null ? value : paramInputValue(paramName);
+        return params == null ? null : params.get(paramName);
     }
 
     /** 本节点单独传的行为入参名，供执行前校验：传了行为没有的参数名要报错 */
@@ -346,14 +341,6 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
     @Override
     public Integer getSpaceId() {
         return spaceId;
-    }
-
-    /**
-     * 行为参数的取值：执行入参覆盖变量默认值，一次执行内固定。
-     * <p>黑板会按绑定属性刷新，行为参数不能跟着变，否则同一个行为在循环里每轮拿到不同的值。</p>
-     */
-    private Object paramInputValue(String key) {
-        return paramInputs.get(key);
     }
 
     /** 只给属性刷新用：节点和行为的执行链路都不通过这里改黑板 */
