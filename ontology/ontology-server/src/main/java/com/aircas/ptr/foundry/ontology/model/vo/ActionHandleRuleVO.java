@@ -1,7 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.vo;
 
-import com.aircas.ptr.foundry.ontology.model.enums.ActionRuleConnectType;
-import com.aircas.ptr.foundry.ontology.model.param.ActionHandleRuleAddParam;
+import com.aircas.ptr.foundry.ontology.model.param.RuleJudgeGroupParam;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -19,11 +18,7 @@ import java.util.List;
 @Schema(description = "行为规则信息VO")
 public class ActionHandleRuleVO {
 
-    @Schema(name = "rules", description = "行为规则执行，规则list", example = "[{\"columnName\":\"longitude\",\"columnValue\":\"20.0\",\"condition\":\"CH\"}]")
-    private List<ActionHandleRuleAddParam> rules;
-
-    @Schema(name = "ruleConnectType", description = "行为规则拼接类型", example = "AND")
-    private ActionRuleConnectType ruleConnectType;
-
+    @Schema(name = "judgeRules", description = "规则数组：组合条件（括号+AND/OR，可整体取反）+ 行为执行参数")
+    private List<RuleJudgeGroupParam> judgeRules;
 
 }

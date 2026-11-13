@@ -155,6 +155,10 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     @Resource
     private ActionHandleRuleService actionHandleRuleService;
 
+    @Lazy
+    @Resource
+    private ActionRuleTriggerService actionRuleTriggerService;
+
     @Resource
     private ActionHandleTaskService actionHandleTaskService;
 
@@ -3992,10 +3996,12 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     public Long createScheduling(ActionSchedulingCreateParam param) {
         //todo 目前只考虑定时调度
         var schedulingType = param.getType();
-        // 行为与对象解绑：直接按 actionApi 查行为，用行为自身的空间，不再依赖对象 id
+        // 调度只能绑定本空间的行为：spaceId 必传，行为按 api + 空间过滤
+        PreconditionUtils.checkNotNull(param.getSpaceId(), "请选择行为所属空间", HttpStatus.BAD_REQUEST);
         var action = actionMapper.selectOne(new LambdaQueryWrapper<OntologyAction>()
-                .eq(OntologyAction::getApi, param.getActionApi()));
-        PreconditionUtils.checkNotNull(action, "action不存在：" + param.getActionApi());
+                .eq(OntologyAction::getApi, param.getActionApi())
+                .eq(OntologyAction::getOntologySpaceId, param.getSpaceId()));
+        PreconditionUtils.checkNotNull(action, "本空间内action不存在：" + param.getActionApi());
         // 属性值、实例关系行为没有算子，执行时会对对象下全部实例逐个落库，定时跑会造成重复数据，不支持调度
         PreconditionUtils.checkArgument(StringUtils.isNotEmpty(action.getFunctionApi()),
                 "不绑定算子的行为不支持配置调度：" + param.getActionApi(), HttpStatus.BAD_REQUEST);
@@ -4030,6 +4036,25 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 log.error("createScheduling failed", e);
                 throw new BusinessException("远程调用xxl-job创建jobinfo失败");
             }
+        } else if (schedulingType.equals(ActionSchedulingTypeEnum.RULE)) {
+            var ruleParam = param.getRule();
+            PreconditionUtils.checkNotNull(ruleParam, "规则调度参数不能为空", HttpStatus.BAD_REQUEST);
+            PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(ruleParam.getJudgeRules()),
+                    "judgeRules 不能为空", HttpStatus.BAD_REQUEST);
+            validateJudgeRules(ruleParam.getJudgeRules());
+            // 监控对象来自条件操作数/执行目标，仅用于展示，不要求外部指定
+            ontologyIdentifier = judgeMonitorObject(ruleParam.getJudgeRules(), ontologyIdentifier);
+            var handleRule = ActionHandleRule.builder()
+                    .actionApi(action.getApi())
+                    .ontologyIdentifier(ontologyIdentifier)
+                    .ontologySpaceId(action.getOntologySpaceId())
+                    .name(param.getName())
+                    .description(param.getDescription())
+                    .judgeJson(writeJudgeJson(ruleParam.getJudgeRules()))
+                    .status(ScheduleStatus.STOP)
+                    .build();
+            actionHandleRuleService.save(handleRule);
+            id = handleRule.getId();
         }
         return id;
     }
@@ -4037,7 +4062,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     @Override
     @Transactional
     public void updateScheduling(ActionSchedulingUpdateParam param) {
-        // 行为与对象解绑：直接按 actionApi 查行为，不再校验对象 id
+        // 行为与对象解绑：直接按 actionApi 查行为，空间归属在下面按调度记录原空间校验
         var action = actionMapper.selectOne(new LambdaQueryWrapper<OntologyAction>()
                 .eq(OntologyAction::getApi, param.getActionApi()));
         PreconditionUtils.checkNotNull(action, "action不存在：" + param.getActionApi());
@@ -4048,6 +4073,9 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             var handleTask = actionHandleTaskService.getById(param.getId());
             PreconditionUtils.checkNotNull(handleTask, "定时调度任务不存在：" + param.getId());
             PreconditionUtils.checkArgument(!ScheduleStatus.START.equals(handleTask.getStatus()), "周期调度已开启，请先暂停后再编辑");
+            PreconditionUtils.checkArgument(handleTask.getOntologySpaceId() == null
+                            || action.getOntologySpaceId().equals(handleTask.getOntologySpaceId()),
+                    "只能选择本空间的行为", HttpStatus.BAD_REQUEST);
             handleTask.setActionApi(action.getApi())
                     .setOntologyIdentifier(ontologyIdentifier)
                     .setOntologySpaceId(action.getOntologySpaceId())
@@ -4071,6 +4099,26 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 log.error("updateJobInfo failed", e);
                 throw new BusinessException("远程调用xxl-job更新jobinfo失败");
             }
+        } else if (schedulingType.equals(ActionSchedulingTypeEnum.RULE)) {
+            var handleRule = actionHandleRuleService.getById(param.getId());
+            PreconditionUtils.checkNotNull(handleRule, "规则调度不存在：" + param.getId());
+            PreconditionUtils.checkArgument(!ScheduleStatus.START.equals(handleRule.getStatus()), "规则调度已开启，请先暂停后再编辑");
+            PreconditionUtils.checkArgument(handleRule.getOntologySpaceId() == null
+                            || action.getOntologySpaceId().equals(handleRule.getOntologySpaceId()),
+                    "只能选择本空间的行为", HttpStatus.BAD_REQUEST);
+            var ruleParam = param.getRule();
+            PreconditionUtils.checkNotNull(ruleParam, "规则调度参数不能为空", HttpStatus.BAD_REQUEST);
+            PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(ruleParam.getJudgeRules()),
+                    "judgeRules 不能为空", HttpStatus.BAD_REQUEST);
+            validateJudgeRules(ruleParam.getJudgeRules());
+            ontologyIdentifier = judgeMonitorObject(ruleParam.getJudgeRules(), ontologyIdentifier);
+            handleRule.setActionApi(action.getApi())
+                    .setOntologyIdentifier(ontologyIdentifier)
+                    .setOntologySpaceId(action.getOntologySpaceId())
+                    .setName(param.getName())
+                    .setDescription(param.getDescription())
+                    .setJudgeJson(writeJudgeJson(ruleParam.getJudgeRules()));
+            actionHandleRuleService.updateById(handleRule);
         }
     }
 
@@ -4088,6 +4136,10 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 log.error("removeScheduling failed", e);
                 throw new BusinessException("远程调用xxl-job删除任务失败");
             }
+        } else if (ActionSchedulingTypeEnum.RULE.equals(type)) {
+            var handleRule = actionHandleRuleService.getById(id);
+            PreconditionUtils.checkNotNull(handleRule, "规则调度不存在：" + id);
+            actionHandleRuleService.removeById(handleRule.getId());
         }
     }
 
@@ -4105,6 +4157,12 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 log.error("startScheduling failed", e);
                 throw new BusinessException("远程调用xxl-job启动任务失败");
             }
+        } else if (ActionSchedulingTypeEnum.RULE.equals(type)) {
+            var handleRule = actionHandleRuleService.getById(id);
+            PreconditionUtils.checkNotNull(handleRule, "规则调度不存在：" + id);
+            actionHandleRuleService.updateById(handleRule.setStatus(ScheduleStatus.START));
+            // 启用即对条件绑定实例评估一遍存量数据，满足就执行；异步跑，不阻塞启动接口，失败只记日志
+            java.util.concurrent.CompletableFuture.runAsync(() -> actionRuleTriggerService.evaluateRuleNow(handleRule.getId()));
         }
     }
 
@@ -4122,6 +4180,10 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 log.error("stopScheduling failed", e);
                 throw new BusinessException("远程调用xxl-job暂停任务失败");
             }
+        } else if (ActionSchedulingTypeEnum.RULE.equals(type)) {
+            var handleRule = actionHandleRuleService.getById(id);
+            PreconditionUtils.checkNotNull(handleRule, "规则调度不存在：" + id);
+            actionHandleRuleService.updateById(handleRule.setStatus(ScheduleStatus.STOP));
         }
 
     }
@@ -4151,6 +4213,29 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                             .periodType(handleTask.getPeriodType())
                             .entityJson(handleTask.getEntityJson()).build())
                     .status(handleTask.getStatus())
+                    .build();
+        } else if (ActionSchedulingTypeEnum.RULE.equals(type)) {
+            var handleRule = actionHandleRuleService.getById(id);
+            PreconditionUtils.checkNotNull(handleRule, "规则调度不存在：" + id);
+            var action = actionMapper.selectOne(new LambdaQueryWrapper<OntologyAction>()
+                    .eq(OntologyAction::getApi, handleRule.getActionApi())
+                    .eq(OntologyAction::getOntologySpaceId, handleRule.getOntologySpaceId()));
+            PreconditionUtils.checkNotNull(action, "调度绑定的行为不存在：" + handleRule.getActionApi(), HttpStatus.BAD_REQUEST);
+            var ontology = ontologyMetaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>()
+                    .eq(OntologyMeta::getUniqueIdentifier, handleRule.getOntologyIdentifier()));
+            return ActionSchedulingDetailVO.builder()
+                    .actionApi(action.getApi())
+                    .actionName(action.getDisplayName())
+                    .ontologyName(ontology == null ? null : ontology.getDisplayName())
+                    .schedulingName(handleRule.getName())
+                    .id(handleRule.getId())
+                    .description(handleRule.getDescription())
+                    .type(ActionSchedulingTypeEnum.RULE)
+                    .ontologyIdentifier(handleRule.getOntologyIdentifier())
+                    .ruleVO(ActionHandleRuleVO.builder()
+                            .judgeRules(readJudgeJson(handleRule.getJudgeJson()))
+                            .build())
+                    .status(handleRule.getStatus())
                     .build();
         }
         return null;
@@ -4190,11 +4275,11 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
 
         List<ActionSchedulingInfoVO> all = new ArrayList<>();
         for (var v : tasks) {
-            var action = actionMap.get(v.getActionApi());
+            var action = v.getActionApi() == null ? null : actionMap.get(v.getActionApi());
             if (action == null) {
                 continue;
             }
-            var ontologyMeta = ontologyMap.get(v.getOntologyIdentifier());
+            var ontologyMeta = v.getOntologyIdentifier() == null ? null : ontologyMap.get(v.getOntologyIdentifier());
             all.add(ActionSchedulingInfoVO.builder()
                     .actionApi(action.getApi())
                     .actionName(action.getDisplayName())
@@ -4211,24 +4296,22 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                     .build());
         }
         for (var v : rules) {
-            var action = actionMap.get(v.getActionApi());
+            var action = v.getActionApi() == null ? null : actionMap.get(v.getActionApi());
             // 指定空间时 actionMap 只含该空间行为，查不到即不属于该空间
             if (ontologySpaceId != null && action == null) {
                 continue;
             }
-            var ontologyMeta = ontologyMap.get(v.getOntologyIdentifier());
-            if (ontologyMeta == null) {
-                continue;
-            }
+            // 监控对象可能推导为空，仅影响展示名称，不应把规则行整条丢掉
+            var ontologyMeta = v.getOntologyIdentifier() == null ? null : ontologyMap.get(v.getOntologyIdentifier());
             all.add(ActionSchedulingInfoVO.builder()
                     .actionApi(v.getActionApi())
                     .actionName(action == null ? null : action.getDisplayName())
-                    .ontologyName(ontologyMeta.getDisplayName())
+                    .ontologyName(ontologyMeta == null ? null : ontologyMeta.getDisplayName())
                     .schedulingName(v.getName())
                     .id(v.getId())
                     .description(v.getDescription())
                     .type(ActionSchedulingTypeEnum.RULE)
-                    .ontologyIdentifier(ontologyMeta.getUniqueIdentifier())
+                    .ontologyIdentifier(v.getOntologyIdentifier())
                     .status(v.getStatus())
                     .createTime(v.getCreateTime())
                     .updateTime(v.getUpdateTime())
@@ -4273,6 +4356,95 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         return new Page<SchedulingResultVO>(pageNum, pageSize)
                 .setTotal(pages.getTotal())
                 .setRecords(vo);
+    }
+
+    /** 定稿规则校验：行为存在且绑算子、操作数完整、比较符合法、linkFlag/括号配对 */
+    private void validateJudgeRules(List<RuleJudgeGroupParam> groups) {
+        for (var group : groups) {
+            PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(group.getJudgeParams()),
+                    "judgeParams 不能为空", HttpStatus.BAD_REQUEST);
+            var actionParam = group.getActionParam();
+            PreconditionUtils.checkNotNull(actionParam, "actionParam 不能为空", HttpStatus.BAD_REQUEST);
+            PreconditionUtils.checkArgument(StringUtils.isNotBlank(actionParam.getActionApi()),
+                    "actionParam.action_api 不能为空", HttpStatus.BAD_REQUEST);
+            var branchAction = actionMapper.selectOne(new LambdaQueryWrapper<OntologyAction>()
+                    .eq(OntologyAction::getApi, actionParam.getActionApi()));
+            PreconditionUtils.checkNotNull(branchAction, "规则绑定的行为不存在：" + actionParam.getActionApi(), HttpStatus.BAD_REQUEST);
+            PreconditionUtils.checkArgument(StringUtils.isNotEmpty(branchAction.getFunctionApi()),
+                    "规则绑定的行为未绑算子，不支持调度：" + actionParam.getActionApi(), HttpStatus.BAD_REQUEST);
+
+            int depth = 0;
+            var items = group.getJudgeParams();
+            for (int i = 0; i < items.size(); i++) {
+                var item = items.get(i);
+                validateJudgeOperate(item.getLeftOperate(), "leftOperate");
+                validateJudgeOperate(item.getRightOperate(), "rightOperate");
+                PreconditionUtils.checkNotNull(item.getCondition(), "judgeParams 缺少比较操作符 condition", HttpStatus.BAD_REQUEST);
+                PreconditionUtils.checkArgument(item.getCondition() != ActionHandleRuleAddConditionEnum.CH,
+                        "规则调度不支持 CH（变化）比较", HttpStatus.BAD_REQUEST);
+                if (Boolean.TRUE.equals(item.getIsLeft())) {
+                    depth++;
+                }
+                if (Boolean.TRUE.equals(item.getIsRight())) {
+                    depth--;
+                    PreconditionUtils.checkArgument(depth >= 0, "judgeParams 右括号多余", HttpStatus.BAD_REQUEST);
+                }
+                if (i < items.size() - 1) {
+                    PreconditionUtils.checkNotNull(item.getLinkFlag(), "非末条 judgeParams 必须给 linkFlag", HttpStatus.BAD_REQUEST);
+                }
+            }
+            PreconditionUtils.checkArgument(depth == 0, "judgeParams 括号不配对", HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    private void validateJudgeOperate(RuleOperateParam operate, String name) {
+        PreconditionUtils.checkNotNull(operate, name + " 不能为空", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkNotNull(operate.getType(), name + ".type 不能为空（dynamic|fixed）", HttpStatus.BAD_REQUEST);
+        if (operate.getType() == RuleOperateType.DYNAMIC) {
+            PreconditionUtils.checkArgument(StringUtils.isNotBlank(operate.getOntologyId())
+                            && StringUtils.isNotBlank(operate.getEntityId())
+                            && (StringUtils.isNotBlank(operate.getPropertyId()) || StringUtils.isNotBlank(operate.getPropertyName())),
+                    name + " 为 dynamic 时必须给 OntologyId、entityId 和 propertyId/propertyName 之一", HttpStatus.BAD_REQUEST);
+        } else {
+            PreconditionUtils.checkNotNull(operate.getFixValue(), name + " 为 fixed 时必须给 fixValue", HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    /** 定稿模式的展示用监控对象：优先执行目标对象，其次首个条件操作数对象 */
+    private String judgeMonitorObject(List<RuleJudgeGroupParam> groups, String fallback) {
+        for (var group : groups) {
+            if (group.getActionParam() != null && StringUtils.isNotBlank(group.getActionParam().getOntologyIdentifier())) {
+                return group.getActionParam().getOntologyIdentifier();
+            }
+        }
+        for (var group : groups) {
+            for (var item : group.getJudgeParams()) {
+                for (var operate : new RuleOperateParam[]{item.getLeftOperate(), item.getRightOperate()}) {
+                    if (operate != null && operate.getType() == RuleOperateType.DYNAMIC
+                            && StringUtils.isNotBlank(operate.getOntologyId())) {
+                        return operate.getOntologyId();
+                    }
+                }
+            }
+        }
+        return fallback;
+    }
+
+    @SneakyThrows
+    private String writeJudgeJson(List<RuleJudgeGroupParam> judgeRules) {
+        if (CollectionUtils.isEmpty(judgeRules)) {
+            return null;
+        }
+        return jsonMapper.writeValueAsString(judgeRules);
+    }
+
+    @SneakyThrows
+    private List<RuleJudgeGroupParam> readJudgeJson(String judgeJson) {
+        if (StringUtils.isBlank(judgeJson)) {
+            return null;
+        }
+        return jsonMapper.readValue(judgeJson, new TypeReference<List<RuleJudgeGroupParam>>() {
+        });
     }
 
 

@@ -15,6 +15,9 @@ import lombok.experimental.SuperBuilder;
 public class ActionSchedulingCreateParam extends ActionHandleConfigInfoParam {
 
 
+    @Schema(name = "spaceId", description = "行为所属空间 id，必填；调度只能绑定本空间的行为", requiredMode = Schema.RequiredMode.REQUIRED)
+    private Integer spaceId;
+
     @Schema(name = "task", description = "创建定时任务行为调度")
     private ActionHandleTaskParam task;
 
