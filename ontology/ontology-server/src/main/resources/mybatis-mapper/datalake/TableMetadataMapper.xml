@@ -13,6 +13,12 @@
         <result column="description" jdbcType="VARCHAR" property="description"/>
     </resultMap>
 
+    <resultMap id="ForeignKeyResultMap" type="com.aircas.ptr.foundry.ontology.model.po.ForeignKeyDesc">
+        <result column="child_column" jdbcType="VARCHAR" property="childColumn"/>
+        <result column="parent_table" jdbcType="VARCHAR" property="parentTable"/>
+        <result column="parent_column" jdbcType="VARCHAR" property="parentColumn"/>
+    </resultMap>
+
     <select id="queryColumnMetadata" resultMap="BaseResultMap">
         SELECT a.attname                                AS column_name,
                col_description(a.attrelid, a.attnum)    AS description,
@@ -86,6 +92,27 @@
         from pg_index i
                  join pg_attribute a on a.attrelid = i.indrelid and a.attnum = any (i.indkey)
         where i.indrelid = '"${schemaName}"."${tableName}"'::regclass and i.indisprimary
+    </select>
+
+
+    <!-- 子表上的单列声明外键；表不存在时返回空集，不用 ::regclass 以免直接报错 -->
+    <select id="queryForeignKeys" resultMap="ForeignKeyResultMap">
+        SELECT a.attname  AS child_column,
+               pc.relname AS parent_table,
+               pa.attname AS parent_column
+        FROM pg_constraint con
+                 JOIN pg_class c ON c.oid = con.conrelid
+                 JOIN pg_class pc ON pc.oid = con.confrelid
+                 JOIN pg_namespace n ON n.oid = c.relnamespace
+                 JOIN pg_namespace pn ON pn.oid = pc.relnamespace
+                 JOIN pg_attribute a ON a.attrelid = con.conrelid AND a.attnum = con.conkey[1]
+                 JOIN pg_attribute pa ON pa.attrelid = con.confrelid AND pa.attnum = con.confkey[1]
+        WHERE con.contype = 'f'
+          AND (SELECT count(*) FROM unnest(con.conkey)) = 1
+          AND (SELECT count(*) FROM unnest(con.confkey)) = 1
+          AND n.nspname = #{schemaName}
+          AND pn.nspname = #{schemaName}
+          AND c.relname = #{tableName}
     </select>
 
 

@@ -213,8 +213,70 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         }
         //batch update
         updateBatchById(updateProperties);
+        //补齐缺失的主子表列映射，否则子表分组按关联列读写都走不通
+        syncTableFieldMappings(ontologyId, updateProperties, otherProps);
         //update arangodb node
         buildEntityNodes(ontologyId, titleKeyChanged);
+    }
+
+    /**
+     * 补齐 {@code table_field_mapping} 里缺失的主子表列映射。
+     * <p>本接口只写 {@code ontology_property}，而子表分组的数据读写、发给数据组织层的管道消息都按这张映射表
+     * 取关联列，手动绑定已有表时必须补上。
+     */
+    private void syncTableFieldMappings(String ontologyId, List<OntologyProperty> updateProperties,
+                                        List<OntologyProperty> otherProps) {
+        List<OntologyProperty> allProps = Lists.newArrayList(updateProperties);
+        allProps.addAll(otherProps);
+        var pkProp = allProps.stream()
+                .filter(p -> p.getIsPrimaryKey() != null && p.getIsPrimaryKey() == 1)
+                .findFirst();
+        // 主键没绑数据源时主子关系无从建立，交给绑定完成后的流程处理
+        if (!pkProp.isPresent() || StringUtils.isEmpty(pkProp.get().getDatasourceId())) {
+            return;
+        }
+        String schemaName = resolveSchemaName(ontologyId);
+        String mainTable = pkProp.get().getDatasourceId();
+        String mainColumn = StringUtils.defaultIfEmpty(pkProp.get().getDatasourceColumnName(), "id");
+        allProps.stream()
+                .map(OntologyProperty::getDatasourceId)
+                .filter(StringUtils::isNotEmpty)
+                .filter(table -> !table.equals(mainTable))
+                .distinct()
+                .forEach(childTable -> ensureTableFieldMapping(schemaName, mainTable, mainColumn, childTable));
+    }
+
+    /**
+     * 主表与子表之间没有列映射时补一条：先认数据湖上的声明外键，再退回平台 {@code {主表名}_id} 命名约定列，
+     * 两者都探不到只记日志——外部表的关联关系可能只存在于对端管道，这里报错会把整单绑定拦死。
+     */
+    private void ensureTableFieldMapping(String schemaName, String mainTable, String mainColumn, String childTable) {
+        if (tableFieldMappingMapper.selectBySourceAndTarget(schemaName, mainTable, childTable) != null) {
+            return;
+        }
+        String relatedColumn = tableMetadataMapper.queryForeignKeys(schemaName, childTable).stream()
+                .filter(fk -> mainTable.equals(fk.getParentTable()) && mainColumn.equals(fk.getParentColumn()))
+                .map(ForeignKeyDesc::getChildColumn)
+                .findFirst()
+                .orElse(null);
+        if (relatedColumn == null) {
+            String conventionColumn = mainTable + "_id";
+            if (Boolean.TRUE.equals(tableMetadataMapper.isColumnExist(schemaName, childTable, conventionColumn))) {
+                relatedColumn = conventionColumn;
+            }
+        }
+        if (relatedColumn == null) {
+            log.warn("主表{}与子表{}未探测到关联列（既没有指向主表主键{}的单列外键，也没有列{}），"
+                    + "未补主子表映射，该分组的关联数据读写会失败", mainTable, childTable, mainColumn, mainTable + "_id");
+            return;
+        }
+        tableFieldMappingMapper.insertMapping(schemaName, TableFieldMapping.builder()
+                .sourceTableName(mainTable)
+                .sourceColumnName(mainColumn)
+                .targetTableName(childTable)
+                .targetColumnName(relatedColumn)
+                .build());
+        log.info("补齐主子表列映射：{}.{}.{} → {}.{}", schemaName, mainTable, mainColumn, childTable, relatedColumn);
     }
 
     @Override
