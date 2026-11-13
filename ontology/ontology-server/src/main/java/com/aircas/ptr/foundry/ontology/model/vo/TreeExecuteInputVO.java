@@ -12,9 +12,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 行为树执行时需要调用方关注的外部入参：由绑定行为的外部输入参数反推。
- * <p>参数名与行为参数名一致：取值先看该节点的 nodeExecutes.params，没有再回退全树 inputs；
- * 只有配了变量默认值的参数可以不传。绑了对象属性的同名黑板键由条件求值时从库里读取，不能同时当行为入参传，执行前会按冲突报错。</p>
+ * 行为树执行时需要调用方关注的行为外部入参：由绑定行为的外部输入参数反推。
+ * <p>参数按节点取值：每个节点只用自己的 nodeExecutes[节点].params，没有全树默认值可以回退，
+ * 因此列出的参数都要传。黑板键是条件用的全局变量，和这里的入参互不相干。</p>
  */
 @Data
 @SuperBuilder
@@ -24,26 +24,21 @@ import java.util.List;
 @Schema(description = "行为树执行入参")
 public class TreeExecuteInputVO {
 
-    @Schema(name = "key", description = "参数名：行为的同名外部入参取值用它，也是全树默认值 inputs 的键", example = "ammoCount")
+    @Schema(name = "key", description = "参数名：与绑定行为声明的外部入参同名，按节点传给 nodeExecutes[节点标识].params",
+            example = "ammoCount")
     private String key;
 
-    @Schema(name = "valueType", description = "黑板声明的值类型，未声明时取行为参数类型", example = "INTEGER")
+    @Schema(name = "valueType", description = "行为声明的参数类型", example = "INTEGER")
     private FunctionParamTypeEnum valueType;
 
-    @Schema(name = "defaultValue", description = "变量默认值；非空表示调用方不传也能执行", example = "10")
-    private Object defaultValue;
-
-    @Schema(name = "required", description = "是否必填：没有配变量默认值就必须由执行入参给", example = "true")
+    @Schema(name = "required", description = "是否必填：外部入参只认节点自己那份取值，没有全树同名值可回退，一律必填",
+            example = "true")
     private boolean required;
-
-    @Schema(name = "bindProperty", description = "该键是否绑了对象属性：绑属性的键由条件求值时从库里读当前值，"
-            + "不能作为行为的外部入参，树里同时命中这两种来源时执行前按冲突报错", example = "false")
-    private boolean bindProperty;
 
     @Schema(name = "description", description = "参数说明，取算子参数或属性的说明")
     private String description;
 
-    @Schema(name = "nodeIds", description = "消费该参数的行为节点标识")
+    @Schema(name = "nodeIds", description = "消费该参数的行为节点标识：每个节点都要在 nodeExecutes 里单独给这个参数")
     private List<String> nodeIds = new ArrayList<>();
 
     @Schema(name = "actionApis", description = "声明该外部参数的行为 api")

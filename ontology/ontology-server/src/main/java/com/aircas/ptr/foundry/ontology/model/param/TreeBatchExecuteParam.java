@@ -43,7 +43,8 @@ public class TreeBatchExecuteParam {
     @Schema(name = "shardTotal", description = "分片总数；不传表示不分片", example = "4")
     private Integer shardTotal;
 
-    @Schema(name = "inputs", description = "执行入参（键名 -> 值），所有实例共用；实例差异化数据通过黑板绑定对象属性获取")
+    @Schema(name = "inputs", description = "黑板键的取值（键名 -> 值），所有实例共用，只允许覆盖来源是外部输入的黑板键；"
+            + "对象属性来源的键按每条实例的当前值刷新")
     private Map<String, Object> inputs;
 
     @Schema(name = "nodeExecutes", description = "按行为节点给的外部入参取值（节点标识 -> 节点执行数据），所有实例共用："

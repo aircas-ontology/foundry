@@ -48,7 +48,8 @@ public class TreeAvailableActionVO {
             + "多于一个时执行请求用 entityPrimaryKeys 按对象传，或在该节点的 nodeExecutes 里单独传；关系对端不在其中，它由对端主键参数指定或按对端对象选实例")
     private List<String> instanceObjects = new ArrayList<>();
 
-    @Schema(name = "externalParams", description = "行为的外部输入参数（取值来源为外部输入），绑定到行为树时保存期会自动补同名黑板键")
+    @Schema(name = "externalParams", description = "行为的外部输入参数（取值来源为外部输入）；树上不生成黑板键，"
+            + "执行时按节点传给 nodeExecutes[节点标识].params")
     private List<TreeActionParamVO> externalParams = new ArrayList<>();
 
     @Schema(name = "inputParams", description = "算子入参，按参数名从执行请求取值")
