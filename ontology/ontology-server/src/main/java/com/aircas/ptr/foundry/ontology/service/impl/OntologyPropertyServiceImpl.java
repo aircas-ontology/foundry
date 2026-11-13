@@ -206,6 +206,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                     .setDisplayName(p.getDisplayName())
                     .setDatasourceId(p.getDatasource() != null ? p.getDatasource().getDatasourceId() : "")
                     .setDatasourceColumnName(p.getDatasource() != null ? p.getDatasource().getDatasourceColumnName() : "")
+                    .setDatasourceSchema(p.getDatasource() != null ? p.getDatasource().getSchemaName() : null)
                     .setStorageGroup(p.getStorageGroup())
                     .setPropertyCategoryId(p.getCategoryId())
                     .setMetadata(p.getMetadata());
