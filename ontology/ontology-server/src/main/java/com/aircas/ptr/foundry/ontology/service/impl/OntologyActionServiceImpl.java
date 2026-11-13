@@ -1673,7 +1673,10 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     @Override
     public TreeDefsVO getTreeDefs(Integer ontologySpaceId) {
         PreconditionUtils.checkNotNull(ontologySpaceId, "必须传对象空间id", HttpStatus.BAD_REQUEST);
+        // 目录只下发容器和装饰器：行为节点从 availableActions 生成，黑板条件和表达式条件不再对外提供新建；
+        // 三种叶子 kind 的保存校验与执行照旧，存量树不受影响
         var nodes = Arrays.stream(BehaviorNodeKindEnum.values())
+                .filter(kind -> kind.getCategory() != BehaviorNodeCategoryEnum.LEAF)
                 .map(this::treeControlNode)
                 .collect(Collectors.toList());
         var actions = list(new LambdaQueryWrapper<OntologyAction>()
