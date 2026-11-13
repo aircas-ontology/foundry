@@ -13,7 +13,8 @@ import java.util.List;
 /**
  * 行为树里需要实例数据的地方，按对象列出：
  * 属性值/实例关系行为、入参取对象属性或出参写属性的行为，以及来源是对象属性的黑板键。
- * <p>实例一律由执行请求给：全树共用一个传 entityPrimaryKey，涉及多个对象类型时按对象传 entityPrimaryKeys。</p>
+ * <p>实例一律由执行请求给：全树共用一个传 entityPrimaryKey，涉及多个对象类型时按对象传 entityPrimaryKeys；
+ * 行为绑定关系时还要按 entityPrimaryKeys.from、entityPrimaryKeys.to 成对传关系两端，与单行为测试的口径一致。</p>
  */
 @Data
 @SuperBuilder
@@ -36,12 +37,29 @@ public class TreeInstanceRequirementVO {
     @Schema(name = "nodeIds", description = "绑定该行为、需要实例的节点标识；黑板属性来源的实例要求为空")
     private List<String> nodeIds = new ArrayList<>();
 
-    @Schema(name = "linkEntityPrimaryKeyRequired", description = "是否需要关系对端主键", example = "false")
+    @Schema(name = "linkEntityPrimaryKeyRequired", description = "是否需要关系两端实例：行为绑定关系时有值，"
+            + "按关系两端传 entityPrimaryKeys.from / entityPrimaryKeys.to（成对必传）", example = "false")
     private boolean linkEntityPrimaryKeyRequired;
 
+    @Schema(name = "linkFromObjectIdentifier",
+            description = "关系 From 端对象的标识：需要关系两端实例时有值，调用方按这个对象选实例、放进 "
+                    + "entityPrimaryKeys.from；自关系时与 to 是同一个对象，仍要选两个不同实例",
+            example = "satellite")
+    private String linkFromObjectIdentifier;
+
+    @Schema(name = "linkToObjectIdentifier",
+            description = "关系 To 端对象的标识：需要关系两端实例时有值，调用方按这个对象选实例、放进 "
+                    + "entityPrimaryKeys.to",
+            example = "groundStation")
+    private String linkToObjectIdentifier;
+
+    @Schema(name = "selfRelation", description = "关系两端是同一个对象类型；此时 from、to 仍要传两个不同实例",
+            example = "false")
+    private boolean selfRelation;
+
     @Schema(name = "linkObjectIdentifier",
-            description = "关系对端对象的标识：需要关系对端主键时有值，调用方按这个对象选实例、放进 "
-                    + "entityPrimaryKeys 即可作为对端；自关系（对端就是本对象）不返回该字段，仍需显式传 linkEntityPrimaryKey",
+            description = "关系对端对象的标识：需要关系两端实例时有值，调用方按这个对象选实例、放进 "
+                    + "entityPrimaryKeys 即可作为对端；自关系（对端就是本对象）不返回该字段，要按 from、to 传两个不同实例",
             example = "groundStation")
     private String linkObjectIdentifier;
 

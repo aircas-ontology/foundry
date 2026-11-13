@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.ontology.repository.datalakeMapper;
 
 import com.aircas.ptr.foundry.ontology.model.po.DatasourceTable;
+import com.aircas.ptr.foundry.ontology.model.po.ForeignKeyDesc;
 import com.aircas.ptr.foundry.ontology.model.po.TableColumnDesc;
 import com.aircas.ptr.foundry.ontology.model.po.TableDesc;
 import org.apache.ibatis.annotations.Mapper;
@@ -37,6 +38,13 @@ public interface TableMetadataMapper {
 
 
     String queryPrimaryKeyColumnName(@Param("schemaName") String schemaName, @Param("tableName") String tableName);
+
+
+    /**
+     * 子表上的单列声明外键（复合外键平台不支持，不返回）。
+     * 用于手动绑定已有表时探测主子表关联列：第三方同步进来的表，关联列名不受平台 {@code {主表名}_id} 约定。
+     */
+    List<ForeignKeyDesc> queryForeignKeys(@Param("schemaName") String schemaName, @Param("tableName") String tableName);
 
 
     void createTable(@Param("schemaName") String schemaName,@Param("table") TableDesc table, @Param("columns") List<TableColumnDesc> columns);

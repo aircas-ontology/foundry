@@ -31,8 +31,12 @@ public class TreeExecuteInputsVO {
     private List<TreeExecuteInputVO> inputParams = new ArrayList<>();
 
     @Schema(name = "instanceRequirements", description = "需要实例的数据来源，按对象逐个列出：行为取属性数据，或黑板键读对象属性；"
-            + "实例主键由执行请求按对象给")
+            + "实例主键由执行请求按对象给；行为绑定关系时还带关系两端的对象，按 from、to 传实例")
     private List<TreeInstanceRequirementVO> instanceRequirements = new ArrayList<>();
+
+    @Schema(name = "outputParams", description = "各节点要写回的数据位置，按写回行逐条列出：写哪个对象、哪个存储分组、要不要给行主键；"
+            + "调用方在 nodeExecutes[节点标识].outputParams[key] 或 dataPrimaryKey 里给实例和行")
+    private List<TreeOutputTargetVO> outputParams = new ArrayList<>();
 
     public List<TreeExecuteInputVO> getInputParams() {
         return inputParams == null ? new ArrayList<>() : inputParams;
@@ -40,5 +44,9 @@ public class TreeExecuteInputsVO {
 
     public List<TreeInstanceRequirementVO> getInstanceRequirements() {
         return instanceRequirements == null ? new ArrayList<>() : instanceRequirements;
+    }
+
+    public List<TreeOutputTargetVO> getOutputParams() {
+        return outputParams == null ? new ArrayList<>() : outputParams;
     }
 }
