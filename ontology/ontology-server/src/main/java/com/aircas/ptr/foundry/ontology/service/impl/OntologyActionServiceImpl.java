@@ -4289,7 +4289,6 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
 
     @Override
     public ActionSchedulingDetailVO getSchedulingDetailById(Long id, ActionSchedulingTypeEnum type) {
-        //todo 只考虑定时任务
         if (ActionSchedulingTypeEnum.TASK.equals(type)) {
             var handleTask = actionHandleTaskService.getById(id);
             PreconditionUtils.checkNotNull(handleTask, "定时调度任务不存在：" + id);

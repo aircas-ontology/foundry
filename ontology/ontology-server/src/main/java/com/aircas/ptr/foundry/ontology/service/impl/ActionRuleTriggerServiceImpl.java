@@ -337,6 +337,10 @@ public class ActionRuleTriggerServiceImpl implements ActionRuleTriggerService {
 
     /** 实例属性值：按属性唯一标识与 apiName 双键索引（主存储取首个值） */
     private Map<String, Object> loadInstanceValues(String ontologyUid, Object pk) {
+        // 主键来自规则操作数/CDC 事件时是字符串，PG 整型列无法与 varchar 比较，数字串需还原为数值
+        if (pk instanceof String s && s.matches("-?\\d+")) {
+            pk = Long.valueOf(s);
+        }
         Map<String, Object> map = new HashMap<>();
         List<EntityPropertyDetailVO> details = entityService.getEntityDetail(ontologyUid, pk);
         if (details == null) {
