@@ -194,7 +194,7 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
                 .collect(Collectors.joining("、"));
         PreconditionUtils.checkArgument(StringUtils.isBlank(unknown),
                 "按节点传的执行数据里这些标识不是本树的行为节点：" + unknown
-                        + "；nodeExecutes 的键要用行为节点的标识（详情接口 executeInputs 里的 nodeIds）", HttpStatus.BAD_REQUEST);
+                        + "；nodeExecutes 的键要用行为节点的标识（详情接口 executeInputs.nodes 里的 nodeId）", HttpStatus.BAD_REQUEST);
     }
 
     private static void collectActionNodeIds(List<BehaviorTreeNode> nodes, Set<String> collector) {
