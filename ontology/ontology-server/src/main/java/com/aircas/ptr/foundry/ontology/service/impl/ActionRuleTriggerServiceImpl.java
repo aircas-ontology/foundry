@@ -244,11 +244,13 @@ public class ActionRuleTriggerServiceImpl implements ActionRuleTriggerService {
         List<Object> tokens = new ArrayList<>();
         for (int i = 0; i < items.size(); i++) {
             var item = items.get(i);
-            if (Boolean.TRUE.equals(item.getIsLeft())) {
+            int leftBrackets = item.getIsLeft() == null ? 0 : item.getIsLeft();
+            for (int k = 0; k < leftBrackets; k++) {
                 tokens.add('(');
             }
             tokens.add(evalJudgeItem(item, instanceCache));
-            if (Boolean.TRUE.equals(item.getIsRight())) {
+            int rightBrackets = item.getIsRight() == null ? 0 : item.getIsRight();
+            for (int k = 0; k < rightBrackets; k++) {
                 tokens.add(')');
             }
             if (i < items.size() - 1) {
@@ -373,38 +375,48 @@ public class ActionRuleTriggerServiceImpl implements ActionRuleTriggerService {
     }
 
     private boolean evaluateCondition(ActionHandleRuleAddConditionEnum condition, Object actual, String expected) {
-        if (condition == null || actual == null) {
+        if (condition == null || actual == null || expected == null) {
             return false;
         }
-        Integer cmp = compare(actual, expected);
-        if (cmp == null) {
-            return false;
-        }
+        var actualStr = String.valueOf(actual);
         switch (condition) {
+            case CONTAINS:
+                return actualStr.contains(expected);
+            case NOT_CONTAINS:
+                return !actualStr.contains(expected);
             case LT:
-                return cmp < 0;
             case LE:
-                return cmp <= 0;
-            case EQ:
-                return cmp == 0;
-            case NE:
-                return cmp != 0;
             case GT:
-                return cmp > 0;
             case GE:
-                return cmp >= 0;
+                // 大小比较只支持数字，非数字操作数直接不成立
+                var a = toBigDecimal(actualStr);
+                var b = toBigDecimal(expected);
+                if (a == null || b == null) {
+                    return false;
+                }
+                int c = a.compareTo(b);
+                if (condition == ActionHandleRuleAddConditionEnum.LT) {
+                    return c < 0;
+                }
+                if (condition == ActionHandleRuleAddConditionEnum.LE) {
+                    return c <= 0;
+                }
+                if (condition == ActionHandleRuleAddConditionEnum.GT) {
+                    return c > 0;
+                }
+                return c >= 0;
+            case EQ:
+                return compare(actualStr, expected) == 0;
+            case NE:
+                return compare(actualStr, expected) != 0;
             default:
                 // CH（变化）不支持：规则调度只做当前值比较
                 return false;
         }
     }
 
-    /** 数值优先比较；非数值退化为字符串比较（EQ/NE 有意义，大小按字典序）。无法比较返回 null */
-    private Integer compare(Object actual, String expected) {
-        if (expected == null) {
-            return null;
-        }
-        var actualStr = String.valueOf(actual);
+    /** 等于/不等于：两边都是数字按数值比（100 与 100.0 相等），否则按字符串精确比较 */
+    private int compare(String actualStr, String expected) {
         var a = toBigDecimal(actualStr);
         var b = toBigDecimal(expected);
         if (a != null && b != null) {

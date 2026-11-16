@@ -3193,8 +3193,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 // 把本次执行结果回填到调度日志表（XxlJobHandler 已按 scheduleId 插入日志行，取最新一条）
                 var handleLog = actionHandleLogMapper.selectOne(new LambdaQueryWrapper<ActionHandleLog>()
                         .eq(ActionHandleLog::getActionHandleId, xxlParam.getScheduleId())
-                        .orderByDesc(ActionHandleLog::getId)
-                        .last("limit 1"));
+                        .orderByDesc(ActionHandleLog::getId), false);
                 if (handleLog != null) {
                     actionHandleLogMapper.updateById(handleLog.setExecuteResult(executeResult));
                 }
@@ -4480,13 +4479,13 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 PreconditionUtils.checkNotNull(item.getCondition(), "judgeParams 缺少比较操作符 condition", HttpStatus.BAD_REQUEST);
                 PreconditionUtils.checkArgument(item.getCondition() != ActionHandleRuleAddConditionEnum.CH,
                         "规则调度不支持 CH（变化）比较", HttpStatus.BAD_REQUEST);
-                if (Boolean.TRUE.equals(item.getIsLeft())) {
-                    depth++;
-                }
-                if (Boolean.TRUE.equals(item.getIsRight())) {
-                    depth--;
-                    PreconditionUtils.checkArgument(depth >= 0, "judgeParams 右括号多余", HttpStatus.BAD_REQUEST);
-                }
+                int leftBrackets = item.getIsLeft() == null ? 0 : item.getIsLeft();
+                int rightBrackets = item.getIsRight() == null ? 0 : item.getIsRight();
+                PreconditionUtils.checkArgument(leftBrackets >= 0 && rightBrackets >= 0,
+                        "judgeParams 括号个数不能为负", HttpStatus.BAD_REQUEST);
+                depth += leftBrackets;
+                depth -= rightBrackets;
+                PreconditionUtils.checkArgument(depth >= 0, "judgeParams 右括号多余", HttpStatus.BAD_REQUEST);
                 if (i < items.size() - 1) {
                     PreconditionUtils.checkNotNull(item.getLinkFlag(), "非末条 judgeParams 必须给 linkFlag", HttpStatus.BAD_REQUEST);
                 }
