@@ -144,6 +144,13 @@ public class EntityServiceImpl implements EntityService {
     private final com.fasterxml.jackson.databind.ObjectMapper jsonMapper = new com.fasterxml.jackson.databind.ObjectMapper();
 
     /**
+     * 仅用于解析行为入参的固定值字面量：默认 mapper 读到第一个 JSON token 就返回，
+     * TLE 两行根数这类「数字开头+空格+文字」会被静默截成前导数字，故要求整串都是 JSON。
+     */
+    private final com.fasterxml.jackson.databind.ObjectMapper fixedValueMapper = new com.fasterxml.jackson.databind.ObjectMapper()
+            .enable(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
+
+    /**
      * 宽容解析算子执行结果。
      * <p>脚本返回标量（如 {@code a+b}）或数组时根节点不是对象，按 VO 反序列化会抛
      * MismatchedInputException，故非对象根返回 null。解析出的 VO 只用于判断异步 taskId
@@ -2264,13 +2271,13 @@ public class EntityServiceImpl implements EntityService {
         return scoped == null ? null : scoped.get(propertyUniqueIdentifier);
     }
 
-    /** 固定值按 JSON 字面量解析，前端直接传一段文本时按原样返回 */
+    /** 固定值按完整 JSON 字面量解析，整串不是合法 JSON 时按原文本返回 */
     private Object parseFixedValue(String sourceConfig) {
         if (StringUtils.isEmpty(sourceConfig)) {
             return null;
         }
         try {
-            return jsonMapper.readValue(sourceConfig, Object.class);
+            return fixedValueMapper.readValue(sourceConfig, Object.class);
         } catch (Exception e) {
             return sourceConfig;
         }

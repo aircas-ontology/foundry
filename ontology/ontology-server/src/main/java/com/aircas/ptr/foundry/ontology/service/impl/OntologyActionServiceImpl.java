@@ -185,6 +185,13 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
 
     private final com.fasterxml.jackson.databind.ObjectMapper jsonMapper = new com.fasterxml.jackson.databind.ObjectMapper();
 
+    /**
+     * 仅用于解析固定值字面量：默认 mapper 读到第一个 JSON token 就返回，
+     * TLE 两行根数这类「数字开头+空格+文字」会被静默截成前导数字，故要求整串都是 JSON。
+     */
+    private final com.fasterxml.jackson.databind.ObjectMapper fixedValueMapper = new com.fasterxml.jackson.databind.ObjectMapper()
+            .enable(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
+
     @Override
     public void removeByOntologyIdentifier(String ontologyIdentifier) {
         var actions = list(new LambdaQueryWrapper<OntologyAction>()
@@ -3567,13 +3574,13 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         return values;
     }
 
-    /** 固定值按 JSON 字面量解析，不是合法 JSON 时按原文本返回 */
+    /** 固定值按完整 JSON 字面量解析，整串不是合法 JSON 时按原文本返回 */
     private Object parseFixedValue(String sourceConfig) {
         if (StringUtils.isEmpty(sourceConfig)) {
             return null;
         }
         try {
-            return jsonMapper.readValue(sourceConfig, Object.class);
+            return fixedValueMapper.readValue(sourceConfig, Object.class);
         } catch (Exception e) {
             return sourceConfig;
         }
