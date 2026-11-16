@@ -54,7 +54,9 @@ public class TreeBatchExecuteParam {
     private Map<String, TreeNodeExecuteParam> nodeExecutes;
 
     @Schema(name = "dataPrimaryKey",
-            description = "分组表行主键：属性值-修改/删除用来定位具体一行；所有实例共用",
+            description = "分组表行主键：属性值-修改/删除用来定位具体一行；所有实例共用。"
+                    + "黑板键绑定的属性不在主属性分组时，批量执行没有按实例选分组行的位置，只能用它指一行回读；"
+                    + "不给且存在这类黑板键时执行前报错",
             example = "123")
     private Object dataPrimaryKey;
 

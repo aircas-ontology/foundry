@@ -292,6 +292,16 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
         return value == null || value.isEmpty() ? inputDataPrimaryKeys : value;
     }
 
+    /** 全树共用的分组行主键（对象id -> 分组 -> 行主键）；黑板是树级变量，回读不认节点级覆盖 */
+    public Map<String, Map<String, Object>> executionInputDataPrimaryKeys() {
+        return inputDataPrimaryKeys;
+    }
+
+    /** 全树共用的数据行主键 */
+    public Object executionDataPrimaryKey() {
+        return dataPrimaryKey;
+    }
+
     /** 本节点用的出参分组行主键（对象id -> 分组 -> 行主键） */
     public Map<String, Map<String, Object>> nodeOutputDataPrimaryKeys(String nodeId) {
         var value = nodeData(nodeId).getOutputDataPrimaryKeys();

@@ -672,6 +672,34 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     }
 
     /**
+     * 对象属性来源的黑板键里属性不在主分组的，按 对象 → 存储分组 → 黑板键 归类。
+     * 主分组一行就是实例本身，不用再选行；其他分组一个实例下有多行，执行前要再选该分组的一行，条件求值前从这一行回读。
+     */
+    private Map<String, Map<String, List<String>>> treeBlackboardPropertyRowGroups(BehaviorTreeDefinition tree) {
+        var properties = boundTreeProperties(tree);
+        Map<String, Map<String, List<String>>> groups = new LinkedHashMap<>();
+        for (var item : tree.getBlackboard()) {
+            if (item.resolvedSource() != BehaviorBlackboardSourceEnum.PROPERTY
+                    || StringUtils.isBlank(item.getKey())) {
+                continue;
+            }
+            var property = properties.get(item.getBindPropertyUniqueIdentifier());
+            if (property == null || StringUtils.isBlank(property.getOntologyUniqueIdentifier())) {
+                continue;
+            }
+            var group = StringUtils.isBlank(property.getStorageGroup())
+                    ? MAIN_STORAGE_GROUP : property.getStorageGroup();
+            if (MAIN_STORAGE_GROUP.equals(group)) {
+                continue;
+            }
+            groups.computeIfAbsent(property.getOntologyUniqueIdentifier(), ignored -> new LinkedHashMap<>())
+                    .computeIfAbsent(group, ignored -> new ArrayList<>())
+                    .add(item.getKey());
+        }
+        return groups;
+    }
+
+    /**
      * 变量给黑板键提供兜底默认值，只校验给了的那些：键名必须已声明、类型必须一致，否则执行期读到 null 或读错类型。
      * <p>只有外部输入来源的黑板键用变量默认值兜底：固定值取黑板项自己的 value，对象属性每次条件求值按实例重读，
      * 给它们配默认值都读不到，保存期直接拒绝。也不要求覆盖每个键——外部输入可以没有兜底值，不传时该键就是空。</p>
@@ -1064,7 +1092,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     /**
      * 按绑定行为反推执行要求：逐个行为节点列出实例要求、算子入参（带取值来源）和写回位置，调用方按节点在 nodeExecutes 里给数据。
      * <p>黑板键只管条件求值，不参与行为入参：来源是固定值的用黑板项自己的取值，外部输入不传就没有值（条件按空判断），
-     * 对象属性按库里的当前值刷新——属性所属的对象在 blackboardInstances 里单独列出，执行前要选好实例。</p>
+     * 对象属性按库里的当前值刷新——属性所属的对象在 blackboardInstances 里单独列出，执行前要选好实例；
+     * 属性不在主属性分组的，还要再选该分组的一行（blackboardInstances[].storageGroups），按 inputDataPrimaryKeys 传。</p>
      */
     private TreeExecuteInputsVO buildTreeExecuteInputs(BehaviorTreeDefinition tree, Integer spaceId) {
         Map<String, TreeActionNodeTemplate> templates = new HashMap<>();
@@ -1088,8 +1117,20 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                     .build());
         }
         var blackboardInstances = new ArrayList<TreeBlackboardInstanceVO>();
-        treeBlackboardPropertyObjects(tree).forEach((objectId, keys) -> blackboardInstances.add(
-                TreeBlackboardInstanceVO.builder().objectIdentifier(objectId).blackboardKeys(keys).build()));
+        var rowGroupsByObject = treeBlackboardPropertyRowGroups(tree);
+        treeBlackboardPropertyObjects(tree).forEach((objectId, keys) -> {
+            var storageGroups = new ArrayList<TreeBlackboardGroupVO>();
+            rowGroupsByObject.getOrDefault(objectId, Map.of()).forEach((group, groupKeys) ->
+                    storageGroups.add(TreeBlackboardGroupVO.builder()
+                            .storageGroup(group)
+                            .blackboardKeys(groupKeys)
+                            .build()));
+            blackboardInstances.add(TreeBlackboardInstanceVO.builder()
+                    .objectIdentifier(objectId)
+                    .blackboardKeys(keys)
+                    .storageGroups(storageGroups)
+                    .build());
+        });
         return TreeExecuteInputsVO.builder()
                 .entityPrimaryKeyRequired(!blackboardInstances.isEmpty()
                         || nodeViews.stream().anyMatch(TreeExecuteNodeVO::isEntityPrimaryKeyRequired))
@@ -1351,6 +1392,24 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 problems.add("缺少实例：" + String.join("、", missingPropertyInstances)
                         + "；来源是对象属性的黑板键要按对象选实例才能读到值，请用 entityPrimaryKey 或 entityPrimaryKeys 传");
             }
+            // 非主分组的属性一行定不到值：实例只定位对象，分组行还要单独选。dataPrimaryKey 是历史口径，仍认
+            var missingPropertyRows = new LinkedHashSet<String>();
+            if (runtime.executionDataPrimaryKey() == null) {
+                treeBlackboardPropertyRowGroups(tree).forEach((objectId, groupsByName) ->
+                        groupsByName.forEach((group, keys) -> {
+                            var rowKey = runtime.executionInputDataPrimaryKeys()
+                                    .getOrDefault(objectId, Map.of()).get(group);
+                            if (rowKey == null) {
+                                missingPropertyRows.add("对象 " + objectId + " 的分组 " + group
+                                        + "（黑板键 " + String.join("、", keys) + "）");
+                            }
+                        }));
+            }
+            if (!missingPropertyRows.isEmpty()) {
+                problems.add("缺少分组行数据：" + String.join("、", missingPropertyRows)
+                        + "；黑板键绑定的属性不在主属性分组时要按行回读，"
+                        + "请在 inputDataPrimaryKeys[对象标识][分组] 里传该组行主键");
+            }
         }
         if (!missingParams.isEmpty()) {
             problems.add("缺少行为入参：" + String.join("、", missingParams)
@@ -1405,6 +1464,26 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         throw new BusinessException("批量执行遍历的对象是 " + traversalObject
                 + "，每条实例只给这个对象的实例主键，但树里这些行为还要按各自对象取实例：" + detail
                 + "；请改用单次执行，在 entityPrimaryKeys 里按对象传实例主键", HttpStatus.BAD_REQUEST);
+    }
+
+    /**
+     * 批量执行只按对象遍历实例，没有按分组再选行的位置：黑板键绑定的属性在非主属性分组时，
+     * 每条实例该读哪一行无从指定，只能靠 dataPrimaryKey 指一行（历史口径），否则执行前拦下。
+     */
+    private void checkTreeBatchBlackboardRows(BehaviorTreeDefinition tree, TreeBatchExecuteParam param) {
+        if (param.getDataPrimaryKey() != null) {
+            return;
+        }
+        var missing = new ArrayList<String>();
+        treeBlackboardPropertyRowGroups(tree).forEach((objectId, groupsByName) ->
+                groupsByName.forEach((group, keys) -> missing.add("对象 " + objectId + " 的分组 " + group
+                        + "（黑板键 " + String.join("、", keys) + "）")));
+        if (missing.isEmpty()) {
+            return;
+        }
+        throw new BusinessException("批量执行没有给这些分组选行数据的位置：" + String.join("、", missing)
+                + "；黑板键绑定的属性不在主属性分组时要按行回读，请改用单次执行在 inputDataPrimaryKeys[对象标识][分组] 里传行主键，"
+                + "或给 dataPrimaryKey 指定一行", HttpStatus.BAD_REQUEST);
     }
 
     /**
@@ -1619,6 +1698,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         checkTreeExecuteInputs(definition, param.getOntologySpaceId(),
                 buildTreeRuntime(compiled, definition, null, param), false);
         checkTreeBatchInstanceScope(plan, param);
+        checkTreeBatchBlackboardRows(definition, param);
         var instanceSource = treeBatchInstanceSource(param.getOntologySpaceId(), param.getOntologyUniqueIdentifier());
         var includeSuccess = Boolean.TRUE.equals(param.getIncludeSuccess());
         var results = new ArrayList<TreeBatchInstanceResultVO>();
@@ -2102,7 +2182,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
      * 条件求值前把来源是对象属性的黑板键按库里的当前值重读一遍。
      * <p>行为不写黑板，属性值只能通过这条路进黑板：绑同一个对象的键合并成一次回读，
      * 定位不到实例或行里没有这个属性时不动黑板值，把原因写进节点说明，
-     * 否则条件会拿着上一次求值留下的值判成执行。</p>
+     * 否则条件会拿着上一次求值留下的值判成执行。实例与分组行取执行请求里全树共用的那份，
+     * 节点级覆盖不影响黑板——黑板是树级变量，不同节点不能读到不同的行。</p>
      */
     private void refreshTreeBlackboardProperties(String nodeId, TreeExecutionRuntime runtime) {
         var boundItems = runtime.getBlackboardItems().values().stream()
@@ -2144,7 +2225,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 return;
             }
             latestValues.putAll(readTreeRowPropertyValues(objectId, entityPrimaryKey,
-                    runtime.nodeInputDataPrimaryKeys(nodeId).get(objectId), runtime.nodeDataPrimaryKey(nodeId), props));
+                    runtime.executionInputDataPrimaryKeys().get(objectId), runtime.executionDataPrimaryKey(), props));
         });
         if (!noInstanceObjects.isEmpty()) {
             runtime.appendNodeMessage(nodeId, "对象 " + String.join("、", noInstanceObjects)

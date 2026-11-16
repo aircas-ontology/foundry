@@ -53,13 +53,15 @@ public class TreeExecuteParam {
     private Map<String, Object> entityPrimaryKeys;
 
     @Schema(name = "dataPrimaryKey",
-            description = "分组表行主键：属性值-修改/删除用来定位具体一行；全树共用",
+            description = "分组表行主键：属性值-修改/删除用来定位具体一行；全树共用。"
+                    + "黑板键绑定的属性不在主属性分组、又没按 inputDataPrimaryKeys 给分组行时，也用它回读（历史口径）",
             example = "123")
     private Object dataPrimaryKey;
 
     @Schema(name = "inputDataPrimaryKeys",
             description = "入参按行读取：对象id -> (存储分组 -> 行主键)，全树共用；"
-                    + "应用行为的属性入参按它取行；留空时取最新一行",
+                    + "应用行为的属性入参按它取行；黑板键绑定的属性不在主属性分组时也按它选该分组的一行回读；"
+                    + "留空时取最新一行",
             example = "{\"3f2a9c1e-7b4d-4a86-9e21-5c8d1f0a6b34\":{\"weapon_load\":11}}")
     private Map<String, Map<String, Object>> inputDataPrimaryKeys;
 
