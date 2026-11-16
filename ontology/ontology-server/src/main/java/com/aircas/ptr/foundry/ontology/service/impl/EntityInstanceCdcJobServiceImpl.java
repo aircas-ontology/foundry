@@ -12,6 +12,7 @@ import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyPropertyMap
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologySpaceMapper;
 import com.aircas.ptr.foundry.ontology.service.EntityInstanceCdcJobService;
 import com.aircas.ptr.foundry.ontology.service.EntityService;
+import com.aircas.ptr.foundry.ontology.service.ActionRuleTriggerService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -59,6 +60,9 @@ public class EntityInstanceCdcJobServiceImpl implements EntityInstanceCdcJobServ
     @Autowired
     EntityService entityService;
 
+    @Autowired
+    ActionRuleTriggerService actionRuleTriggerService;
+
     /** 图库未启用时（foundry.integration.arangodb.enabled=false）跳过全部图同步 */
     @Value("${foundry.integration.arangodb.enabled:true}")
     boolean graphEnabled;
@@ -74,7 +78,7 @@ public class EntityInstanceCdcJobServiceImpl implements EntityInstanceCdcJobServ
             log.debug("表[{}.{}]非对象主表（从表），跳过实例同步", schema, table);
             return true;
         }
-        pkProps.forEach(pkProp -> syncInstance(schema, table, after, pkProp, true));
+        pkProps.forEach(pkProp -> syncInstance(schema, table, after, pkProp, true, after.keySet()));
         return true;
     }
 
@@ -88,6 +92,7 @@ public class EntityInstanceCdcJobServiceImpl implements EntityInstanceCdcJobServ
             log.debug("表[{}.{}]非对象主表（从表），跳过实例同步", schema, table);
             return true;
         }
+        Set<String> changedColumns = diffColumns(before, after);
         for (OntologyProperty pkProp : pkProps) {
             String pkColumn = pkProp.getDatasourceColumnName();
             Object newPkValue = OntologyInstanceConverter.getColumnValue(after, pkColumn);
@@ -101,9 +106,21 @@ public class EntityInstanceCdcJobServiceImpl implements EntityInstanceCdcJobServ
                 deleteGraphNode(pkProp.getOntologyUniqueIdentifier(), oldPkValue);
             }
             // 主键变更等同于新增实例：旧节点及相邻边已删，按新主键重建节点
-            syncInstance(schema, table, after, pkProp, pkChanged);
+            syncInstance(schema, table, after, pkProp, pkChanged, changedColumns);
         }
         return true;
+    }
+
+    /** 本次更新实际变化的列：before 缺失视为全列变更；否则取新增列与前后值不同的列 */
+    private Set<String> diffColumns(Map<String, Object> before, Map<String, Object> after) {
+        if (before == null) {
+            return after.keySet();
+        }
+        return after.entrySet().stream()
+                .filter(e -> !before.containsKey(e.getKey())
+                        || !Objects.equals(String.valueOf(before.get(e.getKey())), String.valueOf(e.getValue())))
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toSet());
     }
 
     @Override
@@ -132,10 +149,11 @@ public class EntityInstanceCdcJobServiceImpl implements EntityInstanceCdcJobServ
      * 将一行主表数据写入（upsert）ontology_instance 索引。
      * save 走实体索引路径，routing 由 @Routing("pk") 从文档 pk 自动解析，满足 _routing.required。
      *
-     * @param rebuildNode 是否按对象属性回查后完整重建图节点（湖侧新增行 / 主键变更重建传 true）
+     * @param rebuildNode    是否按对象属性回查后完整重建图节点（湖侧新增行 / 主键变更重建传 true）
+     * @param changedColumns 本次变更的列集合，规则调度按表+字段过滤触发
      */
     private void syncInstance(String schema, String table, Map<String, Object> row, OntologyProperty pkProp,
-                              boolean rebuildNode) {
+                              boolean rebuildNode, Set<String> changedColumns) {
         String pkColumn = pkProp.getDatasourceColumnName();
         Object pkValue = OntologyInstanceConverter.getColumnValue(row, pkColumn);
         if (pkValue == null) {
@@ -169,6 +187,12 @@ public class EntityInstanceCdcJobServiceImpl implements EntityInstanceCdcJobServ
             ontologyInstanceRepository.save(dto);
             log.debug("数据湖[{}.{}]实例文档同步成功, pk={}", schema, table, dto.getPk());
             syncGraphNode(meta.getUniqueIdentifier(), table, row, pkValue, dto.getName(), rebuildNode);
+            // 实例插入/更新后触发规则调度（先按表+变更字段过滤，电平触发）；失败只记日志，不影响实例同步
+            try {
+                actionRuleTriggerService.onInstanceChange(meta.getUniqueIdentifier(), pkValue, table, changedColumns);
+            } catch (Exception e) {
+                log.error("规则调度触发失败, ontology={}, pk={}", meta.getUniqueIdentifier(), pkValue, e);
+            }
         }
     }
 

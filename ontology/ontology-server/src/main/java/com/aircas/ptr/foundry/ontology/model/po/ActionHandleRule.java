@@ -51,9 +51,11 @@ public class ActionHandleRule {
 
     private String description;
 
-    private String rules;
-
-    private Integer ruleConnectType;
+    /**
+     * 定稿规则结构 JSON（List&lt;RuleJudgeGroupParam&gt;）：组合条件（括号+AND/OR，可整体取反）+ 行为执行参数。
+     * 条件跨对象，CDC 按条件引用的实例定向触发；规则启用时先评估一遍存量数据
+     */
+    private String judgeJson;
 
     /**
      * 对象空间id
