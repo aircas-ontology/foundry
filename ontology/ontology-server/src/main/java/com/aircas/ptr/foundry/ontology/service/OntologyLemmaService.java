@@ -7,7 +7,7 @@ import com.aircas.ptr.foundry.ontology.model.param.OntologyStatisticLemmaUpdateP
 import com.aircas.ptr.foundry.ontology.model.po.OntologyLemma;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyLemmaTreeVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyLemmaVO;
-import com.baomidou.mybatisplus.extension.service.IService;
+import com.baomidou.mybatisplus.spring.service.IService;
 
 import java.util.List;
 

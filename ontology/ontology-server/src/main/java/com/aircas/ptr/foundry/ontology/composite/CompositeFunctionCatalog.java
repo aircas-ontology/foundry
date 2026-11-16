@@ -38,8 +38,7 @@ public class CompositeFunctionCatalog {
             return null;
         }
         return functionMapper.selectOne(Wrappers.<Function>lambdaQuery()
-                .eq(Function::getApi, functionApi.trim())
-                .last("limit 1"));
+                .eq(Function::getApi, functionApi.trim()), false);
     }
 
     /** 按函数显示名+版本取函数定义，不存在返回 null */
@@ -52,7 +51,7 @@ public class CompositeFunctionCatalog {
         if (version != null && !version.trim().isEmpty()) {
             query.eq(Function::getVersion, version.trim());
         }
-        return functionMapper.selectOne(query.last("limit 1"));
+        return functionMapper.selectOne(query, false);
     }
 
     /** 按函数 id 取入参定义（按 paramOrder 升序，与 {@code executeFunction} 一致） */

@@ -32,7 +32,7 @@ import com.aircas.ptr.foundry.ontology.service.*;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Lists;
@@ -1173,8 +1173,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                             .eq(OntologyMeta::getOntologySpaceId, targetSpaceId)
                             .eq(OntologyMeta::getDisplayName, metaData.getDisplayName())
                             .eq(OntologyMeta::getStatus, Status.ENABLE.getValue())
-                            .orderByDesc(OntologyMeta::getId)
-                            .last("LIMIT 1"));
+                            .orderByDesc(OntologyMeta::getId), false);
                     if (meta != null) {
                         displayNameToUid.put(metaData.getDisplayName(), meta.getUniqueIdentifier());
                     }
@@ -1269,8 +1268,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                             .eq(OntologyMeta::getOntologySpaceId, targetSpaceId)
                             .eq(OntologyMeta::getDisplayName, metaData.getDisplayName())
                             .eq(OntologyMeta::getStatus, Status.ENABLE.getValue())
-                            .orderByDesc(OntologyMeta::getId)
-                            .last("LIMIT 1"));
+                            .orderByDesc(OntologyMeta::getId), false);
                     if (meta != null) {
                         displayNameToUid.put(metaData.getDisplayName(), meta.getUniqueIdentifier());
                     }

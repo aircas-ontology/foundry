@@ -3,7 +3,7 @@ package com.aircas.ptr.foundry.ontology.service;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyInstanceUrlSaveParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyInstanceUrl;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyInstanceUrlVO;
-import com.baomidou.mybatisplus.extension.service.IService;
+import com.baomidou.mybatisplus.spring.service.IService;
 
 import java.util.List;
 

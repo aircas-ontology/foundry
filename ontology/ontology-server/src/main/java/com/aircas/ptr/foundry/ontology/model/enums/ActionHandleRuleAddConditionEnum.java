@@ -20,6 +20,8 @@ public enum ActionHandleRuleAddConditionEnum {
     NE("!=", "不等于"),
     GT(">", "大于"),
     GE(">=", "大于等于"),
+    CONTAINS("contains", "包含"),
+    NOT_CONTAINS("notContains", "不包含"),
     CH("!=", "变化");
 
     private final String code;

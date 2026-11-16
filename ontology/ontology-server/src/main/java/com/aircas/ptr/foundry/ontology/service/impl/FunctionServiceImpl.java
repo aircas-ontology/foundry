@@ -86,7 +86,7 @@ import com.aircas.ptr.foundry.ontology.utils.ContainerUploadRegistry;
 import com.aircas.ptr.foundry.ontology.utils.CompositeValidator;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -689,12 +689,12 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
      */
     private int[] resolveRateLimit(Integer spaceId, String functionApi, String version) {
         if (spaceId != null) {
+            // MP 3.5.18 selectOne 内部走分页会追加 LIMIT，不能再 last("LIMIT 1")，否则拼成 LIMIT 1 LIMIT ? 非法 SQL
             var scoped = getOne(new LambdaQueryWrapper<Function>()
                     .select(Function::getRateLimitConfig)
                     .eq(Function::getOntologySpaceId, spaceId)
                     .eq(Function::getApi, functionApi)
-                    .eq(Function::getVersion, version)
-                    .last("LIMIT 1"));
+                    .eq(Function::getVersion, version), false);
             if (scoped != null) {
                 return parseRateLimitConfig(scoped, functionApi);
             }
@@ -707,8 +707,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         var function = getOne(new LambdaQueryWrapper<Function>()
                 .select(Function::getRateLimitConfig)
                 .eq(Function::getApi, functionApi)
-                .eq(Function::getVersion, version)
-                .last("LIMIT 1"));
+                .eq(Function::getVersion, version), false);
         return parseRateLimitConfig(function, functionApi);
     }
 
