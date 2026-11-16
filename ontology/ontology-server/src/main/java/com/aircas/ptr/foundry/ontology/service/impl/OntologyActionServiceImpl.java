@@ -4164,6 +4164,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                     .name(param.getName())
                     .description(param.getDescription())
                     .judgeJson(writeJudgeJson(ruleParam.getJudgeRules()))
+                    .flowDocument(ruleParam.getFlowDocument())
                     .status(ScheduleStatus.STOP)
                     .build();
             actionHandleRuleService.save(handleRule);
@@ -4230,7 +4231,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                     .setOntologySpaceId(action.getOntologySpaceId())
                     .setName(param.getName())
                     .setDescription(param.getDescription())
-                    .setJudgeJson(writeJudgeJson(ruleParam.getJudgeRules()));
+                    .setJudgeJson(writeJudgeJson(ruleParam.getJudgeRules()))
+                    .setFlowDocument(ruleParam.getFlowDocument());
             actionHandleRuleService.updateById(handleRule);
         }
     }
@@ -4346,6 +4348,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                     .ontologyIdentifier(handleRule.getOntologyIdentifier())
                     .ruleVO(ActionHandleRuleVO.builder()
                             .judgeRules(readJudgeJson(handleRule.getJudgeJson()))
+                            .flowDocument(handleRule.getFlowDocument())
                             .build())
                     .status(handleRule.getStatus())
                     .build();
