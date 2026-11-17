@@ -32,14 +32,16 @@ public interface OntologyActionService extends IService<OntologyAction> {
     /**
      * 发布行为：草稿的行为置为已发布，才对智能体和调度可用。
      * 绑算子的行为要求算子已发布，否则执行时取不到可用版本。
+     * <p>行为树走同一个接口：树没有版本，状态就是唯一开关，发布前会用库里的树定义重新校验一次。</p>
      *
      * @param ontologySpaceId 对象空间id
-     * @param actionApi       行为 api
+     * @param actionApi       行为 api，行为 api 只在空间内唯一，发布必须带空间定位
      */
     void publishAction(Integer ontologySpaceId, String actionApi);
 
     /**
-     * 撤回发布：已发布的行为退回草稿状态。
+     * 撤回发布：已发布的行为退回草稿状态，行为树的下线同样走这里。
+     * <p>被行为树引用的行为不能撤回；树的下线要同时失效编译缓存，否则缓存里的旧树仍会被执行。</p>
      *
      * @param ontologySpaceId 对象空间id
      * @param actionApi       行为 api
@@ -47,16 +49,6 @@ public interface OntologyActionService extends IService<OntologyAction> {
     void unpublishAction(Integer ontologySpaceId, String actionApi);
 
     void deleteActionByApi(Integer ontologySpaceId, String actionApi);
-
-    /**
-     * 发布或下线行为树。行为没有版本，状态就是唯一开关；发布前会用库里的树定义重新校验一次。
-     * <p>行为 api 只在空间内唯一，发布必须带空间定位，避免跨空间同名树被误改状态。</p>
-     *
-     * @param ontologySpaceId 行为树所属的对象空间id
-     * @param actionApi       行为树的 api
-     * @param status          1 发布，0 下线
-     */
-    void publishTree(Integer ontologySpaceId, String actionApi, Integer status);
 
     /**
      * 分页查行为/行为树列表。

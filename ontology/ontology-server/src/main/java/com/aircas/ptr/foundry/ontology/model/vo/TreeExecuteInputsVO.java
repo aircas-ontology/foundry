@@ -30,7 +30,8 @@ public class TreeExecuteInputsVO {
     @Schema(name = "nodes", description = "行为节点逐个列出：每个节点要用的实例、外部入参和写回位置，按节点在 nodeExecutes 里给")
     private List<TreeExecuteNodeVO> nodes = new ArrayList<>();
 
-    @Schema(name = "blackboardInstances", description = "黑板里来源是对象属性的键要按对象选实例；实例由执行请求的 entityPrimaryKeys 给")
+    @Schema(name = "blackboardInstances", description = "黑板里来源是对象属性的键要按对象选实例；实例由执行请求的 entityPrimaryKeys 给。"
+            + "属性不在主属性分组的条目还带 storageGroups，要按 inputDataPrimaryKeys[对象标识][分组] 再选该分组的一行")
     private List<TreeBlackboardInstanceVO> blackboardInstances = new ArrayList<>();
 
     public List<TreeExecuteNodeVO> getNodes() {

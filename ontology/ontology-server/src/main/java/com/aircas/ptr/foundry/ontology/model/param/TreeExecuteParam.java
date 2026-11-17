@@ -20,8 +20,10 @@ import java.util.Map;
  * 基础算子这类按对象做条件/聚合查询的行为直接带对象标识执行，不需要具体实例。
  * 一棵树里的行为可以涉及多个对象类型，都按 entityPrimaryKey 定位同一个主键；
  * 多个对象类型各要实例时用 entityPrimaryKeys 按对象分开传。
- * 黑板变量只用来决定节点执行不执行，和执行入参是两套东西：inputs 只覆盖来源是外部输入的黑板键，
- * 固定值取声明值，对象属性来源的键在每次条件求值前按库里的当前值重读。</p>
+ * 黑板变量和执行入参是两套东西：inputs 只覆盖来源是外部输入的黑板键，固定值取声明值，
+ * 对象属性来源的键在每次条件求值前按库里的当前值重读。
+ * 行为节点上配了取值来源（黑板变量/上游行为出参）的入参不在执行要求里，值由节点配的来源供，
+ * 这份请求再传同名值会被拒绝。</p>
  */
 @Data
 @SuperBuilder
@@ -53,13 +55,15 @@ public class TreeExecuteParam {
     private Map<String, Object> entityPrimaryKeys;
 
     @Schema(name = "dataPrimaryKey",
-            description = "分组表行主键：属性值-修改/删除用来定位具体一行；全树共用",
+            description = "分组表行主键：属性值-修改/删除用来定位具体一行；全树共用。"
+                    + "黑板键绑定的属性不在主属性分组、又没按 inputDataPrimaryKeys 给分组行时，也用它回读（历史口径）",
             example = "123")
     private Object dataPrimaryKey;
 
     @Schema(name = "inputDataPrimaryKeys",
             description = "入参按行读取：对象id -> (存储分组 -> 行主键)，全树共用；"
-                    + "应用行为的属性入参按它取行；留空时取最新一行",
+                    + "应用行为的属性入参按它取行；黑板键绑定的属性不在主属性分组时也按它选该分组的一行回读；"
+                    + "留空时取最新一行",
             example = "{\"3f2a9c1e-7b4d-4a86-9e21-5c8d1f0a6b34\":{\"weapon_load\":11}}")
     private Map<String, Map<String, Object>> inputDataPrimaryKeys;
 
