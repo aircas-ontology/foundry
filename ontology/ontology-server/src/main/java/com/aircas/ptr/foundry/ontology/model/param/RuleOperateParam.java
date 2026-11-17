@@ -27,6 +27,10 @@ public class RuleOperateParam {
     @Schema(name = "entityId", description = "实例对象主键；type=dynamic 必填", example = "3")
     private String entityId;
 
+    @Schema(name = "dataPrimaryKey", description = "子表数据行主键；type=dynamic 可选。属性在扩展存储分组时指定取哪一行的值，"
+            + "不传沿用原口径（扩展表按主键倒序取最新行）；属性在主表时忽略", example = "12")
+    private String dataPrimaryKey;
+
     @Schema(name = "propertyName", description = "属性名（apiName）快照；propertyId 查不到值时按它兜底", example = "longitude")
     private String propertyName;
 

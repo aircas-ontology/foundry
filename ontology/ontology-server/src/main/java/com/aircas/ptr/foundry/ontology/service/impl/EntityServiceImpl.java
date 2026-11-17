@@ -445,8 +445,9 @@ public class EntityServiceImpl implements EntityService {
      * 取实例属性详情。rowKeysByGroup 指定的分组按行精确取值（分组名 -> 行主键），
      * 没指定的分组沿用原口径（扩展表按主键倒序取最多 10 行）。
      */
-    private List<EntityPropertyDetailVO> getEntityDetail(String ontologyUniqueIdentifier, Object entityPrimaryKey,
-                                                         Map<String, Object> rowKeysByGroup) {
+    @Override
+    public List<EntityPropertyDetailVO> getEntityDetail(String ontologyUniqueIdentifier, Object entityPrimaryKey,
+                                                        Map<String, Object> rowKeysByGroup) {
         List<EntityPropertyDetailVO> res = Lists.newArrayList();
         var props = propertyMapper.selectList(new LambdaQueryWrapper<OntologyProperty>()
                         .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier))

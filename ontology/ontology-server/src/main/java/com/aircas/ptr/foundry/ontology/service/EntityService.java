@@ -53,6 +53,14 @@ public interface EntityService {
 
     List<EntityPropertyDetailVO> getEntityDetail(String ontologyUniqueIdentifier, Object entityPrimaryKey);
 
+    /**
+     * 取实例属性详情，扩展存储分组可按行精确取值。
+     *
+     * @param rowKeysByGroup 分组名 -> 行主键；指定的分组只取该行（校验行属于本实例），没指定的分组沿用原口径（按主键倒序取最多 10 行）
+     */
+    List<EntityPropertyDetailVO> getEntityDetail(String ontologyUniqueIdentifier, Object entityPrimaryKey,
+                                                 Map<String, Object> rowKeysByGroup);
+
     Page<EntityInfoVO> getEntities(String ontologyUniqueIdentifier, String propertyName, Object propertyValue, Integer pageNum, Integer pageSize, Boolean needFilterVisibility);
 
     List<EntityNode> getByByOntologyUniqIdentifier(String ontologyIdentifier);
