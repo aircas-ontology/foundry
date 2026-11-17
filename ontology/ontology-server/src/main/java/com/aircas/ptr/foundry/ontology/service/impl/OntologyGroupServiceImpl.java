@@ -92,7 +92,7 @@ public class OntologyGroupServiceImpl extends ServiceImpl<OntologyGroupMapper, O
 
     @Override
     public List<OntologyGroupInfoVO> getGroupBySpaceId(Integer spaceId) {
-        var list = list(new LambdaQueryWrapper<OntologyGroup>().like(OntologyGroup::getOntologySpaceId, spaceId));
+        var list = list(new LambdaQueryWrapper<OntologyGroup>().eq(OntologyGroup::getOntologySpaceId, spaceId));
         return list.stream().map(v -> OntologyGroupInfoVO.builder()
                         .groupId(v.getGroupId())
                         .groupName(v.getGroupName())
