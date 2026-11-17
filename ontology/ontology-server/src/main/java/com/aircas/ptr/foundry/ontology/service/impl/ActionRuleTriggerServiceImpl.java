@@ -312,7 +312,7 @@ public class ActionRuleTriggerServiceImpl implements ActionRuleTriggerService {
         return evaluateCondition(item.getCondition(), left, right == null ? null : String.valueOf(right));
     }
 
-    /** fixed 用固定值；dynamic 实时取实例属性当前值，propertyId 优先、propertyName 兜底，同实例一次评估内只取一遍 */
+    /** fixed 用固定值；dynamic 实时取实例属性当前值，propertyId 优先、propertyName 兜底，同实例同一行一次评估内只取一遍 */
     private Object resolveJudgeOperate(RuleOperateParam operate, Map<String, Map<String, Object>> instanceCache) {
         if (operate == null) {
             return null;
@@ -324,9 +324,9 @@ public class ActionRuleTriggerServiceImpl implements ActionRuleTriggerService {
                 || StringUtils.isBlank(operate.getOntologyId()) || StringUtils.isBlank(operate.getEntityId())) {
             return null;
         }
-        String instanceKey = operate.getOntologyId() + ":" + operate.getEntityId();
-        var values = instanceCache.computeIfAbsent(instanceKey,
-                k -> loadInstanceValues(operate.getOntologyId(), operate.getEntityId()));
+        String instanceKey = operate.getOntologyId() + ":" + operate.getEntityId()
+                + ":" + StringUtils.defaultString(operate.getDataPrimaryKey());
+        var values = instanceCache.computeIfAbsent(instanceKey, k -> loadInstanceValues(operate));
         Object value = null;
         if (StringUtils.isNotBlank(operate.getPropertyId())) {
             value = values.get(operate.getPropertyId());
@@ -337,14 +337,26 @@ public class ActionRuleTriggerServiceImpl implements ActionRuleTriggerService {
         return value;
     }
 
-    /** 实例属性值：按属性唯一标识与 apiName 双键索引（主存储取首个值） */
-    private Map<String, Object> loadInstanceValues(String ontologyUid, Object pk) {
+    /**
+     * 实例属性值：按属性唯一标识与 apiName 双键索引（主存储取首个值）。
+     * 操作数给了子表行主键且属性在扩展分组时，只取该行的值；行不存在或不属于本实例会抛错，由上层记日志。
+     */
+    private Map<String, Object> loadInstanceValues(RuleOperateParam operate) {
         // 主键来自规则操作数/CDC 事件时是字符串，PG 整型列无法与 varchar 比较，数字串需还原为数值
+        Object pk = operate.getEntityId();
         if (pk instanceof String s && s.matches("-?\\d+")) {
             pk = Long.valueOf(s);
         }
+        Map<String, Object> rowKeysByGroup = null;
+        if (StringUtils.isNotBlank(operate.getDataPrimaryKey())) {
+            var group = propertyStorageGroup(operate);
+            // 主表行就是实例本身，行主键只对扩展分组有意义
+            if (StringUtils.isNotBlank(group) && !"main".equals(group)) {
+                rowKeysByGroup = Map.of(group, operate.getDataPrimaryKey());
+            }
+        }
         Map<String, Object> map = new HashMap<>();
-        List<EntityPropertyDetailVO> details = entityService.getEntityDetail(ontologyUid, pk);
+        List<EntityPropertyDetailVO> details = entityService.getEntityDetail(operate.getOntologyId(), pk, rowKeysByGroup);
         if (details == null) {
             return map;
         }
@@ -359,6 +371,20 @@ public class ActionRuleTriggerServiceImpl implements ActionRuleTriggerService {
             }
         }
         return map;
+    }
+
+    /** 操作数引用属性的存储分组：propertyId 优先、propertyName 兜底；属性查不到时返回 null 沿用原口径 */
+    private String propertyStorageGroup(RuleOperateParam operate) {
+        var wrapper = new LambdaQueryWrapper<OntologyProperty>()
+                .eq(OntologyProperty::getOntologyUniqueIdentifier, operate.getOntologyId())
+                .eq(OntologyProperty::getStatus, Status.ENABLE.getValue());
+        if (StringUtils.isNotBlank(operate.getPropertyId())) {
+            wrapper.eq(OntologyProperty::getUniqueIdentifier, operate.getPropertyId());
+        } else {
+            wrapper.eq(OntologyProperty::getApiName, operate.getPropertyName());
+        }
+        return propertyMapper.selectList(wrapper).stream().findFirst()
+                .map(OntologyProperty::getStorageGroup).orElse(null);
     }
 
     private boolean inCooldown(String key) {
