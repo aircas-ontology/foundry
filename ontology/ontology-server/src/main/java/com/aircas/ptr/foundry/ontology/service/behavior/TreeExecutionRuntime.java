@@ -40,12 +40,13 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /**
- * 一次树执行（单条实例）的运行时：黑板、节点执行痕迹、条件求值。
- * <p>黑板只是全局变量，用来决定节点执行不执行：固定值取黑板项自己的取值，外部输入由 inputs 覆盖、没传时回落到变量默认值，
- * 对象属性来源的键在每次条件求值前按库里的当前值重新读一遍。行为既不读黑板也不写黑板，
- * 它需要的外部入参只认节点自己的 nodeExecutes[节点].params，两个节点绑同一个行为时各给一套。
+ * 一次树执行（单条实例）的运行时：黑板、节点执行痕迹、条件求值、节点产出。
+ * <p>黑板是全局变量，既决定节点执行不执行，也能按节点上的绑定给行为供入参值：固定值取黑板项自己的取值，
+ * 外部输入由 inputs 覆盖、没传时回落到变量默认值（行为出参回传也写这类键），
+ * 对象属性来源的键在每次条件求值前按库里的当前值重新读一遍。
+ * 行为没在节点上配取值来源时，外部入参只认节点自己的 nodeExecutes[节点].params，两个节点绑同一个行为时各给一套。
  * 每次执行独立一个实例，behavior3java 的 Blackboard 只承载库内置节点的记忆状态。
- * 并行节点的多个分支共用一个运行时，所以黑板与节点痕迹按并发访问处理。</p>
+ * 并行节点的多个分支共用一个运行时，所以黑板、节点痕迹与节点产出按并发访问处理。</p>
  */
 @Slf4j
 public class TreeExecutionRuntime implements BehaviorTreeRuntime {
@@ -111,6 +112,17 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
     /** 节点标识 -> 执行痕迹；并行分支各写各的节点 */
     private final Map<String, BehaviorNodeTrace> traces = new ConcurrentHashMap<>();
 
+    /** 节点标识 -> 界面上的节点名称：失败提示给用户看名称，不露内部标识 */
+    private final Map<String, String> nodeNames = new LinkedHashMap<>();
+
+    /**
+     * 行为节点标识 -> 最近一次成功执行的产出（绑定的行为 + 返回体）。
+     * <p>下游节点按「节点 + 出参」引用它的值，只认成功那次的返回体，不回库里读——出参可能本来就只是返回不写实例，
+     * 也可能写的是另一个对象的实例。节点重新执行时覆盖，失败时清掉，循环里下游拿到的就是最后一轮的值。
+     * 并行分支各写各的节点，用并发 Map。</p>
+     */
+    private final Map<String, NodeOutput> nodeOutputs = new ConcurrentHashMap<>();
+
     /**
      * 当前线程上生效的限时截止时间。限时节点在本线程压栈，子树在并行分支线程执行时把快照带过去；
      * 只用于「超时后不再发起新的行为」，不中断已经开始的行为。
@@ -155,6 +167,7 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
         this.actionInvoker = actionInvoker;
         this.blackboardRefresher = blackboardRefresher;
         this.stepBudget = OntologyTreeNodes.MAX_LOOP_ITERATIONS * (countNodes(definition.getRoots()) + 1);
+        definition.getRoots().forEach(root -> collectNodeNames(root, nodeNames));
         definition.getBlackboard().forEach(item -> blackboardItems.put(item.getKey(), item));
         for (var variable : definition.getVariables()) {
             blackboard.put(variable.getName(), variable.getDefaultValue());
@@ -204,6 +217,18 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
             }
             collectActionNodeIds(node.getChildren(), collector);
         }
+    }
+
+    private static void collectNodeNames(BehaviorTreeNode node, Map<String, String> collector) {
+        if (StringUtils.isNotBlank(node.getDisplayName())) {
+            collector.putIfAbsent(node.getId(), node.getDisplayName());
+        }
+        node.getChildren().forEach(child -> collectNodeNames(child, collector));
+    }
+
+    /** 给用户看的节点称呼：界面上配的节点名称，没配名称才退回标识 */
+    public String nodeLabel(String nodeId) {
+        return nodeNames.getOrDefault(nodeId, nodeId);
     }
 
     public BehaviorTreeDefinition getDefinition() {
@@ -353,9 +378,37 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
         return spaceId;
     }
 
-    /** 只给属性刷新用：节点和行为的执行链路都不通过这里改黑板 */
+    /** 黑板写入：属性回读刷新，以及节点出参按配置回传；对象属性来源的键只接受写回同一属性的出参 */
     public void setBlackboardValue(String key, Object value) {
         blackboard.put(key, value);
+    }
+
+    /** 按黑板键取当前值；来源是对象属性的键要先调 {@link #refreshBlackboard} 才是库里的最新值 */
+    public Object blackboardValue(String key) {
+        return blackboard.get(key);
+    }
+
+    /** 读黑板值前刷新对象属性来源的键，让节点入参拿到的是这一刻库里的值，而不是上一次求值留下的 */
+    public void refreshBlackboard(String nodeId) {
+        blackboardRefresher.refresh(nodeId, this);
+    }
+
+    /** 行为节点执行成功后的产出：下游按「节点 + 出参」引用它的返回体 */
+    public void setNodeOutput(String nodeId, String actionApi, String resultJson) {
+        nodeOutputs.put(nodeId, new NodeOutput(actionApi, resultJson));
+    }
+
+    /** 节点失败或本轮没产出：清掉上一次的，下游引用它要按「拿不到就不执行」处理 */
+    public void clearNodeOutput(String nodeId) {
+        nodeOutputs.remove(nodeId);
+    }
+
+    public NodeOutput nodeOutput(String nodeId) {
+        return nodeOutputs.get(nodeId);
+    }
+
+    /** 一次成功执行的产出：行为 api 用于认出它声明的出参行，resultJson 是未剥壳的完整返回体 */
+    public record NodeOutput(String actionApi, String resultJson) {
     }
 
     @Override

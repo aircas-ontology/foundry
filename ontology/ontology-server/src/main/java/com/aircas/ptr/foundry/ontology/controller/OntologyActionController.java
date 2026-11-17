@@ -56,16 +56,7 @@ public class OntologyActionController {
         return RestResult.success();
     }
 
-    @Operation(summary = "发布或下线行为树")
-    @PostMapping("/publish")
-    public RestResult publishTree(@RequestParam(required = true, name = "ontologySpaceId") @Parameter(description = "对象空间id") Integer ontologySpaceId,
-                                  @RequestParam(required = true, name = "actionApi") @Parameter(description = "行为树api") String actionApi,
-                                  @RequestParam(required = true, name = "status") @Parameter(description = "1 发布，0 下线") Integer status) {
-        ontologyActionService.publishTree(ontologySpaceId, actionApi, status);
-        return RestResult.success();
-    }
-
-    @Operation(summary = "发布行为（草稿 -> 已发布，发布后对智能体和调度可用）")
+    @Operation(summary = "发布行为（草稿 -> 已发布，发布后对智能体和调度可用；行为树同样走这里，发布前会重校验整树定义）")
     @PutMapping("/publish")
     public RestResult publishAction(@RequestParam(required = true, name = "ontologySpaceId") @Parameter(description = "对象空间id") Integer ontologySpaceId,
                                     @RequestParam(required = true, name = "actionApi") @Parameter(description = "行为api") String actionApi) {
@@ -73,7 +64,7 @@ public class OntologyActionController {
         return RestResult.success();
     }
 
-    @Operation(summary = "撤回发布（已发布 -> 草稿）")
+    @Operation(summary = "撤回发布（已发布 -> 草稿，行为树的下线同样走这里）")
     @PutMapping("/unpublish")
     public RestResult unpublishAction(@RequestParam(required = true, name = "ontologySpaceId") @Parameter(description = "对象空间id") Integer ontologySpaceId,
                                       @RequestParam(required = true, name = "actionApi") @Parameter(description = "行为api") String actionApi) {

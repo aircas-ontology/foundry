@@ -58,6 +58,16 @@ public class TreeAvailableActionVO {
     @Schema(name = "outputParams", description = "算子出参")
     private List<TreeActionParamVO> outputParams = new ArrayList<>();
 
+    @Schema(name = "bindableInputs", description = "行为节点上可改取值来源的入参：行为绑定行声明的入参，"
+            + "与执行要求 executeInputs.nodes[].inputParams 同一套；name 就是 inputBindings 里那条的键")
+    private List<TreeActionParamVO> bindableInputs = new ArrayList<>();
+
+    @Schema(name = "bindableOutputs", description = "可被引用/回传黑板的出参：行为声明的出参绑定行，"
+            + "name 是三种可点名标识里能定到唯一一条的那个（属性唯一标识 > 出参字段名 > 顶层算子出参名），"
+            + "fieldName 是英文字段名（出参字段名，缺时退回算子出参名）仅供展示，description 是显示名；"
+            + "name 填进本节点 outputBindings 的键，或下游节点 inputBindings 里取上游出参那条的 output；没有返回体的基础行为为空")
+    private List<TreeActionParamVO> bindableOutputs = new ArrayList<>();
+
     public List<TreeActionParamVO> getInputParams() {
         return inputParams == null ? new ArrayList<>() : inputParams;
     }

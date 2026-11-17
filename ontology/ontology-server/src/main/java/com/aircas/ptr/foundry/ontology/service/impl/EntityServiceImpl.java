@@ -2086,6 +2086,8 @@ public class EntityServiceImpl implements EntityService {
                                         .link(link)
                                         .linkEntityPrimaryKey(linkedEntityDetail.get(0).getEntityPrimaryKey())
                                         .linkToOntologyUniqueIdentifier(linkedOntology)
+                                        // 行为节点的取值覆盖要带到算子调用侧，丢了节点上配的黑板/上游出参来源就退化成绑定行自己的来源
+                                        .paramValueOverrides(infoDTO.getParamValueOverrides())
                                         .build();
                                 //执行函数
                                 String functionResultJson = callFunction(contextInfoDTO);
@@ -2121,6 +2123,8 @@ public class EntityServiceImpl implements EntityService {
                     .entityPrimaryKeys(infoDTO.getEntityPrimaryKeys())
                     .objectProperties(infoDTO.getObjectProperties())
                     .entityActionExecuteParam(param)
+                    // 同上：无关系分支也要把节点级取值覆盖带下去
+                    .paramValueOverrides(infoDTO.getParamValueOverrides())
                     .build();
             var functionResultJson = callFunction(contextInfoDTO);
             //函数同步执行，更新结果
@@ -2196,6 +2200,11 @@ public class EntityServiceImpl implements EntityService {
                     .collect(Collectors.toList());
             if (paramMappings.isEmpty()) {
                 return new FunctionParameter().setParamName(p.getParamName());
+            }
+            // 行为节点给这个入参配了取值来源：整包按节点给的值用，不再逐字段拼——子字段行会被同一个值各自盖一遍
+            var nodeValue = paramValueOverride(actionContext, p.getParamName());
+            if (nodeValue != null) {
+                return FunctionParameter.builder().paramName(p.getParamName()).paramValue(nodeValue).build();
             }
             // 没有子字段路径即整包给这个参数一个值，与逐字段绑定改造前的行为一致
             boolean boundWhole = paramMappings.stream().noneMatch(m -> StringUtils.isNotEmpty(m.getParamPath()));
@@ -2321,6 +2330,13 @@ public class EntityServiceImpl implements EntityService {
      */
     private Object resolveInputValue(ActionParamMappingVO mapping, FunctionParamTypeEnum paramType,
                                      ActionContextInfoDTO actionContext, String ownerParamName) {
+        // 行为节点给这个入参配了取值来源（黑板变量/上游行为出参）时按节点给的算，属性、固定值来源也一样被覆盖
+        var overrideKey = StringUtils.isNotBlank(mapping.getParameterName())
+                ? mapping.getParameterName() : ownerParamName;
+        var nodeValue = paramValueOverride(actionContext, overrideKey);
+        if (nodeValue != null) {
+            return nodeValue;
+        }
         if (mapping.getSourceType() == ActionParamSourceEnum.FIXED) {
             return parseFixedValue(mapping.getSourceConfig());
         }
@@ -2336,6 +2352,15 @@ public class EntityServiceImpl implements EntityService {
             return null;
         }
         return FunctionParamTypeEnum.LIST.equals(paramType) ? values : values.get(0);
+    }
+
+    /** 行为树节点为该入参配的取值（黑板变量或上游行为出参）；非树执行或没配时返回 null，按绑定行自己的来源取 */
+    private Object paramValueOverride(ActionContextInfoDTO actionContext, String paramName) {
+        var overrides = actionContext.getParamValueOverrides();
+        if (MapUtils.isEmpty(overrides) || StringUtils.isBlank(paramName)) {
+            return null;
+        }
+        return overrides.get(paramName);
     }
 
     /** 该入参按 inputParams 单独加载的视图里此属性的取值；没指定过这个入参或视图里没有该属性时返回 null，由调用处回落共用视图 */
