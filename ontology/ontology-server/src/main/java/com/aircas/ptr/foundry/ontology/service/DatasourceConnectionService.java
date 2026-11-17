@@ -169,4 +169,36 @@ public interface DatasourceConnectionService extends IService<DatasourceConnecti
      * @return 数据源连接配置
      */
     DatasourceConnection getBySpaceId(Integer spaceId);
+
+    /**
+     * 按数据源 id 扫描 schema 清单，行为与 {@link #listSchemas(Integer)} 完全一致，
+     * 只是归属键从 spaceId 换成 {@code datasource_connection} 主键。
+     *
+     * <p>供「还没有绑定对象空间」的数据源使用——{@code /datasource/connection/list} 只列未绑定空间的记录，
+     * 那些记录按 spaceId 查不到，只能按 id 探。</p>
+     *
+     * @param datasourceId datasource_connection 表主键
+     * @return schema 清单；id 不存在或 JDBC URL 为空时抛业务异常
+     */
+    List<DatasourceSchemaVO> listSchemasByDatasource(Integer datasourceId);
+
+    /**
+     * 按数据源 id 扫描表清单 + 字段数，行为与 {@link #listTablesWithColumnCount(Integer, String)} 一致。
+     *
+     * @param datasourceId datasource_connection 表主键
+     * @param schemaName   外部库 schema 名（MySQL/MariaDB 上作为 catalog；其余厂商作为 schema 参数）
+     * @return 表名 + 表注释 + 字段数
+     */
+    List<DatasourceTableSummaryVO> listTablesWithColumnCountByDatasource(Integer datasourceId, String schemaName);
+
+    /**
+     * 按数据源 id 扫描多表列信息与表间外键，行为与 {@link #listTablesDetail(Integer, String, List)} 一致。
+     *
+     * @param datasourceId datasource_connection 表主键
+     * @param schemaName   外部库 schema 名（MySQL/MariaDB 上作为 catalog；其余厂商作为 schema 参数）
+     * @param tableNames   表名集合（区分大小写）；只有集合内部的表之间才会给出外键
+     * @return 每张表的列清单、主键列与指向其他勾选表的外键
+     */
+    List<DatasourceTableDetailVO> listTablesDetailByDatasource(Integer datasourceId, String schemaName,
+                                                              List<String> tableNames);
 }

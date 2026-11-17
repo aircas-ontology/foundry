@@ -92,6 +92,7 @@ public class DatasourceConnectionServiceImpl
         checkStatus(status);
         IPage<DatasourceConnection> page = baseMapper.selectPage(new Page<>(pageNum, pageSize),
                 new LambdaQueryWrapper<DatasourceConnection>()
+                        .isNull(DatasourceConnection::getSpaceId)
                         .and(StringUtils.isNotBlank(keyword), q -> q
                                 .like(DatasourceConnection::getName, keyword)
                                 .or()
@@ -115,7 +116,7 @@ public class DatasourceConnectionServiceImpl
         checkStatus(param.getStatus());
         checkSpaceNotTaken(param.getSpaceId(), null);
         DatasourceConnection po = DatasourceConnection.builder()
-                .spaceId(param.getSpaceId())
+                //.spaceId(param.getSpaceId())
                 .name(param.getName().trim())
                 .dbType(normalizeDbType(param.getDbType()))
                 // driver_class 列是 NOT NULL：留空存空串而不是 null，此时靠 JDBC 4+ 的驱动 SPI 自动注册
@@ -145,7 +146,7 @@ public class DatasourceConnectionServiceImpl
         // update_time 手动填——wrapper 更新没有实体对象，MetaObjectHandler 不生效
         baseMapper.update(null, new LambdaUpdateWrapper<DatasourceConnection>()
                 .eq(DatasourceConnection::getId, id)
-                .set(DatasourceConnection::getSpaceId, param.getSpaceId())
+               // .set(DatasourceConnection::getSpaceId, param.getSpaceId())
                 .set(DatasourceConnection::getName, param.getName().trim())
                 .set(DatasourceConnection::getDbType, normalizeDbType(param.getDbType()))
                 .set(DatasourceConnection::getDriverClass, StringUtils.defaultString(StringUtils.trim(param.getDriverClass())))
@@ -273,7 +274,15 @@ public class DatasourceConnectionServiceImpl
      */
     @Override
     public List<DatasourceTableSummaryVO> listTablesWithColumnCount(Integer spaceId, String schemaName) {
-        DatasourceConnection conn = requireDatasourceBySpace(spaceId);
+        return doListTablesWithColumnCount(requireDatasourceBySpace(spaceId), schemaName);
+    }
+
+    @Override
+    public List<DatasourceTableSummaryVO> listTablesWithColumnCountByDatasource(Integer datasourceId, String schemaName) {
+        return doListTablesWithColumnCount(requireDatasource(datasourceId), schemaName);
+    }
+
+    private List<DatasourceTableSummaryVO> doListTablesWithColumnCount(DatasourceConnection conn, String schemaName) {
         loadDriver(conn.getDriverClass());
 
         CatalogSchema cs = resolveCatalogSchema(conn, schemaName);
@@ -286,8 +295,8 @@ public class DatasourceConnectionServiceImpl
             tables.forEach(t -> t.setColumnCount(counts.getOrDefault(t.getTableName(), 0)));
             return tables;
         } catch (Exception e) {
-            log.error("扫描数据源表清单失败，spaceId={}, schemaName={}, dbType={}, catalog={}, schema={}",
-                    spaceId, schemaName, conn.getDbType(), cs.catalog(), cs.schema(), e);
+            log.error("扫描数据源表清单失败，datasourceId={}, spaceId={}, schemaName={}, dbType={}, catalog={}, schema={}",
+                    conn.getId(), conn.getSpaceId(), schemaName, conn.getDbType(), cs.catalog(), cs.schema(), e);
             throw new BusinessException("扫描表清单失败: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
@@ -298,6 +307,18 @@ public class DatasourceConnectionServiceImpl
      */
     @Override
     public List<DatasourceTableDetailVO> listTablesDetail(Integer spaceId, String schemaName, List<String> tableNames) {
+        List<String> names = checkTableNames(tableNames);
+        return doListTablesDetail(requireDatasourceBySpace(spaceId), schemaName, names);
+    }
+
+    @Override
+    public List<DatasourceTableDetailVO> listTablesDetailByDatasource(Integer datasourceId, String schemaName,
+                                                                     List<String> tableNames) {
+        List<String> names = checkTableNames(tableNames);
+        return doListTablesDetail(requireDatasource(datasourceId), schemaName, names);
+    }
+
+    private static List<String> checkTableNames(List<String> tableNames) {
         PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(tableNames),
                 "tableNames 不能为空", HttpStatus.BAD_REQUEST);
         List<String> names = tableNames.stream()
@@ -306,8 +327,11 @@ public class DatasourceConnectionServiceImpl
                 .distinct()
                 .toList();
         PreconditionUtils.checkArgument(!names.isEmpty(), "tableNames 不能为空", HttpStatus.BAD_REQUEST);
+        return names;
+    }
 
-        DatasourceConnection conn = requireDatasourceBySpace(spaceId);
+    private List<DatasourceTableDetailVO> doListTablesDetail(DatasourceConnection conn, String schemaName,
+                                                            List<String> names) {
         loadDriver(conn.getDriverClass());
 
         CatalogSchema cs = resolveCatalogSchema(conn, schemaName);
@@ -339,8 +363,8 @@ public class DatasourceConnectionServiceImpl
                     })
                     .toList();
         } catch (Exception e) {
-            log.error("扫描数据源表结构失败，spaceId={}, schemaName={}, dbType={}, catalog={}, schema={}, tableNames={}",
-                    spaceId, schemaName, conn.getDbType(), cs.catalog(), cs.schema(), names, e);
+            log.error("扫描数据源表结构失败，datasourceId={}, spaceId={}, schemaName={}, dbType={}, catalog={}, schema={}, tableNames={}",
+                    conn.getId(), conn.getSpaceId(), schemaName, conn.getDbType(), cs.catalog(), cs.schema(), names, e);
             throw new BusinessException("扫描表结构失败: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
@@ -351,7 +375,15 @@ public class DatasourceConnectionServiceImpl
      */
     @Override
     public List<DatasourceSchemaVO> listSchemas(Integer spaceId) {
-        DatasourceConnection conn = requireDatasourceBySpace(spaceId);
+        return doListSchemas(requireDatasourceBySpace(spaceId));
+    }
+
+    @Override
+    public List<DatasourceSchemaVO> listSchemasByDatasource(Integer datasourceId) {
+        return doListSchemas(requireDatasource(datasourceId));
+    }
+
+    private List<DatasourceSchemaVO> doListSchemas(DatasourceConnection conn) {
         loadDriver(conn.getDriverClass());
 
         String dbType = conn.getDbType() == null ? "" : conn.getDbType().trim().toUpperCase();
@@ -380,8 +412,8 @@ public class DatasourceConnectionServiceImpl
                 }
             }
         } catch (Exception e) {
-            log.error("扫描数据源 schema 失败，spaceId={}, dbType={}, useCatalogs={}",
-                    spaceId, dbType, useCatalogs, e);
+            log.error("扫描数据源 schema 失败，datasourceId={}, spaceId={}, dbType={}, useCatalogs={}",
+                    conn.getId(), conn.getSpaceId(), dbType, useCatalogs, e);
             throw new BusinessException("扫描 schema 失败: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
         }
         return result;

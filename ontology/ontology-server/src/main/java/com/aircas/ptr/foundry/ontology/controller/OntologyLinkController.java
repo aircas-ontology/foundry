@@ -10,6 +10,7 @@ import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkInfoVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyLinkObjectsVO;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyMetaInfoVO;
 import com.aircas.ptr.foundry.ontology.service.OntologyLinkGroupService;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -57,6 +58,16 @@ public class OntologyLinkController {
     public RestResult<OntologyLinkObjectsVO> getLinkObjectsByUniqueIdentifier(
             @RequestParam(required = true, name = "uniqueIdentifier") @Parameter(description = "关系id（unique_identifier）") String uniqueIdentifier) {
         return RestResult.ofData(ontologyLinkGroupService.getLinkObjectsByUniqueIdentifier(uniqueIdentifier));
+    }
+
+
+    @GetMapping("/list")
+    @Operation(summary = "分页查询空间内的关系，支持按关系名称模糊匹配，返回关系id、关系名称及关系两侧的对象")
+    public RestResult<Page<OntologyLinkObjectsVO>> pageGetLinkObjects(@RequestParam(required = true, name = "spaceId") @Parameter(description = "对象空间id") Integer spaceId,
+                                                                      @RequestParam(required = false, name = "relationName") @Parameter(description = "关系名称，模糊匹配，不传查全部") String relationName,
+                                                                      @RequestParam(required = false, defaultValue = "1") @Parameter(description = "页码，从1开始") Integer pageNum,
+                                                                      @RequestParam(required = false, defaultValue = "10") @Parameter(description = "每页条数") Integer pageSize) {
+        return RestResult.ofData(ontologyLinkGroupService.pageGetLinkObjects(spaceId, relationName, pageNum, pageSize));
     }
 
 

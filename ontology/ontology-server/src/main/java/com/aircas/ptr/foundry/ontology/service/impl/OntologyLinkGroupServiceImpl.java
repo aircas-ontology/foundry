@@ -21,6 +21,7 @@ import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyMetaMapper;
 import com.aircas.ptr.foundry.ontology.service.EntityService;
 import com.aircas.ptr.foundry.ontology.service.OntologyLinkGroupService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.google.common.collect.Lists;
 import lombok.extern.slf4j.Slf4j;
@@ -31,7 +32,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import jakarta.annotation.Resource;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -139,6 +142,57 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
                 .fromObject(from == null ? null : DataConverter.convert(from))
                 .toObject(to == null ? null : DataConverter.convert(to))
                 .build();
+    }
+
+    @Override
+    public Page<OntologyLinkObjectsVO> pageGetLinkObjects(Integer spaceId, String relationName, Integer pageNum, Integer pageSize) {
+        PreconditionUtils.checkArgument(spaceId != null, "spaceId is empty", HttpStatus.BAD_REQUEST);
+
+        var queryWrapper = new LambdaQueryWrapper<OntologyLinkGroup>()
+                .eq(OntologyLinkGroup::getStatus, Status.ENABLE.getValue())
+                .eq(OntologyLinkGroup::getOntologySpaceId, spaceId);
+        if (StringUtils.isNotEmpty(relationName)) {
+            queryWrapper.like(OntologyLinkGroup::getName, relationName);
+        }
+        // 按自增主键倒序而不是 create_time 倒序：create_time 允许为空，PostgreSQL 的 DESC 默认 NULLS FIRST 会把老数据顶到最前
+        queryWrapper.orderByDesc(OntologyLinkGroup::getId);
+
+        var pageResult = page(new Page<>(pageNum, pageSize), queryWrapper);
+        var result = new Page<OntologyLinkObjectsVO>(pageNum, pageSize);
+        result.setTotal(pageResult.getTotal());
+        if (CollectionUtils.isEmpty(pageResult.getRecords())) {
+            result.setRecords(Lists.newArrayList());
+            return result;
+        }
+
+        var metaMap = queryMetaMap(pageResult.getRecords());
+        result.setRecords(pageResult.getRecords().stream()
+                .map(link -> OntologyLinkObjectsVO.builder()
+                        .uniqueIdentifier(link.getUniqueIdentifier())
+                        .name(link.getName())
+                        .fromObject(toObjectVO(metaMap.get(link.getOntologyUniqueIdentifierFrom())))
+                        .toObject(toObjectVO(metaMap.get(link.getOntologyUniqueIdentifierTo())))
+                        .build())
+                .collect(Collectors.toList()));
+        return result;
+    }
+
+    /** 一次性查出本页关系两端的对象，避免逐条查库 */
+    private Map<String, OntologyMeta> queryMetaMap(List<OntologyLinkGroup> links) {
+        var idList = links.stream()
+                .flatMap(l -> Stream.of(l.getOntologyUniqueIdentifierFrom(), l.getOntologyUniqueIdentifierTo()))
+                .filter(StringUtils::isNotEmpty)
+                .distinct()
+                .collect(Collectors.toList());
+        if (CollectionUtils.isEmpty(idList)) {
+            return Collections.emptyMap();
+        }
+        return ontologyMetaMapper.selectList(new LambdaQueryWrapper<OntologyMeta>().in(OntologyMeta::getUniqueIdentifier, idList))
+                .stream().collect(Collectors.toMap(OntologyMeta::getUniqueIdentifier, v -> v, (a, b) -> a));
+    }
+
+    private OntologyMetaInfoVO toObjectVO(OntologyMeta meta) {
+        return meta == null ? null : DataConverter.convert(meta);
     }
 
     @Override

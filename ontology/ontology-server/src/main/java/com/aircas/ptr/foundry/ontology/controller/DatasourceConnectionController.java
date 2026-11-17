@@ -110,6 +110,32 @@ public class DatasourceConnectionController {
         return RestResult.ofData(datasourceConnectionService.listTablesDetail(spaceId, schemaName, tableNames));
     }
 
+    @Operation(summary = "按数据源 id 列出 schema 清单（与 /schema/list 同一套扫描逻辑，只是归属键换成 datasource_connection 主键；"
+            + "供尚未绑定对象空间、按 spaceId 查不到的数据源用）")
+    @GetMapping("/schema/list_by_datasource")
+    public RestResult<List<DatasourceSchemaVO>> listSchemasByDatasource(
+            @RequestParam @Parameter(description = "数据源 id") Integer id) {
+        return RestResult.ofData(datasourceConnectionService.listSchemasByDatasource(id));
+    }
+
+    @Operation(summary = "按数据源 id 列出表：表名 / 表注释 / 字段数（与 /table/list 同一套扫描逻辑，只是归属键换成 datasource_connection 主键）")
+    @GetMapping("/table/list_by_datasource")
+    public RestResult<List<DatasourceTableSummaryVO>> listTablesByDatasource(
+            @RequestParam @Parameter(description = "数据源 id") Integer id,
+            @RequestParam @Parameter(description = "外部库 schema 名（MySQL/MariaDB 上作为 catalog；其余厂商作为 schema 参数）") String schemaName) {
+        return RestResult.ofData(datasourceConnectionService.listTablesWithColumnCountByDatasource(id, schemaName));
+    }
+
+    @Operation(summary = "按数据源 id 列出多张表的列与主子表外键候选（与 /table/columns 同一套扫描逻辑，"
+            + "只是归属键换成 datasource_connection 主键；外键只给本次传入表之间的关系，origin=HEURISTIC 的需要用户确认）")
+    @GetMapping("/table/columns_by_datasource")
+    public RestResult<List<DatasourceTableDetailVO>> listTableColumnsByDatasource(
+            @RequestParam @Parameter(description = "数据源 id") Integer id,
+            @RequestParam @Parameter(description = "外部库 schema 名（MySQL/MariaDB 上作为 catalog；其余厂商作为 schema 参数）") String schemaName,
+            @RequestParam @Parameter(description = "表名，逗号分隔，区分大小写") List<String> tableNames) {
+        return RestResult.ofData(datasourceConnectionService.listTablesDetailByDatasource(id, schemaName, tableNames));
+    }
+
     @Operation(summary = "测试连接（只建一次连接读库名与版本，不执行 SQL、不落库；"
             + "传 id 时以库中该条为底、表单里非空字段覆盖，编辑场景可以不带密码）")
     @PostMapping("/test")
