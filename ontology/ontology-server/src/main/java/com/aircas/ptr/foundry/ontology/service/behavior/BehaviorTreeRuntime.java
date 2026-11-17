@@ -1,6 +1,8 @@
 package com.aircas.ptr.foundry.ontology.service.behavior;
 
 import com.aircas.ptr.foundry.ontology.model.enums.BehaviorStateEnum;
+import com.aircas.ptr.foundry.ontology.model.param.BehaviorActionConfig;
+import com.aircas.ptr.foundry.ontology.model.param.BehaviorBlackboardConditionConfig;
 
 import java.util.List;
 import java.util.function.Supplier;
@@ -25,10 +27,10 @@ public interface BehaviorTreeRuntime {
 
     void setNodeState(String nodeId, BehaviorStateEnum state);
 
-    /** 按跳过处理：状态记成功，并标记 skipped */
+    /** 按跳过处理：状态记成功并标记 skipped；本轮没执行，子树里上一轮的产出同时清掉 */
     void setNodeSkipped(String nodeId, String message);
 
-    /** 进入节点时清掉上一轮留下的状态、跳过标记和说明，循环/重入时结果树才反映本次执行 */
+    /** 进入节点时清掉上一轮留下的状态、跳过标记、说明和子树产出，循环/重入时结果树与下游引用才反映本次执行 */
     void resetNodeTrace(String nodeId);
 
     /** 节点本次执行是否被跳过；并行节点据此把跳过的分支排除在成败判定外 */
@@ -73,10 +75,10 @@ public interface BehaviorTreeRuntime {
      *
      * @return 比较结果；类型对不上返回 null，原因写入节点说明
      */
-    Boolean evaluateBlackboardCondition(String nodeId, com.aircas.ptr.foundry.ontology.model.param.BehaviorBlackboardConditionConfig config);
+    Boolean evaluateBlackboardCondition(String nodeId, BehaviorBlackboardConditionConfig config);
 
     /** 执行行为节点绑定的行为，真实落库；行为不会改动黑板 */
-    BehaviorStateEnum executeAction(String nodeId, com.aircas.ptr.foundry.ontology.model.param.BehaviorActionConfig config);
+    BehaviorStateEnum executeAction(String nodeId, BehaviorActionConfig config);
 
     /**
      * 冷却占位：允许执行时记录本次执行时间；仍在冷却期返回 inCooldown；状态表不可用时返回 unavailable。

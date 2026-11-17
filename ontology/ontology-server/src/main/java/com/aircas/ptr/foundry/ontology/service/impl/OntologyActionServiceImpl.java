@@ -2305,6 +2305,10 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
      */
     private TreeBranchRunner.BranchRun runTreeBranches(List<Supplier<BehaviorStateEnum>> branches, int maxConcurrency,
                                                        long deadlineMillis) throws InterruptedException {
+        if (branches.isEmpty()) {
+            // 调用方已拦空分支，这里兜住接口本身：并发数至少为 1 会越界取第 0 个分支
+            return new TreeBranchRunner.BranchRun(new ArrayList<>(), false);
+        }
         var states = new ArrayList<BehaviorStateEnum>(Collections.nCopies(branches.size(), BehaviorStateEnum.FAILURE));
         var concurrency = Math.max(1, Math.min(maxConcurrency, branches.size()));
         var running = new ArrayDeque<BranchTask>();
@@ -2452,6 +2456,11 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     private TreeActionInvoker.TreeActionOutcome invokeTreeNodeAction(String nodeId, Integer spaceId,
                                                                      BehaviorActionConfig config,
                                                                      TreeExecutionRuntime runtime) {
+        if (config == null || StringUtils.isBlank(config.getActionApi())) {
+            runtime.clearNodeOutput(nodeId);
+            return new TreeActionInvoker.TreeActionOutcome(BehaviorStateEnum.FAILURE,
+                    "行为节点缺少行为配置，没有可执行的行为");
+        }
         var boundApi = config.getActionApi();
         var bound = getOne(new LambdaQueryWrapper<OntologyAction>()
                 .eq(OntologyAction::getApi, boundApi)
@@ -4645,15 +4654,21 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         axes.add(new TestAxis(field, key, subKey, values));
     }
 
-    /** 按笛卡尔积展开组合，越靠后的取值轴变化越快 */
-    private List<List<Object>> expandTestCombos(List<TestAxis> axes) {
+    /**
+     * 展开批量组合：入参方向的数据位置全部只选实例（主存储分组的行就是实例本身）时按笛卡尔积组合；
+     * 只要有数据位置选了非 main 分组的行，就改成按下标配对成组，第 i 组取每个轴的第 i 个候选值。
+     */
+    private List<List<Object>> expandTestCombos(ActionInvokeParam param, List<TestAxis> axes) {
+        return hasNonMainGroupTarget(param.getInputParams()) ? expandTestGroups(axes) : expandTestProduct(axes);
+    }
+
+    /** 笛卡尔积展开，越靠后的取值轴变化越快 */
+    private List<List<Object>> expandTestProduct(List<TestAxis> axes) {
         var total = 1;
         for (var axis : axes) {
             total *= axis.values().size();
         }
-        PreconditionUtils.checkArgument(total <= MAX_TEST_COMBOS,
-                "批量测试最多 " + MAX_TEST_COMBOS + " 组组合，当前候选值会展开出 " + total + " 组（"
-                        + describeTestAxes(axes) + "），请减少候选值", HttpStatus.BAD_REQUEST);
+        checkTestComboCount(total, axes);
         var combos = new ArrayList<List<Object>>(total);
         var cursor = new int[axes.size()];
         for (int index = 0; index < total; index++) {
@@ -4670,6 +4685,46 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             }
         }
         return combos;
+    }
+
+    /** 跨存储分组按下标配对：各轴候选值个数必须一致，多出来的位置没有配对对象，不能靠截断或补位凑组数 */
+    private List<List<Object>> expandTestGroups(List<TestAxis> axes) {
+        var total = axes.get(0).values().size();
+        PreconditionUtils.checkArgument(axes.stream().allMatch(axis -> axis.values().size() == total),
+                "候选值里选了非 main 分组的行，批量测试按下标配对成组，各取值轴的候选值个数必须一致（"
+                        + describeTestAxes(axes) + "），请补齐或减少候选值", HttpStatus.BAD_REQUEST);
+        checkTestComboCount(total, axes);
+        var combos = new ArrayList<List<Object>>(total);
+        for (int index = 0; index < total; index++) {
+            var combo = new ArrayList<Object>(axes.size());
+            for (var axis : axes) {
+                combo.add(axis.values().get(index));
+            }
+            combos.add(combo);
+        }
+        return combos;
+    }
+
+    private void checkTestComboCount(int total, List<TestAxis> axes) {
+        PreconditionUtils.checkArgument(total <= MAX_TEST_COMBOS,
+                "批量测试最多 " + MAX_TEST_COMBOS + " 组组合，当前候选值会展开出 " + total + " 组（"
+                        + describeTestAxes(axes) + "），请减少候选值", HttpStatus.BAD_REQUEST);
+    }
+
+    /** 入参方向有没有数据位置选了非 main 分组的行：选了子表行就是跨分组，各取值轴不能再自由相乘 */
+    private static boolean hasNonMainGroupTarget(Map<String, List<ActionInstanceTargetParam>> targets) {
+        return targets != null && targets.values().stream()
+                .filter(Objects::nonNull)
+                .flatMap(List::stream)
+                .filter(Objects::nonNull)
+                .anyMatch(OntologyActionServiceImpl::hasNonMainGroupRow);
+    }
+
+    private static boolean hasNonMainGroupRow(ActionInstanceTargetParam target) {
+        return MapUtils.emptyIfNull(target.getDataPrimaryKeys()).entrySet().stream()
+                .anyMatch(entry -> entry.getValue() != null
+                        && StringUtils.isNotBlank(entry.getKey())
+                        && !MAIN_STORAGE_GROUP.equals(entry.getKey()));
     }
 
     private String describeTestAxes(List<TestAxis> axes) {
@@ -4690,7 +4745,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         PreconditionUtils.checkArgument(action != null, "无效的action api", HttpStatus.BAD_REQUEST);
         PreconditionUtils.checkArgument(action.getActionKind() != ActionKindEnum.BASE,
                 "属性值/实例关系行为只操作单个实例，不支持批量测试", HttpStatus.BAD_REQUEST);
-        var combos = expandTestCombos(axes);
+        var combos = expandTestCombos(param, axes);
         var cases = new ArrayList<ActionTestCaseResultVO>(combos.size());
         var results = new ArrayList<String>(combos.size());
         var failed = 0;
