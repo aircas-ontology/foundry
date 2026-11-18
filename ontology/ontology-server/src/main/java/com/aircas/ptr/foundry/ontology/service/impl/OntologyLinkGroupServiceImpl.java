@@ -94,6 +94,9 @@ public class OntologyLinkGroupServiceImpl extends ServiceImpl<OntologyLinkGroupM
         var link = getOne(new LambdaQueryWrapper<OntologyLinkGroup>()
                 .eq(OntologyLinkGroup::getUniqueIdentifier, param.getUniqueIdentifier()));
         PreconditionUtils.checkArgument(link != null, "关系不存在：" + param.getUniqueIdentifier(), HttpStatus.BAD_REQUEST);
+        if (StringUtils.isNotEmpty(param.getName())) {
+            link.setName(param.getName());
+        }
         if (param.getCategoryId() != null) {
             link.setCategoryId(param.getCategoryId());
         }
