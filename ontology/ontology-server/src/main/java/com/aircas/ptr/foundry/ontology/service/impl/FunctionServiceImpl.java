@@ -340,6 +340,18 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 .collect(Collectors.toList());
     }
 
+    /**
+     * 查引用了该函数 api 的行为，供删除/修改/下线的关联校验使用。
+     * <p>函数 api 只在所属空间内唯一，别的空间可以有同名 api 并被那边的行为引用；
+     * 不带空间条件就会让别的空间的行为锁住本空间函数。
+     * 历史数据里存在没有空间的函数，这类函数保持原口径只按 api 查。</p>
+     */
+    private List<OntologyAction> listActionsBoundToApi(String api, Integer spaceId) {
+        return ontologyActionMapper.selectList(new LambdaQueryWrapper<OntologyAction>()
+                .eq(OntologyAction::getFunctionApi, api)
+                .eq(spaceId != null, OntologyAction::getOntologySpaceId, spaceId));
+    }
+
     @Override
     @Transactional(value = "mainTransactionManager")
     public void deleteByApi(Integer spaceId, String api, String version) {
@@ -348,7 +360,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         // 已发布状态不允许删除，需先下线
         requireUnpublished(function, "已发布的函数不能删除，请先下线");
         //判断函数是否关联了行为，被对象行为使用到则不删除
-        var ontologyActions = ontologyActionMapper.selectList(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getFunctionApi, api));
+        var ontologyActions = listActionsBoundToApi(api, function.getOntologySpaceId());
         PreconditionUtils.checkArgument(CollectionUtils.isEmpty(ontologyActions), "该函数已被行为关联" + api);
         //删除函数参数
         functionParamService.remove(new LambdaQueryWrapper<FunctionParamPO>().eq(FunctionParamPO::getFunctionId, function.getId()));
@@ -793,7 +805,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         PreconditionUtils.checkArgument(function.getPublish() == FunctionConstant.PUBLISH_UNPUBLISHED,
                 "已发布的函数不能修改，请先下线：" + param.getFunctionApi(), HttpStatus.BAD_REQUEST);
         // 原地修改前校验行为关联（与删除/下线一致的 api 级粒度），被行为引用则禁止直接改
-        var ontologyActions = ontologyActionMapper.selectList(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getFunctionApi, function.getApi()));
+        var ontologyActions = listActionsBoundToApi(function.getApi(), function.getOntologySpaceId());
         PreconditionUtils.checkArgument(CollectionUtils.isEmpty(ontologyActions),
                 "该函数已被行为关联，不能修改：" + function.getApi());
         // 未发布：原地更新（版本号不可改，param.version 仅作定位）
@@ -852,7 +864,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         PreconditionUtils.checkArgument(function.getPublish() == FunctionConstant.PUBLISH_PUBLISHED,
                 "该版本不是发布状态：" + api + " " + function.getVersion(), HttpStatus.BAD_REQUEST);
         //判断函数是否关联了行为，被对象行为使用到则不能下线
-        var ontologyActions = ontologyActionMapper.selectList(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getFunctionApi, api));
+        var ontologyActions = listActionsBoundToApi(api, function.getOntologySpaceId());
         PreconditionUtils.checkArgument(CollectionUtils.isEmpty(ontologyActions), "该函数已被行为关联，不能下线：" + api);
         function.setPublish(FunctionConstant.PUBLISH_UNPUBLISHED);
         updateById(function);
