@@ -38,6 +38,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -424,6 +425,12 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         var tableMap = tableMetadataMapper.listTables(schemaName, null).stream().collect(Collectors.toMap(v -> v.getTableName(), v -> v.getDescription() != null ? v.getDescription() : ""));
 
         return props.stream().map(v -> DataConverter.convert(v).setDatasourceDescription(tableMap.get(v.getDatasourceId())))
+                .sorted(Comparator
+                        .comparingInt((OntologyPropertyDetailVO v) -> "main".equals(StringUtils.defaultIfBlank(v.getStorageGroup(), "main")) ? 0 : 1)
+                        .thenComparing(v -> StringUtils.defaultIfBlank(v.getStorageGroup(), "main"), String.CASE_INSENSITIVE_ORDER)
+                        .thenComparingInt(v -> "id".equalsIgnoreCase(v.getApiName()) ? 0 : 1)
+                        .thenComparing(OntologyPropertyDetailVO::getApiName, String.CASE_INSENSITIVE_ORDER)
+                )
                 .collect(Collectors.toList());
     }
 
