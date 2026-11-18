@@ -45,6 +45,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
@@ -444,12 +445,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         var tableMap = tableMetadataMapper.listTables(schemaName, null).stream().collect(Collectors.toMap(v -> v.getTableName(), v -> v.getDescription() != null ? v.getDescription() : ""));
 
         return props.stream().map(v -> DataConverter.convert(v).setDatasourceDescription(tableMap.get(v.getDatasourceId())))
-                .sorted(Comparator
-                        .comparingInt((OntologyPropertyDetailVO v) -> "main".equals(StringUtils.defaultIfBlank(v.getStorageGroup(), "main")) ? 0 : 1)
-                        .thenComparing(v -> StringUtils.defaultIfBlank(v.getStorageGroup(), "main"), String.CASE_INSENSITIVE_ORDER)
-                        .thenComparingInt(v -> "id".equalsIgnoreCase(v.getApiName()) ? 0 : 1)
-                        .thenComparing(OntologyPropertyDetailVO::getApiName, String.CASE_INSENSITIVE_ORDER)
-                )
+                .sorted(propertyStorageOrder(OntologyPropertyDetailVO::getStorageGroup, OntologyPropertyDetailVO::getApiName))
                 .collect(Collectors.toList());
     }
 
@@ -676,7 +672,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         // query properties of this ontology, grouped by propertyCategoryId, so each category node carries its own properties
         var props = list(new LambdaQueryWrapper<OntologyProperty>()
                 .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier));
-        props.sort(categoryPropertyOrder());
+        props.sort(propertyStorageOrder(OntologyProperty::getStorageGroup, OntologyProperty::getApiName));
         var propMap = props.stream()
                 .collect(Collectors.groupingBy(
                         p -> p.getPropertyCategoryId() != null ? p.getPropertyCategoryId() : rootCategoryId,
@@ -1258,18 +1254,18 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         return vo;
     }
 
-    /** 分类树中属性的顺序：主键最前，其后主分组、其它分组按名称升序，同一分组内按 apiName 升序。 */
-    private static Comparator<OntologyProperty> categoryPropertyOrder() {
+    /** 属性列表统一排序口径：main 分组最先、其它分组按名称升序，组内 id 属性最前、其余按 apiName 升序（均大小写不敏感）。 */
+    private static <T> Comparator<T> propertyStorageOrder(Function<T, String> storageGroup, Function<T, String> apiName) {
         return Comparator
-                .comparing((OntologyProperty p) -> Integer.valueOf(1).equals(p.getIsPrimaryKey()) ? 0 : 1)
-                .thenComparing(p -> MAIN_STORAGE_GROUP.equals(groupNameOf(p)) ? 0 : 1)
-                .thenComparing(OntologyPropertyServiceImpl::groupNameOf)
-                .thenComparing(OntologyProperty::getApiName, String.CASE_INSENSITIVE_ORDER);
+                .comparingInt((T v) -> MAIN_STORAGE_GROUP.equals(defaultStorageGroup(storageGroup.apply(v))) ? 0 : 1)
+                .thenComparing(v -> defaultStorageGroup(storageGroup.apply(v)), String.CASE_INSENSITIVE_ORDER)
+                .thenComparingInt(v -> "id".equalsIgnoreCase(apiName.apply(v)) ? 0 : 1)
+                .thenComparing(apiName, String.CASE_INSENSITIVE_ORDER);
     }
 
-    /** 存储分组为空视为主分组，与 EntityServiceImpl 行查询侧的兜底一致。 */
-    private static String groupNameOf(OntologyProperty property) {
-        return StringUtils.isEmpty(property.getStorageGroup()) ? MAIN_STORAGE_GROUP : property.getStorageGroup();
+    /** 存储分组为空视为主分组。 */
+    private static String defaultStorageGroup(String storageGroup) {
+        return StringUtils.defaultIfBlank(storageGroup, MAIN_STORAGE_GROUP);
     }
 
 
