@@ -106,11 +106,13 @@ public class CompositeFunctionInvoker {
         }
         // 单对象入参解包：与非编排路径（FunctionServiceImpl#doExecuteFunction）对齐，
         // 只有一个入参时直接传值，避免 runner 端收到 {"input": 10} 而脚本期望 10
+        // Python 只解包对象值：python-runner 的入参模型是 input: dict，裸标量/数组会被拒成 422
         String inputJson;
         try {
             ObjectMapper objectMapper = new ObjectMapper();
-            if (inputParams.size() == 1 && paramMap.containsKey(inputParams.get(0).getParamName())) {
-                inputJson = objectMapper.writeValueAsString(paramMap.get(inputParams.get(0).getParamName()));
+            Object singleValue = inputParams.size() == 1 ? paramMap.get(inputParams.get(0).getParamName()) : null;
+            if (singleValue != null && (language != FunctionLanguageEnum.PYTHON || singleValue instanceof Map<?, ?>)) {
+                inputJson = objectMapper.writeValueAsString(singleValue);
             } else {
                 inputJson = objectMapper.writeValueAsString(paramMap);
             }
