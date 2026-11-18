@@ -61,7 +61,16 @@ public interface OntologyActionService extends IService<OntologyAction> {
 
     OntologyActionDetailVO getActionByApi(Integer ontologySpaceId, String actionApi);
 
+    /**
+     * 按对象下全部实例执行行为（对外手动触发）：一次请求记一条手动执行日志。
+     */
     String executeAction(OntologyActionExecuteParam param);
+
+    /**
+     * 调度链路的执行入口：定时任务按对象下全部实例遍历执行走这里，
+     * 执行日志由调度侧按 TASK 记录，这里不再记手动执行日志。
+     */
+    String executeActionForScheduling(OntologyActionExecuteParam param);
 
     /**
      * 执行不绑算子的基础行为（属性值 / 实例关系）：按行为定义对单个实体真实落库。
@@ -76,6 +85,7 @@ public interface OntologyActionService extends IService<OntologyAction> {
 
     /**
      * 行为测试：用一条真实实例数据把行为跑通并落库，用于发布前验证定义是否可用。
+     * <p>对外手动触发入口，一次测试请求记一条手动执行日志（批量展开的各组也算这一次）。</p>
      *
      * @param param 行为 api + 本端/对端实体主键 + 外部输入参数取值
      * @return 本次落库动作说明；绑算子的行为附带算子返回结果
@@ -83,9 +93,20 @@ public interface OntologyActionService extends IService<OntologyAction> {
     ActionTestResultVO testAction(ActionTestParam param);
 
     /**
+     * 调度链路的测试执行入口：定时任务存的实体执行参数与规则调度命中后的执行都走这里，
+     * 执行日志由调度侧按 TASK/RULE 记录，这里不再记手动执行日志。
+     *
+     * @param param 行为 api + 本端/对端实体主键 + 外部输入参数取值
+     * @return 本次落库动作说明；绑算子的行为附带算子返回结果
+     */
+    ActionTestResultVO testActionForScheduling(ActionTestParam param);
+
+    /**
      * 行为树执行：一次树执行只针对一条实例数据，全树共用它，节点跑通即真实落库。
      * <p>
      * 单轮求值，不产生 RUNNING；循环、冷却、限时、并行都在单次请求内生效。
+     * <p>
+     * 一次请求记一条手动执行日志；行为树还没接调度，若后续要接，日志记录要挪到对外入口，不能留在执行体里。
      *
      * @param param 树 api + 全树默认实例/数据位置 + 行为外部入参，可按节点用 nodeExecutes 覆盖
      * @return 整树状态 + 结束时黑板快照 + 逐节点结果

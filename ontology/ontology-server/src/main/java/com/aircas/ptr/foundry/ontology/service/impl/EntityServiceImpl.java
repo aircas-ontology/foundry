@@ -21,7 +21,7 @@ import com.aircas.ptr.foundry.ontology.model.po.*;
 import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.aircas.ptr.foundry.ontology.repository.arangodb.EntityNodeRepository;
 import com.aircas.ptr.foundry.ontology.repository.arangodb.EntityRelationRepository;
-import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.ObjectMapper;
+import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.DataLakeObjectMapper;
 import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.TableFieldMappingMapper;
 import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.TableMetadataMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.FunctionExecuteResultMapper;
@@ -30,6 +30,7 @@ import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyMetaMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyPropertyMapper;
 import com.aircas.ptr.foundry.ontology.service.EntityService;
 import com.aircas.ptr.foundry.ontology.service.FunctionService;
+import com.aircas.ptr.foundry.ontology.service.ManualExecuteLogService;
 import com.aircas.ptr.foundry.ontology.service.OntologyActionService;
 import com.aircas.ptr.foundry.ontology.utils.FunctionOutputValueReader;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -111,6 +112,9 @@ public class EntityServiceImpl implements EntityService {
     @Resource
     private OntologyActionService actionService;
 
+    @Resource
+    private ManualExecuteLogService manualExecuteLogService;
+
 
     @Resource
     private OntologyPropertyMapper propertyMapper;
@@ -125,7 +129,7 @@ public class EntityServiceImpl implements EntityService {
     private TableFieldMappingMapper tableFieldMappingMapper;
 
     @Resource
-    private ObjectMapper objectMapper;
+    private DataLakeObjectMapper objectMapper;
 
     @Resource
     private TableMetadataMapper tableMetadataMapper;
@@ -1238,6 +1242,13 @@ public class EntityServiceImpl implements EntityService {
         // 按对象方向指定实例/行是内部载体（单行为测试给行为树用），对外执行请求不接受，传了也只是忽略
         param.setInputEntities(null);
         param.setOutputEntities(null);
+        // 对外的单实体执行属于手动触发，一次请求记一条手动执行日志
+        return manualExecuteLogService.runAndLog(param.getOntologySpaceId(), param.getActionApi(), param,
+                () -> runEntityAction(param), msg -> msg);
+    }
+
+    @SneakyThrows
+    private String runEntityAction(EntityActionExecuteParam param) {
         var infoDTO = initActionContextInfoDTO(param);
         //获取行为关联关系下的对象的实体详情
         List<List<EntityPropertyDetailVO>> linkedEntities = getLinkedEntities(infoDTO);

@@ -480,7 +480,7 @@ public class ActionRuleTriggerServiceImpl implements ActionRuleTriggerService {
         executeTemplate(ruleId, action.getApi(), template);
     }
 
-    /** testAction 执行 + 结果落 action_handle_log；日志独立提交，不随后续异常回滚 */
+    /** 规则命中后执行行为并把结果落 action_handle_log；日志独立提交，不随后续异常回滚 */
     private void executeTemplate(Long ruleId, String actionApi, ActionTestParam template) {
         var handleLog = ActionHandleLog.builder()
                 .actionHandleId(ruleId)
@@ -491,7 +491,7 @@ public class ActionRuleTriggerServiceImpl implements ActionRuleTriggerService {
                 .build();
         actionHandleLogMapper.insert(handleLog);
         try {
-            var result = ontologyActionService.testAction(template);
+            var result = ontologyActionService.testActionForScheduling(template);
             handleLog.setMsg(result.getMessage())
                     .setExecuteResult(writeJson(result))
                     .setCompleteTime(new Date())

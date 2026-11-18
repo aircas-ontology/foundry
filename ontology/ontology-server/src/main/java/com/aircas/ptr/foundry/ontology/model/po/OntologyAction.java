@@ -130,6 +130,14 @@ public class OntologyAction {
      */
     private String definition;
 
+    /**
+     * Column: basic_function_config
+     * 基础函数行为的查询配置 JSON，仅 subject_type=BASIC_FUNCTION 有值。
+     * 编辑行为时按类别整体重写，改成别的类别后要置空，故空值也参与 UPDATE
+     */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private String basicFunctionConfig;
+
 
     private static final long serialVersionUID = 1L;
 }

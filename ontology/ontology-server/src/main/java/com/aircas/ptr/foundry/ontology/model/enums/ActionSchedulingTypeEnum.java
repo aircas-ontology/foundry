@@ -15,7 +15,9 @@ import lombok.Getter;
 public enum ActionSchedulingTypeEnum {
 
     TASK(1, "定时"),
-    RULE(2, "规则");
+    RULE(2, "规则"),
+    /** 页面或接口手动触发的一次执行；action_handle_log.action_handle_id 存行为 id，不是调度 id */
+    MANUAL(3, "手动执行");
 
     private final Integer code;
     private final String description;

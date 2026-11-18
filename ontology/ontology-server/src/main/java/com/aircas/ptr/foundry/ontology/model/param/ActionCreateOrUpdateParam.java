@@ -28,9 +28,10 @@ public class ActionCreateOrUpdateParam {
     /**
      * 行为（BASE/APPLICATION）必填，由 service 校验；行为树不指向对象类型，这里为空。
      * 因此不能再用基类的 @NotBlank，否则树请求进不了共用入口。
+     * 基础函数行为也不传：它作用的对象写在 {@link #basicFunction} 里，可以一次选多个。
      */
     @OntologyIdVerify
-    @Schema(name = "ontologyIdentifier", description = "对象id，即行为的操作范围；行为树不传", example = "abcdef")
+    @Schema(name = "ontologyIdentifier", description = "对象id，即行为的操作范围；行为树和基础函数行为不传", example = "abcdef")
     private String ontologyIdentifier;
 
     @Schema(name = "ontologySpaceId", description = "所属对象空间id；行为由对象id反查得到，行为树没有对象id，必须自己传", example = "1")
@@ -43,7 +44,7 @@ public class ActionCreateOrUpdateParam {
     @NotBlank(message = "actionApi is empty")
     private String actionApi;
 
-    @Schema(description = "对象下函数api；应用行为必填（CUSTOMIZE/EXTERNAL/CONTAINER），基础算子行为必填（BASIC_QUERY），属性值、实例关系行为不可传", example = "satellite")
+    @Schema(description = "对象下函数api；应用行为必填（CUSTOMIZE/EXTERNAL/CONTAINER），属性值、实例关系、基础函数行为不可传", example = "satellite")
     private String functionApi;
 
     @Schema(description = "行为描述", example = "这是一个行为")
@@ -62,26 +63,30 @@ public class ActionCreateOrUpdateParam {
     @NotNull(message = "actionKind is null")
     private ActionKindEnum actionKind;
 
-    @Schema(description = "基础行为类型：PROPERTY_VALUE 属性值 / LINK 实例关系 / BASIC_OPERATOR 基础算子；actionKind=BASE 时必填")
+    @Schema(description = "基础行为类型：PROPERTY_VALUE 属性值 / LINK 实例关系 / BASIC_FUNCTION 基础函数；actionKind=BASE 时必填。"
+            + "BASIC_OPERATOR 基础算子已停止创建和编辑，存量行为仍可读可执行")
     private ActionSubjectTypeEnum subjectType;
 
-    @Schema(description = "基础操作：CREATE 新增 / UPDATE 修改 / DELETE 删除；属性值、实例关系两类必填，基础算子不可传")
+    @Schema(description = "基础操作：CREATE 新增 / UPDATE 修改 / DELETE 删除；属性值、实例关系两类必填，基础函数不可传")
     private ActionOperationEnum operation;
 
     @Schema(description = "目标存储分组（分组名即物理表名，main 主表不允许）；仅行为类型=属性值时必填")
     private String storageGroup;
 
     @Schema(description = "已废弃：输出方式已下沉到 mappingIns 每行的 outputMode，应用行为不再需要顶层指定；"
-            + "基础算子固定 RESULT_ONLY，属性值和实例关系行为为空", example = "RESULT_ONLY")
+            + "基础函数固定 RESULT_ONLY，属性值和实例关系行为为空", example = "RESULT_ONLY")
     private ActionOutputModeEnum outputMode;
 
     @Schema(description = "行为关系映射；应用行为可选填，出参写入对象属性与绑定关系可以并存（绑了关系的同一次执行既回写属性也补关系边）。"
-            + "基础行为里实例关系必填、属性值不需要，基础算子选填")
+            + "基础行为里实例关系必填、属性值和基础函数不需要")
     private ActionLinkMappingParam linkMapping;
 
 
-    @Schema(description = "行为参数列表")
+    @Schema(description = "行为参数列表；基础函数行为不绑算子，不可传")
     private List<ActionParamMappingCreateParam> mappingIns;
+
+    @Schema(description = "基础函数配置（查询的对象、聚合/查询、字段与条件）；subjectType=BASIC_FUNCTION 时必填")
+    private ActionBasicFunctionConfig basicFunction;
 
     @Schema(description = "行为树定义（黑板 + 变量 + 节点树），actionKind=TREE 时必填")
     private BehaviorTreeDefinition treeDefinition;

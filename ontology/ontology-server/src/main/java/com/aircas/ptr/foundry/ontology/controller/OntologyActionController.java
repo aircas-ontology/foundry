@@ -222,8 +222,8 @@ public class OntologyActionController {
 
     @Operation(summary = "查询行为执行结果数据，默认10条最新结果")
     @GetMapping("/scheduling/result")
-    public RestResult<Page<SchedulingResultVO>> getSchedulingResult(@RequestParam(required = true, name = "id") @Parameter(description = "scheduling id") Long id,
-                                                                    @RequestParam(required = true, name = "type") @Parameter(description = "TASK/RULE") ActionSchedulingTypeEnum type,
+    public RestResult<Page<SchedulingResultVO>> getSchedulingResult(@RequestParam(required = true, name = "id") @Parameter(description = "TASK/RULE 传调度id，MANUAL 传行为id") Long id,
+                                                                    @RequestParam(required = true, name = "type") @Parameter(description = "TASK/RULE/MANUAL，手动触发的执行记录查 MANUAL") ActionSchedulingTypeEnum type,
                                                                     @RequestParam(required = false, name = "taskStatus") @Parameter(description = "执行状态过滤，可选") TaskStatusEnum taskStatus,
                                                                     @RequestParam(required = false, name = "beginTime") @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") @Parameter(description = "触发时间起，yyyy-MM-dd HH:mm:ss，可选") Date beginTime,
                                                                     @RequestParam(required = false, name = "endTime") @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") @Parameter(description = "触发时间止，yyyy-MM-dd HH:mm:ss，可选") Date endTime,

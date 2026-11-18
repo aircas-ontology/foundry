@@ -11,7 +11,8 @@ import lombok.experimental.SuperBuilder;
  * 行为节点要用到的一个对象实例：属性值/实例关系行为、入参取对象属性或出参写属性的行为都要实例。
  * <p>实例一律由执行请求给：节点只涉及一个对象时用 nodeExecutes[节点标识].entityPrimaryKey，
  * 涉及多个对象时按对象传 nodeExecutes[节点标识].entityPrimaryKeys；
- * 行为绑定关系时还要按 entityPrimaryKeys.from、entityPrimaryKeys.to 成对传关系两端，与单行为测试的口径一致。</p>
+ * 行为绑定关系时还要按 entityPrimaryKeys.from、entityPrimaryKeys.to 成对传关系两端，与单行为测试的口径一致。
+ * 是否必须给由节点上的 entityPrimaryKeyRequired 决定：基础函数行为列对象但每条都可选，不选按该对象全量查。</p>
  */
 @Data
 @SuperBuilder

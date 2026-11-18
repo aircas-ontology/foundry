@@ -60,6 +60,15 @@ public final class FunctionOutputValueReader {
     }
 
     /**
+     * 只按字面路径取值，不做形状放宽。
+     * <p>给路径和返回体是同一份代码生成、形状确定的出参用：放宽兜底会按最后一段字段名在返回体里递归找，
+     * 同名字段散在多行结果里时会取到别的行，那种时候宁可按取不到报错。</p>
+     */
+    public static Object readExact(String jsonString, String expression) {
+        return readLiteral(jsonString, expression);
+    }
+
+    /**
      * 按通配路径批量取值：{@code $.data[*].longitude} 取出数组里每个元素的同一列，供调用方逐元素插行。
      * <p>先按字面数组层找，再按 {@code data} 外壳与出参名的错位放宽找；都没有时按路径里通配后面第一个
      * 字段名在返回体里找一个「元素含该字段」的数组，口径同单值取值的兜底——前端按参数树写的

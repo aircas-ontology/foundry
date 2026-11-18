@@ -12,10 +12,11 @@ import com.aircas.ptr.foundry.ontology.model.enums.*;
 import com.aircas.ptr.foundry.ontology.model.param.*;
 import com.aircas.ptr.foundry.ontology.model.po.*;
 import com.aircas.ptr.foundry.ontology.model.vo.*;
-import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.ObjectMapper;
+import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.DataLakeObjectMapper;
 import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.TableMetadataMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.*;
 import com.aircas.ptr.foundry.ontology.service.*;
+import com.aircas.ptr.foundry.ontology.service.action.BasicFunctionActionExecutor;
 import com.aircas.ptr.foundry.ontology.service.behavior.BtTreeManager;
 import com.aircas.ptr.foundry.ontology.service.behavior.CompiledBehaviorTree;
 import com.aircas.ptr.foundry.ontology.service.behavior.TreeActionInvoker;
@@ -116,6 +117,9 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     private ActionHandleLogMapper actionHandleLogMapper;
 
     @Resource
+    private ManualExecuteLogService manualExecuteLogService;
+
+    @Resource
     private OntologyMetaMapper ontologyMetaMapper;
 
     @Resource
@@ -140,7 +144,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     private ActionCategoryMapper actionCategoryMapper;
 
     @Resource
-    private ObjectMapper entityMapper;
+    private DataLakeObjectMapper entityMapper;
 
     @Resource
     private TableMetadataMapper tableMetadataMapper;
@@ -178,6 +182,9 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
 
     @Resource(name = "behaviorTreeBranchExecutor")
     private ThreadPoolTaskExecutor behaviorTreeBranchExecutor;
+
+    @Resource
+    private BasicFunctionActionExecutor basicFunctionActionExecutor;
 
     /** 冷却表缺失只提示一次，避免每个冷却节点、每次保存都刷日志 */
     private final AtomicBoolean behaviorTreeCooldownWarned = new AtomicBoolean();
@@ -256,21 +263,35 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     }
 
 
-    @Override
-    @Transactional(value = "mainTransactionManager")
-    public void createAction(ActionCreateOrUpdateParam param) {
-        // 应用行为可不传 ontologyIdentifier，从分类取空间 id
-        Integer spaceId = null;
+    /**
+     * 行为归属的对象空间：按创建时选的对象反查；基础函数没有顶层对象，按配置里的第一个对象反查；
+     * 两者都没有（应用行为、行为树）退回行为分类所在空间。
+     */
+    private Integer resolveActionSpaceId(ActionCreateOrUpdateParam param) {
         if (StringUtils.isNotEmpty(param.getOntologyIdentifier())) {
             var meta = ontologyMetaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>()
                     .eq(OntologyMeta::getUniqueIdentifier, param.getOntologyIdentifier()));
             PreconditionUtils.checkNotNull(meta, "无效的对象：" + param.getOntologyIdentifier(), HttpStatus.BAD_REQUEST);
-            spaceId = meta.getOntologySpaceId();
-        } else {
-            var category = actionCategoryMapper.selectById(param.getCategoryId());
-            PreconditionUtils.checkNotNull(category, "无效的行为分类：" + param.getCategoryId(), HttpStatus.BAD_REQUEST);
-            spaceId = category.getOntologySpaceId();
+            return meta.getOntologySpaceId();
         }
+        if (param.getBasicFunction() != null) {
+            var identifiers = basicFunctionActionExecutor.configOntologyIdentifiers(param.getBasicFunction());
+            if (!identifiers.isEmpty()) {
+                var meta = ontologyMetaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>()
+                        .eq(OntologyMeta::getUniqueIdentifier, identifiers.get(0)));
+                PreconditionUtils.checkNotNull(meta, "无效的对象：" + identifiers.get(0), HttpStatus.BAD_REQUEST);
+                return meta.getOntologySpaceId();
+            }
+        }
+        var category = actionCategoryMapper.selectById(param.getCategoryId());
+        PreconditionUtils.checkNotNull(category, "无效的行为分类：" + param.getCategoryId(), HttpStatus.BAD_REQUEST);
+        return category.getOntologySpaceId();
+    }
+
+    @Override
+    @Transactional(value = "mainTransactionManager")
+    public void createAction(ActionCreateOrUpdateParam param) {
+        var spaceId = resolveActionSpaceId(param);
         var exist = getOne(new LambdaQueryWrapper<OntologyAction>()
                 .eq(OntologyAction::getApi, param.getActionApi())
                 .eq(OntologyAction::getOntologySpaceId, spaceId));
@@ -287,18 +308,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     @Override
     @Transactional(value = "mainTransactionManager")
     public void updateAction(ActionCreateOrUpdateParam param) {
-        // 应用行为可不传 ontologyIdentifier，从分类取空间 id
-        Integer spaceId = null;
-        if (StringUtils.isNotEmpty(param.getOntologyIdentifier())) {
-            var meta = ontologyMetaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>()
-                    .eq(OntologyMeta::getUniqueIdentifier, param.getOntologyIdentifier()));
-            PreconditionUtils.checkNotNull(meta, "无效的对象：" + param.getOntologyIdentifier(), HttpStatus.BAD_REQUEST);
-            spaceId = meta.getOntologySpaceId();
-        } else {
-            var category = actionCategoryMapper.selectById(param.getCategoryId());
-            PreconditionUtils.checkNotNull(category, "无效的行为分类：" + param.getCategoryId(), HttpStatus.BAD_REQUEST);
-            spaceId = category.getOntologySpaceId();
-        }
+        var spaceId = resolveActionSpaceId(param);
         var action = getOne(new LambdaQueryWrapper<OntologyAction>()
                 .eq(OntologyAction::getApi, param.getActionApi())
                 .eq(OntologyAction::getOntologySpaceId, spaceId));
@@ -424,8 +434,10 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         // 类别、输出方式必须由调用方明确传入：猜错会把行为建成另一种，执行时才暴露很难定位
         PreconditionUtils.checkNotNull(param.getActionKind(), "必须选择行为类别：基础行为/应用行为", HttpStatus.BAD_REQUEST);
         var kind = param.getActionKind();
-        // 只有应用行为可以脱离对象挂在空间上；基础行为都作用在某个对象的实例上，缺对象标识会建出执行不了的记录
-        if (kind == ActionKindEnum.BASE) {
+        // 只有应用行为可以脱离对象挂在空间上；基础行为都作用在某个对象的实例上，缺对象标识会建出执行不了的记录。
+        // 基础函数例外：它作用的对象写在 basicFunction 配置里（可以一次选多个），顶层对象id 不使用
+        if (kind == ActionKindEnum.BASE
+                && param.getSubjectType() != ActionSubjectTypeEnum.BASIC_FUNCTION) {
             // 原来由参数基类的 @NotBlank 兜底，共用入口后移到 service，提示文案保持一致
             PreconditionUtils.checkArgument(StringUtils.isNotBlank(param.getOntologyIdentifier()),
                     "ontologyIdentifier is empty", HttpStatus.BAD_REQUEST);
@@ -467,21 +479,16 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 checkPropertyValueAction(param, definition);
             } else if (subjectType == ActionSubjectTypeEnum.LINK) {
                 checkLinkAction(param, definition);
+            } else if (subjectType == ActionSubjectTypeEnum.BASIC_FUNCTION) {
+                checkBasicFunctionAction(param, definition, spaceId);
+            } else if (subjectType == ActionSubjectTypeEnum.BASIC_OPERATOR) {
+                // 基础算子已下线：不删代码也不动基础查询算子，存量行为照常回显和执行，只是不再接受新的创建和编辑
+                throw new BusinessException("基础算子行为已停止创建和编辑，请改用基础函数行为", HttpStatus.BAD_REQUEST);
             } else {
-                PreconditionUtils.checkArgument(param.getOperation() == null && StringUtils.isEmpty(param.getStorageGroup()),
-                        "基础算子行为不需要基础操作和存储分组", HttpStatus.BAD_REQUEST);
-                PreconditionUtils.checkArgument(param.getOutputMode() != ActionOutputModeEnum.WRITE_PROPERTY,
-                        "基础算子行为只支持仅返回结果", HttpStatus.BAD_REQUEST);
-                // 基础算子行为仍不要求关系：它没有归属对象，执行链路也不落关系边
-                checkFunctionAction(param, definition, Collections.singletonList(FunctionTypeEnum.BASIC_QUERY),
-                        spaceId, false);
-                // 基础算子也不允许行级 WRITE_PROPERTY
-                PreconditionUtils.checkArgument(definition.mappings.stream()
-                                .noneMatch(m -> m.getOutputMode() == ActionOutputModeEnum.WRITE_PROPERTY),
-                        "基础算子行为只支持仅返回结果，出参不可写入属性", HttpStatus.BAD_REQUEST);
+                throw new BusinessException("不支持的基础行为类型：" + subjectType.name(), HttpStatus.BAD_REQUEST);
             }
-            // 属性值、实例关系的输出即落库本身，没有回写方式；基础算子只读
-            action.setOutputMode(subjectType == ActionSubjectTypeEnum.BASIC_OPERATOR
+            // 属性值、实例关系的输出即落库本身，没有回写方式；基础函数只读
+            action.setOutputMode(subjectType == ActionSubjectTypeEnum.BASIC_FUNCTION
                     ? ActionOutputModeEnum.RESULT_ONLY : null);
         }
 
@@ -496,6 +503,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         action.setSubjectType(param.getSubjectType());
         action.setActionOperation(param.getOperation());
         action.setStorageGroup(param.getStorageGroup());
+        // 只有基础函数那一类会填这份配置，其他类别拿到的是 null，编辑改成别的类别时旧配置跟着清掉
+        action.setBasicFunctionConfig(definition.basicFunctionConfig);
         action.setOntologyUniqueIdentifier(new ArrayList<>(definition.objectIdentifiers));
         return definition;
     }
@@ -541,6 +550,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         action.setActionOperation(null);
         action.setStorageGroup(null);
         action.setOutputMode(null);
+        action.setBasicFunctionConfig(null);
         action.setDefinition(writeTreeDefinition(tree));
         // 树自己不指向对象，它的挂载对象就是各节点绑定的行为的挂载对象
         action.setOntologyUniqueIdentifier(new ArrayList<>(treeObjectIdentifiers(boundApis, spaceId)));
@@ -1265,11 +1275,18 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
 
     /**
      * 行为声明的出参绑定行，带出可点名的三种标识与取值路径。
-     * <p>出参行只存属性标识和取值路径，出参名要从算子参数表补；不绑算子的行为没有出参行。</p>
+     * <p>出参行只存属性标识和取值路径，出参名要从算子参数表补；不绑算子的行为没有出参行，
+     * 基础函数行为按自己的结果形状声明（一个对象一条聚合值 / 每个查询字段一条 + 总行数）。</p>
      */
     private List<TreeOutputRow> treeOutputRows(OntologyAction bound) {
         var detail = getActionByApi(bound.getOntologySpaceId(), bound.getApi());
-        if (detail == null || CollectionUtils.isEmpty(detail.getMappingIns())) {
+        if (detail == null) {
+            return List.of();
+        }
+        if (isBasicFunctionAction(bound)) {
+            return basicFunctionOutputRows(detail.getBasicFunction());
+        }
+        if (CollectionUtils.isEmpty(detail.getMappingIns())) {
             return List.of();
         }
         var outputRows = detail.getMappingIns().stream()
@@ -1292,8 +1309,47 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                     funcParam == null ? null : funcParam.getParamName(), row.getFunctionParamExpression(),
                     valueType,
                     row.getPropertyType(),
-                    StringUtils.defaultIfBlank(row.getDisplayName(), row.getParameterName()), row.getOutputMode());
+                    StringUtils.defaultIfBlank(row.getDisplayName(), row.getParameterName()), row.getOutputMode(),
+                    false);
         }).collect(Collectors.toList());
+    }
+
+    /**
+     * 基础函数行为的出参行：没有算子也没有写回属性，出参就是这次查询结果里的取值位置。
+     * <p>点名标识走 parameterName（属性唯一标识那一级没有属性可指），取值路径由执行器按结果 JSON 的形状给，
+     * 与 {@code run} 逐项产出的顺序一致。</p>
+     */
+    private List<TreeOutputRow> basicFunctionOutputRows(ActionBasicFunctionConfig config) {
+        return basicFunctionActionExecutor.declareOutputs(config).stream()
+                .map(output -> new TreeOutputRow(null, output.key(), null, output.expression(),
+                        output.valueType() == null ? FunctionParamTypeEnum.STRING : toBlackboardValueType(output.valueType()),
+                        output.valueType(), output.displayName(), ActionOutputModeEnum.RESULT_ONLY, true))
+                .collect(Collectors.toList());
+    }
+
+    /** 基础函数行为：不绑算子，出参与实例要求都按配置里的对象算 */
+    private boolean isBasicFunctionAction(OntologyAction bound) {
+        return bound.getActionKind() == ActionKindEnum.BASE
+                && bound.getSubjectType() == ActionSubjectTypeEnum.BASIC_FUNCTION;
+    }
+
+    /** 行为落库的基础函数配置；坏了或没有就按配置不可用报错，不列半套出参 */
+    private ActionBasicFunctionConfig basicFunctionConfigOf(OntologyAction bound) {
+        return basicFunctionActionExecutor.parse(bound.getBasicFunctionConfig(), bound.getApi());
+    }
+
+    /**
+     * 基础函数节点可以按对象选实例：选了就把查询收窄到那条数据，不选按该对象全量查。
+     * <p>所以这份列表列出来但不强制（{@code entityPrimaryKeyRequired} 仍为 false），
+     * 与属性值/实例关系那两类「不给实例就没法定位数据」的要求不同。</p>
+     */
+    private List<TreeInstanceRequirementVO> basicFunctionInstanceRequirements(OntologyAction bound) {
+        if (!isBasicFunctionAction(bound)) {
+            return List.of();
+        }
+        return basicFunctionActionExecutor.configOntologyIdentifiers(basicFunctionConfigOf(bound)).stream()
+                .map(objectId -> TreeInstanceRequirementVO.builder().objectIdentifier(objectId).build())
+                .collect(Collectors.toList());
     }
 
     /**
@@ -1302,6 +1358,10 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
      * 通配路径展开出的是一批行，黑板键和下游标量入参装不下整批，取批里有值的第一条。</p>
      */
     private Object readTreeOutputValue(String resultJson, TreeOutputRow row) {
+        // 路径由自己生成的出参（基础函数）形状是定的：走放宽兜底会按字段名在别的行里找到一个同名值，宁可不放宽
+        if (row.exactPath()) {
+            return FunctionOutputValueReader.readExact(resultJson, row.expression());
+        }
         if (FunctionOutputValueReader.hasWildcard(row.expression())) {
             var values = FunctionOutputValueReader.readMany(resultJson, row.expression(), row.functionParamName());
             if (CollectionUtils.isEmpty(values)) {
@@ -1312,10 +1372,10 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         return FunctionOutputValueReader.read(resultJson, row.expression(), row.functionParamName(), row.propertyType());
     }
 
-    /** 行为的一条出参绑定行：三种可点名标识、取值路径、类型与输出方式 */
+    /** 行为的一条出参绑定行：三种可点名标识、取值路径、类型与输出方式；exactPath 表示这条路径按字面取，不做形状放宽 */
     private record TreeOutputRow(String propertyUniqueIdentifier, String parameterName, String functionParamName,
                                  String expression, FunctionParamTypeEnum type, OntologyDataTypeEnum propertyType,
-                                 String displayName, ActionOutputModeEnum outputMode) {
+                                 String displayName, ActionOutputModeEnum outputMode, boolean exactPath) {
     }
 
     /** 收集树里绑定的行为及对应节点：行为 api -> 绑定它的节点，用来描述入参与实例来源 */
@@ -1546,7 +1606,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 .collect(Collectors.toList());
         var needsInstance = treeActionNeedsEntity(bound);
         return new TreeActionNodeTemplate(bound.getDisplayName(), needsInstance,
-                needsInstance ? treeNodeInstanceRequirements(bound) : List.of(),
+                needsInstance ? treeNodeInstanceRequirements(bound) : basicFunctionInstanceRequirements(bound),
                 inputParams, treeOutputTargets(bound));
     }
 
@@ -1588,6 +1648,16 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
      */
     private List<TreeOutputTargetVO> treeOutputTargets(OntologyAction bound) {
         var targets = new ArrayList<TreeOutputTargetVO>();
+        if (isBasicFunctionAction(bound)) {
+            // 基础函数只读，出参一律是「随结果返回」：报名和展示用声明里的 key/显示名，不需要给数据位置
+            return basicFunctionOutputRows(basicFunctionConfigOf(bound)).stream()
+                    .map(row -> TreeOutputTargetVO.builder()
+                            .mode(TreeOutputTargetModeEnum.RESULT_ONLY)
+                            .parameterName(row.parameterName())
+                            .displayName(row.displayName())
+                            .build())
+                    .collect(Collectors.toList());
+        }
         if (bound.getActionKind() == ActionKindEnum.BASE) {
             var group = bound.getStorageGroup();
             if (bound.getSubjectType() == ActionSubjectTypeEnum.PROPERTY_VALUE
@@ -2024,6 +2094,12 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
      */
     @Override
     public TreeExecuteResultVO executeTree(TreeExecuteParam param) {
+        // 行为树没有调度入口，对外执行都是手动触发：一次请求记一条手动执行日志
+        return manualExecuteLogService.runAndLog(param.getOntologySpaceId(), param.getTreeApi(), param,
+                () -> runTreeExecution(param), this::treeResultMessage);
+    }
+
+    private TreeExecuteResultVO runTreeExecution(TreeExecuteParam param) {
         var compiled = btTreeManager.getTree(param.getOntologySpaceId(), param.getTreeApi());
         var definition = prepareTreeDefinition(compiled.definition());
         var runtime = buildTreeRuntime(compiled, definition, param);
@@ -2037,6 +2113,11 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
      */
     @Override
     public TreeExecuteResultVO testTree(TreeExecuteParam param) {
+        return manualExecuteLogService.runAndLog(param.getOntologySpaceId(), param.getTreeApi(), param,
+                () -> runTreeTest(param), this::treeResultMessage);
+    }
+
+    private TreeExecuteResultVO runTreeTest(TreeExecuteParam param) {
         var compiled = btTreeManager.compileForTest(param.getOntologySpaceId(), param.getTreeApi());
         var action = getOne(new LambdaQueryWrapper<OntologyAction>()
                 .eq(OntologyAction::getApi, param.getTreeApi())
@@ -2065,6 +2146,12 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
      */
     @Override
     public TreeBatchExecuteResultVO executeTreeBatch(TreeBatchExecuteParam param) {
+        // 一次批量请求记一条手动执行日志，实例明细只在那一条的结果里
+        return manualExecuteLogService.runAndLog(param.getOntologySpaceId(), param.getTreeApi(), param,
+                () -> runTreeBatchExecution(param), this::treeBatchResultMessage);
+    }
+
+    private TreeBatchExecuteResultVO runTreeBatchExecution(TreeBatchExecuteParam param) {
         var compiled = btTreeManager.getTree(param.getOntologySpaceId(), param.getTreeApi());
         var shardTotal = param.getShardTotal();
         var shardIndex = param.getShardIndex();
@@ -2445,6 +2532,21 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             }
         }
         return null;
+    }
+
+    /** 行为树单次执行写进执行日志的说明：成功记一句话，失败取第一个有原因的失败节点 */
+    private String treeResultMessage(TreeExecuteResultVO result) {
+        if (result.getState() == BehaviorStateEnum.SUCCESS) {
+            return "行为树执行成功：" + result.getTreeApi();
+        }
+        var failureMessage = firstFailureMessage(result.getNodes());
+        return StringUtils.isBlank(failureMessage) ? "行为树执行失败：" + result.getTreeApi() : failureMessage;
+    }
+
+    /** 行为树批量执行写进执行日志的说明：一次请求只留实例数与成功失败计数 */
+    private String treeBatchResultMessage(TreeBatchExecuteResultVO result) {
+        return "共 " + result.getTotal() + " 条实例，成功 " + result.getSuccessCount()
+                + " / 失败 " + result.getFailCount();
     }
 
     /**
@@ -3414,6 +3516,30 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         });
     }
 
+    /**
+     * 基础函数行为：按选中的对象做聚合或查询，不绑算子也不写库，因此没有关系映射和参数绑定。
+     * <p>对象可以选多个（必须挂在同一对象分类下），此时只能做聚合；聚合目标与条件字段存的是属性 apiName，
+     * 单对象从属性里选、多对象手输，由执行器逐个对象确认这些字段都存在且关联了数据源。</p>
+     */
+    private void checkBasicFunctionAction(ActionCreateOrUpdateParam param, ActionDefinition definition, Integer spaceId) {
+        PreconditionUtils.checkArgument(StringUtils.isEmpty(param.getFunctionApi()), "基础函数行为不需要绑定算子", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(param.getOperation() == null && StringUtils.isEmpty(param.getStorageGroup()),
+                "基础函数行为不需要基础操作和存储分组", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(param.getLinkMapping() == null && CollectionUtils.isEmpty(param.getMappingIns()),
+                "基础函数行为不绑算子也不写关系，不需要传行为参数列表和关系映射", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(param.getOutputMode() != ActionOutputModeEnum.WRITE_PROPERTY,
+                "基础函数行为只支持仅返回结果", HttpStatus.BAD_REQUEST);
+        var config = param.getBasicFunction();
+        basicFunctionActionExecutor.checkConfig(config, spaceId);
+        // 顶层对象id 对基础函数没有独立作用（对象都在配置里），传了就必须是配置里的某一个，否则挂载对象会多出一个查不到的对象
+        PreconditionUtils.checkArgument(StringUtils.isBlank(param.getOntologyIdentifier())
+                        || basicFunctionActionExecutor.configOntologyIdentifiers(config).contains(param.getOntologyIdentifier()),
+                "基础函数行为作用的对象写在 basicFunction 配置里，顶层对象id 要么不传，要么传配置里选中的某个对象",
+                HttpStatus.BAD_REQUEST);
+        definition.basicFunctionConfig = basicFunctionActionExecutor.write(config);
+        definition.objectIdentifiers.addAll(basicFunctionActionExecutor.configOntologyIdentifiers(config));
+    }
+
     /** 属性值行为：对某个存储分组（物理表）做新增/修改/删除，不绑算子 */
     private void checkPropertyValueAction(ActionCreateOrUpdateParam param, ActionDefinition definition) {
         PreconditionUtils.checkArgument(StringUtils.isEmpty(param.getFunctionApi()), "属性值行为不需要绑定算子", HttpStatus.BAD_REQUEST);
@@ -3676,6 +3802,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         private Function func;
         private List<FunctionParamPO> funcParams = new ArrayList<>();
         private OntologyActionLink actionLink;
+        /** 基础函数行为的查询配置 JSON，只有 subjectType=BASIC_FUNCTION 那一支会填 */
+        private String basicFunctionConfig;
         private final List<OntologyActionMappingIn> mappings = new ArrayList<>();
         /** 本次绑定里能认出的挂载对象id，校验顺路收集，落库到行为的挂载对象列 */
         private final Set<String> objectIdentifiers = new LinkedHashSet<>();
@@ -3808,6 +3936,10 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 .createTime(action.getCreateTime())
                 .updateTime(action.getUpdateTime())
                 .build();
+        // 基础函数行为的查询配置原样回显，前端据此重画对象、字段和条件
+        if (action.getSubjectType() == ActionSubjectTypeEnum.BASIC_FUNCTION) {
+            detailVO.setBasicFunction(basicFunctionActionExecutor.parse(action.getBasicFunctionConfig(), action.getApi()));
+        }
         // 行为树没有算子、关系和参数绑定，读回定义即可
         if (action.getActionKind() == ActionKindEnum.TREE) {
             var tree = readTreeDefinition(action.getDefinition());
@@ -3890,6 +4022,17 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     @SneakyThrows
     @Override
     public String executeAction(OntologyActionExecuteParam param) {
+        // 对外的按对象执行属于手动触发，整次执行记一条手动执行日志；调度走 executeActionForScheduling，日志由调度侧记
+        var meta = ontologyMetaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>()
+                .select(OntologyMeta::getOntologySpaceId)
+                .eq(OntologyMeta::getUniqueIdentifier, param.getOntologyUniqueIdentifier()));
+        return manualExecuteLogService.runAndLog(meta == null ? null : meta.getOntologySpaceId(),
+                param.getActionApi(), param, () -> executeActionForScheduling(param), msg -> msg);
+    }
+
+    @SneakyThrows
+    @Override
+    public String executeActionForScheduling(OntologyActionExecuteParam param) {
         // 定时调度存了整段实体执行参数（entity_json）：解析成 EntityActionExecuteParam，
         // 按它指定的实例直接执行，不再按对象下全部实例遍历。缺省（没存 JSON）仍走下面的全量逻辑。
         if (param instanceof XxlJobActionExecuteParam xxlParam && xxlParam.getScheduleId() != null) {
@@ -3927,6 +4070,15 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         PreconditionUtils.checkArgument(contextInfoDTO.getActionDetailVO() != null
                 && meta.getOntologySpaceId().equals(contextInfoDTO.getActionDetailVO().getOntologySpaceId()),
                 "行为不属于该对象所在的空间", HttpStatus.BAD_REQUEST);
+        // 实例主键只对基础函数有意义（把查询收窄到那一条数据）；别的类别按下面遍历全部实例执行，传了也不会生效
+        PreconditionUtils.checkArgument(param.getEntityPrimaryKey() == null
+                        || contextInfoDTO.getActionDetailVO().getSubjectType() == ActionSubjectTypeEnum.BASIC_FUNCTION,
+                "只有基础函数行为支持用 entityPrimaryKey 指定实例：" + param.getActionApi(), HttpStatus.BAD_REQUEST);
+        // 基础函数是只读查询：一次调用把配置里的对象各查一遍，按对象下实例逐个循环只会把同一个聚合重复算出来
+        if (contextInfoDTO.getActionDetailVO().getSubjectType() == ActionSubjectTypeEnum.BASIC_FUNCTION) {
+            return runBasicFunctionAction(contextInfoDTO.getActionDetailVO(), param.getOntologyUniqueIdentifier(),
+                    param.getEntityPrimaryKey(), null);
+        }
         checkBulkExecutable(contextInfoDTO.getActionDetailVO());
         //获取实体主键列表
         var primaryProperty = contextInfoDTO.getOntologyProperties().stream().filter(v -> v.getIsPrimaryKey() == 1).findFirst().orElse(null);
@@ -4004,6 +4156,13 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
 
     @Override
     public ActionTestResultVO testAction(ActionTestParam param) {
+        // 对外的行为测试都是手动触发，一次请求（含批量展开的各组）记一条手动执行日志
+        return manualExecuteLogService.runAndLog(param.getOntologySpaceId(), param.getActionApi(), param,
+                () -> testActionForScheduling(param), ActionTestResultVO::getMessage);
+    }
+
+    @Override
+    public ActionTestResultVO testActionForScheduling(ActionTestParam param) {
         var invokeParam = toInvokeParam(param);
         // 入参方向把某个字段写成数组就是批量测试：展开成组合后逐组跑一遍。不传数组时与改造前完全一致
         var testAxes = collectTestAxes(invokeParam);
@@ -4035,8 +4194,9 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
      * 不加事务：属性值行为写数据湖、实例关系行为写图库、算子行为跨两者，
      * 且发现必填属性缺失时的失效标记必须独立提交，不能被随后的异常回滚掉。
      * <p>
-     * 批量展开只在对外的 {@link #testAction(ActionTestParam)} 做：行为树节点也是走这里执行单条行为，
-     * 黑板里的值偶尔本来就是集合，不能在那条链路上悄悄炸成多组。
+     * 批量展开只在 {@link #testActionForScheduling(ActionTestParam)} 做：行为树节点也是走这里执行单条行为，
+     * 黑板里的值偶尔本来就是集合，不能在那条链路上悄悄炸成多组。手动执行日志记在对外的 {@link #testAction(ActionTestParam)}，
+     * 这一层一次调用就是一次执行，不重复记。
      */
     private ActionTestResultVO runTestAction(ActionInvokeParam param) {
         var action = getOne(new LambdaQueryWrapper<OntologyAction>()
@@ -4061,9 +4221,9 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             throw new BusinessException("行为没有绑定关系，不需要传 from/to 实例主键", HttpStatus.BAD_REQUEST);
         }
         if (action.getActionKind() == ActionKindEnum.BASE) {
-            // 属性值/实例关系行为不绑算子，没有算子入参可指向
+            // 不绑算子的基础行为没有算子入参可指向
             if (MapUtils.isNotEmpty(param.getInputParams()) || MapUtils.isNotEmpty(param.getOutputParams())) {
-                throw new BusinessException("属性值/实例关系行为不绑算子，不支持用 inputParams、outputParams 按参数指定数据位置",
+                throw new BusinessException("属性值/实例关系/基础函数行为不绑算子，不支持用 inputParams、outputParams 按参数指定数据位置",
                         HttpStatus.BAD_REQUEST);
             }
             if (action.getSubjectType() == ActionSubjectTypeEnum.PROPERTY_VALUE) {
@@ -4072,8 +4232,19 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             if (action.getSubjectType() == ActionSubjectTypeEnum.LINK) {
                 return testLinkAction(action, detail, param);
             }
+            if (action.getSubjectType() == ActionSubjectTypeEnum.BASIC_FUNCTION) {
+                return testBasicFunctionAction(action, detail, param);
+            }
         }
         return testFunctionAction(action, detail, param);
+    }
+
+    /** 基础函数行为测试：按配置真实查一遍，选了实例的对象只查该实例 */
+    private ActionTestResultVO testBasicFunctionAction(OntologyAction action, OntologyActionDetailVO detail,
+                                                       ActionInvokeParam param) {
+        var result = runBasicFunctionAction(detail, singleActionObject(action),
+                param.getEntityPrimaryKey(), param.getEntityPrimaryKeys());
+        return testResult(action, "行为执行成功").setResult(result);
     }
 
     /**
@@ -4098,7 +4269,44 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         if (subjectType == ActionSubjectTypeEnum.LINK) {
             return runLinkAction(action, detail.getLinkMapping(), param);
         }
+        if (subjectType == ActionSubjectTypeEnum.BASIC_FUNCTION) {
+            return runBasicFunctionAction(detail, param.getOntologyUniqueIdentifier(),
+                    param.getEntityPrimaryKey(), param.getEntityPrimaryKeys());
+        }
         throw new BusinessException("该行为需要绑定算子后才能执行：" + action.getApi(), HttpStatus.BAD_REQUEST);
+    }
+
+    /**
+     * 执行基础函数行为：按配置里的对象逐个查询，选了实例的对象只查该实例，其余按全量查。
+     *
+     * @param requestObject      请求指定的对象id，用于把单个实例主键归到正确的对象上；多对象时必填
+     * @param entityPrimaryKey   对象级的实例主键
+     * @param primaryKeyByObject 按对象给的实例主键，优先于 entityPrimaryKey
+     */
+    private String runBasicFunctionAction(OntologyActionDetailVO detail, String requestObject,
+                                          Object entityPrimaryKey, Map<String, Object> primaryKeyByObject) {
+        var config = detail.getBasicFunction();
+        PreconditionUtils.checkNotNull(config, "基础函数行为没有查询配置：" + detail.getActionApi(), HttpStatus.BAD_REQUEST);
+        var targets = new LinkedHashMap<String, Object>();
+        var identifiers = basicFunctionActionExecutor.configOntologyIdentifiers(config);
+        MapUtils.emptyIfNull(primaryKeyByObject).forEach((objectId, primaryKey) -> {
+            if (identifiers.contains(objectId) && primaryKey != null) {
+                targets.put(objectId, primaryKey);
+            }
+        });
+        if (entityPrimaryKey == null) {
+            return basicFunctionActionExecutor.run(config, targets);
+        }
+        if (identifiers.contains(requestObject)) {
+            targets.putIfAbsent(requestObject, entityPrimaryKey);
+        } else if (identifiers.size() == 1) {
+            targets.putIfAbsent(identifiers.get(0), entityPrimaryKey);
+        } else {
+            // 多对象时一个主键说不清查的是谁，让调用方按对象传，别默默查错对象
+            throw new BusinessException("基础函数行为绑了多个对象，按实例查询时要按对象传实例主键"
+                    + "（entityPrimaryKeys：对象id -> 实例主键）：" + detail.getActionApi(), HttpStatus.BAD_REQUEST);
+        }
+        return basicFunctionActionExecutor.run(config, targets);
     }
 
     /** 行为测试的入参形状与执行不同，这里把测试给的键包成执行用的单实体参数 */
@@ -4859,11 +5067,20 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         targets.put(axis.key(), new ArrayList<>(List.of(copyParamTarget((ActionInstanceTargetParam) value))));
     }
 
+    /**
+     * 调度接口只认定时和规则两类；MANUAL 是手动执行日志的类型，传进来会一条都不改地走完，直接拒掉。
+     */
+    private void checkSchedulingType(ActionSchedulingTypeEnum type) {
+        PreconditionUtils.checkArgument(type == ActionSchedulingTypeEnum.TASK || type == ActionSchedulingTypeEnum.RULE,
+                "调度类型只支持 TASK 定时和 RULE 规则", HttpStatus.BAD_REQUEST);
+    }
+
     @Override
     @Transactional
     public Long createScheduling(ActionSchedulingCreateParam param) {
         //todo 目前只考虑定时调度
         var schedulingType = param.getType();
+        checkSchedulingType(schedulingType);
         // 调度只能绑定本空间的行为：spaceId 必传，行为按 api + 空间过滤
         PreconditionUtils.checkNotNull(param.getSpaceId(), "请选择行为所属空间", HttpStatus.BAD_REQUEST);
         var action = actionMapper.selectOne(new LambdaQueryWrapper<OntologyAction>()
@@ -4938,6 +5155,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         var ontologyIdentifier = scheduleObject(action, param.getOntologyIdentifier());
         //todo 目前只考虑定时调度
         var schedulingType = param.getType();
+        checkSchedulingType(schedulingType);
         if (schedulingType.equals(ActionSchedulingTypeEnum.TASK)) {
             var handleTask = actionHandleTaskService.getById(param.getId());
             PreconditionUtils.checkNotNull(handleTask, "定时调度任务不存在：" + param.getId());
@@ -4995,6 +5213,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     @Override
     @Transactional
     public void removeScheduling(ActionSchedulingTypeEnum type, Long id) {
+        checkSchedulingType(type);
         //todo 只考虑定时任务
         if (ActionSchedulingTypeEnum.TASK.equals(type)) {
             var handleTask = actionHandleTaskService.getById(id);
@@ -5016,6 +5235,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     @Override
     @Transactional
     public void startScheduling(ActionSchedulingTypeEnum type, Long id) {
+        checkSchedulingType(type);
         //todo 只考虑定时任务
         if (ActionSchedulingTypeEnum.TASK.equals(type)) {
             var handleTask = actionHandleTaskService.getById(id);
@@ -5039,6 +5259,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     @Override
     @Transactional
     public void stopScheduling(ActionSchedulingTypeEnum type, Long id) {
+        checkSchedulingType(type);
         //todo 只考虑定时任务
         if (ActionSchedulingTypeEnum.TASK.equals(type)) {
             var handleTask = actionHandleTaskService.getById(id);
@@ -5060,6 +5281,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
 
     @Override
     public ActionSchedulingDetailVO getSchedulingDetailById(Long id, ActionSchedulingTypeEnum type) {
+        checkSchedulingType(type);
         if (ActionSchedulingTypeEnum.TASK.equals(type)) {
             var handleTask = actionHandleTaskService.getById(id);
             PreconditionUtils.checkNotNull(handleTask, "定时调度任务不存在：" + id);
@@ -5113,6 +5335,9 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
 
     @Override
     public Page<ActionSchedulingInfoVO> listScheduling(Integer pageNum, Integer pageSize, String name, ActionSchedulingTypeEnum type, Integer ontologySpaceId) {
+        if (type != null) {
+            checkSchedulingType(type);
+        }
         List<ActionHandleTask> tasks = List.of();
         List<ActionHandleRule> rules = List.of();
         if (type == null || ActionSchedulingTypeEnum.TASK.equals(type)) {
