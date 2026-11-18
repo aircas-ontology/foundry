@@ -1016,16 +1016,19 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         }
         //脚本函数：按参数定义组装单对象入参（handle(input)），按语言路由到对应引擎执行
         Map<String, Object> inputMap = buildInputMap(executeInputParams, funParamMap);
+        FunctionLanguageEnum language = function.getLanguage() == null ? inferLanguageFromCode(function.getCode()) : function.getLanguage();
         // 单对象入参解包：当只有一个入参时，直接将该参数的值作为 runner 的 input，
         // 避免脚本里写 input.input.xxx 的双层嵌套（用户给参数起名 input/user/whatever 都能直接用 input.xxx 或 input）
+        // Python 只解包对象值：python-runner 的入参模型是 input: dict，裸标量/数组会被拒成 422，
+        // 这类参数保持 {参数名: 值} 整包下发，脚本按声明的入参名取值即可。
         String inputJson;
-        if (executeInputParams.size() == 1 && inputMap.containsKey(executeInputParams.get(0).getParamName())) {
-            Object value = inputMap.get(executeInputParams.get(0).getParamName());
-            inputJson = objectMapper.writeValueAsString(value);
+        Object singleValue = executeInputParams.size() == 1
+                ? inputMap.get(executeInputParams.get(0).getParamName()) : null;
+        if (singleValue != null && (language != FunctionLanguageEnum.PYTHON || singleValue instanceof Map<?, ?>)) {
+            inputJson = objectMapper.writeValueAsString(singleValue);
         } else {
             inputJson = objectMapper.writeValueAsString(inputMap);
         }
-        FunctionLanguageEnum language = function.getLanguage() == null ? inferLanguageFromCode(function.getCode()) : function.getLanguage();
         ScriptExecutionContext ctx = ScriptExecutionContext.builder()
                 .language(language)
                 .functionApi(param.getFunctionApi())
