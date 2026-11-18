@@ -2296,16 +2296,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                                 .sourceType(param.sourceType())
                                 .build())
                         .collect(Collectors.toList()))
-                // 基础行为不绑算子、执行没有返回体，出参既取不到也就无从引用或回传
-                .bindableOutputs(action.getActionKind() == ActionKindEnum.BASE ? new ArrayList<>()
-                        : treeOutputRows(action).stream()
-                        .map(row -> TreeActionParamVO.builder()
-                                .name(treeOutputKey(row))
-                                .fieldName(StringUtils.defaultIfBlank(row.parameterName(), row.functionParamName()))
-                                .type(row.type())
-                                .description(row.displayName())
-                                .build())
-                        .collect(Collectors.toList()));
+                .bindableOutputs(treeBindableOutputs(action));
         if (StringUtils.isBlank(action.getFunctionApi())) {
             return builder.build();
         }
@@ -2325,6 +2316,32 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             // 算子可能已被删除或下架，行为仍要出现在目录里，只是暂时拿不到参数
             log.warn("行为树节点目录取算子参数失败, actionApi={}, functionApi={}", action.getApi(), action.getFunctionApi(), e);
             return builder.build();
+        }
+    }
+
+    /**
+     * 可被下游引用或回传黑板的出参。
+     * <p>属性值、实例关系这两类基础行为没有返回体，出参既取不到也就无从引用或回传；
+     * 基础函数同样不绑算子，但执行会返回查询结果，出参与其它行为一样可以选。</p>
+     */
+    private List<TreeActionParamVO> treeBindableOutputs(OntologyAction action) {
+        if (action.getActionKind() == ActionKindEnum.BASE
+                && action.getSubjectType() != ActionSubjectTypeEnum.BASIC_FUNCTION) {
+            return new ArrayList<>();
+        }
+        try {
+            return treeOutputRows(action).stream()
+                    .map(row -> TreeActionParamVO.builder()
+                            .name(treeOutputKey(row))
+                            .fieldName(StringUtils.defaultIfBlank(row.parameterName(), row.functionParamName()))
+                            .type(row.type())
+                            .description(row.displayName())
+                            .build())
+                    .collect(Collectors.toList());
+        } catch (Exception e) {
+            // 单条行为定义坏了（如基础函数配置无法解析）不能让整个目录不可用，行为照常出现，只是暂时没有出参可选
+            log.warn("行为树节点目录取行为出参失败, actionApi={}", action.getApi(), e);
+            return new ArrayList<>();
         }
     }
 
