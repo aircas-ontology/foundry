@@ -5461,6 +5461,9 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                         .taskStatus(v.getTaskStatus())
                         .requestParam(v.getRequestParam())
                         .triggerTime(v.getTriggerTime())
+                        .executeStartTime(v.getExecuteStartTime())
+                        .executorIp(v.getExecutorIp())
+                        .executorHost(v.getExecutorHost())
                         .completeTime(v.getCompleteTime())
                         .build())
                 .collect(Collectors.toList());

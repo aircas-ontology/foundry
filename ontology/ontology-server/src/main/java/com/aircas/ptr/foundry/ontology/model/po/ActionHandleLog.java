@@ -32,7 +32,16 @@ public class ActionHandleLog {
 
     private Date triggerTime;
 
+    /** 实际开始执行行为的时间（触发后可能排队/评估，与 triggerTime 区分） */
+    private Date executeStartTime;
+
     private Date completeTime;
+
+    /** 执行机 IP */
+    private String executorIp;
+
+    /** 执行机主机名 */
+    private String executorHost;
 
     private TaskStatusEnum taskStatus;
 }

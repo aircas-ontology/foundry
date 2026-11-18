@@ -2,6 +2,7 @@ package com.aircas.ptr.foundry.ontology.model.dto;
 
 
 import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
@@ -15,6 +16,7 @@ import lombok.experimental.Accessors;
 @NoArgsConstructor
 @Data
 @Accessors(chain = true)
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class OntologyPropertyDTO {
 
     @Schema(name = "dataType", description = "数据类型", required = true, example = "Bool")

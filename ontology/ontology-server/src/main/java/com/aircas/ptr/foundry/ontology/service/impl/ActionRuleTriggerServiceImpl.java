@@ -24,6 +24,7 @@ import com.aircas.ptr.foundry.ontology.service.ActionHandleRuleService;
 import com.aircas.ptr.foundry.ontology.service.ActionRuleTriggerService;
 import com.aircas.ptr.foundry.ontology.service.EntityService;
 import com.aircas.ptr.foundry.ontology.service.OntologyActionService;
+import com.aircas.ptr.foundry.ontology.utils.ExecutorMachineInfo;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
@@ -97,6 +98,8 @@ public class ActionRuleTriggerServiceImpl implements ActionRuleTriggerService {
                 || StringUtils.isBlank(table) || CollectionUtils.isEmpty(changedColumns)) {
             return;
         }
+        // 触发时刻取收到数据变更的时间，后续规则捞取/条件求值的耗时不算进执行时间
+        var triggerTime = new Date();
         // 先判断本次变更的表+字段上有没有配置属性：变更列映射到对象属性，
         // 一个属性都没命中说明这些字段没有规则可挂，直接不进规则调度
         Set<String> changedPropertyKeys = changedPropertyKeys(ontologyUniqueIdentifier, table, changedColumns);
@@ -126,7 +129,7 @@ public class ActionRuleTriggerServiceImpl implements ActionRuleTriggerService {
                     if (inCooldown(cooldownKey)) {
                         continue;
                     }
-                    if (evalAndExecuteGroup(rule.getId(), group, instanceCache)) {
+                    if (evalAndExecuteGroup(rule.getId(), group, instanceCache, triggerTime)) {
                         markCooldown(cooldownKey);
                     }
                 }
@@ -165,6 +168,7 @@ public class ActionRuleTriggerServiceImpl implements ActionRuleTriggerService {
         if (rule == null) {
             return;
         }
+        var triggerTime = new Date();
         try {
             var groups = readGroups(rule);
             if (CollectionUtils.isEmpty(groups)) {
@@ -172,7 +176,7 @@ public class ActionRuleTriggerServiceImpl implements ActionRuleTriggerService {
             }
             Map<String, Map<String, Object>> instanceCache = new HashMap<>();
             for (var group : groups) {
-                evalAndExecuteGroup(rule.getId(), group, instanceCache);
+                evalAndExecuteGroup(rule.getId(), group, instanceCache, triggerTime);
             }
         } catch (Exception e) {
             log.error("规则调度启用时存量评估失败, ruleId={}", ruleId, e);
@@ -189,7 +193,7 @@ public class ActionRuleTriggerServiceImpl implements ActionRuleTriggerService {
 
     /** 求值一组条件（含整体取反），成立则执行该组行为；返回是否执行 */
     private boolean evalAndExecuteGroup(Long ruleId, RuleJudgeGroupParam group,
-                                        Map<String, Map<String, Object>> instanceCache) {
+                                        Map<String, Map<String, Object>> instanceCache, Date triggerTime) {
         boolean result = evalJudgeItems(group.getJudgeParams(), instanceCache);
         if (Boolean.TRUE.equals(group.getCondition())) {
             result = !result;
@@ -197,7 +201,7 @@ public class ActionRuleTriggerServiceImpl implements ActionRuleTriggerService {
         if (!result) {
             return false;
         }
-        executeJudgeAction(ruleId, group.getActionParam());
+        executeJudgeAction(ruleId, group.getActionParam(), triggerTime);
         return true;
     }
 
@@ -460,7 +464,7 @@ public class ActionRuleTriggerServiceImpl implements ActionRuleTriggerService {
     }
 
     /** 执行定稿规则的行为：目标实例由 actionParam 显式指定；entity_json 与周期调度同形式 */
-    private void executeJudgeAction(Long ruleId, RuleActionParam actionParam) {
+    private void executeJudgeAction(Long ruleId, RuleActionParam actionParam, Date triggerTime) {
         if (actionParam == null || StringUtils.isBlank(actionParam.getActionApi())) {
             log.warn("规则调度缺少 actionParam.action_api, ruleId={}", ruleId);
             return;
@@ -477,20 +481,23 @@ public class ActionRuleTriggerServiceImpl implements ActionRuleTriggerService {
         if (StringUtils.isNotBlank(actionParam.getEntityIdentifier()) && template.getEntityPrimaryKey() == null) {
             template.setEntityPrimaryKey(actionParam.getEntityIdentifier());
         }
-        executeTemplate(ruleId, action.getApi(), template);
+        executeTemplate(ruleId, action.getApi(), template, triggerTime);
     }
 
     /** 规则命中后执行行为并把结果落 action_handle_log；日志独立提交，不随后续异常回滚 */
-    private void executeTemplate(Long ruleId, String actionApi, ActionTestParam template) {
+    private void executeTemplate(Long ruleId, String actionApi, ActionTestParam template, Date triggerTime) {
         var handleLog = ActionHandleLog.builder()
                 .actionHandleId(ruleId)
                 .actionHandleType(ActionSchedulingTypeEnum.RULE)
                 .requestParam(writeJson(template))
-                .triggerTime(new Date())
+                .triggerTime(triggerTime)
+                .executorIp(ExecutorMachineInfo.ip())
+                .executorHost(ExecutorMachineInfo.host())
                 .taskStatus(TaskStatusEnum.PENDING)
                 .build();
         actionHandleLogMapper.insert(handleLog);
         try {
+            handleLog.setExecuteStartTime(new Date());
             var result = ontologyActionService.testActionForScheduling(template);
             handleLog.setMsg(result.getMessage())
                     .setExecuteResult(writeJson(result))

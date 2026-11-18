@@ -4,6 +4,7 @@ package com.aircas.ptr.foundry.ontology.model.dto;
 import com.aircas.ptr.foundry.ontology.model.param.PropertyCategoryCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.PropertyMetadataSchemaCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.PropertyMetadataSchemaUpdateParam;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -17,6 +18,7 @@ import java.util.List;
 @NoArgsConstructor
 @Data
 @Accessors(chain = true)
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class OntologyCreateDTO {
 
     private OntologyMetaDataDTO metadata;

@@ -39,6 +39,16 @@ public class SchedulingResultVO {
     @JsonFormat(pattern = DATE_FORMAT_DEFAULT, timezone = "GMT+8")
     private Date triggerTime;
 
+    @Schema(name = "executeStartTime",description = "开始执行时间")
+    @JsonFormat(pattern = DATE_FORMAT_DEFAULT, timezone = "GMT+8")
+    private Date executeStartTime;
+
+    @Schema(name = "executorIp",description = "执行机IP")
+    private String executorIp;
+
+    @Schema(name = "executorHost",description = "执行机主机名")
+    private String executorHost;
+
     @Schema(name = "requestParam",description = "请求参数")
     private String requestParam;
 
