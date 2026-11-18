@@ -28,6 +28,12 @@ public class OntologyUpdateParam extends OntologyIdentifierParam {
     private String icon;
 
     /**
+     * 对象api名称（可选，不传则不修改）
+     */
+    @Schema(name = "apiName", description = "在代码里用的对象名称，不传则保持原值", example = "airplane")
+    private String apiName;
+
+    /**
      * 对象名称
      */
     @Schema(name = "displayName", description = "对象名称", example = "飞机")

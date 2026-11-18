@@ -83,16 +83,14 @@ public class DatasourceConnectionController {
         return RestResult.success();
     }
 
-    @Operation(summary = "列出该对象空间对应数据源下的 schema 清单（按厂商分派：MySQL/MariaDB 走 getCatalogs()，其余走 getSchemas()；"
-            + "系统 schema 已过滤）；「数据源构建对象」向导选 schema 步骤用")
+    @Operation(summary = "列出该对象空间对应数据源下的 schema ")
     @GetMapping("/schema/list")
     public RestResult<List<DatasourceSchemaVO>> listSchemas(
             @RequestParam @SpaceIdVerify @Parameter(description = "对象空间 id") Integer spaceId) {
         return RestResult.ofData(datasourceConnectionService.listSchemas(spaceId));
     }
 
-    @Operation(summary = "列出该对象空间对应数据源下的表：表名 / 表注释 / 字段数；「数据源构建对象」向导选表步骤用，"
-            + "与查数据湖空间内表的 /datasource/table 无关")
+    @Operation(summary = "列出该对象空间对应数据源下的表")
     @GetMapping("/table/list")
     public RestResult<List<DatasourceTableSummaryVO>> listTables(
             @RequestParam @SpaceIdVerify @Parameter(description = "对象空间 id") Integer spaceId,
@@ -100,8 +98,7 @@ public class DatasourceConnectionController {
         return RestResult.ofData(datasourceConnectionService.listTablesWithColumnCount(spaceId, schemaName));
     }
 
-    @Operation(summary = "列出该对象空间对应数据源下多张表的列与主子表外键候选；外键只给本次传入表之间的关系，"
-            + "每张子表至多一条，origin=HEURISTIC 的是按同名列推断的、需要用户确认")
+    @Operation(summary = "列出该对象空间对应数据源下多张表的列与主子表外键候选")
     @GetMapping("/table/columns")
     public RestResult<List<DatasourceTableDetailVO>> listTableColumns(
             @RequestParam @SpaceIdVerify @Parameter(description = "对象空间 id") Integer spaceId,
@@ -110,8 +107,31 @@ public class DatasourceConnectionController {
         return RestResult.ofData(datasourceConnectionService.listTablesDetail(spaceId, schemaName, tableNames));
     }
 
-    @Operation(summary = "测试连接（只建一次连接读库名与版本，不执行 SQL、不落库；"
-            + "传 id 时以库中该条为底、表单里非空字段覆盖，编辑场景可以不带密码）")
+    @Operation(summary = "按数据源 id 列出 schema ")
+    @GetMapping("/schema/list_by_datasource")
+    public RestResult<List<DatasourceSchemaVO>> listSchemasByDatasource(
+            @RequestParam @Parameter(description = "数据源 id") Integer id) {
+        return RestResult.ofData(datasourceConnectionService.listSchemasByDatasource(id));
+    }
+
+    @Operation(summary = "按数据源 id schemaName列出表")
+    @GetMapping("/table/list_by_datasource")
+    public RestResult<List<DatasourceTableSummaryVO>> listTablesByDatasource(
+            @RequestParam @Parameter(description = "数据源 id") Integer id,
+            @RequestParam @Parameter(description = "外部库 schema 名（MySQL/MariaDB 上作为 catalog；其余厂商作为 schema 参数）") String schemaName) {
+        return RestResult.ofData(datasourceConnectionService.listTablesWithColumnCountByDatasource(id, schemaName));
+    }
+
+    @Operation(summary = "按数据源 id schemaName tableNames 列出属性")
+    @GetMapping("/table/columns_by_datasource")
+    public RestResult<List<DatasourceTableDetailVO>> listTableColumnsByDatasource(
+            @RequestParam @Parameter(description = "数据源 id") Integer id,
+            @RequestParam @Parameter(description = "外部库 schema 名（MySQL/MariaDB 上作为 catalog；其余厂商作为 schema 参数）") String schemaName,
+            @RequestParam @Parameter(description = "表名，逗号分隔，区分大小写") List<String> tableNames) {
+        return RestResult.ofData(datasourceConnectionService.listTablesDetailByDatasource(id, schemaName, tableNames));
+    }
+
+    @Operation(summary = "测试连接")
     @PostMapping("/test")
     public RestResult<String> test(
             @RequestParam(required = false) @Parameter(description = "已保存的数据源 id，可不传") Integer id,

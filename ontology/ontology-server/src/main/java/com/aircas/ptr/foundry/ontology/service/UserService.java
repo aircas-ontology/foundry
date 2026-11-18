@@ -4,7 +4,7 @@ import com.aircas.ptr.foundry.ontology.model.dto.JwtDTO;
 import com.aircas.ptr.foundry.ontology.model.param.UserCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.UserLoginParam;
 import com.aircas.ptr.foundry.ontology.model.po.User;
-import com.baomidou.mybatisplus.extension.service.IService;
+import com.baomidou.mybatisplus.spring.service.IService;
 
 import jakarta.validation.Valid;
 

@@ -21,4 +21,7 @@ public class ActionHandleRuleVO {
     @Schema(name = "judgeRules", description = "规则数组：组合条件（括号+AND/OR，可整体取反）+ 行为执行参数")
     private List<RuleJudgeGroupParam> judgeRules;
 
+    @Schema(name = "flowDocument", description = "前端规则画布文档 JSON 字符串，创建/编辑时传入的原文，前端自行反序列化回显画布")
+    private String flowDocument;
+
 }

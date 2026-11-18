@@ -62,4 +62,9 @@ public class OntologyPropertyUpdateParam extends IdentifierParam {
     @Schema(name = "metadata", description = "属性元数据")
     private JsonNode metadata;
 
+    // Jackson 把 JSON null 反序列化为 NullNode（非 Java null），"metadata": null 须视同未设置
+    public JsonNode getMetadata() {
+        return metadata == null || metadata.isNull() ? null : metadata;
+    }
+
 }

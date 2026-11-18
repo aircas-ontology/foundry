@@ -21,7 +21,7 @@ import com.aircas.ptr.foundry.ontology.model.po.*;
 import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.aircas.ptr.foundry.ontology.repository.arangodb.EntityNodeRepository;
 import com.aircas.ptr.foundry.ontology.repository.arangodb.EntityRelationRepository;
-import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.ObjectMapper;
+import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.DataLakeObjectMapper;
 import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.TableFieldMappingMapper;
 import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.TableMetadataMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.FunctionExecuteResultMapper;
@@ -30,6 +30,7 @@ import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyMetaMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyPropertyMapper;
 import com.aircas.ptr.foundry.ontology.service.EntityService;
 import com.aircas.ptr.foundry.ontology.service.FunctionService;
+import com.aircas.ptr.foundry.ontology.service.ManualExecuteLogService;
 import com.aircas.ptr.foundry.ontology.service.OntologyActionService;
 import com.aircas.ptr.foundry.ontology.utils.FunctionOutputValueReader;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -111,6 +112,9 @@ public class EntityServiceImpl implements EntityService {
     @Resource
     private OntologyActionService actionService;
 
+    @Resource
+    private ManualExecuteLogService manualExecuteLogService;
+
 
     @Resource
     private OntologyPropertyMapper propertyMapper;
@@ -125,7 +129,7 @@ public class EntityServiceImpl implements EntityService {
     private TableFieldMappingMapper tableFieldMappingMapper;
 
     @Resource
-    private ObjectMapper objectMapper;
+    private DataLakeObjectMapper objectMapper;
 
     @Resource
     private TableMetadataMapper tableMetadataMapper;
@@ -445,8 +449,9 @@ public class EntityServiceImpl implements EntityService {
      * 取实例属性详情。rowKeysByGroup 指定的分组按行精确取值（分组名 -> 行主键），
      * 没指定的分组沿用原口径（扩展表按主键倒序取最多 10 行）。
      */
-    private List<EntityPropertyDetailVO> getEntityDetail(String ontologyUniqueIdentifier, Object entityPrimaryKey,
-                                                         Map<String, Object> rowKeysByGroup) {
+    @Override
+    public List<EntityPropertyDetailVO> getEntityDetail(String ontologyUniqueIdentifier, Object entityPrimaryKey,
+                                                        Map<String, Object> rowKeysByGroup) {
         List<EntityPropertyDetailVO> res = Lists.newArrayList();
         var props = propertyMapper.selectList(new LambdaQueryWrapper<OntologyProperty>()
                         .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier))
@@ -1237,6 +1242,13 @@ public class EntityServiceImpl implements EntityService {
         // 按对象方向指定实例/行是内部载体（单行为测试给行为树用），对外执行请求不接受，传了也只是忽略
         param.setInputEntities(null);
         param.setOutputEntities(null);
+        // 对外的单实体执行属于手动触发，一次请求记一条手动执行日志
+        return manualExecuteLogService.runAndLog(param.getOntologySpaceId(), param.getActionApi(), param,
+                () -> runEntityAction(param), msg -> msg);
+    }
+
+    @SneakyThrows
+    private String runEntityAction(EntityActionExecuteParam param) {
         var infoDTO = initActionContextInfoDTO(param);
         //获取行为关联关系下的对象的实体详情
         List<List<EntityPropertyDetailVO>> linkedEntities = getLinkedEntities(infoDTO);
@@ -2086,6 +2098,8 @@ public class EntityServiceImpl implements EntityService {
                                         .link(link)
                                         .linkEntityPrimaryKey(linkedEntityDetail.get(0).getEntityPrimaryKey())
                                         .linkToOntologyUniqueIdentifier(linkedOntology)
+                                        // 行为节点的取值覆盖要带到算子调用侧，丢了节点上配的黑板/上游出参来源就退化成绑定行自己的来源
+                                        .paramValueOverrides(infoDTO.getParamValueOverrides())
                                         .build();
                                 //执行函数
                                 String functionResultJson = callFunction(contextInfoDTO);
@@ -2121,6 +2135,8 @@ public class EntityServiceImpl implements EntityService {
                     .entityPrimaryKeys(infoDTO.getEntityPrimaryKeys())
                     .objectProperties(infoDTO.getObjectProperties())
                     .entityActionExecuteParam(param)
+                    // 同上：无关系分支也要把节点级取值覆盖带下去
+                    .paramValueOverrides(infoDTO.getParamValueOverrides())
                     .build();
             var functionResultJson = callFunction(contextInfoDTO);
             //函数同步执行，更新结果
@@ -2196,6 +2212,11 @@ public class EntityServiceImpl implements EntityService {
                     .collect(Collectors.toList());
             if (paramMappings.isEmpty()) {
                 return new FunctionParameter().setParamName(p.getParamName());
+            }
+            // 行为节点给这个入参配了取值来源：整包按节点给的值用，不再逐字段拼——子字段行会被同一个值各自盖一遍
+            var nodeValue = paramValueOverride(actionContext, p.getParamName());
+            if (nodeValue != null) {
+                return FunctionParameter.builder().paramName(p.getParamName()).paramValue(nodeValue).build();
             }
             // 没有子字段路径即整包给这个参数一个值，与逐字段绑定改造前的行为一致
             boolean boundWhole = paramMappings.stream().noneMatch(m -> StringUtils.isNotEmpty(m.getParamPath()));
@@ -2321,6 +2342,13 @@ public class EntityServiceImpl implements EntityService {
      */
     private Object resolveInputValue(ActionParamMappingVO mapping, FunctionParamTypeEnum paramType,
                                      ActionContextInfoDTO actionContext, String ownerParamName) {
+        // 行为节点给这个入参配了取值来源（黑板变量/上游行为出参）时按节点给的算，属性、固定值来源也一样被覆盖
+        var overrideKey = StringUtils.isNotBlank(mapping.getParameterName())
+                ? mapping.getParameterName() : ownerParamName;
+        var nodeValue = paramValueOverride(actionContext, overrideKey);
+        if (nodeValue != null) {
+            return nodeValue;
+        }
         if (mapping.getSourceType() == ActionParamSourceEnum.FIXED) {
             return parseFixedValue(mapping.getSourceConfig());
         }
@@ -2336,6 +2364,15 @@ public class EntityServiceImpl implements EntityService {
             return null;
         }
         return FunctionParamTypeEnum.LIST.equals(paramType) ? values : values.get(0);
+    }
+
+    /** 行为树节点为该入参配的取值（黑板变量或上游行为出参）；非树执行或没配时返回 null，按绑定行自己的来源取 */
+    private Object paramValueOverride(ActionContextInfoDTO actionContext, String paramName) {
+        var overrides = actionContext.getParamValueOverrides();
+        if (MapUtils.isEmpty(overrides) || StringUtils.isBlank(paramName)) {
+            return null;
+        }
+        return overrides.get(paramName);
     }
 
     /** 该入参按 inputParams 单独加载的视图里此属性的取值；没指定过这个入参或视图里没有该属性时返回 null，由调用处回落共用视图 */

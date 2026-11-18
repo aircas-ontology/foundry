@@ -13,7 +13,6 @@ import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
 import org.springframework.data.elasticsearch.core.RefreshPolicy;
 import org.springframework.data.elasticsearch.core.query.DeleteQuery;
 import org.springframework.data.elasticsearch.core.query.Query;
-import org.springframework.data.elasticsearch.core.query.ScriptType;
 import org.springframework.data.elasticsearch.core.query.UpdateQuery;
 import org.springframework.stereotype.Service;
 
@@ -57,7 +56,6 @@ public class SpaceCdcJobServiceImpl implements SpaceCdcJobService {
 
         UpdateQuery updateQuery = UpdateQuery.builder(instanceQueryBySpaceId(after.getId()))
                 .withScript("ctx._source.space_display_name = params.spaceDisplayName;")
-                .withScriptType(ScriptType.INLINE)
                 .withParams(params)
                 .withRefreshPolicy(RefreshPolicy.IMMEDIATE)
                 .build();

@@ -8,11 +8,14 @@ import com.aircas.ptr.foundry.agent.server.service.AgentChatService;
 import com.aircas.ptr.foundry.agent.server.service.DocumentUploadService;
 import com.aircas.ptr.foundry.agent.server.session.ConversationResetService;
 import com.aircas.ptr.foundry.common.base.RestResult;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -20,7 +23,13 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter;
+import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Agent 对话入口。
@@ -32,7 +41,8 @@ import reactor.core.publisher.Flux;
  * <p>流式接口直接返回领域事件流 {@code Flux<AgentChatStreamVO>}，配合
  * {@code produces = MediaType.TEXT_EVENT_STREAM_VALUE} 由 Spring 默认的 SSE 编码器输出
  * {@code data:{json}\n\n} 帧；事件类型（thinking/tool_call/…）已内闭在 VO 的 {@code type} 字段，
- * 无需额外的 SSE 元数据（id/event/retry）。</p>
+ * 无需额外的 SSE 元数据（id/event/retry）。另有 {@code /chat/stream_ndjson} 复用同一事件流，
+ * 以 HTTP chunked + NDJSON（每行一个 JSON 对象）输出，供不支持/不想用 SSE 的调用方使用。</p>
  *
  * <p>大模型在对话过程中会按需调用 MCP 动态发现的工具（ontology-server 的 MCP Server 提供）。
  * 多轮上下文由 {@code MessageChatMemoryAdvisor} 按 {@code sessionId} 隔离记忆。</p>
@@ -62,6 +72,50 @@ public class AgentChatController {
     @Operation(summary = "流式对话：以 SSE 类型化事件逐段返回思考过程与回复")
     public Flux<AgentChatStreamVO> stream(@RequestBody @Valid AgentChatParam param) {
         return agentChatService.chatStream(param);
+    }
+
+    /** NDJSON 行序列化：与 SSE 编码器一致省略 null 字段，前端按行 JSON.parse。 */
+    private static final ObjectMapper NDJSON_MAPPER = new ObjectMapper()
+            .setSerializationInclusion(JsonInclude.Include.NON_NULL);
+
+    @PostMapping(value = "/stream_ndjson", produces = MediaType.APPLICATION_NDJSON_VALUE)
+    @Operation(summary = "流式对话（NDJSON）：HTTP chunked 每行一个 JSON 事件，事件结构与 /chat/stream 完全一致，非 SSE")
+    public ResponseEntity<ResponseBodyEmitter> streamNdjson(@RequestBody @Valid AgentChatParam param) {
+        ResponseBodyEmitter emitter = new ResponseBodyEmitter(0L);
+        // 写失败（客户端断开）时在 onNext 内直接取消上游，避免抛异常产生 reactor onErrorDropped 噪音日志
+        AtomicReference<Disposable> subscriptionRef = new AtomicReference<>();
+        Disposable subscription = agentChatService.chatStream(param).subscribe(
+                event -> {
+                    try {
+                        // 以 UTF-8 字节写出，避免字符串转换器默认 ISO-8859-1 破坏中文
+                        emitter.send((NDJSON_MAPPER.writeValueAsString(event) + "\n").getBytes(StandardCharsets.UTF_8),
+                                MediaType.APPLICATION_NDJSON);
+                    } catch (IOException | IllegalStateException e) {
+                        Disposable d = subscriptionRef.get();
+                        if (d != null) {
+                            d.dispose();
+                        }
+                    }
+                },
+                error -> {
+                    try {
+                        emitter.send((NDJSON_MAPPER.writeValueAsString(AgentChatStreamVO.error(error.getMessage())) + "\n")
+                                .getBytes(StandardCharsets.UTF_8), MediaType.APPLICATION_NDJSON);
+                    } catch (IOException | IllegalStateException ignored) {
+                        // 客户端已断开，无需再写
+                    }
+                    emitter.complete();
+                },
+                emitter::complete);
+        subscriptionRef.set(subscription);
+        emitter.onCompletion(subscription::dispose);
+        emitter.onTimeout(subscription::dispose);
+        emitter.onError(t -> subscription.dispose());
+        return ResponseEntity.ok()
+                // 告知 Nginx 等反向代理关闭响应缓冲，否则流会被攒成一次性输出
+                .header("X-Accel-Buffering", "no")
+                .contentType(MediaType.APPLICATION_NDJSON)
+                .body(emitter);
     }
 
     @PostMapping("/clear_context")

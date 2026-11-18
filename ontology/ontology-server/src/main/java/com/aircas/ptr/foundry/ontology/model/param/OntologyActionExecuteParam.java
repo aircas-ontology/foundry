@@ -30,6 +30,12 @@ public class OntologyActionExecuteParam {
     private String actionApi;
 
 
+    @Schema(name = "entityPrimaryKey", description = "实例主键：仅基础函数行为可用，传了只查该实例、不传按对象全量查；"
+            + "基础函数选了多个对象时，这个实例归属 ontologyUniqueIdentifier 指定的那个对象，其余对象仍按全量查。"
+            + "其他类别的行为不需要传（按对象下全部实例执行）", example = "1")
+    private Object entityPrimaryKey;
+
+
     @Schema(name = "shardIndex", description = "shardIndex", example = "1")
     private Integer shardIndex;
 

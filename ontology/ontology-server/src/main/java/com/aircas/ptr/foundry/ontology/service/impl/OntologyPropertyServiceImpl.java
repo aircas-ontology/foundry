@@ -20,7 +20,8 @@ import com.aircas.ptr.foundry.ontology.service.OntologyPropertyService;
 import com.aircas.ptr.foundry.ontology.service.PropertyCategoryService;
 import com.aircas.ptr.foundry.ontology.service.PropertyMetadataSchemaService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -38,17 +39,22 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMapper, OntologyProperty> implements OntologyPropertyService {
+
+    /** 主存储分组名称，与 getStorageGroup、实体侧落库取值一致。 */
+    private static final String MAIN_STORAGE_GROUP = "main";
 
     private final TableMetadataMapper tableMetadataMapper;
 
@@ -125,6 +131,12 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                 .setStorageGroup(param.getStorageGroup())
                 .setPropertyCategoryId(param.getCategoryId())
                 .setMetadata(param.getMetadata()));
+        // updateById 默认忽略 null 字段，元数据置空须显式 set，否则 schema 赋值锁永远解不开
+        if (param.getMetadata() == null) {
+            update(new LambdaUpdateWrapper<OntologyProperty>()
+                    .eq(OntologyProperty::getUniqueIdentifier, uniqIdentifier)
+                    .set(OntologyProperty::getMetadata, null));
+        }
         //update arangodb node
         buildEntityNodes(originalProperty.getOntologyUniqueIdentifier(), titleKeyChanged);
     }
@@ -158,6 +170,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                         .eq(PropertyCategory::getOntologyUniqueIdentifier, ontologyId))
                 .stream().map(PropertyCategory::getId).collect(Collectors.toSet());
         var titleKeyChanged = false;
+        var clearMetadataIds = Lists.<String>newArrayList();
 
         for (OntologyPropertyUpdateParam p : params) {
             //check storage group
@@ -193,6 +206,8 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
             if (metadata != null) {
                 PreconditionUtils.checkNotNull(schema, "当前对象未定义元数据schema，不能设置元数据", HttpStatus.BAD_REQUEST);
                 validateMetadataAgainstSchema(metadata, schema, "");
+            } else {
+                clearMetadataIds.add(p.getUniqueIdentifier());
             }
             var prop = updatePropMap.get(p.getUniqueIdentifier());
             if (isTitleKeyChanged(prop, p)) {
@@ -213,6 +228,12 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         }
         //batch update
         updateBatchById(updateProperties);
+        // updateBatchById 默认忽略 null 字段，元数据置空须显式 set
+        if (!clearMetadataIds.isEmpty()) {
+            update(new LambdaUpdateWrapper<OntologyProperty>()
+                    .in(OntologyProperty::getUniqueIdentifier, clearMetadataIds)
+                    .set(OntologyProperty::getMetadata, null));
+        }
         //补齐缺失的主子表列映射，否则子表分组按关联列读写都走不通
         syncTableFieldMappings(ontologyId, updateProperties, otherProps);
         //update arangodb node
@@ -424,6 +445,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         var tableMap = tableMetadataMapper.listTables(schemaName, null).stream().collect(Collectors.toMap(v -> v.getTableName(), v -> v.getDescription() != null ? v.getDescription() : ""));
 
         return props.stream().map(v -> DataConverter.convert(v).setDatasourceDescription(tableMap.get(v.getDatasourceId())))
+                .sorted(propertyStorageOrder(OntologyPropertyDetailVO::getStorageGroup, OntologyPropertyDetailVO::getApiName))
                 .collect(Collectors.toList());
     }
 
@@ -650,6 +672,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         // query properties of this ontology, grouped by propertyCategoryId, so each category node carries its own properties
         var props = list(new LambdaQueryWrapper<OntologyProperty>()
                 .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier));
+        props.sort(propertyStorageOrder(OntologyProperty::getStorageGroup, OntologyProperty::getApiName));
         var propMap = props.stream()
                 .collect(Collectors.groupingBy(
                         p -> p.getPropertyCategoryId() != null ? p.getPropertyCategoryId() : rootCategoryId,
@@ -1229,6 +1252,20 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                     .collect(Collectors.toList()));
         }
         return vo;
+    }
+
+    /** 属性列表统一排序口径：main 分组最先、其它分组按名称升序，组内 id 属性最前、其余按 apiName 升序（均大小写不敏感）。 */
+    private static <T> Comparator<T> propertyStorageOrder(Function<T, String> storageGroup, Function<T, String> apiName) {
+        return Comparator
+                .comparingInt((T v) -> MAIN_STORAGE_GROUP.equals(defaultStorageGroup(storageGroup.apply(v))) ? 0 : 1)
+                .thenComparing(v -> defaultStorageGroup(storageGroup.apply(v)), String.CASE_INSENSITIVE_ORDER)
+                .thenComparingInt(v -> "id".equalsIgnoreCase(apiName.apply(v)) ? 0 : 1)
+                .thenComparing(apiName, String.CASE_INSENSITIVE_ORDER);
+    }
+
+    /** 存储分组为空视为主分组。 */
+    private static String defaultStorageGroup(String storageGroup) {
+        return StringUtils.defaultIfBlank(storageGroup, MAIN_STORAGE_GROUP);
     }
 
 

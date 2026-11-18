@@ -86,7 +86,7 @@ import com.aircas.ptr.foundry.ontology.utils.ContainerUploadRegistry;
 import com.aircas.ptr.foundry.ontology.utils.CompositeValidator;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -340,6 +340,18 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 .collect(Collectors.toList());
     }
 
+    /**
+     * 查引用了该函数 api 的行为，供删除/修改/下线的关联校验使用。
+     * <p>函数 api 只在所属空间内唯一，别的空间可以有同名 api 并被那边的行为引用；
+     * 不带空间条件就会让别的空间的行为锁住本空间函数。
+     * 历史数据里存在没有空间的函数，这类函数保持原口径只按 api 查。</p>
+     */
+    private List<OntologyAction> listActionsBoundToApi(String api, Integer spaceId) {
+        return ontologyActionMapper.selectList(new LambdaQueryWrapper<OntologyAction>()
+                .eq(OntologyAction::getFunctionApi, api)
+                .eq(spaceId != null, OntologyAction::getOntologySpaceId, spaceId));
+    }
+
     @Override
     @Transactional(value = "mainTransactionManager")
     public void deleteByApi(Integer spaceId, String api, String version) {
@@ -348,7 +360,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         // 已发布状态不允许删除，需先下线
         requireUnpublished(function, "已发布的函数不能删除，请先下线");
         //判断函数是否关联了行为，被对象行为使用到则不删除
-        var ontologyActions = ontologyActionMapper.selectList(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getFunctionApi, api));
+        var ontologyActions = listActionsBoundToApi(api, function.getOntologySpaceId());
         PreconditionUtils.checkArgument(CollectionUtils.isEmpty(ontologyActions), "该函数已被行为关联" + api);
         //删除函数参数
         functionParamService.remove(new LambdaQueryWrapper<FunctionParamPO>().eq(FunctionParamPO::getFunctionId, function.getId()));
@@ -689,12 +701,12 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
      */
     private int[] resolveRateLimit(Integer spaceId, String functionApi, String version) {
         if (spaceId != null) {
+            // MP 3.5.18 selectOne 内部走分页会追加 LIMIT，不能再 last("LIMIT 1")，否则拼成 LIMIT 1 LIMIT ? 非法 SQL
             var scoped = getOne(new LambdaQueryWrapper<Function>()
                     .select(Function::getRateLimitConfig)
                     .eq(Function::getOntologySpaceId, spaceId)
                     .eq(Function::getApi, functionApi)
-                    .eq(Function::getVersion, version)
-                    .last("LIMIT 1"));
+                    .eq(Function::getVersion, version), false);
             if (scoped != null) {
                 return parseRateLimitConfig(scoped, functionApi);
             }
@@ -707,8 +719,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         var function = getOne(new LambdaQueryWrapper<Function>()
                 .select(Function::getRateLimitConfig)
                 .eq(Function::getApi, functionApi)
-                .eq(Function::getVersion, version)
-                .last("LIMIT 1"));
+                .eq(Function::getVersion, version), false);
         return parseRateLimitConfig(function, functionApi);
     }
 
@@ -794,7 +805,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         PreconditionUtils.checkArgument(function.getPublish() == FunctionConstant.PUBLISH_UNPUBLISHED,
                 "已发布的函数不能修改，请先下线：" + param.getFunctionApi(), HttpStatus.BAD_REQUEST);
         // 原地修改前校验行为关联（与删除/下线一致的 api 级粒度），被行为引用则禁止直接改
-        var ontologyActions = ontologyActionMapper.selectList(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getFunctionApi, function.getApi()));
+        var ontologyActions = listActionsBoundToApi(function.getApi(), function.getOntologySpaceId());
         PreconditionUtils.checkArgument(CollectionUtils.isEmpty(ontologyActions),
                 "该函数已被行为关联，不能修改：" + function.getApi());
         // 未发布：原地更新（版本号不可改，param.version 仅作定位）
@@ -853,7 +864,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         PreconditionUtils.checkArgument(function.getPublish() == FunctionConstant.PUBLISH_PUBLISHED,
                 "该版本不是发布状态：" + api + " " + function.getVersion(), HttpStatus.BAD_REQUEST);
         //判断函数是否关联了行为，被对象行为使用到则不能下线
-        var ontologyActions = ontologyActionMapper.selectList(new LambdaQueryWrapper<OntologyAction>().eq(OntologyAction::getFunctionApi, api));
+        var ontologyActions = listActionsBoundToApi(api, function.getOntologySpaceId());
         PreconditionUtils.checkArgument(CollectionUtils.isEmpty(ontologyActions), "该函数已被行为关联，不能下线：" + api);
         function.setPublish(FunctionConstant.PUBLISH_UNPUBLISHED);
         updateById(function);
@@ -1017,16 +1028,19 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         }
         //脚本函数：按参数定义组装单对象入参（handle(input)），按语言路由到对应引擎执行
         Map<String, Object> inputMap = buildInputMap(executeInputParams, funParamMap);
+        FunctionLanguageEnum language = function.getLanguage() == null ? inferLanguageFromCode(function.getCode()) : function.getLanguage();
         // 单对象入参解包：当只有一个入参时，直接将该参数的值作为 runner 的 input，
         // 避免脚本里写 input.input.xxx 的双层嵌套（用户给参数起名 input/user/whatever 都能直接用 input.xxx 或 input）
+        // Python 只解包对象值：python-runner 的入参模型是 input: dict，裸标量/数组会被拒成 422，
+        // 这类参数保持 {参数名: 值} 整包下发，脚本按声明的入参名取值即可。
         String inputJson;
-        if (executeInputParams.size() == 1 && inputMap.containsKey(executeInputParams.get(0).getParamName())) {
-            Object value = inputMap.get(executeInputParams.get(0).getParamName());
-            inputJson = objectMapper.writeValueAsString(value);
+        Object singleValue = executeInputParams.size() == 1
+                ? inputMap.get(executeInputParams.get(0).getParamName()) : null;
+        if (singleValue != null && (language != FunctionLanguageEnum.PYTHON || singleValue instanceof Map<?, ?>)) {
+            inputJson = objectMapper.writeValueAsString(singleValue);
         } else {
             inputJson = objectMapper.writeValueAsString(inputMap);
         }
-        FunctionLanguageEnum language = function.getLanguage() == null ? inferLanguageFromCode(function.getCode()) : function.getLanguage();
         ScriptExecutionContext ctx = ScriptExecutionContext.builder()
                 .language(language)
                 .functionApi(param.getFunctionApi())

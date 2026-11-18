@@ -9,10 +9,10 @@
 
     <!-- 设置控制台日志输出 -->
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
-        <!-- 控制台只输出 WARN+：避免每条 INFO 重复刷到 stdout（容器里会被收成 json.log 撑爆磁盘）；
-             完整 INFO 仍落 ALL 文件，同步进度可查 -->
-        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
-            <level>WARN</level>
+        <!-- 控制台运行期只输出 WARN+：避免每条 INFO 重复刷到 stdout（容器里会被收成 json.log 撑爆磁盘）；
+             启动窗口（默认 120 秒）内放行 INFO，保留 Starting/Started 等启动日志；完整 INFO 始终落 ALL 文件 -->
+        <filter class="com.aircas.ptr.foundry.common.filter.StartupWindowConsoleFilter">
+            <infoWindowSeconds>120</infoWindowSeconds>
         </filter>
         <encoder>
             <pattern>[%d{yyyy-MM-dd HH:mm:ss.SSS}] [%thread] [%X{logId}] [%-5level] %logger{36} - [%file:%line] %msg%n </pattern>

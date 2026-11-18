@@ -101,14 +101,15 @@
                pc.relname AS parent_table,
                pa.attname AS parent_column
         FROM pg_constraint con
-                 JOIN pg_namespace n ON n.oid = con.connamespace
-                 JOIN pg_namespace pn ON pn.oid = con.confnamespace
                  JOIN pg_class c ON c.oid = con.conrelid
                  JOIN pg_class pc ON pc.oid = con.confrelid
+                 JOIN pg_namespace n ON n.oid = c.relnamespace
+                 JOIN pg_namespace pn ON pn.oid = pc.relnamespace
                  JOIN pg_attribute a ON a.attrelid = con.conrelid AND a.attnum = con.conkey[1]
                  JOIN pg_attribute pa ON pa.attrelid = con.confrelid AND pa.attnum = con.confkey[1]
         WHERE con.contype = 'f'
-          AND cardinality(con.conkey) = 1
+          AND (SELECT count(*) FROM unnest(con.conkey)) = 1
+          AND (SELECT count(*) FROM unnest(con.confkey)) = 1
           AND n.nspname = #{schemaName}
           AND pn.nspname = #{schemaName}
           AND c.relname = #{tableName}

@@ -58,6 +58,11 @@ public class ActionHandleRule {
     private String judgeJson;
 
     /**
+     * 前端规则画布文档 JSON，后端只存不解析，仅详情接口原样回显
+     */
+    private String flowDocument;
+
+    /**
      * 对象空间id
      */
     private Integer ontologySpaceId;

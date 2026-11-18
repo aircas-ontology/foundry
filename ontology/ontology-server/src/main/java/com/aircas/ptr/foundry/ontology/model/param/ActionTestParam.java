@@ -18,7 +18,8 @@ import java.util.Map;
 @AllArgsConstructor
 @NoArgsConstructor
 @Schema(description = "行为测试请求；入参方向给出多个候选值即批量测试（entityPrimaryKeys 的值写成数组，"
-        + "inputParams 的每个入参放多个数据位置），候选值之间做笛卡尔积、最多 50 组，逐组执行并各自落库，失败组合在 cases 里记原因")
+        + "inputParams 的每个入参放多个数据位置），候选值只选实例时彼此做笛卡尔积、选了非 main 分组的行时改为各轴按下标配对成组，"
+        + "最多 50 组，逐组执行并各自落库，失败组合在 cases 里记原因")
 public class ActionTestParam {
 
     @Schema(name = "ontologySpaceId", description = "对象空间id", example = "156", required = true)
@@ -36,13 +37,15 @@ public class ActionTestParam {
     @Schema(name = "entityPrimaryKeys", description = "各对象选中的实例主键：对象id -> 实例主键；"
             + "应用行为的入参/出参可能跨对象，映射涉及的对象都要提供；某个算子入参要单独读别的实例时用 inputParams；"
             + "行为绑定关系时用保留键 from、to 分别传关系两端的实例主键，与按对象 id 传的实例互不混用；"
-            + "实例主键可以写成数组（如 {\"from\":[1,2]}），数组之间做笛卡尔积、逐组执行，即批量测试",
+            + "实例主键可以写成数组（如 {\"from\":[1,2]}），数组之间做笛卡尔积、逐组执行，即批量测试；"
+            + "候选值里一旦有非 main 分组的行，全部候选值改为按下标配对成组，",
             example = "{\"3f2a9c1e-7b4d-4a86-9e21-5c8d1f0a6b34\":1,\"a5e8c206-3f17-4d92-8b74-1c6f9d3e5028\":2}")
     private Map<String, Object> entityPrimaryKeys;
 
     @Schema(name = "inputParams", description = "按算子入参指定的数据位置：入参名 -> 数据位置数组。"
             + "数组的一个元素就是一组完整取值：读哪个实例（entityPrimaryKey）、每个存储分组读哪一行（dataPrimaryKeys），"
-            + "只读一个位置时数组里放一个元素；放多个元素就是批量测试的候选值，元素之间做笛卡尔积、逐组执行；"
+            + "只读一个位置时数组里放一个元素；放多个元素就是批量测试的候选值，只选实例时各入参的候选值做笛卡尔积、"
+            + "一旦有候选值选了非 main 分组的行就改为各轴按下标配对成组（此时各轴候选值个数要一致），逐组执行；"
             + "命中时优先于 entityPrimaryKeys，只影响该入参的读取，不影响出参写回和关系落库；"
             + "关系对端的实例由本次遍历决定，不支持按入参指定；不绑算子的行为也不支持",
             example = "{\"name\":[{\"entityPrimaryKey\":11}],"

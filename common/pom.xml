@@ -58,7 +58,7 @@
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-aop</artifactId>
+            <artifactId>spring-boot-starter-aspectj</artifactId>
         </dependency>
         <dependency>
             <groupId>commons-io</groupId>
@@ -81,10 +81,10 @@
             <groupId>com.alibaba.fastjson2</groupId>
             <artifactId>fastjson2</artifactId>
         </dependency>
-        <!--Knife4j OpenAPI3 Jakarta（knife4j-next fork，适配 Spring Boot 3.5.x） -->
+        <!--Knife4j OpenAPI3 Boot4（knife4j-next fork，适配 Spring Boot 4.x） -->
         <dependency>
             <groupId>com.baizhukui</groupId>
-            <artifactId>knife4j-openapi3-jakarta-spring-boot-starter</artifactId>
+            <artifactId>knife4j-openapi3-boot4-spring-boot-starter</artifactId>
         </dependency>
         <dependency>
             <groupId>org.apache.commons</groupId>

@@ -35,11 +35,13 @@ public class TreeExecuteNodeVO {
     private String actionDisplayName;
 
     @Schema(name = "entityPrimaryKeyRequired", description = "该节点是否需要节点级实例：属性值行为为 true，按 instanceRequirements 给实例；"
-            + "关系节点按 entityPrimaryKeys.from / to 成对给两端；绑算子的行为为 false，读写实例在 inputParams、outputParams 里按参数/按行给",
+            + "关系节点按 entityPrimaryKeys.from / to 成对给两端；绑算子的行为为 false，读写实例在 inputParams、outputParams 里按参数/按行给；"
+            + "基础函数行为为 false，instanceRequirements 里的对象可以选实例也可以不选，不选按该对象全量查",
             example = "false")
     private boolean entityPrimaryKeyRequired;
 
-    @Schema(name = "instanceRequirements", description = "该节点要用到的节点级实例，按对象逐个列出；绑算子的行为为空，实例在入参/写回行上选")
+    @Schema(name = "instanceRequirements", description = "该节点要用到的节点级实例，按对象逐个列出；绑算子的行为为空，实例在入参/写回行上选；"
+            + "基础函数行为按配置里的对象逐个列出，每一条都可选（选了只查那个实例）")
     private List<TreeInstanceRequirementVO> instanceRequirements = new ArrayList<>();
 
     @Schema(name = "inputParams", description = "该节点绑定的行为的算子入参，逐条带取值来源：来源是外部输入的按节点在 "

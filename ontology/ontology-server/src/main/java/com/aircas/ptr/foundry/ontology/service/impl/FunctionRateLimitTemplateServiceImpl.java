@@ -47,8 +47,7 @@ public class FunctionRateLimitTemplateServiceImpl implements FunctionRateLimitTe
         return templateMapper.selectOne(
                 new LambdaQueryWrapper<FunctionRateLimitTemplate>()
                         .eq(FunctionRateLimitTemplate::getEnabled, 1)
-                        .orderByAsc(FunctionRateLimitTemplate::getId)
-                        .last("LIMIT 1"));
+                        .orderByAsc(FunctionRateLimitTemplate::getId), false);
     }
 
     @Override

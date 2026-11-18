@@ -36,6 +36,13 @@ public class ActionContextInfoDTO {
     private Map<String, Map<String, List<Object>>> paramEntityDetailMaps;
 
     /**
+     * 行为节点上配了取值来源的入参取值：参数名 -> 值，取值时优先于该绑定行自己的来源。
+     * <p>来源是黑板变量或上游行为出参；按参数名覆盖，所以属性来源的绑定行也一样生效。
+     * 异步回调时随上下文一起序列化。</p>
+     */
+    private Map<String, Object> paramValueOverrides;
+
+    /**
      * 来源为「外部输入」的参数取值（参数名 -> 值），只有行为测试接口会传入；定时执行为空
      */
     private Map<String, Object> externalParams;

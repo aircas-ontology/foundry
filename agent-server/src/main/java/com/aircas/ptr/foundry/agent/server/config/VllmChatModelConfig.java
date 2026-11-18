@@ -1,23 +1,26 @@
 package com.aircas.ptr.foundry.agent.server.config;
 
+import com.openai.client.OpenAIClient;
+import com.openai.client.OpenAIClientImpl;
+import com.openai.core.ClientOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
-import org.springframework.ai.openai.api.OpenAiApi;
+import org.springframework.ai.openai.http.okhttp.SpringAiOpenAiHttpClient;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
-import org.springframework.web.client.RestClient;
-import org.springframework.web.reactive.function.client.WebClient;
 
 /**
- * 自定义 ChatModel 和 OpenAiApi：绕过 Spring AI 自动配置，直接控制参数，
+ * 自定义 ChatModel：绕过 Spring AI 自动配置，直接控制参数，
  * 避免发送 vLLM 不支持的字段（如 stream_options）导致 400 Bad Request。
  *
- * <p>同步调用走 RestClient，流式调用走 WebClient，两者都需要正确配置。</p>
+ * <p>Spring AI 2.0 起 OpenAI 模块改用官方 OpenAI Java SDK（OkHttp 传输），
+ * 原 {@code OpenAiApi}（RestClient/WebClient）已移除；这里用 {@link SpringAiOpenAiHttpClient}
+ * 构建 {@link OpenAIClient}，同步/流式共用同一客户端。</p>
  */
 @Configuration
 public class VllmChatModelConfig {
@@ -38,26 +41,23 @@ public class VllmChatModelConfig {
 
     @Bean
     @Primary
-    public OpenAiApi vllmOpenAiApi(WebClient.Builder webClientBuilder, RestClient.Builder restClientBuilder) {
-        OpenAiApi api = OpenAiApi.builder()
+    public ChatModel vllmChatModel() {
+        OpenAIClient client = new OpenAIClientImpl(ClientOptions.builder()
                 .baseUrl(baseUrl)
                 .apiKey(apiKey)
-                .webClientBuilder(webClientBuilder)
-                .restClientBuilder(restClientBuilder)
-                .build();
+                .httpClient(SpringAiOpenAiHttpClient.builder().build())
+                .build());
 
-        log.info("[VllmChatModel] 已创建自定义 OpenAiApi，base-url={}", baseUrl);
-        return api;
-    }
+        log.info("[VllmChatModel] 已创建自定义 OpenAIClient，base-url={}", baseUrl);
 
-    @Bean
-    @Primary
-    public ChatModel vllmChatModel(OpenAiApi openAiApi) {
         return OpenAiChatModel.builder()
-                .openAiApi(openAiApi)
-                .defaultOptions(OpenAiChatOptions.builder()
+                .openAiClient(client)
+                .openAiClientAsync(client.async())
+                .options(OpenAiChatOptions.builder()
                         .model(model)
                         .temperature(temperature)
+                        // vLLM 不支持 stream_options，显式关闭 usage 统计避免 400
+                        .streamUsage(false)
                         .build())
                 .build();
     }

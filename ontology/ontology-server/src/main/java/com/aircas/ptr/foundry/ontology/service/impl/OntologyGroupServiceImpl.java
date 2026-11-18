@@ -13,7 +13,7 @@ import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyGroupMapper
 import com.aircas.ptr.foundry.ontology.service.OntologyGroupService;
 import com.aircas.ptr.foundry.ontology.service.OntologyMetaService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -92,7 +92,7 @@ public class OntologyGroupServiceImpl extends ServiceImpl<OntologyGroupMapper, O
 
     @Override
     public List<OntologyGroupInfoVO> getGroupBySpaceId(Integer spaceId) {
-        var list = list(new LambdaQueryWrapper<OntologyGroup>().like(OntologyGroup::getOntologySpaceId, spaceId));
+        var list = list(new LambdaQueryWrapper<OntologyGroup>().eq(OntologyGroup::getOntologySpaceId, spaceId));
         return list.stream().map(v -> OntologyGroupInfoVO.builder()
                         .groupId(v.getGroupId())
                         .groupName(v.getGroupName())
