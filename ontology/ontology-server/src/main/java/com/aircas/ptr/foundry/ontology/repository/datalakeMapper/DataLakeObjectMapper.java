@@ -13,7 +13,7 @@ import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 @Mapper
-public interface ObjectMapper extends BaseMapper<Object> {
+public interface DataLakeObjectMapper extends BaseMapper<Object> {
 
     List<Map<String, Object>> queryTableDataByColumn(@Param("schemaName") String schemaName,
                                                      @Param("tableName") String tableName,

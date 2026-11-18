@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
+import com.aircas.ptr.foundry.ontology.model.enums.MetadataValueTypeEnum;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -23,6 +24,13 @@ public class PropertyMetadataSchemaUpdateParam extends PropertyMetadataSchemaDel
     private String name;
 
 
-    @Schema(name = "enumValues", description = "枚举值", example = "【一级,二级,三级,四级】")
+    @Schema(name = "valueType", description = "取值类型：INPUT 输入值 / ENUM 枚举值 / RANGE 范围值；不传保持原类型（旧字段 enumValues 非空时视为 ENUM）", example = "ENUM")
+    private MetadataValueTypeEnum valueType;
+
+    @Schema(name = "value", description = "取值内容字符串：ENUM 为逗号分隔候选项如\"高,中,低\"，RANGE 形如\"0,100\"，INPUT 可空；传 valueType 时以本字段为准（null 清空值）", example = "高,中,低")
+    private String value;
+
+    @Deprecated
+    @Schema(name = "enumValues", description = "已废弃，兼容旧前端/旧导出文件：valueType 未传且本字段非空时视为 ENUM，值逗号拼接存入 value", example = "[\"一级\",\"二级\",\"三级\"]")
     private List<String> enumValues;
 }

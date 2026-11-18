@@ -12,7 +12,7 @@ import com.aircas.ptr.foundry.ontology.model.vo.OntologyLemmaVO;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyLemmaMapper;
 import com.aircas.ptr.foundry.ontology.service.OntologyLemmaService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.Lists;

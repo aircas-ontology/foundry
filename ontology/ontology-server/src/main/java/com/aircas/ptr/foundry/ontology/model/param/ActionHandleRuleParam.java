@@ -20,4 +20,7 @@ public class ActionHandleRuleParam {
     @Schema(name = "judgeRules", description = "规则数组：条件可跨任意对象实例，CDC 只在条件引用的实例变化时定向评估；"
             + "规则启用时先对绑定实例评估一遍存量数据", required = true)
     private List<RuleJudgeGroupParam> judgeRules;
+
+    @Schema(name = "flowDocument", description = "前端规则画布文档 JSON 字符串（前端自行序列化），后端只存储，仅查看调度详情时原样返回用于回显画布")
+    private String flowDocument;
 }

@@ -2,8 +2,8 @@ package com.aircas.ptr.foundry.ontology.service.behavior;
 
 /**
  * 黑板上绑定了对象属性的键，在条件求值前按库里的当前值刷新。
- * <p>行为不会再写黑板，属性值只能通过这条路进来：谁写了属性都不影响条件读到的结果，
- * 条件每次都拿到那一刻的真实值。</p>
+ * <p>对象属性来源的键的值以库为准：出参只允许回传「写回属性就是本键绑定属性」的对象属性键，
+ * 写回表后回读到的正是这份回传值，条件每次拿到的都是那一刻的属性真实值，不会被别的回传值顶掉。</p>
  */
 @FunctionalInterface
 public interface TreeBlackboardRefresher {

@@ -10,6 +10,7 @@ import com.aircas.ptr.foundry.ontology.model.dto.OntologyCreateDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.OntologyMetaDataDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.OntologyPropertyDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.OntologyRelationDTO;
+import com.aircas.ptr.foundry.ontology.model.enums.MetadataValueTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyExportTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyLinkTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyOrderByEnum;
@@ -32,7 +33,7 @@ import com.aircas.ptr.foundry.ontology.service.*;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Lists;
@@ -232,7 +233,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
      *
      * <p>算法：递归遍历每个属性的 metadata JsonNode，收集所有路径（如 "密级/来源"），
      * 然后按 BFS 顺序批量插入 property_metadata_schema 表（顶层 parentId=0，子层 parentId=父行 id）。
-     * 枚举值不推断（schema 叶子 enumValues 为 null），metadata 校验只检查键是否存在、不检查值内容。</p>
+     * 取值类型默认 INPUT（value 为空），metadata 校验只检查键是否存在、不检查值内容。</p>
      *
      * <p>冲突检测：若同一字段在不同属性的 metadata 里既是叶子又是分支（如一个属性是 {"密级":"中"}，
      * 另一个是 {"密级":{"来源":"雷达"}}），报错回滚。</p>
@@ -273,6 +274,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                     .name(name)
                     .parentId(0)
                     .path(name)
+                    .valueType(MetadataValueTypeEnum.INPUT)
                     .build();
             topLevelRows.add(row);
             queue.add(name);
@@ -297,6 +299,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                         .name(childName)
                         .parentId(parentId)
                         .path(childPath)
+                        .valueType(MetadataValueTypeEnum.INPUT)
                         .build();
                 childRows.add(row);
                 queue.add(childPath);
@@ -408,7 +411,8 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
             var createSchemaParam = PropertyMetadataSchemaCreateParam.builder()
                     .parentId(0)
                     .name(rootNode.getName())
-                    .enumValues(rootNode.getEnumValues())
+                    .valueType(rootNode.getValueType())
+                    .value(rootNode.getValue())
                     .children(rootNode.getChildren())
                     .ontologyIdentifier(childIdentifier)
                     .build();
@@ -547,8 +551,8 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         return PropertyMetadataSchemaCreateParam.MetadataSchemaNode.builder()
                 .name(schema.getName())
                 .children(childNodes)
-                .enumValues(StringUtils.isNotEmpty(schema.getEnumValues()) ?
-                        Lists.newArrayList(schema.getEnumValues().split(",")) : null)
+                .valueType(schema.getValueType())
+                .value(schema.getValue())
                 .build();
     }
 
@@ -636,6 +640,9 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
     @Override
     @Transactional(value = "mainTransactionManager")
     public void updateMeta(OntologyUpdateParam updateParam) {
+        var meta = getOne(new LambdaQueryWrapper<OntologyMeta>()
+                .eq(OntologyMeta::getUniqueIdentifier, updateParam.getOntologyIdentifier()));
+        PreconditionUtils.checkNotNull(meta, "对象不存在:" + updateParam.getOntologyIdentifier(), HttpStatus.BAD_REQUEST);
         var updateWrapper = new LambdaUpdateWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, updateParam.getOntologyIdentifier())
                 .set(OntologyMeta::getMetaGroupId, String.join(",", updateParam.getGroupIds()))
                 .set(OntologyMeta::getIcon, updateParam.getIcon())
@@ -643,6 +650,15 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 .set(OntologyMeta::getDisplayName, updateParam.getDisplayName())
                 .set(OntologyMeta::getLatestQueryTime, new Date())
                 .set(OntologyMeta::getOntologyCategoryId, updateParam.getCategoryId());
+        if (StringUtils.isNotEmpty(updateParam.getApiName())
+                && !StringUtils.equals(updateParam.getApiName(), meta.getApiName())) {
+            var duplicateApiName = getOne(new LambdaQueryWrapper<OntologyMeta>()
+                    .eq(OntologyMeta::getOntologySpaceId, meta.getOntologySpaceId())
+                    .eq(OntologyMeta::getApiName, updateParam.getApiName())
+                    .ne(OntologyMeta::getUniqueIdentifier, meta.getUniqueIdentifier()));
+            PreconditionUtils.checkIsNull(duplicateApiName, "对象api名称 '" + updateParam.getApiName() + "' 已存在", HttpStatus.BAD_REQUEST);
+            updateWrapper.set(OntologyMeta::getApiName, updateParam.getApiName());
+        }
         update(null, updateWrapper);
     }
 
@@ -1173,8 +1189,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                             .eq(OntologyMeta::getOntologySpaceId, targetSpaceId)
                             .eq(OntologyMeta::getDisplayName, metaData.getDisplayName())
                             .eq(OntologyMeta::getStatus, Status.ENABLE.getValue())
-                            .orderByDesc(OntologyMeta::getId)
-                            .last("LIMIT 1"));
+                            .orderByDesc(OntologyMeta::getId), false);
                     if (meta != null) {
                         displayNameToUid.put(metaData.getDisplayName(), meta.getUniqueIdentifier());
                     }
@@ -1269,8 +1284,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                             .eq(OntologyMeta::getOntologySpaceId, targetSpaceId)
                             .eq(OntologyMeta::getDisplayName, metaData.getDisplayName())
                             .eq(OntologyMeta::getStatus, Status.ENABLE.getValue())
-                            .orderByDesc(OntologyMeta::getId)
-                            .last("LIMIT 1"));
+                            .orderByDesc(OntologyMeta::getId), false);
                     if (meta != null) {
                         displayNameToUid.put(metaData.getDisplayName(), meta.getUniqueIdentifier());
                     }
@@ -1785,6 +1799,11 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 .collect(Collectors.toMap(PropertyCategory::getId, PropertyCategory::getPath, (a, b) -> a));
         var propertyCategory = buildPropertyCategoryTree(propertyCategories);
 
+        //属性元数据 schema 树
+        var metadataSchemas = propertyMetadataSchemaService.list(new LambdaQueryWrapper<PropertyMetadataSchema>()
+                .eq(PropertyMetadataSchema::getOntologyUniqueIdentifier, uid));
+        var propertySchema = buildMetadataSchemaTree(metadataSchemas);
+
         //属性
         var properties = ontologyPropertyService.list(new LambdaQueryWrapper<OntologyProperty>()
                         .eq(OntologyProperty::getOntologyUniqueIdentifier, uid)
@@ -1799,6 +1818,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                         .defaultValue(p.getDefaultValue())
                         .storageGroup(p.getStorageGroup())
                         .categoryPath(p.getPropertyCategoryId() == null ? null : propCategoryPathMap.get(p.getPropertyCategoryId()))
+                        .metadata(p.getMetadata())
                         .build())
                 .collect(Collectors.toList());
 
@@ -1810,6 +1830,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         return OntologyCreateDTO.builder()
                 .metadata(metadata)
                 .propertyCategory(propertyCategory)
+                .propertySchema(propertySchema)
                 .properties(properties)
                 .relations(withRelations ? exportOntologyRelations(uid, space.getId(), uidToDisplayName, exportedLinkIds) : null)
                 .instances(instances)
@@ -1889,7 +1910,8 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         return PropertyMetadataSchemaCreateParam.builder()
                 .parentId(root.getParentId())
                 .name(root.getName())
-                .enumValues(splitEnumValues(root.getEnumValues()))
+                .valueType(root.getValueType())
+                .value(root.getValue())
                 .children(buildMetadataSchemaChildren(root.getId(), schemas))
                 .build();
     }
@@ -1899,19 +1921,10 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 .filter(s -> s.getParentId() != null && s.getParentId().equals(parentId))
                 .map(s -> PropertyMetadataSchemaCreateParam.MetadataSchemaNode.builder()
                         .name(s.getName())
-                        .enumValues(splitEnumValues(s.getEnumValues()))
+                        .valueType(s.getValueType())
+                        .value(s.getValue())
                         .children(buildMetadataSchemaChildren(s.getId(), schemas))
                         .build())
-                .collect(Collectors.toList());
-    }
-
-    private List<String> splitEnumValues(String enumValues) {
-        if (StringUtils.isEmpty(enumValues)) {
-            return null;
-        }
-        return Arrays.stream(enumValues.split(","))
-                .map(String::trim)
-                .filter(StringUtils::isNotEmpty)
                 .collect(Collectors.toList());
     }
 

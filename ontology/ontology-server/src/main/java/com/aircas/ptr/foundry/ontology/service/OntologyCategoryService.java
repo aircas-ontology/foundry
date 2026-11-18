@@ -5,7 +5,7 @@ import com.aircas.ptr.foundry.ontology.model.param.OntologyCategoryDeleteParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyCategoryUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyCategory;
 import com.aircas.ptr.foundry.ontology.model.vo.OntologyCategoryVO;
-import com.baomidou.mybatisplus.extension.service.IService;
+import com.baomidou.mybatisplus.spring.service.IService;
 
 import java.util.List;
 

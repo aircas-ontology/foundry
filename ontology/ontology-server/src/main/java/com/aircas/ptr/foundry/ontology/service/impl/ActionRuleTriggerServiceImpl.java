@@ -24,6 +24,7 @@ import com.aircas.ptr.foundry.ontology.service.ActionHandleRuleService;
 import com.aircas.ptr.foundry.ontology.service.ActionRuleTriggerService;
 import com.aircas.ptr.foundry.ontology.service.EntityService;
 import com.aircas.ptr.foundry.ontology.service.OntologyActionService;
+import com.aircas.ptr.foundry.ontology.utils.ExecutorMachineInfo;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
@@ -97,6 +98,8 @@ public class ActionRuleTriggerServiceImpl implements ActionRuleTriggerService {
                 || StringUtils.isBlank(table) || CollectionUtils.isEmpty(changedColumns)) {
             return;
         }
+        // 触发时刻取收到数据变更的时间，后续规则捞取/条件求值的耗时不算进执行时间
+        var triggerTime = new Date();
         // 先判断本次变更的表+字段上有没有配置属性：变更列映射到对象属性，
         // 一个属性都没命中说明这些字段没有规则可挂，直接不进规则调度
         Set<String> changedPropertyKeys = changedPropertyKeys(ontologyUniqueIdentifier, table, changedColumns);
@@ -126,7 +129,7 @@ public class ActionRuleTriggerServiceImpl implements ActionRuleTriggerService {
                     if (inCooldown(cooldownKey)) {
                         continue;
                     }
-                    if (evalAndExecuteGroup(rule.getId(), group, instanceCache)) {
+                    if (evalAndExecuteGroup(rule.getId(), group, instanceCache, triggerTime)) {
                         markCooldown(cooldownKey);
                     }
                 }
@@ -165,6 +168,7 @@ public class ActionRuleTriggerServiceImpl implements ActionRuleTriggerService {
         if (rule == null) {
             return;
         }
+        var triggerTime = new Date();
         try {
             var groups = readGroups(rule);
             if (CollectionUtils.isEmpty(groups)) {
@@ -172,7 +176,7 @@ public class ActionRuleTriggerServiceImpl implements ActionRuleTriggerService {
             }
             Map<String, Map<String, Object>> instanceCache = new HashMap<>();
             for (var group : groups) {
-                evalAndExecuteGroup(rule.getId(), group, instanceCache);
+                evalAndExecuteGroup(rule.getId(), group, instanceCache, triggerTime);
             }
         } catch (Exception e) {
             log.error("规则调度启用时存量评估失败, ruleId={}", ruleId, e);
@@ -189,7 +193,7 @@ public class ActionRuleTriggerServiceImpl implements ActionRuleTriggerService {
 
     /** 求值一组条件（含整体取反），成立则执行该组行为；返回是否执行 */
     private boolean evalAndExecuteGroup(Long ruleId, RuleJudgeGroupParam group,
-                                        Map<String, Map<String, Object>> instanceCache) {
+                                        Map<String, Map<String, Object>> instanceCache, Date triggerTime) {
         boolean result = evalJudgeItems(group.getJudgeParams(), instanceCache);
         if (Boolean.TRUE.equals(group.getCondition())) {
             result = !result;
@@ -197,7 +201,7 @@ public class ActionRuleTriggerServiceImpl implements ActionRuleTriggerService {
         if (!result) {
             return false;
         }
-        executeJudgeAction(ruleId, group.getActionParam());
+        executeJudgeAction(ruleId, group.getActionParam(), triggerTime);
         return true;
     }
 
@@ -244,11 +248,13 @@ public class ActionRuleTriggerServiceImpl implements ActionRuleTriggerService {
         List<Object> tokens = new ArrayList<>();
         for (int i = 0; i < items.size(); i++) {
             var item = items.get(i);
-            if (Boolean.TRUE.equals(item.getIsLeft())) {
+            int leftBrackets = item.getIsLeft() == null ? 0 : item.getIsLeft();
+            for (int k = 0; k < leftBrackets; k++) {
                 tokens.add('(');
             }
             tokens.add(evalJudgeItem(item, instanceCache));
-            if (Boolean.TRUE.equals(item.getIsRight())) {
+            int rightBrackets = item.getIsRight() == null ? 0 : item.getIsRight();
+            for (int k = 0; k < rightBrackets; k++) {
                 tokens.add(')');
             }
             if (i < items.size() - 1) {
@@ -310,7 +316,7 @@ public class ActionRuleTriggerServiceImpl implements ActionRuleTriggerService {
         return evaluateCondition(item.getCondition(), left, right == null ? null : String.valueOf(right));
     }
 
-    /** fixed 用固定值；dynamic 实时取实例属性当前值，propertyId 优先、propertyName 兜底，同实例一次评估内只取一遍 */
+    /** fixed 用固定值；dynamic 实时取实例属性当前值，propertyId 优先、propertyName 兜底，同实例同一行一次评估内只取一遍 */
     private Object resolveJudgeOperate(RuleOperateParam operate, Map<String, Map<String, Object>> instanceCache) {
         if (operate == null) {
             return null;
@@ -322,9 +328,9 @@ public class ActionRuleTriggerServiceImpl implements ActionRuleTriggerService {
                 || StringUtils.isBlank(operate.getOntologyId()) || StringUtils.isBlank(operate.getEntityId())) {
             return null;
         }
-        String instanceKey = operate.getOntologyId() + ":" + operate.getEntityId();
-        var values = instanceCache.computeIfAbsent(instanceKey,
-                k -> loadInstanceValues(operate.getOntologyId(), operate.getEntityId()));
+        String instanceKey = operate.getOntologyId() + ":" + operate.getEntityId()
+                + ":" + StringUtils.defaultString(operate.getDataPrimaryKey());
+        var values = instanceCache.computeIfAbsent(instanceKey, k -> loadInstanceValues(operate));
         Object value = null;
         if (StringUtils.isNotBlank(operate.getPropertyId())) {
             value = values.get(operate.getPropertyId());
@@ -335,10 +341,26 @@ public class ActionRuleTriggerServiceImpl implements ActionRuleTriggerService {
         return value;
     }
 
-    /** 实例属性值：按属性唯一标识与 apiName 双键索引（主存储取首个值） */
-    private Map<String, Object> loadInstanceValues(String ontologyUid, Object pk) {
+    /**
+     * 实例属性值：按属性唯一标识与 apiName 双键索引（主存储取首个值）。
+     * 操作数给了子表行主键且属性在扩展分组时，只取该行的值；行不存在或不属于本实例会抛错，由上层记日志。
+     */
+    private Map<String, Object> loadInstanceValues(RuleOperateParam operate) {
+        // 主键来自规则操作数/CDC 事件时是字符串，PG 整型列无法与 varchar 比较，数字串需还原为数值
+        Object pk = operate.getEntityId();
+        if (pk instanceof String s && s.matches("-?\\d+")) {
+            pk = Long.valueOf(s);
+        }
+        Map<String, Object> rowKeysByGroup = null;
+        if (StringUtils.isNotBlank(operate.getDataPrimaryKey())) {
+            var group = propertyStorageGroup(operate);
+            // 主表行就是实例本身，行主键只对扩展分组有意义
+            if (StringUtils.isNotBlank(group) && !"main".equals(group)) {
+                rowKeysByGroup = Map.of(group, operate.getDataPrimaryKey());
+            }
+        }
         Map<String, Object> map = new HashMap<>();
-        List<EntityPropertyDetailVO> details = entityService.getEntityDetail(ontologyUid, pk);
+        List<EntityPropertyDetailVO> details = entityService.getEntityDetail(operate.getOntologyId(), pk, rowKeysByGroup);
         if (details == null) {
             return map;
         }
@@ -355,6 +377,20 @@ public class ActionRuleTriggerServiceImpl implements ActionRuleTriggerService {
         return map;
     }
 
+    /** 操作数引用属性的存储分组：propertyId 优先、propertyName 兜底；属性查不到时返回 null 沿用原口径 */
+    private String propertyStorageGroup(RuleOperateParam operate) {
+        var wrapper = new LambdaQueryWrapper<OntologyProperty>()
+                .eq(OntologyProperty::getOntologyUniqueIdentifier, operate.getOntologyId())
+                .eq(OntologyProperty::getStatus, Status.ENABLE.getValue());
+        if (StringUtils.isNotBlank(operate.getPropertyId())) {
+            wrapper.eq(OntologyProperty::getUniqueIdentifier, operate.getPropertyId());
+        } else {
+            wrapper.eq(OntologyProperty::getApiName, operate.getPropertyName());
+        }
+        return propertyMapper.selectList(wrapper).stream().findFirst()
+                .map(OntologyProperty::getStorageGroup).orElse(null);
+    }
+
     private boolean inCooldown(String key) {
         Long last = judgeCooldownMap.get(key);
         return last != null && System.currentTimeMillis() - last < JUDGE_COOLDOWN_MS;
@@ -369,38 +405,48 @@ public class ActionRuleTriggerServiceImpl implements ActionRuleTriggerService {
     }
 
     private boolean evaluateCondition(ActionHandleRuleAddConditionEnum condition, Object actual, String expected) {
-        if (condition == null || actual == null) {
+        if (condition == null || actual == null || expected == null) {
             return false;
         }
-        Integer cmp = compare(actual, expected);
-        if (cmp == null) {
-            return false;
-        }
+        var actualStr = String.valueOf(actual);
         switch (condition) {
+            case CONTAINS:
+                return actualStr.contains(expected);
+            case NOT_CONTAINS:
+                return !actualStr.contains(expected);
             case LT:
-                return cmp < 0;
             case LE:
-                return cmp <= 0;
-            case EQ:
-                return cmp == 0;
-            case NE:
-                return cmp != 0;
             case GT:
-                return cmp > 0;
             case GE:
-                return cmp >= 0;
+                // 大小比较只支持数字，非数字操作数直接不成立
+                var a = toBigDecimal(actualStr);
+                var b = toBigDecimal(expected);
+                if (a == null || b == null) {
+                    return false;
+                }
+                int c = a.compareTo(b);
+                if (condition == ActionHandleRuleAddConditionEnum.LT) {
+                    return c < 0;
+                }
+                if (condition == ActionHandleRuleAddConditionEnum.LE) {
+                    return c <= 0;
+                }
+                if (condition == ActionHandleRuleAddConditionEnum.GT) {
+                    return c > 0;
+                }
+                return c >= 0;
+            case EQ:
+                return compare(actualStr, expected) == 0;
+            case NE:
+                return compare(actualStr, expected) != 0;
             default:
                 // CH（变化）不支持：规则调度只做当前值比较
                 return false;
         }
     }
 
-    /** 数值优先比较；非数值退化为字符串比较（EQ/NE 有意义，大小按字典序）。无法比较返回 null */
-    private Integer compare(Object actual, String expected) {
-        if (expected == null) {
-            return null;
-        }
-        var actualStr = String.valueOf(actual);
+    /** 等于/不等于：两边都是数字按数值比（100 与 100.0 相等），否则按字符串精确比较 */
+    private int compare(String actualStr, String expected) {
         var a = toBigDecimal(actualStr);
         var b = toBigDecimal(expected);
         if (a != null && b != null) {
@@ -418,7 +464,7 @@ public class ActionRuleTriggerServiceImpl implements ActionRuleTriggerService {
     }
 
     /** 执行定稿规则的行为：目标实例由 actionParam 显式指定；entity_json 与周期调度同形式 */
-    private void executeJudgeAction(Long ruleId, RuleActionParam actionParam) {
+    private void executeJudgeAction(Long ruleId, RuleActionParam actionParam, Date triggerTime) {
         if (actionParam == null || StringUtils.isBlank(actionParam.getActionApi())) {
             log.warn("规则调度缺少 actionParam.action_api, ruleId={}", ruleId);
             return;
@@ -435,21 +481,24 @@ public class ActionRuleTriggerServiceImpl implements ActionRuleTriggerService {
         if (StringUtils.isNotBlank(actionParam.getEntityIdentifier()) && template.getEntityPrimaryKey() == null) {
             template.setEntityPrimaryKey(actionParam.getEntityIdentifier());
         }
-        executeTemplate(ruleId, action.getApi(), template);
+        executeTemplate(ruleId, action.getApi(), template, triggerTime);
     }
 
-    /** testAction 执行 + 结果落 action_handle_log；日志独立提交，不随后续异常回滚 */
-    private void executeTemplate(Long ruleId, String actionApi, ActionTestParam template) {
+    /** 规则命中后执行行为并把结果落 action_handle_log；日志独立提交，不随后续异常回滚 */
+    private void executeTemplate(Long ruleId, String actionApi, ActionTestParam template, Date triggerTime) {
         var handleLog = ActionHandleLog.builder()
                 .actionHandleId(ruleId)
                 .actionHandleType(ActionSchedulingTypeEnum.RULE)
                 .requestParam(writeJson(template))
-                .triggerTime(new Date())
+                .triggerTime(triggerTime)
+                .executorIp(ExecutorMachineInfo.ip())
+                .executorHost(ExecutorMachineInfo.host())
                 .taskStatus(TaskStatusEnum.PENDING)
                 .build();
         actionHandleLogMapper.insert(handleLog);
         try {
-            var result = ontologyActionService.testAction(template);
+            handleLog.setExecuteStartTime(new Date());
+            var result = ontologyActionService.testActionForScheduling(template);
             handleLog.setMsg(result.getMessage())
                     .setExecuteResult(writeJson(result))
                     .setCompleteTime(new Date())

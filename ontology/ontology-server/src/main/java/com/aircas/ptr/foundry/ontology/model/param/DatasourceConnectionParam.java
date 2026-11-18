@@ -20,7 +20,7 @@ import lombok.experimental.Accessors;
 @Schema(description = "数据源连接配置入参")
 public class DatasourceConnectionParam {
 
-    @Schema(name = "spaceId", description = "归属的对象空间 id（每个空间至多一条数据源记录，重复报 400）", example = "1", required = true)
+    @Schema(name = "spaceId", description = "归属的对象空间 id（每个空间至多一条数据源记录，重复报 400）", example = "1")
 
     private Integer spaceId;
 

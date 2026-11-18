@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.vo;
 
+import com.aircas.ptr.foundry.ontology.model.param.ActionBasicFunctionConfig;
 import com.aircas.ptr.foundry.ontology.model.param.ActionLinkMappingParam;
 import com.aircas.ptr.foundry.ontology.model.param.BehaviorTreeDefinition;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -33,6 +34,9 @@ public class OntologyActionDetailVO extends OntologyActionInfoVO {
 
     @Schema(description = "行为树定义（黑板 + 变量 + 节点树），仅 actionKind=TREE 返回")
     private BehaviorTreeDefinition treeDefinition;
+
+    @Schema(description = "基础函数配置（查询的对象、聚合/查询、字段与条件），仅 subjectType=BASIC_FUNCTION 返回")
+    private ActionBasicFunctionConfig basicFunction;
 
     @Schema(description = "行为树执行入参要求（必填黑板键 + 需要实例的节点），仅 actionKind=TREE 返回")
     private TreeExecuteInputsVO executeInputs;

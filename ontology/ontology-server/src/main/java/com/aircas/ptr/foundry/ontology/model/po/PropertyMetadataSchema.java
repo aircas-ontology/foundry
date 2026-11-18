@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.po;
 
+import com.aircas.ptr.foundry.ontology.model.enums.MetadataValueTypeEnum;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -40,9 +41,14 @@ public class PropertyMetadataSchema {
 
 
     /**
-     * 为叶子结点时的枚举值列表，/分割符
+     * 取值类型：INPUT 输入值 / ENUM 枚举值 / RANGE 范围值
      */
-    private String enumValues;
+    private MetadataValueTypeEnum valueType;
+
+    /**
+     * 取值内容（字符串）：ENUM 为逗号分隔候选项，RANGE 形如 "min,max"，INPUT 可空
+     */
+    private String value;
 
     /**
      * 元数据名称

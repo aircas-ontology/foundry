@@ -24,7 +24,10 @@ public class OntologyForceSuccessNode extends Decorator {
     public B3Status onTick(Tick tick) {
         var child = getChild();
         if (child == null) {
-            return B3Status.ERROR;
+            var runtime = OntologyTreeNodes.runtime(tick);
+            runtime.setNodeState(nodeId, BehaviorStateEnum.FAILURE);
+            runtime.setNodeMessage(nodeId, "强制成功节点没有可执行的子节点");
+            return B3Status.FAILURE;
         }
         var childStatus = child.execute(tick);
         var status = childStatus == B3Status.FAILURE ? B3Status.SUCCESS : childStatus;

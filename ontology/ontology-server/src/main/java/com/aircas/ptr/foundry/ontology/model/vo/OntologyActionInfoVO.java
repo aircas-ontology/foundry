@@ -58,7 +58,7 @@ public class OntologyActionInfoVO {
     @Schema(name = "actionKind", description = "行为类别：BASE 基础行为 / APPLICATION 应用行为 / TREE 行为树", example = "BASE")
     private ActionKindEnum actionKind;
 
-    @Schema(name = "subjectType", description = "基础行为类型：PROPERTY_VALUE 属性值 / LINK 实例关系 / BASIC_OPERATOR 基础算子")
+    @Schema(name = "subjectType", description = "基础行为类型：PROPERTY_VALUE 属性值 / LINK 实例关系 / BASIC_FUNCTION 基础函数（BASIC_OPERATOR 为基础算子，仅存量行为）")
     private ActionSubjectTypeEnum subjectType;
 
     @Schema(name = "operation", description = "基础操作：CREATE 新增 / UPDATE 修改 / DELETE 删除")
@@ -67,7 +67,7 @@ public class OntologyActionInfoVO {
     @Schema(name = "storageGroup", description = "属性值操作的目标存储分组", example = "extra")
     private String storageGroup;
 
-    @Schema(name = "outputMode", description = "输出方式（仅基础算子行为有值 RESULT_ONLY）；应用行为已下沉到 mappingIns 每行独立选择", example = "RESULT_ONLY")
+    @Schema(name = "outputMode", description = "输出方式（只读的基础函数和基础算子行为有值 RESULT_ONLY）；应用行为已下沉到 mappingIns 每行独立选择", example = "RESULT_ONLY")
     private ActionOutputModeEnum outputMode;
 
     @Schema(name = "createTime", description = "创建时间")

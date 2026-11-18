@@ -19,7 +19,7 @@ import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
 import com.aircas.ptr.foundry.ontology.model.po.OntologySpace;
 import com.aircas.ptr.foundry.ontology.model.vo.CdcFullSyncResultVO;
-import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.ObjectMapper;
+import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.DataLakeObjectMapper;
 import com.aircas.ptr.foundry.ontology.repository.datalakeMapper.TableMetadataMapper;
 import com.aircas.ptr.foundry.ontology.repository.elasticsearch.OntologyInstanceRepository;
 import com.aircas.ptr.foundry.ontology.repository.elasticsearch.OntologyLinkGroupRepository;
@@ -87,7 +87,7 @@ public class CdcIncrementalSyncServiceImpl implements CdcIncrementalSyncService 
     @Autowired
     private OntologyLinkGroupMapper linkGroupMapper;
     @Autowired
-    private ObjectMapper lakeObjectMapper;
+    private DataLakeObjectMapper lakeObjectMapper;
     @Autowired
     private TableMetadataMapper tableMetadataMapper;
     @Autowired
