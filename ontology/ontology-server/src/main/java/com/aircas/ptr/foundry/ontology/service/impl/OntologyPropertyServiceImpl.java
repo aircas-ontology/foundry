@@ -38,6 +38,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -49,6 +50,9 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMapper, OntologyProperty> implements OntologyPropertyService {
+
+    /** 主存储分组名称，与 getStorageGroup、实体侧落库取值一致。 */
+    private static final String MAIN_STORAGE_GROUP = "main";
 
     private final TableMetadataMapper tableMetadataMapper;
 
@@ -650,6 +654,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         // query properties of this ontology, grouped by propertyCategoryId, so each category node carries its own properties
         var props = list(new LambdaQueryWrapper<OntologyProperty>()
                 .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier));
+        props.sort(categoryPropertyOrder());
         var propMap = props.stream()
                 .collect(Collectors.groupingBy(
                         p -> p.getPropertyCategoryId() != null ? p.getPropertyCategoryId() : rootCategoryId,
@@ -1229,6 +1234,20 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                     .collect(Collectors.toList()));
         }
         return vo;
+    }
+
+    /** 分类树中属性的顺序：主键最前，其后主分组、其它分组按名称升序，同一分组内按 apiName 升序。 */
+    private static Comparator<OntologyProperty> categoryPropertyOrder() {
+        return Comparator
+                .comparing((OntologyProperty p) -> Integer.valueOf(1).equals(p.getIsPrimaryKey()) ? 0 : 1)
+                .thenComparing(p -> MAIN_STORAGE_GROUP.equals(groupNameOf(p)) ? 0 : 1)
+                .thenComparing(OntologyPropertyServiceImpl::groupNameOf)
+                .thenComparing(OntologyProperty::getApiName, String.CASE_INSENSITIVE_ORDER);
+    }
+
+    /** 存储分组为空视为主分组，与 EntityServiceImpl 行查询侧的兜底一致。 */
+    private static String groupNameOf(OntologyProperty property) {
+        return StringUtils.isEmpty(property.getStorageGroup()) ? MAIN_STORAGE_GROUP : property.getStorageGroup();
     }
 
 
