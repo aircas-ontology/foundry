@@ -20,6 +20,7 @@ import com.aircas.ptr.foundry.ontology.service.OntologyPropertyService;
 import com.aircas.ptr.foundry.ontology.service.PropertyCategoryService;
 import com.aircas.ptr.foundry.ontology.service.PropertyMetadataSchemaService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -129,6 +130,12 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                 .setStorageGroup(param.getStorageGroup())
                 .setPropertyCategoryId(param.getCategoryId())
                 .setMetadata(param.getMetadata()));
+        // updateById 默认忽略 null 字段，元数据置空须显式 set，否则 schema 赋值锁永远解不开
+        if (param.getMetadata() == null) {
+            update(new LambdaUpdateWrapper<OntologyProperty>()
+                    .eq(OntologyProperty::getUniqueIdentifier, uniqIdentifier)
+                    .set(OntologyProperty::getMetadata, null));
+        }
         //update arangodb node
         buildEntityNodes(originalProperty.getOntologyUniqueIdentifier(), titleKeyChanged);
     }
@@ -162,6 +169,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                         .eq(PropertyCategory::getOntologyUniqueIdentifier, ontologyId))
                 .stream().map(PropertyCategory::getId).collect(Collectors.toSet());
         var titleKeyChanged = false;
+        var clearMetadataIds = Lists.<String>newArrayList();
 
         for (OntologyPropertyUpdateParam p : params) {
             //check storage group
@@ -197,6 +205,8 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
             if (metadata != null) {
                 PreconditionUtils.checkNotNull(schema, "当前对象未定义元数据schema，不能设置元数据", HttpStatus.BAD_REQUEST);
                 validateMetadataAgainstSchema(metadata, schema, "");
+            } else {
+                clearMetadataIds.add(p.getUniqueIdentifier());
             }
             var prop = updatePropMap.get(p.getUniqueIdentifier());
             if (isTitleKeyChanged(prop, p)) {
@@ -217,6 +227,12 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         }
         //batch update
         updateBatchById(updateProperties);
+        // updateBatchById 默认忽略 null 字段，元数据置空须显式 set
+        if (!clearMetadataIds.isEmpty()) {
+            update(new LambdaUpdateWrapper<OntologyProperty>()
+                    .in(OntologyProperty::getUniqueIdentifier, clearMetadataIds)
+                    .set(OntologyProperty::getMetadata, null));
+        }
         //补齐缺失的主子表列映射，否则子表分组按关联列读写都走不通
         syncTableFieldMappings(ontologyId, updateProperties, otherProps);
         //update arangodb node
@@ -428,6 +444,12 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         var tableMap = tableMetadataMapper.listTables(schemaName, null).stream().collect(Collectors.toMap(v -> v.getTableName(), v -> v.getDescription() != null ? v.getDescription() : ""));
 
         return props.stream().map(v -> DataConverter.convert(v).setDatasourceDescription(tableMap.get(v.getDatasourceId())))
+                .sorted(Comparator
+                        .comparingInt((OntologyPropertyDetailVO v) -> "main".equals(StringUtils.defaultIfBlank(v.getStorageGroup(), "main")) ? 0 : 1)
+                        .thenComparing(v -> StringUtils.defaultIfBlank(v.getStorageGroup(), "main"), String.CASE_INSENSITIVE_ORDER)
+                        .thenComparingInt(v -> "id".equalsIgnoreCase(v.getApiName()) ? 0 : 1)
+                        .thenComparing(OntologyPropertyDetailVO::getApiName, String.CASE_INSENSITIVE_ORDER)
+                )
                 .collect(Collectors.toList());
     }
 

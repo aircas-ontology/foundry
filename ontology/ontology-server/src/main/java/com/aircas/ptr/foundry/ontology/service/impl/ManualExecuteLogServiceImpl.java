@@ -7,6 +7,7 @@ import com.aircas.ptr.foundry.ontology.model.po.OntologyAction;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.ActionHandleLogMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyActionMapper;
 import com.aircas.ptr.foundry.ontology.service.ManualExecuteLogService;
+import com.aircas.ptr.foundry.ontology.utils.ExecutorMachineInfo;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.Resource;
@@ -47,11 +48,14 @@ public class ManualExecuteLogServiceImpl implements ManualExecuteLogService {
                 .actionHandleType(ActionSchedulingTypeEnum.MANUAL)
                 .requestParam(writeJson(requestParam))
                 .triggerTime(new Date())
+                .executorIp(ExecutorMachineInfo.ip())
+                .executorHost(ExecutorMachineInfo.host())
                 .taskStatus(TaskStatusEnum.PENDING)
                 .build();
         // 日志独立提交，不能被执行体的事务回滚带走
         actionHandleLogMapper.insert(handleLog);
         try {
+            handleLog.setExecuteStartTime(new Date());
             var result = execution.get();
             handleLog.setMsg(messageOf.apply(result))
                     .setExecuteResult(writeJson(result))

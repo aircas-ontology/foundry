@@ -636,6 +636,9 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
     @Override
     @Transactional(value = "mainTransactionManager")
     public void updateMeta(OntologyUpdateParam updateParam) {
+        var meta = getOne(new LambdaQueryWrapper<OntologyMeta>()
+                .eq(OntologyMeta::getUniqueIdentifier, updateParam.getOntologyIdentifier()));
+        PreconditionUtils.checkNotNull(meta, "对象不存在:" + updateParam.getOntologyIdentifier(), HttpStatus.BAD_REQUEST);
         var updateWrapper = new LambdaUpdateWrapper<OntologyMeta>().eq(OntologyMeta::getUniqueIdentifier, updateParam.getOntologyIdentifier())
                 .set(OntologyMeta::getMetaGroupId, String.join(",", updateParam.getGroupIds()))
                 .set(OntologyMeta::getIcon, updateParam.getIcon())
@@ -643,6 +646,15 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 .set(OntologyMeta::getDisplayName, updateParam.getDisplayName())
                 .set(OntologyMeta::getLatestQueryTime, new Date())
                 .set(OntologyMeta::getOntologyCategoryId, updateParam.getCategoryId());
+        if (StringUtils.isNotEmpty(updateParam.getApiName())
+                && !StringUtils.equals(updateParam.getApiName(), meta.getApiName())) {
+            var duplicateApiName = getOne(new LambdaQueryWrapper<OntologyMeta>()
+                    .eq(OntologyMeta::getOntologySpaceId, meta.getOntologySpaceId())
+                    .eq(OntologyMeta::getApiName, updateParam.getApiName())
+                    .ne(OntologyMeta::getUniqueIdentifier, meta.getUniqueIdentifier()));
+            PreconditionUtils.checkIsNull(duplicateApiName, "对象api名称 '" + updateParam.getApiName() + "' 已存在", HttpStatus.BAD_REQUEST);
+            updateWrapper.set(OntologyMeta::getApiName, updateParam.getApiName());
+        }
         update(null, updateWrapper);
     }
 
@@ -1783,6 +1795,11 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 .collect(Collectors.toMap(PropertyCategory::getId, PropertyCategory::getPath, (a, b) -> a));
         var propertyCategory = buildPropertyCategoryTree(propertyCategories);
 
+        //属性元数据 schema 树
+        var metadataSchemas = propertyMetadataSchemaService.list(new LambdaQueryWrapper<PropertyMetadataSchema>()
+                .eq(PropertyMetadataSchema::getOntologyUniqueIdentifier, uid));
+        var propertySchema = buildMetadataSchemaTree(metadataSchemas);
+
         //属性
         var properties = ontologyPropertyService.list(new LambdaQueryWrapper<OntologyProperty>()
                         .eq(OntologyProperty::getOntologyUniqueIdentifier, uid)
@@ -1797,6 +1814,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                         .defaultValue(p.getDefaultValue())
                         .storageGroup(p.getStorageGroup())
                         .categoryPath(p.getPropertyCategoryId() == null ? null : propCategoryPathMap.get(p.getPropertyCategoryId()))
+                        .metadata(p.getMetadata())
                         .build())
                 .collect(Collectors.toList());
 
@@ -1808,6 +1826,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         return OntologyCreateDTO.builder()
                 .metadata(metadata)
                 .propertyCategory(propertyCategory)
+                .propertySchema(propertySchema)
                 .properties(properties)
                 .relations(withRelations ? exportOntologyRelations(uid, space.getId(), uidToDisplayName, exportedLinkIds) : null)
                 .instances(instances)

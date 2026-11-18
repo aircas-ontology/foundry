@@ -21,6 +21,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 import jakarta.annotation.Resource;
+import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -58,6 +59,9 @@ public class TableMetadataServiceImpl implements TableMetadataService {
                         .isPrimaryKey(v.getIsPrimaryKey())
                         .type(v.getType())
                         .build()
+        ).sorted(Comparator
+                .comparing((TableColumnDescVO vo) -> "id".equalsIgnoreCase(vo.getColumnName()) ? 0 : 1)
+                .thenComparing(TableColumnDescVO::getColumnName, String.CASE_INSENSITIVE_ORDER)
         ).collect(Collectors.toList());
     }
 
