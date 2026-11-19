@@ -2,6 +2,8 @@ package com.aircas.ptr.foundry.ontology.model.param;
 
 import com.aircas.ptr.foundry.ontology.model.enums.AggFuncEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.BasicFunctionModeEnum;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -31,6 +33,12 @@ public class ActionBasicFunctionConfig {
     @Schema(name = "ontologyIdentifiers", description = "查询的对象id 列表，至少一个；多于一个时必须是同一对象分类下的对象，且只能做聚合",
             example = "3f2a9c1e-7b4d-4a86-9e21-5c8d1f0a6b34")
     private List<String> ontologyIdentifiers;
+
+    @Schema(name = "ontologyNames", description = "查询选中对象的名称，与 ontologyIdentifiers 同序、逐项对应；"
+            + "对象已删除时用对象id占位。仅详情接口返回，不落库", example = "[\"卫星\"]")
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private List<String> ontologyNames;
 
     @Schema(name = "mode", description = "操作方式：AGGREGATE 聚合 / QUERY 查询", example = "AGGREGATE")
     private BasicFunctionModeEnum mode;
@@ -70,6 +78,12 @@ public class ActionBasicFunctionConfig {
         @Schema(name = "targetOntologyIdentifier", description = "回写目标对象id；可以不是查询的对象，但必须和行为同属一个对象空间",
                 example = "3f2a9c1e-7b4d-48ce-b029-8ab05dae780c")
         private String targetOntologyIdentifier;
+
+        @Schema(name = "targetOntologyName", description = "回写目标对象名称；对象已删除时用对象id占位。"
+                + "仅详情接口返回，不落库", example = "卫星")
+        @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+        @JsonInclude(JsonInclude.Include.NON_NULL)
+        private String targetOntologyName;
 
         @Schema(name = "targetStorageGroup", description = "回写目标存储分组（分组名即物理表名）；查询方式必填且不能是 main，"
                 + "聚合方式不传（固定写 main 主表）", example = "track")

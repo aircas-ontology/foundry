@@ -412,21 +412,31 @@ public class BasicFunctionActionExecutor {
     }
 
     /**
-     * 配置里选中对象的名称，与 {@code config.getOntologyIdentifiers()} 逐项对应（含重复项）。
-     * <p>对象已删除或名称为空时用对象id占位，保证前端按同一下标就能对上标识。</p>
+     * 查询选中对象的名称，与 {@code config.getOntologyIdentifiers()} 同序、逐项对应。
+     * <p>对象已删除或名称为空时用对象id占位，保证前端按下标就能对上标识。</p>
      */
-    public List<String> ontologyDisplayNames(ActionBasicFunctionConfig config) {
-        var identifiers = configOntologyIdentifiers(config);
-        if (identifiers.isEmpty()) {
+    public List<String> queryOntologyDisplayNames(ActionBasicFunctionConfig config) {
+        if (config == null || CollectionUtils.isEmpty(config.getOntologyIdentifiers())) {
             return List.of();
         }
-        var metas = metasById(identifiers);
-        return config.getOntologyIdentifiers().stream()
+        var identifiers = config.getOntologyIdentifiers();
+        var metas = metasById(identifiers.stream().filter(StringUtils::isNotBlank).distinct().collect(Collectors.toList()));
+        return identifiers.stream()
                 .map(id -> {
                     var meta = metas.get(id);
                     return meta == null || StringUtils.isBlank(meta.getDisplayName()) ? id : meta.getDisplayName();
                 })
                 .collect(Collectors.toList());
+    }
+
+    /** 回写目标对象的名称；没配回写返回 null，对象已删除或名称为空时用对象id占位 */
+    public String writeBackOntologyDisplayName(ActionBasicFunctionConfig config) {
+        var identifier = writeBackTargetIdentifier(config);
+        if (StringUtils.isBlank(identifier)) {
+            return null;
+        }
+        var meta = metasById(List.of(identifier)).get(identifier);
+        return meta == null || StringUtils.isBlank(meta.getDisplayName()) ? identifier : meta.getDisplayName();
     }
 
     /** 按对象id取对象，spaceId 非空时同时核对归属空间 */
