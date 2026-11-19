@@ -40,4 +40,23 @@ public final class DownloadUtil {
         objectMapper.writeValue(response.getOutputStream(), data);
         response.getOutputStream().flush();
     }
+
+    /**
+     * 以附件（attachment）形式写出 HTML 内容。
+     *
+     * @param response HTTP 响应
+     * @param fileName 下载文件名
+     * @param html     HTML 文本
+     * @throws IOException 写出响应流失败时抛出
+     */
+    public static void writeHtmlAttachment(HttpServletResponse response, String fileName, String html) throws IOException {
+        var contentType = new MediaType(MediaType.TEXT_HTML, StandardCharsets.UTF_8);
+        var contentDisposition = ContentDisposition.attachment()
+                .filename(fileName, StandardCharsets.UTF_8)
+                .build();
+        response.setContentType(contentType.toString());
+        response.setHeader(HttpHeaders.CONTENT_DISPOSITION, contentDisposition.toString());
+        response.getOutputStream().write(html.getBytes(StandardCharsets.UTF_8));
+        response.getOutputStream().flush();
+    }
 }
