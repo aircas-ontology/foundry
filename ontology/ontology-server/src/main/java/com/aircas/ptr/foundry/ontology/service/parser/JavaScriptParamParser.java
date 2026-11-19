@@ -121,12 +121,18 @@ public class JavaScriptParamParser implements ScriptParamParser {
                                     new LinkedHashSet<>(), 1))
                             .build());
                 } else {
+                    // 集合参数：元素类型决定下一级结构（List<OrbitPoint> 展开字段）与展示（List<Double> 标元素类型）
+                    String elementType = extractCollectionElementType(p.getType());
+                    List<ScriptParsedParam> elementFields = elementType == null ? null
+                            : expandCollectionElementFields(p.getType(), FunctionParamCategoryEnum.INPUT, classByName, expander);
                     out.add(ScriptParsedParam.builder()
                             .name(paramName)
                             .type(ScriptParamTypeMapper.map(typeText))
                             .rawType(typeText)
+                            .elementType(elementType)
                             .category(FunctionParamCategoryEnum.INPUT)
                             .source("ANNOTATION")
+                            .fields(elementFields)
                             .build());
                 }
                 expanded = true;
@@ -171,7 +177,8 @@ public class JavaScriptParamParser implements ScriptParamParser {
             return;
         }
         // 返回集合（List<OrbitPoint>）：外层类型名查不到脚本内类，元素类型才是业务结构
-        List<ScriptParsedParam> elementFields = expandCollectionElementFields(handle.getType(), classByName, expander);
+        List<ScriptParsedParam> elementFields = expandCollectionElementFields(handle.getType(),
+                FunctionParamCategoryEnum.OUTPUT, classByName, expander);
         if (elementFields != null) {
             out.add(ScriptParsedParam.builder()
                     .name("result")
@@ -196,21 +203,22 @@ public class JavaScriptParamParser implements ScriptParamParser {
     }
 
     /**
-     * 返回类型是集合时的元素字段：先按脚本内类展开（AST），认不出再试工程内类（反射）。
+     * 集合类型的元素字段：先按脚本内类展开（AST），认不出再试工程内类（反射）。
      * <p>元素类型不是业务结构（{@code List<String>}）时返回 null，由调用方回落标量层，
-     * 仍是原来那个没有下一级的 result。</p>
+     * 仍是原来那个没有下一级的参数/result。</p>
      */
-    private List<ScriptParsedParam> expandCollectionElementFields(Type returnType,
+    private List<ScriptParsedParam> expandCollectionElementFields(Type collectionType,
+                                                                 FunctionParamCategoryEnum category,
                                                                  Map<String, ClassOrInterfaceDeclaration> classByName,
                                                                  ProjectClassExpander expander) {
-        String elementType = extractCollectionElementType(returnType);
+        String elementType = extractCollectionElementType(collectionType);
         if (elementType == null) {
             return null;
         }
-        List<ScriptParsedParam> fields = expandScriptType(elementType, FunctionParamCategoryEnum.OUTPUT,
+        List<ScriptParsedParam> fields = expandScriptType(elementType, category,
                 classByName, expander, new LinkedHashSet<>(), 1);
         return fields != null ? fields
-                : expander.expandFieldsByName(elementType, FunctionParamCategoryEnum.OUTPUT, new LinkedHashSet<>(), 1);
+                : expander.expandFieldsByName(elementType, category, new LinkedHashSet<>(), 1);
     }
 
     private List<ScriptParsedParam> expandFields(ClassOrInterfaceDeclaration cls, FunctionParamCategoryEnum category, String source,
@@ -229,10 +237,12 @@ public class JavaScriptParamParser implements ScriptParamParser {
             for (VariableDeclarator var : field.getVariables()) {
                 if (seen.add(var.getNameAsString())) {
                     String fieldTypeText = var.getType().asString();
+                    String elementType = extractCollectionElementType(var.getType());
                     ScriptParsedParam.ScriptParsedParamBuilder fb = ScriptParsedParam.builder()
                             .name(var.getNameAsString())
                             .type(ScriptParamTypeMapper.map(fieldTypeText))
                             .rawType(fieldTypeText)
+                            .elementType(elementType)
                             .category(category)
                             .source(source);
                     // 字段类型本身也是自定义类 → 递归展开
@@ -241,7 +251,6 @@ public class JavaScriptParamParser implements ScriptParamParser {
                         fb.fields(expandFields(nestedClass, category, source, classByName, expander, visited, depth + 1));
                     } else {
                         // 集合泛型：List<Admin> / Set<User> → 提取泛型参数递归展开
-                        String elementType = extractCollectionElementType(var.getType());
                         String probeType = elementType == null ? fieldTypeText : elementType;
                         ClassOrInterfaceDeclaration elemClass = resolveUserClass(probeType, classByName);
                         if (elemClass != null && visited.add(probeType)) {

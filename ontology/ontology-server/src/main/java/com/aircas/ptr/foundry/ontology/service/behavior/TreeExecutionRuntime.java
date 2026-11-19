@@ -557,7 +557,7 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
     public Boolean evaluateBlackboardCondition(String nodeId, BehaviorBlackboardConditionConfig config) {
         blackboardRefresher.refresh(nodeId, this);
         var reason = new String[1];
-        var hit = compare(config.getOp(), blackboard.get(config.getKey()), config.getValue(), reason);
+        var hit = compare(config.getOp(), blackboard.get(config.getKey()), config.getValue(), "黑板值", reason);
         if (reason[0] != null) {
             setNodeMessage(nodeId, reason[0]);
             return null;
@@ -641,9 +641,22 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
     }
 
     /**
-     * 按比较方式比黑板值与配置值；类型对不上只把原因写进 reason，由调用方定节点状态，不打断整棵树。
+     * 行为节点执行成功条件的比较：与黑板条件同一份比较口径，只是左值来自这次执行结果里取到的出参值。
+     *
+     * @param leftLabel 说明里对左值的称呼，报错时能看出比的是黑板值还是出参值
+     * @return 条件成立返回 null；不成立或没法比较返回原因说明
      */
-    private boolean compare(BehaviorCompareOpEnum op, Object actual, Object expect, String[] reason) {
+    public String compareSuccessValue(Object actual, BehaviorCompareOpEnum op, Object expect, String leftLabel) {
+        var reason = new String[1];
+        var hit = compare(op, actual, expect, leftLabel, reason);
+        return hit ? null : StringUtils.defaultIfBlank(reason[0], leftLabel + " 不满足 " + op.getName()
+                + (expect == null ? "" : " " + expect) + "，实际是 " + actual);
+    }
+
+    /**
+     * 按比较方式比左值与配置值；类型对不上只把原因写进 reason，由调用方定节点状态，不打断整棵树。
+     */
+    private boolean compare(BehaviorCompareOpEnum op, Object actual, Object expect, String leftLabel, String[] reason) {
         if (op == BehaviorCompareOpEnum.IS_EMPTY) {
             return isEmptyValue(actual);
         }
@@ -651,7 +664,7 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
             return !isEmptyValue(actual);
         }
         if (actual == null) {
-            reason[0] = "黑板值为空，无法参与 " + op.getName() + " 比较";
+            reason[0] = leftLabel + "为空，无法参与 " + op.getName() + " 比较";
             return false;
         }
         if (op == BehaviorCompareOpEnum.CONTAINS || op == BehaviorCompareOpEnum.NOT_CONTAINS) {
@@ -675,7 +688,7 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
             left = Double.parseDouble(String.valueOf(actual));
             right = Double.parseDouble(String.valueOf(expect));
         } catch (NumberFormatException e) {
-            reason[0] = "黑板值 " + actual + " 不是数值，无法按 " + op.getName() + " 比较";
+            reason[0] = leftLabel + " " + actual + " 不是数值，无法按 " + op.getName() + " 比较";
             return false;
         }
         var compared = Double.compare(left, right);

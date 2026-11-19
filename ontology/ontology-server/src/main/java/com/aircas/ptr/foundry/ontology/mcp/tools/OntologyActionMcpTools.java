@@ -130,7 +130,8 @@ public class OntologyActionMcpTools implements McpTools {
             - storageGroup：目标存储分组（物理表名，main 主表不允许），仅属性值行为必填。
             - functionApi：绑定的函数 api，应用行为必填（函数须已发布）；属性值/实例关系/基础函数行为不可传。
             - mappingIns：入参映射数组（应用行为用，每行含 outputMode 等）；linkMapping：出参写属性/绑关系的映射，实例关系行为必填。
-            - basicFunction：subjectType=BASIC_FUNCTION 时必填的基础函数配置（查询对象、聚合/查询、字段与条件）。
+            - basicFunction：subjectType=BASIC_FUNCTION 时必填的基础函数配置（查询对象、聚合/查询、字段与条件；可选 writeBack 结果回写，
+            查询方式把结果行追加到目标对象的子表分组、聚合方式把聚合值写进目标对象主表属性，不配就只返回结果）。
             - treeDefinition：actionKind=TREE 时必填的行为树定义（黑板 + 变量 + 节点树）。
             - icon、description 可选。
             示例（应用行为）：{"ontologyIdentifier":"abcdef","ontologySpaceId":156,"actionApi":"syncSpeed","displayName":"同步速度","categoryId":1,"actionKind":"APPLICATION","functionApi":"calcSpeed"}

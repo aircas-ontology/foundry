@@ -42,6 +42,12 @@ public class ActionTestParam {
             example = "{\"3f2a9c1e-7b4d-4a86-9e21-5c8d1f0a6b34\":1,\"a5e8c206-3f17-4d92-8b74-1c6f9d3e5028\":2}")
     private Map<String, Object> entityPrimaryKeys;
 
+    @Schema(name = "writeBackEntityPrimaryKey", description = "结果回写落点的实例主键：只用于配了结果回写的基础函数行为，"
+            + "只决定写到哪个实例，不参与查询收窄；回写目标与查询对象是同一个时用它区分「查哪个实例」和「写到哪个实例」。"
+            + "不传则沿用 entityPrimaryKey/entityPrimaryKeys 里回写目标对象的键",
+            example = "2")
+    private Object writeBackEntityPrimaryKey;
+
     @Schema(name = "inputParams", description = "按算子入参指定的数据位置：入参名 -> 数据位置数组。"
             + "数组的一个元素就是一组完整取值：读哪个实例（entityPrimaryKey）、每个存储分组读哪一行（dataPrimaryKeys），"
             + "只读一个位置时数组里放一个元素；放多个元素就是批量测试的候选值，只选实例时各入参的候选值做笛卡尔积、"

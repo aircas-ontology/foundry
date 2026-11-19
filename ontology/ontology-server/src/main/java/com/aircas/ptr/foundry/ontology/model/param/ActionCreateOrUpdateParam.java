@@ -74,7 +74,7 @@ public class ActionCreateOrUpdateParam {
     private String storageGroup;
 
     @Schema(description = "已废弃：输出方式已下沉到 mappingIns 每行的 outputMode，应用行为不再需要顶层指定；"
-            + "基础函数固定 RESULT_ONLY，属性值和实例关系行为为空", example = "RESULT_ONLY")
+            + "基础函数按配置里有没有结果回写自动给 RESULT_ONLY/WRITE_PROPERTY，不用传；属性值和实例关系行为为空", example = "RESULT_ONLY")
     private ActionOutputModeEnum outputMode;
 
     @Schema(description = "行为关系映射；应用行为可选填，出参写入对象属性与绑定关系可以并存（绑了关系的同一次执行既回写属性也补关系边）。"
@@ -85,7 +85,7 @@ public class ActionCreateOrUpdateParam {
     @Schema(description = "行为参数列表；基础函数行为不绑算子，不可传")
     private List<ActionParamMappingCreateParam> mappingIns;
 
-    @Schema(description = "基础函数配置（查询的对象、聚合/查询、字段与条件）；subjectType=BASIC_FUNCTION 时必填")
+    @Schema(description = "基础函数配置（查询的对象、聚合/查询、字段与条件、可选的结果回写）；subjectType=BASIC_FUNCTION 时必填")
     private ActionBasicFunctionConfig basicFunction;
 
     @Schema(description = "行为树定义（黑板 + 变量 + 节点树），actionKind=TREE 时必填")

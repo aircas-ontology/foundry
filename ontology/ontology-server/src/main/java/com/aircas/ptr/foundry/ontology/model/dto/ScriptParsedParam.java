@@ -27,6 +27,9 @@ public class ScriptParsedParam {
     /** 源码里的原始类型文本（int/str/number/类名等），用于推导 referenceType */
     private String rawType;
 
+    /** 集合参数的元素类型文本（{@code List<Double>} → Double），标量/对象参数为 null；用于描述注记与字段展开 */
+    private String elementType;
+
     /** 参数方向：INPUT / OUTPUT */
     private FunctionParamCategoryEnum category;
 

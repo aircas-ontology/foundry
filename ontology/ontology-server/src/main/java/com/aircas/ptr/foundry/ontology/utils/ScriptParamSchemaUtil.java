@@ -3,6 +3,8 @@ package com.aircas.ptr.foundry.ontology.utils;
 import com.aircas.ptr.foundry.common.constant.FunctionParamTypeEnum;
 import org.apache.commons.lang.StringUtils;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -21,6 +23,11 @@ public final class ScriptParamSchemaUtil {
 
     /** 数组/列表族类型文本 → java.util.List（Groovy 解析器把数组统一还原为 "array"） */
     private static final Set<String> LIST_TYPE_TEXTS = Set.of("list", "array", "set", "iterable", "collection");
+
+    /** 集合/映射族裸类型 → JDK 全限定名（泛型实参补全时使用，如 List<Map<..>> 的内层） */
+    private static final Set<String> SET_TYPE_TEXTS = Set.of("set", "hashset", "linkedhashset", "treeset");
+
+    private static final Set<String> MAP_TYPE_TEXTS = Set.of("map", "hashmap", "linkedhashmap", "dictionary");
 
     /** 标量类型文本 → JVM 装箱全限定类名（与 FunctionParamTypeEnum.FUNC_PARAM_TYPE_MAP 同源口径） */
     private static final Map<String, String> SCALAR_FQN = Map.ofEntries(
@@ -81,8 +88,14 @@ public final class ScriptParamSchemaUtil {
             return "java.util.List";
         }
         if (angle > 0) {
-            // 保留泛型实参（如 java.util.List<java.lang.String>），SchemaHandleUtil 支持类型表达式
-            return s;
+            // 保留泛型实参并补全全限定名（List<Double> → java.util.List<java.lang.Double>），
+            // SchemaHandleUtil 支持类型表达式；元素类不可解析（脚本内类等）时收敛到集合裸类型
+            String qualified = qualifyGenericType(s);
+            if (qualified != null) {
+                return qualified;
+            }
+            String base = baseFqn(s.substring(0, angle));
+            return base != null ? base : s;
         }
         int dot = s.lastIndexOf('.');
         if (dot >= 0) {
@@ -109,5 +122,79 @@ public final class ScriptParamSchemaUtil {
         }
         // 兼容小写开头的未知简单名按 java.lang. 装箱族尝试无望，统一原样返回（执行侧 Class.forName 失败按 Object 兜底）
         return s;
+    }
+
+    /**
+     * 泛型类型文本的全限定化：逐层补全裸类型与实参（{@code List<Double>} → {@code java.util.List<java.lang.Double>}），
+     * 已是全限定名或 JDK 类名的部分原样保留；任一实参认不出（脚本内类等）返回 null，由调用方收敛到裸类型。
+     */
+    private static String qualifyGenericType(String typeText) {
+        String s = typeText.trim();
+        if (s.endsWith("[]")) {
+            String component = qualifyGenericType(s.substring(0, s.length() - 2));
+            return component == null ? null : component + "[]";
+        }
+        int angle = s.indexOf('<');
+        if (angle < 0) {
+            return baseFqn(s);
+        }
+        String raw = baseFqn(s.substring(0, angle));
+        if (raw == null || !s.endsWith(">")) {
+            return null;
+        }
+        List<String> args = splitTopLevelArguments(s.substring(angle + 1, s.length() - 1));
+        StringBuilder sb = new StringBuilder(raw).append('<');
+        for (int i = 0; i < args.size(); i++) {
+            String qualified = qualifyGenericType(args.get(i));
+            if (qualified == null) {
+                return null;
+            }
+            if (i > 0) {
+                sb.append(',');
+            }
+            sb.append(qualified);
+        }
+        return sb.append('>').toString();
+    }
+
+    /** 裸类型文本 → 全限定名：已带包名原样返回，JDK 标量/集合族查表，其余（脚本内类等）返回 null。 */
+    private static String baseFqn(String typeText) {
+        String name = typeText == null ? "" : typeText.trim();
+        if (name.isEmpty()) {
+            return null;
+        }
+        if (name.indexOf('.') >= 0) {
+            return name;
+        }
+        String lower = name.toLowerCase();
+        if (SET_TYPE_TEXTS.contains(lower)) {
+            return "java.util.Set";
+        }
+        if (MAP_TYPE_TEXTS.contains(lower)) {
+            return "java.util.Map";
+        }
+        if (LIST_TYPE_TEXTS.contains(lower)) {
+            return "java.util.List";
+        }
+        return SCALAR_FQN.get(lower);
+    }
+
+    private static List<String> splitTopLevelArguments(String argsPart) {
+        List<String> args = new ArrayList<>();
+        int depth = 0;
+        int start = 0;
+        for (int i = 0; i < argsPart.length(); i++) {
+            char c = argsPart.charAt(i);
+            if (c == '<') {
+                depth++;
+            } else if (c == '>') {
+                depth--;
+            } else if (c == ',' && depth == 0) {
+                args.add(argsPart.substring(start, i));
+                start = i + 1;
+            }
+        }
+        args.add(argsPart.substring(start));
+        return args;
     }
 }

@@ -82,8 +82,9 @@ def execute(code: str, input_data: dict, timeout_ms: int = 5000) -> object:
 def parse(code: str) -> list:
     """静态解析脚本参数。
 
-    与主应用约定的回传形态：[{name, type, category, source}, ...]；
-    type 为语言原生类型文本（str/int/list/dict/interface 名），主应用侧统一归一。
+    与主应用约定的回传形态：[{name, type, category, source, elementType?, fields?}, ...]；
+    type 为语言原生类型文本（str/int/list/dict/interface 名），主应用侧统一归一；
+    elementType 仅集合类型携带（list[float] → float、list[Admin] → Admin），用于展示元素类型。
 
     解析层级：
       1) ANNOTATION：handle 形参/返回值为 TypedDict/dataclass/类时展开字段；
@@ -125,18 +126,19 @@ def parse(code: str) -> list:
         result = []
         for fname, ftype in classes[class_name]:
             field = {"name": fname, "type": ftype}
+            elem_type = _extract_collection_element(ftype)
+            if elem_type:
+                field["elementType"] = elem_type
             if ftype in classes and ftype not in visited:
                 # 字段类型本身也是自定义类 → 递归展开
                 nested = _expand_class(ftype, visited)
                 if nested:
                     field["fields"] = nested
-            else:
+            elif elem_type and elem_type in classes and elem_type not in visited:
                 # 集合泛型：List[Admin] → 提取元素类型递归展开
-                elem_type = _extract_collection_element(ftype)
-                if elem_type and elem_type in classes and elem_type not in visited:
-                    nested = _expand_class(elem_type, visited)
-                    if nested:
-                        field["fields"] = nested
+                nested = _expand_class(elem_type, visited)
+                if nested:
+                    field["fields"] = nested
             result.append(field)
         return result
 
@@ -158,9 +160,15 @@ def parse(code: str) -> list:
                 if attrs:
                     param_node["fields"] = [{"name": attr, "type": "object"} for attr in attrs]
             else:
-                # 标量类型（str/int/float 等）
+                # 标量/集合类型（str / list[float] / list[Admin] 等）
                 param_node["type"] = ann
                 param_node["source"] = "ANNOTATION"
+                elem_type = _extract_collection_element(ann)
+                if elem_type:
+                    param_node["elementType"] = elem_type
+                    if elem_type in classes and classes[elem_type]:
+                        # 集合入参的元素是脚本内类 → 元素字段作为下一级结构
+                        param_node["fields"] = _expand_class(elem_type)
         else:
             # 无注解 → 启发扫描该参数的 body 访问
             param_node["type"] = "object"

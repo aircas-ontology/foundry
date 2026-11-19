@@ -27,7 +27,8 @@ import java.util.Set;
  * （Python 用 {@code ast} 标准库、TS 用 typescript Compiler API），主应用 HTTP 调 runner 的 {@code /parse}。
  * <p>
  * runner 契约：{@code POST /parse} body={code} → {ok, params:[层级结构]} | {ok:false,error}。
- * 层级结构：每个参数一个节点，含 name/type/category/source，可展开类型带 fields 数组。
+ * 层级结构：每个参数一个节点，含 name/type/category/source，可展开类型带 fields 数组；
+ * 集合类型带 elementType（如 list[float] → float、number[] → number），与主应用描述注记同一口径。
  * runner 回传的 type 为语言原生类型文本（str/number/dict/interface 名等），主应用统一经 ScriptParamTypeMapper 归一。
  */
 @Slf4j
@@ -86,6 +87,7 @@ public class RunnerScriptParamParser implements ScriptParamParser {
                 String paramName = str(p.get("name"));
                 String category = str(p.get("category"));
                 String nativeType = str(p.get("type"));
+                String elementType = optionalStr(p.get("elementType"));
                 String source = str(p.get("source"));
                 FunctionParamCategoryEnum cat = "OUTPUT".equalsIgnoreCase(category)
                         ? FunctionParamCategoryEnum.OUTPUT : FunctionParamCategoryEnum.INPUT;
@@ -98,16 +100,18 @@ public class RunnerScriptParamParser implements ScriptParamParser {
                             .name(paramName)
                             .type(ScriptParamTypeMapper.map(nativeType))
                             .rawType(nativeType)
+                            .elementType(elementType)
                             .category(cat)
                             .source(source)
                             .fields(parseFields(fieldList, cat, source))
                             .build());
                 } else {
-                    // 无 fields → 标量参数
+                    // 无 fields → 标量/集合参数
                     result.add(ScriptParsedParam.builder()
                             .name(paramName)
                             .type(ScriptParamTypeMapper.map(nativeType))
                             .rawType(nativeType)
+                            .elementType(elementType)
                             .category(cat)
                             .source(source)
                             .build());
@@ -119,6 +123,10 @@ public class RunnerScriptParamParser implements ScriptParamParser {
 
     private static String str(Object value) {
         return value == null ? "" : String.valueOf(value);
+    }
+
+    private static String optionalStr(Object value) {
+        return value == null ? null : String.valueOf(value);
     }
 
     /**
@@ -138,6 +146,7 @@ public class RunnerScriptParamParser implements ScriptParamParser {
                     .name(fieldName)
                     .type(ScriptParamTypeMapper.map(fieldType))
                     .rawType(fieldType)
+                    .elementType(optionalStr(f.get("elementType")))
                     .category(category)
                     .source(source);
             // 递归：子字段本身也有 fields 时继续展开

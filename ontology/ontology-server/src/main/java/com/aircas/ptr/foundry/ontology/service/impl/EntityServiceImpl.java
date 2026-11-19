@@ -2658,7 +2658,8 @@ public class EntityServiceImpl implements EntityService {
      * <p>数字值按它的文本形态走 {@link #convertByTargetType}：同一列用字符串写和用数字写必须同口径，
      * 过去 {@code number.intValue()} 会把 500.9 静默截成 500、{@code 1} 进 boolean 列原样传下去留给插库报错。</p>
      */
-    private Object convertWriteValue(Object value, OntologyProperty prop) {
+    @Override
+    public Object convertWriteValue(Object value, OntologyProperty prop) {
         if (value == null || prop.getPropertyType() == null) {
             return value;
         }
@@ -3451,6 +3452,204 @@ public class EntityServiceImpl implements EntityService {
         Page<List<EntityPropertyGenericQueryVO>> page = new Page<>(param.getPageNum(), pageSize, total);
         page.setRecords(resultVOs);
         return page;
+    }
+
+
+    /** 统一聚合内层分支投影出的那一列的列名：各对象的取值都叫这个名，外层只对它做一次聚合函数 */
+    private static final String UNION_VALUE_COLUMN = "union_value";
+
+    /** 统一聚合外层子查询的表别名 */
+    private static final String UNION_SOURCE_ALIAS = "union_src";
+
+    @Override
+    public Page<List<EntityPropertyGenericQueryVO>> genericAggregateUnion(EntityUnionAggregateParam param) {
+        PreconditionUtils.checkNotNull(param, "统一聚合查询参数不能为空", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkNotNull(param.getAggFunc(), "统一聚合要指定聚合函数", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(StringUtils.isNotEmpty(param.getPropertyApiName()),
+                "统一聚合要指定聚合属性", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(param.getSources()),
+                "统一聚合至少要有一个来源对象", HttpStatus.BAD_REQUEST);
+        var branches = param.getSources().stream()
+                .map(source -> buildUnionAggregateBranch(source, param.getPropertyApiName(), param.getAggFunc()))
+                .collect(Collectors.toList());
+        // 属性展示名按第一个来源对象给：合批之后的值认不出各自来自哪个对象，展示名只是这一列的表头
+        var propertyDisplayName = branches.get(0).property().getDisplayName();
+        checkUnionBranchValueTypes(param.getAggFunc(), propertyDisplayName, branches);
+        var alias = param.getAggFunc().getValue().toLowerCase() + "_" + param.getPropertyApiName();
+        var valueColumn = wrapTableRef(UNION_SOURCE_ALIAS, UNION_VALUE_COLUMN);
+        // DISTINCT 没有可下推到外层的聚合函数：单对象时 DISTINCT(col) 回的就是去重后的那批值，
+        // 这里对合起来的整批值去重，口径保持一致（回值，不回条数）
+        var selectBuilder = new StringBuilder("SELECT ");
+        if (param.getAggFunc() == AggFuncEnum.DISTINCT) {
+            selectBuilder.append("DISTINCT ").append(valueColumn);
+        } else {
+            selectBuilder.append(param.getAggFunc().getValue()).append("(").append(valueColumn).append(")");
+        }
+        var dataSql = selectBuilder.append(" AS ").append(wrapWithDoubleQuotes(alias))
+                .append(" FROM (").append(String.join(" UNION ALL ",
+                        branches.stream().map(UnionAggregateBranch::sql).collect(Collectors.toList()))).append(") ")
+                .append(wrapWithDoubleQuotes(UNION_SOURCE_ALIAS)).toString();
+        List<Map<String, Object>> resultMaps;
+        try {
+            resultMaps = objectMapper.queryBySql(dataSql);
+        } catch (DataAccessException e) {
+            log.error("统一聚合查询执行失败, sql: {}", dataSql, e);
+            var cause = StringUtils.defaultString(e.getMostSpecificCause().getMessage());
+            if (cause.contains("invalid input syntax for type numeric")) {
+                throw new BusinessException("聚合列存在非数字数据，无法转换为数值类型", HttpStatus.BAD_REQUEST);
+            }
+            if (cause.contains("cannot be matched")) {
+                throw new BusinessException("各来源对象的属性[" + propertyDisplayName
+                        + "]关联的数据源字段类型不一致，合不成一批，无法统一聚合，请检查这些对象上该属性的字段类型",
+                        HttpStatus.BAD_REQUEST);
+            }
+            throw e;
+        }
+        var resultVOs = new ArrayList<List<EntityPropertyGenericQueryVO>>();
+        for (var row : resultMaps) {
+            resultVOs.add(List.of(EntityPropertyGenericQueryVO.builder()
+                    .propertyApiName(param.getPropertyApiName())
+                    .propertyDisplayName(propertyDisplayName)
+                    .aggFunc(param.getAggFunc())
+                    .alias(alias)
+                    .value(row == null ? null : row.get(alias))
+                    .build()));
+        }
+        var page = new Page<List<EntityPropertyGenericQueryVO>>(1, Math.max(resultVOs.size(), 1), resultVOs.size());
+        page.setRecords(resultVOs);
+        return page;
+    }
+
+    /**
+     * 统一聚合的一个对象分支：把该对象上被聚合的属性按 {@link #unionBranchExpr} 的取值形状投影成一列，聚合留给外层做。
+     * <p>表的关联、实例主键与过滤条件的处理与 {@link #genericQuery} 同一套：条件里引用到子表字段时
+     * 一样要 LEFT JOIN 过来，命中几行就贡献几个值。</p>
+     */
+    private UnionAggregateBranch buildUnionAggregateBranch(EntityUnionAggregateParam.Source source,
+                                                           String propertyApiName, AggFuncEnum aggFunc) {
+        PreconditionUtils.checkArgument(source != null && StringUtils.isNotEmpty(source.getOntologyIdentifier()),
+                "统一聚合的来源对象不能为空", HttpStatus.BAD_REQUEST);
+        var props = propertyMapper.selectList(new LambdaQueryWrapper<OntologyProperty>()
+                .eq(OntologyProperty::getOntologyUniqueIdentifier, source.getOntologyIdentifier()));
+        var propMap = props.stream()
+                .collect(Collectors.toMap(OntologyProperty::getApiName, v -> v, (existing, ignored) -> existing));
+        var pkProp = props.stream()
+                .filter(p -> p.getIsPrimaryKey() != null && p.getIsPrimaryKey() == 1).findFirst().orElse(null);
+        // 报错文案要点对象名，判定通过时不去查：checkArgument 的消息参数是先求值的，放这里每个对象都要白查一遍库
+        if (pkProp == null || StringUtils.isEmpty(pkProp.getDatasourceId())) {
+            throw new BusinessException("对象[" + objectDisplayName(source.getOntologyIdentifier())
+                    + "]的主键属性不存在或未关联数据源，统一聚合跑不出来", HttpStatus.BAD_REQUEST);
+        }
+        if (StringUtils.isEmpty(pkProp.getDatasourceSchema())) {
+            throw new BusinessException("对象[" + objectDisplayName(source.getOntologyIdentifier())
+                    + "]的数据源 schema 为空，请检查数据源配置", HttpStatus.BAD_REQUEST);
+        }
+        var prop = propMap.get(propertyApiName);
+        if (prop == null || StringUtils.isEmpty(prop.getDatasourceId())) {
+            throw new BusinessException("对象[" + objectDisplayName(source.getOntologyIdentifier()) + "]的属性"
+                    + propertyApiName + "不存在或未关联数据源", HttpStatus.BAD_REQUEST);
+        }
+        var mainSchema = pkProp.getDatasourceSchema();
+        var mainDs = pkProp.getDatasourceId();
+        var columnRef = wrapColumnRef(mainSchema, prop.getDatasourceId(), prop.getDatasourceColumnName());
+        var selectBuilder = new StringBuilder("SELECT ")
+                .append(unionBranchExpr(aggFunc, columnRef, prop.getPropertyType()))
+                .append(" AS ").append(wrapWithDoubleQuotes(UNION_VALUE_COLUMN));
+        var fromBuilder = new StringBuilder(wrapTableRef(mainSchema, mainDs));
+        var tableMappingMap = new HashMap<String, TableFieldMapping>();
+        tableFieldMappingMapper.selectBySourceTable(mainSchema, mainDs)
+                .forEach(mapping -> tableMappingMap.put(mapping.getTargetTableName(), mapping));
+        var joinedTables = Sets.newHashSet(mainDs);
+        for (var apiName : collectUnionBranchPropertyApiNames(propertyApiName, source.getFilters())) {
+            var joinProp = propMap.get(apiName);
+            if (joinProp == null || StringUtils.isEmpty(joinProp.getDatasourceId())
+                    || !joinedTables.add(joinProp.getDatasourceId())) {
+                continue;
+            }
+            var mapping = tableMappingMap.get(joinProp.getDatasourceId());
+            PreconditionUtils.checkArgument(mapping != null,
+                    "未找到数据源表 " + joinProp.getDatasourceId() + " 与主表 " + mainDs + " 的关联关系", HttpStatus.BAD_REQUEST);
+            fromBuilder.append(" LEFT JOIN ").append(wrapTableRef(mainSchema, joinProp.getDatasourceId()))
+                    .append(" ON ").append(wrapColumnRef(mainSchema, mainDs, mapping.getSourceColumnName())).append(" = ")
+                    .append(wrapColumnRef(mainSchema, joinProp.getDatasourceId(), mapping.getTargetColumnName()));
+        }
+        var filters = source.getFilters();
+        if (source.getEntityPrimaryKey() != null) {
+            filters = andPrimaryKeyFilter(filters, pkProp.getApiName(), source.getEntityPrimaryKey());
+        }
+        if (filters != null) {
+            validateFilterGroup(filters, propMap);
+        }
+        var whereBuilder = new StringBuilder();
+        if (filters != null && CollectionUtils.isNotEmpty(filters.getChildren())) {
+            var whereClause = buildWhereClause(filters, propMap, mainSchema);
+            if (StringUtils.isNotEmpty(whereClause)) {
+                whereBuilder.append(" WHERE ").append(whereClause);
+            }
+        }
+        return new UnionAggregateBranch(selectBuilder.append(" FROM ").append(fromBuilder).append(whereBuilder).toString(), prop);
+    }
+
+    /** 统一聚合分支要关联的表：被聚合的属性 + 条件里引用的属性 */
+    private Set<String> collectUnionBranchPropertyApiNames(String propertyApiName, FilterGroupParam filters) {
+        var apiNames = new LinkedHashSet<String>();
+        apiNames.add(propertyApiName);
+        apiNames.addAll(collectFilterPropertyApiNames(filters));
+        return apiNames;
+    }
+
+    /** 统一聚合的一个对象分支：拼好的取值 SQL + 该对象上被取的那个属性 */
+    private record UnionAggregateBranch(String sql, OntologyProperty property) {
+    }
+
+    /**
+     * 统一聚合里一个分支取值的写法：各分支合批前先把形状对齐，外层才能只调一次聚合函数。
+     * <ul>
+     *   <li>SUM/AVG：转成 numeric。各对象声明的属性类型可以不同（字符串记的数值），不先统一会被数据库拒掉。</li>
+     *   <li>COUNT：只数非空，转成 text 保证各分支合得到一起，空不空的判定不受影响。</li>
+     *   <li>MAX/MIN/DISTINCT：要的是属性原值和原顺序，原样取。</li>
+     * </ul>
+     */
+    private static String unionBranchExpr(AggFuncEnum aggFunc, String columnRef, OntologyDataTypeEnum propType) {
+        if (aggFunc == AggFuncEnum.SUM || aggFunc == AggFuncEnum.AVG) {
+            return toNumericExpr(columnRef, propType);
+        }
+        if (aggFunc == AggFuncEnum.COUNT) {
+            return "(" + columnRef + ")::text";
+        }
+        return columnRef;
+    }
+
+    /**
+     * MAX/MIN/DISTINCT 跨对象合批的前置检查：这些函数拿的是属性原值，各对象声明的类型不一致时
+     * 数据库会自己找一个公共类型（数值和文本混批会统一成文本），MAX 就按字典序比出「9 大于 10」这种看着像、其实是错的值。
+     * <p>与其静默算错，不如在跑之前点名要求一致；SUM/AVG/COUNT 已各自把取值统一成 numeric/text，不收这条限制。</p>
+     */
+    private void checkUnionBranchValueTypes(AggFuncEnum aggFunc, String propertyDisplayName,
+                                            List<UnionAggregateBranch> branches) {
+        if (aggFunc != AggFuncEnum.MAX && aggFunc != AggFuncEnum.MIN && aggFunc != AggFuncEnum.DISTINCT) {
+            return;
+        }
+        var types = branches.stream()
+                .map(branch -> branch.property().getPropertyType())
+                .filter(Objects::nonNull)
+                .map(OntologyDataTypeEnum::getValue)
+                .distinct()
+                .collect(Collectors.toList());
+        if (types.size() <= 1) {
+            return;
+        }
+        throw new BusinessException("各来源对象的属性[" + propertyDisplayName + "]声明的数据类型不一致（"
+                + String.join("、", types) + "），" + aggFunc.getValue()
+                + " 取的是属性原值，跨类型合批会按文本比出错值；请把这些对象上该属性的数据类型改成一致后再执行",
+                HttpStatus.BAD_REQUEST);
+    }
+
+    /** 报错文案里的对象名：调用侧只有对象id，露 uuid 定位不到是哪个对象 */
+    private String objectDisplayName(String ontologyIdentifier) {
+        var meta = metaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>()
+                .eq(OntologyMeta::getUniqueIdentifier, ontologyIdentifier), false);
+        return meta == null ? ontologyIdentifier : meta.getDisplayName();
     }
 
 

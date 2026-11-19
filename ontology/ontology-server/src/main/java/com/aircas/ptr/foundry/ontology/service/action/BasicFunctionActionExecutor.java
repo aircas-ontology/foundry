@@ -8,6 +8,7 @@ import com.aircas.ptr.foundry.ontology.model.enums.BasicFunctionModeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FilterNodeTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.param.ActionBasicFunctionConfig;
 import com.aircas.ptr.foundry.ontology.model.param.EntityPropertyGenericQueryParam;
+import com.aircas.ptr.foundry.ontology.model.param.EntityUnionAggregateParam;
 import com.aircas.ptr.foundry.ontology.model.param.FilterGroupParam;
 import com.aircas.ptr.foundry.ontology.model.param.FilterNodeParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologySelectPropertyParam;
@@ -16,6 +17,7 @@ import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
 import com.aircas.ptr.foundry.ontology.model.vo.ActionBasicFunctionObjectResultVO;
 import com.aircas.ptr.foundry.ontology.model.vo.ActionBasicFunctionResultVO;
+import com.aircas.ptr.foundry.ontology.model.vo.ActionBasicFunctionWriteBackVO;
 import com.aircas.ptr.foundry.ontology.model.vo.EntityPropertyGenericQueryVO;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyCategoryMapper;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.OntologyMetaMapper;
@@ -45,9 +47,9 @@ import java.util.stream.Collectors;
  * 基础函数行为（subjectType=BASIC_FUNCTION）的定义校验与执行。
  *
  * <p>与基础查询算子的分工：算子那份配置引用的是变量名，执行时要靠变量绑定换成真实属性；
- * 这里的配置直接引用属性 apiName，所以不绑算子、没有变量绑定那一层，执行时把配置逐对象摊成
- * {@link EntityPropertyGenericQueryParam} 交给通用查询。多对象时每个对象各算各的聚合值，
- * 不做跨对象合并；实例主键按对象给，给了就把查询收窄到该实例，没给按该对象全量查。</p>
+ * 这里的配置直接引用属性 apiName，所以不绑算子、没有变量绑定那一层，执行时按操作方式交给通用查询：
+ * 查询方式一个对象一次查询，聚合方式把每个对象的取值合批（UNION ALL）后只算一次，得到一个统一聚合值。
+ * 实例主键按对象给，给了就把该对象贡献的行收窄到那条实例，没给按该对象全量参与。</p>
  */
 @Slf4j
 @Component
@@ -60,6 +62,13 @@ public class BasicFunctionActionExecutor {
     /** 查询方式额外给一条总行数的出参 */
     private static final String TOTAL_FIELD = "total";
 
+    /**
+     * 配了结果回写时一次取满的行数上限：回写要落全部命中行，而不是首页那十几条。
+     * <p>命中行数超过上限直接报错，不分页循环取——通用查询没有默认排序，翻页取数会漏行也会重行，
+     * 宁可让人收窄条件。</p>
+     */
+    private static final int MAX_WRITE_BACK_ROWS = 1000;
+
     private final OntologyMetaMapper metaMapper;
 
     private final OntologyCategoryMapper categoryMapper;
@@ -70,14 +79,18 @@ public class BasicFunctionActionExecutor {
 
     private final ObjectMapper jacksonObjectMapper;
 
+    private final BasicFunctionWriteBackExecutor writeBackExecutor;
+
     public BasicFunctionActionExecutor(OntologyMetaMapper metaMapper, OntologyCategoryMapper categoryMapper,
                                        OntologyPropertyMapper propertyMapper, @Lazy EntityService entityService,
-                                       ObjectMapper jacksonObjectMapper) {
+                                       ObjectMapper jacksonObjectMapper,
+                                       BasicFunctionWriteBackExecutor writeBackExecutor) {
         this.metaMapper = metaMapper;
         this.categoryMapper = categoryMapper;
         this.propertyMapper = propertyMapper;
         this.entityService = entityService;
         this.jacksonObjectMapper = jacksonObjectMapper;
+        this.writeBackExecutor = writeBackExecutor;
     }
 
     /**
@@ -95,6 +108,7 @@ public class BasicFunctionActionExecutor {
         checkMode(config, metas);
         checkSameCategory(metas);
         checkFields(metas, config);
+        writeBackExecutor.checkConfig(config, spaceId);
     }
 
     /**
@@ -124,15 +138,22 @@ public class BasicFunctionActionExecutor {
         }
     }
 
+    public String run(ActionBasicFunctionConfig config, Map<String, Object> primaryKeyByObject) {
+        return run(config, primaryKeyByObject, null);
+    }
+
     /**
-     * 执行一次基础函数查询。
+     * 执行一次基础函数查询，行为配了结果回写时顺带把这次结果落到对象数据上。
      *
-     * @param config            行为的查询配置
-     * @param primaryKeyByObject 对象id -&gt; 实例主键；某个对象没有键时该对象按全量查
-     * @return 结果 JSON，逐对象一条
+     * @param config                    行为的查询配置
+     * @param primaryKeyByObject        对象id -&gt; 实例主键；某个查询对象没有键时该对象按全量参与。
+     *                                  没单独给回写实例时，这份键里要带上回写目标对象的实例主键，否则回写没有归属、直接报错
+     * @param writeBackEntityPrimaryKey 单独指定的回写实例主键；只覆盖回写目标对象，不参与查询收窄
+     * @return 结果 JSON，一条；聚合方式多对象时也是合批算出的那一个统一值。配了回写时附带 writeBack 说明落到了哪里、落了几行
      */
     @SneakyThrows
-    public String run(ActionBasicFunctionConfig config, Map<String, Object> primaryKeyByObject) {
+    public String run(ActionBasicFunctionConfig config, Map<String, Object> primaryKeyByObject,
+                      Object writeBackEntityPrimaryKey) {
         var identifiers = configOntologyIdentifiers(config);
         if (identifiers.isEmpty()) {
             throw new BusinessException("基础函数行为没有选择对象", HttpStatus.BAD_REQUEST);
@@ -141,36 +162,141 @@ public class BasicFunctionActionExecutor {
         checkMode(config, metas);
         checkFields(metas, config);
         var mode = config.getMode();
-        var results = new ArrayList<ActionBasicFunctionObjectResultVO>();
-        for (var meta : metas) {
-            var queryParam = buildQueryParam(config, mode, meta,
-                    primaryKeyByObject == null ? null : primaryKeyByObject.get(meta.getUniqueIdentifier()));
+        var writeBackEnabled = writeBackExecutor.isEnabled(config);
+        List<ActionBasicFunctionObjectResultVO> results;
+        Object aggregateValue = null;
+        var writeBackRows = new ArrayList<List<EntityPropertyGenericQueryVO>>();
+        if (mode == BasicFunctionModeEnum.AGGREGATE) {
+            // 各对象算各自的 AVG/COUNT 再拼起来不是全局值，所以每个对象只出一个取值分支，聚合函数只在外层调一次
+            var page = entityService.genericAggregateUnion(buildUnionAggregateParam(config, metas, primaryKeyByObject));
+            aggregateValue = firstValue(page);
+            results = List.of(ActionBasicFunctionObjectResultVO.builder()
+                    .ontologyUniqueIdentifier(metas.size() == 1 ? metas.get(0).getUniqueIdentifier() : null)
+                    .ontologyDisplayName(joinObjectNames(metas))
+                    .aggFunc(config.getAggFunc())
+                    .targetField(config.getTargetField())
+                    .value(aggregateValue)
+                    .build());
+        } else {
+            // 查询方式只作用于一个对象，创建和执行都拦在 checkMode
+            var meta = metas.get(0);
+            var queryParam = buildQueryParam(config, meta, instanceKey(primaryKeyByObject, meta));
+            // 回写要落全部命中行：查询方式把页宽抬到上限，一次取满（命中更多直接报错，见 checkWriteBackRows）
+            if (writeBackEnabled) {
+                queryParam.setPageSize(MAX_WRITE_BACK_ROWS);
+            }
             var page = entityService.genericQuery(queryParam);
+            var rows = page == null || page.getRecords() == null
+                    ? List.<List<EntityPropertyGenericQueryVO>>of() : page.getRecords();
             var item = ActionBasicFunctionObjectResultVO.builder()
                     .ontologyUniqueIdentifier(meta.getUniqueIdentifier())
                     .ontologyDisplayName(meta.getDisplayName())
                     .build();
-            if (mode == BasicFunctionModeEnum.AGGREGATE) {
-                item.setAggFunc(config.getAggFunc());
-                item.setTargetField(config.getTargetField());
-                item.setValue(firstValue(page));
+            if (writeBackEnabled) {
+                checkWriteBackRows(page);
+                writeBackRows.addAll(rows);
+                // 出参和黑板取值仍按首页口径，不因为配了回写就把整批行回显出去
+                item.setRecords(rows.stream().limit(DEFAULT_PAGE_SIZE).collect(Collectors.toList()));
             } else {
-                item.setRecords(page == null ? List.of() : page.getRecords());
-                item.setTotal(page == null ? 0L : page.getTotal());
+                item.setRecords(rows);
             }
-            results.add(item);
+            item.setTotal(page == null ? 0L : page.getTotal());
+            results = List.of(item);
         }
         return jacksonObjectMapper.writeValueAsString(ActionBasicFunctionResultVO.builder()
                 .mode(mode)
                 .results(results)
+                .writeBack(writeBackEnabled
+                        ? writeBack(mode, config,
+                        writeBackKeys(config, primaryKeyByObject, writeBackEntityPrimaryKey),
+                        writeBackRows, aggregateValue) : null)
                 .build());
+    }
+
+    /**
+     * 回写落点的实例键：单独给的回写实例只覆盖回写目标对象，查询收窄仍用原那份；
+     * 没给就沿用按对象传的键，保持行为测试旧的传法。
+     */
+    private Map<String, Object> writeBackKeys(ActionBasicFunctionConfig config,
+                                              Map<String, Object> primaryKeyByObject,
+                                              Object writeBackEntityPrimaryKey) {
+        if (writeBackEntityPrimaryKey == null) {
+            return primaryKeyByObject;
+        }
+        var keys = new LinkedHashMap<String, Object>();
+        if (primaryKeyByObject != null) {
+            keys.putAll(primaryKeyByObject);
+        }
+        var target = writeBackTargetIdentifier(config);
+        if (target != null) {
+            keys.put(target, writeBackEntityPrimaryKey);
+        }
+        return keys;
+    }
+
+    /** 执行请求为该对象指定的实例主键；没指定就是 null，按该对象全量查 */
+    private Object instanceKey(Map<String, Object> primaryKeyByObject, OntologyMeta meta) {
+        return primaryKeyByObject == null ? null : primaryKeyByObject.get(meta.getUniqueIdentifier());
+    }
+
+    /**
+     * 聚合配置摊成一次跨对象统一聚合：每个选中对象一个取值分支，实例主键按对象给，过滤条件各对象共用。
+     * <p>条件共用是配置本身的口径（一份 filters 作用于行为选中的所有对象），各对象按自己的属性表解析。</p>
+     */
+    private EntityUnionAggregateParam buildUnionAggregateParam(ActionBasicFunctionConfig config, List<OntologyMeta> metas,
+                                                               Map<String, Object> primaryKeyByObject) {
+        var sources = new ArrayList<EntityUnionAggregateParam.Source>();
+        for (var meta : metas) {
+            sources.add(EntityUnionAggregateParam.Source.builder()
+                    .ontologyIdentifier(meta.getUniqueIdentifier())
+                    .entityPrimaryKey(instanceKey(primaryKeyByObject, meta))
+                    .filters(config.getFilters())
+                    .build());
+        }
+        return EntityUnionAggregateParam.builder()
+                .aggFunc(config.getAggFunc())
+                .propertyApiName(StringUtils.trimToEmpty(config.getTargetField()))
+                .sources(sources)
+                .build();
+    }
+
+    /** 行为是否配了结果回写：配了执行才会落库，行为的输出方式据此给 WRITE_PROPERTY 还是 RESULT_ONLY */
+    public boolean hasWriteBack(ActionBasicFunctionConfig config) {
+        return writeBackExecutor.isEnabled(config);
+    }
+
+    /** 回写目标对象id；没配回写就是 null。执行侧靠它认下「实例主键给的是回写落点、不是查询对象」这种传法 */
+    public String writeBackTargetIdentifier(ActionBasicFunctionConfig config) {
+        return hasWriteBack(config) ? config.getWriteBack().getTargetOntologyIdentifier() : null;
+    }
+
+    /** 把本次结果落到回写目标上：查询方式逐行追加子表，聚合方式改主表属性 */
+    private ActionBasicFunctionWriteBackVO writeBack(BasicFunctionModeEnum mode, ActionBasicFunctionConfig config,
+                                                     Map<String, Object> primaryKeyByObject,
+                                                     List<List<EntityPropertyGenericQueryVO>> rows,
+                                                     Object aggregateValue) {
+        return mode == BasicFunctionModeEnum.QUERY
+                ? writeBackExecutor.writeQueryRows(config, primaryKeyByObject, rows)
+                : writeBackExecutor.writeAggregateValue(config, primaryKeyByObject, aggregateValue);
+    }
+
+    /**
+     * 回写行数封顶：命中行超过一次能落的量就直接报错。
+     * <p>通用查询没有默认排序，靠翻页凑全量会漏行也会重行，落进子表就是错数据；
+     * 让人收窄条件比悄悄少写几百行好定位。</p>
+     */
+    private void checkWriteBackRows(Page<List<EntityPropertyGenericQueryVO>> page) {
+        var total = page == null ? 0L : page.getTotal();
+        PreconditionUtils.checkArgument(total <= MAX_WRITE_BACK_ROWS,
+                "本次查询命中 " + total + " 行，超过结果回写的单次上限 " + MAX_WRITE_BACK_ROWS
+                        + " 行，请给行为加过滤条件缩小范围后再执行", HttpStatus.BAD_REQUEST);
     }
 
     /**
      * 这份配置的结果里有哪些可点名的出参：行为树节点按它列出入参，回传黑板时按 {@code expression}
      * 从 {@link #run} 的结果 JSON 里取值。
-     * <p>{@code results} 的下标就是所选对象的顺序，与执行侧逐项产出一致；查询方式一次取第一行的对应列
-     * （黑板键和下游标量入参装不下整批行，口径同通配出参取批内首值），总条数单独列一条。</p>
+     * <p>查询方式一次取第一行的对应列（黑板键和下游标量入参装不下整批行，口径同通配出参取批内首值），
+     * 总条数单独列一条；聚合方式只有一个统一聚合值，只列一条。</p>
      */
     public List<BasicFunctionOutput> declareOutputs(ActionBasicFunctionConfig config) {
         if (config == null || config.getMode() == null) {
@@ -209,20 +335,25 @@ public class BasicFunctionActionExecutor {
         if (aggFunc == null || targetField.isEmpty()) {
             return List.of();
         }
-        for (var i = 0; i < identifiers.size(); i++) {
-            var meta = metas.get(identifiers.get(i));
-            // 对象已被删掉时这条不列：执行侧同样会在认对象时报错，不存在结果里少一项、路径下标错位的情况
-            if (meta == null) {
-                continue;
-            }
-            var property = propsByApiName(meta.getUniqueIdentifier()).get(targetField);
-            outputs.add(new BasicFunctionOutput(
-                    outputKey(meta, aggFunc.getValue().toLowerCase() + "_" + targetField),
-                    meta.getDisplayName() + " " + propertyDisplayName(property, targetField) + " 的" + aggFunc.getValue(),
-                    "$.results[" + i + "].value",
-                    aggregateValueType(aggFunc, property == null ? null : property.getPropertyType())));
+        // 多对象合批只出一个统一值，出参就一条：逐对象各列一条会让人以为还能取到每个对象自己的值
+        var chosenMetas = identifiers.stream().map(metas::get).filter(Objects::nonNull).collect(Collectors.toList());
+        if (chosenMetas.isEmpty()) {
+            return List.of();
         }
+        var property = propsByApiName(chosenMetas.get(0).getUniqueIdentifier()).get(targetField);
+        outputs.add(new BasicFunctionOutput(aggregateOutputKey(config),
+                joinObjectNames(chosenMetas) + " " + propertyDisplayName(property, targetField) + " 的" + aggFunc.getValue(),
+                "$.results[0].value",
+                aggregateValueType(aggFunc, property == null ? null : property.getPropertyType())));
         return outputs;
+    }
+
+    /**
+     * 统一聚合值的点名标识与结果列名：聚合函数 + 目标属性，例如 {@code avg_speed}。
+     * <p>不带对象前缀：这个值是所选对象合批算出来的，不属于其中任何一个对象。</p>
+     */
+    private String aggregateOutputKey(ActionBasicFunctionConfig config) {
+        return config.getAggFunc().getValue().toLowerCase() + "_" + StringUtils.trimToEmpty(config.getTargetField());
     }
 
     /**
@@ -419,24 +550,16 @@ public class BasicFunctionActionExecutor {
         }
     }
 
-    private EntityPropertyGenericQueryParam buildQueryParam(ActionBasicFunctionConfig config, BasicFunctionModeEnum mode,
-                                                            OntologyMeta meta, Object entityPrimaryKey) {
+    /** 查询方式的通用查询参数：只查行为选中的那一个对象，字段按选择顺序去重 */
+    private EntityPropertyGenericQueryParam buildQueryParam(ActionBasicFunctionConfig config, OntologyMeta meta,
+                                                            Object entityPrimaryKey) {
         var selectProperties = new ArrayList<OntologySelectPropertyParam>();
-        if (mode == BasicFunctionModeEnum.AGGREGATE) {
-            var aggFunc = config.getAggFunc();
-            selectProperties.add(OntologySelectPropertyParam.builder()
-                    .propertyApiName(config.getTargetField())
-                    .aggFunc(aggFunc)
-                    .alias(aggFunc.getValue().toLowerCase() + "_" + config.getTargetField())
-                    .build());
-        } else {
-            config.getSelectFields().stream()
-                    .filter(StringUtils::isNotBlank)
-                    .distinct()
-                    .forEach(apiName -> selectProperties.add(OntologySelectPropertyParam.builder()
-                            .propertyApiName(apiName)
-                            .build()));
-        }
+        config.getSelectFields().stream()
+                .filter(StringUtils::isNotBlank)
+                .distinct()
+                .forEach(apiName -> selectProperties.add(OntologySelectPropertyParam.builder()
+                        .propertyApiName(apiName)
+                        .build()));
         var queryParam = new EntityPropertyGenericQueryParam();
         queryParam.setOntologyIdentifier(meta.getUniqueIdentifier());
         queryParam.setEntityPrimaryKey(entityPrimaryKey);

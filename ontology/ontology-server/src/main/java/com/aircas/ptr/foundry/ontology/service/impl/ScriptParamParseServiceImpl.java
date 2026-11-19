@@ -17,6 +17,7 @@ import com.aircas.ptr.foundry.ontology.utils.ScriptParamDescriptionExtractor.Des
 import com.aircas.ptr.foundry.ontology.utils.ScriptParamSchemaUtil;
 import com.aircas.ptr.foundry.ontology.utils.ScriptParamTypeMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang.StringUtils;
 import org.springframework.stereotype.Service;
 
 import jakarta.annotation.PostConstruct;
@@ -74,6 +75,7 @@ public class ScriptParamParseServiceImpl implements ScriptParamParseService {
         }
         applyResultTypeDirective(outcome, language, code);
         enrichDescriptions(outcome, language, code);
+        annotateCollectionElements(outcome);
         return toVO(outcome, language);
     }
 
@@ -211,6 +213,42 @@ public class ScriptParamParseServiceImpl implements ScriptParamParseService {
                 applyDescription(field, descriptions, outputCount, false);
             }
         }
+    }
+
+    /**
+     * 集合入参的元素类型注记：paramType 只能是 LIST，元素类型（{@code List<Double>} → DOUBLE、
+     * {@code List<OrbitPoint>} → OrbitPoint）补进描述，前端参数面板与行为绑定可直接看到。
+     */
+    private void annotateCollectionElements(ScriptParseOutcome outcome) {
+        if (outcome.getParams() == null) {
+            return;
+        }
+        for (ScriptParsedParam p : outcome.getParams()) {
+            annotateCollectionElement(p);
+        }
+    }
+
+    private void annotateCollectionElement(ScriptParsedParam p) {
+        if (p.getCategory() == FunctionParamCategoryEnum.INPUT && p.getType() == FunctionParamTypeEnum.LIST
+                && StringUtils.isNotBlank(p.getElementType())) {
+            String note = "元素类型：" + elementTypeLabel(p.getElementType());
+            p.setDescription(StringUtils.isBlank(p.getDescription()) ? note : p.getDescription() + "（" + note + "）");
+        }
+        if (p.getFields() != null) {
+            for (ScriptParsedParam field : p.getFields()) {
+                annotateCollectionElement(field);
+            }
+        }
+    }
+
+    /** 元素类型的展示名：基础类型用枚举名（DOUBLE），业务类用简单类名。 */
+    private String elementTypeLabel(String elementType) {
+        FunctionParamTypeEnum mapped = ScriptParamTypeMapper.map(elementType);
+        if (mapped != FunctionParamTypeEnum.OBJECT) {
+            return mapped.name();
+        }
+        int dot = elementType.lastIndexOf('.');
+        return dot >= 0 ? elementType.substring(dot + 1) : elementType;
     }
 
     /**
