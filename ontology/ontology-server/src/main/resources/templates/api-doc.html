@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>接口文档 - 空间 {{spaceId}}</title>
+<style>
+  :root{
+    --bg:#ffffff; --panel:#f7f9fc; --border:#e3e8ef; --text:#1f2933;
+    --muted:#6b7280; --brand:#2563eb; --brand-soft:#eff4ff;
+    --method-get:#0f9d58; --code-bg:#f4f6fb; --table-head:#f0f4fa;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+       color:var(--text);background:var(--bg);line-height:1.7;font-size:15px}
+  header{padding:32px 40px;background:linear-gradient(135deg,#2563eb,#1e40af);color:#fff}
+  header h1{margin:0 0 6px;font-size:26px}
+  header p{margin:0;opacity:.9}
+  .wrap{max-width:1080px;margin:0 auto;padding:28px 40px 80px}
+  nav.doc-toc{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px 22px;margin:24px 0 36px}
+  nav.doc-toc h2{margin:0 0 10px;font-size:16px}
+  nav.doc-toc ol{margin:0;padding-left:20px}
+  nav.doc-toc li{margin:4px 0}
+  nav.doc-toc a{color:var(--brand);text-decoration:none}
+  nav.doc-toc a:hover{text-decoration:underline}
+  section{margin:0 0 40px;scroll-margin-top:20px}
+  h2.sec{border-left:4px solid var(--brand);padding-left:12px;font-size:21px;margin:0 0 6px}
+  .sec-desc{color:var(--muted);margin:0 0 18px;padding-left:16px}
+  .card{border:1px solid var(--border);border-radius:12px;margin:0 0 22px;overflow:hidden;box-shadow:0 1px 2px rgba(16,24,40,.04)}
+  .card-head{padding:14px 18px;background:var(--panel);border-bottom:1px solid var(--border);display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  .ep-title{font-weight:600;font-size:16px}
+  .badge{font-size:12px;font-weight:700;color:#fff;border-radius:6px;padding:3px 10px;letter-spacing:.5px}
+  .m-get{background:var(--method-get)}
+  .url{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:#fff;border:1px dashed var(--border);
+       border-radius:6px;padding:6px 10px;font-size:13px;color:#0b3d91;flex:1;min-width:240px}
+  .card-body{padding:16px 18px}
+  table{width:100%;border-collapse:collapse;margin:6px 0 14px;font-size:14px}
+  th,td{border:1px solid var(--border);padding:8px 10px;text-align:left;vertical-align:top}
+  th{background:var(--table-head);font-weight:600}
+  td code{background:var(--code-bg);padding:1px 5px;border-radius:4px;font-size:13px}
+  .req{color:#d93025;font-weight:600}
+  .opt{color:var(--muted)}
+  .lbl{font-weight:600;color:#0b3d91}
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:8px;padding:14px 16px;overflow:auto;
+      font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;line-height:1.55;margin:8px 0}
+  .blk-title{font-weight:600;margin:14px 0 4px;color:#374151;font-size:14px}
+  .note{background:var(--brand-soft);border:1px solid #c9dcff;border-left:4px solid var(--brand);border-radius:8px;
+        padding:10px 14px;color:#1e3a8a;font-size:13.5px;margin:10px 0}
+  .note b{color:#1e3a8a}
+  .footer{color:var(--muted);font-size:13px;text-align:center;margin-top:30px}
+</style>
+</head>
+<body>
+<header>
+  <h1>接口文档</h1>
+  <p>对象空间 <b>{{spaceId}}</b> · 查询对象 / 查询属性 / 查询关系 / 查询实例</p>
+</header>
+<div class="wrap">
+
+<nav class="doc-toc">
+  <h2>目录</h2>
+  <ol>
+    <li><a href="#common">通用说明（服务地址、鉴权、统一响应、占位符）</a></li>
+    <li><a href="#sec1">一、查询对象（GET /meta/search）</a></li>
+    <li><a href="#sec2">二、查询属性（GET /property/info）</a></li>
+    <li><a href="#sec3">三、查询关系（GET /link/list）</a></li>
+    <li><a href="#sec4">四、查询实例（GET /entity/list）</a></li>
+  </ol>
+</nav>
+
+<section id="common">
+  <h2 class="sec">通用说明</h2>
+  <div class="card">
+    <div class="card-body">
+      <table>
+        <tr><th style="width:160px">项</th><th>说明</th></tr>
+        <tr><td class="lbl">服务地址</td><td><code>{{baseUrl}}</code><br>
+          本文档由服务端按本次请求自动生成，该地址可直接调用。</td></tr>
+        <tr><td class="lbl">空间 ID</td><td><code>{{spaceId}}</code><br>
+          本文档涉及 <code>spaceId</code> 的入参与示例均已填入该值。</td></tr>
+        <tr><td class="lbl">鉴权</td><td>请求头 <code>access-token: Bearer &lt;token&gt;</code>（未携带或无效返回 <code>code=401</code>）</td></tr>
+        <tr><td class="lbl">编码 / 类型</td><td><code>application/json; charset=utf-8</code></td></tr>
+        <tr><td class="lbl">统一响应</td><td>所有接口返回统一结构 <code>RestResult&lt;T&gt;</code>：
+          <pre>{
+  "code": 200,        // 200 成功；400 参数异常；401 未登录；403 无权限；404 不存在；500 业务异常
+  "message": "SUCCESS",
+  "data": ...         // 业务数据，结构随接口变化；失败时可能为 null
+}</pre></td></tr>
+        <tr><td class="lbl">分页结构</td><td>分页接口的 <code>data</code> 为 <code>Page&lt;T&gt;</code>：
+          <pre>{ "records": [ ... ], "total": 128, "size": 10, "current": 1, "pages": 13 }</pre></td></tr>
+      </table>
+      <div class="note">
+        <b>占位符说明：</b>文中 <code>{对象唯一标识}</code> 需要替换为真实值。获取方式：先调用
+        <a href="#sec1">一、查询对象</a>（已带上空间 ID <code>{{spaceId}}</code>），取返回结果中的 <code>uniqueIdentifier</code>。
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 一、查询对象 ============ -->
+<section id="sec1">
+  <h2 class="sec">一、查询对象</h2>
+  <p class="sec-desc">查询空间 <code>{{spaceId}}</code> 下的对象（本体）列表，返回对象 ID、名称、apiName 及实例 / 属性 / 关系 / 行为数量。</p>
+
+  <div class="card">
+    <div class="card-head">
+      <span class="ep-title">1.1 查询对象列表</span>
+      <span class="badge m-get">GET</span>
+      <span class="url">/meta/search?spaceId={{spaceId}}</span>
+    </div>
+    <div class="card-body">
+      <div class="blk-title">请求参数（Query）</div>
+      <table>
+        <tr><th style="width:200px">参数</th><th style="width:90px">必填</th><th>说明</th></tr>
+        <tr><td><code>spaceId</code></td><td class="opt">否</td><td>空间 ID，本空间固定为 <code>{{spaceId}}</code></td></tr>
+        <tr><td><code>keyword</code></td><td class="opt">否</td><td>搜索关键词，匹配对象名称；不传则返回本空间全部对象</td></tr>
+      </table>
+      <div class="blk-title">输出报文（data 为 <code>List&lt;OntologyMetaInfoVO&gt;</code>）</div>
+      <pre>{
+  "code": 200,
+  "message": "SUCCESS",
+  "data": [
+    {
+      "uniqueIdentifier": "3f1a2b9c-1a2b-3c4d-5e6f-7a8b9c0d1e2f",
+      "displayName": "飞机",
+      "apiName": "aircraft",
+      "description": "航空器对象",
+      "icon": "aircraft.png",
+      "spaceId": {{spaceId}},
+      "ontologyCategoryId": 10,
+      "parentOntologyUniqueIdentifier": null,
+      "parentOntologyDisplayName": null,
+      "metaGroupId": ["group_001"],
+      "entityCount": 128,
+      "propertyCount": 15,
+      "relationCount": 6,
+      "actionCount": 2,
+      "createTime": "2026-01-12 09:30:00",
+      "updateTime": "2026-03-01 14:22:10",
+      "latestQueryTime": "2026-03-10 08:15:30"
+    }
+  ]
+}</pre>
+      <div class="blk-title">调用示例（curl）</div>
+      <pre>curl -X GET "{{baseUrl}}/meta/search?spaceId={{spaceId}}" \
+  -H "access-token: Bearer &lt;token&gt;"</pre>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 二、查询属性 ============ -->
+<section id="sec2">
+  <h2 class="sec">二、查询属性</h2>
+  <p class="sec-desc">按对象查询其属性（字段）列表，用于展示。</p>
+
+  <div class="card">
+    <div class="card-head">
+      <span class="ep-title">2.1 查询对象属性列表</span>
+      <span class="badge m-get">GET</span>
+      <span class="url">/property/info?ontologyUniqueIdentifier={对象唯一标识}</span>
+    </div>
+    <div class="card-body">
+      <div class="blk-title">请求参数（Query）</div>
+      <table>
+        <tr><th style="width:200px">参数</th><th style="width:90px">必填</th><th>说明</th></tr>
+        <tr><td><code>ontologyUniqueIdentifier</code></td><td class="req">是</td><td>对象唯一标识，取自 <a href="#sec1">一、查询对象</a> 返回的 <code>uniqueIdentifier</code></td></tr>
+      </table>
+      <div class="blk-title">输出报文（data 为 <code>List&lt;OntologyPropertyInfoVO&gt;</code>）</div>
+      <pre>{
+  "code": 200,
+  "message": "SUCCESS",
+  "data": [
+    {
+      "uniqueIdentifier": "9c0d1e2f-...",
+      "ontologyUniqueIdentifier": "3f1a2b9c-1a2b-3c4d-5e6f-7a8b9c0d1e2f",
+      "displayName": "名称",
+      "apiName": "name",
+      "description": "飞机名称",
+      "propertyType": "String",
+      "isPrimaryKey": false,
+      "isTitleKey": true,
+      "defaultValue": null,
+      "storageGroup": "main",
+      "categoryId": 12,
+      "metadata": null
+    },
+    {
+      "displayName": "吨位",
+      "apiName": "tonnage",
+      "propertyType": "Int",
+      "isPrimaryKey": false,
+      "isTitleKey": false,
+      "storageGroup": "main"
+    }
+  ]
+}</pre>
+      <div class="blk-title">字段说明</div>
+      <table>
+        <tr><th style="width:220px">字段</th><th>说明</th></tr>
+        <tr><td><code>propertyType</code></td><td>属性类型，取值：<code>Bool</code> / <code>Int</code> / <code>Long</code> / <code>Float</code> / <code>Double</code> / <code>Decimal</code> / <code>String</code> / <code>Date</code> / <code>Timestamp</code> / <code>Array</code> / <code>Map</code> / <code>Vector</code> / <code>Geohash</code> / <code>Geoshape</code> / <code>TimeSeries</code> / <code>Attachment</code> / <code>MediaReference</code> / <code>Cipher</code> / <code>Ontology</code></td></tr>
+        <tr><td><code>isPrimaryKey</code></td><td>是否主键属性（实例的唯一标识字段）</td></tr>
+        <tr><td><code>isTitleKey</code></td><td>是否名称键属性（实例展示名所用字段）</td></tr>
+        <tr><td><code>storageGroup</code></td><td>属性存储分组，主属性组固定为 <code>main</code></td></tr>
+      </table>
+      <div class="blk-title">调用示例（curl）</div>
+      <pre>curl -X GET "{{baseUrl}}/property/info?ontologyUniqueIdentifier={对象唯一标识}" \
+  -H "access-token: Bearer &lt;token&gt;"</pre>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 三、查询关系 ============ -->
+<section id="sec3">
+  <h2 class="sec">三、查询关系</h2>
+  <p class="sec-desc">分页查询空间 <code>{{spaceId}}</code> 内的对象关系，每条关系携带两侧对象信息。</p>
+
+  <div class="card">
+    <div class="card-head">
+      <span class="ep-title">3.1 分页查询空间内关系</span>
+      <span class="badge m-get">GET</span>
+      <span class="url">/link/list?spaceId={{spaceId}}&amp;pageNum=1&amp;pageSize=10</span>
+    </div>
+    <div class="card-body">
+      <div class="blk-title">请求参数（Query）</div>
+      <table>
+        <tr><th style="width:200px">参数</th><th style="width:90px">必填</th><th>说明</th></tr>
+        <tr><td><code>spaceId</code></td><td class="req">是</td><td>空间 ID，本文档固定为 <code>{{spaceId}}</code></td></tr>
+        <tr><td><code>relationName</code></td><td class="opt">否</td><td>关系名称模糊匹配；不传则查询本空间全部关系</td></tr>
+        <tr><td><code>pageNum</code></td><td class="opt">否</td><td>页码，默认 1</td></tr>
+        <tr><td><code>pageSize</code></td><td class="opt">否</td><td>每页条数，默认 10</td></tr>
+      </table>
+      <div class="blk-title">输出报文（data 为 <code>Page&lt;OntologyLinkObjectsVO&gt;</code>）</div>
+      <pre>{
+  "code": 200,
+  "message": "SUCCESS",
+  "data": {
+    "records": [
+      {
+        "uniqueIdentifier": "b1c2d3e4-...",
+        "name": "装备",
+        "fromObject": {
+          "uniqueIdentifier": "3f1a2b9c-1a2b-3c4d-5e6f-7a8b9c0d1e2f",
+          "displayName": "机场",
+          "apiName": "airport",
+          "spaceId": {{spaceId}}
+        },
+        "toObject": {
+          "uniqueIdentifier": "7a8b9c0d-...",
+          "displayName": "飞机",
+          "apiName": "aircraft",
+          "spaceId": {{spaceId}}
+        }
+      }
+    ],
+    "total": 6,
+    "size": 10,
+    "current": 1,
+    "pages": 1
+  }
+}</pre>
+      <div class="note"><b>说明：</b><code>uniqueIdentifier</code> 为关系 ID（<code>ontology_link_group.unique_identifier</code>）；<code>fromObject</code> / <code>toObject</code> 为关系两侧对象，字段结构同 <a href="#sec1">一、查询对象</a>。</div>
+      <div class="blk-title">调用示例（curl）</div>
+      <pre>curl -X GET "{{baseUrl}}/link/list?spaceId={{spaceId}}&amp;pageNum=1&amp;pageSize=10" \
+  -H "access-token: Bearer &lt;token&gt;"</pre>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 四、查询实例 ============ -->
+<section id="sec4">
+  <h2 class="sec">四、查询实例</h2>
+  <p class="sec-desc">分页查询对象下挂载的实例（实体）数据，返回实例主属性列表。</p>
+
+  <div class="card">
+    <div class="card-head">
+      <span class="ep-title">4.1 实例分页查询</span>
+      <span class="badge m-get">GET</span>
+      <span class="url">/entity/list?ontologyUniqueIdentifier={对象唯一标识}&amp;pageNum=1&amp;pageSize=10</span>
+    </div>
+    <div class="card-body">
+      <div class="blk-title">请求参数（Query）</div>
+      <table>
+        <tr><th style="width:230px">参数</th><th style="width:90px">必填</th><th>说明</th></tr>
+        <tr><td><code>ontologyUniqueIdentifier</code></td><td class="req">是</td><td>对象唯一标识，取自 <a href="#sec1">一、查询对象</a> 返回的 <code>uniqueIdentifier</code></td></tr>
+        <tr><td><code>pageNum</code></td><td class="opt">否</td><td>页码，默认 1</td></tr>
+        <tr><td><code>pageSize</code></td><td class="opt">否</td><td>每页条数，默认 10</td></tr>
+      </table>
+      <div class="blk-title">输出报文（data 为 <code>Page&lt;EntityInfoVO&gt;</code>）</div>
+      <pre>{
+  "code": 200,
+  "message": "SUCCESS",
+  "data": {
+    "records": [
+      {
+        "ontologyUniqueIdentifier": "3f1a2b9c-1a2b-3c4d-5e6f-7a8b9c0d1e2f",
+        "ontologyName": "飞机",
+        "primaryKey": 1001,
+        "displayName": "歼-20",
+        "properties": [
+          { "propertyApiName": "name",    "propertyDisplayName": "名称", "propertyValue": "歼-20" },
+          { "propertyApiName": "tonnage", "propertyDisplayName": "吨位", "propertyValue": 37 }
+        ]
+      }
+    ],
+    "total": 128,
+    "size": 10,
+    "current": 1,
+    "pages": 13
+  }
+}</pre>
+      <div class="note"><b>说明：</b><code>primaryKey</code> 为该对象主键属性（<code>isPrimaryKey=true</code>）的值，类型为 Int 或 String；后续按实例查询详情、关系时以此值作为入参。</div>
+      <div class="blk-title">调用示例（curl）</div>
+      <pre>curl -X GET "{{baseUrl}}/entity/list?ontologyUniqueIdentifier={对象唯一标识}&amp;pageNum=1&amp;pageSize=10" \
+  -H "access-token: Bearer &lt;token&gt;"</pre>
+    </div>
+  </div>
+</section>
+
+<div class="footer">本文档由 ontology-server 依据空间 {{spaceId}} 自动生成</div>
+</div>
+</body>
+</html>
