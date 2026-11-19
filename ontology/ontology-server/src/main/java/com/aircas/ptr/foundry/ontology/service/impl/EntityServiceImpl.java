@@ -2844,7 +2844,7 @@ public class EntityServiceImpl implements EntityService {
 
     /**
      * 按算子结果落关系边：算子在 {@link FunctionResultVO} 里返回可见窗口（startTime + endTime）即这条关系成立，
-     * 没有返回窗口就整个跳过。
+     * 算子没返回顶层窗口时依次回落到算子的可见窗口列表、行为定义里固定的持续时段，三者都取不到才跳过并记 warn。
      * <p>
      * 不建也不删：一个只想回写属性的行为不能顺带把图库里已有的边置为删除；
      * 边的启停由实例关系行为负责，它按人工指定的目标状态改边，不走算子结果。
@@ -2860,7 +2860,26 @@ public class EntityServiceImpl implements EntityService {
         }
         Date startTime = resultVO.getStartTime();
         Date endTime = resultVO.getEndTime();
+        List<VisibilityWindow> timeWindows = resultVO.getTimeWindows();
+        // 一级起止缺失时逐级回落：算子返回的窗口列表 → 行为定义里固定的持续时段；算子返回了顶层起止的旧路径取值完全不变
         if (startTime == null || endTime == null) {
+            var nearest = nearestWindow(timeWindows);
+            if (nearest == null) {
+                var definedWindows = actionContext.getLink().getVisibilityWindows();
+                nearest = nearestWindow(definedWindows);
+                if (nearest != null) {
+                    timeWindows = definedWindows;
+                }
+            }
+            if (nearest != null) {
+                startTime = nearest.getStartTime();
+                endTime = nearest.getEndTime();
+            }
+        }
+        if (startTime == null || endTime == null) {
+            log.warn("行为 {} 实例关系边落位跳过：算子既没返回顶层起止也没返回可见窗口，行为定义没有可用的持续时段，link={}",
+                    actionContext.getActionDetailVO().getActionApi(),
+                    actionContext.getLink().getOntologyLinkUniqIdentifier());
             return;
         }
 
@@ -2910,7 +2929,7 @@ public class EntityServiceImpl implements EntityService {
                         .status(Status.ENABLE)
                         .startTime(startTime)
                         .endTime(endTime)
-                        .timeWindows(resultVO.getTimeWindows() == null ? Lists.<VisibilityWindow>newArrayList() : resultVO.getTimeWindows())
+                        .timeWindows(timeWindows == null ? Lists.<VisibilityWindow>newArrayList() : timeWindows)
                         .createTime(new Date())
                         .updateTime(new Date())
                         .type(link.getType())
@@ -2918,7 +2937,7 @@ public class EntityServiceImpl implements EntityService {
                         .build());
             }
         } else {
-            relationRepository.updateRelation(startTime, endTime, resultVO.getTimeWindows(), Status.ENABLE, relation.getId());
+            relationRepository.updateRelation(startTime, endTime, timeWindows, Status.ENABLE, relation.getId());
         }
     }
 
