@@ -23,6 +23,9 @@ public class PropertyMetadataSchemaUpdateParam extends PropertyMetadataSchemaDel
     @NotBlank(message = "元数据schema名称不能为空")
     private String name;
 
+    @Schema(name = "parentId", description = "新父节点 id：不传保持原父级；传了则移动节点（子孙路径同步重写）。0 表示根节点（仅节点本身已是根时允许）；不能移动到自身或其子孙节点下", example = "12")
+    private Integer parentId;
+
 
     @Schema(name = "valueType", description = "取值类型：INPUT 输入值 / ENUM 枚举值 / RANGE 范围值；不传保持原类型（旧字段 enumValues 非空时视为 ENUM）", example = "ENUM")
     private MetadataValueTypeEnum valueType;
