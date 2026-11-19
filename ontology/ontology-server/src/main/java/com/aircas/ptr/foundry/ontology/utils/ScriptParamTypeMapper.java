@@ -117,6 +117,14 @@ public final class ScriptParamTypeMapper {
 
     private static String stripGeneric(String typeText) {
         int angle = typeText.indexOf('<');
-        return angle > 0 ? typeText.substring(0, angle) : typeText;
+        if (angle > 0) {
+            return typeText.substring(0, angle);
+        }
+        // Python 写法 list[float]/dict[str,int]：剥方括号泛型，但保留 String[] 这类空方括号数组后缀
+        int bracket = typeText.indexOf('[');
+        if (bracket > 0 && typeText.charAt(bracket + 1) != ']') {
+            return typeText.substring(0, bracket);
+        }
+        return typeText;
     }
 }

@@ -179,12 +179,18 @@ public class GroovyScriptParamParser implements ScriptParamParser {
                                         new LinkedHashSet<>(), 1))
                                 .build());
                     } else {
+                        // 集合参数：元素类型决定下一级结构（List<OrbitPoint> 展开字段）与展示（List<Double> 标元素类型）
+                        String elementType = extractCollectionElementType(type);
+                        List<ScriptParsedParam> elementFields = elementType == null ? null
+                                : expandCollectionElementFields(type, FunctionParamCategoryEnum.INPUT, ctx);
                         out.add(ScriptParsedParam.builder()
                                 .name(p.getName())
                                 .type(ScriptParamTypeMapper.map(typeText))
-                                .rawType(typeText)
+                                .rawType(elementType == null ? typeText : genericTypeText(type))
+                                .elementType(elementType)
                                 .category(FunctionParamCategoryEnum.INPUT)
                                 .source("ANNOTATION")
+                                .fields(elementFields)
                                 .build());
                     }
                     expanded = true;
@@ -231,7 +237,7 @@ public class GroovyScriptParamParser implements ScriptParamParser {
             return;
         }
         // 返回集合（List<OrbitPoint> / OrbitPoint[]）：外层类型名查不到脚本内类，元素类型才是业务结构
-        List<ScriptParsedParam> elementFields = expandCollectionElementFields(returnType, ctx);
+        List<ScriptParsedParam> elementFields = expandCollectionElementFields(returnType, FunctionParamCategoryEnum.OUTPUT, ctx);
         if (elementFields != null) {
             String collectionText = typeNodeText(returnType);
             out.add(ScriptParsedParam.builder()
@@ -261,19 +267,21 @@ public class GroovyScriptParamParser implements ScriptParamParser {
     }
 
     /**
-     * 返回类型是集合时的元素字段：先按脚本内类展开（AST），认不出再试工程内类（反射）。
+     * 集合类型的元素字段：先按脚本内类展开（AST），认不出再试工程内类（反射）。
      * <p>元素类型不是业务结构（{@code List<String>}、{@code List<Map<String,Object>>}）时返回 null，
-     * 由调用方回落标量层，仍是原来那个没有下一级的 result。</p>
+     * 由调用方回落标量层，仍是原来那个没有下一级的参数/result。</p>
      */
-    private List<ScriptParsedParam> expandCollectionElementFields(ClassNode returnType, ParseContext ctx) {
-        String elementType = extractCollectionElementType(returnType);
+    private List<ScriptParsedParam> expandCollectionElementFields(ClassNode collectionType,
+                                                                  FunctionParamCategoryEnum category,
+                                                                  ParseContext ctx) {
+        String elementType = extractCollectionElementType(collectionType);
         if (elementType == null) {
             return null;
         }
-        List<ScriptParsedParam> fields = expandScriptType(elementType, FunctionParamCategoryEnum.OUTPUT,
+        List<ScriptParsedParam> fields = expandScriptType(elementType, category,
                 ctx, new LinkedHashSet<>(), 1);
         return fields != null ? fields
-                : ctx.expander.expandFieldsByName(elementType, FunctionParamCategoryEnum.OUTPUT, new LinkedHashSet<>(), 1);
+                : ctx.expander.expandFieldsByName(elementType, category, new LinkedHashSet<>(), 1);
     }
 
     private List<ScriptParsedParam> expandFields(ClassNode userClass, FunctionParamCategoryEnum category, String source,
@@ -287,10 +295,14 @@ public class GroovyScriptParamParser implements ScriptParamParser {
             String name = prop.getName();
             if (seen.add(name)) {
                 String propTypeText = typeNodeText(prop.getType());
+                String elementType = extractCollectionElementType(prop.getType());
                 ScriptParsedParam.ScriptParsedParamBuilder fb = ScriptParsedParam.builder()
                         .name(name)
                         .type(ScriptParamTypeMapper.map(propTypeText))
-                        .rawType(propTypeText)
+                        // 入参集合字段保留泛型文本供 referenceType 补全；出参口径不变
+                        .rawType(elementType != null && category == FunctionParamCategoryEnum.INPUT
+                                ? genericTypeText(prop.getType()) : propTypeText)
+                        .elementType(elementType)
                         .category(category)
                         .source(source);
                 // 字段类型本身也是自定义类 → 递归展开
@@ -299,7 +311,6 @@ public class GroovyScriptParamParser implements ScriptParamParser {
                     fb.fields(expandFields(nestedClass, category, source, ctx, visited, depth + 1));
                 } else {
                     // 集合泛型：List<Admin> → 提取泛型参数递归展开
-                    String elementType = extractCollectionElementType(prop.getType());
                     ClassNode elemNode = elementType == null ? null : lookupScriptClass(elementType, ctx);
                     if (elemNode != null && visited.add(elementType)) {
                         fb.fields(expandFields(elemNode, category, source, ctx, visited, depth + 1));

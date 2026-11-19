@@ -487,9 +487,11 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             } else {
                 throw new BusinessException("不支持的基础行为类型：" + subjectType.name(), HttpStatus.BAD_REQUEST);
             }
-            // 属性值、实例关系的输出即落库本身，没有回写方式；基础函数只读
+            // 属性值、实例关系的输出即落库本身，没有回写方式；基础函数只有配了结果回写才落库，否则仍只返回结果
             action.setOutputMode(subjectType == ActionSubjectTypeEnum.BASIC_FUNCTION
-                    ? ActionOutputModeEnum.RESULT_ONLY : null);
+                    ? (basicFunctionActionExecutor.hasWriteBack(param.getBasicFunction())
+                    ? ActionOutputModeEnum.WRITE_PROPERTY : ActionOutputModeEnum.RESULT_ONLY)
+                    : null);
         }
 
         action.setApi(param.getActionApi());
@@ -838,7 +840,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 PreconditionUtils.checkArgument(declared != null, "节点 " + label + " 的黑板键未声明：" + config.getKey(), HttpStatus.BAD_REQUEST);
                 var op = config.getOp();
                 PreconditionUtils.checkNotNull(op, "节点 " + label + " 必须选择比较方式", HttpStatus.BAD_REQUEST);
-                checkTreeCompareOpType(label, op, declared);
+                checkTreeCompareOpType(label, op, declared, "黑板键类型");
                 if (op == BehaviorCompareOpEnum.IS_EMPTY || op == BehaviorCompareOpEnum.IS_NOT_EMPTY) {
                     PreconditionUtils.checkArgument(config.getValue() == null,
                             "节点 " + label + " 的" + op.getName() + "不需要比较值", HttpStatus.BAD_REQUEST);
@@ -867,7 +869,51 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 if (actionApis.add(boundApi)) {
                     checkTreeBoundAction(label, boundApi, spaceId);
                 }
+                checkActionSuccessCondition(label, config, spaceId);
             }
+        }
+    }
+
+    /**
+     * 行为节点的执行成功条件：可选，配了就要能在该行为的出参里定到唯一一条，且比较方式与类型对得上。
+     * <p>左值只取本节点这次执行结果里的出参，不给黑板键：黑板上的值要到节点判成功之后才被这次结果刷新，
+     * 拿它判本节点会判到上一轮或别的节点写进去的旧值。</p>
+     */
+    private void checkActionSuccessCondition(String label, BehaviorActionConfig config, Integer spaceId) {
+        var condition = config.getSuccessCondition();
+        if (condition == null) {
+            return;
+        }
+        var outputKey = StringUtils.trimToNull(condition.getOutputKey());
+        var op = condition.getOp();
+        PreconditionUtils.checkArgument(outputKey != null || op != null || condition.getValue() != null,
+                "行为节点 " + label + " 的执行成功条件是空的：要选判断哪条出参和比较方式，不需要判定就整个不传",
+                HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(outputKey != null,
+                "行为节点 " + label + " 的执行成功条件要选判断哪条出参", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkNotNull(op,
+                "行为节点 " + label + " 的执行成功条件要选比较方式", HttpStatus.BAD_REQUEST);
+        var rows = treeOutputRows(requireTreeActionByApi(config.getActionApi(), spaceId));
+        PreconditionUtils.checkArgument(!rows.isEmpty(),
+                "行为节点 " + label + " 绑的行为没有可判断的出参，执行成功条件配不上；"
+                        + "行为不报错就算成功的口径已经够用，请把成功条件整个去掉", HttpStatus.BAD_REQUEST);
+        var matched = matchTreeOutputRows(rows, outputKey);
+        PreconditionUtils.checkArgument(matched.size() == 1,
+                "行为节点 " + label + " 的执行成功条件指的出参 " + outputKey + " 在该行为上认不出"
+                        + "（要命中唯一一条，可用：属性唯一标识 > 出参字段名 > 顶层算子出参名）；该行为可选的出参有："
+                        + rows.stream().map(TreeOutputRow::displayName).filter(StringUtils::isNotBlank)
+                        .distinct().collect(Collectors.joining("、")), HttpStatus.BAD_REQUEST);
+        var row = matched.get(0);
+        checkTreeCompareOpType(label, op, row.type(), "出参「" + row.displayName() + "」类型");
+        if (op == BehaviorCompareOpEnum.IS_EMPTY || op == BehaviorCompareOpEnum.IS_NOT_EMPTY) {
+            PreconditionUtils.checkArgument(condition.getValue() == null,
+                    "行为节点 " + label + " 的执行成功条件是" + op.getName() + "，不需要比较值", HttpStatus.BAD_REQUEST);
+        } else {
+            PreconditionUtils.checkArgument(condition.getValue() != null,
+                    "行为节点 " + label + " 的执行成功条件要填比较值", HttpStatus.BAD_REQUEST);
+            PreconditionUtils.checkArgument(matchesTreeValueType(condition.getValue(), row.type()),
+                    "行为节点 " + label + " 的执行成功条件比较值 " + condition.getValue() + " 与出参「"
+                            + row.displayName() + "」的类型 " + row.type().name() + " 不匹配", HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -1276,7 +1322,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     /**
      * 行为声明的出参绑定行，带出可点名的三种标识与取值路径。
      * <p>出参行只存属性标识和取值路径，出参名要从算子参数表补；不绑算子的行为没有出参行，
-     * 基础函数行为按自己的结果形状声明（一个对象一条聚合值 / 每个查询字段一条 + 总行数）。</p>
+     * 基础函数行为按自己的结果形状声明（聚合是一个统一值一条 / 每个查询字段一条 + 总行数）。</p>
      */
     private List<TreeOutputRow> treeOutputRows(OntologyAction bound) {
         var detail = getActionByApi(bound.getOntologySpaceId(), bound.getApi());
@@ -1342,12 +1388,20 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
      * 基础函数节点可以按对象选实例：选了就把查询收窄到那条数据，不选按该对象全量查。
      * <p>所以这份列表列出来但不强制（{@code entityPrimaryKeyRequired} 仍为 false），
      * 与属性值/实例关系那两类「不给实例就没法定位数据」的要求不同。</p>
+     * <p>配了结果回写时还要把回写目标对象也列进来：回写的行挂在哪个实例上只有执行方知道，
+     * 这个对象不在查询对象里时更要在这里给出实例，执行侧拿不到会直接报错。</p>
      */
     private List<TreeInstanceRequirementVO> basicFunctionInstanceRequirements(OntologyAction bound) {
         if (!isBasicFunctionAction(bound)) {
             return List.of();
         }
-        return basicFunctionActionExecutor.configOntologyIdentifiers(basicFunctionConfigOf(bound)).stream()
+        var config = basicFunctionConfigOf(bound);
+        var objectIdentifiers = new LinkedHashSet<>(basicFunctionActionExecutor.configOntologyIdentifiers(config));
+        var writeBackTarget = basicFunctionActionExecutor.writeBackTargetIdentifier(config);
+        if (StringUtils.isNotBlank(writeBackTarget)) {
+            objectIdentifiers.add(writeBackTarget);
+        }
+        return objectIdentifiers.stream()
                 .map(objectId -> TreeInstanceRequirementVO.builder().objectIdentifier(objectId).build())
                 .collect(Collectors.toList());
     }
@@ -1649,7 +1703,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     private List<TreeOutputTargetVO> treeOutputTargets(OntologyAction bound) {
         var targets = new ArrayList<TreeOutputTargetVO>();
         if (isBasicFunctionAction(bound)) {
-            // 基础函数只读，出参一律是「随结果返回」：报名和展示用声明里的 key/显示名，不需要给数据位置
+            // 基础函数的出参一律是「随结果返回」：配了结果回写也是执行侧直接落库，黑板那一层不回读落库结果，所以不给数据位置
             return basicFunctionOutputRows(basicFunctionConfigOf(bound)).stream()
                     .map(row -> TreeOutputTargetVO.builder()
                             .mode(TreeOutputTargetModeEnum.RESULT_ONLY)
@@ -1981,15 +2035,18 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     /**
      * 比较方式与黑板键类型必须配得上，否则运行时是拿字符串比大小这类静默错。
      */
-    private void checkTreeCompareOpType(String nodeLabel, BehaviorCompareOpEnum op, FunctionParamTypeEnum declared) {
+    private void checkTreeCompareOpType(String nodeLabel, BehaviorCompareOpEnum op, FunctionParamTypeEnum declared,
+                                        String leftLabel) {
         if (op == BehaviorCompareOpEnum.GT || op == BehaviorCompareOpEnum.GE
                 || op == BehaviorCompareOpEnum.LT || op == BehaviorCompareOpEnum.LE) {
             PreconditionUtils.checkArgument(TREE_NUMBER_TYPES.contains(declared),
-                    "节点 " + nodeLabel + " 的" + op.getName() + "只支持数值类型，黑板键类型是 " + declared.name(), HttpStatus.BAD_REQUEST);
+                    "节点 " + nodeLabel + " 的" + op.getName() + "只支持数值类型，" + leftLabel + "是 " + declared.name(),
+                    HttpStatus.BAD_REQUEST);
         }
         if (op == BehaviorCompareOpEnum.CONTAINS || op == BehaviorCompareOpEnum.NOT_CONTAINS) {
             PreconditionUtils.checkArgument(declared == FunctionParamTypeEnum.STRING || declared == FunctionParamTypeEnum.LIST,
-                    "节点 " + nodeLabel + " 的" + op.getName() + "只支持字符串和列表，黑板键类型是 " + declared.name(), HttpStatus.BAD_REQUEST);
+                    "节点 " + nodeLabel + " 的" + op.getName() + "只支持字符串和列表，" + leftLabel + "是 " + declared.name(),
+                    HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -2571,6 +2628,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
      * <p>没配取值来源的入参沿用执行请求按节点给的值；配了却取不到值时节点直接失败，不让行为拿残缺的参数执行。
      * 执行成功后把返回体留在本次运行时里，供下游节点按「节点 + 出参」引用；节点失败或没有返回体时清掉，
      * 循环里下游拿到的就是最后一轮的值。</p>
+     * <p>节点配了执行成功条件时，行为调用没报错还要条件成立才算成功；不成立按失败处理，
+     * 这次的出参既不回传黑板也不留给下游引用。</p>
      */
     private TreeActionInvoker.TreeActionOutcome invokeTreeNodeAction(String nodeId, Integer spaceId,
                                                                      BehaviorActionConfig config,
@@ -2623,6 +2682,12 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         }
         // 出参回传与下游引用按算子返回体形状取值，先把执行结果那层字符串数组外壳剥掉
         var resultJson = unwrapActionResultForRead(testResult.getResult());
+        // 先判成功条件：不成立这次结果不可信，出参不回传黑板、节点产出也不留给下游
+        var conditionProblem = checkNodeSuccessCondition(nodeId, bound, config, resultJson, runtime);
+        if (conditionProblem != null) {
+            runtime.clearNodeOutput(nodeId);
+            return new TreeActionInvoker.TreeActionOutcome(BehaviorStateEnum.FAILURE, conditionProblem);
+        }
         var writeBackProblem = writeTreeOutputsToBlackboard(nodeId, bound, config, resultJson, runtime);
         if (writeBackProblem != null) {
             runtime.clearNodeOutput(nodeId);
@@ -2759,6 +2824,39 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             runtime.setBlackboardValue(blackboardKey, value);
         }
         return null;
+    }
+
+    /**
+     * 行为节点的成功条件判定：没配就算过（行为调用没报错即成功）；配了则从这次返回体里按出参取值比较。
+     * <p>条件指向的出参在保存期已校验过，这里再认不出说明行为定义在那之后变了；取不到值、比不了都按失败处理，
+     * 不能因为判不了就默默放过——用户配条件就是为了拦住这一轮结果不可信的情况。</p>
+     *
+     * @return 不成立或判不了时的说明；成立返回 null
+     */
+    private String checkNodeSuccessCondition(String nodeId, OntologyAction bound, BehaviorActionConfig config,
+                                             String resultJson, TreeExecutionRuntime runtime) {
+        var condition = config.getSuccessCondition();
+        if (condition == null) {
+            return null;
+        }
+        var label = "行为节点「" + runtime.nodeLabel(nodeId) + "」";
+        var outputKey = StringUtils.trimToEmpty(condition.getOutputKey());
+        var matched = StringUtils.isBlank(outputKey) ? List.<TreeOutputRow>of()
+                : matchTreeOutputRows(treeOutputRows(bound), outputKey);
+        if (matched.size() != 1) {
+            return label + "的执行成功条件指的出参 " + StringUtils.defaultIfBlank(outputKey, "（未填写）")
+                    + " 在该行为上认不出（要命中唯一一条），条件判不了";
+        }
+        if (condition.getOp() == null) {
+            return label + "的执行成功条件没选比较方式，条件判不了";
+        }
+        var row = matched.get(0);
+        if (StringUtils.isBlank(resultJson)) {
+            return label + "配了执行成功条件，但行为没有返回体，取不到出参「" + row.displayName() + "」的值，条件判不了";
+        }
+        var reason = runtime.compareSuccessValue(readTreeOutputValue(resultJson, row), condition.getOp(),
+                condition.getValue(), "出参「" + row.displayName() + "」的值");
+        return reason == null ? null : label + "的执行成功条件不成立：" + reason;
     }
 
     /** 按 api 取本空间的行为：执行期引用上游产出时用它找声明的出参行，取不到就是定义变了 */
@@ -3534,9 +3632,10 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     }
 
     /**
-     * 基础函数行为：按选中的对象做聚合或查询，不绑算子也不写库，因此没有关系映射和参数绑定。
-     * <p>对象可以选多个（必须挂在同一对象分类下），此时只能做聚合；聚合目标与条件字段存的是属性 apiName，
-     * 单对象从属性里选、多对象手输，由执行器逐个对象确认这些字段都存在且关联了数据源。</p>
+     * 基础函数行为：按选中的对象做聚合或查询，不绑算子；配了结果回写才落库，因此没有关系映射和参数绑定。
+     * <p>对象可以选多个（必须挂在同一对象分类下），此时只能做聚合，且各对象命中的行合成一批只算一个统一聚合值；
+     * 聚合目标与条件字段存的是属性 apiName，单对象从属性里选、多对象手输，
+     * 由执行器逐个对象确认这些字段都存在且关联了数据源。</p>
      */
     private void checkBasicFunctionAction(ActionCreateOrUpdateParam param, ActionDefinition definition, Integer spaceId) {
         PreconditionUtils.checkArgument(StringUtils.isEmpty(param.getFunctionApi()), "基础函数行为不需要绑定算子", HttpStatus.BAD_REQUEST);
@@ -3544,8 +3643,10 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 "基础函数行为不需要基础操作和存储分组", HttpStatus.BAD_REQUEST);
         PreconditionUtils.checkArgument(param.getLinkMapping() == null && CollectionUtils.isEmpty(param.getMappingIns()),
                 "基础函数行为不绑算子也不写关系，不需要传行为参数列表和关系映射", HttpStatus.BAD_REQUEST);
-        PreconditionUtils.checkArgument(param.getOutputMode() != ActionOutputModeEnum.WRITE_PROPERTY,
-                "基础函数行为只支持仅返回结果", HttpStatus.BAD_REQUEST);
+        // 输出方式由配置自己说话：配了结果回写才算写入对象属性，调用方单传一个 WRITE_PROPERTY 依然拒掉
+        PreconditionUtils.checkArgument(param.getOutputMode() != ActionOutputModeEnum.WRITE_PROPERTY
+                        || basicFunctionActionExecutor.hasWriteBack(param.getBasicFunction()),
+                "基础函数行为只有配了结果回写才落库，没配回写时输出方式只能是仅返回结果", HttpStatus.BAD_REQUEST);
         var config = param.getBasicFunction();
         basicFunctionActionExecutor.checkConfig(config, spaceId);
         // 顶层对象id 对基础函数没有独立作用（对象都在配置里），传了就必须是配置里的某一个，否则挂载对象会多出一个查不到的对象
@@ -4091,10 +4192,10 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         PreconditionUtils.checkArgument(param.getEntityPrimaryKey() == null
                         || contextInfoDTO.getActionDetailVO().getSubjectType() == ActionSubjectTypeEnum.BASIC_FUNCTION,
                 "只有基础函数行为支持用 entityPrimaryKey 指定实例：" + param.getActionApi(), HttpStatus.BAD_REQUEST);
-        // 基础函数是只读查询：一次调用把配置里的对象各查一遍，按对象下实例逐个循环只会把同一个聚合重复算出来
+        // 基础函数按配置一次把所有对象查一遍（配了回写也是这一次执行落库），按对象下实例逐个循环只会把同一个聚合重复算出来
         if (contextInfoDTO.getActionDetailVO().getSubjectType() == ActionSubjectTypeEnum.BASIC_FUNCTION) {
             return runBasicFunctionAction(contextInfoDTO.getActionDetailVO(), param.getOntologyUniqueIdentifier(),
-                    param.getEntityPrimaryKey(), null);
+                    param.getEntityPrimaryKey(), null, null);
         }
         checkBulkExecutable(contextInfoDTO.getActionDetailVO());
         //获取实体主键列表
@@ -4197,6 +4298,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 .actionApi(param.getActionApi())
                 .entityPrimaryKey(param.getEntityPrimaryKey())
                 .entityPrimaryKeys(param.getEntityPrimaryKeys())
+                .writeBackEntityPrimaryKey(param.getWriteBackEntityPrimaryKey())
                 .inputParams(param.getInputParams())
                 .outputParams(param.getOutputParams())
                 .dataPrimaryKey(param.getDataPrimaryKey())
@@ -4224,6 +4326,12 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         // 行为树编排的是已有行为，没有单条行为的入参绑定，走行为测试只会得到"算子不存在"这类误导提示
         PreconditionUtils.checkArgument(action.getActionKind() != ActionKindEnum.TREE,
                 "行为树不支持按单个行为测试", HttpStatus.BAD_REQUEST);
+        // 回写实例只有基础函数用得上，别的类别传了不会生效，直接拒掉
+        PreconditionUtils.checkArgument(param.getWriteBackEntityPrimaryKey() == null
+                        || (action.getActionKind() == ActionKindEnum.BASE
+                        && action.getSubjectType() == ActionSubjectTypeEnum.BASIC_FUNCTION),
+                "只有基础函数行为支持用 writeBackEntityPrimaryKey 指定回写实例：" + param.getActionApi(),
+                HttpStatus.BAD_REQUEST);
         // 属性值行为按行为所属对象定位实例；关系行为的本端/对端实例在测试体里按关系定义校验，两端都必须给
         if (action.getActionKind() == ActionKindEnum.BASE
                 && action.getSubjectType() == ActionSubjectTypeEnum.PROPERTY_VALUE) {
@@ -4260,7 +4368,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     private ActionTestResultVO testBasicFunctionAction(OntologyAction action, OntologyActionDetailVO detail,
                                                        ActionInvokeParam param) {
         var result = runBasicFunctionAction(detail, singleActionObject(action),
-                param.getEntityPrimaryKey(), param.getEntityPrimaryKeys());
+                param.getEntityPrimaryKey(), param.getEntityPrimaryKeys(), param.getWriteBackEntityPrimaryKey());
         return testResult(action, "行为执行成功").setResult(result);
     }
 
@@ -4288,42 +4396,56 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         }
         if (subjectType == ActionSubjectTypeEnum.BASIC_FUNCTION) {
             return runBasicFunctionAction(detail, param.getOntologyUniqueIdentifier(),
-                    param.getEntityPrimaryKey(), param.getEntityPrimaryKeys());
+                    param.getEntityPrimaryKey(), param.getEntityPrimaryKeys(), null);
         }
         throw new BusinessException("该行为需要绑定算子后才能执行：" + action.getApi(), HttpStatus.BAD_REQUEST);
     }
 
     /**
      * 执行基础函数行为：按配置里的对象逐个查询，选了实例的对象只查该实例，其余按全量查。
+     * 行为配了结果回写时，本次结果按回写目标对象的实例主键落库：优先用 writeBackEntityPrimaryKey（只定落点、不收窄查询），
+     * 没给再沿用按对象传的那份里目标对象的键。
      *
-     * @param requestObject      请求指定的对象id，用于把单个实例主键归到正确的对象上；多对象时必填
-     * @param entityPrimaryKey   对象级的实例主键
-     * @param primaryKeyByObject 按对象给的实例主键，优先于 entityPrimaryKey
+     * @param requestObject             请求指定的对象id，用于把单个实例主键归到正确的对象上；多对象查询且没给对象级主键时要按对象传
+     * @param entityPrimaryKey          对象级的实例主键，归属对象就是 requestObject（只有一个查询对象时不传对象id 也算给它）
+     * @param primaryKeyByObject        按对象给的实例主键，优先于 entityPrimaryKey；回写目标对象不是查询对象时靠它给实例
+     * @param writeBackEntityPrimaryKey 单独指定的回写实例主键；不参与查询收窄
      */
     private String runBasicFunctionAction(OntologyActionDetailVO detail, String requestObject,
-                                          Object entityPrimaryKey, Map<String, Object> primaryKeyByObject) {
+                                          Object entityPrimaryKey, Map<String, Object> primaryKeyByObject,
+                                          Object writeBackEntityPrimaryKey) {
         var config = detail.getBasicFunction();
         PreconditionUtils.checkNotNull(config, "基础函数行为没有查询配置：" + detail.getActionApi(), HttpStatus.BAD_REQUEST);
+        // 没配回写还传落点实例就是配了不生效，直接拒掉，别让调用方以为数据落库了
+        PreconditionUtils.checkArgument(writeBackEntityPrimaryKey == null
+                        || basicFunctionActionExecutor.writeBackTargetIdentifier(config) != null,
+                "行为没有配置结果回写，不需要传 writeBackEntityPrimaryKey：" + detail.getActionApi(),
+                HttpStatus.BAD_REQUEST);
         var targets = new LinkedHashMap<String, Object>();
         var identifiers = basicFunctionActionExecutor.configOntologyIdentifiers(config);
+        var writeBackTarget = basicFunctionActionExecutor.writeBackTargetIdentifier(config);
+        // 按对象给的实例主键原样收下：查询只认自己那几个对象的键，回写目标对象不在查询对象里时要从这儿拿它的实例
         MapUtils.emptyIfNull(primaryKeyByObject).forEach((objectId, primaryKey) -> {
-            if (identifiers.contains(objectId) && primaryKey != null) {
+            if (primaryKey != null) {
                 targets.put(objectId, primaryKey);
             }
         });
         if (entityPrimaryKey == null) {
-            return basicFunctionActionExecutor.run(config, targets);
+            return basicFunctionActionExecutor.run(config, targets, writeBackEntityPrimaryKey);
         }
         if (identifiers.contains(requestObject)) {
             targets.putIfAbsent(requestObject, entityPrimaryKey);
         } else if (identifiers.size() == 1) {
             targets.putIfAbsent(identifiers.get(0), entityPrimaryKey);
+        } else if (StringUtils.equals(requestObject, writeBackTarget)) {
+            // 对象级主键给的不是查询对象，而是这次回写的落点对象：收下给回写用，不参与查询收窄
+            targets.putIfAbsent(requestObject, entityPrimaryKey);
         } else {
             // 多对象时一个主键说不清查的是谁，让调用方按对象传，别默默查错对象
             throw new BusinessException("基础函数行为绑了多个对象，按实例查询时要按对象传实例主键"
                     + "（entityPrimaryKeys：对象id -> 实例主键）：" + detail.getActionApi(), HttpStatus.BAD_REQUEST);
         }
-        return basicFunctionActionExecutor.run(config, targets);
+        return basicFunctionActionExecutor.run(config, targets, writeBackEntityPrimaryKey);
     }
 
     /** 行为测试的入参形状与执行不同，这里把测试给的键包成执行用的单实体参数 */

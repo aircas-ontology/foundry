@@ -5,6 +5,7 @@ import com.aircas.ptr.foundry.ontology.model.dto.ActionContextInfoDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.EntityRelationExportDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.OntologyInstancesExportDTO;
 import com.aircas.ptr.foundry.ontology.model.param.*;
+import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
 import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 
@@ -111,6 +112,15 @@ public interface EntityService {
 
     Page<List<EntityPropertyGenericQueryVO>> genericQuery(EntityPropertyGenericQueryParam param);
 
+    /**
+     * 跨对象统一聚合：每个对象各取一列（各自的表、关联与条件），UNION ALL 合成一批值后在外层做一次聚合函数。
+     *
+     * <p>不走 {@link #genericQuery} 逐对象查：那种算法每个对象各得一个值，AVG、COUNT 这类结果没法再拿
+     * 各对象的值合并出全局值（三个对象平均 90 不等于两个大对象和一个小对象的平均）。
+     * 返回壳与通用查询的聚合一致：普通聚合一条记录一个值，DISTINCT 是去重后的那批值。</p>
+     */
+    Page<List<EntityPropertyGenericQueryVO>> genericAggregateUnion(EntityUnionAggregateParam param);
+
     EntityPropertyRowDetailVO getEntityPropertyRowDetail(EntityPropertyRowQueryParam param);
 
     Page<EntityPropertyRowDetailVO.PropertyGroupData> getEntityPropertyRowDetailPage(EntityPropertyRowPageQueryParam param);
@@ -122,6 +132,15 @@ public interface EntityService {
     void updateEntityProperty(EntityPropertyUpdateParam param);
 
     void deleteEntityProperty(EntityPropertyDeleteParam param);
+
+    /**
+     * 写回值按目标属性的数据类型转换，供所有要把值落到属性列的链路复用。
+     *
+     * <p>查询出来的值和脚本回传的值经常与目标列不同型（字符串写成数值列、时间写成字符串），
+     * 原样进 SQL 会被数据库按列类型拒掉，报错点还落在插库那一步。算子出参回写与
+     * 基础函数结果回写共用这里，转不动时抛出可读错误而不是留给数据库报错。</p>
+     */
+    Object convertWriteValue(Object value, OntologyProperty property);
 
     Integer countEntity(String datasourceSchema, String datasourceId);
 

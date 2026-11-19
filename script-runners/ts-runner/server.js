@@ -4,7 +4,7 @@
  * 对外契约与 groovy/java/python runner 完全一致：
  *   GET  /health           → {status, language}
  *   POST /validate  {code} → {ok} | {ok:false, error}
- *   POST /parse     {code} → {ok, params:[{name,type,category,source}]} | {ok:false, error}
+ *   POST /parse     {code} → {ok, params:[{name,type,category,source,elementType?,fields?}]} | {ok:false, error}
  *   POST /functions/handle {functionApi,version,code,input}
  *                          → {data,description,taskId,..., _meta:{durationMs,status,language}}
  *
@@ -231,6 +231,15 @@ function expandArrayElementFields(node, named, src) {
   return expanded && expanded.fields && expanded.fields.length > 0 ? expanded.fields : null;
 }
 
+/** 数组元素类型名（Admin[] → Admin、number[] → number）；非数组或认不出返回 null，与后端 elementType 契约一致。 */
+function arrayElementTypeName(node, src) {
+  const elemNode = extractArrayElementType(node, src);
+  if (!elemNode) return null;
+  const typeText = normalizeTsType(elemNode, src);
+  if (!typeText || typeText === 'object' || typeText === 'array') return null;
+  return typeText.startsWith('ref:') ? typeText.slice(4) : typeText;
+}
+
 /** 递归展开一个类型节点为带嵌套 fields 的参数节点，无法展开返回 null。visited 防循环引用。 */
 function expandType(node, named, src, visited) {
   if (!node) return null;
@@ -249,7 +258,9 @@ function expandType(node, named, src, visited) {
           const nested = expandType(m.type, named, src, new Set(visited).add(refName));
           if (nested && nested.fields) field.fields = nested.fields;
         } else if (typeText === 'array') {
-          // 数组元素是自定义类 → 递归展开
+          // 数组元素是自定义类 → 递归展开；元素类型名用于展示
+          const elemName = arrayElementTypeName(m.type, src);
+          if (elemName) field.elementType = elemName;
           const elemNode = extractArrayElementType(m.type, src);
           if (elemNode) {
             const elemTypeText = normalizeTsType(elemNode, src);
@@ -289,6 +300,9 @@ function expandType(node, named, src, visited) {
             if (nested && nested.fields) field.fields = nested.fields;
           }
         } else if (f.type === 'array' && f._rawType) {
+          // 数组字段：元素类型名用于展示，元素是自定义类时递归展开
+          const elemName = arrayElementTypeName(f._rawType, src);
+          if (elemName) field.elementType = elemName;
           const elemNode = extractArrayElementType(f._rawType, src);
           if (elemNode) {
             const elemTypeText = normalizeTsType(elemNode, src);
@@ -329,6 +343,8 @@ function expandTypeByName(name, named, src, visited) {
       }
     } else if (f.type === 'array' && f._rawType) {
       // 数组字段：通过原始类型节点提取元素类型并递归展开
+      const elemName = arrayElementTypeName(f._rawType, src);
+      if (elemName) field.elementType = elemName;
       const elemNode = extractArrayElementType(f._rawType, src);
       if (elemNode) {
         const elemTypeText = normalizeTsType(elemNode, src);
@@ -458,6 +474,13 @@ function parse(code) {
       if (scalar && scalar !== 'object' && !scalar.startsWith('ref:')) {
         paramNode.type = scalar;
         paramNode.source = 'ANNOTATION';
+        if (scalar === 'array') {
+          // 集合入参：元素类型用于展示，元素是自定义类型时字段作为下一级结构
+          const elemName = arrayElementTypeName(param.type, src);
+          if (elemName) paramNode.elementType = elemName;
+          const elemFields = expandArrayElementFields(param.type, named, src);
+          if (elemFields && elemFields.length > 0) paramNode.fields = elemFields;
+        }
       } else {
         // 启发层：扫 body 收集字段
         paramNode.type = 'object';
