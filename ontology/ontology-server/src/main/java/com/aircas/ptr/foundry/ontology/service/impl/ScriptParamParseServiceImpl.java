@@ -124,6 +124,7 @@ public class ScriptParamParseServiceImpl implements ScriptParamParseService {
                 .category(category)
                 .paramOrder(order)
                 .referenceType(referenceType(p, language))
+                .elementType(p.getElementType())
                 .description(p.getDescription());
                 // paramSchema 不产出（null）：静态解析拿不到结构 JSON，由用户保存前自行补充
         if (p.getFields() != null && !p.getFields().isEmpty()) {

@@ -1348,9 +1348,10 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 .collect(Collectors.toMap(FunctionParamPO::getId, param -> param, (existing, ignored) -> existing));
         return outputRows.stream().map(row -> {
             var funcParam = row.getFunctionParamId() == null ? null : funcParams.get(row.getFunctionParamId());
-            // 类型按出参落到的属性给（算子出参常是整批 LIST，展示和兼容校验都该看单条值本身的类型）；没有属性时才退回算子出参类型
+            // 类型按出参落到的属性给（算子出参常是整批 LIST，展示和兼容校验都该看单条值本身的类型）；
+            // 没有属性时按取值路径找到子字段自身的类型，认不出才退回算子出参类型
             var valueType = row.getPropertyType() != null ? toBlackboardValueType(row.getPropertyType())
-                    : (funcParam == null ? FunctionParamTypeEnum.STRING : funcParam.getParamType());
+                    : resolveOutputRowType(funcParam, row.getParameterName(), row.getFunctionParamExpression());
             return new TreeOutputRow(row.getPropertyUniqueIdentifier(), row.getParameterName(),
                     funcParam == null ? null : funcParam.getParamName(), row.getFunctionParamExpression(),
                     valueType,
@@ -3441,6 +3442,81 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         });
     }
 
+    /**
+     * 出参行没写回属性时的类型：按取值路径在算子出参的字段树里找子字段自己的类型。
+     * <p>算子出参常是一个 OBJECT（或 List<对象>），整包类型对单条子字段没有意义：拿 OBJECT 去校验
+     * 成功条件和上游入参，会把数值、字符串字段一起拦住。路径认不出（函数没字段树、路径停在整包）时
+     * 退回整包参数类型，保持原口径。</p>
+     */
+    private FunctionParamTypeEnum resolveOutputRowType(FunctionParamPO funcParam, String parameterName, String expression) {
+        if (funcParam == null) {
+            return FunctionParamTypeEnum.STRING;
+        }
+        var fields = parseParamFields(funcParam);
+        if (fields.isEmpty()) {
+            return funcParam.getParamType();
+        }
+        var fromExpression = leafFieldType(fields, expression);
+        if (fromExpression != null) {
+            return fromExpression;
+        }
+        // 出参行一般只存参数名不存路径：子字段可能嵌在 LIST/OBJECT 里，按名字在整棵字段树里找
+        var fromName = fieldTypeByName(fields, parameterName);
+        return fromName != null ? fromName : funcParam.getParamType();
+    }
+
+    /**
+     * 只有字段名、没有取值路径时在整棵字段树里按名字找类型。
+     * <p>层序查找，同名优先最外层的字段，避免被更深层的同名字段覆盖。</p>
+     */
+    private FunctionParamTypeEnum fieldTypeByName(List<FunctionParameterVO> fields, String name) {
+        if (StringUtils.isBlank(name)) {
+            return null;
+        }
+        var queue = new ArrayDeque<>(fields);
+        while (!queue.isEmpty()) {
+            var field = queue.poll();
+            if (name.equals(field.getParamName())) {
+                return field.getParamType();
+            }
+            if (CollectionUtils.isNotEmpty(field.getFields())) {
+                queue.addAll(field.getFields());
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 沿 JsonPath 在字段树里逐段下行，返回最后一段命中的字段类型。
+     * <p>路径里带数组下标、或前面是出参名这类字段树里没有的包装段时跳过继续往后找；
+     * 最后一段没命中就不认，避免把中间某个对象字段的类型当成叶子类型。</p>
+     */
+    private FunctionParamTypeEnum leafFieldType(List<FunctionParameterVO> fields, String path) {
+        if (StringUtils.isBlank(path)) {
+            return null;
+        }
+        var current = fields;
+        FunctionParamTypeEnum leafType = null;
+        boolean lastMatched = false;
+        for (var segmentText : path.trim().replaceFirst("^\\$\\.?", "").split("\\.")) {
+            var segment = segmentText.replaceAll("\\[[^\\]]*]", "").trim();
+            if (segment.isEmpty()) {
+                // [*] / [0] 这类数组下标不代表字段层级
+                continue;
+            }
+            var field = current.stream()
+                    .filter(item -> segment.equals(item.getParamName()))
+                    .findFirst().orElse(null);
+            lastMatched = field != null;
+            if (field == null) {
+                continue;
+            }
+            leafType = field.getParamType();
+            current = field.getFields() == null ? Lists.newArrayList() : field.getFields();
+        }
+        return lastMatched ? leafType : null;
+    }
+
     /** 至少有一个出参行选了 WRITE_PROPERTY 时，校验算子确实有出参可供写回 */
     private void checkWritePropertyOutput(ActionDefinition definition) {
         var hasWriteProperty = definition.mappings.stream()
@@ -4031,6 +4107,12 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 .eq(OntologyAction::getApi, actionApi)
                 .eq(OntologyAction::getOntologySpaceId, ontologySpaceId));
         PreconditionUtils.checkArgument(action != null, "无效的action api", HttpStatus.BAD_REQUEST);
+        // 实例关系的挂载列表里有对端对象，详情沿用改造前的单值口径只回显创建时选的那一端（列表首位）；
+        // 对端仍保留在库里，执行和按对象查询照常用完整列表
+        var mountedObjectText = action.getSubjectType() == ActionSubjectTypeEnum.LINK
+                && CollectionUtils.isNotEmpty(action.getOntologyUniqueIdentifier())
+                ? action.getOntologyUniqueIdentifier().get(0)
+                : action.ontologyUniqueIdentifierText();
         var detailVO = OntologyActionDetailVO
                 .builder()
                 .id(action.getId())
@@ -4042,7 +4124,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 .actionApi(action.getApi())
                 .description(action.getDescription())
                 .displayName(action.getDisplayName())
-                .ontologyUniqIdentifier(action.ontologyUniqueIdentifierText())
+                .ontologyUniqIdentifier(mountedObjectText)
                 .icon(action.getIcon())
                 .categoryId(action.getActionCategoryId())
                 .status(action.getStatus())
