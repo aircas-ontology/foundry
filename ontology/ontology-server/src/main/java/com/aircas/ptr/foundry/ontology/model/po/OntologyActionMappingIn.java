@@ -73,6 +73,11 @@ public class OntologyActionMappingIn {
     private String sourceConfig;
 
     /**
+     * List 入参按子表行读取的行数；为空按默认 10 行，顺序按行主键倒序
+     */
+    private Integer rowLimit;
+
+    /**
      * 出参行输出方式：RESULT_ONLY 仅返回 / WRITE_PROPERTY 写入属性；入参行为空
      */
     private ActionOutputModeEnum outputMode;

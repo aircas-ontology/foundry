@@ -62,6 +62,16 @@ public interface EntityService {
     List<EntityPropertyDetailVO> getEntityDetail(String ontologyUniqueIdentifier, Object entityPrimaryKey,
                                                  Map<String, Object> rowKeysByGroup);
 
+    /**
+     * 取实例属性详情，扩展存储分组可按行精确取值，并可按属性指定读取行数。
+     *
+     * @param rowKeysByGroup   分组名 -> 行主键；指定的分组只取该行（校验行属于本实例），没指定的分组按主键倒序取
+     * @param maxRowsByProperty 属性唯一标识 -> 行数上限；取该分组内绑定属性中最大的行数，没给的属性所在分组按默认 10 行
+     */
+    List<EntityPropertyDetailVO> getEntityDetail(String ontologyUniqueIdentifier, Object entityPrimaryKey,
+                                                 Map<String, Object> rowKeysByGroup,
+                                                 Map<String, Integer> maxRowsByProperty);
+
     Page<EntityInfoVO> getEntities(String ontologyUniqueIdentifier, String propertyName, Object propertyValue, Integer pageNum, Integer pageSize, Boolean needFilterVisibility);
 
     List<EntityNode> getByByOntologyUniqIdentifier(String ontologyIdentifier);

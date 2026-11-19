@@ -50,9 +50,15 @@ public class OntologyAction {
     @TableField(typeHandler = StringListCommaTypeHandler.class, updateStrategy = FieldStrategy.ALWAYS)
     private List<String> ontologyUniqueIdentifier;
 
-    /** 接口回显用的逗号拼接形式，与列里存的一致；没有挂载对象时为空串 */
-    public String ontologyUniqueIdentifierText() {
-        return ontologyUniqueIdentifier == null ? "" : String.join(",", ontologyUniqueIdentifier);
+    /** 创建时选的那个对象：保存时排在挂载列表首位；没有挂载对象时返回 null */
+    public String primaryOntologyIdentifier() {
+        return ontologyUniqueIdentifier == null || ontologyUniqueIdentifier.isEmpty() ? null : ontologyUniqueIdentifier.get(0);
+    }
+
+    /** 接口回显用的挂载对象：创建时选的那个；没有挂载对象时为空串 */
+    public String primaryOntologyIdentifierText() {
+        var primary = primaryOntologyIdentifier();
+        return primary == null ? "" : primary;
     }
 
     /**

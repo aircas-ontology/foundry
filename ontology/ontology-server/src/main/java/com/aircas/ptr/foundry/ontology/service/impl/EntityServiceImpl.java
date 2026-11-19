@@ -442,16 +442,26 @@ public class EntityServiceImpl implements EntityService {
 
     @Override
     public List<EntityPropertyDetailVO> getEntityDetail(String ontologyUniqueIdentifier, Object entityPrimaryKey) {
-        return getEntityDetail(ontologyUniqueIdentifier, entityPrimaryKey, null);
+        return getEntityDetail(ontologyUniqueIdentifier, entityPrimaryKey, null, null);
     }
+
+    /** 扩展分组没指定行数时的默认读取行数（按行主键倒序） */
+    private static final int DEFAULT_GROUP_ROWS = 10;
 
     /**
      * 取实例属性详情。rowKeysByGroup 指定的分组按行精确取值（分组名 -> 行主键），
-     * 没指定的分组沿用原口径（扩展表按主键倒序取最多 10 行）。
+     * 没指定的分组沿用原口径（扩展表按主键倒序取行，行数按 maxRowsByProperty 给的取，默认 10 行）。
      */
     @Override
     public List<EntityPropertyDetailVO> getEntityDetail(String ontologyUniqueIdentifier, Object entityPrimaryKey,
                                                         Map<String, Object> rowKeysByGroup) {
+        return getEntityDetail(ontologyUniqueIdentifier, entityPrimaryKey, rowKeysByGroup, null);
+    }
+
+    @Override
+    public List<EntityPropertyDetailVO> getEntityDetail(String ontologyUniqueIdentifier, Object entityPrimaryKey,
+                                                        Map<String, Object> rowKeysByGroup,
+                                                        Map<String, Integer> maxRowsByProperty) {
         List<EntityPropertyDetailVO> res = Lists.newArrayList();
         var props = propertyMapper.selectList(new LambdaQueryWrapper<OntologyProperty>()
                         .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUniqueIdentifier))
@@ -524,7 +534,7 @@ public class EntityServiceImpl implements EntityService {
                             columns,
                             tableMapping.getTargetColumnName(),
                             orderBy,
-                            10,
+                            groupRowLimit(entry.getValue(), maxRowsByProperty),
                             QuerySortEnum.DESC.getValue()
                     );
                 }
@@ -551,6 +561,21 @@ public class EntityServiceImpl implements EntityService {
             }
         });
         return res;
+    }
+
+    /**
+     * 扩展分组本次读取的行数：一个分组的所有属性共用同一次多行查询，取该分组内被指定行数的属性中最大的一个；
+     * 没指定行数按默认 10 行。
+     */
+    private int groupRowLimit(List<OntologyProperty> groupProps, Map<String, Integer> maxRowsByProperty) {
+        if (MapUtils.isEmpty(maxRowsByProperty) || CollectionUtils.isEmpty(groupProps)) {
+            return DEFAULT_GROUP_ROWS;
+        }
+        return groupProps.stream()
+                .map(p -> maxRowsByProperty.get(p.getUniqueIdentifier()))
+                .filter(Objects::nonNull)
+                .max(Integer::compareTo)
+                .orElse(DEFAULT_GROUP_ROWS);
     }
 
     /**
@@ -1506,9 +1531,9 @@ public class EntityServiceImpl implements EntityService {
      * 或顶层算子出参名（脚本算子往往只有一个顶层出参，属性级写回实例只能靠前两种）。
      * key 写错、该 key 没有对应的绑定行、绑定跨多对象却指定实例主键——
      * 这几种都会静默退回共用的实例选择，读写到调用方没打算碰的实例，直接报错。
-     * 关系两端本体的实例仍按 from/to 或本端选择：这两份参数只路由各自行的读或写，
-     * 不参与另一方向和关系落库的主键解析，所以允许落在端点对象上（与 inputEntities 不同）。
-     * 出参点名关系对端的实例不算冲突：写哪颗实例由该 key 决定，没点名的行才用本次遍历到的对端。</p>
+     * 关系端点对象的实例由关系两端决定：入参绑定落在端点上时，按入参再指定一次只能与端点已选的实例一致
+     * （对端对象的分组行执行侧不按行取，仍拒）。这里不猜本端/对端——挂载侧推导不准时不误拦，
+     * 只有能确定的端点实例对不上才报错。</p>
      */
     private void checkParamTargets(OntologyActionDetailVO detail, FunctionDetailVO functionDetailVO,
                                    EntityActionExecuteParam param) {
@@ -1520,10 +1545,11 @@ public class EntityServiceImpl implements EntityService {
         PreconditionUtils.checkArgument(functionDetailVO != null,
                 "不绑算子的行为不支持用 inputParams、outputParams 按参数指定数据位置：" + detail.getActionApi(),
                 HttpStatus.BAD_REQUEST);
-        var counterpartObject = relationCounterpartObject(detail, param);
+        var linkGroup = actionLinkGroup(detail);
         var params = functionDetailVO.getParams();
         checkDirectionTargets(detail, params, inputTargets, this::isInstanceInputRow,
-                FunctionParamCategoryEnum.INPUT, "inputParams", "入参", counterpartObject);
+                FunctionParamCategoryEnum.INPUT, "inputParams", "入参", linkEndpointInstances(linkGroup, param),
+                counterpartObjectOf(linkGroup, param));
         checkOutputTargets(detail, params, outputTargets);
     }
 
@@ -1531,7 +1557,7 @@ public class EntityServiceImpl implements EntityService {
                                        Map<String, ActionInstanceTargetParam> targets,
                                        Predicate<ActionParamMappingVO> needsTarget,
                                        FunctionParamCategoryEnum category, String fieldName, String cnLabel,
-                                       String counterpartObject) {
+                                       Map<String, List<Object>> endpointInstances, String counterpartObject) {
         if (MapUtils.isEmpty(targets)) {
             return;
         }
@@ -1549,10 +1575,27 @@ public class EntityServiceImpl implements EntityService {
             PreconditionUtils.checkArgument(!objectIds.isEmpty(),
                     cnLabel + "[" + paramName + "]的绑定没有" + ("入参".equals(cnLabel) ? "取对象属性" : "写入对象属性")
                             + "的行，按" + cnLabel + "指定数据位置无效", HttpStatus.BAD_REQUEST);
-            var onlyObjectId = objectIds.size() == 1 ? objectIds.iterator().next() : null;
-            PreconditionUtils.checkArgument(!StringUtils.equals(onlyObjectId, counterpartObject),
-                    cnLabel + "[" + paramName + "]的数据落在关系对端对象[" + counterpartObject + "]上，"
-                            + "实例与分组行都由关系两端或本次遍历决定，不能按" + cnLabel + "指定", HttpStatus.BAD_REQUEST);
+            var endpointHits = objectIds.stream().filter(endpointInstances::containsKey).collect(Collectors.toList());
+            if (!endpointHits.isEmpty()) {
+                // 对端对象明确时，它的分组行由本次遍历决定，按入参指定不会生效；本端端点的按行取值照旧
+                if (StringUtils.isNotEmpty(counterpartObject) && endpointHits.contains(counterpartObject)) {
+                    PreconditionUtils.checkArgument(MapUtils.isEmpty(target.getDataPrimaryKeys()),
+                            cnLabel + "[" + paramName + "]的数据落在关系对端对象[" + counterpartObject + "]上，"
+                                    + "分组行由关系两端决定，不能按" + cnLabel + "指定", HttpStatus.BAD_REQUEST);
+                }
+                var endpointKeys = endpointHits.stream()
+                        .flatMap(objectId -> endpointInstances.get(objectId).stream())
+                        .collect(Collectors.toList());
+                // 端点实例推不出来时不判，避免挂载侧信息不全把合法请求拦掉；能确定的对不上才报错
+                if (target.getEntityPrimaryKey() != null && !endpointKeys.isEmpty()) {
+                    PreconditionUtils.checkArgument(endpointKeys.stream()
+                                    .anyMatch(primaryKey -> Objects.equals(primaryKey, target.getEntityPrimaryKey())),
+                            cnLabel + "[" + paramName + "]指定的实例[" + target.getEntityPrimaryKey()
+                                    + "]与关系端点对象已选的实例[" + endpointKeys.stream()
+                                    .map(String::valueOf).collect(Collectors.joining("、"))
+                                    + "]不一致：实例由关系两端决定，按" + cnLabel + "指定只能与之一致", HttpStatus.BAD_REQUEST);
+                }
+            }
             PreconditionUtils.checkArgument(target.getEntityPrimaryKey() == null || objectIds.size() == 1,
                     cnLabel + "[" + paramName + "]的绑定跨多个对象，不能按" + cnLabel + "指定实例主键，请用 "
                             + "entityPrimaryKeys 按对象传",
@@ -1664,18 +1707,70 @@ public class EntityServiceImpl implements EntityService {
         return rows.size() > limit ? shown + " 等 " + rows.size() + " 条" : shown;
     }
 
-    /** 行为绑定关系时的对端对象；没绑关系返回 null */
-    private String relationCounterpartObject(OntologyActionDetailVO detail, EntityActionExecuteParam param) {
+    /** 行为绑定的关系定义；没绑关系或关系不存在返回 null */
+    private OntologyLinkGroup actionLinkGroup(OntologyActionDetailVO detail) {
         var link = detail.getLinkMapping();
         if (link == null || StringUtils.isEmpty(link.getOntologyLinkUniqIdentifier())) {
             return null;
         }
-        var linkGroup = linkGroupMapper.selectOne(new LambdaQueryWrapper<OntologyLinkGroup>()
+        return linkGroupMapper.selectOne(new LambdaQueryWrapper<OntologyLinkGroup>()
                 .eq(OntologyLinkGroup::getUniqueIdentifier, link.getOntologyLinkUniqIdentifier()));
+    }
+
+    /**
+     * 关系两端对象本次已选的实例，只用于校验端点入参，不推本端/对端。
+     * <p>自关系两端是同一个对象，两个实例都收，入参指定任一都算一致。</p>
+     */
+    private Map<String, List<Object>> linkEndpointInstances(OntologyLinkGroup linkGroup, EntityActionExecuteParam param) {
         if (linkGroup == null) {
+            return Map.of();
+        }
+        Map<String, List<Object>> endpoints = new LinkedHashMap<>();
+        collectEndpointInstance(endpoints, linkGroup.getOntologyUniqueIdentifierFrom(), param);
+        collectEndpointInstance(endpoints, linkGroup.getOntologyUniqueIdentifierTo(), param);
+        return endpoints;
+    }
+
+    /**
+     * 关系对端对象：请求点名了就用它；否则按本端对象推（对外执行时本端是调用方传的，可靠）。
+     * 都推不出来返回 null，调用处不判——宁可放过也不误拦。
+     */
+    private String counterpartObjectOf(OntologyLinkGroup linkGroup, EntityActionExecuteParam param) {
+        if (param == null) {
+            return null;
+        }
+        if (StringUtils.isNotEmpty(param.getLinkedOntologyUniqueIdentifier())) {
+            return param.getLinkedOntologyUniqueIdentifier();
+        }
+        if (linkGroup == null || StringUtils.isEmpty(param.getOntologyUniqueIdentifier())) {
             return null;
         }
         return counterpartOntology(linkGroup, param.getOntologyUniqueIdentifier());
+    }
+
+    /** 某端对象的实例：按对象传的优先，其次对端专用参数、本端单值参数 */
+    private void collectEndpointInstance(Map<String, List<Object>> endpoints, String objectId,
+                                         EntityActionExecuteParam param) {
+        if (StringUtils.isEmpty(objectId) || param == null) {
+            return;
+        }
+        var instances = endpoints.computeIfAbsent(objectId, key -> new ArrayList<>());
+        var keys = param.getEntityPrimaryKeys();
+        if (keys != null) {
+            addIfAbsent(instances, keys.get(objectId));
+        }
+        if (StringUtils.equals(objectId, param.getLinkedOntologyUniqueIdentifier())) {
+            addIfAbsent(instances, param.getLinkedEntityPrimaryKey());
+        }
+        if (StringUtils.equals(objectId, param.getOntologyUniqueIdentifier())) {
+            addIfAbsent(instances, param.getEntityPrimaryKey());
+        }
+    }
+
+    private void addIfAbsent(List<Object> instances, Object primaryKey) {
+        if (primaryKey != null && !instances.contains(primaryKey)) {
+            instances.add(primaryKey);
+        }
     }
 
     /** 从行为映射收集需要实例数据的对象：属性/对象/List 来源的入参，以及写入对象属性的出参 */
@@ -1802,44 +1897,82 @@ public class EntityServiceImpl implements EntityService {
      * 按算子入参单独加载的实例数据：入参名 -> (属性id -> 值)。
      * <p>同一对象的两个属性入参要读不同实例时靠这份视图路由取值。入参只给了分组行主键时，
      * 实例沿用对象级选择、行按指定的取；关系对端的实例随本次遍历变化，跳过它，取值自动回落共用视图。</p>
+     * <p>入参绑定了 List 行数（rowLimit）时即使没给 inputParams 也要单独建视图：共用视图按默认 10 行取，
+     * 拿不到用户要的行数。</p>
      */
     private Map<String, Map<String, List<Object>>> loadParamEntityDetailMaps(ActionContextInfoDTO context,
                                                                              EntityActionExecuteParam param,
                                                                              String excludeObjectId) {
         var targets = param == null ? null : param.getInputParams();
-        if (MapUtils.isEmpty(targets)) {
+        var rowLimits = listRowLimits(context);
+        if (MapUtils.isEmpty(targets) && rowLimits.isEmpty()) {
             return null;
         }
         var detail = context.getActionDetailVO();
         var legacyObjectId = legacyActionObject(context, param);
         var actionApi = detail == null ? "" : detail.getActionApi();
+        Set<String> paramNames = new LinkedHashSet<>();
+        if (MapUtils.isNotEmpty(targets)) {
+            targets.forEach((paramName, target) -> {
+                if (target != null) {
+                    paramNames.add(paramName);
+                }
+            });
+        }
+        paramNames.addAll(rowLimits.keySet());
         Map<String, Map<String, List<Object>>> res = new LinkedHashMap<>();
-        targets.forEach((paramName, target) -> {
-            if (target == null) {
-                return;
-            }
+        for (var paramName : paramNames) {
+            var target = targets == null ? null : targets.get(paramName);
             var objectIds = paramDataObjectIds(context.getMappings(), context.getFunctionInputParams(),
                     paramName, this::isInstanceInputRow, legacyObjectId);
+            var limits = rowLimits.get(paramName);
             var details = Lists.<EntityPropertyDetailVO>newArrayList();
             for (var objectId : objectIds) {
                 if (StringUtils.equals(objectId, excludeObjectId)) {
                     continue;
                 }
-                var primaryKey = target.getEntityPrimaryKey() != null ? target.getEntityPrimaryKey()
+                var primaryKey = target != null && target.getEntityPrimaryKey() != null ? target.getEntityPrimaryKey()
                         : resolveEntityPrimaryKey(context, param, objectId, inputTargetsFor(context));
                 PreconditionUtils.checkNotNull(primaryKey,
                         "入参[" + paramName + "]的对象[" + objectId + "]未选择实例数据，无法执行行为：" + actionApi,
                         HttpStatus.BAD_REQUEST);
-                details.addAll(getEntityDetail(objectId, primaryKey, mergeRowKeys(target.getDataPrimaryKeys(),
-                        rowKeysOf(inputTargetsFor(context), objectId))));
+                var rowKeys = target != null
+                        ? mergeRowKeys(target.getDataPrimaryKeys(), rowKeysOf(inputTargetsFor(context), objectId))
+                        : inputRowKeysFor(context, objectId);
+                details.addAll(getEntityDetail(objectId, primaryKey, rowKeys, limits));
             }
             if (!details.isEmpty()) {
                 res.put(paramName, details.stream().collect(Collectors.toMap(
                         EntityPropertyDetailVO::getPropertyUniqIdentifier,
                         EntityPropertyDetailVO::getPropertyValues, (list1, list2) -> list1)));
             }
-        });
+        }
         return res.isEmpty() ? null : res;
+    }
+
+    /**
+     * 各入参绑定的读取行数：入参名 -> (属性唯一标识 -> 行数)。
+     * <p>同一个分组共用一次多行查询，行数在取数时按分组取最大；这里按属性记，才能只放大该入参绑定属性所在的分组。</p>
+     */
+    private Map<String, Map<String, Integer>> listRowLimits(ActionContextInfoDTO context) {
+        var mappings = context.getMappings();
+        if (CollectionUtils.isEmpty(mappings)) {
+            return Map.of();
+        }
+        var inputParams = context.getFunctionInputParams();
+        Map<String, Map<String, Integer>> res = new LinkedHashMap<>();
+        for (var mapping : mappings) {
+            if (mapping.getRowLimit() == null || StringUtils.isEmpty(mapping.getPropertyUniqueIdentifier())) {
+                continue;
+            }
+            var paramName = paramNameOf(inputParams, mapping.getFunctionParamId());
+            if (StringUtils.isEmpty(paramName)) {
+                continue;
+            }
+            res.computeIfAbsent(paramName, k -> new LinkedHashMap<>())
+                    .merge(mapping.getPropertyUniqueIdentifier(), mapping.getRowLimit(), Math::max);
+        }
+        return res;
     }
 
     /**
@@ -2272,10 +2405,17 @@ public class EntityServiceImpl implements EntityService {
      * 由算子执行侧的组装逻辑还原成嵌套对象。
      * <p>
      * 同一参数上若还有一条不带路径的绑定，它作为整包取值，优先于逐字段组装。
+     * List 入参的子字段绑定是「元素字段」，按子表行逐元素拼装，见 {@link #assembleListElements}。
      */
     private FunctionParameter assembleObjectParam(FunctionParameterVO param,
                                                   List<ActionParamMappingVO> mappings,
                                                   ActionContextInfoDTO actionContext) {
+        if (FunctionParamTypeEnum.LIST.equals(param.getParamType())) {
+            var elements = assembleListElements(param, mappings, actionContext);
+            if (elements != null) {
+                return elements;
+            }
+        }
         var root = new ParamFieldNode();
         mappings.stream()
                 .filter(m -> StringUtils.isNotEmpty(m.getParamPath()))
@@ -2290,6 +2430,107 @@ public class EntityServiceImpl implements EntityService {
                 .ifPresent(m -> builder.paramValue(
                         resolveInputValue(m, param.getParamType(), actionContext, param.getParamName())));
         return builder.fields(fields.isEmpty() ? null : fields).build();
+    }
+
+    /**
+     * List 入参按子表行逐元素组装：每个元素的字段各取一列取值，按行号把各列拼成一个元素，
+     * 元素字段路径（如 position.longitude）在元素内逐层展开。
+     * <p>只处理元素字段绑定（带 paramPath）；同一参数上还有整包绑定时返回 null，整包取值优先，与对象参数一致。
+     * 某列只有单值（主表属性等实例级取值）时广播到每一行；行数以最长的一列为准，短列缺的行补 null。</p>
+     */
+    private FunctionParameter assembleListElements(FunctionParameterVO param,
+                                                   List<ActionParamMappingVO> mappings,
+                                                   ActionContextInfoDTO actionContext) {
+        if (mappings.stream().anyMatch(m -> StringUtils.isEmpty(m.getParamPath()))) {
+            return null;
+        }
+        var columns = mappings.stream()
+                .map(m -> new ListElementColumn(m, resolveInputValues(m, actionContext, param.getParamName())))
+                .collect(Collectors.toList());
+        int rowCount = columns.stream().mapToInt(c -> c.values == null ? 0 : c.values.size()).max().orElse(0);
+        List<Object> elements = new ArrayList<>(rowCount);
+        for (int i = 0; i < rowCount; i++) {
+            Map<String, Object> element = new LinkedHashMap<>();
+            for (var column : columns) {
+                insertElementPath(element, column.mapping.getParamPath(), columnValueAt(column.values, i));
+            }
+            elements.add(element);
+        }
+        return FunctionParameter.builder()
+                .paramName(param.getParamName())
+                .paramType(param.getParamType())
+                .paramValue(elements)
+                .build();
+    }
+
+    /** List 元素的一列取值：一条元素字段绑定 + 该属性按行主键倒序的取值序列 */
+    private static class ListElementColumn {
+        private final ActionParamMappingVO mapping;
+        private final List<Object> values;
+
+        private ListElementColumn(ActionParamMappingVO mapping, List<Object> values) {
+            this.mapping = mapping;
+            this.values = values;
+        }
+    }
+
+    /** 第 index 个元素在该列上的取值：单值列广播到每一行，短列缺的行返回 null */
+    private Object columnValueAt(List<Object> values, int index) {
+        if (values == null || values.isEmpty()) {
+            return null;
+        }
+        if (values.size() == 1) {
+            return values.get(0);
+        }
+        return index < values.size() ? values.get(index) : null;
+    }
+
+    /** 把元素字段的取值按路径写进元素；路径中间层是同名元素字段的嵌套结构 */
+    @SuppressWarnings("unchecked")
+    private void insertElementPath(Map<String, Object> element, String paramPath, Object value) {
+        var segments = paramPath.split("\\.");
+        Map<String, Object> node = element;
+        for (int i = 0; i < segments.length - 1; i++) {
+            var child = node.get(segments[i]);
+            if (!(child instanceof Map)) {
+                child = new LinkedHashMap<String, Object>();
+                node.put(segments[i], child);
+            }
+            node = (Map<String, Object>) child;
+        }
+        node.put(segments[segments.length - 1], value);
+    }
+
+    /**
+     * 取一个 List 入参某条元素字段绑定的全部取值（按行主键倒序），用于按行拼元素。
+     * 节点覆盖、固定值、外部输入给的是单值或整包数组：数组原样用，其它包装成单元素列表由行数决定是否广播。
+     */
+    private List<Object> resolveInputValues(ActionParamMappingVO mapping, ActionContextInfoDTO actionContext,
+                                            String ownerParamName) {
+        var overrideKey = StringUtils.isNotBlank(mapping.getParameterName())
+                ? mapping.getParameterName() : ownerParamName;
+        var nodeValue = paramValueOverride(actionContext, overrideKey);
+        if (nodeValue != null) {
+            return asValueList(nodeValue);
+        }
+        if (mapping.getSourceType() == ActionParamSourceEnum.FIXED) {
+            return asValueList(parseFixedValue(mapping.getSourceConfig()));
+        }
+        if (mapping.getSourceType() == ActionParamSourceEnum.EXTERNAL) {
+            var externalParams = actionContext.getExternalParams();
+            return asValueList(externalParams == null ? null : externalParams.get(mapping.getParameterName()));
+        }
+        var paramScopedValues = paramScopedValues(actionContext, ownerParamName, mapping.getPropertyUniqueIdentifier());
+        return CollectionUtils.isNotEmpty(paramScopedValues) ? paramScopedValues
+                : actionContext.getEntityDetailMap().get(mapping.getPropertyUniqueIdentifier());
+    }
+
+    /** 单值来源统一成按行的取值序列；已是数组的原样用，null 表示这一列没有值 */
+    private List<Object> asValueList(Object value) {
+        if (value == null) {
+            return null;
+        }
+        return value instanceof List<?> list ? new ArrayList<>(list) : Lists.newArrayList(value);
     }
 
     private void insertFieldPath(ParamFieldNode root, ActionParamMappingVO mapping) {

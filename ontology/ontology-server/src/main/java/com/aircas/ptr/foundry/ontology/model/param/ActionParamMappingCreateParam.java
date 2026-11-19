@@ -38,6 +38,10 @@ public class ActionParamMappingCreateParam {
             "标量参数或整个对象一次取值时不传", example = "position.longitude")
     private String paramPath;
 
+    @Schema(description = "List 入参按子表行读取的行数：不传按默认 10 行，顺序沿用行主键倒序；" +
+            "只对 List 入参的对象属性绑定生效，同一个 List 入参的各条绑定行必须一致", example = "100")
+    private Integer rowLimit;
+
     @Schema(description = "参数对应的对象属性ID；来源为对象属性/对象/List 时是取值属性，不绑算子的行为是目标属性", required = true, example = "fdsfa-gfdsagf-dfs")
     private String propertyUniqueIdentifier;
 

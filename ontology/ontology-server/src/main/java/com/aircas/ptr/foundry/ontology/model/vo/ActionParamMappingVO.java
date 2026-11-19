@@ -40,6 +40,9 @@ public class ActionParamMappingVO {
     @Schema(description = "对象入参的子字段路径（相对该算子参数，点分层级）；标量参数或整包取值为空", example = "position.longitude")
     private String paramPath;
 
+    @Schema(description = "List 入参按子表行读取的行数；为空按默认 10 行，顺序按行主键倒序", example = "100")
+    private Integer rowLimit;
+
     @Schema(description = "属性关联对象id", required = true, example = "abcd1234")
     private String ontologyUniqueIdentifier;
 

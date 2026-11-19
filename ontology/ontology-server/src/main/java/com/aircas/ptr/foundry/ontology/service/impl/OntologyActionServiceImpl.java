@@ -201,25 +201,35 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
 
     @Override
     public void removeByOntologyIdentifier(String ontologyIdentifier) {
-        var actions = list(new LambdaQueryWrapper<OntologyAction>()
+        var matched = list(new LambdaQueryWrapper<OntologyAction>()
                 .apply(OBJECT_IDENTIFIER_CONTAINS, ontologyIdentifier));
-        if (CollectionUtils.isEmpty(actions)) {
+        if (CollectionUtils.isEmpty(matched)) {
             return;
         }
+        // 合并后一个行为可以挂多个对象：还挂在别的对象上的只摘掉本对象，行为本身留着；
+        // 关系行为绑的边、基础函数的查询对象都写死在本对象上，随对象一起删
+        var behaviors = matched.stream()
+                .filter(action -> action.getActionKind() != ActionKindEnum.TREE)
+                .collect(Collectors.toList());
+        var removed = behaviors.stream()
+                .filter(action -> !keepsAfterDetach(action, ontologyIdentifier))
+                .collect(Collectors.toList());
+        var detached = behaviors.stream()
+                .filter(action -> keepsAfterDetach(action, ontologyIdentifier))
+                .collect(Collectors.toList());
+
         // 删对象会连带删行为，与单个删除保持同一口径：被行为树引用的行为先拦下，
         // 否则树里只剩一个永远解析不到的 api，要等到执行才暴露
         var referenced = new ArrayList<String>();
         var spaces = new LinkedHashSet<Integer>();
-        for (var action : actions) {
+        behaviors.forEach(action -> {
             if (action.getOntologySpaceId() != null) {
                 spaces.add(action.getOntologySpaceId());
             }
-        }
+        });
         for (var spaceId : spaces) {
-            var spaceApis = actions.stream()
+            var spaceApis = removed.stream()
                     .filter(action -> Objects.equals(action.getOntologySpaceId(), spaceId))
-                    // 树节点只能绑非树行为，树自身的定义不参与引用判定
-                    .filter(action -> action.getActionKind() != ActionKindEnum.TREE)
                     .map(OntologyAction::getApi)
                     .collect(Collectors.toSet());
             if (!spaceApis.isEmpty()) {
@@ -229,13 +239,71 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         PreconditionUtils.checkArgument(referenced.isEmpty(),
                 "对象下的行为被行为树引用，不能删除对象：" + String.join("；", referenced), HttpStatus.BAD_REQUEST);
 
-        var actionIds = actions.stream().map(v -> v.getId()).collect(Collectors.toList());
-        actionLinkMapper.delete(new LambdaQueryWrapper<OntologyActionLink>().in(OntologyActionLink::getOntologyActionId, actionIds));
-        remove(new LambdaQueryWrapper<OntologyAction>().in(OntologyAction::getId, actionIds));
-        ontologyActionMappingInService.remove(new LambdaQueryWrapper<OntologyActionMappingIn>().in(OntologyActionMappingIn::getOntologyActionId, actionIds));
+        var actionIds = removed.stream().map(OntologyAction::getId).collect(Collectors.toList());
+        if (!actionIds.isEmpty()) {
+            actionLinkMapper.delete(new LambdaQueryWrapper<OntologyActionLink>().in(OntologyActionLink::getOntologyActionId, actionIds));
+            remove(new LambdaQueryWrapper<OntologyAction>().in(OntologyAction::getId, actionIds));
+            ontologyActionMappingInService.remove(new LambdaQueryWrapper<OntologyActionMappingIn>().in(OntologyActionMappingIn::getOntologyActionId, actionIds));
+        }
+        detached.forEach(action -> {
+            action.setOntologyUniqueIdentifier(withoutObject(action, ontologyIdentifier));
+            updateById(action);
+        });
+        // 树的挂载列表是各节点绑定行为的并集，行为摘掉本对象后树也要重算
+        matched.stream()
+                .filter(action -> action.getActionKind() == ActionKindEnum.TREE)
+                .forEach(tree -> {
+                    tree.setOntologyUniqueIdentifier(new ArrayList<>(treeObjectIdentifiers(
+                            collectTreeActionApis(readTreeDefinition(tree.getDefinition()).getRoots(), new HashSet<>()),
+                            tree.getOntologySpaceId())));
+                    updateById(tree);
+                });
         // 调度行靠 action_id 关联行为，该列已在 alter_table_20260909.sql 中删除，此处无法再按行为清理调度；
         // 遗留的调度任务会在下次触发时因取不到行为而失败，待确认该列是否为误删后补回
         spaces.forEach(btTreeManager::invalidateSpace);
+    }
+
+    /** 摘掉这个对象后行为还能不能跑：关系行为绑的边、基础函数的查询对象都随对象一起没了 */
+    private boolean keepsAfterDetach(OntologyAction action, String ontologyIdentifier) {
+        if (withoutObject(action, ontologyIdentifier).isEmpty()) {
+            return false;
+        }
+        return action.getSubjectType() != ActionSubjectTypeEnum.LINK
+                && action.getSubjectType() != ActionSubjectTypeEnum.BASIC_FUNCTION;
+    }
+
+    private List<String> withoutObject(OntologyAction action, String ontologyIdentifier) {
+        if (CollectionUtils.isEmpty(action.getOntologyUniqueIdentifier())) {
+            return new ArrayList<>();
+        }
+        return action.getOntologyUniqueIdentifier().stream()
+                .filter(identifier -> !StringUtils.equals(identifier, ontologyIdentifier))
+                .distinct()
+                .collect(Collectors.toList());
+    }
+
+    /** 树里各行为节点绑定的行为 api；读不出来的节点跳过，与删除判定口径一致 */
+    private Set<String> collectTreeActionApis(List<BehaviorTreeNode> nodes, Set<String> apis) {
+        if (CollectionUtils.isEmpty(nodes)) {
+            return apis;
+        }
+        for (var node : nodes) {
+            if (node.getKind() == BehaviorNodeKindEnum.ACTION && node.getConfig() != null) {
+                try {
+                    var config = jsonMapper.convertValue(node.getConfig(), BehaviorActionConfig.class);
+                    if (config != null && StringUtils.isNotBlank(config.getActionApi())) {
+                        apis.add(config.getActionApi());
+                    }
+                } catch (IllegalArgumentException e) {
+                    log.warn("行为树节点配置解析失败, nodeId={}", node.getId());
+                }
+            }
+            var children = node.getChildren();
+            if (CollectionUtils.isNotEmpty(children)) {
+                collectTreeActionApis(children, apis);
+            }
+        }
+        return apis;
     }
 
     /**
@@ -960,7 +1028,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 continue;
             }
             var objectId = StringUtils.isNotBlank(mapping.getOntologyUniqueIdentifier())
-                    ? mapping.getOntologyUniqueIdentifier() : singleActionObject(bound);
+                    ? mapping.getOntologyUniqueIdentifier() : bound.primaryOntologyIdentifier();
             if (StringUtils.isNotBlank(objectId)) {
                 objects.add(objectId);
             }
@@ -3247,6 +3315,10 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         if (CollectionUtils.isEmpty(param.getMappingIns())) {
             return;
         }
+        // List 入参按子表多行取值：元素字段必须同对象同分组，各绑定行的行数必须一致
+        Map<Long, String> listElementGroups = new HashMap<>();
+        Map<Long, String> listElementGroupLabels = new HashMap<>();
+        Map<Long, Integer> listRowLimits = new HashMap<>();
         for (var mapping : param.getMappingIns()) {
             var funcParam = paramMap.get(mapping.getFunctionParamId());
             PreconditionUtils.checkArgument(funcParam != null, "无效的函数参数：" + mapping.getFunctionParamId(), HttpStatus.BAD_REQUEST);
@@ -3287,6 +3359,10 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                             HttpStatus.BAD_REQUEST);
                 }
             }
+            if (isInput) {
+                checkListRowBinding(funcParam, mapping, property, paramPath, valueFromProperty,
+                        listElementGroups, listElementGroupLabels, listRowLimits);
+            }
             // 出参写回：按行级 outputMode 判断，WRITE_PROPERTY 要求属性存在且归属该行指定的对象
             if (funcParam.getCategory().equals(FunctionParamCategoryEnum.OUTPUT)
                     && mapping.getOutputMode() == ActionOutputModeEnum.WRITE_PROPERTY) {
@@ -3311,12 +3387,62 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                     .sourceType(sourceType)
                     .sourceConfig(mapping.getSourceConfig())
                     .paramPath(paramPath)
+                    .rowLimit(mapping.getRowLimit())
                     .outputMode(funcParam.getCategory().equals(FunctionParamCategoryEnum.OUTPUT)
                             ? (mapping.getOutputMode() != null ? mapping.getOutputMode() : ActionOutputModeEnum.RESULT_ONLY)
                             : null)
                     .ontologyUniqueIdentifier(mapping.getOntologyUniqueIdentifier())
                     .build());
         }
+    }
+
+    /**
+     * List 入参按子表多行取值的两条约束：
+     * <ul>
+     *   <li>元素字段（带 param_path 的行）必须同属一个对象、一个存储分组：不同表没有共同行序，
+     *       按序号拼起来会把不同行的数据拼进同一个元素；</li>
+     *   <li>行数只对 List 入参的对象属性绑定生效，同一个 List 入参的各行必须一致，
+     *       否则一列读 10 行、另一列读 100 行只能拼出错位数据。</li>
+     * </ul>
+     */
+    private void checkListRowBinding(FunctionParamPO funcParam, ActionParamMappingCreateParam mapping,
+                                     OntologyProperty property, String paramPath, boolean valueFromProperty,
+                                     Map<Long, String> listElementGroups, Map<Long, String> listElementGroupLabels,
+                                     Map<Long, Integer> listRowLimits) {
+        var paramName = funcParam.getParamName();
+        var paramTypeName = funcParam.getParamType() == null ? "OBJECT" : funcParam.getParamType().getName();
+        boolean isList = funcParam.getParamType() == FunctionParamTypeEnum.LIST;
+        if (mapping.getRowLimit() != null) {
+            PreconditionUtils.checkArgument(mapping.getRowLimit() > 0,
+                    "行数必须大于 0：算子入参[" + paramName + "]填的是 " + mapping.getRowLimit(), HttpStatus.BAD_REQUEST);
+            PreconditionUtils.checkArgument(isList && valueFromProperty,
+                    "行数只对 List 入参的对象属性绑定生效：算子入参[" + paramName + "]是 " + paramTypeName
+                            + "，来源是 " + (valueFromProperty ? "非对象属性" : "固定值/外部输入"),
+                    HttpStatus.BAD_REQUEST);
+            var previous = listRowLimits.putIfAbsent(funcParam.getId(), mapping.getRowLimit());
+            PreconditionUtils.checkArgument(previous == null || previous.equals(mapping.getRowLimit()),
+                    "同一个 List 入参的绑定行行数必须一致：算子入参[" + paramName + "]已有行数是 "
+                            + previous + "，当前行是 " + mapping.getRowLimit(), HttpStatus.BAD_REQUEST);
+        }
+        // 整包绑定（没有子字段路径）不参与分组比对：它取的是整列值，不存在按行对齐的问题
+        if (!isList || StringUtils.isEmpty(paramPath) || property == null || !valueFromProperty) {
+            return;
+        }
+        var objectId = StringUtils.isNotEmpty(mapping.getOntologyUniqueIdentifier())
+                ? mapping.getOntologyUniqueIdentifier() : property.getOntologyUniqueIdentifier();
+        var group = StringUtils.defaultIfBlank(property.getStorageGroup(), MAIN_STORAGE_GROUP);
+        var currentKey = objectId + "|" + group;
+        var currentLabel = "属性[" + property.getDisplayName() + "]（分组 " + group + "）";
+        var previousKey = listElementGroups.putIfAbsent(funcParam.getId(), currentKey);
+        if (previousKey == null) {
+            listElementGroupLabels.put(funcParam.getId(), currentLabel);
+            return;
+        }
+        PreconditionUtils.checkArgument(previousKey.equals(currentKey),
+                "同一个 List 入参的元素字段必须绑定同一对象同一存储分组的属性：算子入参[" + paramName + "]已有 "
+                        + listElementGroupLabels.get(funcParam.getId()) + "，当前行是 " + currentLabel
+                        + "。不同对象或不同存储分组没有共同行序，按行拼对象会串行，请改绑同一分组的属性",
+                HttpStatus.BAD_REQUEST);
     }
 
     /** 子字段路径归一：去掉前端可能带上的参数名前缀，空白按「未绑定子字段」处理 */
@@ -3955,6 +4081,10 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                         mapped.add(mapping.getOntologyUniqueIdentifier());
                     }
                 });
+        if (mapped.isEmpty()) {
+            // 绑定行也没写对象id（存量数据）：退回创建时选的对象，与合并前的单值口径一致
+            return bound.primaryOntologyIdentifier();
+        }
         return mapped.size() == 1 ? mapped.iterator().next() : null;
     }
 
@@ -4079,7 +4209,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                         .id(v.getId())
                         .actionApi(v.getApi())
                         .description(v.getDescription())
-                        .ontologyUniqIdentifier(v.ontologyUniqueIdentifierText())
+                        .ontologyUniqIdentifier(v.primaryOntologyIdentifierText())
                         .displayName(v.getDisplayName())
                         .icon(v.getIcon())
                         .functionApi(v.getFunctionApi())
@@ -4111,12 +4241,9 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 .eq(OntologyAction::getApi, actionApi)
                 .eq(OntologyAction::getOntologySpaceId, ontologySpaceId));
         PreconditionUtils.checkArgument(action != null, "无效的action api", HttpStatus.BAD_REQUEST);
-        // 实例关系的挂载列表里有对端对象，详情沿用改造前的单值口径只回显创建时选的那一端（列表首位）；
-        // 对端仍保留在库里，执行和按对象查询照常用完整列表
-        var mountedObjectText = action.getSubjectType() == ActionSubjectTypeEnum.LINK
-                && CollectionUtils.isNotEmpty(action.getOntologyUniqueIdentifier())
-                ? action.getOntologyUniqueIdentifier().get(0)
-                : action.ontologyUniqueIdentifierText();
+        // 挂载列表里还有绑定读写的对象和关系对端，详情沿用改造前的单值口径只回显创建时选的那一端（列表首位）；
+        // 其余对象仍保留在库里，执行和按对象查询照常用完整列表
+        var mountedObjectText = action.primaryOntologyIdentifierText();
         var detailVO = OntologyActionDetailVO
                 .builder()
                 .id(action.getId())
@@ -4212,6 +4339,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                                 .sourceType(v.getSourceType())
                                 .sourceConfig(v.getSourceConfig())
                                 .paramPath(v.getParamPath())
+                                .rowLimit(v.getRowLimit())
                                 .propertyUniqueIdentifier(v.getPropertyUniqueIdentifier())
                                 .propertyType(prop == null ? null : prop.getPropertyType())
                                 .displayName(prop == null ? null : prop.getDisplayName())
@@ -4458,7 +4586,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     /** 基础函数行为测试：按配置真实查一遍，选了实例的对象只查该实例 */
     private ActionTestResultVO testBasicFunctionAction(OntologyAction action, OntologyActionDetailVO detail,
                                                        ActionInvokeParam param) {
-        var result = runBasicFunctionAction(detail, singleActionObject(action),
+        // 请求按对象传了实例就能认出是哪个挂载对象；只给对象级主键时沿用合并前的单值口径
+        var result = runBasicFunctionAction(detail, requestActionObject(action, param),
                 param.getEntityPrimaryKey(), param.getEntityPrimaryKeys(), param.getWriteBackEntityPrimaryKey());
         return testResult(action, "行为执行成功").setResult(result);
     }

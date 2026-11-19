@@ -10,6 +10,8 @@ import com.aircas.ptr.foundry.ontology.model.dto.OntologyCreateDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.OntologyMetaDataDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.OntologyPropertyDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.OntologyRelationDTO;
+import com.aircas.ptr.foundry.ontology.model.enums.ActionKindEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.ActionParamSourceEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.MetadataValueTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyExportTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyLinkTypeEnum;
@@ -465,11 +467,13 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
             }).collect(Collectors.toList());
             linkService.saveBatch(childLinks);
         }
-        // 创建行为（不创建行为调度）
+        // 创建行为（不创建行为调度）；行为树是空间级资源，节点引用的是原行为的 api，不随对象继承
         List<OntologyActionMappingIn> mappingIns = Lists.newArrayList();
         List<OntologyActionLink> actionLinks = Lists.newArrayList();
         var actionEntity = actionService.list(new LambdaQueryWrapper<OntologyAction>()
-                .apply("strpos(',' || ontology_unique_identifier || ',', concat(',', {0}, ',')) > 0", parentIdentifier));
+                .apply("strpos(',' || ontology_unique_identifier || ',', concat(',', {0}, ',')) > 0", parentIdentifier)
+                .and(w -> w.isNull(OntologyAction::getActionKind)
+                        .or().ne(OntologyAction::getActionKind, ActionKindEnum.TREE)));
 
         actionEntity.forEach(action -> {
             var ontologyAction = OntologyAction.builder().api(ontologyCreateParam.getApiName() + "_" + action.getApi())
@@ -477,6 +481,15 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                     .displayName(action.getDisplayName())
                     .functionApi(action.getFunctionApi())
                     .status(action.getStatus())
+                    .actionKind(action.getActionKind())
+                    .subjectType(action.getSubjectType())
+                    .actionOperation(action.getActionOperation())
+                    .storageGroup(action.getStorageGroup())
+                    .outputMode(action.getOutputMode())
+                    // 基础函数的查询对象写在配置里，继承时把父对象换成子对象
+                    .basicFunctionConfig(StringUtils.replace(action.getBasicFunctionConfig(), parentIdentifier, childIdentifier))
+                    .actionCategoryId(action.getActionCategoryId())
+                    .ontologySpaceId(action.getOntologySpaceId())
                     // 挂载对象里父对象换成新建的子对象，其余对象照旧
                     .ontologyUniqueIdentifier(action.getOntologyUniqueIdentifier() == null ? new ArrayList<>()
                             : action.getOntologyUniqueIdentifier().stream()
@@ -505,6 +518,15 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                         .ontologyActionId(ontologyActionId)
                         .functionParamId(v.getFunctionParamId())
                         .functionParamExpression(v.getFunctionParamExpression())
+                        .parameterName(v.getParameterName())
+                        // 行级对象id决定这行读/写哪个对象，父对象的那行换成子对象，绑在别的对象上的照旧
+                        .ontologyUniqueIdentifier(parentIdentifier.equals(v.getOntologyUniqueIdentifier())
+                                ? childIdentifier : v.getOntologyUniqueIdentifier())
+                        .sourceType(v.getSourceType())
+                        .sourceConfig(remapListSourceConfig(v.getSourceConfig(), v.getSourceType(), parentProperties, childProps))
+                        .paramPath(v.getParamPath())
+                        .rowLimit(v.getRowLimit())
+                        .outputMode(v.getOutputMode())
                         .build();
             }).collect(Collectors.toList()));
         });
@@ -512,6 +534,25 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         actionLinkService.saveBatch(actionLinks);
     }
 
+
+    /** List 来源的配置存着一组属性id，继承时换成子对象的属性；其他来源是字面量，原样保留 */
+    private String remapListSourceConfig(String sourceConfig, ActionParamSourceEnum sourceType,
+                                         List<OntologyProperty> parentProperties, List<OntologyProperty> childProps) {
+        if (sourceType != ActionParamSourceEnum.LIST || StringUtils.isBlank(sourceConfig)) {
+            return sourceConfig;
+        }
+        try {
+            List<String> propertyIds = objectMapper.readValue(sourceConfig, new TypeReference<List<String>>() {
+            });
+            return objectMapper.writeValueAsString(propertyIds.stream()
+                    .map(id -> findChildOntologyProperty(parentProperties, childProps, id))
+                    .collect(Collectors.toList()));
+        } catch (Exception e) {
+            // 形状认不出来就按原值复制：继承失败比留下同一份配置更难排查
+            log.warn("继承行为时无法改写 List 入参来源配置，按原值复制：{}", sourceConfig);
+            return sourceConfig;
+        }
+    }
 
     private String findChildOntologyProperty(List<OntologyProperty> parentProperties, List<OntologyProperty> childProps, String targetUniqId) {
         var property = parentProperties.stream()

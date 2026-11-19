@@ -30,8 +30,8 @@ public class OntologyActionInfoVO {
     @Schema(name = "icon", description = "对象icon", example = "http://127.0.0.1/a.jpeg")
     private String icon;
 
-    @Schema(name = "ontologyUniqIdentifier", description = "行为的挂载对象id，逗号分隔，可以有多个（入参取值、出参写回、关系两端）",
-            example = "3f2a9c1e-7b4d-4a86-9e21-5c8d1f0a6b34,a5e8c206-3f17-4d92-8b74-1c6f9d3e5028")
+    @Schema(name = "ontologyUniqIdentifier", description = "创建时选的对象id；关系行为只回显创建时选的那一端，其余不参与回填",
+            example = "3f2a9c1e-7b4d-4a86-9e21-5c8d1f0a6b34")
     private String ontologyUniqIdentifier;
 
     @Schema(name = "actionApi", description = "api名称", example = "satellite")
