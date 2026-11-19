@@ -8,6 +8,7 @@ import com.aircas.ptr.foundry.ontology.model.dto.EntityDatasourceColumnDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.EntityDatasourceDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.EntityDatasourceSchemaChangeEventDTO;
 import com.aircas.ptr.foundry.ontology.model.enums.DatasourceEventTypeEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.MetadataValueTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.param.*;
 import com.aircas.ptr.foundry.ontology.model.po.*;
 import com.aircas.ptr.foundry.ontology.model.vo.*;
@@ -813,6 +814,8 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                 .children(param.getChildren())
                 .name(param.getName())
                 .path(parentPath + param.getName())
+                .valueType(param.getValueType())
+                .value(param.getValue())
                 .enumValues(param.getEnumValues())
                 .build();
 
@@ -828,8 +831,8 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                         .name(node.getName())
                         .parentId(node.getParentId())
                         .path(node.getPath())
-                        .enumValues(CollectionUtils.isNotEmpty(node.getEnumValues()) ?
-                                String.join(",", node.getEnumValues()) : null)
+                        .valueType(resolveValueType(node.getValueType(), node.getEnumValues()))
+                        .value(resolveValue(node.getValue(), node.getEnumValues()))
                         .build();
                 batchList.add(schema);
             }
@@ -846,6 +849,8 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                                 .path(node.getPath() + "/" + child.getName())
                                 .name(child.getName())
                                 .children(child.getChildren())
+                                .valueType(child.getValueType())
+                                .value(child.getValue())
                                 .enumValues(child.getEnumValues())
                                 .build();
                         nextLevel.add(childNode);
@@ -884,10 +889,24 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
             var paths = parentSchema.getPath().split("/");
             paths[paths.length - 1] = param.getName();
             var newPath = String.join("/", paths);
+            var newType = param.getValueType();
+            var newValue = param.getValue();
+            if (newType == null && CollectionUtils.isNotEmpty(param.getEnumValues())) {
+                newType = MetadataValueTypeEnum.ENUM;
+                if (newValue == null) {
+                    newValue = String.join(",", param.getEnumValues());
+                }
+            }
+            var finalType = newType;
+            var finalValue = newValue;
             allSchemas.forEach(schema -> {
                 if (schema.getId().equals(param.getMetadataSchemaId())) {
-                    schema.setName(param.getName())
-                            .setEnumValues(CollectionUtils.isNotEmpty(param.getEnumValues()) ? String.join(",", param.getEnumValues()) : null);
+                    schema.setName(param.getName());
+                    if (finalType != null) {
+                        schema.setValueType(finalType).setValue(finalValue);
+                    } else if (finalValue != null) {
+                        schema.setValue(finalValue);
+                    }
                     schema.setPath(newPath);
                 } else {
                     var updatedPath = newPath + schema.getPath().substring(parentSchema.getPath().length());
@@ -895,6 +914,12 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                 }
             });
             propertyMetadataSchemaService.updateBatchById(allSchemas);
+            // updateBatchById 忽略 null 字段：显式传了类型但值为 null 时需清空 value（如 RANGE→INPUT）
+            if (finalType != null && finalValue == null) {
+                propertyMetadataSchemaService.update(new LambdaUpdateWrapper<PropertyMetadataSchema>()
+                        .eq(PropertyMetadataSchema::getId, param.getMetadataSchemaId())
+                        .set(PropertyMetadataSchema::getValue, null));
+            }
         }
     }
 
@@ -953,8 +978,8 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                 boolean isLeaf = isLast && allPaths.stream().noneMatch(p -> p.startsWith(path + "/"));
 
                 if (isLeaf) {
-                    String enumValues = schema.getEnumValues();
-                    current.put(part, StringUtils.isEmpty(enumValues) ? "" : enumValues);
+                    String value = schema.getValue();
+                    current.put(part, StringUtils.isEmpty(value) ? "" : value);
                 } else {
                     if (!current.has(part)) {
                         current.set(part, jsonMapper.createObjectNode());
@@ -1222,8 +1247,8 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
 
     private PropertyMetadataSchemaVO buildSchemaVO(PropertyMetadataSchema schema, Map<Integer, List<PropertyMetadataSchema>> schemaMap) {
         var vo = new PropertyMetadataSchemaVO()
-                .setEnumValues(StringUtils.isEmpty(schema.getEnumValues()) ?
-                        null : Lists.newArrayList(StringUtils.split(schema.getEnumValues(), ",")))
+                .setValueType(schema.getValueType())
+                .setValue(schema.getValue())
                 .setSchemaId(schema.getId())
                 .setName(schema.getName());
         var children = schemaMap.get(schema.getId());
@@ -1233,6 +1258,21 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                     .collect(Collectors.toList()));
         }
         return vo;
+    }
+
+    /** valueType 未传时：旧 enumValues 非空视为 ENUM（兼容旧导出文件/旧前端），否则默认 INPUT */
+    private MetadataValueTypeEnum resolveValueType(MetadataValueTypeEnum valueType, List<String> enumValues) {
+        if (valueType != null) {
+            return valueType;
+        }
+        return CollectionUtils.isNotEmpty(enumValues) ? MetadataValueTypeEnum.ENUM : MetadataValueTypeEnum.INPUT;
+    }
+
+    private String resolveValue(String value, List<String> enumValues) {
+        if (value != null) {
+            return value;
+        }
+        return CollectionUtils.isNotEmpty(enumValues) ? String.join(",", enumValues) : null;
     }
 
     private PropertyCategoryVO buildCategoryVO(PropertyCategory category,

@@ -2,6 +2,7 @@ package com.aircas.ptr.foundry.ontology.mcp.tools;
 
 import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import com.aircas.ptr.foundry.ontology.mcp.McpTools;
+import com.aircas.ptr.foundry.ontology.model.enums.MetadataValueTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.Status;
 import com.aircas.ptr.foundry.ontology.model.param.CategoryNode;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyCreateParam;
@@ -531,10 +532,12 @@ public class OntologyPropertyMcpTools implements McpTools {
 
     @Tool(description = """
             创建对象的属性元数据 schema 节点（对应 REST 端点 POST /property/metadata_schema）。
-            元数据 schema 定义属性 metadata 的取值结构（如"信息等级：高/中/低"），可携带子节点一次建出子树。
+            元数据 schema 定义属性 metadata 的取值结构，可携带子节点一次建出子树。
             parentId 传 0 表示创建根节点（仅当该对象还没有元数据 schema 时允许）；传已有 schema 节点 id 则在其下创建子节点。
-            enumValuesJson 为可选的枚举值 JSON 字符串数组，如 ["高","中","低"]；不传表示该节点取值不受枚举限制。
-            childrenJson 为可选的子节点 JSON 数组，元素形如 {"name":"子节点","enumValues":["a","b"],"children":[...]}，可递归嵌套。
+            valueType 为取值类型：INPUT 输入值（自由填写）/ ENUM 枚举值 / RANGE 范围值；不传默认 INPUT。
+            value 为取值内容字符串：ENUM 填逗号分隔候选项如 "高,中,低"（前端下拉提示，赋值时不强制校验成员），
+            RANGE 填 "最小值,最大值" 如 "0,100"，INPUT 可空。
+            childrenJson 为可选的子节点 JSON 数组，元素形如 {"name":"子节点","valueType":"ENUM","value":"a,b","children":[...]}，可递归嵌套。
             业务锁：对象下只要有任一属性已赋值元数据（metadata 非空），schema 的新增会被拒绝，需先清空属性元数据。
             副作用：按层级批量写入元数据 schema 表。成功返回中文结果说明。
             """)
@@ -542,8 +545,9 @@ public class OntologyPropertyMcpTools implements McpTools {
             @ToolParam(description = "对象唯一标识（ontologyUniqueIdentifier）") String ontologyUniqueIdentifier,
             @ToolParam(description = "父节点 id；0 表示创建根节点（仅当对象还没有元数据 schema 时允许）") Integer parentId,
             @ToolParam(description = "元数据 schema 节点名称") String name,
-            @ToolParam(description = "枚举值 JSON 字符串数组，如 [\"高\",\"中\",\"低\"]，可为空", required = false) String enumValuesJson,
-            @ToolParam(description = "子节点 JSON 数组字符串，元素形如 {\"name\":\"子节点\",\"enumValues\":[...],\"children\":[...]}，可为空", required = false) String childrenJson) {
+            @ToolParam(description = "取值类型：INPUT 输入值 / ENUM 枚举值 / RANGE 范围值，不传默认 INPUT", required = false) String valueType,
+            @ToolParam(description = "取值内容字符串：ENUM 逗号分隔候选项如\"高,中,低\"，RANGE 如\"0,100\"，INPUT 可空", required = false) String value,
+            @ToolParam(description = "子节点 JSON 数组字符串，元素形如 {\"name\":\"子节点\",\"valueType\":\"ENUM\",\"value\":\"a,b\",\"children\":[...]}，可为空", required = false) String childrenJson) {
         requireText(ontologyUniqueIdentifier, "ontologyUniqueIdentifier");
         requireOntologyExists(ontologyUniqueIdentifier);
         requireText(name, "name");
@@ -554,7 +558,8 @@ public class OntologyPropertyMcpTools implements McpTools {
         param.setOntologyIdentifier(ontologyUniqueIdentifier);
         param.setParentId(parentId);
         param.setName(name);
-        param.setEnumValues(parseEnumValues(enumValuesJson));
+        param.setValueType(parseValueType(valueType));
+        param.setValue(value);
         if (StringUtils.isNotBlank(childrenJson)) {
             param.setChildren(parseJson(childrenJson,
                     new TypeReference<List<PropertyMetadataSchemaCreateParam.MetadataSchemaNode>>() {
@@ -566,16 +571,18 @@ public class OntologyPropertyMcpTools implements McpTools {
 
     @Tool(description = """
             修改对象的属性元数据 schema 节点（对应 REST 端点 PUT /property/metadata_schema）。
-            只支持修改节点名称和枚举值列表，不支持移动节点或增删子节点。
-            enumValuesJson 为枚举值 JSON 字符串数组，如 ["一级","二级","三级"]；不传则清空该节点的枚举值限制。
+            只支持修改节点名称、取值类型与取值内容，不支持移动节点或增删子节点。
+            valueType 可选 INPUT 输入值 / ENUM 枚举值 / RANGE 范围值：不传保持原类型；传了则连同 value 一起更新（value 不传清空值）。
+            value 为取值内容字符串：ENUM 逗号分隔候选项如 "一级,二级,三级"，RANGE 如 "0,100"，INPUT 可空；只传 value 不传 valueType 时仅更新值。
             业务锁：对象下只要有任一属性已赋值元数据（metadata 非空），schema 的修改会被拒绝，需先清空属性元数据。
-            副作用：更新节点名称与枚举值，并同步重写其全部子孙节点的路径。成功返回中文结果说明。
+            副作用：更新节点名称与取值配置，并同步重写其全部子孙节点的路径。成功返回中文结果说明。
             """)
     public String updateMetadataSchema(
             @ToolParam(description = "对象唯一标识（ontologyUniqueIdentifier）") String ontologyUniqueIdentifier,
             @ToolParam(description = "要修改的元数据 schema 节点 id（metadataSchemaId）") Integer metadataSchemaId,
             @ToolParam(description = "新的节点名称") String name,
-            @ToolParam(description = "枚举值 JSON 字符串数组，如 [\"一级\",\"二级\",\"三级\"]，不传则清空枚举值", required = false) String enumValuesJson) {
+            @ToolParam(description = "取值类型：INPUT 输入值 / ENUM 枚举值 / RANGE 范围值，不传保持原类型", required = false) String valueType,
+            @ToolParam(description = "取值内容字符串：ENUM 逗号分隔候选项，RANGE 如\"0,100\"，INPUT 可空", required = false) String value) {
         requireText(ontologyUniqueIdentifier, "ontologyUniqueIdentifier");
         requireOntologyExists(ontologyUniqueIdentifier);
         requireText(name, "name");
@@ -586,7 +593,8 @@ public class OntologyPropertyMcpTools implements McpTools {
         param.setOntologyIdentifier(ontologyUniqueIdentifier);
         param.setMetadataSchemaId(metadataSchemaId);
         param.setName(name);
-        param.setEnumValues(parseEnumValues(enumValuesJson));
+        param.setValueType(parseValueType(valueType));
+        param.setValue(value);
         ontologyPropertyService.updateMetadataSchema(param);
         return "属性元数据schema更新成功：" + name + "（metadataSchemaId=" + metadataSchemaId + "）";
     }
@@ -615,8 +623,8 @@ public class OntologyPropertyMcpTools implements McpTools {
     @Tool(description = """
             查询对象的属性元数据 schema（对应 REST 端点 GET /property/metadata_schema）。
             当需要知道属性 metadata 应按什么结构赋值时使用（createProperty/updateProperty 的 metadata 须符合此结构）。
-            返回 JSON 对象：按 schema 路径嵌套，叶子节点为逗号分隔的枚举值字符串（无枚举限制时为空字符串 ""），
-            非叶子节点为嵌套对象。例如 {"信息等级":"高,中,低","来源":{"渠道":""}}。
+            返回 JSON 对象：按 schema 路径嵌套，叶子节点为取值内容字符串（ENUM 是逗号分隔候选项，RANGE 如 "0,100"，无值时为空字符串 ""），
+            非叶子节点为嵌套对象。例如 {"信息等级":"高,中,低","来源":{"渠道":""}}。取值类型（INPUT/ENUM/RANGE）用 getMetadataSchemaTree 查。
             对象未定义元数据 schema 时返回 null。需要带节点 id 的树结构时用 getMetadataSchemaTree。
             """)
     public JsonNode getMetadataSchema(
@@ -629,7 +637,8 @@ public class OntologyPropertyMcpTools implements McpTools {
     @Tool(description = """
             查询对象的属性元数据 schema 树（对应 REST 端点 GET /property/metadata_schema/tree）。
             当需要修改/删除 schema 节点、先获取节点 id 时使用。
-            返回 PropertyMetadataSchemaVO 树：schemaId（节点 id）、name、enumValues（枚举值字符串列表）、children（子节点）。
+            返回 PropertyMetadataSchemaVO 树：schemaId（节点 id）、name、valueType（INPUT 输入值/ENUM 枚举值/RANGE 范围值）、
+            value（取值内容字符串：ENUM 逗号分隔候选项，RANGE 如 "0,100"）、children（子节点）。
             对象未定义元数据 schema 时返回 null。只需取值结构时用 getMetadataSchema。
             """)
     public PropertyMetadataSchemaVO getMetadataSchemaTree(
@@ -703,11 +712,14 @@ public class OntologyPropertyMcpTools implements McpTools {
         }
     }
 
-    private List<String> parseEnumValues(String enumValuesJson) {
-        if (StringUtils.isBlank(enumValuesJson)) {
+    private MetadataValueTypeEnum parseValueType(String valueType) {
+        if (StringUtils.isBlank(valueType)) {
             return null;
         }
-        return parseJson(enumValuesJson, new TypeReference<List<String>>() {
-        }, "enumValuesJson");
+        try {
+            return MetadataValueTypeEnum.valueOf(valueType.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("valueType 不合法：" + valueType + "，可选值 INPUT/ENUM/RANGE");
+        }
     }
 }

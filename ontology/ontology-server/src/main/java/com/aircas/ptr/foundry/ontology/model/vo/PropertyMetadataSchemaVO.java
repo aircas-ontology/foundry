@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.vo;
 
+import com.aircas.ptr.foundry.ontology.model.enums.MetadataValueTypeEnum;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -23,8 +24,11 @@ public class PropertyMetadataSchemaVO {
     @Schema(name = "name", description = "名称", example = "等级")
     private String name;
 
-    @Schema(name = "enumValues", description = "可用枚举值")
-    private List<String> enumValues;
+    @Schema(name = "valueType", description = "取值类型：INPUT 输入值 / ENUM 枚举值 / RANGE 范围值")
+    private MetadataValueTypeEnum valueType;
+
+    @Schema(name = "value", description = "取值内容字符串：ENUM 为逗号分隔候选项，RANGE 形如\"0,100\"，INPUT 可空")
+    private String value;
 
     @Schema(name = "children", description = "子节点")
     private List<PropertyMetadataSchemaVO> children;
