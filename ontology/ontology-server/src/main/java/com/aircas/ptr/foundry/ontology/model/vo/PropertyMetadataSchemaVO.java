@@ -21,6 +21,9 @@ public class PropertyMetadataSchemaVO {
     @Schema(name = "schemaId", description = "schemaId", example = "1")
     private Integer schemaId;
 
+    @Schema(name = "parentId", description = "父节点 id，根节点为 0", example = "0")
+    private Integer parentId;
+
     @Schema(name = "name", description = "名称", example = "等级")
     private String name;
 

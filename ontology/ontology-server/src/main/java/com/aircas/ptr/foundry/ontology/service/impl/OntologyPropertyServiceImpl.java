@@ -886,9 +886,39 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                         .or()
                         .likeRight(PropertyMetadataSchema::getPath, parentSchema.getPath() + "/")));
         if (CollectionUtils.isNotEmpty(allSchemas)) {
-            var paths = parentSchema.getPath().split("/");
-            paths[paths.length - 1] = param.getName();
-            var newPath = String.join("/", paths);
+            var oldPath = parentSchema.getPath();
+            final String newPath;
+            final Integer newParentId;
+            if (param.getParentId() != null && !param.getParentId().equals(parentSchema.getParentId())) {
+                var targetParentId = param.getParentId();
+                String parentPath;
+                if (targetParentId.equals(0)) {
+                    PreconditionUtils.checkArgument(Integer.valueOf(0).equals(parentSchema.getParentId()),
+                            "对象仅允许一个根节点，不能将其他节点移动为根", HttpStatus.BAD_REQUEST);
+                    parentPath = "";
+                } else {
+                    var targetParent = propertyMetadataSchemaService.getOne(new LambdaQueryWrapper<PropertyMetadataSchema>()
+                            .eq(PropertyMetadataSchema::getOntologyUniqueIdentifier, param.getOntologyIdentifier())
+                            .eq(PropertyMetadataSchema::getId, targetParentId));
+                    PreconditionUtils.checkArgument(targetParent != null, "父节点" + targetParentId + "不存在", HttpStatus.BAD_REQUEST);
+                    PreconditionUtils.checkArgument(!targetParent.getPath().equals(oldPath)
+                                    && !targetParent.getPath().startsWith(oldPath + "/"),
+                            "不能将节点移动到自身或其子孙节点下", HttpStatus.BAD_REQUEST);
+                    parentPath = targetParent.getPath() + "/";
+                }
+                newPath = parentPath + param.getName();
+                newParentId = targetParentId;
+            } else {
+                var paths = oldPath.split("/");
+                paths[paths.length - 1] = param.getName();
+                newPath = String.join("/", paths);
+                newParentId = parentSchema.getParentId();
+            }
+            var collision = propertyMetadataSchemaService.getOne(new LambdaQueryWrapper<PropertyMetadataSchema>()
+                    .eq(PropertyMetadataSchema::getOntologyUniqueIdentifier, param.getOntologyIdentifier())
+                    .eq(PropertyMetadataSchema::getPath, newPath)
+                    .ne(PropertyMetadataSchema::getId, param.getMetadataSchemaId()));
+            PreconditionUtils.checkArgument(collision == null, "目标父节点下已存在同名节点：" + param.getName(), HttpStatus.BAD_REQUEST);
             var newType = param.getValueType();
             var newValue = param.getValue();
             if (newType == null && CollectionUtils.isNotEmpty(param.getEnumValues())) {
@@ -908,8 +938,9 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                         schema.setValue(finalValue);
                     }
                     schema.setPath(newPath);
+                    schema.setParentId(newParentId);
                 } else {
-                    var updatedPath = newPath + schema.getPath().substring(parentSchema.getPath().length());
+                    var updatedPath = newPath + schema.getPath().substring(oldPath.length());
                     schema.setPath(updatedPath);
                 }
             });
@@ -1250,6 +1281,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                 .setValueType(schema.getValueType())
                 .setValue(schema.getValue())
                 .setSchemaId(schema.getId())
+                .setParentId(schema.getParentId())
                 .setName(schema.getName());
         var children = schemaMap.get(schema.getId());
         if (CollectionUtils.isNotEmpty(children)) {

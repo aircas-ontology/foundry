@@ -571,18 +571,20 @@ public class OntologyPropertyMcpTools implements McpTools {
 
     @Tool(description = """
             修改对象的属性元数据 schema 节点（对应 REST 端点 PUT /property/metadata_schema）。
-            只支持修改节点名称、取值类型与取值内容，不支持移动节点或增删子节点。
+            支持修改节点名称、取值类型、取值内容，以及通过 parentId 移动节点到新的父级（不支持增删子节点）。
+            parentId 可选：不传保持原父级；传了则移动节点，子孙节点路径同步重写。0 表示根节点（仅节点本身已是根时允许）；不能移动到自身或其子孙节点下；目标父节点下已有同名节点会被拒绝。
             valueType 可选 INPUT 输入值 / ENUM 枚举值 / RANGE 范围值：不传保持原类型；传了则连同 value 一起更新（value 不传清空值）。
             value 为取值内容字符串：ENUM 逗号分隔候选项如 "一级,二级,三级"，RANGE 如 "0,100"，INPUT 可空；只传 value 不传 valueType 时仅更新值。
             业务锁：对象下只要有任一属性已赋值元数据（metadata 非空），schema 的修改会被拒绝，需先清空属性元数据。
-            副作用：更新节点名称与取值配置，并同步重写其全部子孙节点的路径。成功返回中文结果说明。
+            副作用：更新节点名称、取值配置与父级，并同步重写其全部子孙节点的路径。成功返回中文结果说明。
             """)
     public String updateMetadataSchema(
             @ToolParam(description = "对象唯一标识（ontologyUniqueIdentifier）") String ontologyUniqueIdentifier,
             @ToolParam(description = "要修改的元数据 schema 节点 id（metadataSchemaId）") Integer metadataSchemaId,
             @ToolParam(description = "新的节点名称") String name,
             @ToolParam(description = "取值类型：INPUT 输入值 / ENUM 枚举值 / RANGE 范围值，不传保持原类型", required = false) String valueType,
-            @ToolParam(description = "取值内容字符串：ENUM 逗号分隔候选项，RANGE 如\"0,100\"，INPUT 可空", required = false) String value) {
+            @ToolParam(description = "取值内容字符串：ENUM 逗号分隔候选项，RANGE 如\"0,100\"，INPUT 可空", required = false) String value,
+            @ToolParam(description = "新父节点 id：不传保持原父级；0 表示根节点（仅节点本身已是根时允许）；不能移动到自身或子孙节点下", required = false) Integer parentId) {
         requireText(ontologyUniqueIdentifier, "ontologyUniqueIdentifier");
         requireOntologyExists(ontologyUniqueIdentifier);
         requireText(name, "name");
@@ -595,6 +597,7 @@ public class OntologyPropertyMcpTools implements McpTools {
         param.setName(name);
         param.setValueType(parseValueType(valueType));
         param.setValue(value);
+        param.setParentId(parentId);
         ontologyPropertyService.updateMetadataSchema(param);
         return "属性元数据schema更新成功：" + name + "（metadataSchemaId=" + metadataSchemaId + "）";
     }
