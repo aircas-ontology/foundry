@@ -1,0 +1,255 @@
+# 配置约定：
+# 1. 本文件为唯一配置（application-local.yml 已合并进来），结构与环境值都在此维护。
+# 2. 值来源：62 部署配置 /home/sthq/ontology-server-jdk21/application.yml（2026-11-17 对齐）。
+# 3. 本地差异：orekit 用本机绝对路径；xxl executor ip 留空自动探测；license 关闭。
+# 4. 如仍需用 application-local.yml 做个人覆盖，profiles.active=local 会自动加载（该文件已被 .gitignore 忽略）。
+# 5. 注意：Spring Boot 强类型属性（如 DataSize、int）不要留空字符串，需给出合法值，或直接删除该 key 使用默认值。
+server:
+  port: 37002
+  servlet:
+    context-path: /ontology
+
+
+spring:
+  profiles:
+    active: local
+  jackson:
+    default-property-inclusion: non_null
+  application:
+    name: ontology
+  main:
+    allow-circular-references: true
+  servlet:
+    multipart:
+      max-file-size: 2048MB
+      max-request-size: 2048MB
+  datasource:
+    main:
+      driver-class-name: org.postgresql.Driver
+      url: jdbc:postgresql://172.16.18.58:35432/postgres?currentSchema=ontology&rewriteBatchedStatements=true&TimeZone=UTC
+      username: postgres
+      password: 123456
+      validation-query: SELECT 1
+      test-on-borrow: true
+    datalake:
+      driver-class-name: org.postgresql.Driver
+      url: jdbc:postgresql://172.16.18.58:35432/entity_datasource
+      username: postgres
+      password: 123456
+    arangodb:
+      host: 172.16.18.62
+      port: 8529
+      database: entity
+      collections: node,relation
+      user: root
+      password: root
+      connections:
+        max: 8
+        ttl: 1800
+      timeout:
+        connect: 5000
+        request: 10000
+  rabbitmq:
+    host: 172.16.18.62
+    port: 5672
+    username: admin
+    password: C7O5O4AC2NAFQp9dTvwL
+    virtual-host: /
+  kafka:
+    bootstrap-servers: 172.16.18.62:39092
+    consumer:
+      group-id: cdc-monitor-group
+      auto-offset-reset: earliest
+      enable-auto-commit: true
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+  elasticsearch:
+    uris: http://172.16.18.62:9200
+    connection-timeout: 5s
+    socket-timeout: 30s
+  data:
+    elasticsearch:
+      repositories:
+        enabled: true
+    redis:
+      host: 172.16.18.58
+      port: 36379
+      password:
+      database: 0
+  ai:
+    mcp:
+      server:
+        name: ontology-mcp-server
+        version: 1.0.0
+        type: sync
+        # 传输协议：SSE(HTTP+SSE，旧) / STATELESS(单请求纯JSON，无会话) / STREAMABLE(Streamable HTTP，现行规范)
+        protocol: STATELESS
+
+mcp:
+  service-token: foundry-mcp-internal-token-2026
+
+cdc:
+  connect:
+    rest:
+      url: http://172.16.18.62:8083
+  datasource:
+    hostname: 172.16.18.58
+    port: 35432
+  ontology-topic-prefix: ontology_server
+  ontology-meta: ontology.ontology_meta
+  ontology-space: ontology.ontology_space
+  ontology-property: ontology.ontology_property
+  ontology-link-group: ontology.ontology_link_group
+  entity-datasource-prefix: entity_datasource_server
+
+rabbitmq:
+  exchange: entity.schema.exchange
+  queue: entity.schema.queue
+  routing-key: entity.schema
+
+
+
+ontology:
+  swagger:
+    enable: true
+  space-binding:
+    users:
+      admin2: 89
+      admin3: 88
+  # 函数编排（LiteFlow 组合函数）运行期配置
+  composite:
+    # JS 转换脚本通过 node 子进程执行（JDK17 无 Nashorn/GraalJS），可用值：node 的绝对路径或命令名
+    node-executable: node
+    # 单个转换脚本的执行超时（秒）
+    script-timeout-seconds: 10
+
+# LiteFlow 规则引擎：编排执行链全部由后端在运行期动态注册（CompositeChainRegistry），
+# 因此不配置 rule-source；LiteFlow 在 rule-source 为空时不会加载任何静态规则文件。
+liteflow:
+  enable: true
+  print-banner: false
+  print-execution-log: false
+  # JDK17 下虚拟线程与 LiteFlow 线程池隔离组合不稳定，统一关闭
+  enable-virtual-thread: false
+  monitor:
+    enable-log: false
+  # LiteFlow 2.16.3 的 actuator 端点编译时未带 -parameters，Boot4 开启 JMX（IDEA 默认勾选
+  # Enable JMX agent）时导出端点会因取不到参数名而启动失败；项目未使用其 metrics，直接关闭
+  metrics:
+    enabled: false
+
+# ES 服务端为 7.17.3，Boot4 自带 elasticsearch-java 9.x 要求 cluster.health 响应必须含
+# unassigned_primary_shards（ES 8+ 才有），actuator 健康检查反序列化必失败，关闭该检查
+management:
+  health:
+    elasticsearch:
+      enabled: false
+
+# Knife4j / SpringDoc OpenAPI 3 配置
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    path: /swagger-ui.html
+
+
+jwt:
+  # HS256 要求密钥 ≥ 256 bits（32 字节），当前 64 字节兼容 HS256/HS384/HS512，预防未来切换算法报错
+  # 生产环境建议通过环境变量 JWT_SECRET 注入随机密钥，避免写死在仓库
+  secret: ontology-jwt-secret-key-2026-foundry-aircas-ptr-hs256-random-v1a
+  access-token-expire-days: 365
+  refresh-token-expire-days: 30
+
+
+minio:
+  endpoint: http://172.16.18.58:9000
+  accessKey: minioadmin
+  secretKey: minioadmin
+  bucketName: ptr
+
+
+orekit:
+  data:
+    # 本地 IDE/mvn 跑法用本机绝对路径；容器部署时改为 /app/orekit-data（docker-compose 挂载）
+    path: /app/orekit-data
+
+
+
+
+xxl:
+  job:
+    baseUrl: http://172.16.18.58:18888/xxl-job-admin
+    admin:
+      addresses: ${xxl.job.baseUrl}
+      addJobUrl:  ${xxl.job.baseUrl}/jobinfo/add
+      queryJobExecutorUrl: ${xxl.job.baseUrl}/jobgroup/pageList
+      queryJobInfoUrl: ${xxl.job.baseUrl}/jobinfo/pageList
+      updateJobUrl: ${xxl.job.baseUrl}/jobinfo/update
+      removeJobUrl: ${xxl.job.baseUrl}/jobinfo/remove
+      startJobUrl: ${xxl.job.baseUrl}/jobinfo/start
+      stopJobUrl: ${xxl.job.baseUrl}/jobinfo/stop
+    accessToken: iecas123
+    cookie: XXL_JOB_LOGIN_IDENTITY=7b226964223a312c22757365726e616d65223a2261646d696e222c2270617373776f7264223a226531306164633339343962613539616262653536653035376632306638383365222c22726f6c65223a312c227065726d697373696f6e223a6e756c6c7d
+    executor:
+      appname: ontology-xxl-job-executor-jdk21
+      address:
+      # ip 留空自动探测（62 部署配置写死 172.16.18.62）
+      ip:
+      port: 39002
+      logpath: ./logs/xxl-job/jobhandler
+      logretentiondays: 30
+
+
+license:
+  enable: false
+  licensePath: 'D:\ideaProjects\license.lic'
+  publicKeyStorePath: "/publicCerts.keystore"
+  storePass: iecas123
+  alias: publiccert
+  subject: aircas
+
+
+rag:
+  knowledge-url: http://192.168.9.13:1124/chat/ask
+  build-url: http://192.168.9.13:1124/ontology/build
+
+threadpool:
+  core-pool-size: 10
+  max-pool-size: 20
+  queue-capacity: 100
+  keep-alive-seconds: 60
+  thread-name-prefix: ontology-thread-
+
+# 脚本函数多语言执行：Python/TypeScript 走独立 Runner 容器；Groovy/Java 在主程序进程内执行。
+script-runner:
+  python: http://172.16.18.58:39101
+  typescript: http://172.16.18.58:39102
+  timeout-ms: 5000
+
+# 容器算子：镜像 / 接口文档上传存储目录与大小限制。
+# image-dir / doc-dir 留空时默认落在 jar 包同级目录下的 container-images/ 与 interface-docs/。
+# arm-check-enabled 是否校验镜像为 ARM64 架构；无 ARM 环境本地测试可置 false 跳过校验。
+# exec-host 执行期访问容器映射端口的基地址（同宿主机默认 127.0.0.1，服务在容器内需改宿主机 IP）。
+container-operator:
+  image-dir:
+  doc-dir:
+  max-image-size-mb: 2048
+  arm-check-enabled: false
+  exec-host: 127.0.0.1
+  exec-timeout-seconds: 30
+  node:
+    ip: 172.16.18.62
+    port: 37002
+
+# 算子限流（跨实例）
+rate-limit:
+  enabled: true
+  key-prefix: "foundry:rl:"
+  concurrency-ttl: 3600

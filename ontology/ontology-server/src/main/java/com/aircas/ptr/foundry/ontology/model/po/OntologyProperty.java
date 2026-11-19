@@ -4,8 +4,6 @@ import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import com.aircas.ptr.foundry.common.util.DebeziumDateReader;
 import com.alibaba.fastjson2.annotation.JSONField;
 import com.baomidou.mybatisplus.annotation.*;
-import com.aircas.ptr.foundry.ontology.repository.handler.JsonbTypeHandler;
-import com.fasterxml.jackson.databind.JsonNode;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -138,10 +136,9 @@ public class OntologyProperty implements Serializable {
 
 
     /**
-     * 属性元数据，JSONB格式
+     * 属性元数据，字符串原样存储（约定为JSON对象字符串），业务逻辑自行解析
      */
-    @TableField(typeHandler = JsonbTypeHandler.class)
-    private JsonNode metadata;
+    private String metadata;
 
 
     private static final long serialVersionUID = 1L;

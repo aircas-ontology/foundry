@@ -28,6 +28,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.OrderItem;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.google.common.collect.Lists;
@@ -4323,6 +4324,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                         .paramOrder(p.getParamOrder())
                         .description(p.getDescription())
                         .referenceType(p.getTypeReferenceName())
+                        .fields(parseFunctionParamFields(p))
                         .build()).collect(Collectors.toList()));
             }
         }
@@ -4358,6 +4360,19 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             detailVO.setMappingIns(mappingVOS);
         }
         return detailVO;
+    }
+
+    /** fields JSON 按 FunctionParamDTO 结构存储，回显给绑定 UI 的定义树（各层含 description）；解析失败不拖垮详情 */
+    private List<FunctionParamVO> parseFunctionParamFields(FunctionParamPO p) {
+        if (StringUtils.isEmpty(p.getFields())) {
+            return null;
+        }
+        try {
+            return jsonMapper.readValue(p.getFields(), new TypeReference<List<FunctionParamVO>>() {});
+        } catch (JsonProcessingException e) {
+            log.warn("反序列化参数 fields 失败：paramName={}, cause={}", p.getParamName(), e.getMessage());
+            return null;
+        }
     }
 
     @SneakyThrows

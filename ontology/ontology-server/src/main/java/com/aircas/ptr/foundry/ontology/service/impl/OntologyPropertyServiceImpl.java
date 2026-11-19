@@ -114,11 +114,8 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         }
         //check metadata schema 和元数据schema格式是否一致
         var schema = getMetadataSchema(originalProperty.getOntologyUniqueIdentifier());
-        var metadata = param.getMetadata();
-        if (metadata != null) {
-            PreconditionUtils.checkNotNull(schema, "当前对象未定义元数据schema，不能设置元数据", HttpStatus.BAD_REQUEST);
-            validateMetadataAgainstSchema(metadata, schema, "");
-        }
+        var metadata = DataConverter.normalizeMetadata(param.getMetadata(), jsonMapper);
+        validateMetadataIfPossible(metadata, schema);
         var titleKeyChanged = isTitleKeyChanged(originalProperty, param);
         //update property
         updateById(originalProperty.setDatasourceColumnName(param.getDatasource() != null ? param.getDatasource().getDatasourceColumnName() : null)
@@ -131,9 +128,9 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                 .setDefaultValue(param.getDefaultValue())
                 .setStorageGroup(param.getStorageGroup())
                 .setPropertyCategoryId(param.getCategoryId())
-                .setMetadata(param.getMetadata()));
+                .setMetadata(metadata));
         // updateById 默认忽略 null 字段，元数据置空须显式 set，否则 schema 赋值锁永远解不开
-        if (param.getMetadata() == null) {
+        if (metadata == null) {
             update(new LambdaUpdateWrapper<OntologyProperty>()
                     .eq(OntologyProperty::getUniqueIdentifier, uniqIdentifier)
                     .set(OntologyProperty::getMetadata, null));
@@ -203,11 +200,9 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                 PreconditionUtils.checkArgument(categoryIds.contains(p.getCategoryId()), "无效的分类id", HttpStatus.BAD_REQUEST);
             }
             //check metadata schema 和元数据schema格式是否一致
-            var metadata = p.getMetadata();
-            if (metadata != null) {
-                PreconditionUtils.checkNotNull(schema, "当前对象未定义元数据schema，不能设置元数据", HttpStatus.BAD_REQUEST);
-                validateMetadataAgainstSchema(metadata, schema, "");
-            } else {
+            var metadata = DataConverter.normalizeMetadata(p.getMetadata(), jsonMapper);
+            validateMetadataIfPossible(metadata, schema);
+            if (metadata == null) {
                 clearMetadataIds.add(p.getUniqueIdentifier());
             }
             var prop = updatePropMap.get(p.getUniqueIdentifier());
@@ -225,7 +220,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                     .setDatasourceSchema(p.getDatasource() != null ? p.getDatasource().getSchemaName() : null)
                     .setStorageGroup(p.getStorageGroup())
                     .setPropertyCategoryId(p.getCategoryId())
-                    .setMetadata(p.getMetadata());
+                    .setMetadata(metadata);
         }
         //batch update
         updateBatchById(updateProperties);
@@ -366,12 +361,9 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                 PreconditionUtils.checkArgument(categoryIds.contains(p.getCategoryId()), "无效的分类id", HttpStatus.BAD_REQUEST);
             }
             //check metadata schema 和元数据schema格式是否一致
-            var metadata = p.getMetadata();
-            if (metadata != null) {
-                PreconditionUtils.checkNotNull(schema, "当前对象未定义元数据schema，不能设置元数据", HttpStatus.BAD_REQUEST);
-                validateMetadataAgainstSchema(metadata, schema, "");
-            }
-            propertyList.add(DataConverter.convert(p));
+            var metadata = DataConverter.normalizeMetadata(p.getMetadata(), jsonMapper);
+            validateMetadataIfPossible(metadata, schema);
+            propertyList.add(DataConverter.convert(p).setMetadata(metadata));
         }
         //更新数据
         saveBatch(propertyList);
@@ -426,13 +418,10 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         }
         //check metadata schema 和元数据schema格式是否一致
         var schema = getMetadataSchema(param.getOntologyIdentifier());
-        var metadata = param.getMetadata();
-        if (metadata != null) {
-            PreconditionUtils.checkNotNull(schema, "当前对象未定义元数据schema，不能设置元数据", HttpStatus.BAD_REQUEST);
-            validateMetadataAgainstSchema(metadata, schema, "");
-        }
+        var metadata = DataConverter.normalizeMetadata(param.getMetadata(), jsonMapper);
+        validateMetadataIfPossible(metadata, schema);
         //create property
-        save(DataConverter.convert(param));
+        save(DataConverter.convert(param).setMetadata(metadata));
         //create arangodb node by primary key
         buildEntityNodes(param.getOntologyIdentifier(), param.getIsTitleKey());
     }
@@ -1492,6 +1481,24 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                 entityService.deleteNodesAndRelationsByOntologyId(ontologyIdentifier);
             }
         }
+    }
+
+    /** 能解析为JSON对象时按schema校验（业务报错回传前端）；解析不了不强制格式，原样存储 */
+    private void validateMetadataIfPossible(String metadata, JsonNode schema) {
+        if (metadata == null) {
+            return;
+        }
+        JsonNode node;
+        try {
+            node = jsonMapper.readTree(metadata);
+        } catch (Exception e) {
+            return;
+        }
+        if (node == null || !node.isObject()) {
+            return;
+        }
+        PreconditionUtils.checkNotNull(schema, "当前对象未定义元数据schema，不能设置元数据", HttpStatus.BAD_REQUEST);
+        validateMetadataAgainstSchema(node, schema, "");
     }
 
     private void validateMetadataAgainstSchema(JsonNode metadata, JsonNode schema, String path) {
