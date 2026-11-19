@@ -1531,9 +1531,8 @@ public class EntityServiceImpl implements EntityService {
      * 或顶层算子出参名（脚本算子往往只有一个顶层出参，属性级写回实例只能靠前两种）。
      * key 写错、该 key 没有对应的绑定行、绑定跨多对象却指定实例主键——
      * 这几种都会静默退回共用的实例选择，读写到调用方没打算碰的实例，直接报错。
-     * 关系端点对象的实例由关系两端决定：入参绑定落在端点上时，按入参再指定一次只能与端点已选的实例一致
-     * （对端对象的分组行执行侧不按行取，仍拒）。这里不猜本端/对端——挂载侧推导不准时不误拦，
-     * 只有能确定的端点实例对不上才报错。</p>
+     * 入参指定的实例只决定这一路读哪份数据，不影响关系边：绑定落在关系端点对象上时按入参给的实例读，
+     * 与 from/to 选了哪颗实例无关。对端对象只给分组行、不给实例时仍拒——那组行会被遍历到的实例覆盖。</p>
      */
     private void checkParamTargets(OntologyActionDetailVO detail, FunctionDetailVO functionDetailVO,
                                    EntityActionExecuteParam param) {
@@ -1548,7 +1547,7 @@ public class EntityServiceImpl implements EntityService {
         var linkGroup = actionLinkGroup(detail);
         var params = functionDetailVO.getParams();
         checkDirectionTargets(detail, params, inputTargets, this::isInstanceInputRow,
-                FunctionParamCategoryEnum.INPUT, "inputParams", "入参", linkEndpointInstances(linkGroup, param),
+                FunctionParamCategoryEnum.INPUT, "inputParams", "入参",
                 counterpartObjectOf(linkGroup, param));
         checkOutputTargets(detail, params, outputTargets);
     }
@@ -1557,7 +1556,7 @@ public class EntityServiceImpl implements EntityService {
                                        Map<String, ActionInstanceTargetParam> targets,
                                        Predicate<ActionParamMappingVO> needsTarget,
                                        FunctionParamCategoryEnum category, String fieldName, String cnLabel,
-                                       Map<String, List<Object>> endpointInstances, String counterpartObject) {
+                                       String counterpartObject) {
         if (MapUtils.isEmpty(targets)) {
             return;
         }
@@ -1575,26 +1574,13 @@ public class EntityServiceImpl implements EntityService {
             PreconditionUtils.checkArgument(!objectIds.isEmpty(),
                     cnLabel + "[" + paramName + "]的绑定没有" + ("入参".equals(cnLabel) ? "取对象属性" : "写入对象属性")
                             + "的行，按" + cnLabel + "指定数据位置无效", HttpStatus.BAD_REQUEST);
-            var endpointHits = objectIds.stream().filter(endpointInstances::containsKey).collect(Collectors.toList());
-            if (!endpointHits.isEmpty()) {
-                // 对端对象明确时，它的分组行由本次遍历决定，按入参指定不会生效；本端端点的按行取值照旧
-                if (StringUtils.isNotEmpty(counterpartObject) && endpointHits.contains(counterpartObject)) {
-                    PreconditionUtils.checkArgument(MapUtils.isEmpty(target.getDataPrimaryKeys()),
-                            cnLabel + "[" + paramName + "]的数据落在关系对端对象[" + counterpartObject + "]上，"
-                                    + "分组行由关系两端决定，不能按" + cnLabel + "指定", HttpStatus.BAD_REQUEST);
-                }
-                var endpointKeys = endpointHits.stream()
-                        .flatMap(objectId -> endpointInstances.get(objectId).stream())
-                        .collect(Collectors.toList());
-                // 端点实例推不出来时不判，避免挂载侧信息不全把合法请求拦掉；能确定的对不上才报错
-                if (target.getEntityPrimaryKey() != null && !endpointKeys.isEmpty()) {
-                    PreconditionUtils.checkArgument(endpointKeys.stream()
-                                    .anyMatch(primaryKey -> Objects.equals(primaryKey, target.getEntityPrimaryKey())),
-                            cnLabel + "[" + paramName + "]指定的实例[" + target.getEntityPrimaryKey()
-                                    + "]与关系端点对象已选的实例[" + endpointKeys.stream()
-                                    .map(String::valueOf).collect(Collectors.joining("、"))
-                                    + "]不一致：实例由关系两端决定，按" + cnLabel + "指定只能与之一致", HttpStatus.BAD_REQUEST);
-                }
+            // 对端对象明确、又只按入参给了分组行没给实例时，这组行会被本次遍历到的实例盖掉，直接拒；
+            // 给了实例则按该实例读，只影响这一路取值，关系边仍由 from/to 决定
+            if (StringUtils.isNotEmpty(counterpartObject) && objectIds.contains(counterpartObject)
+                    && target.getEntityPrimaryKey() == null) {
+                PreconditionUtils.checkArgument(MapUtils.isEmpty(target.getDataPrimaryKeys()),
+                        cnLabel + "[" + paramName + "]的数据落在关系对端对象[" + counterpartObject + "]上，"
+                                + "分组行由关系两端决定，不能按" + cnLabel + "指定", HttpStatus.BAD_REQUEST);
             }
             PreconditionUtils.checkArgument(target.getEntityPrimaryKey() == null || objectIds.size() == 1,
                     cnLabel + "[" + paramName + "]的绑定跨多个对象，不能按" + cnLabel + "指定实例主键，请用 "
@@ -1718,20 +1704,6 @@ public class EntityServiceImpl implements EntityService {
     }
 
     /**
-     * 关系两端对象本次已选的实例，只用于校验端点入参，不推本端/对端。
-     * <p>自关系两端是同一个对象，两个实例都收，入参指定任一都算一致。</p>
-     */
-    private Map<String, List<Object>> linkEndpointInstances(OntologyLinkGroup linkGroup, EntityActionExecuteParam param) {
-        if (linkGroup == null) {
-            return Map.of();
-        }
-        Map<String, List<Object>> endpoints = new LinkedHashMap<>();
-        collectEndpointInstance(endpoints, linkGroup.getOntologyUniqueIdentifierFrom(), param);
-        collectEndpointInstance(endpoints, linkGroup.getOntologyUniqueIdentifierTo(), param);
-        return endpoints;
-    }
-
-    /**
      * 关系对端对象：请求点名了就用它；否则按本端对象推（对外执行时本端是调用方传的，可靠）。
      * 都推不出来返回 null，调用处不判——宁可放过也不误拦。
      */
@@ -1746,31 +1718,6 @@ public class EntityServiceImpl implements EntityService {
             return null;
         }
         return counterpartOntology(linkGroup, param.getOntologyUniqueIdentifier());
-    }
-
-    /** 某端对象的实例：按对象传的优先，其次对端专用参数、本端单值参数 */
-    private void collectEndpointInstance(Map<String, List<Object>> endpoints, String objectId,
-                                         EntityActionExecuteParam param) {
-        if (StringUtils.isEmpty(objectId) || param == null) {
-            return;
-        }
-        var instances = endpoints.computeIfAbsent(objectId, key -> new ArrayList<>());
-        var keys = param.getEntityPrimaryKeys();
-        if (keys != null) {
-            addIfAbsent(instances, keys.get(objectId));
-        }
-        if (StringUtils.equals(objectId, param.getLinkedOntologyUniqueIdentifier())) {
-            addIfAbsent(instances, param.getLinkedEntityPrimaryKey());
-        }
-        if (StringUtils.equals(objectId, param.getOntologyUniqueIdentifier())) {
-            addIfAbsent(instances, param.getEntityPrimaryKey());
-        }
-    }
-
-    private void addIfAbsent(List<Object> instances, Object primaryKey) {
-        if (primaryKey != null && !instances.contains(primaryKey)) {
-            instances.add(primaryKey);
-        }
     }
 
     /** 从行为映射收集需要实例数据的对象：属性/对象/List 来源的入参，以及写入对象属性的出参 */
@@ -1896,7 +1843,8 @@ public class EntityServiceImpl implements EntityService {
     /**
      * 按算子入参单独加载的实例数据：入参名 -> (属性id -> 值)。
      * <p>同一对象的两个属性入参要读不同实例时靠这份视图路由取值。入参只给了分组行主键时，
-     * 实例沿用对象级选择、行按指定的取；关系对端的实例随本次遍历变化，跳过它，取值自动回落共用视图。</p>
+     * 实例沿用对象级选择、行按指定的取；关系对端不按方向取实例，跳过它、取值回落共用视图——
+     * 但该入参显式点了实例时按点的实例读（含关系端点），只影响这一路取值，不改关系边。</p>
      * <p>入参绑定了 List 行数（rowLimit）时即使没给 inputParams 也要单独建视图：共用视图按默认 10 行取，
      * 拿不到用户要的行数。</p>
      */
@@ -1927,11 +1875,13 @@ public class EntityServiceImpl implements EntityService {
                     paramName, this::isInstanceInputRow, legacyObjectId);
             var limits = rowLimits.get(paramName);
             var details = Lists.<EntityPropertyDetailVO>newArrayList();
+            var explicitPrimaryKey = target == null ? null : target.getEntityPrimaryKey();
             for (var objectId : objectIds) {
-                if (StringUtils.equals(objectId, excludeObjectId)) {
+                // 关系对端由本次遍历到的实例提供；该入参显式点了实例时以入参为准
+                if (StringUtils.equals(objectId, excludeObjectId) && explicitPrimaryKey == null) {
                     continue;
                 }
-                var primaryKey = target != null && target.getEntityPrimaryKey() != null ? target.getEntityPrimaryKey()
+                var primaryKey = explicitPrimaryKey != null ? explicitPrimaryKey
                         : resolveEntityPrimaryKey(context, param, objectId, inputTargetsFor(context));
                 PreconditionUtils.checkNotNull(primaryKey,
                         "入参[" + paramName + "]的对象[" + objectId + "]未选择实例数据，无法执行行为：" + actionApi,
@@ -1939,7 +1889,14 @@ public class EntityServiceImpl implements EntityService {
                 var rowKeys = target != null
                         ? mergeRowKeys(target.getDataPrimaryKeys(), rowKeysOf(inputTargetsFor(context), objectId))
                         : inputRowKeysFor(context, objectId);
-                details.addAll(getEntityDetail(objectId, primaryKey, rowKeys, limits));
+                var objectDetails = getEntityDetail(objectId, primaryKey, rowKeys, limits);
+                // 点了实例就必须按它取到数：取不到时回落共用视图会静默读成另一个实例
+                if (explicitPrimaryKey != null) {
+                    PreconditionUtils.checkArgument(!objectDetails.isEmpty(),
+                            "入参[" + paramName + "]指定的实例[" + explicitPrimaryKey + "]在对象[" + objectId
+                                    + "]下没有数据，无法按该实例取值：" + actionApi, HttpStatus.BAD_REQUEST);
+                }
+                details.addAll(objectDetails);
             }
             if (!details.isEmpty()) {
                 res.put(paramName, details.stream().collect(Collectors.toMap(
@@ -2198,7 +2155,7 @@ public class EntityServiceImpl implements EntityService {
         if (CollectionUtils.isNotEmpty(linkedEntities)) {
             //获取映射涉及对象的实体属性详情；对端实例由下面的遍历逐个提供
             var srcEntityDetailMap = loadEntityDetailMap(infoDTO, param, linkedOntology);
-            //按入参指定的实例数据同样不含对端，对端一律用本次遍历到的实例
+            //按入参指定的实例数据：显式点了实例的按点的取（含关系端点），其余用本次遍历到的实例
             var paramEntityDetailMaps = loadParamEntityDetailMaps(infoDTO, param, linkedOntology);
 
             //和关联对象下的所有实体计算关系

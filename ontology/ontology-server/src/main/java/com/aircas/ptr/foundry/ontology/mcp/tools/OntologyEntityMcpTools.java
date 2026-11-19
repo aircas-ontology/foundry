@@ -295,7 +295,7 @@ public class OntologyEntityMcpTools implements McpTools {
             - actionApi：必填，行为的 api 名称；
             - dataPrimaryKey：可选，存储分组行的数据主键；属性值行为的修改/删除需要它定位到具体一行，main 分组可不传（等同实体主键），绑算子的行为忽略该字段；
             - entityPrimaryKeysJson：可选 JSON 对象，对象id -> 实例主键，如 {"obj_b":2}；应用行为的入参/出参可能跨对象，映射涉及的对象都要提供；单对象行为可只传 entityPrimaryKey；
-            - inputParamsJson：可选 JSON 对象，入参名 -> {"entityPrimaryKey":实例主键,"dataPrimaryKeys":{"分组名":行主键}}；同一对象的两个属性入参要读不同实例时用它，命中时优先于 entityPrimaryKeysJson，只影响该入参读取；关系对端与不绑算子的行为不支持；
+            - inputParamsJson：可选 JSON 对象，入参名 -> {"entityPrimaryKey":实例主键,"dataPrimaryKeys":{"分组名":行主键}}；同一对象的两个属性入参要读不同实例时用它，命中时优先于 entityPrimaryKeysJson，只影响该入参读取；绑定落在关系端点对象上也按这里指定的实例读；不绑算子的行为不支持；
             - outputParamsJson：可选 JSON 对象，key -> {"entityPrimaryKey":实例主键,"dataPrimaryKeys":{"分组名":行主键}}；key 优先级：属性唯一标识 > 出参字段名 > 顶层算子出参名；同一算子出参的几个属性写到不同实例时逐条点名，只影响该行写回；不绑算子的行为不支持；
             - linkedOntologyUniqueIdentifier / linkedEntityPrimaryKey：可选，关系行为对端对象及其实例主键；不传对端主键时遍历对端全部实例。
             返回行为执行的字符串结果。注意：行为可能修改实例属性或关系数据，执行前确认目标实例与行为语义。

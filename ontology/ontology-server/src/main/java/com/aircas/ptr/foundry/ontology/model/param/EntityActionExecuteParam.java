@@ -50,7 +50,8 @@ public class EntityActionExecuteParam extends EntityQueryParam {
 
     @Schema(name = "inputParams", description = "按算子入参指定的数据位置：入参名 -> {实例主键, 存储分组->行主键}。"
             + "同一对象的两个属性入参要读不同实例时用它；命中时优先于 entityPrimaryKeys，"
-            + "只影响该入参的读取，不影响出参写回和关系落库；关系对端与不绑算子的行为不支持")
+            + "只影响该入参的读取，不影响出参写回和关系落库；绑定落在关系端点对象上也按这里的实例读，"
+            + "关系边仍由 from/to 决定；不绑算子的行为不支持")
     private Map<String, ActionInstanceTargetParam> inputParams;
 
     @Schema(name = "outputParams", description = "按出参绑定指定的写回位置：key -> {实例主键, 存储分组->行主键}。"

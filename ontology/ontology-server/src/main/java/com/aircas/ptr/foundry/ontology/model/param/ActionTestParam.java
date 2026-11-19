@@ -53,7 +53,7 @@ public class ActionTestParam {
             + "只读一个位置时数组里放一个元素；放多个元素就是批量测试的候选值，只选实例时各入参的候选值做笛卡尔积、"
             + "一旦有候选值选了非 main 分组的行就改为各轴按下标配对成组（此时各轴候选值个数要一致），逐组执行；"
             + "命中时优先于 entityPrimaryKeys，只影响该入参的读取，不影响出参写回和关系落库；"
-            + "关系对端的实例由本次遍历决定，不支持按入参指定；不绑算子的行为也不支持",
+            + "绑定落在关系端点对象上也按这里指定的实例读，关系边仍由 from/to 决定；不绑算子的行为也不支持",
             example = "{\"name\":[{\"entityPrimaryKey\":11}],"
                     + "\"max_mach\":[{\"entityPrimaryKey\":101,\"dataPrimaryKeys\":{\"duty_log\":11}},"
                     + "{\"entityPrimaryKey\":102,\"dataPrimaryKeys\":{\"duty_log\":12}}]}")
