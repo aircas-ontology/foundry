@@ -4143,9 +4143,11 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 .createTime(action.getCreateTime())
                 .updateTime(action.getUpdateTime())
                 .build();
-        // 基础函数行为的查询配置原样回显，前端据此重画对象、字段和条件
+        // 基础函数行为的查询配置原样回显，前端据此重画对象、字段和条件；对象名称单独给一份供直接展示
         if (action.getSubjectType() == ActionSubjectTypeEnum.BASIC_FUNCTION) {
-            detailVO.setBasicFunction(basicFunctionActionExecutor.parse(action.getBasicFunctionConfig(), action.getApi()));
+            var basicFunction = basicFunctionActionExecutor.parse(action.getBasicFunctionConfig(), action.getApi());
+            detailVO.setBasicFunction(basicFunction);
+            detailVO.setBasicFunctionOntologyNames(basicFunctionActionExecutor.ontologyDisplayNames(basicFunction));
         }
         // 行为树没有算子、关系和参数绑定，读回定义即可
         if (action.getActionKind() == ActionKindEnum.TREE) {

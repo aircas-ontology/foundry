@@ -411,6 +411,24 @@ public class BasicFunctionActionExecutor {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * 配置里选中对象的名称，与 {@code config.getOntologyIdentifiers()} 逐项对应（含重复项）。
+     * <p>对象已删除或名称为空时用对象id占位，保证前端按同一下标就能对上标识。</p>
+     */
+    public List<String> ontologyDisplayNames(ActionBasicFunctionConfig config) {
+        var identifiers = configOntologyIdentifiers(config);
+        if (identifiers.isEmpty()) {
+            return List.of();
+        }
+        var metas = metasById(identifiers);
+        return config.getOntologyIdentifiers().stream()
+                .map(id -> {
+                    var meta = metas.get(id);
+                    return meta == null || StringUtils.isBlank(meta.getDisplayName()) ? id : meta.getDisplayName();
+                })
+                .collect(Collectors.toList());
+    }
+
     /** 按对象id取对象，spaceId 非空时同时核对归属空间 */
     private List<OntologyMeta> loadMetas(List<String> identifiers, Integer spaceId) {
         var metas = metasById(identifiers);

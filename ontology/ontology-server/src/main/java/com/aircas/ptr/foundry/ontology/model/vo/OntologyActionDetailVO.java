@@ -38,6 +38,10 @@ public class OntologyActionDetailVO extends OntologyActionInfoVO {
     @Schema(description = "基础函数配置（查询的对象、聚合/查询、字段与条件、可选的结果回写），仅 subjectType=BASIC_FUNCTION 返回")
     private ActionBasicFunctionConfig basicFunction;
 
+    @Schema(description = "基础函数查询选中对象的名称，顺序与 basicFunction.ontologyIdentifiers 一一对应；"
+            + "对象已删除时用对象id占位。仅 subjectType=BASIC_FUNCTION 返回", example = "[\"卫星\"]")
+    private List<String> basicFunctionOntologyNames;
+
     @Schema(description = "行为树执行入参要求（必填黑板键 + 需要实例的节点），仅 actionKind=TREE 返回")
     private TreeExecuteInputsVO executeInputs;
 
