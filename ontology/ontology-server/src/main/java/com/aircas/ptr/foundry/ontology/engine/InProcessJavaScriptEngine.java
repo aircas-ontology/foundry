@@ -18,6 +18,7 @@ import javax.tools.ToolProvider;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -27,13 +28,18 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.security.CodeSource;
 import java.security.MessageDigest;
 import java.security.ProtectionDomain;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.EnumSet;
+import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
@@ -42,6 +48,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.jar.Attributes;
+import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import java.util.jar.Manifest;
 import java.util.regex.Matcher;
@@ -176,17 +183,19 @@ public class InProcessJavaScriptEngine implements ScriptEngine {
         return new CompiledJava(className, loader);
     }
 
-    /** 同一进程内 classpath 不变，首次拼好即缓存，避免每次编译都扫一遍 jar。 */
     private volatile String cachedClasspath;
 
     private String getClasspath() {
         String cached = cachedClasspath;
-        if (cached != null) {
-            return cached;
+        if (cached == null) {
+            synchronized (this) {
+                if (cachedClasspath == null) {
+                    cachedClasspath = buildClasspath();
+                }
+                cached = cachedClasspath;
+            }
         }
-        String classpath = buildClasspath();
-        cachedClasspath = classpath;
-        return classpath;
+        return cached;
     }
 
     /**
@@ -194,6 +203,8 @@ public class InProcessJavaScriptEngine implements ScriptEngine {
      * <p>只取 {@code java.class.path} 不够：IDE「缩短命令行＝JAR manifest / classpath file」与 {@code java -jar}
      * 启动下该属性只剩一两项，脚本会报 {@code package com.aircas... does not exist}。
      * 这里三路合并：系统属性（条目极少时才展开中间 jar 的 manifest Class-Path）+ 本类 CodeSource + ClassLoader 链上的 URL。</p>
+     * <p>Spring Boot fat jar 部署时上面三路都拿不到真正的类入口（类与依赖嵌套在 {@code BOOT-INF} 下，
+     * javac 读不了嵌套 jar），再对每个候选 jar 检测 fat jar 布局，命中则解压后补进 classpath。</p>
      */
     private String buildClasspath() {
         Set<String> entries = new LinkedHashSet<>();
@@ -215,13 +226,115 @@ public class InProcessJavaScriptEngine implements ScriptEngine {
             }
             current = current.getParent();
         }
+        // 遍历副本：展开结果会往 entries 里追加解压目录与依赖 jar
+        for (String entry : new ArrayList<>(entries)) {
+            addFatJarClasspath(entries, entry);
+        }
         return String.join(File.pathSeparator, entries);
+    }
+
+    /** Spring Boot fat jar 内工程类与三方依赖的存放前缀；javac 只能读普通目录与普通 jar，需要先解压。 */
+    private static final String FAT_JAR_CLASSES_PREFIX = "BOOT-INF/classes/";
+    private static final String FAT_JAR_LIB_PREFIX = "BOOT-INF/lib/";
+
+    /**
+     * fat jar（{@code java -jar app.jar} 部署形态）展开：{@code BOOT-INF/classes} 与 {@code BOOT-INF/lib/*.jar}
+     * 是嵌套在 app.jar 里的条目，javac 无法直接读取，这里解压到临时目录后把 classes 目录与各依赖 jar 补进 classpath。
+     * <p>只在运行形态确实是 fat jar 时触发：IDE 从 target/classes 跑、普通 jar 部署时 classpath 不变。
+     * 解压失败只告警，退回原 classpath（脚本编译仍会报原来的错，但不影响其他函数）。</p>
+     */
+    private void addFatJarClasspath(Set<String> entries, String entry) {
+        File file = new File(entry);
+        if (!entry.toLowerCase().endsWith(".jar") || !file.isFile()) {
+            return;
+        }
+        try (JarFile jar = new JarFile(file)) {
+            if (!isFatJar(jar)) {
+                return;
+            }
+            Path root = Files.createTempDirectory("foundry-javac-cp-");
+            Path classesDir = Files.createDirectories(root.resolve("classes"));
+            Path libDir = Files.createDirectories(root.resolve("lib"));
+            int libCount = extractFatJar(jar, classesDir, libDir);
+            entries.add(classesDir.toString());
+            try (var libs = Files.list(libDir)) {
+                libs.forEach(p -> entries.add(p.toString()));
+            }
+            registerCleanup(root);
+            log.info("Java 脚本 classpath 检测到 fat jar：{}，已解压工程类与 {} 个依赖 jar 到 {}",
+                    file.getAbsolutePath(), libCount, root);
+        } catch (IOException e) {
+            log.warn("展开 fat jar 失败，Java 脚本按原 classpath 编译：{}（{}）", entry, e.getMessage());
+        }
+    }
+
+    private static boolean isFatJar(JarFile jar) {
+        Enumeration<JarEntry> examination = jar.entries();
+        while (examination.hasMoreElements()) {
+            String name = examination.nextElement().getName();
+            if (name.startsWith(FAT_JAR_CLASSES_PREFIX) || name.startsWith(FAT_JAR_LIB_PREFIX)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** 解压 {@code BOOT-INF/classes} 与 {@code BOOT-INF/lib/*.jar}，返回依赖 jar 数量。 */
+    private static int extractFatJar(JarFile jar, Path classesDir, Path libDir) throws IOException {
+        int libCount = 0;
+        Enumeration<JarEntry> entries = jar.entries();
+        while (entries.hasMoreElements()) {
+            JarEntry entry = entries.nextElement();
+            String name = entry.getName();
+            if (entry.isDirectory()) {
+                continue;
+            }
+            if (name.startsWith(FAT_JAR_CLASSES_PREFIX)) {
+                copyJarEntry(jar, entry, classesDir, name.substring(FAT_JAR_CLASSES_PREFIX.length()));
+            } else if (name.startsWith(FAT_JAR_LIB_PREFIX) && name.endsWith(".jar")
+                    && name.indexOf('/', FAT_JAR_LIB_PREFIX.length()) < 0) {
+                // 只拷 lib 直属的 jar；再往下的目录是嵌套 jar 内部结构，不单独展开
+                copyJarEntry(jar, entry, libDir, name.substring(FAT_JAR_LIB_PREFIX.length()));
+                libCount++;
+            }
+        }
+        return libCount;
+    }
+
+    private static void copyJarEntry(JarFile jar, JarEntry entry, Path targetRoot, String relative) throws IOException {
+        Path target = targetRoot.resolve(relative).normalize();
+        if (!target.startsWith(targetRoot)) {
+            // zip-slip 防御：条目名带 ../ 越出解压目录时丢弃
+            return;
+        }
+        Files.createDirectories(target.getParent());
+        try (InputStream in = jar.getInputStream(entry)) {
+            Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
+        }
+    }
+
+    /** 临时解压目录随 JVM 退出清理；Windows 上句柄未释放时删除失败直接忽略。 */
+    private static void registerCleanup(Path root) {
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            try (var paths = Files.walk(root)) {
+                paths.sorted(Comparator.reverseOrder()).forEach(path -> {
+                    try {
+                        Files.deleteIfExists(path);
+                    } catch (IOException ignored) {
+                        // 退出阶段尽力清理，删不掉不阻塞 JVM 结束
+                    }
+                });
+            } catch (IOException ignored) {
+                // 目录可能已被手工清理
+            }
+        }, "foundry-javac-cp-cleanup"));
     }
 
     /**
      * 编译失败自检：输出应用自身类的运行时来源与 javac 实际拿到的 classpath。
      * <p>来源是 {@code file:.../target/classes} 而 classpath 里没有它 ⇒ classpath 取漏了；
-     * 来源是 jar 内嵌套路径（fat jar）⇒ 嵌套 jar javac 读不了，需要展开目录或先抽取 BOOT-INF。</p>
+     * 来源是 fat jar 内嵌套路径（{@code jar:file:...!/BOOT-INF/classes!/}）⇒ 应已由
+     * {@link #addFatJarClasspath} 解压补入，若仍失败先查 {@code 展开 fat jar 失败} 告警。</p>
      */
     private void logClasspathDiagnostics(String classpath) {
         int count = classpath.isBlank() ? 0 : classpath.split(Pattern.quote(File.pathSeparator)).length;
