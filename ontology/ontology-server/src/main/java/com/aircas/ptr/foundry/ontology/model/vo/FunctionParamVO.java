@@ -2,16 +2,20 @@ package com.aircas.ptr.foundry.ontology.model.vo;
 
 import com.aircas.ptr.foundry.common.constant.FunctionParamTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamCategoryEnum;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 @Data
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
+@JsonIgnoreProperties(ignoreUnknown = true)
 @Schema(description = "函数参数定义（前端绑定 UI 用）")
 public class FunctionParamVO {
 
@@ -35,4 +39,7 @@ public class FunctionParamVO {
 
     @Schema(description = "参数描述", example = "最大速度")
     private String description;
+
+    @Schema(description = "子字段列表（对象/自定义类参数展开，各层含 description；标量参数为 null）")
+    private List<FunctionParamVO> fields;
 }

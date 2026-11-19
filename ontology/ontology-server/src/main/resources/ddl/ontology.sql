@@ -623,7 +623,7 @@ create table if not exists ontology_property
     datasource_schema          varchar(255),
     datasource_db              varchar(255) default 'entity_datasource'::character varying,
     property_category_id       integer,
-    metadata                   jsonb
+    metadata                   text
     );
 
 comment on table ontology_property is '对象属性';
@@ -668,7 +668,7 @@ comment on column ontology_property.datasource_db is '数据源db';
 
 comment on column ontology_property.property_category_id is '属性分类id';
 
-comment on column ontology_property.metadata is '属性元数据，JSONB格式，树形结构';
+comment on column ontology_property.metadata is '属性元数据，字符串原样存储（约定为JSON对象字符串），业务逻辑自行解析';
 
 create unique index if not exists ontology_property_uk_ontologyid_displayname
     on ontology_property (ontology_unique_identifier, display_name);

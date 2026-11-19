@@ -1,7 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.vo;
 
 
-import com.fasterxml.jackson.databind.JsonNode;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -85,8 +84,8 @@ public class EntityPropertyRowDetailVO {
         @Schema(name = "categoryId", description = "属性分类id", example = "10")
         private Integer categoryId;
 
-        @Schema(name = "metadata", description = "属性元数据")
-        private JsonNode metadata;
+        @Schema(name = "metadata", description = "属性元数据，字符串原样回显")
+        private String metadata;
 
 
     }
