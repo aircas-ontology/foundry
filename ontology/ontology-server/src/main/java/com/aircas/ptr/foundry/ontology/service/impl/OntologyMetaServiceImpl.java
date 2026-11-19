@@ -3,6 +3,7 @@ package com.aircas.ptr.foundry.ontology.service.impl;
 import com.aircas.ptr.foundry.common.base.ResultCode;
 import com.aircas.ptr.foundry.common.constant.FunctionParamTypeEnum;
 import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
+import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.common.util.IdGenerator;
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.ontology.converter.DataConverter;
@@ -233,7 +234,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
     /**
      * 从所有属性的 metadata 推导元数据 schema 并落库。
      *
-     * <p>算法：递归遍历每个属性的 metadata JsonNode，收集所有路径（如 "密级/来源"），
+     * <p>算法：解析每个属性的 metadata JSON 字符串并递归遍历，收集所有路径（如 "密级/来源"），
      * 然后按 BFS 顺序批量插入 property_metadata_schema 表（顶层 parentId=0，子层 parentId=父行 id）。
      * 取值类型默认 INPUT（value 为空），metadata 校验只检查键是否存在、不检查值内容。</p>
      *
@@ -247,8 +248,16 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         Set<String> branchPaths = new HashSet<>();
 
         for (var propertyParam : properties) {
-            if (propertyParam.getMetadata() == null) continue;
-            collectPaths(propertyParam.getMetadata(), "", childrenByParent, leafPaths, branchPaths);
+            var metadataStr = DataConverter.normalizeMetadata(propertyParam.getMetadata(), objectMapper);
+            if (metadataStr == null) continue;
+            com.fasterxml.jackson.databind.JsonNode metadataNode;
+            try {
+                metadataNode = objectMapper.readTree(metadataStr);
+            } catch (Exception e) {
+                throw new BusinessException("属性 " + propertyParam.getApiName() + " 的 metadata 解析失败：" + e.getMessage(), HttpStatus.BAD_REQUEST);
+            }
+            if (metadataNode.isNull()) continue;
+            collectPaths(metadataNode, "", childrenByParent, leafPaths, branchPaths);
         }
 
         if (childrenByParent.isEmpty()) return;
@@ -618,7 +627,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
         //删除行为，参数，规则，任务
         actionService.removeByOntologyIdentifier(ontologyIdentifier);
         //删除所有实体节点和边, 保留实体表
-        entityService.deleteNodesAndRelationsByOntologyId(meta.getApiName());
+        entityService.deleteNodesAndRelationsByOntologyId(meta.getUniqueIdentifier());
         //删除百科信息
         lemmaService.remove(new LambdaQueryWrapper<OntologyLemma>().eq(OntologyLemma::getOntologyUniqueIdentifier, ontologyIdentifier));
     }
@@ -665,7 +674,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
 
         // 批量删除实体节点和边
         for (var meta : metaList) {
-            entityService.deleteNodesAndRelationsByOntologyId(meta.getApiName());
+            entityService.deleteNodesAndRelationsByOntologyId(meta.getUniqueIdentifier());
         }
 
         // 批量删除百科信息
@@ -1508,7 +1517,8 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                         .defaultValue(p.getDefaultValue())
                         .storageGroup(p.getStorageGroup())
                         .categoryId(propCategoryId)
-                        .metadata(p.getMetadata())
+                        // 导出文件里 metadata 仍是 JSON 对象（格式不变），入参已改字符串；旧文件 "metadata": null 是 NullNode，视同未设置
+                        .metadata(p.getMetadata() == null || p.getMetadata().isNull() ? null : p.getMetadata().toString())
                         .build();
             }).collect(Collectors.toList());
             ontologyPropertyService.batchCreateProperties(ontologyPropertyCreateParams);
@@ -1800,6 +1810,18 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                 .collect(Collectors.toList());
     }
 
+    /** 导出文件里 metadata 保持 JSON 对象格式；库里字符串解析失败时把报错回传前端，不静默丢值 */
+    private com.fasterxml.jackson.databind.JsonNode parsePropertyMetadataForExport(OntologyProperty p) {
+        if (StringUtils.isBlank(p.getMetadata())) {
+            return null;
+        }
+        try {
+            return objectMapper.readTree(p.getMetadata());
+        } catch (Exception e) {
+            throw new BusinessException("属性 " + p.getApiName() + " 的 metadata 不是合法JSON，无法导出：" + e.getMessage(), HttpStatus.BAD_REQUEST);
+        }
+    }
+
     private OntologyCreateDTO buildExportDTO(OntologyMeta meta, OntologySpace space,
                                              Map<Integer, String> ontologyCategoryPathMap,
                                              Map<String, String> groupNameMap,
@@ -1859,7 +1881,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                         .defaultValue(p.getDefaultValue())
                         .storageGroup(p.getStorageGroup())
                         .categoryPath(p.getPropertyCategoryId() == null ? null : propCategoryPathMap.get(p.getPropertyCategoryId()))
-                        .metadata(p.getMetadata())
+                        .metadata(parsePropertyMetadataForExport(p))
                         .build())
                 .collect(Collectors.toList());
 

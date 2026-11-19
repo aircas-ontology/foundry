@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.ontology.converter;
 
 import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
+import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.common.util.DateUtils;
 import com.aircas.ptr.foundry.common.util.IdGenerator;
 import com.aircas.ptr.foundry.ontology.model.document.EntityRelation;
@@ -12,13 +13,39 @@ import com.aircas.ptr.foundry.ontology.model.po.OntologyMeta;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
 import com.aircas.ptr.foundry.ontology.model.vo.*;
 import com.google.common.collect.Sets;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.http.HttpStatus;
 
 import java.sql.Timestamp;
 import java.util.Arrays;
 import java.util.stream.Collectors;
 
 public class DataConverter {
+
+    /**
+     * metadata 入参兼容字符串与 JSON 对象，统一为存储用字符串，原样存储不强制 JSON 格式；
+     * 空白/JSON null 视同未设置（更新时即清空）。
+     */
+    public static String normalizeMetadata(Object metadata, ObjectMapper mapper) {
+        if (metadata == null) {
+            return null;
+        }
+        String str;
+        if (metadata instanceof String s) {
+            str = s;
+        } else {
+            try {
+                str = mapper.writeValueAsString(metadata);
+            } catch (Exception e) {
+                throw new BusinessException("metadata 序列化失败：" + e.getMessage(), HttpStatus.BAD_REQUEST);
+            }
+        }
+        if (StringUtils.isBlank(str) || "null".equals(str.trim())) {
+            return null;
+        }
+        return str;
+    }
 
     public static EntityLinkPropertyVO convert(EntityRelation relation) {
         return EntityLinkPropertyVO.builder()
@@ -73,7 +100,6 @@ public class DataConverter {
                 .defaultValue(param.getDefaultValue())
                 .storageGroup(param.getStorageGroup())
                 .propertyCategoryId(param.getCategoryId())
-                .metadata(param.getMetadata())
                 .build();
         if (datasource != null) {
             prop.setDatasourceId(datasource.getDatasourceId())

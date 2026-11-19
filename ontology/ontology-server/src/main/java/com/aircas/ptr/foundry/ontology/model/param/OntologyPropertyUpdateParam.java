@@ -2,7 +2,6 @@ package com.aircas.ptr.foundry.ontology.model.param;
 
 import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import com.aircas.ptr.foundry.ontology.controller.validator.DatasourceVerify;
-import com.fasterxml.jackson.databind.JsonNode;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -59,12 +58,7 @@ public class OntologyPropertyUpdateParam extends IdentifierParam {
     @Schema(name = "categoryId", description = "属性分类id", example = "10")
     private Integer categoryId;
 
-    @Schema(name = "metadata", description = "属性元数据")
-    private JsonNode metadata;
-
-    // Jackson 把 JSON null 反序列化为 NullNode（非 Java null），"metadata": null 须视同未设置
-    public JsonNode getMetadata() {
-        return metadata == null || metadata.isNull() ? null : metadata;
-    }
+    @Schema(name = "metadata", description = "元数据，字符串原样存储（约定JSON对象字符串）；也兼容直接传JSON对象；不传或传null则清空")
+    private Object metadata;
 
 }

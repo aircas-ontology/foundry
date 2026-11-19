@@ -185,7 +185,8 @@ public class OntologyMetaMcpTools implements McpTools {
               description/tag/defaultValue/categoryId/datasource/metadata 可选；
               其中 ontologyIdentifier 无需传，服务端一律用本次新建对象的 uniqueIdentifier 覆盖；
               属性 categoryId 不传时挂到该对象属性分类根节点「全部」。
-            属性可带 metadata，服务端会从所有属性的 metadata 自动推导并创建元数据 schema（单根树，枚举值不推断），
+            属性可带 metadata（JSON 对象字符串，键=节点名称逐层嵌套），服务端会从所有属性的 metadata 自动推导并创建元数据 schema（单根树，枚举值不推断），
+            某属性 metadata 无法解析为 JSON 时整单报错回滚；
             落库时序固定为「对象 → schema → 属性」；同一字段在不同属性 metadata 里既是叶子又是分支（结构冲突）时整单回滚。
             返回新创建对象的唯一标识（uniqueIdentifier）。
             """)
