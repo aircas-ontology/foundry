@@ -130,4 +130,15 @@ public interface FunctionService extends IService<Function> {
      * @return {@code functionApi -> description} 映射；无数据时返回空 Map，不返回 null
      */
     Map<String, String> mapDescriptionByApi(Integer spaceId, List<String> functionApis);
+
+    /**
+     * 按「空间 + function api」批量取函数名称（displayName），同一 api 多版本时取版本号最大的那条，供行为列表冗余函数名称。
+     * <p>
+     * 与 {@link #mapDescriptionByApi} 同口径：算子 api 只在空间内唯一，不带空间会命中其他空间的同名算子。
+     *
+     * @param spaceId      函数所属对象空间id，为空时只按 api 匹配（早期无空间的行为用）
+     * @param functionApis 函数 api 列表，允许为空
+     * @return {@code functionApi -> displayName} 映射；无数据时返回空 Map，不返回 null
+     */
+    Map<String, String> mapDisplayNameByApi(Integer spaceId, List<String> functionApis);
 }

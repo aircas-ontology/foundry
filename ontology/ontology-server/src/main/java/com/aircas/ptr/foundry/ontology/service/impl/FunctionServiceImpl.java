@@ -213,27 +213,44 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
 
     @Override
     public Map<String, String> mapDescriptionByApi(Integer spaceId, List<String> functionApis) {
-        List<String> apis = functionApis == null ? Collections.emptyList()
-                : functionApis.stream().filter(StringUtils::isNotBlank).distinct().collect(Collectors.toList());
-        if (apis.isEmpty()) {
-            return new HashMap<>();
-        }
-        var wrapper = new LambdaQueryWrapper<Function>()
-                .select(Function::getApi, Function::getVersion, Function::getDescription)
-                .in(Function::getApi, apis);
-        // 算子 api 只在空间内唯一：限定了空间就只在该空间里取，无空间的早期行为退回只按 api 匹配
-        if (spaceId != null) {
-            wrapper.eq(Function::getOntologySpaceId, spaceId);
-        }
         // description 列可为 null，过滤空白描述，避免 Collectors.toMap 在 value 为 null 时抛 NPE；
         // 按版本升序排，同一 api 后到的更高版本覆盖前面的，与行为绑定算子取最新版本的口径一致
-        return list(wrapper)
+        return listByApis(spaceId, functionApis)
                 .stream()
                 .filter(function -> StringUtils.isNotBlank(function.getDescription()))
                 .sorted(Comparator.comparing((Function f) -> f.getVersion() == null ? "" : f.getVersion(),
                         FunctionServiceImpl::compareVersion))
                 .collect(Collectors.toMap(Function::getApi, Function::getDescription,
                         (older, newer) -> newer, LinkedHashMap::new));
+    }
+
+    @Override
+    public Map<String, String> mapDisplayNameByApi(Integer spaceId, List<String> functionApis) {
+        // 与描述同口径：版本升序让最新版本覆盖旧版本，名称列同样只保留非空值
+        return listByApis(spaceId, functionApis)
+                .stream()
+                .filter(function -> StringUtils.isNotBlank(function.getDisplayName()))
+                .sorted(Comparator.comparing((Function f) -> f.getVersion() == null ? "" : f.getVersion(),
+                        FunctionServiceImpl::compareVersion))
+                .collect(Collectors.toMap(Function::getApi, Function::getDisplayName,
+                        (older, newer) -> newer, LinkedHashMap::new));
+    }
+
+    /** 批量取函数，只查列表要用的列；api 去重，空列表不查库 */
+    private List<Function> listByApis(Integer spaceId, List<String> functionApis) {
+        List<String> apis = functionApis == null ? Collections.emptyList()
+                : functionApis.stream().filter(StringUtils::isNotBlank).distinct().collect(Collectors.toList());
+        if (apis.isEmpty()) {
+            return Collections.emptyList();
+        }
+        var wrapper = new LambdaQueryWrapper<Function>()
+                .select(Function::getApi, Function::getVersion, Function::getDescription, Function::getDisplayName)
+                .in(Function::getApi, apis);
+        // 算子 api 只在空间内唯一：限定了空间就只在该空间里取，无空间的早期行为退回只按 api 匹配
+        if (spaceId != null) {
+            wrapper.eq(Function::getOntologySpaceId, spaceId);
+        }
+        return list(wrapper);
     }
 
 

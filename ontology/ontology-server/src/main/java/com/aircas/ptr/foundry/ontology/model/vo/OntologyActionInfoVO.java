@@ -46,6 +46,9 @@ public class OntologyActionInfoVO {
     @Schema(name = "functionApi", description = "对象下函数api", example = "getInfo")
     private String functionApi;
 
+    @Schema(name = "functionName", description = "函数名称，同一 api 多版本时取版本号最大的一条；不绑算子的行为或查不到函数时为空", example = "获取卫星信息")
+    private String functionName;
+
     @Schema(name = "functionDescription", description = "函数描述", example = "这是一个函数")
     private String functionDescription;
 

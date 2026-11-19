@@ -4070,7 +4070,10 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         }
         var functionDescMap = new HashMap<String, String>();
         apisBySpace.forEach((spaceId, apis) -> functionService.mapDescriptionByApi(spaceId, apis)
-                .forEach((api, desc) -> functionDescMap.put(functionDescKey(spaceId, api), desc)));
+                .forEach((api, desc) -> functionDescMap.put(functionRefKey(spaceId, api), desc)));
+        var functionNameMap = new HashMap<String, String>();
+        apisBySpace.forEach((spaceId, apis) -> functionService.mapDisplayNameByApi(spaceId, apis)
+                .forEach((api, name) -> functionNameMap.put(functionRefKey(spaceId, api), name)));
         List<OntologyActionInfoVO> records = pageResult.getRecords().stream()
                 .map(v -> OntologyActionInfoVO.builder()
                         .id(v.getId())
@@ -4080,7 +4083,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                         .displayName(v.getDisplayName())
                         .icon(v.getIcon())
                         .functionApi(v.getFunctionApi())
-                        .functionDescription(functionDescMap.get(functionDescKey(v.getOntologySpaceId(), v.getFunctionApi())))
+                        .functionName(functionNameMap.get(functionRefKey(v.getOntologySpaceId(), v.getFunctionApi())))
+                        .functionDescription(functionDescMap.get(functionRefKey(v.getOntologySpaceId(), v.getFunctionApi())))
                         .categoryId(v.getActionCategoryId())
                         .status(v.getStatus())
                         .actionKind(v.getActionKind())
@@ -4096,8 +4100,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         return result;
     }
 
-    /** 算子描述按「空间 + api」定位，跨空间的同名 api 各是各的算子 */
-    private String functionDescKey(Integer spaceId, String functionApi) {
+    /** 算子名称/描述按「空间 + api」定位，跨空间的同名 api 各是各的算子 */
+    private String functionRefKey(Integer spaceId, String functionApi) {
         return spaceId + ":" + functionApi;
     }
 
@@ -4118,6 +4122,9 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 .id(action.getId())
                 .ontologySpaceId(action.getOntologySpaceId())
                 .functionApi(action.getFunctionApi())
+                .functionName(functionService
+                        .mapDisplayNameByApi(action.getOntologySpaceId(), Collections.singletonList(action.getFunctionApi()))
+                        .get(action.getFunctionApi()))
                 .functionDescription(functionService
                         .mapDescriptionByApi(action.getOntologySpaceId(), Collections.singletonList(action.getFunctionApi()))
                         .get(action.getFunctionApi()))
