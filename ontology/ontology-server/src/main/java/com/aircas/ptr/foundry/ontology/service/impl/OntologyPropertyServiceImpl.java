@@ -1511,11 +1511,10 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
             while (fieldNames.hasNext()) {
                 var fieldName = fieldNames.next();
                 var childPath = path.isEmpty() ? fieldName : path + "/" + fieldName;
-                PreconditionUtils.checkArgument(schemaObj.has(fieldName),
-                        "元数据字段不在schema中：" + childPath, HttpStatus.BAD_REQUEST);
                 var childMetadata = metadataObj.get(fieldName);
                 var childSchema = schemaObj.get(fieldName);
-                if (childMetadata.isObject()) {
+                // schema 中不存在的字段直接放行，不再强制 metadata 键与 schema 对齐
+                if (childSchema != null && childMetadata.isObject()) {
                     validateMetadataAgainstSchema(childMetadata, childSchema, childPath);
                 }
             }
