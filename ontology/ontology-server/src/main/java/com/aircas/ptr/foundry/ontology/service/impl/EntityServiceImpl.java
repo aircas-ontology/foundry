@@ -2314,6 +2314,24 @@ public class EntityServiceImpl implements EntityService {
     }
 
 
+    /**
+     * 行为树节点给的整包取值按入参声明类型收口：
+     * <ul>
+     *   <li>LIST 入参收到单值时当作只有一个元素的集合，上游给一个值也能喂集合；</li>
+     *   <li>单值入参收到通配出参行展开的整批列时，按原口径取批里第一条非空。</li>
+     * </ul>
+     */
+    private Object coerceOverrideValue(FunctionParameterVO param, Object value) {
+        if (param.getParamType() == FunctionParamTypeEnum.LIST) {
+            return value instanceof List ? value : Lists.newArrayList(value);
+        }
+        if (value instanceof List<?> values) {
+            return values.stream().filter(Objects::nonNull).findFirst()
+                    .orElseThrow(() -> new BusinessException("行为入参[" + param.getParamName() + "]整批取不到值"));
+        }
+        return value;
+    }
+
     public String callFunction(ActionContextInfoDTO actionContext) throws Exception {
 
         //构造函数参数，list类型返回所有值，其他类型取第一个值
@@ -2327,7 +2345,10 @@ public class EntityServiceImpl implements EntityService {
             // 行为节点给这个入参配了取值来源：整包按节点给的值用，不再逐字段拼——子字段行会被同一个值各自盖一遍
             var nodeValue = paramValueOverride(actionContext, p.getParamName());
             if (nodeValue != null) {
-                return FunctionParameter.builder().paramName(p.getParamName()).paramValue(nodeValue).build();
+                return FunctionParameter.builder()
+                        .paramName(p.getParamName())
+                        .paramValue(coerceOverrideValue(p, nodeValue))
+                        .build();
             }
             // 没有子字段路径即整包给这个参数一个值，与逐字段绑定改造前的行为一致
             boolean boundWhole = paramMappings.stream().noneMatch(m -> StringUtils.isNotEmpty(m.getParamPath()));

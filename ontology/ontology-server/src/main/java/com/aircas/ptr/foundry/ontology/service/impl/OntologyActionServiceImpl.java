@@ -31,7 +31,6 @@ import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonMappingException;
-import com.google.common.base.Suppliers;
 import com.google.common.collect.Lists;
 import com.xxl.job.core.context.XxlJobHelper;
 import lombok.SneakyThrows;
@@ -939,63 +938,22 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 if (actionApis.add(boundApi)) {
                     checkTreeBoundAction(label, boundApi, spaceId);
                 }
-                checkActionSuccessCondition(label, config, spaceId);
+                checkActionSuccessCondition(label, config);
             }
         }
     }
 
-    /**
-     * 行为节点的执行成功条件：可选。两种写法二选一：
-     * 表达式写法只校验 SpEL 语法（字段存不存在、取不取得到要到执行期才知道）；
-     * 出参比较写法则要能在该行为的出参里定到唯一一条，且比较方式与类型对得上。
-     * <p>左值只取本节点这次执行结果里的出参，不给黑板键：黑板上的值要到节点判成功之后才被这次结果刷新，
-     * 拿它判本节点会判到上一轮或别的节点写进去的旧值。</p>
-     */
-    private void checkActionSuccessCondition(String label, BehaviorActionConfig config, Integer spaceId) {
+    /** 行为节点的执行成功条件：可选，传了就要有一条 SpEL 表达式，这里只校验语法（字段存不存在要到执行期才知道） */
+    private void checkActionSuccessCondition(String label, BehaviorActionConfig config) {
         var condition = config.getSuccessCondition();
         if (condition == null) {
             return;
         }
-        var outputKey = StringUtils.trimToNull(condition.getOutputKey());
         var expression = StringUtils.trimToNull(condition.getExpression());
-        if (expression != null) {
-            PreconditionUtils.checkArgument(outputKey == null && condition.getOp() == null && condition.getValue() == null,
-                    "行为节点 " + label + " 的执行成功条件写法二选一：要么写 expression 表达式，"
-                            + "要么给出参和比较方式（outputKey+op+value），两种不能同时出现",
-                    HttpStatus.BAD_REQUEST);
-            checkTreeExpression(expression, "行为节点 " + label + " 的执行成功条件表达式");
-            return;
-        }
-        var op = condition.getOp();
-        PreconditionUtils.checkArgument(outputKey != null || op != null || condition.getValue() != null,
-                "行为节点 " + label + " 的执行成功条件是空的：要选判断哪条出参和比较方式，不需要判定就整个不传",
+        PreconditionUtils.checkArgument(expression != null,
+                "行为节点 " + label + " 的执行成功条件是空的：写一条 SpEL 表达式，不需要判定就整个不传",
                 HttpStatus.BAD_REQUEST);
-        PreconditionUtils.checkArgument(outputKey != null,
-                "行为节点 " + label + " 的执行成功条件要选判断哪条出参", HttpStatus.BAD_REQUEST);
-        PreconditionUtils.checkNotNull(op,
-                "行为节点 " + label + " 的执行成功条件要选比较方式", HttpStatus.BAD_REQUEST);
-        var rows = treeOutputRows(requireTreeActionByApi(config.getActionApi(), spaceId));
-        PreconditionUtils.checkArgument(!rows.isEmpty(),
-                "行为节点 " + label + " 绑的行为没有可判断的出参，执行成功条件配不上；"
-                        + "行为不报错就算成功的口径已经够用，请把成功条件整个去掉", HttpStatus.BAD_REQUEST);
-        var matched = matchTreeOutputRows(rows, outputKey);
-        PreconditionUtils.checkArgument(matched.size() == 1,
-                "行为节点 " + label + " 的执行成功条件指的出参 " + outputKey + " 在该行为上认不出"
-                        + "（要命中唯一一条，可用：属性唯一标识 > 出参字段名 > 顶层算子出参名）；该行为可选的出参有："
-                        + rows.stream().map(TreeOutputRow::displayName).filter(StringUtils::isNotBlank)
-                        .distinct().collect(Collectors.joining("、")), HttpStatus.BAD_REQUEST);
-        var row = matched.get(0);
-        checkTreeCompareOpType(label, op, row.type(), "出参「" + row.displayName() + "」类型");
-        if (op == BehaviorCompareOpEnum.IS_EMPTY || op == BehaviorCompareOpEnum.IS_NOT_EMPTY) {
-            PreconditionUtils.checkArgument(condition.getValue() == null,
-                    "行为节点 " + label + " 的执行成功条件是" + op.getName() + "，不需要比较值", HttpStatus.BAD_REQUEST);
-        } else {
-            PreconditionUtils.checkArgument(condition.getValue() != null,
-                    "行为节点 " + label + " 的执行成功条件要填比较值", HttpStatus.BAD_REQUEST);
-            PreconditionUtils.checkArgument(matchesTreeValueType(condition.getValue(), row.type()),
-                    "行为节点 " + label + " 的执行成功条件比较值 " + condition.getValue() + " 与出参「"
-                            + row.displayName() + "」的类型 " + row.type().name() + " 不匹配", HttpStatus.BAD_REQUEST);
-        }
+        checkTreeExpression(expression, "行为节点 " + label + " 的执行成功条件表达式");
     }
 
     /**
@@ -1263,15 +1221,10 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                         + source.getName() + "：固定值以声明为准，回传只能选外部输入或写回同一属性的对象属性来源的键");
                 continue;
             }
-            if (item.getValueType() == FunctionParamTypeEnum.LIST) {
-                // LIST 黑板键装的是整批值：只收通配行展开的整批列或类型为 LIST 的整包数组
-                if (row.type() != FunctionParamTypeEnum.LIST
-                        && (row.exactPath() || !FunctionOutputValueReader.hasWildcard(row.expression()))) {
-                    problems.add("节点 " + nodeLabel + " 的出参 " + row.displayName() + "（" + row.type()
-                            + "）是单值出参，回传 LIST 黑板键 " + key
-                            + " 要选整批来源：取值路径带 [*] 的出参行，或类型为 LIST（路径直接指向数组）的出参行");
-                }
-            } else if (!treeTypesCompatible(row.type(), item.getValueType())) {
+            // LIST 黑板键什么形状都收：通配行回传整批列、数组行整包、单值行按只有一个元素的集合，
+            // 形状收口在执行侧按入参声明类型做
+            if (item.getValueType() != FunctionParamTypeEnum.LIST
+                    && !treeTypesCompatible(row.type(), item.getValueType())) {
                 problems.add("节点 " + nodeLabel + " 的出参 " + row.displayName() + "（" + row.type() + "）回传黑板键 "
                         + key + "（" + item.getValueType().name() + "），类型对不上");
             }
@@ -1303,7 +1256,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                     + StringUtils.defaultIfBlank(key, "（未选择）"));
             return;
         }
-        if (!treeTypesCompatible(item.getValueType(), paramType)) {
+        // LIST 入参取标量黑板键也放行：执行侧按只有一个元素的集合传
+        if (paramType != FunctionParamTypeEnum.LIST && !treeTypesCompatible(item.getValueType(), paramType)) {
             problems.add("节点 " + nodeLabel + " 的入参 " + paramName + "（" + paramType + "）取黑板键 " + key + "（"
                     + item.getValueType().name() + "），类型对不上");
         }
@@ -1341,17 +1295,9 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             problems.add(label + "（来自节点「" + treeNodeLabel(upstream) + "」的 " + row.displayName() + "）没配取值路径，取不到值");
             return;
         }
-        if (paramType == FunctionParamTypeEnum.LIST) {
-            // LIST 入参取上游出参是整批口径，只认整批来源：通配行取整批列，类型为 LIST 的行整包取；
-            // 单值出参喂 LIST 执行时只会拿到一个元素，宁可在保存期拒绝并指明该选哪种出参
-            if (row.type() != FunctionParamTypeEnum.LIST
-                    && (row.exactPath() || !FunctionOutputValueReader.hasWildcard(row.expression()))) {
-                problems.add(label + "（" + row.type() + "）是单值出参，传给 LIST 入参 " + paramName
-                        + " 要选整批来源：取值路径带 [*] 的出参行，或类型为 LIST（路径直接指向数组）的出参行");
-            }
-            return;
-        }
-        if (!treeTypesCompatible(row.type(), paramType)) {
+        // LIST 入参什么形状都收：通配行取整批列、数组行整包、单值行按只有一个元素的集合，
+        // 形状收口在执行侧按声明类型做，这里不做单值类型比对
+        if (paramType != FunctionParamTypeEnum.LIST && !treeTypesCompatible(row.type(), paramType)) {
             problems.add(label + "（" + row.type() + "）传给入参 " + paramName + "（" + paramType + "），类型对不上");
         }
     }
@@ -2751,7 +2697,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                     "绑定的行为不可用（不存在、未发布或是树）：" + boundApi);
         }
         Map<String, Object> overrides = new LinkedHashMap<>();
-        var problem = resolveTreeNodeInputs(nodeId, spaceId, bound, config, runtime, overrides);
+        var problem = resolveTreeNodeInputs(nodeId, spaceId, config, runtime, overrides);
         if (problem != null) {
             runtime.clearNodeOutput(nodeId);
             return new TreeActionInvoker.TreeActionOutcome(BehaviorStateEnum.FAILURE, problem);
@@ -2787,7 +2733,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         // 出参回传与下游引用按算子返回体形状取值，先把执行结果那层字符串数组外壳剥掉
         var resultJson = unwrapActionResultForRead(testResult.getResult());
         // 先判成功条件：不成立这次结果不可信，出参不回传黑板、节点产出也不留给下游
-        var conditionProblem = checkNodeSuccessCondition(nodeId, bound, config, resultJson, resolvedInputs, runtime);
+        var conditionProblem = checkNodeSuccessCondition(nodeId, config, resultJson, resolvedInputs, runtime);
         if (conditionProblem != null) {
             runtime.clearNodeOutput(nodeId);
             return new TreeActionInvoker.TreeActionOutcome(BehaviorStateEnum.FAILURE, conditionProblem);
@@ -2811,11 +2757,11 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
      * <p>一个入参一条：黑板变量按当前值取（有键的来源是对象属性时先整体回读一次库里的值），
      * 上游出参从那次执行的返回体按出参绑定行的取值路径取，不回库——出参可能本来就不写实例，
      * 也可能写的是另一个对象的实例。任何一条取不到就整节点不执行，避免行为拿着半套参数跑出误导结果。</p>
-     * <p>LIST 入参取上游出参是整批口径，见 {@link #resolveActionOutputInput}。</p>
+     * <p>LIST 入参取上游出参什么形状都收，见 {@link #resolveActionOutputInput}。</p>
      *
      * @return 取不到值的原因，全部取到时返回 null
      */
-    private String resolveTreeNodeInputs(String nodeId, Integer spaceId, OntologyAction bound, BehaviorActionConfig config,
+    private String resolveTreeNodeInputs(String nodeId, Integer spaceId, BehaviorActionConfig config,
                                          TreeExecutionRuntime runtime, Map<String, Object> overrides) {
         var bindings = MapUtils.emptyIfNull(config.getInputBindings());
         if (bindings.isEmpty()) {
@@ -2825,8 +2771,6 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             runtime.refreshBlackboard(nodeId);
         }
         var rowsByActionApi = new HashMap<String, List<TreeOutputRow>>();
-        // 入参声明类型只在通配出参行要判「整批还是取第一条」时才查，普通单值绑定不多付一次查询
-        var inputParamTypes = Suppliers.memoize(() -> treeInputParamTypes(bound));
         for (var entry : bindings.entrySet()) {
             var paramName = entry.getKey();
             var binding = entry.getValue();
@@ -2835,8 +2779,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             }
             var problem = StringUtils.isNotBlank(binding.getBlackboardKey())
                     ? resolveBlackboardInput(nodeId, paramName, binding.getBlackboardKey().trim(), runtime, overrides)
-                    : resolveActionOutputInput(nodeId, spaceId, paramName, binding, runtime, overrides, rowsByActionApi,
-                            inputParamTypes);
+                    : resolveActionOutputInput(nodeId, spaceId, paramName, binding, runtime, overrides, rowsByActionApi);
             if (problem != null) {
                 return problem;
             }
@@ -2871,14 +2814,14 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
 
     /**
      * 取上游行为节点的出参：按「节点 + 出参」从那轮返回体取值，取不到就返回原因。
-     * <p>「一份只有一个值」是单值入参的口径；入参本身是 LIST 时改整批取：通配出参行拿整批列，
-     * 路径直接指向数组的出参行整包拿，不再退化成批里第一条。</p>
+     * <p>通配出参行展开的是一批值，整批放进覆盖值；路径指向数组的行整包给；单值行给标量。
+     * 覆盖值按入参声明类型收口在执行侧完成：LIST 入参把单值当只有一个元素的集合、整批原样收下，
+     * 单值入参展沿用取批里第一条非空。</p>
      */
     private String resolveActionOutputInput(String nodeId, Integer spaceId, String paramName,
                                             BehaviorInputBinding binding, TreeExecutionRuntime runtime,
                                             Map<String, Object> overrides,
-                                            Map<String, List<TreeOutputRow>> rowsByActionApi,
-                                            Supplier<Map<String, FunctionParamTypeEnum>> inputParamTypes) {
+                                            Map<String, List<TreeOutputRow>> rowsByActionApi) {
         var fromNodeId = binding.getNodeId();
         var upstream = runtime.nodeOutput(fromNodeId);
         var label = "行为节点「" + runtime.nodeLabel(nodeId) + "」的入参 " + paramName + " ";
@@ -2895,13 +2838,12 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                     + "（要命中唯一一条，可用：属性唯一标识 > 出参字段名 > 顶层算子出参名），行为不执行";
         }
         var row = matched.get(0);
-        // LIST 入参 + 通配出参行：按 [*] 展开成整批列给下游，不能退化成批里第一条
-        if (!row.exactPath() && FunctionOutputValueReader.hasWildcard(row.expression())
-                && inputParamTypes.get().get(paramName) == FunctionParamTypeEnum.LIST) {
+        // 通配出参行按 [*] 展开成整批列：整批交给执行侧，不能在这里退化成批里第一条
+        if (!row.exactPath() && FunctionOutputValueReader.hasWildcard(row.expression())) {
             var values = FunctionOutputValueReader.readMany(upstream.resultJson(), row.expression(),
                     row.functionParamName());
             if (CollectionUtils.isEmpty(values) || values.stream().allMatch(Objects::isNull)) {
-                return label + "从" + fromLabel + "的出参「" + row.displayName() + "」整批取不到值，行为不执行";
+                return label + "从" + fromLabel + "的出参「" + row.displayName() + "」取不到值，行为不执行";
             }
             overrides.put(paramName, values);
             return null;
@@ -2912,17 +2854,6 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         }
         overrides.put(paramName, value);
         return null;
-    }
-
-    /**
-     * 行为声明的入参名 -> 类型，判断上游出参要不要整批取时用。
-     * <p>声明里没带类型（历史绑定行）按字符串算，与执行要求的缺省口径一致。</p>
-     */
-    private Map<String, FunctionParamTypeEnum> treeInputParamTypes(OntologyAction bound) {
-        return treeInputParamDefs(bound).stream()
-                .collect(Collectors.toMap(TreeInputParamDef::name,
-                        param -> param.type() == null ? FunctionParamTypeEnum.STRING : param.type(),
-                        (left, right) -> left, LinkedHashMap::new));
     }
 
     /**
@@ -2951,10 +2882,10 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                         + " 在该行为上认不出（要命中唯一一条，可用：属性唯一标识 > 出参字段名 > 顶层算子出参名）";
             }
             var row = matched.get(0);
-            // LIST 黑板键：通配行按 [*] 展开成整批列回传；其余行仍按单值口径取值
+            // LIST 黑板键：通配行按 [*] 展开成整批列回传，单值行按只有一个元素的集合回传
             var targetItem = StringUtils.isBlank(blackboardKey) ? null : runtime.getBlackboardItems().get(blackboardKey);
-            if (targetItem != null && targetItem.getValueType() == FunctionParamTypeEnum.LIST
-                    && !row.exactPath() && FunctionOutputValueReader.hasWildcard(row.expression())) {
+            var listTarget = targetItem != null && targetItem.getValueType() == FunctionParamTypeEnum.LIST;
+            if (listTarget && !row.exactPath() && FunctionOutputValueReader.hasWildcard(row.expression())) {
                 var values = FunctionOutputValueReader.readMany(resultJson, row.expression(), row.functionParamName());
                 if (CollectionUtils.isEmpty(values) || values.stream().allMatch(Objects::isNull)) {
                     return label + "的出参「" + row.displayName() + "」整批取不到值，"
@@ -2968,62 +2899,34 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 return label + "的出参「" + row.displayName() + "」在本次返回里取不到值，"
                         + "不回传黑板键 " + blackboardKey;
             }
-            runtime.setBlackboardValue(blackboardKey, value);
+            runtime.setBlackboardValue(blackboardKey, listTarget && !(value instanceof List)
+                    ? Lists.newArrayList(value) : value);
         }
         return null;
     }
 
     /**
-     * 行为节点的成功条件判定：没配就算过（行为调用没报错即成功）；配了则按两种写法之一判：
-     * 表达式写法在只读上下文里求值，必须返回 true/false；出参比较写法从这次返回体里按出参取值比较。
-     * <p>条件指向的出参在保存期已校验过，这里再认不出说明行为定义在那之后变了；取不到值、比不了都按失败处理，
-     * 不能因为判不了就默默放过——用户配条件就是为了拦住这一轮结果不可信的情况。</p>
-     *
-     * @param resolvedInputs 本次真正传给算子的入参，表达式写法按 #inputs 读取；不收集时为 null
-     * @return 不成立或判不了时的说明；成立返回 null
-     */
-    private String checkNodeSuccessCondition(String nodeId, OntologyAction bound, BehaviorActionConfig config,
-                                             String resultJson, Map<String, Object> resolvedInputs,
-                                             TreeExecutionRuntime runtime) {
-        var condition = config.getSuccessCondition();
-        if (condition == null) {
-            return null;
-        }
-        var label = "行为节点「" + runtime.nodeLabel(nodeId) + "」";
-        var expression = StringUtils.trimToNull(condition.getExpression());
-        if (expression != null) {
-            return checkNodeSuccessExpression(nodeId, label, expression, resultJson, resolvedInputs, runtime);
-        }
-        var outputKey = StringUtils.trimToEmpty(condition.getOutputKey());
-        var matched = StringUtils.isBlank(outputKey) ? List.<TreeOutputRow>of()
-                : matchTreeOutputRows(treeOutputRows(bound), outputKey);
-        if (matched.size() != 1) {
-            return label + "的执行成功条件指的出参 " + StringUtils.defaultIfBlank(outputKey, "（未填写）")
-                    + " 在该行为上认不出（要命中唯一一条），条件判不了";
-        }
-        if (condition.getOp() == null) {
-            return label + "的执行成功条件没选比较方式，条件判不了";
-        }
-        var row = matched.get(0);
-        if (StringUtils.isBlank(resultJson)) {
-            return label + "配了执行成功条件，但行为没有返回体，取不到出参「" + row.displayName() + "」的值，条件判不了";
-        }
-        var reason = runtime.compareSuccessValue(readTreeOutputValue(resultJson, row), condition.getOp(),
-                condition.getValue(), "出参「" + row.displayName() + "」的值");
-        return reason == null ? null : label + "的执行成功条件不成立：" + reason;
-    }
-
-    /**
-     * 表达式式成功条件：作用域里的值全部来自本次执行，不掺黑板也不回库。
+     * 行为节点的成功条件判定：没配就算过（行为调用没报错即成功）；配了就在只读上下文里对本次执行求值，
+     * 必须返回 true/false。作用域里的值全部来自本次执行，不掺黑板也不回库：
      * <ul>
      *   <li>{@code #result}：本次返回体（完整外壳，解析成 Map/List；不是 JSON 时是原文）；</li>
      *   <li>{@code #data}：返回体里的业务数据层（有 data 字段时取它，否则同 #result）；</li>
      *   <li>{@code #inputs}：本次真正传给算子的入参，顶层入参名 -> 值，LIST 入参可按下标取某一项；</li>
      * </ul>
-     * 表达式必须自己算完给 true/false：false 算条件不成立，求值异常、取不到字段、结果不是布尔都算判不了，同样按失败。
+     * false 算条件不成立，求值异常、取不到字段、结果不是布尔都算判不了，同样按失败处理——
+     * 不能因为判不了就默默放过，用户配条件就是为了拦住这一轮结果不可信的情况。
+     *
+     * @param resolvedInputs 本次真正传给算子的入参，按 #inputs 读取；不收集时为 null
+     * @return 不成立或判不了时的说明；成立返回 null
      */
-    private String checkNodeSuccessExpression(String nodeId, String label, String expression, String resultJson,
-                                              Map<String, Object> resolvedInputs, TreeExecutionRuntime runtime) {
+    private String checkNodeSuccessCondition(String nodeId, BehaviorActionConfig config, String resultJson,
+                                             Map<String, Object> resolvedInputs, TreeExecutionRuntime runtime) {
+        var condition = config.getSuccessCondition();
+        var expression = condition == null ? null : StringUtils.trimToNull(condition.getExpression());
+        if (expression == null) {
+            return null;
+        }
+        var label = "行为节点「" + runtime.nodeLabel(nodeId) + "」";
         Object parsed = null;
         if (StringUtils.isNotBlank(resultJson)) {
             try {

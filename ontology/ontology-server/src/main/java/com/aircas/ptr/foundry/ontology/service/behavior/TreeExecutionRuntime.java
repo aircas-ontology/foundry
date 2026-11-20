@@ -672,19 +672,6 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
     }
 
     /**
-     * 行为节点执行成功条件的比较：与黑板条件同一份比较口径，只是左值来自这次执行结果里取到的出参值。
-     *
-     * @param leftLabel 说明里对左值的称呼，报错时能看出比的是黑板值还是出参值
-     * @return 条件成立返回 null；不成立或没法比较返回原因说明
-     */
-    public String compareSuccessValue(Object actual, BehaviorCompareOpEnum op, Object expect, String leftLabel) {
-        var reason = new String[1];
-        var hit = compare(op, actual, expect, leftLabel, reason);
-        return hit ? null : StringUtils.defaultIfBlank(reason[0], leftLabel + " 不满足 " + op.getName()
-                + (expect == null ? "" : " " + expect) + "，实际是 " + actual);
-    }
-
-    /**
      * 按比较方式比左值与配置值；类型对不上只把原因写进 reason，由调用方定节点状态，不打断整棵树。
      */
     private boolean compare(BehaviorCompareOpEnum op, Object actual, Object expect, String leftLabel, String[] reason) {
