@@ -38,6 +38,7 @@ public class BehaviorActionConfig {
 
     @Schema(name = "inputBindings", description = "入参取值绑定：入参名 -> 这一路的取值来源。来源要么给 blackboardKey"
             + "（取本树黑板键的当前值），要么给 nodeId + output（取上游行为节点的出参），两者只能填一种。"
+            + "LIST 入参取上游出参时整批取：选取值路径带 [*] 的出参行拿整批列，或选类型为 LIST（路径直接指向数组）的出参行拿整个数组。"
             + "没配的入参照旧按行为声明的来源取值（外部输入由执行请求给、对象属性按实例读、固定值取定义）")
     private Map<String, BehaviorInputBinding> inputBindings;
 
@@ -49,14 +50,17 @@ public class BehaviorActionConfig {
     private Map<String, String> outputBindings;
 
     @Schema(name = "successCondition", description = "行为执行成功条件：可选，不传就是行为调用没报错算成功。"
-            + "传了则在这次执行结果里按 outputKey 取出那条出参的值做比较，比较成立该节点才算成功；"
-            + "不成立按失败处理（会走本节点的重试），且这次出参不回传黑板")
+            + "传了两种写法二选一：expression 写一条 SpEL 自己算完给 true/false；"
+            + "或按 outputKey 取出那条出参的值用 op 与 value 比较。成立该节点才算成功；"
+            + "不成立、或条件判不了都按失败处理（会走本节点的重试），且这次出参不回传黑板")
     private SuccessCondition successCondition;
 
     /**
-     * 一条成功条件：本节点某个出参的这次取值 与 一个比较值按 op 比。
-     * <p>左值只能取本节点绑定行为的出参，不取黑板键：黑板键上的值要到本节点成功之后才会被这次结果刷新，
-     * 拿它判本节点的成功与否会判到上一次的旧值。</p>
+     * 一条成功条件，两种写法二选一。
+     * <p>表达式写法只读求值，必须返回 true/false：变量 #result 是本次完整返回体、#data 是返回体里的业务数据层
+     * （没有 data 时同 #result）、#inputs 是本次真正传给算子的入参（顶层入参名 -> 值，LIST 入参可按下标取某一项）。
+     * 不走黑板也不回库——黑板上的值要到本节点成功之后才会被这次结果刷新，拿旧值判本节点会把判错的轮次当成成功。</p>
+     * <p>出参比较写法：左值只能取本节点绑定行为的出参，不取黑板键。</p>
      */
     @Data
     @SuperBuilder
@@ -65,16 +69,25 @@ public class BehaviorActionConfig {
     @Schema(description = "行为节点的执行成功条件")
     public static class SuccessCondition {
 
+        @Schema(name = "expression", description = "SpEL 表达式式成功条件：与 outputKey/op/value 二选一。"
+                + "在只读上下文里求值，必须返回 true/false：true 算成功，false 算条件不成立，"
+                + "求值异常、字段取不到或结果不是布尔算判不了，同样按失败处理。"
+                + "可用变量：#result 本次返回体（完整外壳）、#data 返回体里的业务数据层（没有 data 时同 #result）、"
+                + "#inputs 本次真正传给算子的入参（顶层入参名 -> 值；LIST 入参按整数下标取某一项，如 #inputs.trajectories[0].longitude）。"
+                + "集合判空、取第几条、对取到的值做运算都可以直接写在表达式里",
+                example = "#data.PredictedPoint.altitude > 0 && #inputs.trajectories.size() > 1")
+        private String expression;
+
         @Schema(name = "outputKey", description = "判断哪条出参：本节点绑定行为的出参标识，写法与出参回传黑板同一套"
-                + "（属性唯一标识 > 出参字段名 > 顶层算子出参名），要能定到唯一一条",
+                + "（属性唯一标识 > 出参字段名 > 顶层算子出参名），要能定到唯一一条；用 expression 时不填",
                 example = "act.satellite.track.updatedCount")
         private String outputKey;
 
-        @Schema(name = "op", description = "比较方式，与黑板条件同一套：EQ/NE/GT/GE/LT/LE/CONTAINS/NOT_CONTAINS/IS_EMPTY/IS_NOT_EMPTY",
+        @Schema(name = "op", description = "比较方式，与黑板条件同一套：EQ/NE/GT/GE/LT/LE/CONTAINS/NOT_CONTAINS/IS_EMPTY/IS_NOT_EMPTY；用 expression 时不填",
                 example = "GT")
         private BehaviorCompareOpEnum op;
 
-        @Schema(name = "value", description = "比较值，类型要与该出参一致；IS_EMPTY、IS_NOT_EMPTY 不需要填", example = "0")
+        @Schema(name = "value", description = "比较值，类型要与该出参一致；IS_EMPTY、IS_NOT_EMPTY 不需要填；用 expression 时不填", example = "0")
         private Object value;
     }
 }

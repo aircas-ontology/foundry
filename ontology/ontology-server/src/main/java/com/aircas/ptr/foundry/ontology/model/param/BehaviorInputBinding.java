@@ -27,6 +27,8 @@ public class BehaviorInputBinding {
     private String nodeId;
 
     @Schema(name = "output", description = "取上游节点的那条出参，写法与出参写回同一套："
-            + "属性唯一标识 > 出参字段名 > 顶层算子出参名", example = "prop_orbit_altitude")
+            + "属性唯一标识 > 出参字段名 > 顶层算子出参名。"
+            + "本入参是 LIST 时整批取：选取值路径带 [*] 的出参行拿整批列，或选类型为 LIST 的出参行拿整个数组；"
+            + "单值出参（路径取到标量）不能直接喂 LIST 入参", example = "prop_orbit_altitude")
     private String output;
 }

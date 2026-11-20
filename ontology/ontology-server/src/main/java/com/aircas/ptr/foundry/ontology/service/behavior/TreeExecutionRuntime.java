@@ -553,6 +553,37 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
         }
     }
 
+    /**
+     * 行为成功条件的表达式求值：只读上下文、变量由调用方给（#result/#data/#inputs），不读黑板。
+     * <p>表达式必须返回 true/false；求值异常、字段取不到或结果不是布尔都返回 null，由调用方按「判不了」处理。</p>
+     */
+    public Boolean evaluateSuccessExpression(String nodeId, String expression, Map<String, Object> variables) {
+        try {
+            var evaluationContext = SimpleEvaluationContext
+                    .forPropertyAccessors(MAP_ACCESSOR, DataBindingPropertyAccessor.forReadOnlyAccess())
+                    // 表达式要对取到的值做判断，集合的 size()/isEmpty()、字符串的 contains() 这些实例方法要能调；
+                    // 仍禁类型引用、构造与静态方法，写不了 T(java.lang.Runtime)
+                    .withInstanceMethods()
+                    .build();
+            if (variables != null) {
+                variables.forEach(evaluationContext::setVariable);
+            }
+            var value = EXPRESSION_PARSER.parseExpression(expression).getValue(evaluationContext);
+            if (!(value instanceof Boolean hit)) {
+                setNodeMessage(nodeId, "执行成功条件的表达式没有返回 true/false：" + expression);
+                return null;
+            }
+            if (!hit) {
+                setNodeMessage(nodeId, "执行成功条件不成立：" + expression);
+            }
+            return hit;
+        } catch (Exception e) {
+            setNodeMessage(nodeId, "执行成功条件表达式求值失败：" + expression);
+            log.warn("行为树成功条件表达式求值失败, expression={}", expression, e);
+            return null;
+        }
+    }
+
     @Override
     public Boolean evaluateBlackboardCondition(String nodeId, BehaviorBlackboardConditionConfig config) {
         blackboardRefresher.refresh(nodeId, this);

@@ -449,7 +449,8 @@ public class EntityServiceImpl implements EntityService {
     private static final int DEFAULT_GROUP_ROWS = 10;
 
     /**
-     * 取实例属性详情。rowKeysByGroup 指定的分组按行精确取值（分组名 -> 行主键），
+     * 取实例属性详情。rowKeysByGroup 指定的分组按行精确取值，值可以是行主键数组
+     * （LIST 入参按元素给行时走这支，按数组顺序逐行取），分组名 -> 行主键；
      * 没指定的分组沿用原口径（扩展表按主键倒序取行，行数按 maxRowsByProperty 给的取，默认 10 行）。
      */
     @Override
@@ -507,25 +508,30 @@ public class EntityServiceImpl implements EntityService {
                 var columns = entry.getValue().stream().map(v -> v.getDatasourceColumnName()).collect(Collectors.toList());
                 var storageGroup = entry.getValue().get(0).getStorageGroup();
                 var joinKey = datalakeKey(pk.getDatasourceSchema(), tableMapping.getTargetTableName(), tableMapping.getTargetColumnName(), entityPrimaryKey);
-                var rowKey = datalakeKey(pk.getDatasourceSchema(), tableMapping.getTargetTableName(), orderBy, rowKeyFor(rowKeysByGroup, storageGroup));
+                var rowKeys = rowKeyList(rowKeyFor(rowKeysByGroup, storageGroup));
                 final List<Map<String, Object>> otherData;
-                if (rowKey != null) {
-                    // 指定了行就只取这一行：按关联列确认它确实属于本实例，避免读到别人的数据
-                    var row = objectMapper.queryJoinTableRow(
-                            pk.getDatasourceSchema(),
-                            joinKey,
-                            tableMapping.getTargetTableName(),
-                            columns,
-                            tableMapping.getTargetColumnName(),
-                            orderBy,
-                            rowKey
-                    );
-                    PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(row),
-                            "存储分组[" + storageGroup + "]中行主键 " + rowKey + " 不存在或不属于实体 "
-                                    + entityPrimaryKey, HttpStatus.BAD_REQUEST);
-                    // 缺失的列补成 null，与多行取值路径的输出形状保持一致
-                    otherData = objectMapper.populate(pk.getDatasourceSchema(), row,
-                            tableMapping.getTargetTableName(), columns);
+                if (rowKeys != null) {
+                    // 指定了行就只取这些行：LIST 入参的多个位置按数组顺序取值，每个行主键都必须属于本实例
+                    var rows = new ArrayList<Map<String, Object>>(rowKeys.size());
+                    for (var specifiedKey : rowKeys) {
+                        var rowKey = datalakeKey(pk.getDatasourceSchema(), tableMapping.getTargetTableName(), orderBy, specifiedKey);
+                        var row = objectMapper.queryJoinTableRow(
+                                pk.getDatasourceSchema(),
+                                joinKey,
+                                tableMapping.getTargetTableName(),
+                                columns,
+                                tableMapping.getTargetColumnName(),
+                                orderBy,
+                                rowKey
+                        );
+                        PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(row),
+                                "存储分组[" + storageGroup + "]中行主键 " + rowKey + " 不存在或不属于实体 "
+                                        + entityPrimaryKey, HttpStatus.BAD_REQUEST);
+                        // 缺失的列补成 null，与多行取值路径的输出形状保持一致
+                        rows.addAll(objectMapper.populate(pk.getDatasourceSchema(), row,
+                                tableMapping.getTargetTableName(), columns));
+                    }
+                    otherData = rows;
                 } else {
                     otherData = objectMapper.queryByJoinTable(
                             pk.getDatasourceSchema(),
@@ -2036,6 +2042,17 @@ public class EntityServiceImpl implements EntityService {
                 ? null : rowKeysByGroup.get(storageGroup);
     }
 
+    /** 分组行主键可能是 LIST 入参按元素给的一组行：数组按原顺序逐行读取，单个值仍是一行 */
+    private static List<Object> rowKeyList(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof List<?> list) {
+            return list.isEmpty() ? null : new ArrayList<>(list);
+        }
+        return Lists.newArrayList(value);
+    }
+
     /**
      * 某个出参绑定本次写回落到哪一行：按该条绑定指定的分组行优先，没指定的分组沿用出参方向（outputEntities）里该对象的行。
      * 都没指定返回空，写回回退到原口径：扩展表新增一行。
@@ -2190,6 +2207,8 @@ public class EntityServiceImpl implements EntityService {
                                         .linkToOntologyUniqueIdentifier(linkedOntology)
                                         // 行为节点的取值覆盖要带到算子调用侧，丢了节点上配的黑板/上游出参来源就退化成绑定行自己的来源
                                         .paramValueOverrides(infoDTO.getParamValueOverrides())
+                                        // 入参回填容器同理：成功条件表达式要靠它拿本次真实入参
+                                        .resolvedInputs(infoDTO.getResolvedInputs())
                                         .build();
                                 //执行函数
                                 String functionResultJson = callFunction(contextInfoDTO);
@@ -2227,6 +2246,8 @@ public class EntityServiceImpl implements EntityService {
                     .entityActionExecuteParam(param)
                     // 同上：无关系分支也要把节点级取值覆盖带下去
                     .paramValueOverrides(infoDTO.getParamValueOverrides())
+                    // 入参回填容器同理：成功条件表达式要靠它拿本次真实入参
+                    .resolvedInputs(infoDTO.getResolvedInputs())
                     .build();
             var functionResultJson = callFunction(contextInfoDTO);
             //函数同步执行，更新结果
@@ -2332,6 +2353,19 @@ public class EntityServiceImpl implements EntityService {
                         .paramName(BasicQueryOperator.PARAM_ENTITY_PRIMARY_KEY)
                         .paramValue(entityPrimaryKey)
                         .build());
+            }
+        }
+        // 行为树的成功条件表达式要读本次真实入参：调用方给了回填容器就写进去；
+        // 关系行为按对端逐对执行，多个线程共用一个容器，加锁后最后完成的一条覆盖
+        var resolvedInputs = actionContext.getResolvedInputs();
+        if (resolvedInputs != null) {
+            synchronized (resolvedInputs) {
+                resolvedInputs.clear();
+                for (var parameter : parameters) {
+                    if (StringUtils.isNotEmpty(parameter.getParamName())) {
+                        resolvedInputs.put(parameter.getParamName(), parameter.getParamValue());
+                    }
+                }
             }
         }
         //执行函数
