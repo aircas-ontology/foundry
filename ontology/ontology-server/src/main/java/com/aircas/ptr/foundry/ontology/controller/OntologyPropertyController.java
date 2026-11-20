@@ -10,6 +10,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -46,7 +49,13 @@ public class OntologyPropertyController {
 
 
     @PutMapping("")
-    @Operation(summary = "单个更新对象属性")
+    @Operation(summary = "单个更新对象属性",
+            requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                    content = @Content(schema = @Schema(implementation = OntologyPropertyUpdateParam.class),
+                            examples = @ExampleObject(name = "更新属性并赋值元数据（新格式）",
+                                    value = "{\"uniqueIdentifier\":\"e0c0040d8f6c4e99abc604d4046decff\",\"displayName\":\"123\",\"dataType\":\"String\","
+                                            + "\"storageGroup\":\"main\",\"isPrimaryKey\":false,\"isTitleKey\":false,\"description\":\"\",\"defaultValue\":\"\",\"categoryId\":707,"
+                                            + "\"metadata\":{\"元数据\":{\"枚举类\":{\"是否必填\":\"是\"},\"范围类\":{\"取值范围\":\"500\"}}}}"))))
     public RestResult updateProperty(@RequestBody @Valid OntologyPropertyUpdateParam propertyUpdateParam) {
         ontologyPropertyService.updateProperty(propertyUpdateParam);
         return RestResult.success();
