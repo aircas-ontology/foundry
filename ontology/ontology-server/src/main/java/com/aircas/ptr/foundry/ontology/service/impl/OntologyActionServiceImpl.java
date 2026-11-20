@@ -1570,7 +1570,9 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             params.put(mapping.getParameterName(), new TreeInputParamDef(mapping.getParameterName(), type,
                     description, sourceType, objectId,
                     bindsProperty ? mapping.getPropertyUniqueIdentifier() : null,
-                    bindsProperty && property != null ? property.getDisplayName() : null));
+                    bindsProperty && property != null ? property.getDisplayName() : null,
+                    funcParam != null ? funcParam.getParamName() : mapping.getParameterName(),
+                    bindsProperty && property != null ? property.getStorageGroup() : null));
         }
         return new ArrayList<>(params.values());
     }
@@ -1695,12 +1697,14 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         List<TreeExecuteInputVO> inputParams = treeInputParamDefs(bound).stream()
                 .<TreeExecuteInputVO>map(param -> TreeExecuteInputVO.builder()
                         .key(param.name())
+                        .paramName(param.paramName())
                         .valueType(param.type())
                         .required(param.sourceType() == ActionParamSourceEnum.EXTERNAL)
                         .sourceType(param.sourceType())
                         .objectIdentifier(param.objectIdentifier())
                         .propertyUniqueIdentifier(param.propertyUniqueIdentifier())
                         .propertyDisplayName(param.propertyDisplayName())
+                        .storageGroup(param.storageGroup())
                         .description(param.description())
                         .build())
                 .collect(Collectors.toList());
@@ -2072,10 +2076,14 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     private record TreeExternalParam(String name, FunctionParamTypeEnum type, String description) {
     }
 
-    /** 行为声明的一个算子入参：名字、类型、取值来源，属性来源时带绑定属性，用于执行要求逐条列出 */
+    /**
+     * 行为声明的一个算子入参：名字、类型、取值来源，属性来源时带绑定属性和它所在的存储分组，用于执行要求逐条列出。
+     * <p>paramName 是所属顶层算子入参名：LIST 的元素字段行按字段名逐条列出，数据位置仍要按参数名传。</p>
+     */
     private record TreeInputParamDef(String name, FunctionParamTypeEnum type, String description,
                                      ActionParamSourceEnum sourceType, String objectIdentifier,
-                                     String propertyUniqueIdentifier, String propertyDisplayName) {
+                                     String propertyUniqueIdentifier, String propertyDisplayName,
+                                     String paramName, String storageGroup) {
     }
 
     /**
@@ -2467,8 +2475,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         return buildTreeRuntime(compiled, definition, param.getEntityPrimaryKey(),
                 param.getEntityPrimaryKeys(), param.getInputs(), param.getDataPrimaryKey(),
                 param.getInputDataPrimaryKeys(), param.getOutputDataPrimaryKeys(),
-                // 树请求一次执行每个入参只给一个数据位置，LIST 入参的按元素多位置写法只走行为测试
-                singleInputTargets(param.getInputParams(), Set.of()), param.getOutputParams(),
+                // 树级默认值一次执行每个入参只给一个数据位置（LIST 按元素多位置只在节点级给），运行时统一按数组存
+                wrapInputTargets(singleInputTargets(param.getInputParams(), Set.of())), param.getOutputParams(),
                 param.getLinkEntityPrimaryKey(), param.getNodeExecutes());
     }
 
@@ -2488,7 +2496,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                                                   Map<String, Object> inputs, Object dataPrimaryKey,
                                                   Map<String, Map<String, Object>> inputDataPrimaryKeys,
                                                   Map<String, Map<String, Object>> outputDataPrimaryKeys,
-                                                  Map<String, ActionInstanceTargetParam> inputParams,
+                                                  Map<String, List<ActionInstanceTargetParam>> inputParams,
                                                   Map<String, ActionInstanceTargetParam> outputParams,
                                                   Object linkEntityPrimaryKey,
                                                   Map<String, TreeNodeExecuteParam> nodeExecutes) {
@@ -2714,13 +2722,16 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 .dataPrimaryKey(runtime.nodeDataPrimaryKey(nodeId))
                 .inputEntities(toInstanceTargets(runtime.nodeInputDataPrimaryKeys(nodeId)))
                 .outputEntities(toInstanceTargets(runtime.nodeOutputDataPrimaryKeys(nodeId)))
-                .inputParams(wrapInputTargets(runtime.nodeInputParams(nodeId)))
+                .inputParams(runtime.nodeInputParams(nodeId))
                 .outputParams(runtime.nodeOutputParams(nodeId))
                 .linkEntityPrimaryKey(treeLinkEntityPrimaryKey(nodeId, bound, runtime))
                 .params(treeExternalParams(nodeId, bound, runtime))
                 .paramValueOverrides(overrides.isEmpty() ? null : overrides)
                 .resolvedInputs(resolvedInputs)
                 .build();
+        // 节点面板按绑定行/元素字段名给的数据位置归到顶层入参名，LIST 的元素字段位置按数组下标拼成同一元素；
+        // 按参数名给的写法不受影响
+        normalizeInputParamKeys(testParam);
         // 树节点的数据位置都来自执行请求，走内部入口，别绕回对外请求再剥掉一次
         var testResult = runTestAction(testParam);
         // 有关系的执行按对端逐条 try/catch，异常只回一个空串；节点不能把这种结果当成功
@@ -3002,7 +3013,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 .build();
     }
 
-    /** 树节点按参数只定位一个数据位置，测试请求里这个字段是候选数组，包成单元素数组传下去 */
+    /** 树级默认值每个入参只定位一个数据位置，运行时统一按数据位置数组存，这里包成单元素数组 */
     private Map<String, List<ActionInstanceTargetParam>> wrapInputTargets(
             Map<String, ActionInstanceTargetParam> targets) {
         if (MapUtils.isEmpty(targets)) {

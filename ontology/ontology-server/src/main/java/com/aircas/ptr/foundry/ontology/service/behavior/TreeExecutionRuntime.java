@@ -78,8 +78,8 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
     /** 按对象给的出参分组行主键：对象id -> (存储分组 -> 行主键)，应用行为按行写出参 */
     private final Map<String, Map<String, Object>> outputDataPrimaryKeys;
 
-    /** 按算子入参给的数据位置：入参名 -> {实例主键, 分组 -> 行主键} */
-    private final Map<String, ActionInstanceTargetParam> inputParams;
+    /** 按算子入参给的数据位置：入参名 -> 数据位置数组；LIST 入参一个位置是列表的一个元素，其余入参只有一个位置 */
+    private final Map<String, List<ActionInstanceTargetParam>> inputParams;
 
     /** 按算子出参给的数据位置：出参名 -> {实例主键, 分组 -> 行主键} */
     private final Map<String, ActionInstanceTargetParam> outputParams;
@@ -147,7 +147,7 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
                                 Map<String, Object> inputs, Object dataPrimaryKey,
                                 Map<String, Map<String, Object>> inputDataPrimaryKeys,
                                 Map<String, Map<String, Object>> outputDataPrimaryKeys,
-                                Map<String, ActionInstanceTargetParam> inputParams,
+                                Map<String, List<ActionInstanceTargetParam>> inputParams,
                                 Map<String, ActionInstanceTargetParam> outputParams,
                                 Object linkEntityPrimaryKey, Map<String, TreeNodeExecuteParam> nodeExecutes,
                                 Integer spaceId, TreeCooldownTracker cooldownTracker,
@@ -345,8 +345,8 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
         return value == null || value.isEmpty() ? outputDataPrimaryKeys : value;
     }
 
-    /** 本节点用的按算子入参数据位置 */
-    public Map<String, ActionInstanceTargetParam> nodeInputParams(String nodeId) {
+    /** 本节点用的按算子入参数据位置（入参名 -> 数据位置数组） */
+    public Map<String, List<ActionInstanceTargetParam>> nodeInputParams(String nodeId) {
         var value = nodeData(nodeId).getInputParams();
         return value == null || value.isEmpty() ? inputParams : value;
     }
