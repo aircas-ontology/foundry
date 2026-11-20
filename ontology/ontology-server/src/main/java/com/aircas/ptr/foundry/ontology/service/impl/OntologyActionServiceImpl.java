@@ -5175,7 +5175,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
 
     /**
      * LIST 入参的多个数据位置合成一个读取位置：位置里的实例必须相同，各位置读的存储分组也必须相同，
-     * 各分组行主键按数组顺序合并成一列，每个位置正好贡献列表的一个元素。
+     * 各分组行主键按数组顺序合并成一列，每个位置正好贡献列表的一个元素；同一行只能出现一次，
+     * 否则会拼出两个完全一样的元素，直接报错。
      */
     private ActionInstanceTargetParam mergeListTargetPositions(String label,
                                                                List<ActionInstanceTargetParam> positions) {
@@ -5190,8 +5191,15 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                     label + " 是列表类型的入参，数组里的每个位置对应列表的一个元素，各位置读的存储分组必须一致"
                             + "（要读 " + describeListGroups(groups) + "），请补齐该位置的分组行",
                     HttpStatus.BAD_REQUEST);
-            positionGroups.forEach(group -> rows.computeIfAbsent(group, k -> new ArrayList<>())
-                    .add(position.getDataPrimaryKeys().get(group)));
+            positionGroups.forEach(group -> {
+                var rowKey = position.getDataPrimaryKeys().get(group);
+                var groupRows = rows.computeIfAbsent(group, k -> new ArrayList<>());
+                PreconditionUtils.checkArgument(!groupRows.contains(rowKey),
+                        label + " 数组里有两个位置选了同一行：分组[" + group + "]行主键 " + rowKey
+                                + "，同一行只能拼成一个元素，请去掉重复的位置",
+                        HttpStatus.BAD_REQUEST);
+                groupRows.add(rowKey);
+            });
         }
         var builder = ActionInstanceTargetParam.builder().entityPrimaryKey(primaryKey);
         if (!rows.isEmpty()) {

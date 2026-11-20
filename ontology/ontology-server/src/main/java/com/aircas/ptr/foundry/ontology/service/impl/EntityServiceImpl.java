@@ -2448,7 +2448,8 @@ public class EntityServiceImpl implements EntityService {
      * List 入参按子表行逐元素组装：每个元素的字段各取一列取值，按行号把各列拼成一个元素，
      * 元素字段路径（如 position.longitude）在元素内逐层展开。
      * <p>只处理元素字段绑定（带 paramPath）；同一参数上还有整包绑定时返回 null，整包取值优先，与对象参数一致。
-     * 某列只有单值（主表属性等实例级取值）时广播到每一行；行数以最长的一列为准，短列缺的行补 null。</p>
+     * 某列只有单值（主表属性等实例级取值）时广播到每一行；多值列的行数必须一致，
+     * 对不上说明各存储分组选的行没对齐，直接报错，见 {@link #checkListElementColumnSizes}。</p>
      */
     private FunctionParameter assembleListElements(FunctionParameterVO param,
                                                    List<ActionParamMappingVO> mappings,
@@ -2460,6 +2461,7 @@ public class EntityServiceImpl implements EntityService {
                 .map(m -> new ListElementColumn(m, resolveInputValues(m, actionContext, param.getParamName())))
                 .collect(Collectors.toList());
         int rowCount = columns.stream().mapToInt(c -> c.values == null ? 0 : c.values.size()).max().orElse(0);
+        checkListElementColumnSizes(param, columns, rowCount);
         List<Object> elements = new ArrayList<>(rowCount);
         for (int i = 0; i < rowCount; i++) {
             Map<String, Object> element = new LinkedHashMap<>();
@@ -2484,6 +2486,31 @@ public class EntityServiceImpl implements EntityService {
             this.mapping = mapping;
             this.values = values;
         }
+    }
+
+    /**
+     * 多值元素字段的行数必须一致：行数对不上说明各存储分组选的行没对齐（常见于只给一个分组选了行、
+     * 另一个分组还在按默认行数读），补齐 null 会多拼出空字段的元素，直接报错。
+     * 单值列（主表属性等实例级取值）广播到每一行，不参与对齐。
+     */
+    private void checkListElementColumnSizes(FunctionParameterVO param, List<ListElementColumn> columns,
+                                             int rowCount) {
+        var inconsistent = columns.stream()
+                .filter(column -> column.values != null && column.values.size() > 1
+                        && column.values.size() != rowCount)
+                .collect(Collectors.toList());
+        PreconditionUtils.checkArgument(inconsistent.isEmpty(),
+                "入参[" + param.getParamName() + "]的元素字段行数不一致：" + describeListColumnSizes(columns)
+                        + "；同一元素的所有字段要逐行对应，多个存储分组时要同时选齐每个分组的行",
+                HttpStatus.BAD_REQUEST);
+    }
+
+    private static String describeListColumnSizes(List<ListElementColumn> columns) {
+        return columns.stream()
+                .filter(column -> column.values != null && column.values.size() > 1)
+                .map(column -> "字段[" + StringUtils.defaultIfBlank(column.mapping.getParamPath(),
+                        column.mapping.getParameterName()) + "] " + column.values.size() + " 行")
+                .collect(Collectors.joining("、"));
     }
 
     /** 第 index 个元素在该列上的取值：单值列广播到每一行，短列缺的行返回 null */
