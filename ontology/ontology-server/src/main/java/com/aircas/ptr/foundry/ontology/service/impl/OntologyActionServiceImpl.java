@@ -37,7 +37,7 @@ import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.collections4.MapUtils;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.dao.DataAccessException;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
@@ -4234,6 +4234,81 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     /** 算子名称/描述按「空间 + api」定位，跨空间的同名 api 各是各的算子 */
     private String functionRefKey(Integer spaceId, String functionApi) {
         return spaceId + ":" + functionApi;
+    }
+
+    @Override
+    public List<OntologyActionInfoVO> listSelectableActions(Integer ontologySpaceId, List<String> ontologyIdentifiers,
+                                                            List<String> functionApis) {
+        PreconditionUtils.checkNotNull(ontologySpaceId, "必须传对象空间id", HttpStatus.BAD_REQUEST);
+        var objectIds = splitSelectionIds(ontologyIdentifiers);
+        var apis = splitSelectionIds(functionApis);
+        // 两边都是收窄条件：没选出对象或函数时，没有可依赖的行为
+        if (objectIds.isEmpty() || apis.isEmpty()) {
+            return List.of();
+        }
+        var wrapper = new LambdaQueryWrapper<OntologyAction>()
+                .eq(OntologyAction::getOntologySpaceId, ontologySpaceId)
+                .eq(OntologyAction::getStatus, ActionStatusEnum.PUBLISHED.getValue())
+                .in(OntologyAction::getFunctionApi, apis)
+                .and(bound -> {
+                    for (int i = 0; i < objectIds.size(); i++) {
+                        if (i == 0) {
+                            bound.apply(OBJECT_IDENTIFIER_CONTAINS, objectIds.get(i));
+                        } else {
+                            bound.or().apply(OBJECT_IDENTIFIER_CONTAINS, objectIds.get(i));
+                        }
+                    }
+                })
+                .orderByDesc(OntologyAction::getId);
+        // 一个行为挂多个已选对象时条件会多次命中，按行为 id 只留一条
+        Map<Long, OntologyAction> unique = new LinkedHashMap<>();
+        for (var action : list(wrapper)) {
+            unique.putIfAbsent(action.getId(), action);
+        }
+        if (unique.isEmpty()) {
+            return List.of();
+        }
+        var functionDescMap = functionService.mapDescriptionByApi(ontologySpaceId, new ArrayList<>(apis));
+        return unique.values().stream()
+                .map(v -> OntologyActionInfoVO.builder()
+                        .id(v.getId())
+                        .actionApi(v.getApi())
+                        .description(v.getDescription())
+                        .ontologyUniqIdentifier(v.ontologyUniqueIdentifierText())
+                        .displayName(v.getDisplayName())
+                        .icon(v.getIcon())
+                        .functionApi(v.getFunctionApi())
+                        .functionDescription(functionDescMap.get(v.getFunctionApi()))
+                        .categoryId(v.getActionCategoryId())
+                        .status(v.getStatus())
+                        .actionKind(v.getActionKind())
+                        .subjectType(v.getSubjectType())
+                        .operation(v.getActionOperation())
+                        .storageGroup(v.getStorageGroup())
+                        .outputMode(v.getOutputMode())
+                        .createTime(v.getCreateTime())
+                        .updateTime(v.getUpdateTime())
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    /** 选择项支持重复传参，也支持逗号拼在同一个参数里；空白和重复编号丢掉 */
+    private List<String> splitSelectionIds(List<String> raw) {
+        if (CollectionUtils.isEmpty(raw)) {
+            return List.of();
+        }
+        var ids = new LinkedHashSet<String>();
+        for (var item : raw) {
+            if (StringUtils.isBlank(item)) {
+                continue;
+            }
+            for (var part : item.split(",")) {
+                if (StringUtils.isNotBlank(part)) {
+                    ids.add(part.trim());
+                }
+            }
+        }
+        return new ArrayList<>(ids);
     }
 
     @Override

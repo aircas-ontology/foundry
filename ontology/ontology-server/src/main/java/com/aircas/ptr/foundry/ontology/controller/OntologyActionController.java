@@ -102,6 +102,15 @@ public class OntologyActionController {
         return RestResult.ofData(ontologyActionService.pageGetActionByOntologyId(ontologySpaceId, ontologyId, categoryId, keyword, status, kinds, pageNum, pageSize));
     }
 
+    @Operation(summary = "主题新建：按对象编号和函数编号查询已发布行为（同编号去重）")
+    @GetMapping("/selectable")
+    public RestResult<List<OntologyActionInfoVO>> listSelectableActions(
+            @RequestParam(name = "ontologySpaceId") @Parameter(description = "对象空间id") Integer ontologySpaceId,
+            @RequestParam(required = false, name = "ontologyIdentifiers") @Parameter(description = "对象编号，可重复传参或逗号分隔") List<String> ontologyIdentifiers,
+            @RequestParam(required = false, name = "functionApis") @Parameter(description = "函数编号（函数api），可重复传参或逗号分隔") List<String> functionApis) {
+        return RestResult.ofData(ontologyActionService.listSelectableActions(ontologySpaceId, ontologyIdentifiers, functionApis));
+    }
+
 
     @Operation(summary = "根据actionApi获取行为详情")
     @GetMapping("")

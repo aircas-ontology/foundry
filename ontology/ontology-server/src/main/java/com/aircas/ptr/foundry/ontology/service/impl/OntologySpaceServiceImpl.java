@@ -7,6 +7,9 @@ import com.aircas.ptr.foundry.ontology.model.dto.OntologyCreateDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.OntologySpaceCreateDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.OntologySpaceDTO;
 import com.aircas.ptr.foundry.ontology.model.enums.ActionKindEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.ActionParamSourceEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.ActionStatusEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.FunctionTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyExportTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.OntologyLinkTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.SpaceTypeEnum;
@@ -26,7 +29,10 @@ import com.aircas.ptr.foundry.ontology.model.po.OntologyCategory;
 import com.aircas.ptr.foundry.ontology.model.po.ActionHandleRule;
 import com.aircas.ptr.foundry.ontology.model.po.ActionHandleTask;
 import com.aircas.ptr.foundry.ontology.model.po.Function;
+import com.aircas.ptr.foundry.ontology.model.po.FunctionParamPO;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyAction;
+import com.aircas.ptr.foundry.ontology.model.po.OntologyActionLink;
+import com.aircas.ptr.foundry.ontology.model.po.OntologyActionMappingIn;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyCategory;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkGroup;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyLinkCategory;
@@ -62,6 +68,7 @@ import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.BeanUtils;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -131,6 +138,12 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
     private final OntologyLinkGroupMapper linkMapper;
 
     private final FunctionMapper functionMapper;
+
+    private final FunctionParamMapper functionParamMapper;
+
+    private final OntologyActionMappingInMapper actionMappingInMapper;
+
+    private final OntologyActionLinkMapper actionLinkMapper;
 
     private final ActionHandleRuleMapper ruleMapper;
 
@@ -2123,6 +2136,7 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
 
         // 5. 复制对象、属性、实例
         Map<String, String> ontologyMapping = new HashMap<>();
+        Map<String, String> propertyMapping = new HashMap<>();
         //新对象唯一标识 -> 「导出主键 → 新主键」映射，第 6 步复制关系边时落位用
         Map<String, Map<String, Object>> pkMappingByNewOntologyUid = new HashMap<>();
         for (var ontologySelection : param.getSelectedOntologies()) {
@@ -2152,6 +2166,7 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
                 var sourceProp = sourcePropMap.get(propSelection.getSourcePropertyUniqueIdentifier());
                 var targetPropCat = resolveCategory(propCatMap, sourceProp.getPropertyCategoryId(), newPropRoot);
                 var newPropId = createPropertyInSubspace(newOntologyId, sourceProp, targetPropCat);
+                propertyMapping.put(sourceProp.getUniqueIdentifier(), newPropId);
                 savePropertyFilter(spaceId, newOntologyId, sourceProp.getUniqueIdentifier(), newPropId, propSelection.getFilter());
                 if (propSelection.getFilter() != null && propSelection.getFilter().getOp() != null) {
                     instanceFilters.add(new InstancePropertyFilter(sourceProp.getApiName(), propSelection.getFilter()));
@@ -2205,11 +2220,244 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
             }
         }
 
+        // 7. 复制选中的函数，再复制选中的行为。行为参数要落到新函数的参数 id 上
+        var functionParamMapping = copySelectedFunctions(param.getParentSpaceId(), spaceId, param.getSelectedFunctionApis());
+        copySelectedActions(param.getParentSpaceId(), spaceId, param.getSelectedActionIds(),
+                ontologyMapping, propertyMapping, linkMapping, functionParamMapping);
+
         return OntologySubspaceCreateVO.builder()
                 .spaceId(spaceId)
                 .ontologyMapping(ontologyMapping)
                 .linkMapping(linkMapping)
                 .build();
+    }
+
+    /**
+     * 把父空间里选中的脚本函数、外部 API 函数复制到新主题。
+     * 每个 api 只复制最新版本，并返回旧参数 id 到新参数 id 的映射，供行为入参改绑。
+     */
+    private Map<Long, Long> copySelectedFunctions(Integer parentSpaceId, Integer newSpaceId, List<String> selectedFunctionApis) {
+        var apis = distinctSelectionIds(selectedFunctionApis);
+        Map<Long, Long> paramMapping = new HashMap<>();
+        if (apis.isEmpty()) {
+            return paramMapping;
+        }
+        var functions = functionMapper.selectList(new LambdaQueryWrapper<Function>()
+                .eq(Function::getOntologySpaceId, parentSpaceId)
+                .in(Function::getApi, apis));
+        Map<String, Function> latest = new HashMap<>();
+        for (var function : functions) {
+            var current = latest.get(function.getApi());
+            if (current == null || isNewerFunction(function, current)) {
+                latest.put(function.getApi(), function);
+            }
+        }
+        var missing = apis.stream().filter(api -> !latest.containsKey(api)).collect(Collectors.toList());
+        PreconditionUtils.checkArgument(missing.isEmpty(),
+                "选中的函数不存在：" + String.join("、", missing), HttpStatus.BAD_REQUEST);
+        for (var api : apis) {
+            var source = latest.get(api);
+            PreconditionUtils.checkArgument(source.getType() == FunctionTypeEnum.CUSTOMIZE
+                            || source.getType() == FunctionTypeEnum.EXTERNAL,
+                    "主题只能选择脚本函数或外部API函数：" + api, HttpStatus.BAD_REQUEST);
+            var copy = new Function();
+            BeanUtils.copyProperties(source, copy);
+            copy.setId(null);
+            copy.setCreateTime(null);
+            copy.setUpdateTime(null);
+            copy.setOntologySpaceId(newSpaceId);
+            functionMapper.insert(copy);
+
+            var params = functionParamMapper.selectList(new LambdaQueryWrapper<FunctionParamPO>()
+                    .eq(FunctionParamPO::getFunctionId, source.getId()));
+            for (var param : params) {
+                var paramCopy = new FunctionParamPO();
+                BeanUtils.copyProperties(param, paramCopy);
+                var oldId = param.getId();
+                paramCopy.setId(null);
+                paramCopy.setCreateTime(null);
+                paramCopy.setUpdateTime(null);
+                paramCopy.setFunctionId(copy.getId());
+                functionParamMapper.insert(paramCopy);
+                paramMapping.put(oldId, paramCopy.getId());
+            }
+        }
+        return paramMapping;
+    }
+
+    private boolean isNewerFunction(Function candidate, Function current) {
+        int compared = FunctionServiceImpl.compareVersion(
+                candidate.getVersion() == null ? "" : candidate.getVersion(),
+                current.getVersion() == null ? "" : current.getVersion());
+        if (compared != 0) {
+            return compared > 0;
+        }
+        return candidate.getId() != null && (current.getId() == null || candidate.getId() > current.getId());
+    }
+
+    /**
+     * 把父空间里选中的已发布行为复制到新主题，挂到新主题的行为分类根上。
+     * 传入的是行为 id（ontology_action.id）。
+     * 对象、属性、关系、函数参数都改绑到本次新建的副本，这样行为列表和分类树能直接看到它们。
+     */
+    private void copySelectedActions(Integer parentSpaceId, Integer newSpaceId, List<Long> selectedActionIds,
+                                     Map<String, String> ontologyMapping, Map<String, String> propertyMapping,
+                                     Map<String, String> linkMapping, Map<Long, Long> functionParamMapping) {
+        if (CollectionUtils.isEmpty(selectedActionIds)) {
+            return;
+        }
+        var ids = selectedActionIds.stream().filter(Objects::nonNull).distinct().collect(Collectors.toList());
+        if (ids.isEmpty()) {
+            return;
+        }
+        var actions = actionMapper.selectList(new LambdaQueryWrapper<OntologyAction>()
+                .eq(OntologyAction::getOntologySpaceId, parentSpaceId)
+                .eq(OntologyAction::getStatus, ActionStatusEnum.PUBLISHED.getValue())
+                .in(OntologyAction::getId, ids));
+        Map<Long, OntologyAction> byId = new HashMap<>();
+        for (var action : actions) {
+            if (action.getId() != null) {
+                byId.putIfAbsent(action.getId(), action);
+            }
+        }
+        var missing = ids.stream().filter(id -> !byId.containsKey(id)).map(String::valueOf).collect(Collectors.toList());
+        PreconditionUtils.checkArgument(missing.isEmpty(),
+                "选中的行为不存在或未发布：" + String.join("、", missing), HttpStatus.BAD_REQUEST);
+        var categoryId = createDefaultActionCategoryRoot(newSpaceId);
+        for (var id : ids) {
+            copyOneAction(byId.get(id), newSpaceId, categoryId,
+                    ontologyMapping, propertyMapping, linkMapping, functionParamMapping);
+        }
+    }
+
+    private void copyOneAction(OntologyAction source, Integer newSpaceId, Integer categoryId,
+                               Map<String, String> ontologyMapping, Map<String, String> propertyMapping,
+                               Map<String, String> linkMapping, Map<Long, Long> functionParamMapping) {
+        PreconditionUtils.checkArgument(source.getActionKind() != ActionKindEnum.TREE,
+                "行为树不随主题复制：" + source.getApi(), HttpStatus.BAD_REQUEST);
+        if (StringUtils.isNotBlank(source.getFunctionApi())) {
+            var copiedFunction = functionMapper.selectCount(new LambdaQueryWrapper<Function>()
+                    .eq(Function::getOntologySpaceId, newSpaceId)
+                    .eq(Function::getApi, source.getFunctionApi()));
+            PreconditionUtils.checkArgument(copiedFunction > 0,
+                    "行为绑定的函数未选中：" + source.getFunctionApi(), HttpStatus.BAD_REQUEST);
+        }
+        var copy = new OntologyAction();
+        BeanUtils.copyProperties(source, copy);
+        copy.setId(null);
+        copy.setCreateTime(null);
+        copy.setUpdateTime(null);
+        copy.setOntologySpaceId(newSpaceId);
+        copy.setActionCategoryId(categoryId);
+        copy.setOntologyUniqueIdentifier(remapIdentifiers(source.getOntologyUniqueIdentifier(), ontologyMapping,
+                "行为 " + source.getApi() + " 挂载的对象未被选中："));
+        actionMapper.insert(copy);
+
+        var mappings = actionMappingInMapper.selectList(new LambdaQueryWrapper<OntologyActionMappingIn>()
+                .eq(OntologyActionMappingIn::getOntologyActionId, source.getId()));
+        for (var mapping : mappings) {
+            var mappingCopy = new OntologyActionMappingIn();
+            BeanUtils.copyProperties(mapping, mappingCopy);
+            mappingCopy.setId(null);
+            mappingCopy.setCreateTime(null);
+            mappingCopy.setUpdateTime(null);
+            mappingCopy.setOntologyActionId(copy.getId());
+            if (StringUtils.isNotBlank(mapping.getPropertyUniqueIdentifier())) {
+                mappingCopy.setPropertyUniqueIdentifier(requireMapped(propertyMapping,
+                        mapping.getPropertyUniqueIdentifier(),
+                        "行为 " + source.getApi() + " 引用的属性未被选中："));
+            }
+            if (StringUtils.isNotBlank(mapping.getOntologyUniqueIdentifier())) {
+                mappingCopy.setOntologyUniqueIdentifier(requireMapped(ontologyMapping,
+                        mapping.getOntologyUniqueIdentifier(),
+                        "行为 " + source.getApi() + " 引用的对象未被选中："));
+            }
+            if (mapping.getFunctionParamId() != null) {
+                var newParamId = functionParamMapping.get(mapping.getFunctionParamId());
+                PreconditionUtils.checkArgument(newParamId != null,
+                        "行为 " + source.getApi() + " 的函数参数无法对应到已选函数", HttpStatus.BAD_REQUEST);
+                mappingCopy.setFunctionParamId(newParamId);
+            }
+            if (mapping.getSourceType() == ActionParamSourceEnum.LIST) {
+                mappingCopy.setSourceConfig(remapListSourceConfig(mapping.getSourceConfig(), propertyMapping, source.getApi()));
+            }
+            actionMappingInMapper.insert(mappingCopy);
+        }
+
+        var link = actionLinkMapper.selectOne(new LambdaQueryWrapper<OntologyActionLink>()
+                .eq(OntologyActionLink::getOntologyActionId, source.getId()));
+        if (link != null) {
+            var linkCopy = new OntologyActionLink();
+            BeanUtils.copyProperties(link, linkCopy);
+            linkCopy.setId(null);
+            linkCopy.setCreateTime(null);
+            linkCopy.setUpdateTime(null);
+            linkCopy.setOntologyActionId(copy.getId());
+            linkCopy.setOntologyLinkUniqueIdentifier(requireMapped(linkMapping,
+                    link.getOntologyLinkUniqueIdentifier(),
+                    "行为 " + source.getApi() + " 关联的关系未被选中："));
+            actionLinkMapper.insert(linkCopy);
+        }
+    }
+
+    private List<String> remapIdentifiers(List<String> sourceIds, Map<String, String> mapping, String missingMessage) {
+        if (CollectionUtils.isEmpty(sourceIds)) {
+            return new ArrayList<>();
+        }
+        var remapped = new ArrayList<String>();
+        for (var id : sourceIds) {
+            if (StringUtils.isBlank(id)) {
+                continue;
+            }
+            remapped.add(requireMapped(mapping, id, missingMessage));
+        }
+        return remapped;
+    }
+
+    private String requireMapped(Map<String, String> mapping, String sourceId, String missingMessage) {
+        var target = mapping.get(sourceId);
+        PreconditionUtils.checkArgument(target != null, missingMessage + sourceId, HttpStatus.BAD_REQUEST);
+        return target;
+    }
+
+    private String remapListSourceConfig(String sourceConfig, Map<String, String> propertyMapping, String actionApi) {
+        if (StringUtils.isBlank(sourceConfig)) {
+            return sourceConfig;
+        }
+        List<String> ids;
+        try {
+            ids = jsonMapper.readValue(sourceConfig, new TypeReference<List<String>>() {
+            });
+        } catch (Exception e) {
+            throw new BusinessException("行为 " + actionApi + " 的 List 入参无法解析", HttpStatus.BAD_REQUEST);
+        }
+        var remapped = new ArrayList<String>();
+        for (var id : ids) {
+            remapped.add(requireMapped(propertyMapping, id, "行为 " + actionApi + " 引用的属性未被选中："));
+        }
+        try {
+            return jsonMapper.writeValueAsString(remapped);
+        } catch (Exception e) {
+            throw new BusinessException("行为 " + actionApi + " 的 List 入参无法保存", HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    private List<String> distinctSelectionIds(List<String> raw) {
+        if (CollectionUtils.isEmpty(raw)) {
+            return List.of();
+        }
+        var ids = new LinkedHashSet<String>();
+        for (var item : raw) {
+            if (StringUtils.isBlank(item)) {
+                continue;
+            }
+            for (var part : item.split(",")) {
+                if (StringUtils.isNotBlank(part)) {
+                    ids.add(part.trim());
+                }
+            }
+        }
+        return new ArrayList<>(ids);
     }
 
     private void checkSpaceNameConflict(String displayName, String apiName) {

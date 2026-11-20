@@ -18,7 +18,7 @@ import jakarta.validation.constraints.NotNull;
 import java.util.List;
 
 /**
- * 创建子空间请求参数：基于已有空间选择对象、实例、属性（含筛选条件）和关系，生成新的子空间。
+ * 创建子空间请求参数：基于已有空间选择对象、实例、属性（含筛选条件）、关系、函数和行为，生成新的子空间。
  */
 @Data
 @SuperBuilder
@@ -55,6 +55,12 @@ public class OntologySubspaceCreateParam {
     @Schema(name = "selectedLinks", description = "选中的关系配置")
     @Valid
     private List<LinkSelection> selectedLinks;
+
+    @Schema(name = "selectedFunctionApis", description = "选中的函数编号（函数 api）。只复制父空间中类型为脚本或外部 API 的算子，复制后出现在新主题的函数列表")
+    private List<String> selectedFunctionApis;
+
+    @Schema(name = "selectedActionIds", description = "选中的行为 id，对应 ontology_action.id，如 138。须为父空间已发布行为，复制后出现在新主题的行为列表和行为分类树")
+    private List<Long> selectedActionIds;
 
     /**
      * 选中的对象。

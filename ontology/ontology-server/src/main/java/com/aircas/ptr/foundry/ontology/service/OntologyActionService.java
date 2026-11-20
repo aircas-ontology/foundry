@@ -59,6 +59,18 @@ public interface OntologyActionService extends IService<OntologyAction> {
                                                          String keyword, Integer status, List<ActionKindEnum> actionKinds,
                                                          Integer pageNum, Integer pageSize);
 
+    /**
+     * 主题新建时可选的已发布行为。
+     * <p>同时按对象编号和函数编号收窄：行为的算子 api 落在传入的函数里，且挂载对象与传入的对象有交集。
+     * 同一个行为被多个对象或函数命中时只返回一条。</p>
+     *
+     * @param ontologySpaceId      对象空间 id
+     * @param ontologyIdentifiers  对象编号（对象 uniqueIdentifier），可逗号分隔或重复传参
+     * @param functionApis         函数编号（函数 api），可逗号分隔或重复传参
+     */
+    List<OntologyActionInfoVO> listSelectableActions(Integer ontologySpaceId, List<String> ontologyIdentifiers,
+                                                     List<String> functionApis);
+
     OntologyActionDetailVO getActionByApi(Integer ontologySpaceId, String actionApi);
 
     /**
