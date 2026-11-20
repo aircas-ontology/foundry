@@ -150,6 +150,9 @@ public class GroovyScriptParamParser implements ScriptParamParser {
         boolean expanded = false;
         if (parameters != null) {
             for (Parameter p : parameters) {
+                String[] funcParam = funcParamMeta(p);
+                String paramName = funcParam[0] != null ? funcParam[0] : p.getName();
+                String paramDescription = funcParam[1];
                 ClassNode type = p.getType();
                 ClassNode userClass = resolveUserClass(type, ctx.classByName);
                 if (userClass != null) {
@@ -158,11 +161,12 @@ public class GroovyScriptParamParser implements ScriptParamParser {
                     List<ScriptParsedParam> fields = expandFields(userClass, FunctionParamCategoryEnum.INPUT,
                             "ANNOTATION", ctx, new LinkedHashSet<>(), 1);
                     out.add(ScriptParsedParam.builder()
-                            .name(p.getName())
+                            .name(paramName)
                             .type(ScriptParamTypeMapper.map(typeText))
                             .rawType(typeText)
                             .category(FunctionParamCategoryEnum.INPUT)
                             .source("ANNOTATION")
+                            .description(paramDescription)
                             .fields(fields)
                             .build());
                     expanded = true;
@@ -172,11 +176,12 @@ public class GroovyScriptParamParser implements ScriptParamParser {
                     if (projectClass != null) {
                         // 工程内类（import 进来的 VO/DTO）：rawType 用真实全限定名，字段反射展开下一级
                         out.add(ScriptParsedParam.builder()
-                                .name(p.getName())
+                                .name(paramName)
                                 .type(ScriptParamTypeMapper.map(typeText))
                                 .rawType(projectClass.getName())
                                 .category(FunctionParamCategoryEnum.INPUT)
                                 .source("ANNOTATION")
+                                .description(paramDescription)
                                 .fields(ctx.expander.expandFields(projectClass, FunctionParamCategoryEnum.INPUT,
                                         new LinkedHashSet<>(), 1))
                                 .build());
@@ -186,12 +191,13 @@ public class GroovyScriptParamParser implements ScriptParamParser {
                         List<ScriptParsedParam> elementFields = elementType == null ? null
                                 : expandCollectionElementFields(type, FunctionParamCategoryEnum.INPUT, ctx);
                         out.add(ScriptParsedParam.builder()
-                                .name(p.getName())
+                                .name(paramName)
                                 .type(ScriptParamTypeMapper.map(typeText))
                                 .rawType(elementType == null ? typeText : genericTypeText(type))
                                 .elementType(elementType)
                                 .category(FunctionParamCategoryEnum.INPUT)
                                 .source("ANNOTATION")
+                                .description(paramDescription)
                                 .fields(elementFields)
                                 .build());
                     }
@@ -203,6 +209,28 @@ public class GroovyScriptParamParser implements ScriptParamParser {
             // 启发层：无类型入参（def handle(input)）→ 扫 body 里 input.xxx 成员访问
             inferInputsFromBody(handle, out);
         }
+    }
+
+    /**
+     * 读取形参上的 {@code @FuncParam} 注解，返回 {@code [name, description]}；无注解时两项均为 null。
+     * <p>CONVERSION 阶段注解类型可能尚未解析成全限定名，按简单名 {@code FuncParam} 匹配。</p>
+     */
+    private static String[] funcParamMeta(Parameter p) {
+        for (AnnotationNode annotation : p.getAnnotations()) {
+            if (!"FuncParam".equals(simpleName(annotation.getClassNode().getName()))) {
+                continue;
+            }
+            return new String[]{constantText(annotation.getMember("name")), constantText(annotation.getMember("description"))};
+        }
+        return new String[]{null, null};
+    }
+
+    /** 注解成员取字符串字面量值；非字面量（表达式）返回 null。 */
+    private static String constantText(Expression expression) {
+        if (expression instanceof ConstantExpression constant && constant.getValue() != null) {
+            return String.valueOf(constant.getValue());
+        }
+        return null;
     }
 
     private void collectOutputs(MethodNode handle, ParseContext ctx, List<ScriptParsedParam> out) {

@@ -204,10 +204,13 @@ public class ScriptParamParseServiceImpl implements ScriptParamParseService {
     }
 
     private void applyDescription(ScriptParsedParam p, Descriptions descriptions, long outputCount, boolean topLevel) {
-        String description = descriptions.describe(
-                p.getName(), p.getCategory() == FunctionParamCategoryEnum.OUTPUT, topLevel, outputCount);
-        if (description != null) {
-            p.setDescription(description);
+        // 注解（@FuncParam）已给出的描述优先，注释仅兜底补齐空白项
+        if (StringUtils.isBlank(p.getDescription())) {
+            String description = descriptions.describe(
+                    p.getName(), p.getCategory() == FunctionParamCategoryEnum.OUTPUT, topLevel, outputCount);
+            if (description != null) {
+                p.setDescription(description);
+            }
         }
         if (p.getFields() != null) {
             for (ScriptParsedParam field : p.getFields()) {
