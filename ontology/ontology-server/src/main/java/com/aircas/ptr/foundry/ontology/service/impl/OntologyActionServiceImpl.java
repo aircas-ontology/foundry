@@ -4274,7 +4274,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                         .id(v.getId())
                         .actionApi(v.getApi())
                         .description(v.getDescription())
-                        .ontologyUniqIdentifier(v.ontologyUniqueIdentifierText())
+                        .ontologyUniqIdentifier(v.primaryOntologyIdentifierText())
                         .displayName(v.getDisplayName())
                         .icon(v.getIcon())
                         .functionApi(v.getFunctionApi())
