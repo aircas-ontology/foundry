@@ -782,12 +782,6 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
     @Transactional(transactionManager = "mainTransactionManager")
     @Override
     public void createMetadataSchema(PropertyMetadataSchemaCreateParam param) {
-        //校验是否存在已赋值的属性
-        var props = list(new LambdaQueryWrapper<OntologyProperty>()
-                .eq(OntologyProperty::getOntologyUniqueIdentifier, param.getOntologyIdentifier())
-                .isNotNull(OntologyProperty::getMetadata));
-        PreconditionUtils.checkArgument(CollectionUtils.isEmpty(props), "元数据schema下有已赋值的属性，不能创建", HttpStatus.FORBIDDEN);
-
         var existMetadata = propertyMetadataSchemaService.list(new LambdaQueryWrapper<PropertyMetadataSchema>()
                 .eq(PropertyMetadataSchema::getOntologyUniqueIdentifier, param.getOntologyIdentifier()));
         var existMetadataMap = existMetadata.stream().collect(Collectors.toMap(PropertyMetadataSchema::getId, v -> v));
@@ -815,13 +809,17 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
             List<PropertyMetadataSchema> batchList = Lists.newArrayList();
             List<PropertyMetadataSchemaCreateParam.MetadataSchemaNode> nextLevel = Lists.newArrayList();
             for (var node : currentLevel) {
+                var resolvedType = resolveValueType(node.getValueType(), node.getEnumValues());
+                var resolvedValue = resolveValue(node.getValue(), node.getEnumValues());
+                PreconditionUtils.checkArgument(resolvedType != MetadataValueTypeEnum.ENUM || StringUtils.isNotBlank(resolvedValue),
+                        "枚举类型必须填写枚举值，节点：" + node.getPath(), HttpStatus.BAD_REQUEST);
                 var schema = PropertyMetadataSchema.builder()
                         .ontologyUniqueIdentifier(param.getOntologyIdentifier())
                         .name(node.getName())
                         .parentId(node.getParentId())
                         .path(node.getPath())
-                        .valueType(resolveValueType(node.getValueType(), node.getEnumValues()))
-                        .value(resolveValue(node.getValue(), node.getEnumValues()))
+                        .valueType(resolvedType)
+                        .value(resolvedValue)
                         .build();
                 batchList.add(schema);
             }
