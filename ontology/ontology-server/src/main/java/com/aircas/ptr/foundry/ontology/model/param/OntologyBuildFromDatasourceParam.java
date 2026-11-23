@@ -22,7 +22,9 @@ import java.util.List;
  * 用该子表的表名（这也是数据湖里那张实体表的物理表名）。一次只建一个对象。</p>
  *
  * <p>列的原生类型不在请求体里传——服务端会重新连外部库扫一次，向导页的状态可能已经过期，
- * 以现场扫到的 {@code TYPE_NAME} 为准；例外是主表的平台主键 {@code id}，固定为 {@code Int}。</p>
+ * 以现场扫到的 {@code TYPE_NAME} 为准；例外是主表的平台主键 {@code id}，固定为 {@code Int}。
+ * 用哪条数据源来扫：{@code datasourceId} 优先，没传则回落到 {@code spaceId} 绑定的那条；
+ * 两者都拿不到时跳过扫描，表与列不再校验存在性，类型统一按 {@code String} 落。</p>
  */
 @Data
 @SuperBuilder
@@ -34,6 +36,11 @@ public class OntologyBuildFromDatasourceParam extends OntologySpaceIdParam {
 
     @Schema(name = "categoryId", description = "对象分类 id（ontology_category.id），不传则不挂分类", example = "1")
     private Integer categoryId;
+
+    @Schema(name = "datasourceId", description = "数据源 id（datasource_connection.id），可选："
+            + "传了就用这条数据源连外部库扫列类型与列注释，不要求对象空间已绑定数据源；"
+            + "不传则回落到 spaceId 绑定的那条；两者都没有时跳过扫描，属性类型统一按 String 落", example = "1")
+    private Integer datasourceId;
 
     @Schema(name = "schemaName", description = "外部库 schema 名（向导第②步 /table/list 选定，本步用它重扫列复核类型）",
             required = true, example = "public")

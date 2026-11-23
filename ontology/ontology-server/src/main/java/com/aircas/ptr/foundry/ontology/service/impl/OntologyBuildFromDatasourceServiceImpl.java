@@ -9,7 +9,6 @@ import com.aircas.ptr.foundry.ontology.model.enums.DatasourceEventTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyBuildFromDatasourceParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyMetaCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyPropertyCreateParam;
-import com.aircas.ptr.foundry.ontology.model.po.DatasourceConnection;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
 import com.aircas.ptr.foundry.ontology.model.po.OntologySpace;
 import com.aircas.ptr.foundry.ontology.model.po.TableColumnDesc;
@@ -112,12 +111,18 @@ public class OntologyBuildFromDatasourceServiceImpl implements OntologyBuildFrom
         // 定案：属性 apiName 在一个对象内必须唯一，跨主子表重名整单 400
         validateColumnNamesUnique(tables, master);
 
-        // 类型与列注释以现场扫描为准：向导页打开后外部库可能已经改过表
-        Map<String, Map<String, DatasourceTableDetailVO.Column>> liveColumns =
-                scanLiveColumns(param.getSpaceId(), param.getSchemaName(), new ArrayList<>(tables.keySet()));
-        List<PropertySpec> specs = buildPropertySpecs(master, childTables, tables, liveColumns);
+        // 类型与列注释以现场扫描为准：向导页打开后外部库可能已经改过表。
+        // 扫谁：请求里的 datasourceId 优先，没传则回落到空间绑定的数据源；两者都没有也允许建对象，
+        // 只是跳过扫描，属性类型统一按 String 落，外部表/列存在性不再校验
+        boolean datasourceAvailable = param.getDatasourceId() != null
+                || datasourceConnectionService.existsBySpace(param.getSpaceId());
+        Map<String, Map<String, DatasourceTableDetailVO.Column>> liveColumns = datasourceAvailable
+                ? scanLiveColumns(param, new ArrayList<>(tables.keySet()))
+                : Map.of();
+        List<PropertySpec> specs = buildPropertySpecs(master, childTables, tables, liveColumns, datasourceAvailable);
         // 建表列清单同样在 Phase 0 算完：外键引用的列不存在时，报错要早于任何写库动作
-        Map<String, EntityColumns> entityColumns = buildEntityColumns(master, tables, specs, foreignKeys, liveColumns);
+        Map<String, EntityColumns> entityColumns =
+                buildEntityColumns(master, tables, specs, foreignKeys, liveColumns, datasourceAvailable);
 
         // ---------- Phase 1：主库 ontology ----------
         var metaParam = new OntologyMetaCreateParam()
@@ -149,7 +154,8 @@ public class OntologyBuildFromDatasourceServiceImpl implements OntologyBuildFrom
                 : "，已跳过子表 id 列：" + String.join("、", droppedChildIds);
         String message = String.format("对象【%s】已创建：%d 个属性、%d 张实体表（%s）、%d 条主子表列映射、%d 个仅作关联用的管道列%s；",
                 StringUtils.trim(param.getDisplayName()), specs.size(), entityTables.size(),
-                String.join("、", entityTableNames), mappingCount, pipeColumnCount, droppedNote);
+                String.join("、", entityTableNames), mappingCount, pipeColumnCount, droppedNote)
+                + (datasourceAvailable ? "" : "未取到数据源（datasourceId 未传且空间未绑定），属性类型统一按 String 创建；");
         log.info("数据源构建对象完成 spaceId={}, schemaName={}, uid={}, {}",
                 param.getSpaceId(), param.getSchemaName(), uniqueIdentifier, message);
 
@@ -329,12 +335,18 @@ public class OntologyBuildFromDatasourceServiceImpl implements OntologyBuildFrom
 
     /**
      * 现场重扫外部库，返回「表名 → 列名 → 列信息」；勾选的表已经不存在时直接 400。
+     *
+     * <p>数据源取法与调用方判定一致：请求带了 {@code datasourceId} 就按它扫（空间未绑定数据源也能扫出类型），
+     * 没带才回落到 {@code spaceId} 绑定的那条。</p>
      */
-    private Map<String, Map<String, DatasourceTableDetailVO.Column>> scanLiveColumns(Integer spaceId,
-                                                                                     String schemaName,
-                                                                                     List<String> tableNames) {
-        Map<String, List<DatasourceTableDetailVO.Column>> scanned = datasourceConnectionService
-                .listTablesDetail(spaceId, schemaName, tableNames).stream()
+    private Map<String, Map<String, DatasourceTableDetailVO.Column>> scanLiveColumns(
+            OntologyBuildFromDatasourceParam param, List<String> tableNames) {
+        List<DatasourceTableDetailVO> scannedTables = param.getDatasourceId() != null
+                ? datasourceConnectionService.listTablesDetailByDatasource(
+                        param.getDatasourceId(), param.getSchemaName(), tableNames)
+                : datasourceConnectionService.listTablesDetail(
+                        param.getSpaceId(), param.getSchemaName(), tableNames);
+        Map<String, List<DatasourceTableDetailVO.Column>> scanned = scannedTables.stream()
                 .collect(Collectors.toMap(DatasourceTableDetailVO::getTableName,
                         DatasourceTableDetailVO::getColumns, (a, b) -> a, LinkedHashMap::new));
         Map<String, Map<String, DatasourceTableDetailVO.Column>> live = new LinkedHashMap<>();
@@ -351,15 +363,17 @@ public class OntologyBuildFromDatasourceServiceImpl implements OntologyBuildFrom
     }
 
     /**
-     * 把勾选列换成属性定义：主表归 main、子表归各自表名，类型取现场扫描的原生类型归一化结果。
+     * 把勾选列换成属性定义：主表归 main、子表归各自表名，类型取现场扫描的原生类型归一化结果；
+     * 未取到数据源（{@code datasourceAvailable=false}）时无从扫描，类型统一落 String。
      */
     private List<PropertySpec> buildPropertySpecs(OntologyBuildFromDatasourceParam.SelectedTable master,
                                                   List<String> childTables,
                                                   Map<String, OntologyBuildFromDatasourceParam.SelectedTable> tables,
-                                                  Map<String, Map<String, DatasourceTableDetailVO.Column>> liveColumns) {
+                                                  Map<String, Map<String, DatasourceTableDetailVO.Column>> liveColumns,
+                                                  boolean datasourceAvailable) {
         List<PropertySpec> specs = new ArrayList<>();
-        appendTableSpecs(specs, master, MAIN_STORAGE_GROUP, liveColumns);
-        childTables.forEach(child -> appendTableSpecs(specs, tables.get(child), child, liveColumns));
+        appendTableSpecs(specs, master, MAIN_STORAGE_GROUP, liveColumns, datasourceAvailable);
+        childTables.forEach(child -> appendTableSpecs(specs, tables.get(child), child, liveColumns, datasourceAvailable));
 
         // 主表没勾 id 时补平台主键：实体表的 id 列是建表语句自带的，属性不补就绑不上、genericQuery 直接 400
         boolean masterHasId = specs.stream()
@@ -373,13 +387,16 @@ public class OntologyBuildFromDatasourceServiceImpl implements OntologyBuildFrom
 
     private void appendTableSpecs(List<PropertySpec> specs, OntologyBuildFromDatasourceParam.SelectedTable table,
                                   String storageGroup,
-                                  Map<String, Map<String, DatasourceTableDetailVO.Column>> liveColumns) {
-        Map<String, DatasourceTableDetailVO.Column> columns = liveColumns.get(table.getTableName());
+                                  Map<String, Map<String, DatasourceTableDetailVO.Column>> liveColumns,
+                                  boolean datasourceAvailable) {
+        Map<String, DatasourceTableDetailVO.Column> columns = liveColumns.getOrDefault(table.getTableName(), Map.of());
         for (var selected : table.getColumns()) {
             DatasourceTableDetailVO.Column live = columns.get(selected.getColumnName());
-            PreconditionUtils.checkNotNull(live, String.format("外部库表%s不存在列%s（可能已改名或删除）",
-                    table.getTableName(), selected.getColumnName()), HttpStatus.BAD_REQUEST);
-            String comment = StringUtils.trimToNull(live.getDescription());
+            if (datasourceAvailable) {
+                PreconditionUtils.checkNotNull(live, String.format("外部库表%s不存在列%s（可能已改名或删除）",
+                        table.getTableName(), selected.getColumnName()), HttpStatus.BAD_REQUEST);
+            }
+            String comment = live == null ? null : StringUtils.trimToNull(live.getDescription());
             String displayName = StringUtils.defaultIfBlank(StringUtils.trim(selected.getDisplayName()),
                     StringUtils.defaultIfBlank(comment, selected.getColumnName()));
             String description = StringUtils.defaultIfBlank(StringUtils.trim(selected.getDescription()), comment);
@@ -388,7 +405,7 @@ public class OntologyBuildFromDatasourceServiceImpl implements OntologyBuildFrom
             // 平台主键 id 在湖里是 id SERIAL PRIMARY KEY，外部库那列是什么类型都不跟
             OntologyDataTypeEnum dataType = platformPk
                     ? OntologyDataTypeEnum.Int
-                    : OntologyDataTypeEnum.valueOfJdbcType(live.getNativeType());
+                    : OntologyDataTypeEnum.valueOfJdbcType(live == null ? null : live.getNativeType());
             specs.add(new PropertySpec(selected.getColumnName(), displayName, description, dataType,
                     storageGroup, platformPk, selected.getSourceColumnName()));
         }
@@ -406,7 +423,8 @@ public class OntologyBuildFromDatasourceServiceImpl implements OntologyBuildFrom
             Map<String, OntologyBuildFromDatasourceParam.SelectedTable> tables,
             List<PropertySpec> specs,
             List<OntologyBuildFromDatasourceParam.ForeignKeyParam> foreignKeys,
-            Map<String, Map<String, DatasourceTableDetailVO.Column>> liveColumns) {
+            Map<String, Map<String, DatasourceTableDetailVO.Column>> liveColumns,
+            boolean datasourceAvailable) {
         Map<String, EntityColumns> columnsByGroup = new LinkedHashMap<>();
         for (var spec : specs) {
             columnsByGroup.computeIfAbsent(spec.storageGroup(), group -> new EntityColumns(
@@ -417,10 +435,11 @@ public class OntologyBuildFromDatasourceServiceImpl implements OntologyBuildFrom
         for (var foreignKey : foreignKeys) {
             addPipeColumn(columnsByGroup.computeIfAbsent(MAIN_STORAGE_GROUP, group -> new EntityColumns(
                             sourceTableName(MAIN_STORAGE_GROUP, master, tables), new ArrayList<>(), new ArrayList<>())),
-                    master.getTableName(), foreignKey.getMasterColumn(), liveColumns, null);
+                    master.getTableName(), foreignKey.getMasterColumn(), liveColumns, null, datasourceAvailable);
             addPipeColumn(columnsByGroup.computeIfAbsent(foreignKey.getChildTable(), group -> new EntityColumns(
                             sourceTableName(foreignKey.getChildTable(), master, tables), new ArrayList<>(), new ArrayList<>())),
-                    foreignKey.getChildTable(), foreignKey.getChildColumn(), liveColumns, foreignKey.getMasterColumn());
+                    foreignKey.getChildTable(), foreignKey.getChildColumn(), liveColumns,
+                    foreignKey.getMasterColumn(), datasourceAvailable);
         }
         return columnsByGroup;
     }
@@ -454,16 +473,18 @@ public class OntologyBuildFromDatasourceServiceImpl implements OntologyBuildFrom
      */
     private void addPipeColumn(EntityColumns columns, String tableName, String columnName,
                                Map<String, Map<String, DatasourceTableDetailVO.Column>> liveColumns,
-                               String associateColumnName) {
+                               String associateColumnName, boolean datasourceAvailable) {
         if (PK_COLUMN_NAME.equals(columnName)
                 || columns.ddlColumns().stream().anyMatch(column -> columnName.equalsIgnoreCase(column.getColumnName()))) {
             return;
         }
         DatasourceTableDetailVO.Column live = liveColumns.getOrDefault(tableName, Map.of()).get(columnName);
-        PreconditionUtils.checkNotNull(live, String.format("外键引用的列%s.%s在外部库不存在（可能已改名或删除）",
-                tableName, columnName), HttpStatus.BAD_REQUEST);
-        OntologyDataTypeEnum dataType = OntologyDataTypeEnum.valueOfJdbcType(live.getNativeType());
-        String description = StringUtils.trimToNull(live.getDescription());
+        if (datasourceAvailable) {
+            PreconditionUtils.checkNotNull(live, String.format("外键引用的列%s.%s在外部库不存在（可能已改名或删除）",
+                    tableName, columnName), HttpStatus.BAD_REQUEST);
+        }
+        OntologyDataTypeEnum dataType = OntologyDataTypeEnum.valueOfJdbcType(live == null ? null : live.getNativeType());
+        String description = live == null ? null : StringUtils.trimToNull(live.getDescription());
         columns.ddlColumns().add(toColumnDesc(columnName, dataType, description));
         columns.eventColumns().add(EntityDatasourceColumnDTO.builder()
                 .columnName(columnName)
@@ -551,7 +572,6 @@ public class OntologyBuildFromDatasourceServiceImpl implements OntologyBuildFrom
     private void notifyPipelineBuild(OntologyBuildFromDatasourceParam param, String uniqueIdentifier,
                                      String lakeSchema, Map<String, EntityColumns> columnsByGroup,
                                      List<EntityTable> entityTables) {
-        DatasourceConnection connection = datasourceConnectionService.getBySpaceId(param.getSpaceId());
         for (var entityTable : entityTables) {
             EntityColumns columns = columnsByGroup.get(entityTable.storageGroup());
             List<EntityDatasourceColumnDTO> eventColumns = new ArrayList<>(columns.eventColumns());

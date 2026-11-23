@@ -370,7 +370,9 @@ public class DatasourceMcpTools implements McpTools {
             子表属性用子表名作存储分组与实体表名。只建结构不搬数据：实体表建出来是空的，外部库实例数据不会自动灌入；
             数据管道事件也不在这里发（REST 侧由前端另调 POST /property/notify_build_pipeline）。
             paramJson 为 JSON 对象字符串，字段：
-            - spaceId：对象空间 id，必填（该空间须已绑定数据源）；
+            - spaceId：对象空间 id，必填；
+            - datasourceId：数据源 id（datasource_connection.id），可选：传了就用这条数据源连外部库扫列类型与列注释，
+              不要求 spaceId 已绑定数据源；不传则回落到 spaceId 绑定的那条；两者都没有时跳过扫描，属性类型统一落 String；
             - schemaName：外部库 schema 名，必填（与第②③步一致，服务端会重扫列复核类型）；
             - displayName：对象中文名，必填；apiName：对象 api 名，必填，须匹配 ^[a-zA-Z_$][a-zA-Z0-9_$]{0,62}$，同时作为主表物理表名；
             - categoryId：对象分类 id，可选；description：对象描述，可选；

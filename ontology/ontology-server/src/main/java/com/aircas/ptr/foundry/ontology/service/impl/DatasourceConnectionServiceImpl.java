@@ -420,8 +420,12 @@ public class DatasourceConnectionServiceImpl
     }
 
     @Override
-    public DatasourceConnection getBySpaceId(Integer spaceId) {
-        return requireDatasourceBySpace(spaceId);
+    public boolean existsBySpace(Integer spaceId) {
+        if (spaceId == null) {
+            return false;
+        }
+        return baseMapper.selectCount(new LambdaQueryWrapper<DatasourceConnection>()
+                .eq(DatasourceConnection::getSpaceId, spaceId)) > 0;
     }
 
     /**
