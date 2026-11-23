@@ -78,8 +78,8 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
     /** 按对象给的出参分组行主键：对象id -> (存储分组 -> 行主键)，应用行为按行写出参 */
     private final Map<String, Map<String, Object>> outputDataPrimaryKeys;
 
-    /** 按算子入参给的数据位置：入参名 -> {实例主键, 分组 -> 行主键} */
-    private final Map<String, ActionInstanceTargetParam> inputParams;
+    /** 按算子入参给的数据位置：入参名 -> 数据位置数组；LIST 入参一个位置是列表的一个元素，其余入参只有一个位置 */
+    private final Map<String, List<ActionInstanceTargetParam>> inputParams;
 
     /** 按算子出参给的数据位置：出参名 -> {实例主键, 分组 -> 行主键} */
     private final Map<String, ActionInstanceTargetParam> outputParams;
@@ -147,7 +147,7 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
                                 Map<String, Object> inputs, Object dataPrimaryKey,
                                 Map<String, Map<String, Object>> inputDataPrimaryKeys,
                                 Map<String, Map<String, Object>> outputDataPrimaryKeys,
-                                Map<String, ActionInstanceTargetParam> inputParams,
+                                Map<String, List<ActionInstanceTargetParam>> inputParams,
                                 Map<String, ActionInstanceTargetParam> outputParams,
                                 Object linkEntityPrimaryKey, Map<String, TreeNodeExecuteParam> nodeExecutes,
                                 Integer spaceId, TreeCooldownTracker cooldownTracker,
@@ -345,8 +345,8 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
         return value == null || value.isEmpty() ? outputDataPrimaryKeys : value;
     }
 
-    /** 本节点用的按算子入参数据位置 */
-    public Map<String, ActionInstanceTargetParam> nodeInputParams(String nodeId) {
+    /** 本节点用的按算子入参数据位置（入参名 -> 数据位置数组） */
+    public Map<String, List<ActionInstanceTargetParam>> nodeInputParams(String nodeId) {
         var value = nodeData(nodeId).getInputParams();
         return value == null || value.isEmpty() ? inputParams : value;
     }
@@ -553,6 +553,37 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
         }
     }
 
+    /**
+     * 行为成功条件的表达式求值：只读上下文、变量由调用方给（#result/#data/#inputs），不读黑板。
+     * <p>表达式必须返回 true/false；求值异常、字段取不到或结果不是布尔都返回 null，由调用方按「判不了」处理。</p>
+     */
+    public Boolean evaluateSuccessExpression(String nodeId, String expression, Map<String, Object> variables) {
+        try {
+            var evaluationContext = SimpleEvaluationContext
+                    .forPropertyAccessors(MAP_ACCESSOR, DataBindingPropertyAccessor.forReadOnlyAccess())
+                    // 表达式要对取到的值做判断，集合的 size()/isEmpty()、字符串的 contains() 这些实例方法要能调；
+                    // 仍禁类型引用、构造与静态方法，写不了 T(java.lang.Runtime)
+                    .withInstanceMethods()
+                    .build();
+            if (variables != null) {
+                variables.forEach(evaluationContext::setVariable);
+            }
+            var value = EXPRESSION_PARSER.parseExpression(expression).getValue(evaluationContext);
+            if (!(value instanceof Boolean hit)) {
+                setNodeMessage(nodeId, "执行成功条件的表达式没有返回 true/false：" + expression);
+                return null;
+            }
+            if (!hit) {
+                setNodeMessage(nodeId, "执行成功条件不成立：" + expression);
+            }
+            return hit;
+        } catch (Exception e) {
+            setNodeMessage(nodeId, "执行成功条件表达式求值失败：" + expression);
+            log.warn("行为树成功条件表达式求值失败, expression={}", expression, e);
+            return null;
+        }
+    }
+
     @Override
     public Boolean evaluateBlackboardCondition(String nodeId, BehaviorBlackboardConditionConfig config) {
         blackboardRefresher.refresh(nodeId, this);
@@ -638,19 +669,6 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
 
     private BehaviorNodeTrace trace(String nodeId) {
         return traces.computeIfAbsent(nodeId, key -> new BehaviorNodeTrace());
-    }
-
-    /**
-     * 行为节点执行成功条件的比较：与黑板条件同一份比较口径，只是左值来自这次执行结果里取到的出参值。
-     *
-     * @param leftLabel 说明里对左值的称呼，报错时能看出比的是黑板值还是出参值
-     * @return 条件成立返回 null；不成立或没法比较返回原因说明
-     */
-    public String compareSuccessValue(Object actual, BehaviorCompareOpEnum op, Object expect, String leftLabel) {
-        var reason = new String[1];
-        var hit = compare(op, actual, expect, leftLabel, reason);
-        return hit ? null : StringUtils.defaultIfBlank(reason[0], leftLabel + " 不满足 " + op.getName()
-                + (expect == null ? "" : " " + expect) + "，实际是 " + actual);
     }
 
     /**

@@ -135,7 +135,7 @@ public class OntologyPropertyMcpTools implements McpTools {
             - description / tag / defaultValue：可选，描述、自定义标签、默认值；
             - categoryId：可选，必须是该对象下已存在的属性分类 id（listPropertyCategories 可查）；
             - datasourceJson：可选，数据源绑定 JSON 对象字符串 {datasourceId, datasourceSchema, datasourceColumnName}，主键属性必传；
-            - metadataJson：可选，属性元数据字符串（约定为 JSON 对象字符串）；能解析为 JSON 对象时须符合该对象的元数据 schema（getMetadataSchema 可查），否则原样存储。
+            - metadataJson：可选，属性元数据字符串（约定为 JSON 对象字符串）；对象须先定义元数据 schema（getMetadataSchema 非 null）才能设置，否则被拒绝；schema 定义后 metadata 为自由 JSON 对象，键不强制与 schema 对齐（schema 之外的键也放行，如分支节点自身取值「值」），仅命中 schema 的对象型键递归校验子结构、标量值不校验取值内容；解析不成对象的字符串原样存储。
             只建元数据，不建物理列；数据湖物理表/列由 autoBindDatasource 统一生成。
             校验失败（重名、主键/标题键冲突、分类不存在等）抛业务异常，不落库。
             """)
@@ -191,7 +191,7 @@ public class OntologyPropertyMcpTools implements McpTools {
             - description / tag / defaultValue：可选字符串，描述、自定义标签、默认值；
             - categoryId：可选整数，必须是该对象下已存在的属性分类 id；
             - datasource：可选对象 {"schemaName":"public","datasourceId":"表名","datasourceColumnName":"列名"}，同一数据源列不能绑定到多个属性；
-            - metadata：可选，JSON 对象字符串（键=schema节点名称逐层嵌套）或 JSON 对象；能解析为对象时须符合对象已定义的元数据 schema，对象未定义 schema 时会被拒绝；解析不了的字符串原样存储。
+            - metadata：可选，JSON 对象字符串或 JSON 对象；对象须先定义元数据 schema 才能设置（未定义时整批被拒绝）；schema 定义后为自由 JSON 对象，键不强制与 schema 节点名称对齐（额外键也放行），仅命中 schema 的对象型键递归校验子结构、标量值不校验；解析不了的字符串原样存储。
             副作用：写入属性表并重建对象实体节点；任一元素校验失败则整批失败、不落库。成功返回中文结果说明。
             """)
     public String batchCreateProperties(
@@ -213,7 +213,7 @@ public class OntologyPropertyMcpTools implements McpTools {
             注意：本操作是整体覆盖式更新，未传的可选字段（description、defaultValue、categoryId、datasourceJson、metadataJson）会被置空，
             修改前建议先用 getPropertyDetailById 查出当前值再整体回填。apiName 不可修改。
             校验限制：属性必须存在；storageGroup 不能与对象 apiName 相同；一个对象最多一个主键、一个标题键，主键必须绑定数据源；
-            同一数据源列不能绑定到多个属性；categoryId 必须是该对象下已有分类；metadata 能解析为 JSON 对象时须符合对象元数据 schema（未定义 schema 时不能设置），否则原样存储。
+            同一数据源列不能绑定到多个属性；categoryId 必须是该对象下已有分类；metadata 须对象已定义元数据 schema 才能设置（未定义时拒绝），schema 定义后为自由 JSON 对象、键不强制与 schema 对齐（额外键放行），仅命中 schema 的对象型键递归校验子结构；解析不成对象的字符串原样存储。
             副作用：更新属性表并重建对象实体节点。成功返回中文结果说明。
             """)
     public String updateProperty(
@@ -227,7 +227,7 @@ public class OntologyPropertyMcpTools implements McpTools {
             @ToolParam(description = "属性默认值，不传则清空", required = false) String defaultValue,
             @ToolParam(description = "属性分类 id（该对象下已有分类），不传则清空分类", required = false) Integer categoryId,
             @ToolParam(description = "数据源绑定 JSON 对象字符串 {\"schemaName\":\"public\",\"datasourceId\":\"表名\",\"datasourceColumnName\":\"列名\"}，不传则解绑数据源", required = false) String datasourceJson,
-            @ToolParam(description = "元数据字符串（约定为 JSON 对象字符串，须符合对象元数据 schema），不传则清空元数据", required = false) String metadataJson) {
+            @ToolParam(description = "元数据字符串（约定为 JSON 对象字符串；对象须已定义元数据 schema，键不强制与 schema 对齐、额外键放行），不传则清空元数据", required = false) String metadataJson) {
         requireText(uniqueIdentifier, "uniqueIdentifier");
         requireText(displayName, "displayName");
         requireText(dataType, "dataType");
@@ -262,7 +262,7 @@ public class OntologyPropertyMcpTools implements McpTools {
             - storageGroup：必填，格式 ^[a-zA-Z_$][a-zA-Z0-9_$]{0,62}$，不能与对象 apiName 相同；
             - description / defaultValue：可选字符串；categoryId：可选整数（该对象下已有分类 id）；
             - datasource：可选对象 {"schemaName":"public","datasourceId":"表名","datasourceColumnName":"列名"}；
-            - metadata：可选，JSON 对象字符串（键=schema节点名称逐层嵌套）或 JSON 对象；能解析为对象时须符合对象元数据 schema，否则原样存储。
+            - metadata：可选，JSON 对象字符串或 JSON 对象；对象须先定义元数据 schema 才能设置（未定义时拒绝）；schema 定义后为自由 JSON 对象，键不强制与 schema 节点名称对齐（额外键放行），仅命中 schema 的对象型键递归校验子结构、标量值不校验；解析不了的字符串原样存储。
             注意：每个元素是整体覆盖式更新，未传的可选字段会被置空；apiName 不可修改。
             副作用：批量更新属性表并重建对象实体节点；任一元素校验失败则整批失败。成功返回中文结果说明。
             """)
@@ -619,7 +619,7 @@ public class OntologyPropertyMcpTools implements McpTools {
 
     @Tool(description = """
             查询对象的属性元数据 schema（对应 REST 端点 GET /property/metadata_schema）。
-            当需要知道属性 metadata 应按什么结构赋值时使用（createProperty/updateProperty 的 metadata 须符合此结构）。
+            当需要了解属性 metadata 的推荐取值结构、或前端按此渲染表单时使用。注意：此结构是推荐/回显模板而非强校验——对象定义 schema 后 metadata 可自由扩展键（schema 之外的键也放行），仅命中 schema 的对象型键递归校验子结构。
             返回 JSON 对象：按 schema 路径嵌套，叶子节点为取值内容字符串（ENUM 是逗号分隔候选项，RANGE 如 "0,100"，无值时为空字符串 ""），
             非叶子节点为嵌套对象。例如 {"信息等级":"高,中,低","来源":{"渠道":""}}。取值类型（INPUT/ENUM/RANGE）用 getMetadataSchemaTree 查。
             对象未定义元数据 schema 时返回 null。需要带节点 id 的树结构时用 getMetadataSchemaTree。

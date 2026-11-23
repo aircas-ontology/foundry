@@ -76,6 +76,7 @@ public class TreeExecuteParam {
     @Schema(name = "inputParams",
             description = "按算子入参指定数据位置：入参名 -> 数据位置数组，与行为测试同一写法；"
                     + "一次执行每个入参只用一个数据位置，数组里放一个元素即可；"
+                    + "LIST 入参要按多个元素取值时改在 nodeExecutes[节点].inputParams 里按节点给数组；"
                     + "同一对象的两个属性入参要读不同实例时用它；"
                     + "树里不同节点绑的行为参数名可能重名，按参数名的默认值会命中所有同名参数",
             example = "{\"max_mach\":[{\"entityPrimaryKey\":101,\"dataPrimaryKeys\":{\"duty_log\":11}}]}")

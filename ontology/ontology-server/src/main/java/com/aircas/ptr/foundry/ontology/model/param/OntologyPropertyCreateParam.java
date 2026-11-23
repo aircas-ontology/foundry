@@ -65,7 +65,11 @@ public class OntologyPropertyCreateParam extends OntologyIdentifierParam {
     @Schema(name = "categoryId", description = "属性分类id", example = "10")
     private Integer categoryId;
 
-    @Schema(name = "metadata", description = "元数据，字符串原样存储（约定JSON对象字符串：键=schema节点名称逐层嵌套）；也兼容直接传JSON对象，服务端转为字符串")
+    @Schema(name = "metadata", description = "属性元数据，约定为JSON对象字符串：键=schema节点名称从根逐层嵌套，叶子值=字符串（ENUM取单个候选值，非数组）；"
+            + "也兼容直接传JSON对象（服务端转为字符串）；解析不成JSON对象的字符串原样存储。旧格式selectedRecords不再支持，提交会报「元数据字段不在schema中」。"
+            + "能解析为对象时须符合该对象已定义的元数据schema（键存在性校验），对象未定义schema时拒绝。"
+            + "示例：{\"元数据\":{\"枚举类\":{\"是否必填\":\"是\"},\"范围类\":{\"取值范围\":\"500\"}}}",
+            example = "{\"元数据\":{\"枚举类\":{\"是否必填\":\"是\"},\"范围类\":{\"取值范围\":\"500\"}}}")
     private Object metadata;
 
 }

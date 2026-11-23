@@ -30,4 +30,12 @@ public class ActionInvokeParam extends ActionTestParam {
      * 属性、固定值、对象这些非外部输入来源的绑定行也按它覆盖，免得配了不生效。</p>
      */
     private Map<String, Object> paramValueOverrides;
+
+    /**
+     * 本次执行真正解析出的入参：传入一个可变容器，执行侧把顶层入参名 -> 值回填进去，
+     * 行为树的成功条件表达式按 {@code #inputs} 读取。不传就不收集，对外测试链路不关心。
+     * <p>涉及关系的行为按对端逐条执行，多个线程会往同一个容器里写，执行侧对容器加锁、最后一条覆盖；
+     * 读在全部执行结束之后。</p>
+     */
+    private Map<String, Object> resolvedInputs;
 }

@@ -111,12 +111,13 @@ public class GroovyServiceImpl implements GroovyService {
                     String jsonSchema = objectMapper.writeValueAsString(schema);
                     funcParams.add(FunctionParamDTO.builder()
                             .paramName(paramName)
-                            .paramType(paramTypeEnum != null ? paramTypeEnum : 
+                            .paramType(paramTypeEnum != null ? paramTypeEnum :
                                       (paramType.isAssignableFrom(List.class) ? FunctionParamTypeEnum.LIST : FunctionParamTypeEnum.OBJECT))
                             .category(FunctionParamCategoryEnum.INPUT)
                             .paramOrder(i + 1)
                             .referenceType(paramType.getName())
                             .paramSchema(jsonSchema)
+                            .description(getParameterDescription(parameters[i]))
                             .build());
                 }
             }
@@ -269,6 +270,11 @@ public class GroovyServiceImpl implements GroovyService {
             return funcParam.name();
         }
         return parameter.getName();
+    }
+
+    private String getParameterDescription(Parameter parameter) {
+        FuncParam funcParam = parameter.getAnnotation(FuncParam.class);
+        return funcParam != null ? funcParam.description() : null;
     }
 
     /**

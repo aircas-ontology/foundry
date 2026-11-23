@@ -47,6 +47,13 @@ public class ActionContextInfoDTO {
      */
     private Map<String, Object> externalParams;
 
+    /**
+     * 本次算子调用真正解析出的入参（顶层入参名 -> 值）：调用方给一个可变容器，{@code callFunction} 回填，
+     * 供行为树成功条件表达式按 #inputs 读取；为空表示不收集（对外单行为测试不关心）。
+     * <p>涉及关系的行为按对端逐条执行，回填时对容器加锁，最后完成的一条覆盖。</p>
+     */
+    private Map<String, Object> resolvedInputs;
+
     private OntologyActionDetailVO actionDetailVO;
 
     private FunctionDetailVO functionDetailVO;

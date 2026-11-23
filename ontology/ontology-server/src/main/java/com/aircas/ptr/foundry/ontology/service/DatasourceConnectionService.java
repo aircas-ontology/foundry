@@ -160,15 +160,17 @@ public interface DatasourceConnectionService extends IService<DatasourceConnecti
     List<DatasourceSchemaVO> listSchemas(Integer spaceId);
 
     /**
-     * 按对象空间取唯一的数据源连接配置（每个空间至多一条）。
+     * 判断对象空间是否绑定了数据源（{@code datasource_connection} 里是否存在该 spaceId 的记录）。
      *
-     * <p>供「数据源构建对象」建完对象后拼数据管道消息时取数据源的 id / 名称 / dbType，
-     * 复用扫描接口同一套「不存在 404、多条 400」的校验口径。</p>
+     * <p>供「数据源构建对象」决定要不要连外部库重扫列：绑定了就以现场扫描为准（类型、列注释、
+     * 表与列是否存在都校验）；没绑定也允许建对象，只是这些外部信息一律拿不到，
+     * 属性类型只能统一按 String 落。请求显式带了 {@code datasourceId} 时按那条数据源扫，不走本方法。
+     * 只做存在性判断，不校验 JDBC URL、也不抛异常。</p>
      *
-     * @param spaceId 归属的对象空间 id
-     * @return 数据源连接配置
+     * @param spaceId 归属的对象空间 id，可为空（空一律返回 false）
+     * @return true 表示该空间绑定了数据源
      */
-    DatasourceConnection getBySpaceId(Integer spaceId);
+    boolean existsBySpace(Integer spaceId);
 
     /**
      * 按数据源 id 扫描 schema 清单，行为与 {@link #listSchemas(Integer)} 完全一致，

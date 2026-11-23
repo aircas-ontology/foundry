@@ -358,6 +358,8 @@ public class OntologyFunctionMcpTools implements McpTools {
             解析脚本输入/输出参数（对应 REST 端点 POST /function/parse_params）。只读操作，不落库。
             当用户给了一段脚本源码、需要在创建/更新 CUSTOMIZE 函数前自动提取 handle 签名的入参/出参定义时使用。
             后端 AST 解析：Java/Groovy 在主程序进程内解析，Python/TypeScript 走独立语言 runner。
+            参数描述（description）回显：Groovy/Java 优先取 @FuncParam(description=...) 注解，注解未给时按脚本注释兜底补齐；
+            返回载荷类型可用注释指令 // @result:类型 声明（泛型擦除后据此补齐出参 data 字段类型）。
             参数：
             - language：必填，脚本语言，可选 GROOVY/JAVA/PYTHON/TYPESCRIPT；
             - code：必填，脚本源码，最长 200000 字符。
