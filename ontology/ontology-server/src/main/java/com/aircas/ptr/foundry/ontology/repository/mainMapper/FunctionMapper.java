@@ -17,7 +17,7 @@ public interface FunctionMapper extends BaseMapper<Function> {
      *
      * @param page            分页参数
      * @param ontologySpaceId 对象空间 id，可空
-     * @param displayName     函数名称模糊搜索，可空
+     * @param displayName     模糊搜索关键词，匹配 display_name 或 api，可空
      * @param types           包含的函数类型列表，可空（空=不限类型）
      * @param excludeTypes    排除的函数类型列表，可空
      * @param publishStatus   发布状态（0 未发布 / 1 已发布），可空

@@ -19,7 +19,7 @@ public class FunctionListQueryParam {
     @Schema(name = "ontologySpaceId", description = "空间 id")
     private Integer ontologySpaceId;
 
-    @Schema(name = "displayName", description = "函数名称（模糊搜索）")
+    @Schema(name = "displayName", description = "搜索关键词，模糊匹配函数名称或 api 名，命中其一即返回")
     private String displayName;
 
     @Schema(name = "types", description = "函数类型（可多值，逗号分隔或重复传参）：CUSTOMIZE / EXTERNAL / BASIC_QUERY / COMPOSITE / CONTAINER。"
