@@ -22,9 +22,15 @@ import lombok.experimental.SuperBuilder;
 @Schema(description = "行为树节点算子入参")
 public class TreeExecuteInputVO {
 
-    @Schema(name = "key", description = "参数名：与绑定行为声明的入参同名；来源是外部输入时按节点传给 nodeExecutes[节点标识].params",
+    @Schema(name = "key", description = "参数名：与绑定行为声明的入参同名；来源是外部输入时按节点传给 nodeExecutes[节点标识].params。"
+            + "绑算子时 LIST 的元素字段各占一行，这里是字段名，数据位置要按 paramName 传",
             example = "ammoCount")
     private String key;
+
+    @Schema(name = "paramName", description = "所属顶层算子入参名：nodeExecutes[节点标识].inputParams 按它给数据位置；"
+            + "LIST 入参按同一 paramName 的任意元素字段行给位置即可，多个位置按数组传，每个位置是列表的一个元素",
+            example = "trajectories")
+    private String paramName;
 
     @Schema(name = "valueType", description = "行为声明的参数类型", example = "INTEGER")
     private FunctionParamTypeEnum valueType;
@@ -45,6 +51,11 @@ public class TreeExecuteInputVO {
 
     @Schema(name = "propertyDisplayName", description = "来源是对象属性时绑定的属性显示名称", example = "起始经度")
     private String propertyDisplayName;
+
+    @Schema(name = "storageGroup", description = "来源是对象属性时绑定属性所在的存储分组；主表为空或 main。"
+            + "valueType 是 LIST 且不在主表时，执行时要选该分组的多行，每行是列表的一个元素，"
+            + "行主键按 /entity/row_detail/page 查", example = "orbit_point")
+    private String storageGroup;
 
     @Schema(name = "description", description = "参数说明，取算子参数或属性的说明")
     private String description;

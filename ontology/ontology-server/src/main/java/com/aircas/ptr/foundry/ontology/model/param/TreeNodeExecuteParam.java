@@ -1,5 +1,11 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.databind.DeserializationContext;
+import com.fasterxml.jackson.databind.JsonDeserializer;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.exc.MismatchedInputException;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -7,6 +13,10 @@ import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -47,9 +57,13 @@ public class TreeNodeExecuteParam {
     private Map<String, Map<String, Object>> outputDataPrimaryKeys;
 
     @Schema(name = "inputParams",
-            description = "本节点按算子入参指定的数据位置（入参名 -> 实例主键 + 分组行主键）；不传沿用执行请求的 inputParams",
-            example = "{\"speed\":{\"entityPrimaryKey\":101,\"dataPrimaryKeys\":{\"weapon_load\":11}}}")
-    private Map<String, ActionInstanceTargetParam> inputParams;
+            description = "本节点按算子入参指定的数据位置（入参名 -> 实例主键 + 分组行主键）；不传沿用执行请求的 inputParams。"
+                    + "LIST 入参可以给多个位置，每个位置是列表的一个元素：必须是同一实例、同一分组，各给该分组的一行；"
+                    + "其余入参只能一个位置。一个位置时也可以直接写成对象（与旧写法一致）",
+            example = "{\"trajectories\":[{\"entityPrimaryKey\":101,\"dataPrimaryKeys\":{\"orbit_point\":11}},"
+                    + "{\"entityPrimaryKey\":101,\"dataPrimaryKeys\":{\"orbit_point\":12}}]}")
+    @JsonDeserialize(using = InputTargetsDeserializer.class)
+    private Map<String, List<ActionInstanceTargetParam>> inputParams;
 
     @Schema(name = "outputParams",
             description = "本节点按出参指定的写回位置（写回位置标识 -> 实例主键 + 分组行主键）；不传沿用执行请求的 outputParams",
@@ -64,4 +78,34 @@ public class TreeNodeExecuteParam {
             + "参数名要和行为声明的外部入参一致，声明了的参数必须给，没有全树默认值可回退",
             example = "{\"ammoCount\":80,\"targetId\":77}")
     private Map<String, Object> params;
+
+    /** 每个入参收单个位置或位置数组：单值老写法包成单元素数组，LIST 入参的多位置才有列表元素可言 */
+    public static class InputTargetsDeserializer
+            extends JsonDeserializer<Map<String, List<ActionInstanceTargetParam>>> {
+        @Override
+        public Map<String, List<ActionInstanceTargetParam>> deserialize(JsonParser p, DeserializationContext ctxt)
+                throws IOException {
+            JsonNode node = p.getCodec().readTree(p);
+            if (!node.isObject()) {
+                throw MismatchedInputException.from(p, Map.class,
+                        "inputParams 应是入参名到数据位置的映射");
+            }
+            Map<String, List<ActionInstanceTargetParam>> targets = new LinkedHashMap<>();
+            var fields = node.fields();
+            while (fields.hasNext()) {
+                var entry = fields.next();
+                JsonNode value = entry.getValue();
+                List<ActionInstanceTargetParam> positions = new ArrayList<>();
+                if (value.isArray()) {
+                    for (JsonNode element : value) {
+                        positions.add(p.getCodec().treeToValue(element, ActionInstanceTargetParam.class));
+                    }
+                } else if (!value.isNull()) {
+                    positions.add(p.getCodec().treeToValue(value, ActionInstanceTargetParam.class));
+                }
+                targets.put(entry.getKey(), positions);
+            }
+            return targets;
+        }
+    }
 }

@@ -49,9 +49,14 @@ public class ActionTestParam {
     private Object writeBackEntityPrimaryKey;
 
     @Schema(name = "inputParams", description = "按算子入参指定的数据位置：入参名 -> 数据位置数组。"
+            + "键也可以写该入参绑定行的字段名（LIST 的元素字段如 longitude、对象子字段如 position.longitude），"
+            + "后端按绑定行归到所属入参：LIST 的各字段位置按数组下标拼成同一个元素，对象入参的各字段必须读同一处；"
+            + "外部输入、固定值来源的参数不读实例，按它的参数名或字段名给的位置会被忽略，值分别从 params 与行为定义取。"
             + "数组的一个元素就是一组完整取值：读哪个实例（entityPrimaryKey）、每个存储分组读哪一行（dataPrimaryKeys），"
             + "只读一个位置时数组里放一个元素；放多个元素就是批量测试的候选值，只选实例时各入参的候选值做笛卡尔积、"
             + "一旦有候选值选了非 main 分组的行就改为各轴按下标配对成组（此时各轴候选值个数要一致），逐组执行；"
+            + "LIST 类型的入参除外：它的数组是同一个列表的元素，一次执行读同一个实例的多行，"
+            + "各元素的 entityPrimaryKey 必须一致，既不参与批量组合，也不按个数配对；"
             + "命中时优先于 entityPrimaryKeys，只影响该入参的读取，不影响出参写回和关系落库；"
             + "绑定落在关系端点对象上也按这里指定的实例读，关系边仍由 from/to 决定；不绑算子的行为也不支持",
             example = "{\"name\":[{\"entityPrimaryKey\":11}],"

@@ -9,7 +9,8 @@ import lombok.NoArgsConstructor;
 import java.util.Map;
 
 @Schema(description = "行为测试/执行时某个对象在某一个方向上的数据位置：选哪个实例、每个存储分组取/写哪一行。"
-        + "一个值就是一组完整的数据位置；行为测试的入参方向把多个数据位置放进数组作为批量测试的候选值")
+        + "一个值就是一组完整的数据位置；行为测试的入参方向把多个数据位置放进数组作为批量测试的候选值，"
+        + "LIST 类型的入参除外——它的多个位置是同一个列表的元素，必须落在同一实例上")
 @Data
 @Builder
 @AllArgsConstructor
