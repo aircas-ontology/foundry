@@ -1,0 +1,39 @@
+# 配置约定：
+# 1. 本文件放可入库的结构与默认值：端口、驱动、文档、日志相关开关。
+# 2. 库地址和账号写在 application-local.yml。spring.profiles.active=local 会覆盖本文件。
+# 3. 该文件已被 .gitignore 忽略（**/application-local.yml），只留在本机。
+# 4. Spring Boot 强类型属性不要留空字符串；不需要的项直接删掉。
+server:
+  port: 37004
+  servlet:
+    context-path: /topic
+
+spring:
+  profiles:
+    active: local
+  application:
+    name: topic
+  jackson:
+    default-property-inclusion: non_null
+  datasource:
+    main:
+      driver-class-name: org.postgresql.Driver
+      validation-query: SELECT 1
+      test-on-borrow: true
+
+# 父 POM 把 elasticsearch starter 传给了所有模块。本服务不用 ES，健康检查关闭，
+# 客户端自动配置在启动类里排除。
+management:
+  health:
+    elasticsearch:
+      enabled: false
+
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    path: /swagger-ui.html
