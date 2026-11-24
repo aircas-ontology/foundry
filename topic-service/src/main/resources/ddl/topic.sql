@@ -15,7 +15,7 @@ COMMENT ON COLUMN topic.topic.description IS '说明';
 
 CREATE TABLE IF NOT EXISTS topic.dict
 (
-    dict_code   varchar(64)  NOT NULL PRIMARY KEY,
+    id          bigserial    PRIMARY KEY,
     dict_name   varchar(128) NOT NULL,
     group_code  varchar(64)  NOT NULL,
     group_name  varchar(128) NOT NULL,
@@ -25,7 +25,6 @@ CREATE TABLE IF NOT EXISTS topic.dict
 );
 
 COMMENT ON TABLE topic.dict IS '字典';
-COMMENT ON COLUMN topic.dict.dict_code IS '字典编号';
 COMMENT ON COLUMN topic.dict.dict_name IS '字典名称';
 COMMENT ON COLUMN topic.dict.group_code IS '字典组编号';
 COMMENT ON COLUMN topic.dict.group_name IS '字典组名称';
@@ -37,7 +36,7 @@ CREATE INDEX IF NOT EXISTS idx_dict_group_code ON topic.dict (group_code);
 
 CREATE TABLE IF NOT EXISTS topic.task_topic
 (
-    task_code       bigserial     PRIMARY KEY,
+    id              bigserial     PRIMARY KEY,
     task_name       varchar(128)  NOT NULL,
     task_type       varchar(64)   NOT NULL,
     task_region     varchar(128)  NOT NULL,
@@ -58,7 +57,6 @@ CREATE TABLE IF NOT EXISTS topic.task_topic
 );
 
 COMMENT ON TABLE topic.task_topic IS '任务主题';
-COMMENT ON COLUMN topic.task_topic.task_code IS '任务编号，自增';
 COMMENT ON COLUMN topic.task_topic.task_name IS '任务名称';
 COMMENT ON COLUMN topic.task_topic.task_type IS '任务类型，由页面传入';
 COMMENT ON COLUMN topic.task_topic.task_region IS '任务区域，由页面传入';
@@ -89,7 +87,7 @@ ALTER TABLE topic.task_topic ADD COLUMN IF NOT EXISTS deleted smallint DEFAULT 0
 
 CREATE TABLE IF NOT EXISTS topic.event_stage
 (
-    stage_code  varchar(64)  NOT NULL PRIMARY KEY,
+    id          bigserial    PRIMARY KEY,
     task_code   bigint       NOT NULL,
     stage_name  varchar(128) NOT NULL,
     start_time  timestamp(6) NOT NULL,
@@ -102,8 +100,7 @@ CREATE TABLE IF NOT EXISTS topic.event_stage
 );
 
 COMMENT ON TABLE topic.event_stage IS '事件阶段';
-COMMENT ON COLUMN topic.event_stage.stage_code IS '事件阶段编号';
-COMMENT ON COLUMN topic.event_stage.task_code IS '任务编号，与任务主题任务编号类型一致';
+COMMENT ON COLUMN topic.event_stage.task_code IS '任务编号，对应任务主题 id';
 COMMENT ON COLUMN topic.event_stage.stage_name IS '事件阶段名称';
 COMMENT ON COLUMN topic.event_stage.start_time IS '事件阶段开始时间';
 COMMENT ON COLUMN topic.event_stage.end_time IS '事件阶段结束时间';
@@ -117,3 +114,38 @@ CREATE INDEX IF NOT EXISTS idx_event_stage_task_code ON topic.event_stage (task_
 ALTER TABLE topic.event_stage ADD COLUMN IF NOT EXISTS event_codes varchar(1024);
 ALTER TABLE topic.event_stage ADD COLUMN IF NOT EXISTS deleted smallint DEFAULT 0 NOT NULL;
 COMMENT ON COLUMN topic.event_stage.deleted IS '是否删除：0未删除，1已删除';
+
+
+
+CREATE TABLE IF NOT EXISTS topic.event_topic
+(
+    id               bigserial    PRIMARY KEY,
+    event_name       varchar(128) NOT NULL,
+    category         varchar(64)  NOT NULL,
+    start_time       timestamp(6) NOT NULL,
+    end_time         timestamp(6) NOT NULL,
+    geo_region       varchar(128) NOT NULL,
+    region_point     text,
+    description      varchar(2000),
+    ontology_space   varchar(1024),
+    status           smallint     DEFAULT 0 NOT NULL,
+    deleted          smallint     DEFAULT 0 NOT NULL,
+    creator          varchar(64),
+    create_time      timestamp(6)
+);
+
+COMMENT ON TABLE topic.event_topic IS '事件主题';
+COMMENT ON COLUMN topic.event_topic.event_name IS '事件名称';
+COMMENT ON COLUMN topic.event_topic.category IS '事件主题类别';
+COMMENT ON COLUMN topic.event_topic.start_time IS '开始时间，由页面传入';
+COMMENT ON COLUMN topic.event_topic.end_time IS '结束时间，由页面传入';
+COMMENT ON COLUMN topic.event_topic.geo_region IS '地理区域，由页面传入';
+COMMENT ON COLUMN topic.event_topic.region_point IS '区域点，由页面传入';
+COMMENT ON COLUMN topic.event_topic.description IS '事件主题描述';
+COMMENT ON COLUMN topic.event_topic.ontology_space IS '关联本体空间，多个用逗号分割';
+COMMENT ON COLUMN topic.event_topic.status IS '状态：0执行中，1执行成功，2执行失败，默认0';
+COMMENT ON COLUMN topic.event_topic.deleted IS '是否删除：0未删除，1已删除，默认0';
+COMMENT ON COLUMN topic.event_topic.creator IS '创建人';
+COMMENT ON COLUMN topic.event_topic.create_time IS '创建时间';
+
+

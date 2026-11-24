@@ -24,7 +24,7 @@ public class EventStageController {
 
     @PostMapping
     @Operation(summary = "创建事件阶段")
-    public RestResult<String> create(@RequestBody @Valid EventStageCreateParam param) {
+    public RestResult<Long> create(@RequestBody @Valid EventStageCreateParam param) {
         return RestResult.ofData(eventStageService.create(param));
     }
 }

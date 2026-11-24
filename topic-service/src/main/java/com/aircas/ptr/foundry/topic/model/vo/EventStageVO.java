@@ -12,7 +12,7 @@ import java.util.Date;
 public class EventStageVO {
 
     @Schema(description = "事件阶段编号")
-    private String stageCode;
+    private Long id;
 
     @Schema(description = "任务编号")
     private Long taskCode;

@@ -1,7 +1,6 @@
 package com.aircas.ptr.foundry.topic.service.impl;
 
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
-import com.aircas.ptr.foundry.common.util.SnowflakeIdUtil;
 import com.aircas.ptr.foundry.topic.model.enums.DeletedFlagEnum;
 import com.aircas.ptr.foundry.topic.model.param.EventStageCreateParam;
 import com.aircas.ptr.foundry.topic.model.po.EventStage;
@@ -27,15 +26,13 @@ public class EventStageServiceImpl extends ServiceImpl<EventStageMapper, EventSt
 
     @Transactional
     @Override
-    public String create(EventStageCreateParam param) {
+    public Long create(EventStageCreateParam param) {
         checkTimeRange(param.getStartTime(), param.getEndTime());
         TaskTopic taskTopic = taskTopicMapper.selectOne(new LambdaQueryWrapper<TaskTopic>()
-                .eq(TaskTopic::getTaskCode, param.getTaskCode())
+                .eq(TaskTopic::getId, param.getTaskCode())
                 .eq(TaskTopic::getDeleted, DeletedFlagEnum.NOT_DELETED.getCode()));
         PreconditionUtils.checkNotNull(taskTopic, "任务不存在", HttpStatus.BAD_REQUEST);
-        String stageCode = "S" + SnowflakeIdUtil.get();
         EventStage stage = EventStage.builder()
-                .stageCode(stageCode)
                 .taskCode(param.getTaskCode())
                 .stageName(param.getStageName())
                 .startTime(param.getStartTime())
@@ -45,7 +42,7 @@ public class EventStageServiceImpl extends ServiceImpl<EventStageMapper, EventSt
                 .deleted(DeletedFlagEnum.NOT_DELETED.getCode())
                 .build();
         save(stage);
-        return stageCode;
+        return stage.getId();
     }
 
     private void checkTimeRange(Date startTime, Date endTime) {

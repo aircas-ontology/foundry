@@ -16,7 +16,7 @@ public class TaskTopicUpdateParam {
 
     @Schema(description = "任务编号", example = "1")
     @NotNull(message = "任务编号不能为空")
-    private Long taskCode;
+    private Long id;
 
     @Schema(description = "任务名称", example = "区域巡查")
     @NotBlank(message = "任务名称不能为空")

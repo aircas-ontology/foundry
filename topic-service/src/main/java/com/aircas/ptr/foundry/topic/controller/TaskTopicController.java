@@ -39,17 +39,17 @@ public class TaskTopicController {
         return RestResult.ofData(taskTopicService.create(param));
     }
 
-    @DeleteMapping("/{taskCode}")
+    @DeleteMapping("/{id}")
     @Operation(summary = "删除任务主题")
-    public RestResult<Void> delete(@Parameter(description = "任务编号，多个用逗号分割") @PathVariable String taskCode) {
-        taskTopicService.delete(taskCode);
+    public RestResult<Void> delete(@Parameter(description = "任务编号，多个用逗号分割") @PathVariable String id) {
+        taskTopicService.delete(id);
         return RestResult.success();
     }
 
-    @GetMapping("/{taskCode}")
+    @GetMapping("/{id}")
     @Operation(summary = "按任务编号查询任务主题详情")
-    public RestResult<TaskTopicDetailVO> get(@PathVariable String taskCode) {
-        return RestResult.ofData(taskTopicService.get(taskCode));
+    public RestResult<TaskTopicDetailVO> get(@PathVariable String id) {
+        return RestResult.ofData(taskTopicService.get(id));
     }
 
     @GetMapping

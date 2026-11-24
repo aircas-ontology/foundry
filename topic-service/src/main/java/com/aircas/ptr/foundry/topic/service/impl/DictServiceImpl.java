@@ -1,10 +1,8 @@
 package com.aircas.ptr.foundry.topic.service.impl;
 
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
-import com.aircas.ptr.foundry.common.util.SnowflakeIdUtil;
 import com.aircas.ptr.foundry.topic.model.enums.DictStatusEnum;
 import com.aircas.ptr.foundry.topic.model.param.DictCreateParam;
-import com.aircas.ptr.foundry.topic.model.param.DictQueryParam;
 import com.aircas.ptr.foundry.topic.model.param.DictUpdateParam;
 import com.aircas.ptr.foundry.topic.model.po.Dict;
 import com.aircas.ptr.foundry.topic.model.vo.DictCreateVO;
@@ -13,6 +11,7 @@ import com.aircas.ptr.foundry.topic.repository.DictMapper;
 import com.aircas.ptr.foundry.topic.service.DictService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,37 +24,35 @@ public class DictServiceImpl extends ServiceImpl<DictMapper, Dict> implements Di
     @Transactional
     @Override
     public DictCreateVO create(DictCreateParam param) {
-        String dictCode = "D" + SnowflakeIdUtil.get();
-        String groupCode = "G" + SnowflakeIdUtil.get();
+        String creator = StringUtils.isBlank(param.getCreator()) ? "admin" : param.getCreator().trim();
         Dict dict = Dict.builder()
-                .dictCode(dictCode)
                 .dictName(param.getDictName())
-                .groupCode(groupCode)
+                .groupCode(param.getGroupCode().trim())
                 .groupName(param.getGroupName())
                 .status(DictStatusEnum.NORMAL.getCode())
-                .creator(param.getCreator())
+                .creator(creator)
                 .build();
         save(dict);
         return DictCreateVO.builder()
-                .dictCode(dictCode)
-                .groupCode(groupCode)
+                .id(dict.getId())
+                .groupCode(dict.getGroupCode())
                 .build();
     }
 
     @Override
-    public List<DictItemVO> listByGroup(DictQueryParam param) {
+    public List<DictItemVO> listByGroup(String groupCode) {
         List<Dict> dicts = list(new LambdaQueryWrapper<Dict>()
-                .select(Dict::getDictCode, Dict::getDictName)
-                .eq(Dict::getGroupCode, param.getGroupCode())
+                .select(Dict::getId, Dict::getDictName)
+                .eq(Dict::getGroupCode, groupCode)
                 .eq(Dict::getStatus, DictStatusEnum.NORMAL.getCode())
-                .orderByAsc(Dict::getDictCode));
+                .orderByAsc(Dict::getId));
         return dicts.stream().map(this::toItem).toList();
     }
 
     @Transactional
     @Override
     public void update(DictUpdateParam param) {
-        Dict dict = getById(param.getDictCode());
+        Dict dict = getById(param.getId());
         PreconditionUtils.checkNotNull(dict, "字典不存在", HttpStatus.BAD_REQUEST);
         dict.setDictName(param.getDictName());
         dict.setGroupCode(param.getGroupCode());
@@ -66,7 +63,7 @@ public class DictServiceImpl extends ServiceImpl<DictMapper, Dict> implements Di
 
     private DictItemVO toItem(Dict dict) {
         return DictItemVO.builder()
-                .dictCode(dict.getDictCode())
+                .id(dict.getId())
                 .dictName(dict.getDictName())
                 .build();
     }

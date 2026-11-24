@@ -20,10 +20,10 @@ import java.util.Date;
 public class EventStage {
 
     /**
-     * 事件阶段编号
+     * 事件阶段编号，数据库自增
      */
-    @TableId(type = IdType.INPUT)
-    private String stageCode;
+    @TableId(type = IdType.AUTO)
+    private Long id;
 
     /**
      * 任务编号

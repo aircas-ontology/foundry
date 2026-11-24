@@ -6,5 +6,5 @@ import com.baomidou.mybatisplus.spring.service.IService;
 
 public interface EventStageService extends IService<EventStage> {
 
-    String create(EventStageCreateParam param);
+    Long create(EventStageCreateParam param);
 }

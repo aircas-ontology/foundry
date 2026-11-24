@@ -22,10 +22,10 @@ import java.util.Date;
 public class Dict {
 
     /**
-     * 字典编号
+     * 字典编号，数据库自增
      */
-    @TableId(type = IdType.INPUT)
-    private String dictCode;
+    @TableId(type = IdType.AUTO)
+    private Long id;
 
     /**
      * 字典名称

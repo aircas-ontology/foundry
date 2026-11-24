@@ -10,7 +10,7 @@ import lombok.Data;
 public class DictCreateVO {
 
     @Schema(description = "字典编号")
-    private String dictCode;
+    private Long id;
 
     @Schema(description = "字典组编号")
     private String groupCode;

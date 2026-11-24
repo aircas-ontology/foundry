@@ -52,7 +52,7 @@ public class TaskTopicServiceImpl extends ServiceImpl<TaskTopicMapper, TaskTopic
                 .deleted(DeletedFlagEnum.NOT_DELETED.getCode())
                 .build();
         save(taskTopic);
-        return taskTopic.getTaskCode();
+        return taskTopic.getId();
     }
 
     @Transactional
@@ -66,11 +66,11 @@ public class TaskTopicServiceImpl extends ServiceImpl<TaskTopicMapper, TaskTopic
                 .toList();
         PreconditionUtils.checkArgument(!taskCodes.isEmpty(), "任务编号不能为空", HttpStatus.BAD_REQUEST);
         long exists = count(new LambdaQueryWrapper<TaskTopic>()
-                .in(TaskTopic::getTaskCode, taskCodes)
+                .in(TaskTopic::getId, taskCodes)
                 .eq(TaskTopic::getDeleted, DeletedFlagEnum.NOT_DELETED.getCode()));
         PreconditionUtils.checkArgument(exists == taskCodes.size(), "任务不存在", HttpStatus.BAD_REQUEST);
         update(new LambdaUpdateWrapper<TaskTopic>()
-                .in(TaskTopic::getTaskCode, taskCodes)
+                .in(TaskTopic::getId, taskCodes)
                 .eq(TaskTopic::getDeleted, DeletedFlagEnum.NOT_DELETED.getCode())
                 .set(TaskTopic::getDeleted, DeletedFlagEnum.DELETED.getCode()));
     }
@@ -91,7 +91,7 @@ public class TaskTopicServiceImpl extends ServiceImpl<TaskTopicMapper, TaskTopic
                 .le(query.getEndTime() != null, TaskTopic::getEndTime, query.getEndTime())
                 .eq(TaskTopic::getDeleted, DeletedFlagEnum.NOT_DELETED.getCode())
                 .orderByDesc(TaskTopic::getStartTime)
-                .orderByAsc(TaskTopic::getTaskCode));
+                .orderByAsc(TaskTopic::getId));
         return tasks.stream().map(this::toVO).toList();
     }
 
@@ -99,7 +99,7 @@ public class TaskTopicServiceImpl extends ServiceImpl<TaskTopicMapper, TaskTopic
     @Override
     public void update(TaskTopicUpdateParam param) {
         checkTimeRange(param.getStartTime(), param.getEndTime());
-        TaskTopic taskTopic = requireTask(param.getTaskCode());
+        TaskTopic taskTopic = requireTask(param.getId());
         taskTopic.setTaskName(param.getTaskName());
         taskTopic.setTaskType(param.getTaskType());
         taskTopic.setTaskRegion(param.getTaskRegion());
@@ -114,7 +114,7 @@ public class TaskTopicServiceImpl extends ServiceImpl<TaskTopicMapper, TaskTopic
 
     private TaskTopic requireTask(Long taskCode) {
         TaskTopic taskTopic = getOne(new LambdaQueryWrapper<TaskTopic>()
-                .eq(TaskTopic::getTaskCode, taskCode)
+                .eq(TaskTopic::getId, taskCode)
                 .eq(TaskTopic::getDeleted, DeletedFlagEnum.NOT_DELETED.getCode()));
         PreconditionUtils.checkNotNull(taskTopic, "任务不存在", HttpStatus.BAD_REQUEST);
         return taskTopic;
@@ -131,7 +131,7 @@ public class TaskTopicServiceImpl extends ServiceImpl<TaskTopicMapper, TaskTopic
 
     private TaskTopicDetailVO toDetailVO(TaskTopic taskTopic) {
         return TaskTopicDetailVO.builder()
-                .taskCode(taskTopic.getTaskCode())
+                .id(taskTopic.getId())
                 .taskName(taskTopic.getTaskName())
                 .taskType(taskTopic.getTaskType())
                 .taskRegion(taskTopic.getTaskRegion())
@@ -140,7 +140,7 @@ public class TaskTopicServiceImpl extends ServiceImpl<TaskTopicMapper, TaskTopic
                 .endTime(taskTopic.getEndTime())
                 .description(taskTopic.getDescription())
                 .ontologySpace(taskTopic.getOntologySpace())
-                .eventStages(listEventStages(taskTopic.getTaskCode()))
+                .eventStages(listEventStages(taskTopic.getId()))
                 .build();
     }
 
@@ -149,7 +149,7 @@ public class TaskTopicServiceImpl extends ServiceImpl<TaskTopicMapper, TaskTopic
                         .eq(EventStage::getTaskCode, taskCode)
                         .eq(EventStage::getDeleted, DeletedFlagEnum.NOT_DELETED.getCode())
                         .orderByAsc(EventStage::getStartTime)
-                        .orderByAsc(EventStage::getStageCode))
+                        .orderByAsc(EventStage::getId))
                 .stream()
                 .map(this::toEventStageVO)
                 .toList();
@@ -157,7 +157,7 @@ public class TaskTopicServiceImpl extends ServiceImpl<TaskTopicMapper, TaskTopic
 
     private EventStageVO toEventStageVO(EventStage stage) {
         return EventStageVO.builder()
-                .stageCode(stage.getStageCode())
+                .id(stage.getId())
                 .taskCode(stage.getTaskCode())
                 .stageName(stage.getStageName())
                 .startTime(stage.getStartTime())
@@ -169,7 +169,7 @@ public class TaskTopicServiceImpl extends ServiceImpl<TaskTopicMapper, TaskTopic
 
     private TaskTopicVO toVO(TaskTopic taskTopic) {
         return TaskTopicVO.builder()
-                .taskCode(taskTopic.getTaskCode())
+                .id(taskTopic.getId())
                 .taskName(taskTopic.getTaskName())
                 .taskType(taskTopic.getTaskType())
                 .taskRegion(taskTopic.getTaskRegion())

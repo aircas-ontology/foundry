@@ -25,7 +25,7 @@ public class TaskTopic {
      * 任务编号，数据库自增
      */
     @TableId(type = IdType.AUTO)
-    private Long taskCode;
+    private Long id;
 
     /**
      * 任务名称

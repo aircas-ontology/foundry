@@ -12,7 +12,7 @@ import java.util.Date;
 public class TaskTopicVO {
 
     @Schema(description = "任务编号")
-    private Long taskCode;
+    private Long id;
 
     @Schema(description = "任务名称")
     private String taskName;

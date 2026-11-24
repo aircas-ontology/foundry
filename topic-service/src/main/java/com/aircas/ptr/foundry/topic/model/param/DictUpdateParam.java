@@ -12,10 +12,9 @@ import lombok.Data;
 @Schema(description = "编辑字典")
 public class DictUpdateParam {
 
-    @Schema(description = "字典编号", example = "GENDER_M")
-    @NotBlank(message = "字典编号不能为空")
-    @Size(max = 64, message = "字典编号最长64个字符")
-    private String dictCode;
+    @Schema(description = "字典编号", example = "1")
+    @NotNull(message = "字典编号不能为空")
+    private Long id;
 
     @Schema(description = "字典名称", example = "男")
     @NotBlank(message = "字典名称不能为空")

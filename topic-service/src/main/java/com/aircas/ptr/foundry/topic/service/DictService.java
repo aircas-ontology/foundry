@@ -1,7 +1,6 @@
 package com.aircas.ptr.foundry.topic.service;
 
 import com.aircas.ptr.foundry.topic.model.param.DictCreateParam;
-import com.aircas.ptr.foundry.topic.model.param.DictQueryParam;
 import com.aircas.ptr.foundry.topic.model.param.DictUpdateParam;
 import com.aircas.ptr.foundry.topic.model.po.Dict;
 import com.aircas.ptr.foundry.topic.model.vo.DictCreateVO;
@@ -14,7 +13,7 @@ public interface DictService extends IService<Dict> {
 
     DictCreateVO create(DictCreateParam param);
 
-    List<DictItemVO> listByGroup(DictQueryParam param);
+    List<DictItemVO> listByGroup(String groupCode);
 
     void update(DictUpdateParam param);
 }
