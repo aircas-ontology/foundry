@@ -13,7 +13,8 @@ import lombok.NoArgsConstructor;
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@Schema(description = "规则判断操作数：dynamic 取指定对象实例的属性当前值，fixed 用固定值")
+@Schema(description = "规则判断操作数：dynamic 取指定对象实例的属性当前值，fixed 用固定值；"
+        + "监测条件（monitorType）下只用 type/OntologyId/storageGroup/entityId 定位被监测的分组")
 public class RuleOperateParam {
 
     @Schema(name = "type", description = "操作数类型：dynamic(变量)|fixed(固定值)", example = "dynamic", required = true)
@@ -30,6 +31,10 @@ public class RuleOperateParam {
     @Schema(name = "dataPrimaryKey", description = "子表数据行主键；type=dynamic 可选。属性在扩展存储分组时指定取哪一行的值，"
             + "不传沿用原口径（扩展表按主键倒序取最新行）；属性在主表时忽略", example = "12")
     private String dataPrimaryKey;
+
+    @Schema(name = "storageGroup", description = "存储分组名；监测条件（monitorType）必填，表示监测该对象哪个分组的数据增删改；"
+            + "普通属性条件不传", example = "main")
+    private String storageGroup;
 
     @Schema(name = "propertyName", description = "属性名（apiName）快照；propertyId 查不到值时按它兜底", example = "longitude")
     private String propertyName;

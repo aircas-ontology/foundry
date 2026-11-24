@@ -143,6 +143,9 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     private OntologyActionMapper actionMapper;
 
     @Resource
+    private OntologyPropertyMapper propertyMapper;
+
+    @Resource
     private ActionCategoryMapper actionCategoryMapper;
 
     @Resource
@@ -6312,13 +6315,24 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
 
             int depth = 0;
             var items = group.getJudgeParams();
+            var groupMonitorType = group.getMonitorType();
             for (int i = 0; i < items.size(); i++) {
                 var item = items.get(i);
-                validateJudgeOperate(item.getLeftOperate(), "leftOperate");
-                validateJudgeOperate(item.getRightOperate(), "rightOperate");
-                PreconditionUtils.checkNotNull(item.getCondition(), "judgeParams 缺少比较操作符 condition", HttpStatus.BAD_REQUEST);
-                PreconditionUtils.checkArgument(item.getCondition() != ActionHandleRuleAddConditionEnum.CH,
-                        "规则调度不支持 CH（变化）比较", HttpStatus.BAD_REQUEST);
+                // 事件类型可选在组上选一次，组内条件项只给对象+分组；条件项自带的类型须与组级一致
+                PreconditionUtils.checkArgument(item.getMonitorType() == null || groupMonitorType == null
+                                || item.getMonitorType() == groupMonitorType,
+                        "judgeParams[" + i + "] 的 monitorType 与规则组 monitorType 不一致："
+                                + item.getMonitorType() + " != " + groupMonitorType, HttpStatus.BAD_REQUEST);
+                var monitorType = item.getMonitorType() != null ? item.getMonitorType() : groupMonitorType;
+                if (monitorType != null) {
+                    validateMonitorOperate(item.getLeftOperate());
+                } else {
+                    validateJudgeOperate(item.getLeftOperate(), "leftOperate");
+                    validateJudgeOperate(item.getRightOperate(), "rightOperate");
+                    PreconditionUtils.checkNotNull(item.getCondition(), "judgeParams 缺少比较操作符 condition", HttpStatus.BAD_REQUEST);
+                    PreconditionUtils.checkArgument(item.getCondition() != ActionHandleRuleAddConditionEnum.CH,
+                            "规则调度不支持 CH（变化）比较", HttpStatus.BAD_REQUEST);
+                }
                 int leftBrackets = item.getIsLeft() == null ? 0 : item.getIsLeft();
                 int rightBrackets = item.getIsRight() == null ? 0 : item.getIsRight();
                 PreconditionUtils.checkArgument(leftBrackets >= 0 && rightBrackets >= 0,
@@ -6345,6 +6359,30 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         } else {
             PreconditionUtils.checkNotNull(operate.getFixValue(), name + " 为 fixed 时必须给 fixValue", HttpStatus.BAD_REQUEST);
         }
+    }
+
+    /** 监测条件只认「对象 + 存储分组」，对象必须启用、分组必须在对象上真实存在，避免配了但永远收不到事件 */
+    private void validateMonitorOperate(RuleOperateParam operate) {
+        PreconditionUtils.checkNotNull(operate, "监测条件 leftOperate 不能为空", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(operate.getType() == RuleOperateType.DYNAMIC,
+                "监测条件 leftOperate.type 必须为 dynamic", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(StringUtils.isNotBlank(operate.getOntologyId()),
+                "监测条件 leftOperate 必须给 OntologyId", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(StringUtils.isNotBlank(operate.getStorageGroup()),
+                "监测条件 leftOperate 必须给 storageGroup", HttpStatus.BAD_REQUEST);
+        var meta = ontologyMetaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>()
+                .eq(OntologyMeta::getUniqueIdentifier, operate.getOntologyId())
+                .eq(OntologyMeta::getStatus, Status.ENABLE.getValue()));
+        PreconditionUtils.checkNotNull(meta, "监测对象不存在或未启用：" + operate.getOntologyId(), HttpStatus.BAD_REQUEST);
+        if ("main".equals(operate.getStorageGroup())) {
+            return;
+        }
+        Long count = propertyMapper.selectCount(new LambdaQueryWrapper<OntologyProperty>()
+                .eq(OntologyProperty::getOntologyUniqueIdentifier, operate.getOntologyId())
+                .eq(OntologyProperty::getStorageGroup, operate.getStorageGroup())
+                .eq(OntologyProperty::getStatus, Status.ENABLE.getValue()));
+        PreconditionUtils.checkArgument(count != null && count > 0,
+                "对象" + operate.getOntologyId() + "不存在存储分组：" + operate.getStorageGroup(), HttpStatus.BAD_REQUEST);
     }
 
     /** 定稿模式的展示用监控对象：优先执行目标对象，其次首个条件操作数对象 */

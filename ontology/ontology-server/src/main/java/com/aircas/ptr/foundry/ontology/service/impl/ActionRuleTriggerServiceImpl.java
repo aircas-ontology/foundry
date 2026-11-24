@@ -3,6 +3,7 @@ package com.aircas.ptr.foundry.ontology.service.impl;
 import com.aircas.ptr.foundry.ontology.model.enums.ActionHandleRuleAddConditionEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.ActionRuleConnectType;
 import com.aircas.ptr.foundry.ontology.model.enums.ActionSchedulingTypeEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.RuleMonitorTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.RuleOperateType;
 import com.aircas.ptr.foundry.ontology.model.enums.ScheduleStatus;
 import com.aircas.ptr.foundry.ontology.model.enums.Status;
@@ -50,12 +51,17 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * 规则行为调度触发实现（定稿 judgeRules 结构）。
  * <p>
- * 电平触发：规则启用时先对条件绑定的实例评估一遍存量数据；此后 CDC 实例插入/更新 ->
- * 变更表+列映射到对象属性（字段无属性配置则不触发）-> 捞开启中的规则 ->
- * 定向匹配（条件操作数引用了本次变更对象+实例且命中变更字段的组才评估）->
- * 实时取操作数实例属性值 -> 括号+AND/OR 组合求值（可整体取反）-> 满足则按 actionParam
+ * 电平触发：规则启用时先对属性条件绑定的实例评估一遍存量数据；此后 CDC 行级事件
+ * （主表与扩展存储分组表的新增/更新/删除）-> 按事件的对象+分组+类型匹配监测条件、
+ * 按变更表+列映射的对象属性匹配属性条件 -> 捞开启中的规则 ->
+ * 定向匹配（组内任一条件命中本次事件才评估）->
+ * 属性条件实时取操作数实例属性值，监测条件用「同一实例已发生的匹配」判断 ->
+ * 括号+AND/OR 组合求值（可整体取反）-> 满足则按 actionParam
  * 显式指定的目标执行行为（entity_json 与周期调度同形式）-> 结果落 action_handle_log。
- * 不处理删除事件。
+ * <p>
+ * 监测条件的 AND 是跨事件累计语义：一次 CDC 消息只对应一个分组的一种事件，
+ * 「A组新增 且 B组新增」需要同一实例先后两条事件在累计窗口内都发生才触发，
+ * 触发后清空累计，窗口内没有新的匹配事件则自动过期。
  * <p>
  * 不加事务：testAction 跨数据湖/图库写库，日志独立提交，不能被随后的异常回滚掉。
  * 单条规则评估/执行失败只记日志，不影响其余规则与实例同步。
@@ -64,9 +70,23 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class ActionRuleTriggerServiceImpl implements ActionRuleTriggerService {
 
+    /** 主存储分组名：主表行即实例本身 */
+    private static final String MAIN_STORAGE_GROUP = "main";
+
     /** 同一规则+组+触发实例的执行冷却，防自写循环：行为写库 -> CDC 再触发 -> 条件仍成立 -> 无限执行 */
     private static final long JUDGE_COOLDOWN_MS = 10_000L;
     private final Map<String, Long> judgeCooldownMap = new ConcurrentHashMap<>();
+
+    /** 监测条件累计窗口：同一实例的多分组事件在这段时间内凑齐才算命中 AND 组合，超时未凑齐自动作废 */
+    private static final long MONITOR_ACCUMULATE_TTL_MS = 5 * 60_000L;
+
+    /** rule+组+对象+实例 -> 已命中的监测条件下标；只存发生过、还没被消费掉的匹配 */
+    private static final class MonitorAccumulation {
+        private final Set<Integer> matchedIndexes = new HashSet<>();
+        private volatile long lastTouched;
+    }
+
+    private final Map<String, MonitorAccumulation> monitorAccumulationMap = new ConcurrentHashMap<>();
 
     @Resource
     private ActionHandleRuleService actionHandleRuleService;
@@ -91,28 +111,38 @@ public class ActionRuleTriggerServiceImpl implements ActionRuleTriggerService {
     private final ObjectMapper jsonMapper = new ObjectMapper()
             .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
+    /** 一次 CDC 事件在规则求值中的上下文：监测条件按它判断是否命中，属性条件按它做定向过滤 */
+    private record EventContext(RuleMonitorTypeEnum eventType, String ontologyUid, String pkStr,
+                                String storageGroup, boolean mainTable, Set<String> changedPropertyKeys) {
+    }
+
     @Override
-    public void onInstanceChange(String ontologyUniqueIdentifier, Object entityPrimaryKey,
-                                 String table, Set<String> changedColumns) {
+    public void onDataChange(String ontologyUniqueIdentifier, Object entityPrimaryKey, String table,
+                             String storageGroup, RuleMonitorTypeEnum eventType, Set<String> changedColumns) {
         if (StringUtils.isBlank(ontologyUniqueIdentifier) || entityPrimaryKey == null
-                || StringUtils.isBlank(table) || CollectionUtils.isEmpty(changedColumns)) {
+                || StringUtils.isBlank(table) || eventType == null) {
             return;
         }
+        var columns = changedColumns == null ? Set.<String>of() : changedColumns;
+        // 更新事件前后无实际差异不算变更，避免空更新触发监测条件
+        if (eventType == RuleMonitorTypeEnum.UPDATE && columns.isEmpty()) {
+            return;
+        }
+        boolean mainTable = StringUtils.equals(MAIN_STORAGE_GROUP, storageGroup);
+        // 属性条件仍按「变更表+变更列映射到对象属性」定向：扩展分组表的事件只供监测条件使用
+        Set<String> changedPropertyKeys = mainTable
+                ? changedPropertyKeys(ontologyUniqueIdentifier, table, columns)
+                : Set.of();
+        var ctx = new EventContext(eventType, ontologyUniqueIdentifier, String.valueOf(entityPrimaryKey),
+                StringUtils.defaultIfBlank(storageGroup, MAIN_STORAGE_GROUP), mainTable, changedPropertyKeys);
         // 触发时刻取收到数据变更的时间，后续规则捞取/条件求值的耗时不算进执行时间
         var triggerTime = new Date();
-        // 先判断本次变更的表+字段上有没有配置属性：变更列映射到对象属性，
-        // 一个属性都没命中说明这些字段没有规则可挂，直接不进规则调度
-        Set<String> changedPropertyKeys = changedPropertyKeys(ontologyUniqueIdentifier, table, changedColumns);
-        if (changedPropertyKeys.isEmpty()) {
-            return;
-        }
         // 条件跨对象，监控对象在条件操作数里，无法按单对象索引捞，取全部开启中的规则内存定向匹配
         var rules = actionHandleRuleService.list(new LambdaQueryWrapper<ActionHandleRule>()
                 .eq(ActionHandleRule::getStatus, ScheduleStatus.START));
         if (CollectionUtils.isEmpty(rules)) {
             return;
         }
-        String pkStr = String.valueOf(entityPrimaryKey);
         for (var rule : rules) {
             try {
                 var groups = readGroups(rule);
@@ -122,14 +152,30 @@ public class ActionRuleTriggerServiceImpl implements ActionRuleTriggerService {
                 Map<String, Map<String, Object>> instanceCache = new HashMap<>();
                 for (int i = 0; i < groups.size(); i++) {
                     var group = groups.get(i);
-                    if (!judgeGroupWatches(group, ontologyUniqueIdentifier, pkStr, changedPropertyKeys)) {
+                    if (group == null || CollectionUtils.isEmpty(group.getJudgeParams())) {
                         continue;
                     }
-                    String cooldownKey = rule.getId() + ":" + i + ":" + ontologyUniqueIdentifier + ":" + pkStr;
+                    var items = group.getJudgeParams();
+                    var groupMonitorType = group.getMonitorType();
+                    var matchedNow = monitorMatches(items, ctx, groupMonitorType);
+                    if (matchedNow.isEmpty() && !propertyWatches(items, ctx, groupMonitorType)) {
+                        continue;
+                    }
+                    boolean monitorGroup = hasMonitorCondition(group);
+                    String baseKey = rule.getId() + ":" + i + ":" + ontologyUniqueIdentifier + ":" + ctx.pkStr();
+                    // 冷却键：监测条件组带事件类型，同一实例的新增和删除互不压制；属性条件组沿用原键
+                    String cooldownKey = baseKey + (monitorGroup ? ":" + eventType : "");
                     if (inCooldown(cooldownKey)) {
                         continue;
                     }
-                    if (evalAndExecuteGroup(rule.getId(), group, instanceCache, triggerTime)) {
+                    // 监测条件把本次命中的下标并入该实例的累计集合，AND 组合要多个分组的事件先后凑齐
+                    Set<Integer> accumulated = monitorGroup
+                            ? accumulateMonitorMatches(baseKey, matchedNow)
+                            : null;
+                    if (evalAndExecuteGroup(rule.getId(), group, instanceCache, triggerTime, accumulated)) {
+                        if (monitorGroup) {
+                            monitorAccumulationMap.remove(baseKey);
+                        }
                         markCooldown(cooldownKey);
                     }
                 }
@@ -145,6 +191,9 @@ public class ActionRuleTriggerServiceImpl implements ActionRuleTriggerService {
      * 供操作数按 propertyId / propertyName 命中判断。
      */
     private Set<String> changedPropertyKeys(String ontologyUid, String table, Set<String> changedColumns) {
+        if (CollectionUtils.isEmpty(changedColumns)) {
+            return Set.of();
+        }
         List<OntologyProperty> props = propertyMapper.selectList(new LambdaQueryWrapper<OntologyProperty>()
                 .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyUid)
                 .eq(OntologyProperty::getDatasourceId, table)
@@ -176,7 +225,11 @@ public class ActionRuleTriggerServiceImpl implements ActionRuleTriggerService {
             }
             Map<String, Map<String, Object>> instanceCache = new HashMap<>();
             for (var group : groups) {
-                evalAndExecuteGroup(rule.getId(), group, instanceCache, triggerTime);
+                // 监测条件是事件触发，没有事件上下文时不评估，避免取反条件在启用瞬间误执行
+                if (hasMonitorCondition(group)) {
+                    continue;
+                }
+                evalAndExecuteGroup(rule.getId(), group, instanceCache, triggerTime, null);
             }
         } catch (Exception e) {
             log.error("规则调度启用时存量评估失败, ruleId={}", ruleId, e);
@@ -191,10 +244,29 @@ public class ActionRuleTriggerServiceImpl implements ActionRuleTriggerService {
         });
     }
 
+    private boolean hasMonitorCondition(RuleJudgeGroupParam group) {
+        if (group == null) {
+            return false;
+        }
+        // 事件类型可只在组上选一次，组内条件项就不再带 monitorType
+        if (group.getMonitorType() != null) {
+            return true;
+        }
+        return CollectionUtils.isNotEmpty(group.getJudgeParams())
+                && group.getJudgeParams().stream().anyMatch(item -> item.getMonitorType() != null);
+    }
+
+    /** 条件项生效的监测类型：条件项自身优先，否则继承规则组的 monitorType；都为空即属性比较条件 */
+    private RuleMonitorTypeEnum effectiveMonitorType(RuleJudgeItemParam item, RuleMonitorTypeEnum groupMonitorType) {
+        return item.getMonitorType() != null ? item.getMonitorType() : groupMonitorType;
+    }
+
     /** 求值一组条件（含整体取反），成立则执行该组行为；返回是否执行 */
     private boolean evalAndExecuteGroup(Long ruleId, RuleJudgeGroupParam group,
-                                        Map<String, Map<String, Object>> instanceCache, Date triggerTime) {
-        boolean result = evalJudgeItems(group.getJudgeParams(), instanceCache);
+                                        Map<String, Map<String, Object>> instanceCache, Date triggerTime,
+                                        Set<Integer> accumulatedMonitorIndexes) {
+        boolean result = evalJudgeItems(group.getJudgeParams(), instanceCache, accumulatedMonitorIndexes,
+                group.getMonitorType());
         if (Boolean.TRUE.equals(group.getCondition())) {
             result = !result;
         }
@@ -205,34 +277,89 @@ public class ActionRuleTriggerServiceImpl implements ActionRuleTriggerService {
         return true;
     }
 
-    /** 组的任一 dynamic 操作数引用了本次变更的对象+实例、且命中变更字段才评估（定向触发） */
-    private boolean judgeGroupWatches(RuleJudgeGroupParam group, String ontologyUid, String pkStr,
-                                      Set<String> changedPropertyKeys) {
-        if (group == null || CollectionUtils.isEmpty(group.getJudgeParams())) {
+    /** 本次事件命中的监测条件下标（一次 CDC 事件只对应一种类型和一个分组，可能同时命中多条同义条件） */
+    private List<Integer> monitorMatches(List<RuleJudgeItemParam> items, EventContext ctx,
+                                         RuleMonitorTypeEnum groupMonitorType) {
+        List<Integer> matched = new ArrayList<>();
+        for (int i = 0; i < items.size(); i++) {
+            var item = items.get(i);
+            var monitorType = effectiveMonitorType(item, groupMonitorType);
+            if (monitorType != null && monitorWatches(item, monitorType, ctx)) {
+                matched.add(i);
+            }
+        }
+        return matched;
+    }
+
+    /**
+     * 属性条件是否与本次事件相关：仅主表的非删除事件参与，
+     * 且操作数引用了本次变更实例并命中变更字段；扩展分组表事件与删除事件不触发属性条件规则。
+     */
+    private boolean propertyWatches(List<RuleJudgeItemParam> items, EventContext ctx,
+                                    RuleMonitorTypeEnum groupMonitorType) {
+        if (!ctx.mainTable() || ctx.eventType() == RuleMonitorTypeEnum.DELETE
+                || ctx.changedPropertyKeys().isEmpty()) {
             return false;
         }
-        for (var item : group.getJudgeParams()) {
-            if (operateWatches(item.getLeftOperate(), ontologyUid, pkStr, changedPropertyKeys)
-                    || operateWatches(item.getRightOperate(), ontologyUid, pkStr, changedPropertyKeys)) {
+        for (var item : items) {
+            if (effectiveMonitorType(item, groupMonitorType) == null
+                    && (operateWatches(item.getLeftOperate(), ctx)
+                    || operateWatches(item.getRightOperate(), ctx))) {
                 return true;
             }
         }
         return false;
     }
 
-    private boolean operateWatches(RuleOperateParam operate, String ontologyUid, String pkStr,
-                                   Set<String> changedPropertyKeys) {
-        if (operate == null || operate.getType() != RuleOperateType.DYNAMIC
-                || !StringUtils.equals(operate.getOntologyId(), ontologyUid)
-                || operate.getEntityId() == null || !pkStr.equals(String.valueOf(operate.getEntityId()))) {
+    /** 把本次命中的监测条件下标并入该实例的累计集合，返回窗口内已命中的全部下标 */
+    private Set<Integer> accumulateMonitorMatches(String baseKey, List<Integer> matchedNow) {
+        long now = System.currentTimeMillis();
+        evictExpiredMonitorAccumulation(now);
+        var accumulation = monitorAccumulationMap.computeIfAbsent(baseKey, k -> new MonitorAccumulation());
+        synchronized (accumulation) {
+            if (now - accumulation.lastTouched >= MONITOR_ACCUMULATE_TTL_MS) {
+                accumulation.matchedIndexes.clear();
+            }
+            accumulation.matchedIndexes.addAll(matchedNow);
+            accumulation.lastTouched = now;
+            return new HashSet<>(accumulation.matchedIndexes);
+        }
+    }
+
+    private void evictExpiredMonitorAccumulation(long now) {
+        if (monitorAccumulationMap.size() > 10_000) {
+            monitorAccumulationMap.entrySet()
+                    .removeIf(e -> now - e.getValue().lastTouched >= MONITOR_ACCUMULATE_TTL_MS);
+        }
+    }
+
+    /** 监测条件是否命中本次事件：事件类型一致 + 对象一致 + 存储分组一致（给了实例主键再限定实例） */
+    private boolean monitorWatches(RuleJudgeItemParam item, RuleMonitorTypeEnum monitorType, EventContext ctx) {
+        if (ctx == null || monitorType != ctx.eventType()) {
             return false;
         }
-        // 字段门槛：操作数引用的属性必须在本次变更列映射出的属性里；未指定属性的按对象级监听放行
+        var operate = item.getLeftOperate();
+        if (operate == null || operate.getType() != RuleOperateType.DYNAMIC
+                || !StringUtils.equals(operate.getOntologyId(), ctx.ontologyUid())
+                || !StringUtils.equals(operate.getStorageGroup(), ctx.storageGroup())) {
+            return false;
+        }
+        return StringUtils.isBlank(operate.getEntityId())
+                || ctx.pkStr().equals(String.valueOf(operate.getEntityId()));
+    }
+
+    /** 属性操作数是否引用了本次变更对象+实例，且在变更字段上（未指定属性的按对象级监听放行） */
+    private boolean operateWatches(RuleOperateParam operate, EventContext ctx) {
+        if (operate == null || operate.getType() != RuleOperateType.DYNAMIC
+                || !StringUtils.equals(operate.getOntologyId(), ctx.ontologyUid())
+                || operate.getEntityId() == null || !ctx.pkStr().equals(String.valueOf(operate.getEntityId()))) {
+            return false;
+        }
         if (StringUtils.isNotBlank(operate.getPropertyId())) {
-            return changedPropertyKeys.contains(operate.getPropertyId());
+            return ctx.changedPropertyKeys().contains(operate.getPropertyId());
         }
         if (StringUtils.isNotBlank(operate.getPropertyName())) {
-            return changedPropertyKeys.contains(operate.getPropertyName());
+            return ctx.changedPropertyKeys().contains(operate.getPropertyName());
         }
         return true;
     }
@@ -241,7 +368,8 @@ public class ActionRuleTriggerServiceImpl implements ActionRuleTriggerService {
      * 组合条件求值：先把每条条件算成布尔值，连同括号/连接符排成 token 序列，
      * 再递归下降解析（AND 优先于 OR，括号可改变优先级）。括号不配对等畸形表达式抛异常，由上层记日志。
      */
-    private boolean evalJudgeItems(List<RuleJudgeItemParam> items, Map<String, Map<String, Object>> instanceCache) {
+    private boolean evalJudgeItems(List<RuleJudgeItemParam> items, Map<String, Map<String, Object>> instanceCache,
+                                   Set<Integer> accumulatedMonitorIndexes, RuleMonitorTypeEnum groupMonitorType) {
         if (CollectionUtils.isEmpty(items)) {
             return false;
         }
@@ -252,7 +380,7 @@ public class ActionRuleTriggerServiceImpl implements ActionRuleTriggerService {
             for (int k = 0; k < leftBrackets; k++) {
                 tokens.add('(');
             }
-            tokens.add(evalJudgeItem(item, instanceCache));
+            tokens.add(evalJudgeItem(i, item, instanceCache, accumulatedMonitorIndexes, groupMonitorType));
             int rightBrackets = item.getIsRight() == null ? 0 : item.getIsRight();
             for (int k = 0; k < rightBrackets; k++) {
                 tokens.add(')');
@@ -310,7 +438,12 @@ public class ActionRuleTriggerServiceImpl implements ActionRuleTriggerService {
         throw new IllegalStateException("judgeParams 表达式位置 " + pos[0] + " 出现非法 token: " + token);
     }
 
-    private boolean evalJudgeItem(RuleJudgeItemParam item, Map<String, Map<String, Object>> instanceCache) {
+    private boolean evalJudgeItem(int index, RuleJudgeItemParam item, Map<String, Map<String, Object>> instanceCache,
+                                  Set<Integer> accumulatedMonitorIndexes, RuleMonitorTypeEnum groupMonitorType) {
+        if (effectiveMonitorType(item, groupMonitorType) != null) {
+            // 监测条件看该实例窗口内是否已发生过对应事件，与本次事件无关
+            return accumulatedMonitorIndexes != null && accumulatedMonitorIndexes.contains(index);
+        }
         Object left = resolveJudgeOperate(item.getLeftOperate(), instanceCache);
         Object right = resolveJudgeOperate(item.getRightOperate(), instanceCache);
         return evaluateCondition(item.getCondition(), left, right == null ? null : String.valueOf(right));
