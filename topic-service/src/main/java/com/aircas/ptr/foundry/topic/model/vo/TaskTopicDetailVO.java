@@ -12,7 +12,7 @@ import java.util.Date;
 public class TaskTopicDetailVO {
 
     @Schema(description = "任务编号")
-    private String taskCode;
+    private Long taskCode;
 
     @Schema(description = "任务名称")
     private String taskName;
@@ -22,6 +22,9 @@ public class TaskTopicDetailVO {
 
     @Schema(description = "任务区域")
     private String taskRegion;
+
+    @Schema(description = "区域点位")
+    private String regionPoint;
 
     @Schema(description = "任务开始时间")
     private Date startTime;

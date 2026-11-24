@@ -12,10 +12,9 @@ import java.util.Date;
 @Schema(description = "编辑任务主题")
 public class TaskTopicUpdateParam {
 
-    @Schema(description = "任务编号", example = "TASK-001")
-    @NotBlank(message = "任务编号不能为空")
-    @Size(max = 64, message = "任务编号最长64个字符")
-    private String taskCode;
+    @Schema(description = "任务编号", example = "1")
+    @NotNull(message = "任务编号不能为空")
+    private Long taskCode;
 
     @Schema(description = "任务名称", example = "区域巡查")
     @NotBlank(message = "任务名称不能为空")
@@ -31,6 +30,10 @@ public class TaskTopicUpdateParam {
     @NotBlank(message = "任务区域不能为空")
     @Size(max = 128, message = "任务区域最长128个字符")
     private String taskRegion;
+
+    @Schema(description = "区域点位，由页面传入", example = "120.1,30.2;120.3,30.4")
+    @NotBlank(message = "区域点位不能为空")
+    private String regionPoint;
 
     @Schema(description = "任务开始时间")
     @NotNull(message = "任务开始时间不能为空")

@@ -8,6 +8,7 @@ import com.aircas.ptr.foundry.topic.model.vo.TaskTopicDetailVO;
 import com.aircas.ptr.foundry.topic.model.vo.TaskTopicVO;
 import com.aircas.ptr.foundry.topic.service.TaskTopicService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -34,13 +35,13 @@ public class TaskTopicController {
 
     @PostMapping
     @Operation(summary = "创建任务主题")
-    public RestResult<String> create(@RequestBody @Valid TaskTopicCreateParam param) {
+    public RestResult<Long> create(@RequestBody @Valid TaskTopicCreateParam param) {
         return RestResult.ofData(taskTopicService.create(param));
     }
 
     @DeleteMapping("/{taskCode}")
     @Operation(summary = "删除任务主题")
-    public RestResult<Void> delete(@PathVariable String taskCode) {
+    public RestResult<Void> delete(@Parameter(description = "任务编号，多个用逗号分割") @PathVariable String taskCode) {
         taskTopicService.delete(taskCode);
         return RestResult.success();
     }

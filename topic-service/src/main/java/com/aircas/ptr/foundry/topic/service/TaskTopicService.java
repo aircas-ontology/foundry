@@ -12,7 +12,7 @@ import java.util.List;
 
 public interface TaskTopicService extends IService<TaskTopic> {
 
-    String create(TaskTopicCreateParam param);
+    Long create(TaskTopicCreateParam param);
 
     void delete(String taskCode);
 

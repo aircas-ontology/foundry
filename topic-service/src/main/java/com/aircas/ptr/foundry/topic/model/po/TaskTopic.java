@@ -22,10 +22,10 @@ import java.util.Date;
 public class TaskTopic {
 
     /**
-     * 任务编号
+     * 任务编号，数据库自增
      */
-    @TableId(type = IdType.INPUT)
-    private String taskCode;
+    @TableId(type = IdType.AUTO)
+    private Long taskCode;
 
     /**
      * 任务名称
@@ -41,6 +41,11 @@ public class TaskTopic {
      * 任务区域
      */
     private String taskRegion;
+
+    /**
+     * 区域点位，由页面传入
+     */
+    private String regionPoint;
 
     /**
      * 任务开始时间

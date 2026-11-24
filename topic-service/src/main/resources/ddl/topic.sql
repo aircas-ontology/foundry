@@ -37,10 +37,11 @@ CREATE INDEX IF NOT EXISTS idx_dict_group_code ON topic.dict (group_code);
 
 CREATE TABLE IF NOT EXISTS topic.task_topic
 (
-    task_code       varchar(64)   NOT NULL PRIMARY KEY,
+    task_code       bigserial     PRIMARY KEY,
     task_name       varchar(128)  NOT NULL,
     task_type       varchar(64)   NOT NULL,
     task_region     varchar(128)  NOT NULL,
+    region_point    text,
     start_time      timestamp(6)  NOT NULL,
     end_time        timestamp(6)  NOT NULL,
     description     varchar(2000),
@@ -57,10 +58,11 @@ CREATE TABLE IF NOT EXISTS topic.task_topic
 );
 
 COMMENT ON TABLE topic.task_topic IS '任务主题';
-COMMENT ON COLUMN topic.task_topic.task_code IS '任务编号';
+COMMENT ON COLUMN topic.task_topic.task_code IS '任务编号，自增';
 COMMENT ON COLUMN topic.task_topic.task_name IS '任务名称';
 COMMENT ON COLUMN topic.task_topic.task_type IS '任务类型，由页面传入';
 COMMENT ON COLUMN topic.task_topic.task_region IS '任务区域，由页面传入';
+COMMENT ON COLUMN topic.task_topic.region_point IS '区域点位，由页面传入';
 COMMENT ON COLUMN topic.task_topic.start_time IS '任务开始时间';
 COMMENT ON COLUMN topic.task_topic.end_time IS '任务结束时间';
 COMMENT ON COLUMN topic.task_topic.description IS '任务描述';

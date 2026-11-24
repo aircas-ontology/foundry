@@ -8,7 +8,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import java.util.Date;
 
 @Data
-@Schema(description = "任务主题列表查询")
+@Schema(description = "任务主题列表查询。条件都可以不传，不传时返回全部未删除数据")
 public class TaskTopicQueryParam {
 
     @Schema(description = "任务名称，模糊匹配")

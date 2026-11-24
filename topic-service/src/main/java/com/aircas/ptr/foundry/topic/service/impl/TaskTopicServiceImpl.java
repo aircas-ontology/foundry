@@ -11,12 +11,14 @@ import com.aircas.ptr.foundry.topic.model.vo.TaskTopicVO;
 import com.aircas.ptr.foundry.topic.repository.TaskTopicMapper;
 import com.aircas.ptr.foundry.topic.service.TaskTopicService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 
@@ -25,20 +27,19 @@ public class TaskTopicServiceImpl extends ServiceImpl<TaskTopicMapper, TaskTopic
 
     @Transactional
     @Override
-    public String create(TaskTopicCreateParam param) {
+    public Long create(TaskTopicCreateParam param) {
         checkTimeRange(param.getStartTime(), param.getEndTime());
-        PreconditionUtils.checkIsNull(getById(param.getTaskCode()), "任务编号已存在", HttpStatus.BAD_REQUEST);
         TaskTopic taskTopic = TaskTopic.builder()
-                .taskCode(param.getTaskCode())
                 .taskName(param.getTaskName())
                 .taskType(param.getTaskType())
                 .taskRegion(param.getTaskRegion())
+                .regionPoint(param.getRegionPoint())
                 .startTime(param.getStartTime())
                 .endTime(param.getEndTime())
                 .description(param.getDescription())
                 .ontologySpace(param.getOntologySpace())
                 .status(param.getStatus())
-                .creator(param.getCreator())
+                .creator(StringUtils.isBlank(param.getCreator()) ? "admin" : param.getCreator().trim())
                 .deleted(DeletedFlagEnum.NOT_DELETED.getCode())
                 .build();
         save(taskTopic);
@@ -48,24 +49,37 @@ public class TaskTopicServiceImpl extends ServiceImpl<TaskTopicMapper, TaskTopic
     @Transactional
     @Override
     public void delete(String taskCode) {
-        TaskTopic taskTopic = requireTask(taskCode);
-        taskTopic.setDeleted(DeletedFlagEnum.DELETED.getCode());
-        updateById(taskTopic);
+        List<Long> taskCodes = Arrays.stream(taskCode.split(","))
+                .map(String::trim)
+                .filter(StringUtils::isNotBlank)
+                .map(this::parseTaskCode)
+                .distinct()
+                .toList();
+        PreconditionUtils.checkArgument(!taskCodes.isEmpty(), "任务编号不能为空", HttpStatus.BAD_REQUEST);
+        long exists = count(new LambdaQueryWrapper<TaskTopic>()
+                .in(TaskTopic::getTaskCode, taskCodes)
+                .eq(TaskTopic::getDeleted, DeletedFlagEnum.NOT_DELETED.getCode()));
+        PreconditionUtils.checkArgument(exists == taskCodes.size(), "任务不存在", HttpStatus.BAD_REQUEST);
+        update(new LambdaUpdateWrapper<TaskTopic>()
+                .in(TaskTopic::getTaskCode, taskCodes)
+                .eq(TaskTopic::getDeleted, DeletedFlagEnum.NOT_DELETED.getCode())
+                .set(TaskTopic::getDeleted, DeletedFlagEnum.DELETED.getCode()));
     }
 
     @Override
     public TaskTopicDetailVO get(String taskCode) {
-        return toDetailVO(requireTask(taskCode));
+        return toDetailVO(requireTask(parseTaskCode(taskCode)));
     }
 
     @Override
     public List<TaskTopicVO> list(TaskTopicQueryParam param) {
+        TaskTopicQueryParam query = param == null ? new TaskTopicQueryParam() : param;
         List<TaskTopic> tasks = list(new LambdaQueryWrapper<TaskTopic>()
-                .like(StringUtils.isNotBlank(param.getTaskName()), TaskTopic::getTaskName, param.getTaskName())
-                .eq(StringUtils.isNotBlank(param.getTaskType()), TaskTopic::getTaskType, param.getTaskType())
-                .eq(StringUtils.isNotBlank(param.getTaskRegion()), TaskTopic::getTaskRegion, param.getTaskRegion())
-                .ge(param.getStartTime() != null, TaskTopic::getStartTime, param.getStartTime())
-                .le(param.getEndTime() != null, TaskTopic::getEndTime, param.getEndTime())
+                .like(StringUtils.isNotBlank(query.getTaskName()), TaskTopic::getTaskName, query.getTaskName())
+                .eq(StringUtils.isNotBlank(query.getTaskType()), TaskTopic::getTaskType, query.getTaskType())
+                .eq(StringUtils.isNotBlank(query.getTaskRegion()), TaskTopic::getTaskRegion, query.getTaskRegion())
+                .ge(query.getStartTime() != null, TaskTopic::getStartTime, query.getStartTime())
+                .le(query.getEndTime() != null, TaskTopic::getEndTime, query.getEndTime())
                 .eq(TaskTopic::getDeleted, DeletedFlagEnum.NOT_DELETED.getCode())
                 .orderByDesc(TaskTopic::getStartTime)
                 .orderByAsc(TaskTopic::getTaskCode));
@@ -80,6 +94,7 @@ public class TaskTopicServiceImpl extends ServiceImpl<TaskTopicMapper, TaskTopic
         taskTopic.setTaskName(param.getTaskName());
         taskTopic.setTaskType(param.getTaskType());
         taskTopic.setTaskRegion(param.getTaskRegion());
+        taskTopic.setRegionPoint(param.getRegionPoint());
         taskTopic.setStartTime(param.getStartTime());
         taskTopic.setEndTime(param.getEndTime());
         taskTopic.setDescription(param.getDescription());
@@ -88,12 +103,17 @@ public class TaskTopicServiceImpl extends ServiceImpl<TaskTopicMapper, TaskTopic
         updateById(taskTopic);
     }
 
-    private TaskTopic requireTask(String taskCode) {
+    private TaskTopic requireTask(Long taskCode) {
         TaskTopic taskTopic = getOne(new LambdaQueryWrapper<TaskTopic>()
                 .eq(TaskTopic::getTaskCode, taskCode)
                 .eq(TaskTopic::getDeleted, DeletedFlagEnum.NOT_DELETED.getCode()));
         PreconditionUtils.checkNotNull(taskTopic, "任务不存在", HttpStatus.BAD_REQUEST);
         return taskTopic;
+    }
+
+    private Long parseTaskCode(String taskCode) {
+        PreconditionUtils.checkArgument(taskCode.matches("\\d+"), "任务不存在", HttpStatus.BAD_REQUEST);
+        return Long.valueOf(taskCode);
     }
 
     private void checkTimeRange(Date startTime, Date endTime) {
@@ -106,6 +126,7 @@ public class TaskTopicServiceImpl extends ServiceImpl<TaskTopicMapper, TaskTopic
                 .taskName(taskTopic.getTaskName())
                 .taskType(taskTopic.getTaskType())
                 .taskRegion(taskTopic.getTaskRegion())
+                .regionPoint(taskTopic.getRegionPoint())
                 .startTime(taskTopic.getStartTime())
                 .endTime(taskTopic.getEndTime())
                 .description(taskTopic.getDescription())
@@ -122,6 +143,7 @@ public class TaskTopicServiceImpl extends ServiceImpl<TaskTopicMapper, TaskTopic
                 .taskName(taskTopic.getTaskName())
                 .taskType(taskTopic.getTaskType())
                 .taskRegion(taskTopic.getTaskRegion())
+                .regionPoint(taskTopic.getRegionPoint())
                 .startTime(taskTopic.getStartTime())
                 .endTime(taskTopic.getEndTime())
                 .description(taskTopic.getDescription())
