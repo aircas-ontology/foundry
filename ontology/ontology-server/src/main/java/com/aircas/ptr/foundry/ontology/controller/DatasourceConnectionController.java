@@ -64,13 +64,15 @@ public class DatasourceConnectionController {
         return RestResult.ofData(datasourceConnectionService.getDatasource(id));
     }
 
-    @Operation(summary = "新增数据源（id、创建/更新时间由后台生成，请求体不接收；password 必填；status 不传按启用落库）")
+    @Operation(summary = "新增数据源（id、创建/更新时间由后台生成，请求体不接收；除 SQLITE 外 username / password 必填，"
+            + "SQLITE 两者都不用传；status 不传按启用落库）")
     @PostMapping
     public RestResult<DatasourceConnectionItemVO> create(@RequestBody @Valid DatasourceConnectionParam param) {
         return RestResult.ofData(datasourceConnectionService.createDatasource(param));
     }
 
-    @Operation(summary = "修改数据源（id 走 query 参数；password 留空表示沿用库中原密码，其余字段按入参覆盖，传空即清空该列）")
+    @Operation(summary = "修改数据源（id 走 query 参数；password 留空表示沿用库中原密码，其余字段按入参覆盖，传空即清空该列；"
+            + "dbType=SQLITE 时 username / password 不用传）")
     @PutMapping
     public RestResult<DatasourceConnectionItemVO> update(
             @RequestParam @Parameter(description = "数据源 id") Integer id,

@@ -129,8 +129,14 @@ public class DatasourceConnectionServiceImpl
 
     @Override
     public DatasourceConnectionItemVO createDatasource(DatasourceConnectionParam param) {
-        PreconditionUtils.checkArgument(StringUtils.isNotBlank(param.getPassword()),
-                "连接密码不能为空", HttpStatus.BAD_REQUEST);
+        // SQLite 按文件连接，没有账号密码；其余厂商仍必填（DTO 上的 @NotBlank 已挪到这里按厂商分派）
+        boolean sqlite = isSqlite(param.getDbType());
+        if (!sqlite) {
+            PreconditionUtils.checkArgument(StringUtils.isNotBlank(param.getUsername()),
+                    "连接用户名不能为空", HttpStatus.BAD_REQUEST);
+            PreconditionUtils.checkArgument(StringUtils.isNotBlank(param.getPassword()),
+                    "连接密码不能为空", HttpStatus.BAD_REQUEST);
+        }
         checkStatus(param.getStatus());
         checkSpaceNotTaken(param.getSpaceId(), null);
         DatasourceConnection po = DatasourceConnection.builder()
@@ -144,8 +150,9 @@ public class DatasourceConnectionServiceImpl
                 .port(param.getPort())
                 .dbName(StringUtils.trimToNull(param.getDbName()))
                 .schemaName(StringUtils.trimToNull(param.getSchemaName()))
-                .username(param.getUsername().trim())
-                .password(param.getPassword())
+                // username / password 列是 NOT NULL：SQLite 统一落空串，请求里传了也不取
+                .username(sqlite ? "" : param.getUsername().trim())
+                .password(sqlite ? "" : param.getPassword())
                 .description(StringUtils.trimToNull(param.getDescription()))
                 .status(param.getStatus() == null ? STATUS_ENABLED : param.getStatus())
                 .build();
@@ -157,6 +164,11 @@ public class DatasourceConnectionServiceImpl
     @Override
     public DatasourceConnectionItemVO updateDatasource(Integer id, DatasourceConnectionParam param) {
         requireExists(id);
+        boolean sqlite = isSqlite(param.getDbType());
+        if (!sqlite) {
+            PreconditionUtils.checkArgument(StringUtils.isNotBlank(param.getUsername()),
+                    "连接用户名不能为空", HttpStatus.BAD_REQUEST);
+        }
         checkStatus(param.getStatus());
         checkSpaceNotTaken(param.getSpaceId(), id);
         // 逐列显式 set：updateById 会跳过 null，「清空描述 / 清空 schema」就写不进去；
@@ -173,7 +185,8 @@ public class DatasourceConnectionServiceImpl
                 .set(DatasourceConnection::getPort, param.getPort())
                 .set(DatasourceConnection::getDbName, StringUtils.trimToNull(param.getDbName()))
                 .set(DatasourceConnection::getSchemaName, StringUtils.trimToNull(param.getSchemaName()))
-                .set(DatasourceConnection::getUsername, param.getUsername().trim())
+                // SQLite 无账号：统一落空串覆盖掉历史占位值；password 仍按「留空=不改」处理
+                .set(DatasourceConnection::getUsername, sqlite ? "" : param.getUsername().trim())
                 .set(DatasourceConnection::getDescription, StringUtils.trimToNull(param.getDescription()))
                 .set(param.getStatus() != null, DatasourceConnection::getStatus, param.getStatus())
                 .set(StringUtils.isNotBlank(param.getPassword()), DatasourceConnection::getPassword, param.getPassword())
@@ -866,6 +879,13 @@ public class DatasourceConnectionServiceImpl
      */
     private static String normalizeDbType(String dbType) {
         return dbType.trim().toUpperCase();
+    }
+
+    /**
+     * 是否为 SQLite（按文件建连、厂商没有账号密码概念）。dbType 大小写不敏感，null 安全。
+     */
+    private static boolean isSqlite(String dbType) {
+        return dbType != null && "SQLITE".equals(dbType.trim().toUpperCase(Locale.ROOT));
     }
 
     /**

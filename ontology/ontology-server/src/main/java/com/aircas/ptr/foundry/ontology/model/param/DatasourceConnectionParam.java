@@ -10,7 +10,9 @@ import lombok.experimental.Accessors;
 
 /**
  * 数据源连接配置入参：只声明用户可写的字段，ID 由库自增、创建/更新时间由 OnInsertUpdateHandler 填充，不接受请求传入。
- * <p>{@code password} 新增必填、修改可留空（留空表示沿用库中原密码）；{@code /test} 接口不做 @Valid 校验，
+ * <p>{@code username} / {@code password} 的必填性按 {@code dbType} 分派，校验放在 service 里：
+ * 除 SQLITE 外两者必填（SQLITE 走文件建连、没有账号密码，传了也不取、落库为空串）；
+ * {@code password} 修改时可留空（留空表示沿用库中原密码）；{@code /test} 接口不做 @Valid 校验，
  * 允许只传需要覆盖的字段。</p>
  */
 @Data
@@ -30,8 +32,8 @@ public class DatasourceConnectionParam {
     private String name;
 
     @Schema(name = "dbType", description = "数据库类型：POSTGRESQL / MYSQL / MARIADB / ORACLE / SQLSERVER / SQLITE 等，不区分大小写。"
-            + "SQLITE 的 jdbcUrl 由 POST /datasource/connection/sqlite/upload 上传库文件后返回；"
-            + "SQLite 本身没有账号密码，但 username / password 仍必填，填占位值即可（驱动会忽略）",
+            + "SQLITE 的 jdbcUrl 由 POST /datasource/connection/sqlite/upload 上传库文件后返回，"
+            + "且 SQLITE 不需要 username / password（不用传，传了也不取）",
             example = "POSTGRESQL")
     @NotBlank(message = "数据库类型不能为空")
     @Size(max = 32, message = "数据库类型最长 32 字")
@@ -64,12 +66,13 @@ public class DatasourceConnectionParam {
     @Size(max = 128, message = "Schema 名最长 128 字")
     private String schemaName;
 
-    @Schema(name = "username", description = "连接用户名", example = "postgres")
-    @NotBlank(message = "连接用户名不能为空")
+    @Schema(name = "username", description = "连接用户名；除 SQLITE 外必填（必填性按 dbType 在服务端校验），"
+            + "SQLITE 不用传，落库为空串", example = "postgres")
     @Size(max = 128, message = "连接用户名最长 128 字")
     private String username;
 
-    @Schema(name = "password", description = "连接密码；新增必填，修改时留空表示不改动库中已存密码", example = "123456")
+    @Schema(name = "password", description = "连接密码；新增必填（SQLITE 不用传），修改时留空表示不改动库中已存密码",
+            example = "123456")
     @Size(max = 255, message = "连接密码最长 255 字")
     private String password;
 
