@@ -4282,14 +4282,20 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         PreconditionUtils.checkNotNull(ontologySpaceId, "必须传对象空间id", HttpStatus.BAD_REQUEST);
         var objectIds = splitSelectionIds(ontologyIdentifiers);
         var apis = splitSelectionIds(functionApis);
-        // 两边都是收窄条件：没选出对象或函数时，没有可依赖的行为
-        if (objectIds.isEmpty() || apis.isEmpty()) {
+        // 对象编号是收窄条件：没选出对象时两类行为都没有命中的挂载对象
+        // 函数编号只收窄应用行为，基础行为本就不绑算子，不传函数编号照样可选
+        if (objectIds.isEmpty()) {
             return List.of();
         }
         var wrapper = new LambdaQueryWrapper<OntologyAction>()
                 .eq(OntologyAction::getOntologySpaceId, ontologySpaceId)
                 .eq(OntologyAction::getStatus, ActionStatusEnum.PUBLISHED.getValue())
-                .in(OntologyAction::getFunctionApi, apis)
+                .and(kindOrFunction -> {
+                    kindOrFunction.eq(OntologyAction::getActionKind, ActionKindEnum.BASE);
+                    if (!apis.isEmpty()) {
+                        kindOrFunction.or().in(OntologyAction::getFunctionApi, apis);
+                    }
+                })
                 .and(bound -> {
                     for (int i = 0; i < objectIds.size(); i++) {
                         if (i == 0) {

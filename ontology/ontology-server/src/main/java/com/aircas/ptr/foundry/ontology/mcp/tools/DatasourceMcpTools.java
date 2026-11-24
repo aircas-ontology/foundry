@@ -128,9 +128,9 @@ public class DatasourceMcpTools implements McpTools {
             当用户要接入一个新的外部数据库时使用；建议先用 testDatasourceConnection 试连成功后再保存。
             paramJson 为 JSON 对象字符串，字段：
             - name：数据源名称，必填，最长 128 字（允许重名）；
-            - dbType：数据库类型，必填，POSTGRESQL / MYSQL / MARIADB / ORACLE / SQLSERVER 等，不区分大小写（落库统一转大写）；
+            - dbType：数据库类型，必填，POSTGRESQL / MYSQL / MARIADB / ORACLE / SQLSERVER / SQLITE 等，不区分大小写（落库统一转大写）；
             - jdbcUrl：完整 JDBC URL，必填，如 jdbc:postgresql://host:5432/dbname；
-            - username：连接用户名，必填；password：连接密码，新增时必填；
+            - username：连接用户名，除 SQLITE 外必填；password：连接密码，除 SQLITE 外新增必填。SQLITE 走库文件建连、没有账号密码，两者都不用传（服务端落空串）；
             - spaceId：归属对象空间 id，可选（每个空间至多一条数据源记录，重复报错）；
             - driverClass：JDBC 驱动类全限定名，可选（留空依赖驱动 SPI 自动注册）；
             - host / port / dbName：冗余展示字段，可选；schemaName：可选，留空按厂商缺省（PG=public、SQLServer=dbo、Oracle=用户名）；
@@ -143,8 +143,12 @@ public class DatasourceMcpTools implements McpTools {
         requireNotBlank(param.getName(), "name（数据源名称）");
         requireNotBlank(param.getDbType(), "dbType（数据库类型）");
         requireNotBlank(param.getJdbcUrl(), "jdbcUrl（JDBC URL）");
-        requireNotBlank(param.getUsername(), "username（连接用户名）");
-        requireNotBlank(param.getPassword(), "password（连接密码，新增必填）");
+        // 必填性按厂商分派，与 POST /datasource/connection 同口径：SQLITE 无账号密码
+        boolean needsCredentials = !"SQLITE".equalsIgnoreCase(param.getDbType().trim());
+        if (needsCredentials) {
+            requireNotBlank(param.getUsername(), "username（连接用户名）");
+            requireNotBlank(param.getPassword(), "password（连接密码，新增必填）");
+        }
         return datasourceConnectionService.createDatasource(param);
     }
 
@@ -154,7 +158,7 @@ public class DatasourceMcpTools implements McpTools {
             注意覆盖语义：除密码外其余字段一律按入参覆盖，JSON 里给空值就是清空该列（如 description、schemaName），
             所以应先 getDatasourceDetail 取回现值、改动目标字段后整体传入；
             password 留空/不传表示沿用库中原密码（密码任何查询接口都不返回）。
-            paramJson 字段同 createDatasource：name / dbType / jdbcUrl / username 必填，
+            paramJson 字段同 createDatasource：name / dbType / jdbcUrl 必填，username 除 SQLITE 外必填（SQLITE 不用传、落空串），
             spaceId / driverClass / host / port / dbName / schemaName / description / status 可选。
             返回修改后的完整配置 VO（不含密码）；id 不存在时抛业务异常。
             """)
@@ -165,7 +169,9 @@ public class DatasourceMcpTools implements McpTools {
         requireNotBlank(param.getName(), "name（数据源名称）");
         requireNotBlank(param.getDbType(), "dbType（数据库类型）");
         requireNotBlank(param.getJdbcUrl(), "jdbcUrl（JDBC URL）");
-        requireNotBlank(param.getUsername(), "username（连接用户名）");
+        if (!"SQLITE".equalsIgnoreCase(param.getDbType().trim())) {
+            requireNotBlank(param.getUsername(), "username（连接用户名）");
+        }
         return datasourceConnectionService.updateDatasource(parseId(id, "数据源 id"), param);
     }
 

@@ -52,8 +52,11 @@ public interface DatasourceConnectionService extends IService<DatasourceConnecti
      * 新增数据源连接配置。
      *
      * <p>id 由库自增、create_time / update_time 由 {@code OnInsertUpdateHandler} 填充，都不取自请求；
-     * {@code password} 此处必填，{@code status} 不传按 1（启用）落库，{@code dbType} 统一转大写存储
+     * {@code status} 不传按 1（启用）落库，{@code dbType} 统一转大写存储
      * （扫表时按 dbType 分派 catalog / schema，小写值会落到未知厂商分支）。</p>
+     *
+     * <p>{@code username} / {@code password} 必填性按厂商分派：除 SQLITE 外必填，
+     * SQLITE 按文件建连、无账号密码概念，传了也不取，两列统一落空串（列本身 NOT NULL）。</p>
      *
      * @param param 连接配置入参
      * @return 落库后的完整配置（不含密码）
@@ -64,7 +67,8 @@ public interface DatasourceConnectionService extends IService<DatasourceConnecti
      * 修改数据源连接配置。
      *
      * <p>除密码外，其余字段一律按入参覆盖——入参里给空值就是清空该列（如描述、schema）。
-     * {@code password} 留空表示沿用库中原密码：密码任何查询接口都不返回，若强制必填就无法保存编辑。</p>
+     * {@code password} 留空表示沿用库中原密码：密码任何查询接口都不返回，若强制必填就无法保存编辑。
+     * dbType 为 SQLITE 时 {@code username} 不参与必填校验、直接覆盖为空串。</p>
      *
      * @param id    datasource_connection 表主键
      * @param param 连接配置入参
@@ -99,8 +103,8 @@ public interface DatasourceConnectionService extends IService<DatasourceConnecti
      * 落地后立即用 {@code jdbc:sqlite:} 真连一次，连不上或不是数据库文件则删除该文件并报错。
      *
      * <p>返回的 {@code jdbcUrl} 原样填进 {@code POST /datasource/connection}（{@code dbType=SQLITE}）即可保存；
-     * SQLite 没有账号密码，但 {@code username} / {@code password} 仍是保存接口的必填字段，前端填占位值即可，
-     * 驱动会忽略它们（已实测）。文件只在这台机器上，多实例部署时后续扫描请求必须打到同一节点。</p>
+     * 此时 {@code username} / {@code password} 都不用传，服务端按空串落库（驱动本来就忽略它们）。
+     * 文件只在这台机器上，多实例部署时后续扫描请求必须打到同一节点。</p>
      *
      * @param file 上传的 .db / .sqlite / .sqlite3 文件
      * @return jdbcUrl、落盘路径、文件名、字节数与实测表数量

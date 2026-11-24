@@ -102,7 +102,7 @@ public class OntologyActionController {
         return RestResult.ofData(ontologyActionService.pageGetActionByOntologyId(ontologySpaceId, ontologyId, categoryId, keyword, status, kinds, pageNum, pageSize));
     }
 
-    @Operation(summary = "主题新建：按对象编号和函数编号查询已发布行为（同编号去重）")
+    @Operation(summary = "主题新建：按对象编号和函数编号查询已发布行为（基础行为只看对象，应用行为还需函数编号命中；同编号去重）")
     @GetMapping("/selectable")
     public RestResult<List<OntologyActionInfoVO>> listSelectableActions(
             @RequestParam(name = "ontologySpaceId") @Parameter(description = "对象空间id") Integer ontologySpaceId,
