@@ -538,7 +538,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             // 关系可选：绑了才在测试/执行时按两端落关系边，没绑只回写属性
             checkFunctionAction(param, definition, APPLICATION_FUNCTION_TYPES, spaceId, false);
             checkWritePropertyOutput(definition);
-            checkSubtableFullWrite(definition);
+            // 子表分组属性不要求绑全：没绑的列新增行时按空值补齐（EntityServiceImpl.fillUnwrittenColumns）
+            // checkSubtableFullWrite(definition);
             // 数组出参写子表：路径按参数形状补 [*]，补完再校验通配分组，校验的就是最终入库的路径
             fillListWildcardExpressions(definition);
             checkWildcardOutputGroups(definition);
