@@ -29,7 +29,9 @@ public class DatasourceConnectionParam {
     @Size(max = 128, message = "数据源名称最长 128 字")
     private String name;
 
-    @Schema(name = "dbType", description = "数据库类型：POSTGRESQL / MYSQL / MARIADB / ORACLE / SQLSERVER 等，不区分大小写",
+    @Schema(name = "dbType", description = "数据库类型：POSTGRESQL / MYSQL / MARIADB / ORACLE / SQLSERVER / SQLITE 等，不区分大小写。"
+            + "SQLITE 的 jdbcUrl 由 POST /datasource/connection/sqlite/upload 上传库文件后返回；"
+            + "SQLite 本身没有账号密码，但 username / password 仍必填，填占位值即可（驱动会忽略）",
             example = "POSTGRESQL")
     @NotBlank(message = "数据库类型不能为空")
     @Size(max = 32, message = "数据库类型最长 32 字")

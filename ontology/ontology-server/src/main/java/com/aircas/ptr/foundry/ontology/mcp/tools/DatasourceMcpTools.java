@@ -371,13 +371,16 @@ public class DatasourceMcpTools implements McpTools {
             数据管道事件也不在这里发（REST 侧由前端另调 POST /property/notify_build_pipeline）。
             paramJson 为 JSON 对象字符串，字段：
             - spaceId：对象空间 id，必填；
-            - datasourceId：数据源 id（datasource_connection.id），可选：传了就用这条数据源连外部库扫列类型与列注释，
-              不要求 spaceId 已绑定数据源；不传则回落到 spaceId 绑定的那条；两者都没有时跳过扫描，属性类型统一落 String；
-            - schemaName：外部库 schema 名，必填（与第②③步一致，服务端会重扫列复核类型）；
+            - datasourceId：数据源 id（datasource_connection.id），可选：仅当请求里还有列没带 dataType 时，
+              才用这条数据源连外部库补扫类型与列注释（不要求 spaceId 已绑定数据源）；不传则回落到 spaceId 绑定的那条；
+              两者都没有时不扫描，未带 dataType 的列落 String；
+            - schemaName：外部库 schema 名，必填（与第②③步一致；需要补扫时用它，同时随管道消息标明源 schema）；
             - displayName：对象中文名，必填；apiName：对象 api 名，必填，须匹配 ^[a-zA-Z_$][a-zA-Z0-9_$]{0,62}$，同时作为主表物理表名；
             - categoryId：对象分类 id，可选；description：对象描述，可选；
             - tables：必填数组，恰好一张 master=true 作主表（只选一张时它即主表），元素
               {tableName（必填，区分大小写）, master（布尔）, sourceTableName（可选，溯源）, columns:[{columnName（必填，同时作为属性 apiName）,
+              dataType（属性类型，取平台枚举名 String/Int/Long/Float/Double/Decimal/Bool/Date/Timestamp，即第③步返回的 ontologyDataType；
+              传了即以它为准、服务端不再为这一列连库，主表的平台主键 id 固定 Int）,
               displayName（可选，缺省用列注释）, description（可选）, sourceColumnName（可选）}]}；
             - foreignKeys：多表时必填，每张子表恰好一条 {masterTable, masterColumn, childTable, childColumn}；
               外键列不要求勾成属性（主子表同名外键列两侧都勾成属性会撞 apiName，未勾选的一侧只建物理列）。

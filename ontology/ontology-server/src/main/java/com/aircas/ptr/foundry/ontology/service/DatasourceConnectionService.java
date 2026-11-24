@@ -7,10 +7,12 @@ import com.aircas.ptr.foundry.ontology.model.vo.DatasourceConnectionVO;
 import com.aircas.ptr.foundry.ontology.model.vo.DatasourceSchemaVO;
 import com.aircas.ptr.foundry.ontology.model.vo.DatasourceTableDetailVO;
 import com.aircas.ptr.foundry.ontology.model.vo.DatasourceTableSummaryVO;
+import com.aircas.ptr.foundry.ontology.model.vo.SqliteDatabaseUploadVO;
 import com.aircas.ptr.foundry.ontology.model.vo.TableColumnDescVO;
 import com.aircas.ptr.foundry.ontology.model.vo.TableCommentVO;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.spring.service.IService;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -91,6 +93,19 @@ public interface DatasourceConnectionService extends IService<DatasourceConnecti
      * @return 数据库产品名与版本，如 {@code PostgreSQL 14.5}
      */
     String testConnection(Integer id, DatasourceConnectionParam param);
+
+    /**
+     * 上传 SQLite 数据库文件：落到本服务所在机器的 {@code /sqlite-data} 目录（文件名前拼 UUID 避免互相覆盖），
+     * 落地后立即用 {@code jdbc:sqlite:} 真连一次，连不上或不是数据库文件则删除该文件并报错。
+     *
+     * <p>返回的 {@code jdbcUrl} 原样填进 {@code POST /datasource/connection}（{@code dbType=SQLITE}）即可保存；
+     * SQLite 没有账号密码，但 {@code username} / {@code password} 仍是保存接口的必填字段，前端填占位值即可，
+     * 驱动会忽略它们（已实测）。文件只在这台机器上，多实例部署时后续扫描请求必须打到同一节点。</p>
+     *
+     * @param file 上传的 .db / .sqlite / .sqlite3 文件
+     * @return jdbcUrl、落盘路径、文件名、字节数与实测表数量
+     */
+    SqliteDatabaseUploadVO uploadSqliteDatabase(MultipartFile file);
 
     /**
      * 扫描指定数据源的表注释（通过 JDBC {@code DatabaseMetaData} 实时获取）。

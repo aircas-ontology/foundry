@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
+import com.aircas.ptr.foundry.common.constant.OntologyDataTypeEnum;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -21,10 +22,13 @@ import java.util.List;
  * <p>选中的表按主子表处理：主表的属性 {@code storageGroup=main}，子表的属性 {@code storageGroup}
  * 用该子表的表名（这也是数据湖里那张实体表的物理表名）。一次只建一个对象。</p>
  *
- * <p>列的原生类型不在请求体里传——服务端会重新连外部库扫一次，向导页的状态可能已经过期，
- * 以现场扫到的 {@code TYPE_NAME} 为准；例外是主表的平台主键 {@code id}，固定为 {@code Int}。
- * 用哪条数据源来扫：{@code datasourceId} 优先，没传则回落到 {@code spaceId} 绑定的那条；
- * 两者都拿不到时跳过扫描，表与列不再校验存在性，类型统一按 {@code String} 落。</p>
+ * <p>属性类型由请求里的 {@code columns[].dataType} 带入（取值为平台属性类型枚举名，与第③步
+ * {@code /table/columns} 返回的 {@code ontologyDataType}、以及属性创建接口的 {@code dataType} 同一套），
+ * 请求带齐类型时服务端不连外部库；只有还存在没带 {@code dataType} 的列时才补扫一次，
+ * 以现场 {@code TYPE_NAME} 归一化结果补齐。主表的平台主键 {@code id} 例外，固定 {@code Int}。</p>
+ *
+ * <p>补扫用哪条数据源：{@code datasourceId} 优先，没传则回落到 {@code spaceId} 绑定的那条；
+ * 两者都拿不到时无处可扫，未带 {@code dataType} 的列按 {@code String} 落，表与列不再校验存在性。</p>
  */
 @Data
 @SuperBuilder
@@ -38,11 +42,12 @@ public class OntologyBuildFromDatasourceParam extends OntologySpaceIdParam {
     private Integer categoryId;
 
     @Schema(name = "datasourceId", description = "数据源 id（datasource_connection.id），可选："
-            + "传了就用这条数据源连外部库扫列类型与列注释，不要求对象空间已绑定数据源；"
-            + "不传则回落到 spaceId 绑定的那条；两者都没有时跳过扫描，属性类型统一按 String 落", example = "1")
+            + "仅当请求里还有列没带 dataType 时，才用这条数据源连外部库补扫类型与列注释（空间未绑定数据源也能扫）；"
+            + "不传则回落到 spaceId 绑定的那条；两者都没有时不扫描，未带 dataType 的列按 String 落", example = "1")
     private Integer datasourceId;
 
-    @Schema(name = "schemaName", description = "外部库 schema 名（向导第②步 /table/list 选定，本步用它重扫列复核类型）",
+    @Schema(name = "schemaName", description = "外部库 schema 名（向导第②步 /table/list 选定）：需要补扫列类型时用它，"
+            + "同时随数据管道消息发给数据组织层做溯源",
             required = true, example = "public")
     @NotBlank(message = "schemaName 必填：外部库 schema 名，与步骤②③选定的一致")
     private String schemaName;
@@ -92,7 +97,7 @@ public class OntologyBuildFromDatasourceParam extends OntologySpaceIdParam {
         @Schema(name = "master", description = "是否主表；不传按 false 处理", example = "true")
         private Boolean master;
 
-        @Schema(name = "columns", description = "勾选的列", required = true)
+        @Schema(name = "columns", description = "勾选的列，每列建议直接带上第③步返回的 dataType", required = true)
         @NotEmpty(message = "columns is empty")
         @Valid
         private List<SelectedColumn> columns;
@@ -110,6 +115,12 @@ public class OntologyBuildFromDatasourceParam extends OntologySpaceIdParam {
                 required = true, example = "ship_name")
         @NotBlank(message = "columnName is empty")
         private String columnName;
+
+        @Schema(name = "dataType", description = "属性数据类型，取平台枚举名：String / Int / Long / Float / Double / "
+                + "Decimal / Bool / Date / Timestamp / Short / Byte；与第③步返回的 ontologyDataType 同一个值。"
+                + "传了即以它为准、服务端不再为这一列连库；不传则回落到补扫结果，无数据源可扫时按 String 落。"
+                + "主表的平台主键 id 例外，固定按 Int 落", example = "String")
+        private OntologyDataTypeEnum dataType;
 
         @Schema(name = "displayName", description = "属性展示名；不传时用列注释，列注释也为空时用列名", example = "舰名")
         private String displayName;

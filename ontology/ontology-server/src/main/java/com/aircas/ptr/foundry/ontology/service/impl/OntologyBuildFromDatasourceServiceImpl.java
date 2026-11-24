@@ -111,18 +111,22 @@ public class OntologyBuildFromDatasourceServiceImpl implements OntologyBuildFrom
         // 定案：属性 apiName 在一个对象内必须唯一，跨主子表重名整单 400
         validateColumnNamesUnique(tables, master);
 
-        // 类型与列注释以现场扫描为准：向导页打开后外部库可能已经改过表。
-        // 扫谁：请求里的 datasourceId 优先，没传则回落到空间绑定的数据源；两者都没有也允许建对象，
-        // 只是跳过扫描，属性类型统一按 String 落，外部表/列存在性不再校验
+        // 属性类型以请求 columns[].dataType 为准；只有还有列没带类型时，才连外部库补扫一次补齐
+        // （类型、列注释、表与列存在性校验都来自这次扫描）。
+        // 扫谁：请求里的 datasourceId 优先，没传则回落到空间绑定的数据源；两者都没有就无处可扫，
+        // 未带 dataType 的列按 String 落，外部表/列存在性不再校验。
         boolean datasourceAvailable = param.getDatasourceId() != null
                 || datasourceConnectionService.existsBySpace(param.getSpaceId());
-        Map<String, Map<String, DatasourceTableDetailVO.Column>> liveColumns = datasourceAvailable
+        boolean liveScan = datasourceAvailable && tables.values().stream()
+                .flatMap(table -> table.getColumns().stream())
+                .anyMatch(column -> column.getDataType() == null);
+        Map<String, Map<String, DatasourceTableDetailVO.Column>> liveColumns = liveScan
                 ? scanLiveColumns(param, new ArrayList<>(tables.keySet()))
                 : Map.of();
-        List<PropertySpec> specs = buildPropertySpecs(master, childTables, tables, liveColumns, datasourceAvailable);
+        List<PropertySpec> specs = buildPropertySpecs(master, childTables, tables, liveColumns, liveScan);
         // 建表列清单同样在 Phase 0 算完：外键引用的列不存在时，报错要早于任何写库动作
         Map<String, EntityColumns> entityColumns =
-                buildEntityColumns(master, tables, specs, foreignKeys, liveColumns, datasourceAvailable);
+                buildEntityColumns(master, tables, specs, foreignKeys, liveColumns, liveScan);
 
         // ---------- Phase 1：主库 ontology ----------
         var metaParam = new OntologyMetaCreateParam()
@@ -155,7 +159,7 @@ public class OntologyBuildFromDatasourceServiceImpl implements OntologyBuildFrom
         String message = String.format("对象【%s】已创建：%d 个属性、%d 张实体表（%s）、%d 条主子表列映射、%d 个仅作关联用的管道列%s；",
                 StringUtils.trim(param.getDisplayName()), specs.size(), entityTables.size(),
                 String.join("、", entityTableNames), mappingCount, pipeColumnCount, droppedNote)
-                + (datasourceAvailable ? "" : "未取到数据源（datasourceId 未传且空间未绑定），属性类型统一按 String 创建；");
+                + typeSourceNote(tables, datasourceAvailable, liveScan);
         log.info("数据源构建对象完成 spaceId={}, schemaName={}, uid={}, {}",
                 param.getSpaceId(), param.getSchemaName(), uniqueIdentifier, message);
 
@@ -363,17 +367,18 @@ public class OntologyBuildFromDatasourceServiceImpl implements OntologyBuildFrom
     }
 
     /**
-     * 把勾选列换成属性定义：主表归 main、子表归各自表名，类型取现场扫描的原生类型归一化结果；
-     * 未取到数据源（{@code datasourceAvailable=false}）时无从扫描，类型统一落 String。
+     * 把勾选列换成属性定义：主表归 main、子表归各自表名。
+     * 类型优先取请求里的 {@code columns[].dataType}；没带时才用本次补扫到的原生类型归一化结果，
+     * 两者都拿不到（无数据源可扫）只能按 {@code String} 落。
      */
     private List<PropertySpec> buildPropertySpecs(OntologyBuildFromDatasourceParam.SelectedTable master,
                                                   List<String> childTables,
                                                   Map<String, OntologyBuildFromDatasourceParam.SelectedTable> tables,
                                                   Map<String, Map<String, DatasourceTableDetailVO.Column>> liveColumns,
-                                                  boolean datasourceAvailable) {
+                                                  boolean liveScan) {
         List<PropertySpec> specs = new ArrayList<>();
-        appendTableSpecs(specs, master, MAIN_STORAGE_GROUP, liveColumns, datasourceAvailable);
-        childTables.forEach(child -> appendTableSpecs(specs, tables.get(child), child, liveColumns, datasourceAvailable));
+        appendTableSpecs(specs, master, MAIN_STORAGE_GROUP, liveColumns, liveScan);
+        childTables.forEach(child -> appendTableSpecs(specs, tables.get(child), child, liveColumns, liveScan));
 
         // 主表没勾 id 时补平台主键：实体表的 id 列是建表语句自带的，属性不补就绑不上、genericQuery 直接 400
         boolean masterHasId = specs.stream()
@@ -388,11 +393,11 @@ public class OntologyBuildFromDatasourceServiceImpl implements OntologyBuildFrom
     private void appendTableSpecs(List<PropertySpec> specs, OntologyBuildFromDatasourceParam.SelectedTable table,
                                   String storageGroup,
                                   Map<String, Map<String, DatasourceTableDetailVO.Column>> liveColumns,
-                                  boolean datasourceAvailable) {
+                                  boolean liveScan) {
         Map<String, DatasourceTableDetailVO.Column> columns = liveColumns.getOrDefault(table.getTableName(), Map.of());
         for (var selected : table.getColumns()) {
             DatasourceTableDetailVO.Column live = columns.get(selected.getColumnName());
-            if (datasourceAvailable) {
+            if (liveScan) {
                 PreconditionUtils.checkNotNull(live, String.format("外部库表%s不存在列%s（可能已改名或删除）",
                         table.getTableName(), selected.getColumnName()), HttpStatus.BAD_REQUEST);
             }
@@ -402,46 +407,14 @@ public class OntologyBuildFromDatasourceServiceImpl implements OntologyBuildFrom
             String description = StringUtils.defaultIfBlank(StringUtils.trim(selected.getDescription()), comment);
             boolean platformPk = PK_COLUMN_NAME.equals(selected.getColumnName())
                     && MAIN_STORAGE_GROUP.equals(storageGroup);
-            // 平台主键 id 在湖里是 id SERIAL PRIMARY KEY，外部库那列是什么类型都不跟
+            // 平台主键 id 在湖里是 id SERIAL PRIMARY KEY，请求与外部库是什么类型都不跟
             OntologyDataTypeEnum dataType = platformPk
                     ? OntologyDataTypeEnum.Int
+                    : selected.getDataType() != null ? selected.getDataType()
                     : OntologyDataTypeEnum.valueOfJdbcType(live == null ? null : live.getNativeType());
             specs.add(new PropertySpec(selected.getColumnName(), displayName, description, dataType,
                     storageGroup, platformPk, selected.getSourceColumnName()));
         }
-    }
-
-    /**
-     * 组装每张实体表的列：勾成属性的列 + 外键两侧没勾成属性的「管道列」。
-     * 管道列不建属性，但必须建物理列，否则 genericQuery 按映射里的列名 JOIN 会找不到列。
-     *
-     * <p>每张表同时产出两份列清单：建表 DDL 用的（描述已按 SQL 转义）和拼数据管道消息用的
-     * （描述保持原文，并带上外部库原始列名 sourceColumnName）。</p>
-     */
-    private Map<String, EntityColumns> buildEntityColumns(
-            OntologyBuildFromDatasourceParam.SelectedTable master,
-            Map<String, OntologyBuildFromDatasourceParam.SelectedTable> tables,
-            List<PropertySpec> specs,
-            List<OntologyBuildFromDatasourceParam.ForeignKeyParam> foreignKeys,
-            Map<String, Map<String, DatasourceTableDetailVO.Column>> liveColumns,
-            boolean datasourceAvailable) {
-        Map<String, EntityColumns> columnsByGroup = new LinkedHashMap<>();
-        for (var spec : specs) {
-            columnsByGroup.computeIfAbsent(spec.storageGroup(), group -> new EntityColumns(
-                            sourceTableName(group, master, tables), new ArrayList<>(), new ArrayList<>()))
-                    .ddlColumns().add(toColumnDesc(spec.apiName(), spec.dataType(), spec.displayName()));
-            columnsByGroup.get(spec.storageGroup()).eventColumns().add(toEventColumn(spec));
-        }
-        for (var foreignKey : foreignKeys) {
-            addPipeColumn(columnsByGroup.computeIfAbsent(MAIN_STORAGE_GROUP, group -> new EntityColumns(
-                            sourceTableName(MAIN_STORAGE_GROUP, master, tables), new ArrayList<>(), new ArrayList<>())),
-                    master.getTableName(), foreignKey.getMasterColumn(), liveColumns, null, datasourceAvailable);
-            addPipeColumn(columnsByGroup.computeIfAbsent(foreignKey.getChildTable(), group -> new EntityColumns(
-                            sourceTableName(foreignKey.getChildTable(), master, tables), new ArrayList<>(), new ArrayList<>())),
-                    foreignKey.getChildTable(), foreignKey.getChildColumn(), liveColumns,
-                    foreignKey.getMasterColumn(), datasourceAvailable);
-        }
-        return columnsByGroup;
     }
 
     /**
@@ -467,23 +440,65 @@ public class OntologyBuildFromDatasourceServiceImpl implements OntologyBuildFrom
     }
 
     /**
+     * 组装每张实体表的列：勾成属性的列 + 外键两侧没勾成属性的「管道列」。
+     * 管道列不建属性，但必须建物理列，否则 genericQuery 按映射里的列名 JOIN 会找不到列。
+     *
+     * <p>管道列的类型：本次扫到了就以扫描结果为准；没扫到时取对象内同名属性的类型（外键另一侧通常是
+     * 勾选成属性的那列，属性 apiName 在对象内唯一，所以按名取即可保证 JOIN 两侧类型一致）；再取不到才 String。</p>
+     *
+     * <p>每张表同时产出两份列清单：建表 DDL 用的（描述已按 SQL 转义）和拼数据管道消息用的
+     * （描述保持原文，并带上外部库原始列名 sourceColumnName）。</p>
+     */
+    private Map<String, EntityColumns> buildEntityColumns(
+            OntologyBuildFromDatasourceParam.SelectedTable master,
+            Map<String, OntologyBuildFromDatasourceParam.SelectedTable> tables,
+            List<PropertySpec> specs,
+            List<OntologyBuildFromDatasourceParam.ForeignKeyParam> foreignKeys,
+            Map<String, Map<String, DatasourceTableDetailVO.Column>> liveColumns,
+            boolean liveScan) {
+        Map<String, EntityColumns> columnsByGroup = new LinkedHashMap<>();
+        for (var spec : specs) {
+            columnsByGroup.computeIfAbsent(spec.storageGroup(), group -> new EntityColumns(
+                            sourceTableName(group, master, tables), new ArrayList<>(), new ArrayList<>()))
+                    .ddlColumns().add(toColumnDesc(spec.apiName(), spec.dataType(), spec.displayName()));
+            columnsByGroup.get(spec.storageGroup()).eventColumns().add(toEventColumn(spec));
+        }
+        Map<String, OntologyDataTypeEnum> propertyTypes = specs.stream()
+                .collect(Collectors.toMap(PropertySpec::apiName, PropertySpec::dataType, (a, b) -> a));
+        for (var foreignKey : foreignKeys) {
+            addPipeColumn(columnsByGroup.computeIfAbsent(MAIN_STORAGE_GROUP, group -> new EntityColumns(
+                            sourceTableName(MAIN_STORAGE_GROUP, master, tables), new ArrayList<>(), new ArrayList<>())),
+                    master.getTableName(), foreignKey.getMasterColumn(), liveColumns, null, liveScan, propertyTypes);
+            addPipeColumn(columnsByGroup.computeIfAbsent(foreignKey.getChildTable(), group -> new EntityColumns(
+                            sourceTableName(foreignKey.getChildTable(), master, tables), new ArrayList<>(), new ArrayList<>())),
+                    foreignKey.getChildTable(), foreignKey.getChildColumn(), liveColumns,
+                    foreignKey.getMasterColumn(), liveScan, propertyTypes);
+        }
+        return columnsByGroup;
+    }
+
+    /**
      * 追加一个只做关联用的管道列：已经是属性列的跳过，平台主键 id 由建表语句自带所以也跳过。
      *
      * @param associateColumnName 非空时把该列标记为关联列，指向主表被引用的列名（子表外键侧）
+     * @param propertyTypes       对象内「属性 apiName → 类型」，本次没扫到这一列时按它推导管道列类型
      */
     private void addPipeColumn(EntityColumns columns, String tableName, String columnName,
                                Map<String, Map<String, DatasourceTableDetailVO.Column>> liveColumns,
-                               String associateColumnName, boolean datasourceAvailable) {
+                               String associateColumnName, boolean liveScan,
+                               Map<String, OntologyDataTypeEnum> propertyTypes) {
         if (PK_COLUMN_NAME.equals(columnName)
                 || columns.ddlColumns().stream().anyMatch(column -> columnName.equalsIgnoreCase(column.getColumnName()))) {
             return;
         }
         DatasourceTableDetailVO.Column live = liveColumns.getOrDefault(tableName, Map.of()).get(columnName);
-        if (datasourceAvailable) {
+        if (liveScan) {
             PreconditionUtils.checkNotNull(live, String.format("外键引用的列%s.%s在外部库不存在（可能已改名或删除）",
                     tableName, columnName), HttpStatus.BAD_REQUEST);
         }
-        OntologyDataTypeEnum dataType = OntologyDataTypeEnum.valueOfJdbcType(live == null ? null : live.getNativeType());
+        OntologyDataTypeEnum dataType = live != null
+                ? OntologyDataTypeEnum.valueOfJdbcType(live.getNativeType())
+                : propertyTypes.getOrDefault(columnName, OntologyDataTypeEnum.String);
         String description = live == null ? null : StringUtils.trimToNull(live.getDescription());
         columns.ddlColumns().add(toColumnDesc(columnName, dataType, description));
         columns.eventColumns().add(EntityDatasourceColumnDTO.builder()
@@ -663,6 +678,35 @@ public class OntologyBuildFromDatasourceServiceImpl implements OntologyBuildFrom
         return table.getColumns().stream()
                 .map(OntologyBuildFromDatasourceParam.SelectedColumn::getColumnName)
                 .collect(Collectors.toSet());
+    }
+
+    /**
+     * 本次没连库扫描时说明属性类型的来源：请求带了 {@code dataType} 的列按它落，没带的只能按 String 落。
+     */
+    private String typeSourceNote(Map<String, OntologyBuildFromDatasourceParam.SelectedTable> tables,
+                                  boolean datasourceAvailable, boolean liveScan) {
+        if (liveScan) {
+            return "";
+        }
+        int fromRequest = 0;
+        int defaulted = 0;
+        for (var table : tables.values()) {
+            for (var column : table.getColumns()) {
+                if (column.getDataType() == null) {
+                    defaulted++;
+                } else {
+                    fromRequest++;
+                }
+            }
+        }
+        String prefix = datasourceAvailable ? "" : "未取到数据源（datasourceId 未传且空间未绑定），";
+        if (fromRequest == 0) {
+            return prefix + "属性类型统一按 String 创建；";
+        }
+        String suffix = defaulted == 0
+                ? (datasourceAvailable ? "（请求已带齐类型，本次未连数据源扫描）" : "")
+                : "，未传 dataType 的 " + defaulted + " 个按 String 落";
+        return prefix + String.format("属性类型取自请求 dataType %d 个%s；", fromRequest, suffix);
     }
 
     /**

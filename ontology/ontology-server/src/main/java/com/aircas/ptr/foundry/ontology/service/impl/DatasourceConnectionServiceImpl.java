@@ -10,6 +10,7 @@ import com.aircas.ptr.foundry.ontology.model.vo.DatasourceConnectionVO;
 import com.aircas.ptr.foundry.ontology.model.vo.DatasourceSchemaVO;
 import com.aircas.ptr.foundry.ontology.model.vo.DatasourceTableDetailVO;
 import com.aircas.ptr.foundry.ontology.model.vo.DatasourceTableSummaryVO;
+import com.aircas.ptr.foundry.ontology.model.vo.SqliteDatabaseUploadVO;
 import com.aircas.ptr.foundry.ontology.model.vo.TableColumnDescVO;
 import com.aircas.ptr.foundry.ontology.model.vo.TableCommentVO;
 import com.aircas.ptr.foundry.ontology.repository.mainMapper.DatasourceConnectionMapper;
@@ -24,7 +25,13 @@ import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.DriverManager;
@@ -37,9 +44,11 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -52,6 +61,15 @@ public class DatasourceConnectionServiceImpl
     private static final String DEFAULT_SCHEMA_POSTGRES = "public";
     /** SQL Server 缺省 schema。 */
     private static final String DEFAULT_SCHEMA_SQLSERVER = "dbo";
+    /**
+     * SQLite 只有一个 {@code main} 库。驱动扫表时根本不按 catalog / schema 过滤（实测任意取值都返回全表），
+     * 这个常量只是回填给前端，好让向导第②③步的 schemaName 参数有值可传。
+     */
+    private static final String DEFAULT_SCHEMA_SQLITE = "main";
+    /** 上传的 SQLite 数据库文件落盘目录（本服务所在机器的本地路径，不做成配置项）。 */
+    private static final String SQLITE_UPLOAD_DIR = "/sqlite-data";
+    /** 上传文件认的 SQLite 扩展名，大小写不敏感。 */
+    private static final Set<String> SQLITE_EXTENSIONS = Set.of(".db", ".sqlite", ".sqlite3");
     /** 新增数据源未指定 status 时的缺省值：启用。 */
     private static final int STATUS_ENABLED = 1;
     /**
@@ -181,6 +199,80 @@ public class DatasourceConnectionServiceImpl
         } catch (Exception e) {
             log.warn("测试数据源连接失败，datasourceId={}, jdbcUrl={}", id, target.getJdbcUrl(), e);
             throw new BusinessException("连接失败: " + e.getMessage(), HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    @Override
+    public SqliteDatabaseUploadVO uploadSqliteDatabase(MultipartFile file) {
+        String fileName = requireSqliteFileName(file);
+        Path dir = Paths.get(SQLITE_UPLOAD_DIR);
+        Path target = dir.resolve(UUID.randomUUID() + "-" + fileName);
+        try {
+            Files.createDirectories(dir);
+            try (InputStream in = file.getInputStream()) {
+                Files.copy(in, target);
+            }
+        } catch (IOException e) {
+            deleteQuietly(target);
+            log.warn("SQLite 数据库文件保存失败，fileName={}, path={}", fileName, target, e);
+            throw new BusinessException("SQLite 文件保存失败：" + e.getMessage(), HttpStatus.BAD_REQUEST);
+        }
+
+        // Windows 上 Paths.get("/sqlite-data") 会落到当前盘根，反斜杠串进 JDBC URL 不好核对，统一成正斜杠
+        String absolutePath = target.toAbsolutePath().toString().replace('\\', '/');
+        int tableCount = countSqliteTables("jdbc:sqlite:" + absolutePath, target, fileName);
+        log.info("SQLite 数据库文件上传完成 fileName={}, path={}, size={}, tableCount={}",
+                fileName, absolutePath, file.getSize(), tableCount);
+        return SqliteDatabaseUploadVO.builder()
+                .jdbcUrl("jdbc:sqlite:" + absolutePath)
+                .schemaName(DEFAULT_SCHEMA_SQLITE)
+                .path(absolutePath)
+                .fileName(fileName)
+                .size(file.getSize())
+                .tableCount(tableCount)
+                .build();
+    }
+
+    private String requireSqliteFileName(MultipartFile file) {
+        PreconditionUtils.checkArgument(file != null && !file.isEmpty(),
+                "上传文件为空", HttpStatus.BAD_REQUEST);
+        String original = file.getOriginalFilename();
+        PreconditionUtils.checkArgument(StringUtils.isNotBlank(original),
+                "文件名为空", HttpStatus.BAD_REQUEST);
+        // 只取最后一段，去掉请求里可能带的路径成分
+        String fileName = Paths.get(original).getFileName().toString();
+        String lower = fileName.toLowerCase(Locale.ROOT);
+        PreconditionUtils.checkArgument(SQLITE_EXTENSIONS.stream().anyMatch(lower::endsWith),
+                "SQLite 数据源文件仅支持 .db / .sqlite / .sqlite3 格式，收到：" + fileName, HttpStatus.BAD_REQUEST);
+        return fileName;
+    }
+
+    /**
+     * 连一次刚落地的库文件数出用户表数，同时充当「是不是真 SQLite 文件」的校验：
+     * 传错文件（zip、别的库的导出、纯文本）会在这里以 {@code SQLITE_NOTADB} 失败，删掉文件并报 400，
+     * 不会留下一个保存后扫描必挂的数据源。
+     */
+    private int countSqliteTables(String jdbcUrl, Path target, String fileName) {
+        try (Connection dbConn = DriverManager.getConnection(jdbcUrl);
+             ResultSet rs = dbConn.getMetaData().getTables(null, null, "%", new String[]{"TABLE"})) {
+            int count = 0;
+            while (rs.next()) {
+                count++;
+            }
+            return count;
+        } catch (Exception e) {
+            deleteQuietly(target);
+            log.warn("SQLite 数据库文件校验失败，fileName={}, path={}", fileName, target, e);
+            throw new BusinessException("SQLite 文件无法打开，请确认上传的是 SQLite 数据库文件：" + e.getMessage(),
+                    HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    private void deleteQuietly(Path path) {
+        try {
+            Files.deleteIfExists(path);
+        } catch (IOException e) {
+            log.warn("SQLite 文件清理失败，path={}, msg={}", path, e.getMessage());
         }
     }
 

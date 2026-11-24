@@ -7,6 +7,7 @@ import com.aircas.ptr.foundry.ontology.model.vo.DatasourceConnectionItemVO;
 import com.aircas.ptr.foundry.ontology.model.vo.DatasourceSchemaVO;
 import com.aircas.ptr.foundry.ontology.model.vo.DatasourceTableDetailVO;
 import com.aircas.ptr.foundry.ontology.model.vo.DatasourceTableSummaryVO;
+import com.aircas.ptr.foundry.ontology.model.vo.SqliteDatabaseUploadVO;
 import com.aircas.ptr.foundry.ontology.service.DatasourceConnectionService;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import io.swagger.v3.oas.annotations.Operation;
@@ -22,6 +23,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import jakarta.validation.Valid;
 
@@ -137,5 +139,14 @@ public class DatasourceConnectionController {
             @RequestParam(required = false) @Parameter(description = "已保存的数据源 id，可不传") Integer id,
             @RequestBody(required = false) DatasourceConnectionParam param) {
         return RestResult.ofData(datasourceConnectionService.testConnection(id, param));
+    }
+
+    @Operation(summary = "上传 SQLite 数据库文件（.db/.sqlite/.sqlite3）：文件落到服务端 /sqlite-data，"
+            + "返回的 jdbcUrl 原样填进 POST /datasource/connection（dbType=SQLITE）即可保存数据源；"
+            + "上传时会真连一次，不是有效 SQLite 文件直接 400 并清理文件")
+    @PostMapping("/sqlite/upload")
+    public RestResult<SqliteDatabaseUploadVO> uploadSqlite(
+            @RequestParam("file") @Parameter(description = "SQLite 数据库文件") MultipartFile file) {
+        return RestResult.ofData(datasourceConnectionService.uploadSqliteDatabase(file));
     }
 }
