@@ -1,5 +1,7 @@
 package com.aircas.ptr.foundry.topic.model.param;
 
+import com.aircas.ptr.foundry.common.constant.DateFormat;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -37,12 +39,14 @@ public class TaskTopicUpdateParam {
     @NotBlank(message = "区域点位不能为空")
     private String regionPoint;
 
-    @Schema(description = "任务开始时间")
+    @Schema(description = "任务开始时间", example = "2026-11-09 00:00:00")
     @NotNull(message = "任务开始时间不能为空")
+    @JsonFormat(pattern = DateFormat.DATE_FORMAT_DEFAULT, timezone = "GMT+8")
     private Date startTime;
 
-    @Schema(description = "任务结束时间")
+    @Schema(description = "任务结束时间", example = "2026-11-13 00:00:00")
     @NotNull(message = "任务结束时间不能为空")
+    @JsonFormat(pattern = DateFormat.DATE_FORMAT_DEFAULT, timezone = "GMT+8")
     private Date endTime;
 
     @Schema(description = "任务描述")
