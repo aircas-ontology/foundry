@@ -28,6 +28,7 @@ import org.codehaus.groovy.ast.ClassHelper;
 import org.codehaus.groovy.ast.ClassNode;
 import org.codehaus.groovy.control.CompilationFailedException;
 import org.codehaus.groovy.control.CompilerConfiguration;
+import org.codehaus.groovy.runtime.typehandling.DefaultTypeTransformation;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
@@ -98,15 +99,8 @@ public class GroovyServiceImpl implements GroovyService {
                     String paramName = getParameterName(parameters[i]);
                     Class<?> paramType = parameters[i].getType();
                     FunctionParamTypeEnum paramTypeEnum = FunctionParamTypeEnum.getByTypeName(paramType.getName());
-                    // 允许基本类型 + OBJECT/LIST（Map/Object/List 等容器类型）
-                    PreconditionUtils.checkArgument(
-                            paramTypeEnum != null || 
-                            paramType.getName().equals("java.lang.Object") ||
-                            paramType.getName().equals("java.util.Map") ||
-                            paramType.getName().equals("java.util.List") ||
-                            paramType.isAssignableFrom(Map.class) ||
-                            paramType.isAssignableFrom(List.class),
-                            "暂不支持复杂类型参数", HttpStatus.BAD_REQUEST);
+                    // 入参类型不做白名单限制：脚本内类、import 进来的业务类按下面的三元落到 OBJECT，
+                    // 与 /function/parseParams 的 AST 解析同一口径（该接口早就接受这些类型）
                     JsonSchema schema = generator.generateSchema(paramType);
                     String jsonSchema = objectMapper.writeValueAsString(schema);
                     funcParams.add(FunctionParamDTO.builder()
@@ -199,7 +193,30 @@ public class GroovyServiceImpl implements GroovyService {
         }
         return paramValues.isEmpty()
                 ? groovyInstance.invokeMethod("handle", null)
-                : groovyInstance.invokeMethod("handle", paramValues.toArray(new Object[]{}));
+                : groovyInstance.invokeMethod("handle", coerceToDeclaredHandleParams(groovyClass, paramValues));
+    }
+
+    /**
+     * 形参声明为脚本内类（{@code handle(Point p)}）时，平台传进来的是 JSON 反序列化出的 Map，
+     * Groovy 动态分派不会把 Map 认成该类，直接 invokeMethod 会抛 MissingMethodException；
+     * 这里按 handle 声明类型补一次 {@code as} 转换，与脚本内 {@code for (Point p : list)} 运行期走的是同一套转换。
+     * 声明为 Map/Object/集合的原样透传，行为与改造前一致。
+     */
+    private Object[] coerceToDeclaredHandleParams(Class<?> groovyClass, List<Object> paramValues) {
+        Object[] args = paramValues.toArray(new Object[0]);
+        Method handleMethod = findHandleMethod(groovyClass);
+        if (handleMethod == null) {
+            return args;
+        }
+        Class<?>[] declaredTypes = handleMethod.getParameterTypes();
+        for (int i = 0; i < args.length && i < declaredTypes.length; i++) {
+            if (!(args[i] instanceof Map) || declaredTypes[i].isInterface()
+                    || declaredTypes[i].isAssignableFrom(Map.class)) {
+                continue;
+            }
+            args[i] = DefaultTypeTransformation.castToType(args[i], declaredTypes[i]);
+        }
+        return args;
     }
 
     /**
