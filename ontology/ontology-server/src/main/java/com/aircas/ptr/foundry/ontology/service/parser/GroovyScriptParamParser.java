@@ -297,14 +297,14 @@ public class GroovyScriptParamParser implements ScriptParamParser {
     }
 
     /**
-     * 集合类型的元素字段：先按脚本内类展开（AST），认不出再试工程内类（反射）。
+     * 集合类型的元素字段：先剥到最内层元素类型再按脚本内类展开（AST），认不出再试工程内类（反射）。
      * <p>元素类型不是业务结构（{@code List<String>}、{@code List<Map<String,Object>>}）时返回 null，
      * 由调用方回落标量层，仍是原来那个没有下一级的参数/result。</p>
      */
     private List<ScriptParsedParam> expandCollectionElementFields(ClassNode collectionType,
                                                                   FunctionParamCategoryEnum category,
                                                                   ParseContext ctx) {
-        String elementType = extractCollectionElementType(collectionType);
+        String elementType = innermostElementType(collectionType);
         if (elementType == null) {
             return null;
         }
@@ -340,14 +340,15 @@ public class GroovyScriptParamParser implements ScriptParamParser {
                 if (nestedClass != null && visited.add(propTypeText)) {
                     fb.fields(expandFields(nestedClass, category, source, ctx, visited, depth + 1));
                 } else {
-                    // 集合泛型：List<Admin> → 提取泛型参数递归展开
-                    ClassNode elemNode = elementType == null ? null : lookupScriptClass(elementType, ctx);
-                    if (elemNode != null && visited.add(elementType)) {
+                    // 集合泛型：List<Admin> / List<List<Admin>> → 剥到最内层元素类递归展开
+                    String innermost = innermostElementType(prop.getType());
+                    ClassNode elemNode = innermost == null ? null : lookupScriptClass(innermost, ctx);
+                    if (elemNode != null && visited.add(innermost)) {
                         fb.fields(expandFields(elemNode, category, source, ctx, visited, depth + 1));
                     } else {
                         // 脚本内类没命中 → 试工程内类（import 进来的 VO/DTO），反射展开下一级
                         fb.fields(ctx.expander.expandFieldsByName(
-                                elementType == null ? prop.getType().getName() : elementType, category, visited, depth + 1));
+                                innermost == null ? prop.getType().getName() : innermost, category, visited, depth + 1));
                     }
                 }
                 fields.add(fb.build());
@@ -509,23 +510,41 @@ public class GroovyScriptParamParser implements ScriptParamParser {
 
     /** 从集合类型中提取泛型元素类型名（如 List<Admin> → "Admin"），非集合返回 null。 */
     private String extractCollectionElementType(ClassNode type) {
+        ClassNode element = collectionElementNode(type);
+        return element == null ? null : typeNodeText(element);
+    }
+
+    /**
+     * 多层集合递归剥壳后的最内层元素类型（{@code List<List<Point>>} → "Point"）；
+     * 只有落到业务类才有下一级结构，非集合返回 null。
+     */
+    private String innermostElementType(ClassNode type) {
+        ClassNode element = collectionElementNode(type);
+        if (element == null) {
+            return null;
+        }
+        ClassNode deeper;
+        while ((deeper = collectionElementNode(element)) != null) {
+            element = deeper;
+        }
+        return typeNodeText(element);
+    }
+
+    /** 集合/数组的直接元素类型节点；非集合返回 null。 */
+    private ClassNode collectionElementNode(ClassNode type) {
         if (type == null) {
             return null;
         }
         // 数组类型：元素类型就是 componentType
         if (type.isArray()) {
-            return typeNodeText(type.getComponentType());
+            return type.getComponentType();
         }
         String name = type.getName().toLowerCase();
-        boolean isCollection = COLLECTION_LIKE.stream().anyMatch(name::endsWith);
-        if (!isCollection) {
+        if (COLLECTION_LIKE.stream().noneMatch(name::endsWith)) {
             return null;
         }
         GenericsType[] generics = type.getGenericsTypes();
-        if (generics != null && generics.length > 0) {
-            return typeNodeText(generics[0].getType());
-        }
-        return null;
+        return generics == null || generics.length == 0 ? null : generics[0].getType();
     }
 
     private boolean isObjectType(ClassNode type) {
@@ -552,7 +571,10 @@ public class GroovyScriptParamParser implements ScriptParamParser {
             return "";
         }
         int dot = fullName.lastIndexOf('.');
-        return dot >= 0 ? fullName.substring(dot + 1) : fullName;
+        String name = dot >= 0 ? fullName.substring(dot + 1) : fullName;
+        // 脚本内嵌套类在 AST 里是 Outer$Inner，按 $ 再截一次才能和形参上写的 Inner 对上
+        int dollar = name.lastIndexOf('$');
+        return dollar >= 0 ? name.substring(dollar + 1) : name;
     }
 
     private static void closeQuietly(GroovyClassLoader loader) {

@@ -18,8 +18,8 @@ public class FunctionParamDTO {
     private Long paramId;
     //参数名
     private String paramName;
-    //参数类型
-    private FunctionParamTypeEnum paramType;
+    //参数类型文本：集合参数带元素类型（List<Double>），其余为枚举名（DOUBLE/OBJECT）
+    private String paramType;
     //参数结构 Object
     private String paramSchema;
     //分类   input[输入参数]  | output[输出返回值]

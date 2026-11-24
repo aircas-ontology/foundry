@@ -120,7 +120,7 @@ public class ScriptParamParseServiceImpl implements ScriptParamParseService {
                 p.getCategory() == null ? FunctionParamCategoryEnum.INPUT : p.getCategory();
         ScriptParsedParamVO.ScriptParsedParamVOBuilder builder = ScriptParsedParamVO.builder()
                 .paramName(p.getName())
-                .paramType(p.getType())
+                .paramType(paramTypeText(p))
                 .category(category)
                 .paramOrder(order)
                 .referenceType(referenceType(p, language))
@@ -135,6 +135,29 @@ public class ScriptParamParseServiceImpl implements ScriptParamParseService {
             builder.fields(fieldVOs);
         }
         return builder.build();
+    }
+
+    /**
+     * 参数类型文本（同时用于返回与落库）：集合参数带元素类型——源码声明里有泛型/数组就原样用
+     * （{@code List<Double>}、{@code OrbitPoint[]}），runner 只回元素类型时拼成 {@code List<元素>}；
+     * 其余类型用枚举名（{@code DOUBLE}/{@code OBJECT}），与改造前一致。
+     */
+    private String paramTypeText(ScriptParsedParam p) {
+        FunctionParamTypeEnum type = p.getType();
+        if (type == null) {
+            return null;
+        }
+        if (type == FunctionParamTypeEnum.LIST) {
+            String raw = p.getRawType();
+            if (StringUtils.isNotBlank(raw) && (raw.indexOf('<') >= 0 || raw.endsWith("[]"))) {
+                return raw;
+            }
+            String elementType = p.getElementType();
+            if (StringUtils.isNotBlank(elementType)) {
+                return "List<" + elementType + ">";
+            }
+        }
+        return type.name();
     }
 
     /**

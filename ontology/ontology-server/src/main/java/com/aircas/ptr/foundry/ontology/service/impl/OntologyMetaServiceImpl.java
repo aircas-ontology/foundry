@@ -1572,7 +1572,7 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                         List<String> paramList = Lists.newArrayList();
                         String paramFormat = "@FuncParam(name = \"%s\") %s %s";
                         input.forEach(p -> paramList.add(String.format(paramFormat, p.getParamName(),
-                                FunctionParamTypeEnum.valueOf(p.getParamType().toUpperCase()).getVale(),
+                                FunctionParamTypeEnum.fromTypeText(p.getParamType()).getVale(),
                                 p.getParamName())));
                         inputParamString = String.join(",\n", paramList);
                     }

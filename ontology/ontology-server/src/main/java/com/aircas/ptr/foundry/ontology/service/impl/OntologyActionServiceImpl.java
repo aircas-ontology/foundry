@@ -24,6 +24,7 @@ import com.aircas.ptr.foundry.ontology.service.behavior.TreeBranchRunner;
 import com.aircas.ptr.foundry.ontology.service.behavior.TreeCooldownTracker;
 import com.aircas.ptr.foundry.ontology.service.behavior.TreeExecutionRuntime;
 import com.aircas.ptr.foundry.ontology.utils.FunctionOutputValueReader;
+import com.aircas.ptr.foundry.ontology.utils.ScriptParamSchemaUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.OrderItem;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -140,6 +141,9 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
 
     @Resource
     private OntologyActionMapper actionMapper;
+
+    @Resource
+    private OntologyPropertyMapper propertyMapper;
 
     @Resource
     private ActionCategoryMapper actionCategoryMapper;
@@ -2463,7 +2467,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         return params.stream()
                 .map(param -> TreeActionParamVO.builder()
                         .name(param.getParamName())
-                        .type(param.getParamType())
+                        .type(param.paramTypeEnum())
                         .description(param.getDescription())
                         .build())
                 .collect(Collectors.toList());
@@ -3557,7 +3561,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             var field = fields.stream().filter(f -> segment.equals(f.getParamName())).findFirst().orElse(null);
             PreconditionUtils.checkArgument(field != null,
                     "算子入参 " + funcParam.getParamName() + " 不存在子字段：" + paramPath, HttpStatus.BAD_REQUEST);
-            currentType = field.getParamType();
+            currentType = field.paramTypeEnum();
             fields = field.getFields() == null ? Lists.newArrayList() : field.getFields();
         }
         return currentType;
@@ -3640,7 +3644,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         while (!queue.isEmpty()) {
             var field = queue.poll();
             if (name.equals(field.getParamName())) {
-                return field.getParamType();
+                return field.paramTypeEnum();
             }
             if (CollectionUtils.isNotEmpty(field.getFields())) {
                 queue.addAll(field.getFields());
@@ -3674,7 +3678,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             if (field == null) {
                 continue;
             }
-            leafType = field.getParamType();
+            leafType = field.paramTypeEnum();
             current = field.getFields() == null ? Lists.newArrayList() : field.getFields();
         }
         return lastMatched ? leafType : null;
@@ -4430,7 +4434,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 detailVO.setFunctionParams(funcParams.stream().map(p -> FunctionParamVO.builder()
                         .paramId(p.getId())
                         .paramName(p.getParamName())
-                        .paramType(p.getParamType())
+                        .paramType(ScriptParamSchemaUtil.displayParamType(p.getParamType(), p.getTypeReferenceName()))
                         .category(p.getCategory())
                         .paramOrder(p.getParamOrder())
                         .description(p.getDescription())
@@ -5333,7 +5337,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         }
         return functionDetail.getParams().stream()
                 .filter(p -> FunctionParamCategoryEnum.INPUT.equals(p.getCategory()))
-                .filter(p -> FunctionParamTypeEnum.LIST.equals(p.getParamType()))
+                .filter(p -> p.paramTypeEnum() == FunctionParamTypeEnum.LIST)
                 .map(FunctionParameterVO::getParamName)
                 .filter(StringUtils::isNotBlank)
                 .collect(Collectors.toSet());
@@ -5457,7 +5461,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                     "入参[" + owner + "]既按参数名又在字段 " + String.join("、", byField.keySet())
                             + " 上给了数据位置，同一入参只用一种写法", HttpStatus.BAD_REQUEST);
             var ownerDef = defByName.get(owner);
-            normalized.put(owner, ownerDef != null && FunctionParamTypeEnum.LIST.equals(ownerDef.getParamType())
+            normalized.put(owner, ownerDef != null && ownerDef.paramTypeEnum() == FunctionParamTypeEnum.LIST
                     ? mergeFieldElementPositions(owner, byField)
                     : mergeFieldSinglePositions(owner, byField));
         });
@@ -6311,13 +6315,24 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
 
             int depth = 0;
             var items = group.getJudgeParams();
+            var groupMonitorType = group.getMonitorType();
             for (int i = 0; i < items.size(); i++) {
                 var item = items.get(i);
-                validateJudgeOperate(item.getLeftOperate(), "leftOperate");
-                validateJudgeOperate(item.getRightOperate(), "rightOperate");
-                PreconditionUtils.checkNotNull(item.getCondition(), "judgeParams 缺少比较操作符 condition", HttpStatus.BAD_REQUEST);
-                PreconditionUtils.checkArgument(item.getCondition() != ActionHandleRuleAddConditionEnum.CH,
-                        "规则调度不支持 CH（变化）比较", HttpStatus.BAD_REQUEST);
+                // 事件类型可选在组上选一次，组内条件项只给对象+分组；条件项自带的类型须与组级一致
+                PreconditionUtils.checkArgument(item.getMonitorType() == null || groupMonitorType == null
+                                || item.getMonitorType() == groupMonitorType,
+                        "judgeParams[" + i + "] 的 monitorType 与规则组 monitorType 不一致："
+                                + item.getMonitorType() + " != " + groupMonitorType, HttpStatus.BAD_REQUEST);
+                var monitorType = item.getMonitorType() != null ? item.getMonitorType() : groupMonitorType;
+                if (monitorType != null) {
+                    validateMonitorOperate(item.getLeftOperate());
+                } else {
+                    validateJudgeOperate(item.getLeftOperate(), "leftOperate");
+                    validateJudgeOperate(item.getRightOperate(), "rightOperate");
+                    PreconditionUtils.checkNotNull(item.getCondition(), "judgeParams 缺少比较操作符 condition", HttpStatus.BAD_REQUEST);
+                    PreconditionUtils.checkArgument(item.getCondition() != ActionHandleRuleAddConditionEnum.CH,
+                            "规则调度不支持 CH（变化）比较", HttpStatus.BAD_REQUEST);
+                }
                 int leftBrackets = item.getIsLeft() == null ? 0 : item.getIsLeft();
                 int rightBrackets = item.getIsRight() == null ? 0 : item.getIsRight();
                 PreconditionUtils.checkArgument(leftBrackets >= 0 && rightBrackets >= 0,
@@ -6344,6 +6359,30 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         } else {
             PreconditionUtils.checkNotNull(operate.getFixValue(), name + " 为 fixed 时必须给 fixValue", HttpStatus.BAD_REQUEST);
         }
+    }
+
+    /** 监测条件只认「对象 + 存储分组」，对象必须启用、分组必须在对象上真实存在，避免配了但永远收不到事件 */
+    private void validateMonitorOperate(RuleOperateParam operate) {
+        PreconditionUtils.checkNotNull(operate, "监测条件 leftOperate 不能为空", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(operate.getType() == RuleOperateType.DYNAMIC,
+                "监测条件 leftOperate.type 必须为 dynamic", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(StringUtils.isNotBlank(operate.getOntologyId()),
+                "监测条件 leftOperate 必须给 OntologyId", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(StringUtils.isNotBlank(operate.getStorageGroup()),
+                "监测条件 leftOperate 必须给 storageGroup", HttpStatus.BAD_REQUEST);
+        var meta = ontologyMetaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>()
+                .eq(OntologyMeta::getUniqueIdentifier, operate.getOntologyId())
+                .eq(OntologyMeta::getStatus, Status.ENABLE.getValue()));
+        PreconditionUtils.checkNotNull(meta, "监测对象不存在或未启用：" + operate.getOntologyId(), HttpStatus.BAD_REQUEST);
+        if ("main".equals(operate.getStorageGroup())) {
+            return;
+        }
+        Long count = propertyMapper.selectCount(new LambdaQueryWrapper<OntologyProperty>()
+                .eq(OntologyProperty::getOntologyUniqueIdentifier, operate.getOntologyId())
+                .eq(OntologyProperty::getStorageGroup, operate.getStorageGroup())
+                .eq(OntologyProperty::getStatus, Status.ENABLE.getValue()));
+        PreconditionUtils.checkArgument(count != null && count > 0,
+                "对象" + operate.getOntologyId() + "不存在存储分组：" + operate.getStorageGroup(), HttpStatus.BAD_REQUEST);
     }
 
     /** 定稿模式的展示用监控对象：优先执行目标对象，其次首个条件操作数对象 */
