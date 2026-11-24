@@ -2466,7 +2466,7 @@ public class EntityServiceImpl implements EntityService {
         var fields = toFieldParams(root, param.getFields(), actionContext, param.getParamName());
         var builder = FunctionParameter.builder()
                 .paramName(param.getParamName())
-                .paramType(param.paramTypeEnum());
+                .paramType(param.getParamType());
         mappings.stream()
                 .filter(m -> StringUtils.isEmpty(m.getParamPath()))
                 .findFirst()
@@ -2503,7 +2503,7 @@ public class EntityServiceImpl implements EntityService {
         }
         return FunctionParameter.builder()
                 .paramName(param.getParamName())
-                .paramType(param.paramTypeEnum())
+                .paramType(param.getParamType())
                 .paramValue(elements)
                 .build();
     }
@@ -2625,7 +2625,7 @@ public class EntityServiceImpl implements EntityService {
             var children = toFieldParams(child, declaredField.getFields(), actionContext, ownerParamName);
             var builder = FunctionParameter.builder()
                     .paramName(name)
-                    .paramType(declaredField.paramTypeEnum());
+                    .paramType(declaredField.getParamType());
             if (child.mapping != null) {
                 builder.paramValue(resolveInputValue(child.mapping, declaredField.paramTypeEnum(), actionContext,
                         ownerParamName));

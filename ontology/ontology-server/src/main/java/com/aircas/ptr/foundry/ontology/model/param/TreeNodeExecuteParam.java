@@ -62,7 +62,9 @@ public class TreeNodeExecuteParam {
                     + "其余入参只能一个位置。一个位置时也可以直接写成对象（与旧写法一致）",
             example = "{\"trajectories\":[{\"entityPrimaryKey\":101,\"dataPrimaryKeys\":{\"orbit_point\":11}},"
                     + "{\"entityPrimaryKey\":101,\"dataPrimaryKeys\":{\"orbit_point\":12}}]}")
+    // 入站请求体走 Jackson 3、工程内自建 mapper 走 Jackson 2，两个注解各管一侧，缺一不可
     @JsonDeserialize(using = InputTargetsDeserializer.class)
+    @tools.jackson.databind.annotation.JsonDeserialize(using = Jackson3InputTargetsDeserializer.class)
     private Map<String, List<ActionInstanceTargetParam>> inputParams;
 
     @Schema(name = "outputParams",
@@ -102,6 +104,34 @@ public class TreeNodeExecuteParam {
                     }
                 } else if (!value.isNull()) {
                     positions.add(p.getCodec().treeToValue(value, ActionInstanceTargetParam.class));
+                }
+                targets.put(entry.getKey(), positions);
+            }
+            return targets;
+        }
+    }
+
+    /** 与上面同一份口径的 Jackson 3 版本：入站请求只认 Jackson 3 的 databind 注解 */
+    public static class Jackson3InputTargetsDeserializer
+            extends tools.jackson.databind.ValueDeserializer<Map<String, List<ActionInstanceTargetParam>>> {
+        @Override
+        public Map<String, List<ActionInstanceTargetParam>> deserialize(
+                tools.jackson.core.JsonParser p, tools.jackson.databind.DeserializationContext ctxt) {
+            tools.jackson.databind.JsonNode node = p.readValueAsTree();
+            if (!node.isObject()) {
+                throw tools.jackson.databind.exc.MismatchedInputException.from(p, Map.class,
+                        "inputParams 应是入参名到数据位置的映射");
+            }
+            Map<String, List<ActionInstanceTargetParam>> targets = new LinkedHashMap<>();
+            for (var entry : node.properties()) {
+                var value = entry.getValue();
+                List<ActionInstanceTargetParam> positions = new ArrayList<>();
+                if (value.isArray()) {
+                    for (var element : value) {
+                        positions.add(ctxt.readTreeAsValue(element, ActionInstanceTargetParam.class));
+                    }
+                } else if (!value.isNull()) {
+                    positions.add(ctxt.readTreeAsValue(value, ActionInstanceTargetParam.class));
                 }
                 targets.put(entry.getKey(), positions);
             }

@@ -39,6 +39,9 @@ public class FunctionParamPO {
 
     private String typeReferenceName;
 
+    /** 参数完整类型文本（声明原样，如 List<List<Point>>）；详情展示优先使用，为空回退 paramType + typeReferenceName */
+    private String typeText;
+
     private FunctionParamCategoryEnum category;
 
     /** 子字段 JSON（参数类型为自定义类时存储嵌套字段结构，标量参数为 null） */
