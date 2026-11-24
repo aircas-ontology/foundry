@@ -263,7 +263,7 @@ public class CompositeFunctionRefResolver {
             CompositeParameter child = new CompositeParameter();
             child.setId(field.getParamName());
             child.setName(field.getParamName());
-            child.setType(CompositeFunctionCatalog.toCanvasType(field.getParamType()));
+            child.setType(CompositeFunctionCatalog.toCanvasType(field.paramTypeEnum()));
             child.setDescription(field.getDescription());
             child.setChildren(toChildPorts(field.getFields()));
             children.add(child);

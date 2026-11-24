@@ -28,8 +28,8 @@ public class FunctionParameterVO {
     @Schema(name = "paramName",description = "参数名称")
     private String paramName;
 
-    @Schema(name = "paramType",description = "参数类型")
-    private FunctionParamTypeEnum paramType;
+    @Schema(name = "paramType",description = "参数类型文本：集合参数带元素类型（如 List<Double>），其余为枚举名（DOUBLE/OBJECT）")
+    private String paramType;
 
     @Schema(name = "category",description = "参数输入输出类别")
     private FunctionParamCategoryEnum category;
@@ -48,4 +48,9 @@ public class FunctionParameterVO {
 
     @Schema(name = "fields", description = "子字段列表（参数类型为自定义类时展开，标量参数为 null）")
     private List<FunctionParameterVO> fields;
+
+    /** 执行链路用的类型枚举，按 paramType 文本还原。 */
+    public FunctionParamTypeEnum paramTypeEnum() {
+        return FunctionParamTypeEnum.fromTypeText(paramType);
+    }
 }

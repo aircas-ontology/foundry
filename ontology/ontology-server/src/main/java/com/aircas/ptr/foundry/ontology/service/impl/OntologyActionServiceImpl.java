@@ -24,6 +24,7 @@ import com.aircas.ptr.foundry.ontology.service.behavior.TreeBranchRunner;
 import com.aircas.ptr.foundry.ontology.service.behavior.TreeCooldownTracker;
 import com.aircas.ptr.foundry.ontology.service.behavior.TreeExecutionRuntime;
 import com.aircas.ptr.foundry.ontology.utils.FunctionOutputValueReader;
+import com.aircas.ptr.foundry.ontology.utils.ScriptParamSchemaUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.OrderItem;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -2463,7 +2464,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         return params.stream()
                 .map(param -> TreeActionParamVO.builder()
                         .name(param.getParamName())
-                        .type(param.getParamType())
+                        .type(param.paramTypeEnum())
                         .description(param.getDescription())
                         .build())
                 .collect(Collectors.toList());
@@ -3557,7 +3558,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             var field = fields.stream().filter(f -> segment.equals(f.getParamName())).findFirst().orElse(null);
             PreconditionUtils.checkArgument(field != null,
                     "算子入参 " + funcParam.getParamName() + " 不存在子字段：" + paramPath, HttpStatus.BAD_REQUEST);
-            currentType = field.getParamType();
+            currentType = field.paramTypeEnum();
             fields = field.getFields() == null ? Lists.newArrayList() : field.getFields();
         }
         return currentType;
@@ -3640,7 +3641,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         while (!queue.isEmpty()) {
             var field = queue.poll();
             if (name.equals(field.getParamName())) {
-                return field.getParamType();
+                return field.paramTypeEnum();
             }
             if (CollectionUtils.isNotEmpty(field.getFields())) {
                 queue.addAll(field.getFields());
@@ -3674,7 +3675,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             if (field == null) {
                 continue;
             }
-            leafType = field.getParamType();
+            leafType = field.paramTypeEnum();
             current = field.getFields() == null ? Lists.newArrayList() : field.getFields();
         }
         return lastMatched ? leafType : null;
@@ -4430,7 +4431,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 detailVO.setFunctionParams(funcParams.stream().map(p -> FunctionParamVO.builder()
                         .paramId(p.getId())
                         .paramName(p.getParamName())
-                        .paramType(p.getParamType())
+                        .paramType(ScriptParamSchemaUtil.displayParamType(p.getParamType(), p.getTypeReferenceName()))
                         .category(p.getCategory())
                         .paramOrder(p.getParamOrder())
                         .description(p.getDescription())
@@ -5333,7 +5334,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         }
         return functionDetail.getParams().stream()
                 .filter(p -> FunctionParamCategoryEnum.INPUT.equals(p.getCategory()))
-                .filter(p -> FunctionParamTypeEnum.LIST.equals(p.getParamType()))
+                .filter(p -> p.paramTypeEnum() == FunctionParamTypeEnum.LIST)
                 .map(FunctionParameterVO::getParamName)
                 .filter(StringUtils::isNotBlank)
                 .collect(Collectors.toSet());
@@ -5457,7 +5458,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                     "入参[" + owner + "]既按参数名又在字段 " + String.join("、", byField.keySet())
                             + " 上给了数据位置，同一入参只用一种写法", HttpStatus.BAD_REQUEST);
             var ownerDef = defByName.get(owner);
-            normalized.put(owner, ownerDef != null && FunctionParamTypeEnum.LIST.equals(ownerDef.getParamType())
+            normalized.put(owner, ownerDef != null && ownerDef.paramTypeEnum() == FunctionParamTypeEnum.LIST
                     ? mergeFieldElementPositions(owner, byField)
                     : mergeFieldSinglePositions(owner, byField));
         });

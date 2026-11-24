@@ -79,6 +79,7 @@ import com.aircas.ptr.foundry.ontology.utils.DockerCommandExecutor;
 import com.aircas.ptr.foundry.ontology.utils.OperatorFunctionFactory;
 import com.aircas.ptr.foundry.ontology.utils.ScriptParamDescriptionExtractor;
 import com.aircas.ptr.foundry.ontology.utils.ScriptParamDescriptionExtractor.Descriptions;
+import com.aircas.ptr.foundry.ontology.utils.ScriptParamSchemaUtil;
 import com.aircas.ptr.foundry.ontology.utils.SchemaHandleUtil;
 import com.aircas.ptr.foundry.ontology.utils.ContainerNodeForwarder;
 import com.aircas.ptr.foundry.ontology.utils.ContainerNodeIdentity;
@@ -267,7 +268,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                     .category(p.getCategory())
                     .paramOrder(p.getParamOrder())
                     .paramSchema(p.getParamSchema())
-                    .paramType(p.getParamType())
+                    .paramType(displayParamType(p))
                     .description(p.getDescription() == null ? "" : p.getDescription());
             // 反序列化 fields JSON 为嵌套结构
             if (StringUtils.isNotEmpty(p.getFields())) {
@@ -1384,7 +1385,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                     ? null : toPortParamDTOs(port.getFields());
             params.add(FunctionParamDTO.builder()
                     .paramName(port.getName())
-                    .paramType(CompositeFunctionCatalog.toParamType(port.getType()))
+                    .paramType(CompositeFunctionCatalog.toParamType(port.getType()).name())
                     .paramOrder(order++)
                     .description(port.getDescription())
                     .fields(children == null || children.isEmpty() ? null : children)
@@ -1563,7 +1564,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
             return FunctionParamPO.builder()
                     .functionId(functionId)
                     .paramName(p.getParamName())
-                    .paramType(p.getParamType())
+                    .paramType(FunctionParamTypeEnum.fromTypeText(p.getParamType()))
                     .category(p.getCategory())
                     .paramSchema(p.getParamSchema())
                     .paramOrder(order)
@@ -1575,6 +1576,11 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                     .build();
         }).collect(Collectors.toList());
         functionParamService.saveBatch(params);
+    }
+
+    /** 详情回显的类型文本：集合参数按 referenceType 的泛型实参拼成 List&lt;Double&gt;。 */
+    private String displayParamType(FunctionParamPO p) {
+        return ScriptParamSchemaUtil.displayParamType(p.getParamType(), p.getTypeReferenceName());
     }
 
     /**
@@ -2051,7 +2057,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 }
                 entryParams.add(FunctionParameterVO.builder()
                         .paramName(port.getName())
-                        .paramType(CompositeFunctionCatalog.toParamType(port.getType()))
+                        .paramType(CompositeFunctionCatalog.toParamType(port.getType()).name())
                         .category(FunctionParamCategoryEnum.INPUT)
                         .paramOrder(paramOrder++)
                         .description(port.getDescription() == null ? "" : port.getDescription())
@@ -2067,7 +2073,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         for (FunctionParamPO paramPO : compositeFunctionCatalog.findInputParams(referenced.getId())) {
             FunctionParameterVO.FunctionParameterVOBuilder voBuilder = FunctionParameterVO.builder()
                     .paramName(paramPO.getParamName())
-                    .paramType(paramPO.getParamType())
+                    .paramType(displayParamType(paramPO))
                     .category(FunctionParamCategoryEnum.INPUT)
                     .paramOrder(paramOrder++)
                     .paramSchema(paramPO.getParamSchema())

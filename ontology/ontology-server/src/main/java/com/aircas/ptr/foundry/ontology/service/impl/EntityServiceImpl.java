@@ -2322,7 +2322,7 @@ public class EntityServiceImpl implements EntityService {
      * </ul>
      */
     private Object coerceOverrideValue(FunctionParameterVO param, Object value) {
-        if (param.getParamType() == FunctionParamTypeEnum.LIST) {
+        if (param.paramTypeEnum() == FunctionParamTypeEnum.LIST) {
             return value instanceof List ? value : Lists.newArrayList(value);
         }
         if (value instanceof List<?> values) {
@@ -2355,7 +2355,7 @@ public class EntityServiceImpl implements EntityService {
             if (boundWhole) {
                 return FunctionParameter.builder()
                         .paramName(p.getParamName())
-                        .paramValue(resolveInputValue(paramMappings.get(0), p.getParamType(), actionContext, p.getParamName()))
+                        .paramValue(resolveInputValue(paramMappings.get(0), p.paramTypeEnum(), actionContext, p.getParamName()))
                         .build();
             }
             return assembleObjectParam(p, paramMappings, actionContext);
@@ -2422,7 +2422,7 @@ public class EntityServiceImpl implements EntityService {
     private FunctionParameter assembleObjectParam(FunctionParameterVO param,
                                                   List<ActionParamMappingVO> mappings,
                                                   ActionContextInfoDTO actionContext) {
-        if (FunctionParamTypeEnum.LIST.equals(param.getParamType())) {
+        if (FunctionParamTypeEnum.LIST.equals(param.paramTypeEnum())) {
             var elements = assembleListElements(param, mappings, actionContext);
             if (elements != null) {
                 return elements;
@@ -2435,12 +2435,12 @@ public class EntityServiceImpl implements EntityService {
         var fields = toFieldParams(root, param.getFields(), actionContext, param.getParamName());
         var builder = FunctionParameter.builder()
                 .paramName(param.getParamName())
-                .paramType(param.getParamType());
+                .paramType(param.paramTypeEnum());
         mappings.stream()
                 .filter(m -> StringUtils.isEmpty(m.getParamPath()))
                 .findFirst()
                 .ifPresent(m -> builder.paramValue(
-                        resolveInputValue(m, param.getParamType(), actionContext, param.getParamName())));
+                        resolveInputValue(m, param.paramTypeEnum(), actionContext, param.getParamName())));
         return builder.fields(fields.isEmpty() ? null : fields).build();
     }
 
@@ -2472,7 +2472,7 @@ public class EntityServiceImpl implements EntityService {
         }
         return FunctionParameter.builder()
                 .paramName(param.getParamName())
-                .paramType(param.getParamType())
+                .paramType(param.paramTypeEnum())
                 .paramValue(elements)
                 .build();
     }
@@ -2594,9 +2594,9 @@ public class EntityServiceImpl implements EntityService {
             var children = toFieldParams(child, declaredField.getFields(), actionContext, ownerParamName);
             var builder = FunctionParameter.builder()
                     .paramName(name)
-                    .paramType(declaredField.getParamType());
+                    .paramType(declaredField.paramTypeEnum());
             if (child.mapping != null) {
-                builder.paramValue(resolveInputValue(child.mapping, declaredField.getParamType(), actionContext,
+                builder.paramValue(resolveInputValue(child.mapping, declaredField.paramTypeEnum(), actionContext,
                         ownerParamName));
             }
             if (!children.isEmpty()) {

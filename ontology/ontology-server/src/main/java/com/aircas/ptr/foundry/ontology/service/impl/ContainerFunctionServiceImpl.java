@@ -418,7 +418,7 @@ public class ContainerFunctionServiceImpl implements ContainerFunctionService {
                     ? null : toFieldVOs(f.getFields());
             vos.add(FunctionParameterVO.builder()
                     .paramName(f.getName())
-                    .paramType(CompositeFunctionCatalog.toParamType(f.getType()))
+                    .paramType(CompositeFunctionCatalog.toParamType(f.getType()).name())
                     .paramOrder(order++)
                     .description(f.getDescription())
                     .paramSchema(writeJson(Map.of(

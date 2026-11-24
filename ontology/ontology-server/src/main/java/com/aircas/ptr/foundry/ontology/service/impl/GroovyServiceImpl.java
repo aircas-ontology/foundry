@@ -33,8 +33,12 @@ import org.springframework.stereotype.Service;
 
 import jakarta.annotation.PreDestroy;
 import java.io.IOException;
+import java.lang.reflect.GenericArrayType;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
+import java.lang.reflect.WildcardType;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -98,21 +102,13 @@ public class GroovyServiceImpl implements GroovyService {
                     String paramName = getParameterName(parameters[i]);
                     Class<?> paramType = parameters[i].getType();
                     FunctionParamTypeEnum paramTypeEnum = FunctionParamTypeEnum.getByTypeName(paramType.getName());
-                    // 允许基本类型 + OBJECT/LIST（Map/Object/List 等容器类型）
-                    PreconditionUtils.checkArgument(
-                            paramTypeEnum != null || 
-                            paramType.getName().equals("java.lang.Object") ||
-                            paramType.getName().equals("java.util.Map") ||
-                            paramType.getName().equals("java.util.List") ||
-                            paramType.isAssignableFrom(Map.class) ||
-                            paramType.isAssignableFrom(List.class),
-                            "暂不支持复杂类型参数", HttpStatus.BAD_REQUEST);
+                    // 标量按类型落，List 落 LIST，脚本内/工程内自定义类落 OBJECT（结构由 paramSchema 提供）
                     JsonSchema schema = generator.generateSchema(paramType);
                     String jsonSchema = objectMapper.writeValueAsString(schema);
                     funcParams.add(FunctionParamDTO.builder()
                             .paramName(paramName)
-                            .paramType(paramTypeEnum != null ? paramTypeEnum :
-                                      (paramType.isAssignableFrom(List.class) ? FunctionParamTypeEnum.LIST : FunctionParamTypeEnum.OBJECT))
+                            .paramType((paramTypeEnum != null ? paramTypeEnum :
+                                      (paramType.isAssignableFrom(List.class) ? FunctionParamTypeEnum.LIST : FunctionParamTypeEnum.OBJECT)).name())
                             .category(FunctionParamCategoryEnum.INPUT)
                             .paramOrder(i + 1)
                             .referenceType(paramType.getName())
@@ -135,7 +131,7 @@ public class GroovyServiceImpl implements GroovyService {
             }
             funcParams.add(FunctionParamDTO.builder()
                     .paramName("result")
-                    .paramType(returnParamType)
+                    .paramType(returnParamType.name())
                     .category(FunctionParamCategoryEnum.OUTPUT)
                     .paramOrder(1)
                     .referenceType(returnType.getRawClass().getTypeName())
@@ -185,12 +181,20 @@ public class GroovyServiceImpl implements GroovyService {
         Map<String, Object> inputMap = paramMap == null ? new HashMap<>() : paramMap;
         List<Object> paramValues = new ArrayList<>();
         if (CollectionUtils.isNotEmpty(paramInfos)) {
-            for (FunctionParamPO paramInfo : paramInfos) {
+            Method handleMethod = findHandleMethod(groovyClass);
+            Type[] declaredTypes = handleMethod == null ? new Type[0] : handleMethod.getGenericParameterTypes();
+            for (int i = 0; i < paramInfos.size(); i++) {
+                FunctionParamPO paramInfo = paramInfos.get(i);
                 Object value = inputMap.get(paramInfo.getParamName());
-                // 编排上游节点产出的对象/列表直接透传，其余按声明类型转换，与 executeGroovy 保持一致
-                // typeReferenceName 为空时，对于基本类型按 paramType 转换，其他类型直接透传
-                if (paramInfo.getParamType() != FunctionParamTypeEnum.OBJECT
+                Type declaredType = i < declaredTypes.length ? declaredTypes[i] : null;
+                if (declaredType != null && carriesNonJdkType(declaredType)) {
+                    // 形参声明为脚本内/工程内自定义类（Point、List<Point>）：JSON 结构按签名转成真实类型；
+                    // 否则原样透传的 Map/List 匹配不上强类型形参
+                    value = convertToDeclaredStructure(paramInfo, value, declaredType);
+                } else if (paramInfo.getParamType() != FunctionParamTypeEnum.OBJECT
                         && paramInfo.getParamType() != FunctionParamTypeEnum.LIST) {
+                    // 其余按声明类型转换，与 executeGroovy 保持一致
+                    // typeReferenceName 为空时，对于基本类型按 paramType 转换，其他类型直接透传
                     var rawValue = value;
                     value = convertScriptParam(paramInfo, rawValue, () -> convertByDeclaredType(paramInfo, rawValue));
                 }
@@ -200,6 +204,61 @@ public class GroovyServiceImpl implements GroovyService {
         return paramValues.isEmpty()
                 ? groovyInstance.invokeMethod("handle", null)
                 : groovyInstance.invokeMethod("handle", paramValues.toArray(new Object[]{}));
+    }
+
+    /**
+     * 形参声明类型里是否带非 JDK 类（脚本内类/工程内 DTO）。只有这类形参需要按签名转换，
+     * 标量与 Object/Map/List 等 JDK 容器的入参保持原有透传/转换口径不变。
+     */
+    private static boolean carriesNonJdkType(Type type) {
+        if (type instanceof Class<?> clazz) {
+            if (clazz.isArray()) {
+                return carriesNonJdkType(clazz.getComponentType());
+            }
+            return !clazz.isPrimitive() && !clazz.getName().startsWith("java.");
+        }
+        if (type instanceof ParameterizedType parameterized) {
+            if (carriesNonJdkType(parameterized.getRawType())) {
+                return true;
+            }
+            for (Type argument : parameterized.getActualTypeArguments()) {
+                if (carriesNonJdkType(argument)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        if (type instanceof GenericArrayType arrayType) {
+            return carriesNonJdkType(arrayType.getGenericComponentType());
+        }
+        if (type instanceof WildcardType wildcard) {
+            for (Type bound : wildcard.getUpperBounds()) {
+                if (carriesNonJdkType(bound)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 按 handle 形参声明的泛型类型把 JSON 结构转成真实对象（Map → Point、List&lt;Map&gt; → List&lt;Point&gt;）。
+     * 值已是声明类型且形参无泛型实参时原样返回，避免无谓的序列化往返。
+     */
+    private Object convertToDeclaredStructure(FunctionParamPO paramInfo, Object value, Type declaredType) {
+        if (value == null) {
+            return null;
+        }
+        JavaType javaType = objectMapper.getTypeFactory().constructType(declaredType);
+        if (!javaType.hasGenericTypes() && javaType.getRawClass().isInstance(value)) {
+            return value;
+        }
+        try {
+            return objectMapper.convertValue(value, javaType);
+        } catch (RuntimeException e) {
+            throw new BusinessException("算子入参[" + paramInfo.getParamName() + "]类型转换失败：期望 "
+                    + javaType.toCanonical() + "，收到的值是 " + value, HttpStatus.BAD_REQUEST);
+        }
     }
 
     /**

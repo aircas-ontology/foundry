@@ -1,6 +1,5 @@
 package com.aircas.ptr.foundry.ontology.model.vo;
 
-import com.aircas.ptr.foundry.common.constant.FunctionParamTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamCategoryEnum;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -25,8 +24,8 @@ public class FunctionParamVO {
     @Schema(description = "参数名", example = "max_mach")
     private String paramName;
 
-    @Schema(description = "参数类型", example = "DOUBLE")
-    private FunctionParamTypeEnum paramType;
+    @Schema(description = "参数类型文本：集合参数带元素类型（如 List<Double>），其余为枚举名（DOUBLE/OBJECT）", example = "DOUBLE")
+    private String paramType;
 
     @Schema(description = "分类：INPUT 入参 / OUTPUT 出参", example = "INPUT")
     private FunctionParamCategoryEnum category;

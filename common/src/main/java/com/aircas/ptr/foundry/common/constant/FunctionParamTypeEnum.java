@@ -95,6 +95,33 @@ public enum FunctionParamTypeEnum {
         };
     }
 
+    /**
+     * 参数类型文本还原枚举：兼容库里的展示文本（{@code List<Double>}、{@code OrbitPoint[]}）、
+     * 枚举名（{@code LIST}/{@code DOUBLE}）以及 TS/Python 别名；认不出的自定义类名按 OBJECT 处理。
+     */
+    public static FunctionParamTypeEnum fromTypeText(String typeText) {
+        if (typeText == null || typeText.isBlank()) {
+            return null;
+        }
+        String base = typeText.trim();
+        int angle = base.indexOf('<');
+        if (angle > 0) {
+            base = base.substring(0, angle).trim();
+        }
+        if (base.endsWith("[]")) {
+            return LIST;
+        }
+        FunctionParamTypeEnum mapped = FUNC_PARAM_TYPE_MAP.get(base);
+        if (mapped != null) {
+            return mapped;
+        }
+        try {
+            return fromJson(base);
+        } catch (IllegalArgumentException e) {
+            return OBJECT;
+        }
+    }
+
     public static FunctionParamTypeEnum getByTypeName(String type) {
         return FUNC_PARAM_TYPE_MAP.get(type);
     }

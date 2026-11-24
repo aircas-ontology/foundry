@@ -1,6 +1,5 @@
 package com.aircas.ptr.foundry.ontology.model.vo;
 
-import com.aircas.ptr.foundry.common.constant.FunctionParamTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FunctionParamCategoryEnum;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
@@ -12,8 +11,8 @@ import java.util.List;
 
 /**
  * 脚本参数解析结果的单个参数。业务字段与创建/更新接口的参数元素（{@code FunctionParamDTO}）一致，
- * 前端拿到后可直接放进函数保存请求的 {@code parameters} 数组；仅 {@code elementType} 为展示用附加字段，
- * 保存接口不接收（{@code paramType} 仍是枚举 {@code LIST}）。
+ * 前端拿到后可直接放进函数保存请求的 {@code parameters} 数组；{@code paramType} 直接携带类型文本
+ * （集合参数为 {@code List<元素>}），{@code elementType} 仅为渲染便利的附加字段。
  */
 @Data
 @Builder
@@ -25,8 +24,8 @@ public class ScriptParsedParamVO {
     @Schema(description = "参数名称")
     private String paramName;
 
-    @Schema(description = "参数类型（归一化后的后端枚举名）")
-    private FunctionParamTypeEnum paramType;
+    @Schema(description = "参数类型文本：集合参数带元素类型（如 List<Double>），其余为枚举名（DOUBLE/OBJECT）")
+    private String paramType;
 
     @Schema(description = "参数输入输出类别：INPUT/OUTPUT")
     private FunctionParamCategoryEnum category;
@@ -38,7 +37,7 @@ public class ScriptParsedParamVO {
     private String referenceType;
 
     @Schema(description = "集合参数的元素类型文本（List<Double> → Double、List<ShTrack> → ShTrack），标量/对象参数为 null；"
-            + "仅供展示（类型可渲染成 LIST<DOUBLE>），保存接口忽略该字段，paramType 仍是枚举 LIST")
+            + "仅供展示便利，保存接口忽略该字段，paramType 已直接携带 List<元素> 文本")
     private String elementType;
 
     @Schema(description = "参数结构 JSON Schema（静态解析不产出，为 null；由用户保存前自行补充）")

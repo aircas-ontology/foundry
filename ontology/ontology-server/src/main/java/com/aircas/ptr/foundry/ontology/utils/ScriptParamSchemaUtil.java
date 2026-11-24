@@ -125,6 +125,57 @@ public final class ScriptParamSchemaUtil {
     }
 
     /**
+     * 参数类型的展示文本：库里的类型仍是枚举（{@code LIST}），集合参数返回时按
+     * {@code type_reference_name} 的泛型实参拼成 {@code List<Double>}，裸 List 无法还原元素时仍返回 {@code LIST}。
+     */
+    public static String displayParamType(FunctionParamTypeEnum paramType, String typeReferenceName) {
+        if (paramType == null || paramType == FunctionParamTypeEnum.LIST) {
+            String simple = simpleTypeText(typeReferenceName);
+            if (simple != null && simple.indexOf('<') >= 0) {
+                return simple;
+            }
+        }
+        return paramType == null ? null : paramType.name();
+    }
+
+    /**
+     * 展示用的简化类型文本：去掉各层包名、保留泛型与数组结构
+     * （{@code java.util.List<java.lang.Double>} → {@code List<Double>}）。仅用于界面展示，不参与类型转换。
+     */
+    public static String simpleTypeText(String typeText) {
+        if (StringUtils.isBlank(typeText)) {
+            return null;
+        }
+        String s = typeText.trim();
+        if (s.endsWith("[]")) {
+            String component = simpleTypeText(s.substring(0, s.length() - 2));
+            return component == null ? null : component + "[]";
+        }
+        int angle = s.indexOf('<');
+        if (angle < 0) {
+            int dot = s.lastIndexOf('.');
+            return dot >= 0 ? s.substring(dot + 1) : s;
+        }
+        if (!s.endsWith(">")) {
+            return s;
+        }
+        String raw = s.substring(0, angle).trim();
+        int dot = raw.lastIndexOf('.');
+        if (dot >= 0) {
+            raw = raw.substring(dot + 1);
+        }
+        List<String> args = splitTopLevelArguments(s.substring(angle + 1, s.length() - 1));
+        StringBuilder sb = new StringBuilder(raw).append('<');
+        for (int i = 0; i < args.size(); i++) {
+            if (i > 0) {
+                sb.append(',');
+            }
+            sb.append(simpleTypeText(args.get(i)));
+        }
+        return sb.append('>').toString();
+    }
+
+    /**
      * 泛型类型文本的全限定化：逐层补全裸类型与实参（{@code List<Double>} → {@code java.util.List<java.lang.Double>}），
      * 已是全限定名或 JDK 类名的部分原样保留；任一实参认不出（脚本内类等）返回 null，由调用方收敛到裸类型。
      */
