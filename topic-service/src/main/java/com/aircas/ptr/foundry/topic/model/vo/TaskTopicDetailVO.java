@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.util.Date;
+import java.util.List;
 
 @Data
 @Builder
@@ -38,12 +39,6 @@ public class TaskTopicDetailVO {
     @Schema(description = "关联本体空间，多个用逗号分割")
     private String ontologySpace;
 
-    @Schema(description = "任务状态")
-    private String status;
-
-    @Schema(description = "创建人")
-    private String creator;
-
-    @Schema(description = "创建时间")
-    private Date createTime;
+    @Schema(description = "事件阶段列表")
+    private List<EventStageVO> eventStages;
 }

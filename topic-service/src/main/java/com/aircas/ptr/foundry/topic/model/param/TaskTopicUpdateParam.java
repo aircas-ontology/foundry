@@ -1,6 +1,8 @@
 package com.aircas.ptr.foundry.topic.model.param;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -51,8 +53,9 @@ public class TaskTopicUpdateParam {
     @Size(max = 1024, message = "关联本体空间最长1024个字符")
     private String ontologySpace;
 
-    @Schema(description = "任务状态，由页面传入", example = "进行中")
-    @NotBlank(message = "任务状态不能为空")
-    @Size(max = 32, message = "任务状态最长32个字符")
-    private String status;
+    @Schema(description = "任务状态：0执行中，1执行完成", example = "0")
+    @NotNull(message = "任务状态不能为空")
+    @Min(value = 0, message = "任务状态只能为0或1")
+    @Max(value = 1, message = "任务状态只能为0或1")
+    private Integer status;
 }

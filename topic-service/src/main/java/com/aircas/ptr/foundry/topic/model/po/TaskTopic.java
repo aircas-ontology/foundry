@@ -68,9 +68,9 @@ public class TaskTopic {
     private String ontologySpace;
 
     /**
-     * 任务状态
+     * 任务状态：0执行中，1执行完成
      */
-    private String status;
+    private Integer status;
 
     /**
      * 创建人

@@ -38,8 +38,8 @@ public class TaskTopicVO {
     @Schema(description = "关联本体空间，多个用逗号分割")
     private String ontologySpace;
 
-    @Schema(description = "任务状态")
-    private String status;
+    @Schema(description = "任务状态：0执行中，1执行完成")
+    private Integer status;
 
     @Schema(description = "创建人")
     private String creator;

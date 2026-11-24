@@ -2,12 +2,16 @@ package com.aircas.ptr.foundry.topic.service.impl;
 
 import com.aircas.ptr.foundry.common.util.PreconditionUtils;
 import com.aircas.ptr.foundry.topic.model.enums.DeletedFlagEnum;
+import com.aircas.ptr.foundry.topic.model.enums.TaskStatusEnum;
 import com.aircas.ptr.foundry.topic.model.param.TaskTopicCreateParam;
 import com.aircas.ptr.foundry.topic.model.param.TaskTopicQueryParam;
 import com.aircas.ptr.foundry.topic.model.param.TaskTopicUpdateParam;
+import com.aircas.ptr.foundry.topic.model.po.EventStage;
 import com.aircas.ptr.foundry.topic.model.po.TaskTopic;
+import com.aircas.ptr.foundry.topic.model.vo.EventStageVO;
 import com.aircas.ptr.foundry.topic.model.vo.TaskTopicDetailVO;
 import com.aircas.ptr.foundry.topic.model.vo.TaskTopicVO;
+import com.aircas.ptr.foundry.topic.repository.EventStageMapper;
 import com.aircas.ptr.foundry.topic.repository.TaskTopicMapper;
 import com.aircas.ptr.foundry.topic.service.TaskTopicService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -16,6 +20,8 @@ import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+
+import jakarta.annotation.Resource;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Arrays;
@@ -24,6 +30,9 @@ import java.util.List;
 
 @Service
 public class TaskTopicServiceImpl extends ServiceImpl<TaskTopicMapper, TaskTopic> implements TaskTopicService {
+
+    @Resource
+    private EventStageMapper eventStageMapper;
 
     @Transactional
     @Override
@@ -38,7 +47,7 @@ public class TaskTopicServiceImpl extends ServiceImpl<TaskTopicMapper, TaskTopic
                 .endTime(param.getEndTime())
                 .description(param.getDescription())
                 .ontologySpace(param.getOntologySpace())
-                .status(param.getStatus())
+                .status(param.getStatus() == null ? TaskStatusEnum.RUNNING.getCode() : param.getStatus())
                 .creator(StringUtils.isBlank(param.getCreator()) ? "admin" : param.getCreator().trim())
                 .deleted(DeletedFlagEnum.NOT_DELETED.getCode())
                 .build();
@@ -131,9 +140,30 @@ public class TaskTopicServiceImpl extends ServiceImpl<TaskTopicMapper, TaskTopic
                 .endTime(taskTopic.getEndTime())
                 .description(taskTopic.getDescription())
                 .ontologySpace(taskTopic.getOntologySpace())
-                .status(taskTopic.getStatus())
-                .creator(taskTopic.getCreator())
-                .createTime(taskTopic.getCreateTime())
+                .eventStages(listEventStages(taskTopic.getTaskCode()))
+                .build();
+    }
+
+    private List<EventStageVO> listEventStages(Long taskCode) {
+        return eventStageMapper.selectList(new LambdaQueryWrapper<EventStage>()
+                        .eq(EventStage::getTaskCode, taskCode)
+                        .eq(EventStage::getDeleted, DeletedFlagEnum.NOT_DELETED.getCode())
+                        .orderByAsc(EventStage::getStartTime)
+                        .orderByAsc(EventStage::getStageCode))
+                .stream()
+                .map(this::toEventStageVO)
+                .toList();
+    }
+
+    private EventStageVO toEventStageVO(EventStage stage) {
+        return EventStageVO.builder()
+                .stageCode(stage.getStageCode())
+                .taskCode(stage.getTaskCode())
+                .stageName(stage.getStageName())
+                .startTime(stage.getStartTime())
+                .endTime(stage.getEndTime())
+                .eventCount(stage.getEventCount())
+                .eventCodes(stage.getEventCodes())
                 .build();
     }
 

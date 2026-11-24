@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS topic.task_topic
     end_time        timestamp(6)  NOT NULL,
     description     varchar(2000),
     ontology_space  varchar(1024),
-    status          varchar(32)   NOT NULL,
+    status          smallint      DEFAULT 0 NOT NULL,
     creator         varchar(64),
     create_time     timestamp(6),
     target_count    integer       DEFAULT 0 NOT NULL,
@@ -67,7 +67,7 @@ COMMENT ON COLUMN topic.task_topic.start_time IS '任务开始时间';
 COMMENT ON COLUMN topic.task_topic.end_time IS '任务结束时间';
 COMMENT ON COLUMN topic.task_topic.description IS '任务描述';
 COMMENT ON COLUMN topic.task_topic.ontology_space IS '关联本体空间，多个用逗号分割';
-COMMENT ON COLUMN topic.task_topic.status IS '任务状态，由页面传入';
+COMMENT ON COLUMN topic.task_topic.status IS '任务状态：0执行中，1执行完成，默认0';
 COMMENT ON COLUMN topic.task_topic.creator IS '创建人';
 COMMENT ON COLUMN topic.task_topic.create_time IS '创建时间';
 COMMENT ON COLUMN topic.task_topic.target_count IS '目标数量';
@@ -90,19 +90,20 @@ ALTER TABLE topic.task_topic ADD COLUMN IF NOT EXISTS deleted smallint DEFAULT 0
 CREATE TABLE IF NOT EXISTS topic.event_stage
 (
     stage_code  varchar(64)  NOT NULL PRIMARY KEY,
-    task_code   varchar(64)  NOT NULL,
+    task_code   bigint       NOT NULL,
     stage_name  varchar(128) NOT NULL,
     start_time  timestamp(6) NOT NULL,
     end_time    timestamp(6) NOT NULL,
     event_count integer      DEFAULT 0 NOT NULL,
     event_codes varchar(1024),
     creator     varchar(64),
-    create_time timestamp(6)
+    create_time timestamp(6),
+    deleted     smallint     DEFAULT 0 NOT NULL
 );
 
 COMMENT ON TABLE topic.event_stage IS '事件阶段';
 COMMENT ON COLUMN topic.event_stage.stage_code IS '事件阶段编号';
-COMMENT ON COLUMN topic.event_stage.task_code IS '任务编号';
+COMMENT ON COLUMN topic.event_stage.task_code IS '任务编号，与任务主题任务编号类型一致';
 COMMENT ON COLUMN topic.event_stage.stage_name IS '事件阶段名称';
 COMMENT ON COLUMN topic.event_stage.start_time IS '事件阶段开始时间';
 COMMENT ON COLUMN topic.event_stage.end_time IS '事件阶段结束时间';
@@ -114,3 +115,5 @@ COMMENT ON COLUMN topic.event_stage.create_time IS '创建时间';
 CREATE INDEX IF NOT EXISTS idx_event_stage_task_code ON topic.event_stage (task_code);
 
 ALTER TABLE topic.event_stage ADD COLUMN IF NOT EXISTS event_codes varchar(1024);
+ALTER TABLE topic.event_stage ADD COLUMN IF NOT EXISTS deleted smallint DEFAULT 0 NOT NULL;
+COMMENT ON COLUMN topic.event_stage.deleted IS '是否删除：0未删除，1已删除';
