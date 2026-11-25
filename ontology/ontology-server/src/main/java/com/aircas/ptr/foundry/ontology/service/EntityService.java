@@ -138,6 +138,9 @@ public interface EntityService {
     /**
      * 按对象+存储分组批量取数：每个分组各自的表按指定属性排序取前 limit 条（不传 limit 取全部），
      * 每行带上所属实体在主存储分组里的展示名。
+     *
+     * <p>传了 entityPrimaryKey 就只取该实例在此分组下的数据行（实体不存在直接报错，与 row_detail 口径一致），
+     * 不传则覆盖该对象全部实例的数据。</p>
      */
     List<EntityStorageGroupDataVO> queryByStorageGroup(List<EntityStorageGroupQueryParam> params);
 

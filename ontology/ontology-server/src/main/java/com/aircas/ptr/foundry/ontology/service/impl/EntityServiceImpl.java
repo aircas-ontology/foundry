@@ -856,6 +856,14 @@ public class EntityServiceImpl implements EntityService {
         var schemaName = pk.getDatasourceSchema();
         var mainTableName = pk.getDatasourceId();
 
+        //指定实例时先确认实体存在，否则查不到数据也分不清是 id 写错还是本来没有数据
+        if (param.getEntityPrimaryKey() != null) {
+            var entityKeyValue = datalakeKey(schemaName, mainTableName, pk.getDatasourceColumnName(), param.getEntityPrimaryKey());
+            var pkData = objectMapper.queryDataByPrimaryKey(schemaName, mainTableName,
+                    Lists.newArrayList(pk.getDatasourceColumnName()), pk.getDatasourceColumnName(), entityKeyValue);
+            PreconditionUtils.checkArgument(MapUtils.isNotEmpty(pkData), "实体" + param.getEntityPrimaryKey() + "不存在");
+        }
+
         //一个分组只绑一张表，否则排序属性与所属实体都没有唯一口径
         var storageGroup = param.getStorageGroup();
         var groupProps = props.stream()
@@ -901,9 +909,16 @@ public class EntityServiceImpl implements EntityService {
         if (isMainGroup && titleColumn != null && !columns.contains(titleColumn)) {
             columns.add(titleColumn);
         }
+        //指定实例：按分组表里表示所属实体的列过滤（主分组是主键列，关联分组是回指主表的列）
+        String filterColumn = null;
+        Object filterValue = null;
+        if (param.getEntityPrimaryKey() != null) {
+            filterColumn = entityKeyColumn;
+            filterValue = datalakeKey(schemaName, groupTable, entityKeyColumn, param.getEntityPrimaryKey());
+        }
         var hasDeletedField = tableMetadataMapper.isColumnExist(schemaName, groupTable, "is_deleted");
-        var rows = objectMapper.querySortedData(schemaName, groupTable, columns, sortColumn,
-                param.sortOrDefault().getValue(), param.getLimit(), hasDeletedField);
+        var rows = objectMapper.querySortedData(schemaName, groupTable, columns, filterColumn, filterValue,
+                sortColumn, param.sortOrDefault().getValue(), param.getLimit(), hasDeletedField);
 
         //关联分组的展示名不在本表里，按本次涉及到的实体主键一次性回捞主表
         var displayNames = Maps.<Object, String>newHashMap();
