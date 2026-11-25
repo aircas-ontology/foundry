@@ -3497,25 +3497,34 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
 
     /**
      * 出参是数组（LIST）且写回目标是子表时，给取值路径补上 {@code [*]}。
-     * <p>参数树点出来的路径只有 {@code $.result.longitude} 这种形状，而 {@code result} 声明成 LIST 时它下面那些字段
-     * 是「元素字段」：按单值取只会拿到第一个元素，返回 5 条就静默少落 4 行，从落库数据上看不出是被截断还是本来只有 1 条。
-     * 这里按参数声明的形状补成 {@code $.result[*].longitude}，执行侧才走逐元素插行。</p>
+     * <p>数组有两种来源：顶层出参本身声明成 LIST（参数树点出来的 {@code $.result.longitude}，{@code result}
+     * 下面是元素字段），以及顶层出参是对象、路径上某个嵌套字段声明成 LIST（脚本把集合包在返回对象里的
+     * {@code $.data.tracks.longitude}）。两种都按单值取只会拿到第一个元素，返回 12 条就静默只落 1 行，
+     * 从落库数据上看不出是被截断还是本来只有 1 条。这里按参数声明的形状补成 {@code [*]} 的写法，
+     * 执行侧才走逐元素插行。</p>
      * <p>不动的几种：主表只有实例那一行，取第一个元素就是它的值，补了反而会被「通配只能写子表」拒掉；
      * 已经写了 {@code [*]} 或写了 {@code [0]} 这类下标的按用户原意保留；路径停在数组层本身
-     * （{@code $.result} 整包给 Array 属性）没有逐元素可言；下一段不是该出参声明的元素字段时认不出数组层，
-     * 宁可不补也不猜路径。</p>
+     * （{@code $.data.tracks} 整包给 Array 属性）没有逐元素可言；数组后面接的不是该数组声明的元素字段时
+     * 认不出数组层，宁可不补也不猜路径。</p>
      */
     private String wildcardListExpression(String expression, FunctionParamPO funcParam, OntologyProperty property) {
-        if (StringUtils.isBlank(expression) || funcParam.getParamType() != FunctionParamTypeEnum.LIST
-                || FunctionOutputValueReader.hasWildcard(expression)) {
+        if (StringUtils.isBlank(expression) || FunctionOutputValueReader.hasWildcard(expression)
+                || !writesToSubtable(property)) {
             return expression;
         }
-        var storageGroup = property == null ? null : property.getStorageGroup();
-        var onMainTable = StringUtils.isBlank(storageGroup) || MAIN_STORAGE_GROUP.equals(storageGroup);
-        if (onMainTable) {
-            return expression;
+        var fields = parseParamFields(funcParam);
+        if (funcParam.getParamType() == FunctionParamTypeEnum.LIST) {
+            return wildcardAfterParamName(expression, funcParam, fields);
         }
-        var elementFieldNames = parseParamFields(funcParam).stream()
+        var token = listFieldToken(expression, fields);
+        return token == null ? expression
+                : expression.substring(0, token.end()) + "[*]" + expression.substring(token.end());
+    }
+
+    /** 顶层出参就是 LIST：元素字段直接挂在出参名下，把 {@code [*]} 补在出参名那一层之后 */
+    private String wildcardAfterParamName(String expression, FunctionParamPO funcParam,
+                                          List<FunctionParameterVO> fields) {
+        var elementFieldNames = fields.stream()
                 .map(FunctionParameterVO::getParamName)
                 .collect(Collectors.toSet());
         var paramName = funcParam.getParamName();
@@ -3531,6 +3540,86 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             return expression;
         }
         return expression.substring(0, insertAt) + "[*]" + expression.substring(insertAt);
+    }
+
+    /**
+     * 顶层出参是对象时，按声明的字段树找路径里第一个 LIST 字段，在它后面补 {@code [*]}。
+     * <p>{@code data} 外壳、前端拼的出参名这类不在字段树里的段按未命中跳过；数组后面必须是它声明的
+     * 元素字段，路径停在数组层、或不认识下一段时原样返回。</p>
+     */
+    private PathToken listFieldToken(String expression, List<FunctionParameterVO> fields) {
+        var tokens = pathTokens(expression);
+        if (tokens == null) {
+            return null;
+        }
+        var current = fields;
+        for (int i = 0; i < tokens.size() - 1; i++) {
+            var field = findField(current, tokens.get(i).name());
+            if (field == null) {
+                continue;
+            }
+            var childFields = field.getFields() == null ? List.<FunctionParameterVO>of() : field.getFields();
+            if (field.paramTypeEnum() != FunctionParamTypeEnum.LIST) {
+                current = childFields;
+                continue;
+            }
+            if (findField(childFields, tokens.get(i + 1).name()) != null) {
+                return tokens.get(i);
+            }
+        }
+        return null;
+    }
+
+    /** 写回目标是否在子表（非 main 分组）；main 只有实例那一行，不做逐元素展开 */
+    private static boolean writesToSubtable(OntologyProperty property) {
+        var storageGroup = property == null ? null : property.getStorageGroup();
+        return StringUtils.isNotBlank(storageGroup) && !MAIN_STORAGE_GROUP.equals(storageGroup);
+    }
+
+    /** 字段树里按名字找一层字段 */
+    private static FunctionParameterVO findField(List<FunctionParameterVO> fields, String name) {
+        if (fields == null || fields.isEmpty()) {
+            return null;
+        }
+        return fields.stream().filter(field -> name.equals(field.getParamName())).findFirst().orElse(null);
+    }
+
+    /**
+     * 取值路径切成字段名段，并记下每段在原文里的结束位置，供插入 {@code [*]}。
+     * <p>带 {@code [0]} 这类显式下标、或写法不是简单的 {@code $.a.b} 时返回 null，按用户原意保留。</p>
+     */
+    private static List<PathToken> pathTokens(String expression) {
+        var tokens = new ArrayList<PathToken>();
+        int i = 0;
+        while (i < expression.length()) {
+            char c = expression.charAt(i);
+            if (c == '$' || c == '.' || Character.isWhitespace(c)) {
+                i++;
+                continue;
+            }
+            if (c == '[') {
+                return null;
+            }
+            int start = i;
+            while (i < expression.length() && expression.charAt(i) != '.' && expression.charAt(i) != '[') {
+                i++;
+            }
+            int end = i;
+            while (end > start && Character.isWhitespace(expression.charAt(end - 1))) {
+                end--;
+            }
+            if (end > start) {
+                tokens.add(new PathToken(expression.substring(start, end), end));
+            }
+            if (i < expression.length() && expression.charAt(i) == '[') {
+                return null;
+            }
+        }
+        return tokens.isEmpty() ? null : tokens;
+    }
+
+    /** 取值路径里的一段字段名及它在原文中的结束位置（插入 {@code [*]} 用） */
+    private record PathToken(String name, int end) {
     }
 
     /** 取值路径从 from 起的字段名段（遇 {@code .} 或 {@code [} 截止）；下标写法或已到结尾返回 null */
@@ -3804,9 +3893,27 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         }
         rowsByGroup.values().stream()
                 .filter(rows -> rows.stream().allMatch(row ->
-                        paramByRow.get(row).getParamType() == FunctionParamTypeEnum.LIST))
+                        isListOutputRow(row.getFunctionParamExpression(), paramByRow.get(row))))
                 .forEach(rows -> rows.forEach(row -> row.setFunctionParamExpression(
                         wildcardListExpression(row.getFunctionParamExpression(), paramByRow.get(row), propByRow.get(row)))));
+    }
+
+    /**
+     * 这一列是否来自数组出参：顶层出参声明成 LIST，或取值路径上有声明成 LIST 的嵌套字段。
+     * <p>整组都是数组列才补 {@code [*]}：组里混一列普通出参，补完就成了「通配列与普通列混用」，
+     * 原来保存得下来的绑定不能因为补路径变成报错。</p>
+     */
+    private boolean isListOutputRow(String expression, FunctionParamPO funcParam) {
+        if (funcParam.getParamType() == FunctionParamTypeEnum.LIST) {
+            return true;
+        }
+        if (StringUtils.isBlank(expression)) {
+            return false;
+        }
+        if (FunctionOutputValueReader.hasWildcard(expression)) {
+            return true;
+        }
+        return listFieldToken(expression, parseParamFields(funcParam)) != null;
     }
 
     /**
@@ -4423,8 +4530,9 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         }
         var mappings = ontologyActionMappingInService.list(new LambdaQueryWrapper<OntologyActionMappingIn>().eq(OntologyActionMappingIn::getOntologyActionId, action.getId()));
 
-        // 函数参数定义（入参 + 出参），先取到以便给 mappingIns 每行填 category
+        // 函数参数定义（入参 + 出参），先取到以便给 mappingIns 每行填 category 和参数类型
         Map<Long, FunctionParamCategoryEnum> funcParamCategoryMap = new HashMap<>();
+        Map<Long, String> funcParamTypeMap = new HashMap<>();
         if (StringUtils.isNotEmpty(action.getFunctionApi())) {
             var func = functionMapper.selectList(new LambdaQueryWrapper<Function>()
                             .eq(Function::getOntologySpaceId, action.getOntologySpaceId())
@@ -4437,11 +4545,15 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             if (func != null) {
                 var funcParams = functionParamMapper.selectList(new LambdaQueryWrapper<FunctionParamPO>()
                         .eq(FunctionParamPO::getFunctionId, func.getId()));
-                funcParams.forEach(p -> funcParamCategoryMap.put(p.getId(), p.getCategory()));
+                funcParams.forEach(p -> {
+                    funcParamCategoryMap.put(p.getId(), p.getCategory());
+                    funcParamTypeMap.put(p.getId(),
+                            ScriptParamSchemaUtil.displayParamType(p.getParamType(), p.getTypeReferenceName(), p.getTypeText()));
+                });
                 detailVO.setFunctionParams(funcParams.stream().map(p -> FunctionParamVO.builder()
                         .paramId(p.getId())
                         .paramName(p.getParamName())
-                        .paramType(ScriptParamSchemaUtil.displayParamType(p.getParamType(), p.getTypeReferenceName()))
+                        .paramType(funcParamTypeMap.get(p.getId()))
                         .category(p.getCategory())
                         .paramOrder(p.getParamOrder())
                         .description(p.getDescription())
@@ -4463,6 +4575,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                                 .functionParamExpression(v.getFunctionParamExpression())
                                 .functionParamId(v.getFunctionParamId())
                                 .category(funcParamCategoryMap.get(v.getFunctionParamId()))
+                                .paramType(funcParamTypeMap.get(v.getFunctionParamId()))
                                 .parameterName(v.getParameterName())
                                 .sourceType(v.getSourceType())
                                 .sourceConfig(v.getSourceConfig())

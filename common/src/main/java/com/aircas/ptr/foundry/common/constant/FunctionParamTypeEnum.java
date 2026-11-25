@@ -58,6 +58,16 @@ public enum FunctionParamTypeEnum {
         FUNC_PARAM_TYPE_MAP.put("java.lang.String", FunctionParamTypeEnum.STRING);
         FUNC_PARAM_TYPE_MAP.put("java.util.List", FunctionParamTypeEnum.LIST);
         FUNC_PARAM_TYPE_MAP.put("java.util.Date", FunctionParamTypeEnum.DATE);
+        // 时间族：与 ScriptParamTypeMapper 的 DATE 口径对齐，收藏与测试请求里的类型文本都能认出来
+        FUNC_PARAM_TYPE_MAP.put("timestamp", FunctionParamTypeEnum.DATE);
+        FUNC_PARAM_TYPE_MAP.put("datetime", FunctionParamTypeEnum.DATE);
+        FUNC_PARAM_TYPE_MAP.put("localdate", FunctionParamTypeEnum.DATE);
+        FUNC_PARAM_TYPE_MAP.put("localdatetime", FunctionParamTypeEnum.DATE);
+        FUNC_PARAM_TYPE_MAP.put("instant", FunctionParamTypeEnum.DATE);
+        FUNC_PARAM_TYPE_MAP.put("java.sql.Timestamp", FunctionParamTypeEnum.DATE);
+        FUNC_PARAM_TYPE_MAP.put("java.time.LocalDateTime", FunctionParamTypeEnum.DATE);
+        FUNC_PARAM_TYPE_MAP.put("java.time.LocalDate", FunctionParamTypeEnum.DATE);
+        FUNC_PARAM_TYPE_MAP.put("java.time.Instant", FunctionParamTypeEnum.DATE);
         FUNC_PARAM_TYPE_MAP.put("java.lang.Object", FunctionParamTypeEnum.OBJECT);
         FUNC_PARAM_TYPE_MAP.put("java.util.Map", FunctionParamTypeEnum.OBJECT);
         FUNC_PARAM_TYPE_MAP.put("Object", FunctionParamTypeEnum.OBJECT);
@@ -112,6 +122,10 @@ public enum FunctionParamTypeEnum {
             return LIST;
         }
         FunctionParamTypeEnum mapped = FUNC_PARAM_TYPE_MAP.get(base);
+        if (mapped == null) {
+            // 大小写写法（TimeStamp/Timestamp/LocalDateTime）：类型文本按不区分大小写再查一次
+            mapped = FUNC_PARAM_TYPE_MAP.get(base.toLowerCase());
+        }
         if (mapped != null) {
             return mapped;
         }
