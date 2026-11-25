@@ -11,7 +11,17 @@ import org.apache.commons.lang3.time.DateUtils;
 
 import java.io.IOException;
 import java.lang.reflect.*;
+import java.text.ParseException;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.*;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -414,16 +424,22 @@ public class SchemaHandleUtil {
         if (Objects.nonNull(value)) {
             Class clazz = getClassByTypeExpression(className);
             if (clazz == List.class) {
-                // Request body 已反序列化为 List 时直接使用；勿用 List.toString()（无引号，不是合法 JSON）
-                if (value instanceof List) {
-                    return value;
+                // 元素类型已知（List<Timestamp>、List<Double>）时逐元素转换；裸 List 或元素类型
+                // 不可解析时保持原口径，只把 JSON 字符串解析成列表，元素原样透传
+                List<?> rawList = asList(value);
+                JavaType elementType = listElementType(className);
+                if (elementType == null || elementType.getRawClass() == Object.class) {
+                    return rawList;
                 }
-                if (value instanceof String) {
-                    return MAPPER.readValue((String) value, new TypeReference<List<?>>() {
-                    });
+                List<Object> converted = new ArrayList<>(rawList.size());
+                for (Object item : rawList) {
+                    converted.add(convertToType(item, elementType));
                 }
-                return MAPPER.convertValue(value, new TypeReference<List<?>>() {
-                });
+                return converted;
+            }
+            // 时间类型统一解析：兼容 yyyy-MM-dd、yyyy-MM-dd HH:mm[:ss]、ISO8601、毫秒时间戳
+            if (isDateLike(clazz)) {
+                return toDateLike(value, clazz);
             }
             // 数值类型之间的转换：上游产出的数值类型与下游声明不一致时做窄化/宽化
             if (value instanceof Number number) {
@@ -478,14 +494,136 @@ public class SchemaHandleUtil {
             if (clazz == Boolean.class || clazz == boolean.class) {
                 return Boolean.parseBoolean(valueStr);
             }
-            if (clazz == Date.class) {
-                return DateUtils.parseDate(valueStr, "yyyy-MM-dd HH:mm:ss");
-            }
             if (clazz == String.class) {
                 return valueStr;
             }
         }
         return value;
+    }
+
+    /** Request body 已反序列化为 List 时直接使用；勿用 List.toString()（无引号，不是合法 JSON） */
+    @SneakyThrows
+    private static List<?> asList(Object value) {
+        if (value instanceof List<?> list) {
+            return list;
+        }
+        if (value instanceof String text) {
+            return MAPPER.readValue(text, new TypeReference<List<?>>() {
+            });
+        }
+        return MAPPER.convertValue(value, new TypeReference<List<?>>() {
+        });
+    }
+
+    /** 集合类型表达式的元素 JavaType；裸集合或表达式无法解析时返回 null（保持元素原样透传） */
+    private static JavaType listElementType(String className) {
+        try {
+            JavaType type = MAPPER.getTypeFactory().constructType(parseTypeExpression(className));
+            return type != null && Collection.class.isAssignableFrom(type.getRawClass()) ? type.getContentType() : null;
+        } catch (ClassNotFoundException | RuntimeException e) {
+            return null;
+        }
+    }
+
+    /** 按目标类型转换单个值：时间类型统一解析，嵌套集合逐层递归，其余交给 Jackson */
+    private static Object convertToType(Object value, JavaType type) {
+        if (value == null) {
+            return null;
+        }
+        Class<?> raw = type.getRawClass();
+        if (isDateLike(raw)) {
+            return toDateLike(value, raw);
+        }
+        if (Collection.class.isAssignableFrom(raw)) {
+            JavaType elementType = type.getContentType();
+            if (elementType == null || elementType.getRawClass() == Object.class || !(value instanceof List<?> list)) {
+                return value;
+            }
+            List<Object> converted = new ArrayList<>(list.size());
+            for (Object item : list) {
+                converted.add(convertToType(item, elementType));
+            }
+            return converted;
+        }
+        if (raw.isInstance(value)) {
+            return value;
+        }
+        return MAPPER.convertValue(value, type);
+    }
+
+    private static boolean isDateLike(Class<?> clazz) {
+        return Date.class.isAssignableFrom(clazz) || java.time.temporal.Temporal.class.isAssignableFrom(clazz);
+    }
+
+    /** 任意时间写法（Date、毫秒数、yyyy-MM-dd[ HH:mm[:ss]]、ISO8601）转成目标时间类型 */
+    private static Object toDateLike(Object value, Class<?> target) {
+        if (target.isInstance(value)) {
+            return value;
+        }
+        Date date = parseDateValue(value);
+        if (target == java.sql.Timestamp.class) {
+            return new java.sql.Timestamp(date.getTime());
+        }
+        if (target == LocalDateTime.class) {
+            return LocalDateTime.ofInstant(date.toInstant(), ZoneId.systemDefault());
+        }
+        if (target == LocalDate.class) {
+            return LocalDateTime.ofInstant(date.toInstant(), ZoneId.systemDefault()).toLocalDate();
+        }
+        if (target == Instant.class) {
+            return date.toInstant();
+        }
+        if (target == OffsetDateTime.class) {
+            return date.toInstant().atZone(ZoneId.systemDefault()).toOffsetDateTime();
+        }
+        if (target == ZonedDateTime.class) {
+            return date.toInstant().atZone(ZoneId.systemDefault());
+        }
+        return date;
+    }
+
+    private static final Pattern EPOCH_MILLIS = Pattern.compile("-?\\d+");
+
+    /** 时间文本解析口径：带偏移/时区的按原偏移，不带时区的按服务器本地时区 */
+    private static Date parseDateValue(Object value) {
+        if (value instanceof Date date) {
+            return date;
+        }
+        if (value instanceof Number number) {
+            return new Date(number.longValue());
+        }
+        String text = String.valueOf(value).trim();
+        if (text.isEmpty()) {
+            throw new IllegalArgumentException("时间为空");
+        }
+        if (EPOCH_MILLIS.matcher(text).matches()) {
+            return new Date(Long.parseLong(text));
+        }
+        try {
+            return Date.from(OffsetDateTime.parse(text, DateTimeFormatter.ISO_OFFSET_DATE_TIME).toInstant());
+        } catch (DateTimeParseException ignored) {
+        }
+        try {
+            return Date.from(Instant.parse(text));
+        } catch (DateTimeParseException ignored) {
+        }
+        String normalized = text.replace('/', '-').replace(' ', 'T');
+        try {
+            return Date.from(LocalDateTime.parse(normalized, DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+                    .atZone(ZoneId.systemDefault()).toInstant());
+        } catch (DateTimeParseException ignored) {
+        }
+        try {
+            return Date.from(LocalDate.parse(normalized, DateTimeFormatter.ISO_LOCAL_DATE)
+                    .atStartOfDay(ZoneId.systemDefault()).toInstant());
+        } catch (DateTimeParseException ignored) {
+        }
+        try {
+            return DateUtils.parseDate(text, "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd HH:mm", "yyyy-MM-dd",
+                    "yyyy/MM/dd HH:mm:ss", "yyyy/MM/dd", "yyyyMMdd");
+        } catch (ParseException e) {
+            throw new IllegalArgumentException("无法解析为时间：" + text, e);
+        }
     }
 
     private static Type parseWildcardType(String token) throws ClassNotFoundException {
