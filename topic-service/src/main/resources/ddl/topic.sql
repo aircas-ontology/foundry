@@ -148,4 +148,28 @@ COMMENT ON COLUMN topic.event_topic.deleted IS '是否删除：0未删除，1已
 COMMENT ON COLUMN topic.event_topic.creator IS '创建人';
 COMMENT ON COLUMN topic.event_topic.create_time IS '创建时间';
 
+CREATE TABLE IF NOT EXISTS topic.event_topic_overview
+(
+    id              bigserial      PRIMARY KEY,
+    event_topic_id  bigint         NOT NULL,
+    type            varchar(64)    NOT NULL,
+    name            varchar(128)   NOT NULL,
+    proportion      numeric(12, 4) NOT NULL,
+    quantity        integer        NOT NULL,
+    creator         varchar(64),
+    create_time     timestamp(6)
+);
+
+COMMENT ON TABLE topic.event_topic_overview IS '事件主题总览统计';
+COMMENT ON COLUMN topic.event_topic_overview.id IS '编号，自增';
+COMMENT ON COLUMN topic.event_topic_overview.event_topic_id IS '事件主题编号';
+COMMENT ON COLUMN topic.event_topic_overview.type IS '类型';
+COMMENT ON COLUMN topic.event_topic_overview.name IS '名称';
+COMMENT ON COLUMN topic.event_topic_overview.proportion IS '占比';
+COMMENT ON COLUMN topic.event_topic_overview.quantity IS '数量';
+COMMENT ON COLUMN topic.event_topic_overview.creator IS '创建人';
+COMMENT ON COLUMN topic.event_topic_overview.create_time IS '创建时间';
+
+CREATE INDEX IF NOT EXISTS idx_event_topic_overview_event_topic_id ON topic.event_topic_overview (event_topic_id);
+
 
