@@ -1,0 +1,33 @@
+# ============================================================
+# topic-service
+# 参照 ontology/ontology-server/docker-compose.yml
+# 应用端口：37004，context-path：/topic
+# 启动前把打包产物和配置放到本文件同级：
+#   topic.jar
+#   application.yml
+#   application-local.yml
+# ============================================================
+
+services:
+  topic-service:
+    image: eclipse-temurin:21-jdk
+    container_name: topic-service
+    restart: unless-stopped
+
+    ports:
+      - "37004:37004"
+
+    volumes:
+      - ./topic.jar:/app/app.jar:ro
+      - ./application.yml:/config/application.yml:ro
+      - ./application-local.yml:/config/application-local.yml:ro
+      - ./logs:/logs
+
+    environment:
+      TZ: Asia/Shanghai
+
+    command:
+      - "java"
+      - "-jar"
+      - "/app/app.jar"
+      - "--spring.config.location=optional:file:/config/application.yml"
