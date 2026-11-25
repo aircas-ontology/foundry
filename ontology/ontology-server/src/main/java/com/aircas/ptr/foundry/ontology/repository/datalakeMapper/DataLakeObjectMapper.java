@@ -75,6 +75,21 @@ public interface DataLakeObjectMapper extends BaseMapper<Object> {
                                             @Param("offset") Integer offset,
                                             @Param("hasDeletedField") Boolean hasDeletedField);
 
+    /** 整表按指定列排序取数，limit 为空表示不限制条数 */
+    List<Map<String, Object>> querySortedTableData(@Param("schemaName") String schemaName,
+                                                   @Param("tableName") String tableName,
+                                                   @Param("columnNames") List<String> columnNames,
+                                                   @Param("orderBy") String orderBy,
+                                                   @Param("sort") String sort,
+                                                   @Param("limit") Integer limit,
+                                                   @Param("hasDeletedField") Boolean hasDeletedField);
+
+    default List<Map<String, Object>> querySortedData(String schemaName, String tableName, List<String> columnNames,
+                                                      String orderBy, String sort, Integer limit, Boolean hasDeletedField) {
+        var records = querySortedTableData(schemaName, tableName, columnNames, orderBy, sort, limit, hasDeletedField);
+        return populate(schemaName, records, tableName, columnNames);
+    }
+
 
     List<String> queryColumnNames(@Param("schemaName") String schemaName, @Param("tableName") String tableName);
 

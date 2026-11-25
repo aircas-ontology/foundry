@@ -135,6 +135,12 @@ public interface EntityService {
 
     Page<EntityPropertyRowDetailVO.PropertyGroupData> getEntityPropertyRowDetailPage(EntityPropertyRowPageQueryParam param);
 
+    /**
+     * 按对象+存储分组批量取数：每个分组各自的表按指定属性排序取前 limit 条（不传 limit 取全部），
+     * 每行带上所属实体在主存储分组里的展示名。
+     */
+    List<EntityStorageGroupDataVO> queryByStorageGroup(List<EntityStorageGroupQueryParam> params);
+
     List<Object> createEntities(EntityCreateParam params);
 
     void insertEntityProperty(EntityPropertyInsertParam param);

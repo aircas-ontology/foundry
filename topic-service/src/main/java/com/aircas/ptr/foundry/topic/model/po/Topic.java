@@ -1,0 +1,39 @@
+package com.aircas.ptr.foundry.topic.model.po;
+
+import com.baomidou.mybatisplus.annotation.FieldFill;
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.experimental.Accessors;
+
+import java.util.Date;
+
+/**
+ * 主题表示例。后续业务表按同样方式增加 PO，不要把 PO 当作接口入参或出参。
+ */
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+@Builder
+@Accessors(chain = true)
+@TableName("topic")
+public class Topic {
+
+    @TableId(type = IdType.AUTO)
+    private Integer id;
+
+    private String name;
+
+    private String description;
+
+    @TableField(fill = FieldFill.INSERT)
+    private Date createTime;
+
+    @TableField(fill = FieldFill.INSERT_UPDATE)
+    private Date updateTime;
+}
