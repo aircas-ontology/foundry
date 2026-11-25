@@ -48,7 +48,8 @@ public final class ScriptParamSchemaUtil {
             Map.entry("datetime", "java.util.Date"),
             Map.entry("localdate", "java.util.Date"),
             Map.entry("localdatetime", "java.util.Date"),
-            Map.entry("timestamp", "java.util.Date"));
+            // Timestamp 按声明类型落 java.sql.Timestamp：脚本按 Timestamp 取值/强转时不会拿到 Date
+            Map.entry("timestamp", "java.sql.Timestamp"));
 
     /** 枚举 → JVM 全限定类名（启发推断项无声明类型时按枚举兜底，与 FunctionParamTypeEnum.getVale() 同源） */
     private static final Map<FunctionParamTypeEnum, String> JDK_FQN_BY_ENUM = Map.ofEntries(
@@ -136,6 +137,28 @@ public final class ScriptParamSchemaUtil {
             }
         }
         return paramType == null ? null : paramType.name();
+    }
+
+    /**
+     * 参数类型的展示文本，优先用保存时记下的完整类型文本（{@code List<List<Point>>} 也能看出层数），
+     * type_text 只是裸枚举名时回退到按泛型实参拼的写法。
+     */
+    public static String displayParamType(FunctionParamTypeEnum paramType, String typeReferenceName, String typeText) {
+        String stored = genericTypeText(typeText);
+        return stored != null ? stored : displayParamType(paramType, typeReferenceName);
+    }
+
+    /**
+     * 带泛型/数组的类型文本去掉各层包名后返回（{@code java.util.List<com.x.Window>} → {@code List<Window>}）；
+     * 枚举名等没有层级信息的文本返回 null，由调用方回退原有展示逻辑。
+     */
+    public static String genericTypeText(String typeText) {
+        if (StringUtils.isBlank(typeText)) {
+            return null;
+        }
+        String trimmed = typeText.trim();
+        return trimmed.indexOf('<') >= 0 || trimmed.endsWith("[]")
+                ? simpleTypeText(trimmed) : null;
     }
 
     /**

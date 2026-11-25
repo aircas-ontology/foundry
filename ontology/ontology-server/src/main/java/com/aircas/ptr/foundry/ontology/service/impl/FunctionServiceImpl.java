@@ -1585,24 +1585,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
      * 没有则按 referenceType 的泛型实参拼成 {@code List<Double>}。
      */
     private String displayParamType(FunctionParamPO p) {
-        String stored = genericTypeText(p.getTypeText());
-        if (stored != null) {
-            return stored;
-        }
-        return ScriptParamSchemaUtil.displayParamType(p.getParamType(), p.getTypeReferenceName());
-    }
-
-    /**
-     * 带泛型/数组的类型文本去掉各层包名后返回（{@code java.util.List<com.x.Window>} → {@code List<Window>}）；
-     * 枚举名等没有层级信息的文本返回 null，由调用方回退原有展示逻辑。
-     */
-    private static String genericTypeText(String typeText) {
-        if (StringUtils.isBlank(typeText)) {
-            return null;
-        }
-        String trimmed = typeText.trim();
-        return trimmed.indexOf('<') >= 0 || trimmed.endsWith("[]")
-                ? ScriptParamSchemaUtil.simpleTypeText(trimmed) : null;
+        return ScriptParamSchemaUtil.displayParamType(p.getParamType(), p.getTypeReferenceName(), p.getTypeText());
     }
 
     /**
@@ -1614,7 +1597,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
             return;
         }
         for (FunctionParameterVO field : fields) {
-            String simplified = genericTypeText(field.getParamType());
+            String simplified = ScriptParamSchemaUtil.genericTypeText(field.getParamType());
             if (simplified != null) {
                 field.setParamType(simplified);
             }

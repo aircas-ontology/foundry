@@ -28,6 +28,10 @@ public class ActionParamMappingVO {
     @Schema(description = "参数分类：INPUT 输入参数 / OUTPUT 输出参数；不绑算子的行为为空", example = "INPUT")
     private FunctionParamCategoryEnum category;
 
+    @Schema(description = "函数参数类型文本（集合参数带元素类型，如 List<Double>），与创建页的参数类型同一套写法；"
+            + "测试页优先按它展示，不绑算子或对不上函数参数时为空", example = "List<Double>")
+    private String paramType;
+
     @Schema(description = "参数名称")
     private String parameterName;
 
