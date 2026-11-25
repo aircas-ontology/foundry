@@ -116,12 +116,14 @@ public interface DataLakeObjectMapper extends BaseMapper<Object> {
             return Lists.newArrayList(new TreeMap<>(map));
         }
         List<Map<String, Object>> newRecords = records.stream().map(r -> {
+            // 整行属性列全空时 MyBatis 给的是 null 元素，按「所有列都为空值」的一行处理
+            Map<String, Object> record = r == null ? new HashMap<>() : r;
             columnNames.forEach(col -> {
-                if (!r.containsKey(col)) {
-                    r.put(col, null);
+                if (!record.containsKey(col)) {
+                    record.put(col, null);
                 }
             });
-            return new TreeMap<>(r);
+            return new TreeMap<>(record);
         }).collect(Collectors.toList());
         return newRecords;
     }
