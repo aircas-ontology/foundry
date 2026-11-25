@@ -835,6 +835,132 @@ public class EntityServiceImpl implements EntityService {
         return page;
     }
 
+    @Override
+    public List<EntityStorageGroupDataVO> queryByStorageGroup(List<EntityStorageGroupQueryParam> params) {
+        if (CollectionUtils.isEmpty(params)) {
+            return Lists.newArrayList();
+        }
+        return params.stream().map(this::queryStorageGroupRows).collect(Collectors.toList());
+    }
+
+    private EntityStorageGroupDataVO queryStorageGroupRows(EntityStorageGroupQueryParam param) {
+        var props = propertyMapper.selectList(new LambdaQueryWrapper<OntologyProperty>()
+                        .eq(OntologyProperty::getOntologyUniqueIdentifier, param.getOntologyUniqueIdentifier()))
+                .stream()
+                .filter(v -> StringUtils.isNotEmpty(v.getDatasourceColumnName()))
+                .collect(Collectors.toList());
+        var optionalPkProperty = props.stream().filter(v -> v.getIsPrimaryKey() == 1).findFirst();
+        PreconditionUtils.checkArgument(optionalPkProperty.isPresent() && StringUtils.isNotEmpty(optionalPkProperty.get().getDatasourceId()),
+                "主键不存在或未绑定数据源", HttpStatus.BAD_REQUEST);
+        var pk = optionalPkProperty.get();
+        var schemaName = pk.getDatasourceSchema();
+        var mainTableName = pk.getDatasourceId();
+
+        //一个分组只绑一张表，否则排序属性与所属实体都没有唯一口径
+        var storageGroup = param.getStorageGroup();
+        var groupProps = props.stream()
+                .filter(v -> StringUtils.equals(storageGroup, v.getStorageGroup()) && StringUtils.isNotEmpty(v.getDatasourceId()))
+                .collect(Collectors.toList());
+        PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(groupProps), "存储分组" + storageGroup + "不存在或未绑定数据源", HttpStatus.BAD_REQUEST);
+        var groupTables = groupProps.stream().map(OntologyProperty::getDatasourceId).distinct().collect(Collectors.toList());
+        PreconditionUtils.checkArgument(groupTables.size() == 1, "存储分组" + storageGroup + "绑定了多个数据源表，无法排序取数", HttpStatus.BAD_REQUEST);
+        var groupTable = groupTables.get(0);
+        var columnPropertyMap = groupProps.stream()
+                .collect(Collectors.toMap(OntologyProperty::getDatasourceColumnName, v -> v, (a, b) -> a));
+
+        //排序列只取分组内属性绑定的列，用户传的属性名不直接进 SQL
+        var sortProperty = groupProps.stream()
+                .filter(v -> StringUtils.equals(v.getApiName(), param.getSortBy()))
+                .findFirst()
+                .or(() -> groupProps.stream().filter(v -> StringUtils.equals(v.getDatasourceColumnName(), param.getSortBy())).findFirst())
+                .or(() -> groupProps.stream().filter(v -> StringUtils.equals(v.getDisplayName(), param.getSortBy())).findFirst());
+        PreconditionUtils.checkArgument(sortProperty.isPresent(),
+                "存储分组" + storageGroup + "里没有排序属性[" + param.getSortBy() + "]", HttpStatus.BAD_REQUEST);
+        var sortColumn = sortProperty.get().getDatasourceColumnName();
+
+        //主分组的行本身就是实体；关联分组的行按回指主表的列定位所属实体
+        var isMainGroup = groupTable.equals(mainTableName);
+        String entityKeyColumn;
+        if (isMainGroup) {
+            entityKeyColumn = pk.getDatasourceColumnName();
+        } else {
+            var tableMapping = tableFieldMappingMapper.selectBySourceAndTarget(schemaName, mainTableName, groupTable);
+            PreconditionUtils.checkArgument(tableMapping != null, "存储分组" + storageGroup + "与主表未建立关联关系", HttpStatus.BAD_REQUEST);
+            entityKeyColumn = tableMapping.getTargetColumnName();
+        }
+        var titleColumn = props.stream()
+                .filter(v -> StringUtils.equals(v.getDatasourceId(), mainTableName) && v.getIsTitleKey() != null && v.getIsTitleKey() == 1)
+                .map(OntologyProperty::getDatasourceColumnName)
+                .findFirst().orElse(null);
+
+        var columns = Lists.newArrayList(columnPropertyMap.keySet());
+        if (!columns.contains(entityKeyColumn)) {
+            columns.add(entityKeyColumn);
+        }
+        //标题属性未必归在 main 分组里，主分组查询要显式带上它才能拿到展示名
+        if (isMainGroup && titleColumn != null && !columns.contains(titleColumn)) {
+            columns.add(titleColumn);
+        }
+        var hasDeletedField = tableMetadataMapper.isColumnExist(schemaName, groupTable, "is_deleted");
+        var rows = objectMapper.querySortedData(schemaName, groupTable, columns, sortColumn,
+                param.sortOrDefault().getValue(), param.getLimit(), hasDeletedField);
+
+        //关联分组的展示名不在本表里，按本次涉及到的实体主键一次性回捞主表
+        var displayNames = Maps.<Object, String>newHashMap();
+        if (!isMainGroup) {
+            var entityKeyValues = rows.stream().map(row -> row.get(entityKeyColumn))
+                    .filter(Objects::nonNull).distinct().collect(Collectors.toList());
+            var mainColumns = Lists.newArrayList(pk.getDatasourceColumnName());
+            if (titleColumn != null) {
+                mainColumns.add(titleColumn);
+            }
+            if (CollectionUtils.isNotEmpty(entityKeyValues)) {
+                objectMapper.queryByPrimaryKeyList(schemaName, mainTableName, mainColumns, pk.getDatasourceColumnName(), entityKeyValues)
+                        .forEach(mainRow -> displayNames.put(mainRow.get(pk.getDatasourceColumnName()),
+                                rowDisplayName(mainRow, titleColumn, pk.getDatasourceColumnName())));
+            }
+        }
+
+        var records = rows.stream().map(row -> {
+            var entityPrimaryKey = row.get(entityKeyColumn);
+            return EntityStorageGroupDataVO.StorageGroupRow.builder()
+                    .entityPrimaryKey(entityPrimaryKey)
+                    .displayName(isMainGroup ? rowDisplayName(row, titleColumn, entityKeyColumn)
+                            : displayNames.get(entityPrimaryKey))
+                    .props(row.entrySet().stream()
+                            .filter(entry -> columnPropertyMap.containsKey(entry.getKey()))
+                            .map(entry -> buildPropertyInfo(columnPropertyMap.get(entry.getKey()), entry.getValue()))
+                            .collect(Collectors.toList()))
+                    .build();
+        }).collect(Collectors.toList());
+
+        return EntityStorageGroupDataVO.builder()
+                .ontologyUniqueIdentifier(param.getOntologyUniqueIdentifier())
+                .storageGroup(storageGroup)
+                .rows(records)
+                .build();
+    }
+
+    /**
+     * 实体在主存储分组里的展示名：标题属性没值时回落到实体主键，与实体列表接口的口径一致。
+     */
+    private String rowDisplayName(Map<String, Object> mainRow, String titleColumn, String primaryKeyColumn) {
+        var title = titleColumn == null ? null : mainRow.get(titleColumn);
+        var value = title == null ? mainRow.get(primaryKeyColumn) : title;
+        return value == null ? null : String.valueOf(value);
+    }
+
+    private EntityPropertyRowDetailVO.PropertyInfo buildPropertyInfo(OntologyProperty property, Object value) {
+        return EntityPropertyRowDetailVO.PropertyInfo.builder()
+                .propertyDisplayName(property.getDisplayName())
+                .propertyUniqIdentifier(property.getUniqueIdentifier())
+                .propertyApiName(property.getApiName())
+                .propertyValue(value)
+                .categoryId(property.getPropertyCategoryId())
+                .metadata(property.getMetadata())
+                .build();
+    }
+
     private EntityPropertyRowDetailVO.PropertyGroupData buildRowGroupData(Map<String, Object> row,
                                                                           Map<String, OntologyProperty> propertyMap,
                                                                           String dataPrimaryKeyColumn,

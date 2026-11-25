@@ -84,6 +84,32 @@
         LIMIT ${limit} OFFSET ${offset}
     </select>
 
+    <!-- 整表按指定列排序取数：limit 为空表示不限制条数；排序列的空值排到最后，
+         否则降序取「最新一条」会先命中时间为空的行 -->
+    <select id="querySortedTableData" resultType="java.util.HashMap">
+        SELECT
+        <if test="columnNames != null and columnNames.size() > 0">
+            <foreach item="column" collection="columnNames" separator=",">
+                "${column}"
+            </foreach>
+        </if>
+        <if test="columnNames == null or columnNames.size() == 0">
+            *
+        </if>
+        FROM "${schemaName}"."${tableName}"
+        <where>
+            <if test="hasDeletedField">
+                "is_deleted" = 0
+            </if>
+        </where>
+        <if test="orderBy != null and orderBy != ''">
+            ORDER BY "${orderBy}" ${sort} NULLS LAST
+        </if>
+        <if test="limit != null">
+            LIMIT ${limit}
+        </if>
+    </select>
+
 
     <select id="queryCount" resultType="java.lang.Integer">
         SELECT count(*)

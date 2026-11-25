@@ -74,6 +74,12 @@ public class OntologyEntityController {
         return RestResult.ofData(entityService.getEntityPropertyRowDetailPage(param));
     }
 
+    @PostMapping("/storage_group/query")
+    @Operation(summary = "按存储分组查询实例数据（按指定属性排序取前limit条，每行带所属实体在主存储分组的展示名）")
+    public RestResult<List<EntityStorageGroupDataVO>> queryByStorageGroup(@RequestBody @Valid List<EntityStorageGroupQueryParam> params) {
+        return RestResult.ofData(entityService.queryByStorageGroup(params));
+    }
+
     @PostMapping("/link")
     @Operation(summary = "查询单对象单个实体所有关联关系")
     public RestResult<List<EntityLinkPropertyVO>> getEntityLinksByPrimaryKey(@RequestBody @Valid EntityQueryParam param) {
