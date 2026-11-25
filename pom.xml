@@ -23,6 +23,7 @@
         <module>common</module>
         <module>ontology</module>
         <module>agent-server</module>
+        <module>topic-service</module>
     </modules>
     <properties>
         <java.version>21</java.version>

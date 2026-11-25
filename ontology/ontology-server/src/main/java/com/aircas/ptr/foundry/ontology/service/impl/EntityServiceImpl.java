@@ -1916,6 +1916,28 @@ public class EntityServiceImpl implements EntityService {
         return null;
     }
 
+    /**
+     * 读取方向兜底的实例：该对象在 inputParams 里被某个入参点名过实例时，集合入参不选也能按这个实例读，
+     * 没指定行的集合属性按默认口径取该实例最近的 10 行。写回不参与，落哪个实例必须显式选。
+     * <p>同一对象的多个入参给了不同实例时没有唯一答案，返回 null，仍按未选择实例报错。</p>
+     */
+    private Object paramTargetPrimaryKey(ActionContextInfoDTO context, EntityActionExecuteParam param, String objectId) {
+        var targets = param == null ? null : param.getInputParams();
+        if (MapUtils.isEmpty(targets) || StringUtils.isEmpty(objectId)) {
+            return null;
+        }
+        var legacyObjectId = legacyActionObject(context, param);
+        Set<Object> primaryKeys = new LinkedHashSet<>();
+        targets.forEach((paramName, target) -> {
+            var primaryKey = target == null ? null : target.getEntityPrimaryKey();
+            if (primaryKey != null && paramDataObjectIds(context.getMappings(), context.getFunctionInputParams(),
+                    paramName, this::isInstanceInputRow, legacyObjectId).contains(objectId)) {
+                primaryKeys.add(primaryKey);
+            }
+        });
+        return primaryKeys.size() == 1 ? primaryKeys.iterator().next() : null;
+    }
+
     /** 调用方按入参方向指定的数据位置；没指定返回 null，读取回退到各对象共用的实例选择 */
     private Map<String, ActionInstanceTargetParam> inputTargetsFor(ActionContextInfoDTO context) {
         var param = context.getEntityActionExecuteParam();
@@ -1960,8 +1982,13 @@ public class EntityServiceImpl implements EntityService {
             if (coveredObjects.contains(objectId)) {
                 continue;
             }
-            var primaryKey = resolveEntityPrimaryKey(context, param, objectId, readObjectIds.contains(objectId)
-                    ? inputTargetsFor(context) : outputTargetsFor(context));
+            var readsObject = readObjectIds.contains(objectId);
+            var primaryKey = resolveEntityPrimaryKey(context, param, objectId,
+                    readsObject ? inputTargetsFor(context) : outputTargetsFor(context));
+            // 集合入参没选实例时，按同一对象在别的入参上选过的实例兜底读取；写回方向仍需显式选实例
+            if (primaryKey == null && readsObject) {
+                primaryKey = paramTargetPrimaryKey(context, param, objectId);
+            }
             PreconditionUtils.checkNotNull(primaryKey,
                     "对象[" + objectId + "]未选择实例数据，无法执行行为："
                             + (context.getActionDetailVO() == null ? "" : context.getActionDetailVO().getActionApi()),
@@ -2015,6 +2042,10 @@ public class EntityServiceImpl implements EntityService {
                 }
                 var primaryKey = explicitPrimaryKey != null ? explicitPrimaryKey
                         : resolveEntityPrimaryKey(context, param, objectId, inputTargetsFor(context));
+                // 该入参没点名实例：沿用同一对象在别的入参上选过的实例，未指定行就按默认取最近 10 行
+                if (primaryKey == null) {
+                    primaryKey = paramTargetPrimaryKey(context, param, objectId);
+                }
                 PreconditionUtils.checkNotNull(primaryKey,
                         "入参[" + paramName + "]的对象[" + objectId + "]未选择实例数据，无法执行行为：" + actionApi,
                         HttpStatus.BAD_REQUEST);
@@ -2561,7 +2592,7 @@ public class EntityServiceImpl implements EntityService {
         var fields = toFieldParams(root, param.getFields(), actionContext, param.getParamName());
         var builder = FunctionParameter.builder()
                 .paramName(param.getParamName())
-                .paramType(param.paramTypeEnum());
+                .paramType(param.getParamType());
         mappings.stream()
                 .filter(m -> StringUtils.isEmpty(m.getParamPath()))
                 .findFirst()
@@ -2598,7 +2629,7 @@ public class EntityServiceImpl implements EntityService {
         }
         return FunctionParameter.builder()
                 .paramName(param.getParamName())
-                .paramType(param.paramTypeEnum())
+                .paramType(param.getParamType())
                 .paramValue(elements)
                 .build();
     }
@@ -2720,7 +2751,7 @@ public class EntityServiceImpl implements EntityService {
             var children = toFieldParams(child, declaredField.getFields(), actionContext, ownerParamName);
             var builder = FunctionParameter.builder()
                     .paramName(name)
-                    .paramType(declaredField.paramTypeEnum());
+                    .paramType(declaredField.getParamType());
             if (child.mapping != null) {
                 builder.paramValue(resolveInputValue(child.mapping, declaredField.paramTypeEnum(), actionContext,
                         ownerParamName));

@@ -275,6 +275,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                 try {
                     List<FunctionParameterVO> fieldVOs = objectMapper.readValue(
                             p.getFields(), new TypeReference<List<FunctionParameterVO>>() {});
+                    normalizeFieldParamTypes(fieldVOs);
                     voBuilder.fields(fieldVOs);
                 } catch (JsonProcessingException e) {
                     log.warn("反序列化参数 fields 失败：paramName={}, cause={}", p.getParamName(), e.getMessage());
@@ -1569,6 +1570,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                     .paramSchema(p.getParamSchema())
                     .paramOrder(order)
                     .typeReferenceName(p.getReferenceType())
+                    .typeText(p.getParamType())
                     .description(p.getDescription())
                     .fields(fieldsJson)
                     .createTime(new Date())
@@ -1578,9 +1580,46 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
         functionParamService.saveBatch(params);
     }
 
-    /** 详情回显的类型文本：集合参数按 referenceType 的泛型实参拼成 List&lt;Double&gt;。 */
+    /**
+     * 详情回显的类型文本：优先用保存时记下的完整类型文本（{@code List<List<Point>>}，多层集合也能看出层数），
+     * 没有则按 referenceType 的泛型实参拼成 {@code List<Double>}。
+     */
     private String displayParamType(FunctionParamPO p) {
+        String stored = genericTypeText(p.getTypeText());
+        if (stored != null) {
+            return stored;
+        }
         return ScriptParamSchemaUtil.displayParamType(p.getParamType(), p.getTypeReferenceName());
+    }
+
+    /**
+     * 带泛型/数组的类型文本去掉各层包名后返回（{@code java.util.List<com.x.Window>} → {@code List<Window>}）；
+     * 枚举名等没有层级信息的文本返回 null，由调用方回退原有展示逻辑。
+     */
+    private static String genericTypeText(String typeText) {
+        if (StringUtils.isBlank(typeText)) {
+            return null;
+        }
+        String trimmed = typeText.trim();
+        return trimmed.indexOf('<') >= 0 || trimmed.endsWith("[]")
+                ? ScriptParamSchemaUtil.simpleTypeText(trimmed) : null;
+    }
+
+    /**
+     * fields JSON 里存的是保存时的类型文本，统一去掉包名，避免同一集合在不同层级出现
+     * {@code LIST}、{@code List<X>}、全限定名三种写法（层级与泛型实参保留）。
+     */
+    private void normalizeFieldParamTypes(List<FunctionParameterVO> fields) {
+        if (CollectionUtils.isEmpty(fields)) {
+            return;
+        }
+        for (FunctionParameterVO field : fields) {
+            String simplified = genericTypeText(field.getParamType());
+            if (simplified != null) {
+                field.setParamType(simplified);
+            }
+            normalizeFieldParamTypes(field.getFields());
+        }
     }
 
     /**
@@ -1637,7 +1676,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
             return null;
         }
         // LIST 类型：把 fields 组装为数组（空列表返回 [] 而非 null，保留用户显式传入空数组的语义）
-        if (p.getParamType() == FunctionParamTypeEnum.LIST) {
+        if (p.paramTypeEnum() == FunctionParamTypeEnum.LIST) {
             List<Object> list = new ArrayList<>();
             for (FunctionParameter f : fields) {
                 Object v = resolveParamValue(f);
@@ -2080,8 +2119,10 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                     .description(paramPO.getDescription() == null ? "" : paramPO.getDescription());
             if (StringUtils.isNotEmpty(paramPO.getFields())) {
                 try {
-                    voBuilder.fields(objectMapper.readValue(
-                            paramPO.getFields(), new TypeReference<List<FunctionParameterVO>>() {}));
+                    List<FunctionParameterVO> fieldVOs = objectMapper.readValue(
+                            paramPO.getFields(), new TypeReference<List<FunctionParameterVO>>() {});
+                    normalizeFieldParamTypes(fieldVOs);
+                    voBuilder.fields(fieldVOs);
                 } catch (JsonProcessingException e) {
                     log.warn("反序列化编排入口节点参数 fields 失败：paramName={}, cause={}",
                             paramPO.getParamName(), e.getMessage());

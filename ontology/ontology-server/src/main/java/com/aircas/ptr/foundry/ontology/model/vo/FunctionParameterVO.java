@@ -28,7 +28,7 @@ public class FunctionParameterVO {
     @Schema(name = "paramName",description = "参数名称")
     private String paramName;
 
-    @Schema(name = "paramType",description = "参数类型文本：集合参数带元素类型（如 List<Double>），其余为枚举名（DOUBLE/OBJECT）")
+    @Schema(name = "paramType",description = "参数类型文本：集合参数保留完整泛型（如 List<Double>、List<List<Point>>），其余为枚举名（DOUBLE/OBJECT）")
     private String paramType;
 
     @Schema(name = "category",description = "参数输入输出类别")
