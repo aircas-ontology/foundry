@@ -26,8 +26,8 @@ public class ActionTestCaseResultVO {
             example = "{\"from\":1,\"to\":10,\"inputParams[max_mach]\":{\"entityPrimaryKey\":101,\"dataPrimaryKeys\":{\"duty_log\":11}}}")
     private Map<String, Object> combo;
 
-    @Schema(name = "result", description = "这组组合的算子返回结果（JSON）；执行失败时为空")
-    private String result;
+    @Schema(name = "result", description = "这组组合的返回结果：是 JSON 的给结构化对象/数组，不是 JSON 的按文本给；执行失败时为空")
+    private Object result;
 
     @Schema(name = "error", description = "这组组合的失败原因；成功时为空")
     private String error;

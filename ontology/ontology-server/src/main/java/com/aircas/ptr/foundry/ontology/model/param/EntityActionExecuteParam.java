@@ -10,6 +10,7 @@ import lombok.experimental.SuperBuilder;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
+import java.util.List;
 import java.util.Map;
 
 @Data
@@ -54,6 +55,14 @@ public class EntityActionExecuteParam extends EntityQueryParam {
             + "关系边仍由 from/to 决定；不绑算子的行为不支持")
     private Map<String, ActionInstanceTargetParam> inputParams;
 
+    /**
+     * LIST 入参按元素给的数据位置：入参名 -> 列表元素位置，一个元素一组 {对象, 实例, 分组行}。
+     * <p>同一份列表的元素可以来自不同对象、不同实例，所以不能压成一个 {@link #inputParams} 位置；
+     * 只有单行为测试的 LIST 入参走这里，内部调用填写，对外执行请求不接受。</p>
+     */
+    @Schema(hidden = true)
+    private Map<String, List<ActionInstanceTargetParam>> inputElementParams;
+
     @Schema(name = "outputParams", description = "按出参绑定指定的写回位置：key -> {实例主键, 存储分组->行主键}。"
             + "key 从高到低认属性唯一标识 > 该条绑定的出参字段名 > 该条绑定所属的顶层算子出参名；"
             + "同一算子出参的几个属性写到不同实例时按字段名或属性唯一标识逐条点名；"
@@ -66,4 +75,11 @@ public class EntityActionExecuteParam extends EntityQueryParam {
 
     @Schema(name = "linkedEntityPrimaryKey", description = "关联对象id下某实体主键值", example = "123")
     private Object linkedEntityPrimaryKey;
+
+    /**
+     * 对象模式测试配的子表读取规则：对象id -> (存储分组 或 空串表示该对象默认 -> 规则)。
+     * 只有对象模式的行为测试会填，对外执行请求不接受。
+     */
+    @Schema(hidden = true)
+    private Map<String, Map<String, ActionTestListReadRuleParam>> listReadRules;
 }

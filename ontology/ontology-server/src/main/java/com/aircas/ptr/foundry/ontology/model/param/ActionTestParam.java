@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
+import com.aircas.ptr.foundry.ontology.model.enums.ActionTestInputModeEnum;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -17,9 +18,9 @@ import java.util.Map;
 @Accessors(chain = true)
 @AllArgsConstructor
 @NoArgsConstructor
-@Schema(description = "行为测试请求；入参方向给出多个候选值即批量测试（entityPrimaryKeys 的值写成数组，"
-        + "inputParams 的每个入参放多个数据位置），候选值只选实例时彼此做笛卡尔积、选了非 main 分组的行时改为各轴按下标配对成组，"
-        + "最多 50 组，逐组执行并各自落库，失败组合在 cases 里记原因")
+@Schema(description = "行为测试请求。inputMode 决定多组取值怎么展开，只属于本次测试、不落库："
+        + "CARTESIAN 各取值轴自由组合 / GROUP 各轴按下标配对 / OBJECT 不选实例和行、遍历行为涉及对象下的全部实例；"
+        + "逐组执行并各自落库，失败组合在 cases 里记原因")
 public class ActionTestParam {
 
     @Schema(name = "ontologySpaceId", description = "对象空间id", example = "156", required = true)
@@ -30,6 +31,14 @@ public class ActionTestParam {
     @NotBlank(message = "actionApi is empty")
     private String actionApi;
 
+    @Schema(name = "inputMode", description = "多组取值的展开方式，只用本次测试、不存库："
+            + "CARTESIAN 各取值轴的候选值自由组合 / GROUP 各轴按下标配对成组（候选值个数必须一致）/ "
+            + "OBJECT 不选实例和行，遍历行为涉及对象下的全部实例（多个对象按笛卡尔积组合），子表按 listReadRules 读取。"
+            + "出现候选值时必须指定：entityPrimaryKeys 的值是数组、非 LIST 入参的 inputParams 一维元素多于一个、"
+            + "LIST 入参的 inputParams 二维数组多于一个候选，这三种都是多组；"
+            + "LIST 入参的 inputParams 一维数组是这次执行的列表元素，不算多组", example = "CARTESIAN")
+    private ActionTestInputModeEnum inputMode;
+
     @Schema(name = "entityPrimaryKey", description = "行为所属对象的实例主键；只涉及一个对象时用它。不支持传数组，多组取值改用 entityPrimaryKeys 或 inputParams",
             example = "1")
     private Object entityPrimaryKey;
@@ -37,8 +46,7 @@ public class ActionTestParam {
     @Schema(name = "entityPrimaryKeys", description = "各对象选中的实例主键：对象id -> 实例主键；"
             + "应用行为的入参/出参可能跨对象，映射涉及的对象都要提供；某个算子入参要单独读别的实例时用 inputParams；"
             + "行为绑定关系时用保留键 from、to 分别传关系两端的实例主键，与按对象 id 传的实例互不混用；"
-            + "实例主键可以写成数组（如 {\"from\":[1,2]}），数组之间做笛卡尔积、逐组执行，即批量测试；"
-            + "候选值里一旦有非 main 分组的行，全部候选值改为按下标配对成组，",
+            + "实例主键可以写成数组（如 {\"from\":[1,2]}）作为批量测试的候选值，按 inputMode 展开成多组",
             example = "{\"3f2a9c1e-7b4d-4a86-9e21-5c8d1f0a6b34\":1,\"a5e8c206-3f17-4d92-8b74-1c6f9d3e5028\":2}")
     private Map<String, Object> entityPrimaryKeys;
 
@@ -48,21 +56,22 @@ public class ActionTestParam {
             example = "2")
     private Object writeBackEntityPrimaryKey;
 
-    @Schema(name = "inputParams", description = "按算子入参指定的数据位置：入参名 -> 数据位置数组。"
-            + "键也可以写该入参绑定行的字段名（LIST 的元素字段如 longitude、对象子字段如 position.longitude），"
-            + "后端按绑定行归到所属入参：LIST 的各字段位置按数组下标拼成同一个元素，对象入参的各字段必须读同一处；"
+    @Schema(name = "inputParams", description = "按算子入参指定的数据位置：入参名 / 绑定行字段名 -> 数据位置。"
+            + "键可以是顶层入参名，也可以是该入参绑定行的字段名（LIST 的元素字段如 longitude、对象子字段如 position.longitude），"
+            + "后端按绑定行归到所属入参；同一字段名落在多个入参上时用「父参数名.字段路径」指明归属，如 tracks.longitude；"
             + "外部输入、固定值来源的参数不读实例，按它的参数名或字段名给的位置会被忽略，值分别从 params 与行为定义取。"
-            + "数组的一个元素就是一组完整取值：读哪个实例（entityPrimaryKey）、每个存储分组读哪一行（dataPrimaryKeys），"
-            + "只读一个位置时数组里放一个元素；放多个元素就是批量测试的候选值，只选实例时各入参的候选值做笛卡尔积、"
-            + "一旦有候选值选了非 main 分组的行就改为各轴按下标配对成组（此时各轴候选值个数要一致），逐组执行；"
-            + "LIST 类型的入参除外：它的数组是同一个列表的元素，一次执行读同一个实例的多行，"
-            + "各元素的 entityPrimaryKey 必须一致，既不参与批量组合，也不按个数配对；"
+            + "写法分两种：一维数组的元素就是数据位置，LIST 入参里它们是这次执行的那份列表的元素（各元素可以各自指定对象和实例，"
+            + "一份列表可以由不同对象、不同实例的行拼成），非 LIST 入参里每个元素是一个批量候选值；"
+            + "二维数组只在 LIST 入参上用，外层是批量候选、内层是该候选的整份列表元素，这时才按 inputMode 展开成多组。"
+            + "每个位置可以写 ontologyIdentifier（绑定跨多个对象时必填）、entityPrimaryKey（不传用 entityPrimaryKeys 里该对象的实例）、"
+            + "dataPrimaryKeys（存储分组 -> 行主键，行主键数组按顺序展开成多个元素）；"
             + "命中时优先于 entityPrimaryKeys，只影响该入参的读取，不影响出参写回和关系落库；"
             + "绑定落在关系端点对象上也按这里指定的实例读，关系边仍由 from/to 决定；不绑算子的行为也不支持",
             example = "{\"name\":[{\"entityPrimaryKey\":11}],"
-                    + "\"max_mach\":[{\"entityPrimaryKey\":101,\"dataPrimaryKeys\":{\"duty_log\":11}},"
-                    + "{\"entityPrimaryKey\":102,\"dataPrimaryKeys\":{\"duty_log\":12}}]}")
-    private Map<String, List<ActionInstanceTargetParam>> inputParams;
+                    + "\"tracks.longitude\":[[{\"entityPrimaryKey\":1,\"dataPrimaryKeys\":{\"track\":11}},"
+                    + "{\"entityPrimaryKey\":1,\"dataPrimaryKeys\":{\"track\":12}}],"
+                    + "[{\"entityPrimaryKey\":2,\"dataPrimaryKeys\":{\"track\":21}}]]}")
+    private Map<String, ActionInputPositionsParam> inputParams;
 
     @Schema(name = "outputParams", description = "按出参绑定指定的写回位置：key -> {实例主键, 存储分组->行主键}。"
             + "key 按写属性的那条出参绑定定位，从高到低三种写法：目标属性的属性唯一标识 > 该行的出参字段名 > 该行的顶层算子出参名；"
@@ -81,7 +90,12 @@ public class ActionTestParam {
     private Object linkEntityPrimaryKey;
 
     @Schema(name = "params", description = "来源为外部输入的参数取值（参数名 -> 值），固定值不在此传；"
-            + "基础函数的过滤条件声明了外部输入时，按条件的 paramName 在这里给值，IN 传数组、BETWEEN 传两个值的数组；"
-            + "数组值就是 LIST 参数本身的内容，不参与批量组合")
+            + "基础函数的过滤条件声明了外部输入时，按条件的属性 apiName 在这里给值，IN 传数组、BETWEEN 传两个值的数组；"
+            + "数组值就是 LIST 参数本身的内容，不参与批量组合。多组测试共用同一个值，来源为外部输入的参数必须给值")
     private Map<String, Object> params;
+
+    @Schema(name = "listReadRules", description = "对象模式下的子表读取规则：按对象（可细化到存储分组）指定读多少行、"
+            + "按哪个属性排序、正序还是倒序。不配规则的分组沿用原口径：按行主键倒序取最新 10 行；"
+            + "只在 inputMode=OBJECT 时使用")
+    private List<ActionTestListReadRuleParam> listReadRules;
 }

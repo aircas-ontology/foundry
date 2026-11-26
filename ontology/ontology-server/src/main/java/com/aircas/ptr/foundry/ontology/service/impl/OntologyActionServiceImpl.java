@@ -51,6 +51,7 @@ import jakarta.annotation.Resource;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
@@ -2490,8 +2491,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         return buildTreeRuntime(compiled, definition, param.getEntityPrimaryKey(),
                 param.getEntityPrimaryKeys(), param.getInputs(), param.getDataPrimaryKey(),
                 param.getInputDataPrimaryKeys(), param.getOutputDataPrimaryKeys(),
-                // 树级默认值一次执行每个入参只给一个数据位置（LIST 按元素多位置只在节点级给），运行时统一按数组存
-                wrapInputTargets(singleInputTargets(param.getInputParams(), Set.of())), param.getOutputParams(),
+                // 树级默认值一次执行每个入参只给一个数据位置（LIST 按元素多位置只在节点级给），校验后原样交给运行时
+                treeInputTargets(param.getInputParams()), param.getOutputParams(),
                 param.getLinkEntityPrimaryKey(), param.getNodeExecutes());
     }
 
@@ -2737,7 +2738,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 .dataPrimaryKey(runtime.nodeDataPrimaryKey(nodeId))
                 .inputEntities(toInstanceTargets(runtime.nodeInputDataPrimaryKeys(nodeId)))
                 .outputEntities(toInstanceTargets(runtime.nodeOutputDataPrimaryKeys(nodeId)))
-                .inputParams(runtime.nodeInputParams(nodeId))
+                .inputParams(toTestInputPositions(runtime.nodeInputParams(nodeId)))
                 .outputParams(runtime.nodeOutputParams(nodeId))
                 .linkEntityPrimaryKey(treeLinkEntityPrimaryKey(nodeId, bound, runtime))
                 .params(treeExternalParams(nodeId, bound, runtime))
@@ -2750,14 +2751,14 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         // 树节点的数据位置都来自执行请求，走内部入口，别绕回对外请求再剥掉一次
         var testResult = runTestAction(testParam);
         // 有关系的执行按对端逐条 try/catch，异常只回一个空串；节点不能把这种结果当成功
-        var counterparts = countCounterpartOutcome(testResult.getResult());
+        var counterparts = countCounterpartOutcome(resultText(testResult.getResult()));
         if (counterparts != null && counterparts.failed > 0) {
             runtime.clearNodeOutput(nodeId);
             return new TreeActionInvoker.TreeActionOutcome(BehaviorStateEnum.FAILURE,
                     "对端执行失败：" + counterparts.failed + "/" + counterparts.total + " 条结果为空");
         }
         // 出参回传与下游引用按算子返回体形状取值，先把执行结果那层字符串数组外壳剥掉
-        var resultJson = unwrapActionResultForRead(testResult.getResult());
+        var resultJson = unwrapActionResultForRead(resultText(testResult.getResult()));
         // 先判成功条件：不成立这次结果不可信，出参不回传黑板、节点产出也不留给下游
         var conditionProblem = checkNodeSuccessCondition(nodeId, config, resultJson, resolvedInputs, runtime);
         if (conditionProblem != null) {
@@ -3022,21 +3023,44 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     /** 复制一份可写的目标：执行请求里的默认值可能被多个节点共用，不能就地改 */
     private ActionInstanceTargetParam copyParamTarget(ActionInstanceTargetParam source) {
         return ActionInstanceTargetParam.builder()
+                .ontologyIdentifier(source.getOntologyIdentifier())
                 .entityPrimaryKey(source.getEntityPrimaryKey())
                 .dataPrimaryKeys(source.getDataPrimaryKeys() == null ? null
                         : new LinkedHashMap<>(source.getDataPrimaryKeys()))
                 .build();
     }
 
-    /** 树级默认值每个入参只定位一个数据位置，运行时统一按数据位置数组存，这里包成单元素数组 */
-    private Map<String, List<ActionInstanceTargetParam>> wrapInputTargets(
-            Map<String, ActionInstanceTargetParam> targets) {
+    /** 运行时按入参存的数据位置都是一维写法：LIST 是这次列表的元素、非 LIST 是唯一一个位置，包成测试请求的形状 */
+    private static Map<String, ActionInputPositionsParam> toTestInputPositions(
+            Map<String, List<ActionInstanceTargetParam>> targets) {
         if (MapUtils.isEmpty(targets)) {
             return null;
         }
-        Map<String, List<ActionInstanceTargetParam>> wrapped = new LinkedHashMap<>();
-        targets.forEach((paramName, target) -> wrapped.put(paramName, new ArrayList<>(List.of(target))));
-        return wrapped;
+        var positions = new LinkedHashMap<String, ActionInputPositionsParam>();
+        targets.forEach((paramName, list) -> positions.put(paramName, list == null ? null
+                : ActionInputPositionsParam.ofPositions(new ArrayList<>(list))));
+        return positions;
+    }
+
+    /** 树级默认数据位置：一次执行每个入参只用数组里的唯一元素，多元素是按节点给的位置 */
+    private Map<String, List<ActionInstanceTargetParam>> treeInputTargets(
+            Map<String, List<ActionInstanceTargetParam>> targets) {
+        if (MapUtils.isEmpty(targets)) {
+            return null;
+        }
+        Map<String, List<ActionInstanceTargetParam>> checked = new LinkedHashMap<>();
+        targets.forEach((paramName, positions) -> {
+            if (positions == null) {
+                return;
+            }
+            var label = "inputParams[" + paramName + "]";
+            PreconditionUtils.checkArgument(positions.size() == 1,
+                    label + " 是树级默认值，一次执行只给一个数据位置；LIST 入参要按多个元素取值请改在 nodeExecutes[节点].inputParams 里给",
+                    HttpStatus.BAD_REQUEST);
+            checkInputTargetElement(label, positions.get(0));
+            checked.put(paramName, new ArrayList<>(List.of(copyParamTarget(positions.get(0)))));
+        });
+        return checked.isEmpty() ? null : checked;
     }
 
     /**
@@ -3364,14 +3388,15 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
 
         var paramMap = definition.funcParams.stream()
                 .collect(Collectors.toMap(FunctionParamPO::getId, v -> v, (existingValue, newValue) -> existingValue));
-        if (CollectionUtils.isEmpty(param.getMappingIns())) {
+        var mappingIns = mergeWholeExternalBindings(param.getMappingIns(), definition.funcParams);
+        if (CollectionUtils.isEmpty(mappingIns)) {
             return;
         }
         // List 入参按子表多行取值：元素字段必须同对象同分组，各绑定行的行数必须一致
         Map<Long, String> listElementGroups = new HashMap<>();
         Map<Long, String> listElementGroupLabels = new HashMap<>();
         Map<Long, Integer> listRowLimits = new HashMap<>();
-        for (var mapping : param.getMappingIns()) {
+        for (var mapping : mappingIns) {
             var funcParam = paramMap.get(mapping.getFunctionParamId());
             PreconditionUtils.checkArgument(funcParam != null, "无效的函数参数：" + mapping.getFunctionParamId(), HttpStatus.BAD_REQUEST);
             var isInput = funcParam.getCategory().equals(FunctionParamCategoryEnum.INPUT);
@@ -3446,6 +3471,50 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                     .ontologyUniqueIdentifier(mapping.getOntologyUniqueIdentifier())
                     .build());
         }
+    }
+
+    /**
+     * 对象/列表入参的来源全部是外部输入、又按子字段逐行绑定时，合并成一条整包绑定。
+     * <p>行为测试的外部输入是「参数名 -&gt; 值」的平铺结构，逐字段绑定拿字段名当键：
+     * 列表元素里的 latitude、longitude 各占一行，重名的字段（两条轨迹各有一列 latitude）
+     * 会取到同一个值而串值。整包绑定后按算子入参名给一个值：对象给 JSON 对象、列表给数组。</p>
+     * <p>只有「全部外部输入」才合并，部分字段来自属性、固定值等其他来源时保持原绑定形状不动。</p>
+     */
+    private List<ActionParamMappingCreateParam> mergeWholeExternalBindings(List<ActionParamMappingCreateParam> rows,
+                                                                           List<FunctionParamPO> funcParams) {
+        if (CollectionUtils.isEmpty(rows)) {
+            return rows;
+        }
+        var funcParamById = funcParams.stream()
+                .collect(Collectors.toMap(FunctionParamPO::getId, v -> v, (existingValue, newValue) -> existingValue));
+        var rowsByParam = new LinkedHashMap<Long, List<ActionParamMappingCreateParam>>();
+        for (var row : rows) {
+            rowsByParam.computeIfAbsent(row.getFunctionParamId(), k -> new ArrayList<>()).add(row);
+        }
+        var merged = new ArrayList<ActionParamMappingCreateParam>(rows.size());
+        for (var entry : rowsByParam.entrySet()) {
+            var paramRows = entry.getValue();
+            var funcParam = funcParamById.get(entry.getKey());
+            var wholeExternal = paramRows.stream()
+                    .allMatch(row -> row.getSourceType() == ActionParamSourceEnum.EXTERNAL);
+            var boundByField = paramRows.stream().anyMatch(row -> StringUtils.isNotEmpty(row.getParamPath()));
+            // 标量参数没有子字段，逐字段绑定本身就不成立，不在这里处理
+            var objectLike = funcParam != null && funcParam.getCategory() == FunctionParamCategoryEnum.INPUT
+                    && (funcParam.getParamType() == FunctionParamTypeEnum.OBJECT
+                    || funcParam.getParamType() == FunctionParamTypeEnum.LIST);
+            if (!(wholeExternal && boundByField && objectLike)) {
+                merged.addAll(paramRows);
+                continue;
+            }
+            var first = paramRows.get(0);
+            merged.add(ActionParamMappingCreateParam.builder()
+                    .functionParamId(first.getFunctionParamId())
+                    .functionParamExpression(first.getFunctionParamExpression())
+                    .parameterName(funcParam.getParamName())
+                    .sourceType(ActionParamSourceEnum.EXTERNAL)
+                    .build());
+        }
+        return merged;
     }
 
     /**
@@ -4760,20 +4829,313 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     public ActionTestResultVO testAction(ActionTestParam param) {
         // 对外的行为测试都是手动触发，一次请求（含批量展开的各组）记一条手动执行日志
         return manualExecuteLogService.runAndLog(param.getOntologySpaceId(), param.getActionApi(), param,
-                () -> testActionForScheduling(param), ActionTestResultVO::getMessage);
+                () -> testActionRequest(param), ActionTestResultVO::getMessage);
+    }
+
+    /**
+     * 对外测试入口：多组取值必须由调用方指定展开方式（inputMode），这里给明确提示。
+     * <p>inputMode 只属于本次请求，不落库；行为和绑定的形状与它无关。</p>
+     */
+    private ActionTestResultVO testActionRequest(ActionTestParam param) {
+        var invokeParam = toInvokeParam(param);
+        if (param.getInputMode() == ActionTestInputModeEnum.OBJECT) {
+            return testByObjectInstances(invokeParam);
+        }
+        PreconditionUtils.checkArgument(CollectionUtils.isEmpty(param.getListReadRules()),
+                "listReadRules 只在 inputMode=OBJECT 时使用：" + param.getActionApi(), HttpStatus.BAD_REQUEST);
+        normalizeInputParamKeys(invokeParam);
+        var listParams = listInputParamNames(invokeParam);
+        // 入参方向把某个字段写成数组就是批量测试：按 inputMode 展开成组合后逐组跑一遍
+        var testAxes = collectTestAxes(invokeParam, listParams);
+        if (testAxes.isEmpty()) {
+            return runTestAction(invokeParam, listParams);
+        }
+        PreconditionUtils.checkArgument(param.getInputMode() != null,
+                "这次测试要按多个候选值展开，请在 inputMode 里指定展开方式：" + describeInputModes(),
+                HttpStatus.BAD_REQUEST);
+        checkExternalParamsProvided(findTestAction(param.getOntologySpaceId(), param.getActionApi()), param.getParams());
+        return testActionCombos(invokeParam, testAxes, expandByMode(param.getInputMode(), testAxes, true),
+                listParams, null);
     }
 
     @Override
     public ActionTestResultVO testActionForScheduling(ActionTestParam param) {
         var invokeParam = toInvokeParam(param);
+        if (param.getInputMode() == ActionTestInputModeEnum.OBJECT) {
+            return testByObjectInstances(invokeParam);
+        }
         // 前端按绑定行选数据位置时键是字段名（longitude、position.longitude），执行侧只认顶层入参名，
         // 这里先归到所属入参；顶层入参名的写法不动
         normalizeInputParamKeys(invokeParam);
         var listParams = listInputParamNames(invokeParam);
-        // 入参方向把某个字段写成数组就是批量测试：展开成组合后逐组跑一遍。不传数组时与改造前完全一致
+        // 调度/行为树内部调用不会传候选值数组；真出现数组又没指定方式时保持改造前的自动判断
         var testAxes = collectTestAxes(invokeParam, listParams);
-        return testAxes.isEmpty() ? runTestAction(invokeParam, listParams)
-                : testActionCombos(invokeParam, testAxes, listParams);
+        if (testAxes.isEmpty()) {
+            return runTestAction(invokeParam, listParams);
+        }
+        var combos = param.getInputMode() == null ? expandTestCombos(invokeParam, testAxes, listParams)
+                : expandByMode(param.getInputMode(), testAxes, true);
+        return testActionCombos(invokeParam, testAxes, combos, listParams, null);
+    }
+
+    private OntologyAction findTestAction(Integer ontologySpaceId, String actionApi) {
+        return getOne(new LambdaQueryWrapper<OntologyAction>()
+                .eq(OntologyAction::getApi, actionApi)
+                .eq(OntologyAction::getOntologySpaceId, ontologySpaceId));
+    }
+
+    private String describeInputModes() {
+        return Arrays.stream(ActionTestInputModeEnum.values())
+                .map(mode -> mode.name() + "（" + mode.getName() + "）")
+                .collect(Collectors.joining("、"));
+    }
+
+    private List<List<Object>> expandByMode(ActionTestInputModeEnum mode, List<TestAxis> axes, boolean capByMaxCombos) {
+        return mode == ActionTestInputModeEnum.GROUP ? expandTestGroups(axes)
+                : expandTestProduct(axes, capByMaxCombos);
+    }
+
+    /**
+     * 对象模式：不选实例和行，遍历行为涉及对象下的全部实例逐组执行；涉及多个对象时按笛卡尔积组合。
+     * <p>只支持绑算子的行为；子表按 listReadRules 读取，不配规则按行主键倒序取最新 10 行；
+     * 外部输入照旧在 params 里给，多组共用同一个值。</p>
+     */
+    private ActionTestResultVO testByObjectInstances(ActionInvokeParam param) {
+        var action = findTestAction(param.getOntologySpaceId(), param.getActionApi());
+        PreconditionUtils.checkArgument(action != null, "无效的action api", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(action.getActionKind() != ActionKindEnum.TREE,
+                "行为树不支持按单个行为测试", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(action.getActionKind() != ActionKindEnum.BASE,
+                "对象模式只支持绑算子的行为，属性值/实例关系/基础函数行为请选择具体实例：" + action.getApi(),
+                HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(param.getEntityPrimaryKey() == null
+                        && MapUtils.isEmpty(param.getEntityPrimaryKeys())
+                        && MapUtils.isEmpty(param.getInputParams()) && MapUtils.isEmpty(param.getOutputParams())
+                        && param.getDataPrimaryKey() == null && param.getLinkEntityPrimaryKey() == null
+                        && param.getWriteBackEntityPrimaryKey() == null,
+                "对象模式按实例和规则自动定位，不用再传 entityPrimaryKey、entityPrimaryKeys、inputParams、outputParams、"
+                        + "dataPrimaryKey、linkEntityPrimaryKey、writeBackEntityPrimaryKey：" + action.getApi(),
+                HttpStatus.BAD_REQUEST);
+        checkExternalParamsProvided(action, param.getParams());
+        var detail = getActionByApi(param.getOntologySpaceId(), param.getActionApi());
+        var objects = objectModeObjects(action, detail);
+        checkListReadRules(param.getListReadRules(), objects);
+        // 逐组把遍历到的实例写进 entityPrimaryKeys：请求里这张表是空的（对象模式不选实例）
+        param.setEntityPrimaryKeys(new LinkedHashMap<>());
+        var axes = new ArrayList<TestAxis>(objects.size());
+        objects.forEach(object -> axes.add(instanceAxis(object.key(), object.objectId())));
+        // 对象模式不设组合上限：用户明确要求把实例全部跑一遍
+        return testActionCombos(param, axes, expandTestProduct(axes, false),
+                listInputParamNames(action), "对象模式");
+    }
+
+    /** 对象模式遍历的取值轴：关系行为两端各一轴（自关系也两轴，覆盖实例两两组合），其余按涉及对象逐个 */
+    private List<ObjectAxis> objectModeObjects(OntologyAction action, OntologyActionDetailVO detail) {
+        var axes = new ArrayList<ObjectAxis>();
+        var linkMapping = detail.getLinkMapping();
+        if (linkMapping != null) {
+            var linkGroup = linkGroupMapper.selectOne(new LambdaQueryWrapper<OntologyLinkGroup>()
+                    .eq(OntologyLinkGroup::getUniqueIdentifier, linkMapping.getOntologyLinkUniqIdentifier()));
+            PreconditionUtils.checkArgument(linkGroup != null,
+                    "无效的对象关系：" + linkMapping.getOntologyLinkUniqIdentifier(), HttpStatus.BAD_REQUEST);
+            var fromObject = linkGroup.getOntologyUniqueIdentifierFrom();
+            var toObject = linkGroup.getOntologyUniqueIdentifierTo();
+            axes.add(new ObjectAxis(TEST_LINK_FROM_KEY, fromObject));
+            axes.add(new ObjectAxis(TEST_LINK_TO_KEY, toObject));
+            // 关系两端之外还读了别的对象（第三个对象上的属性入参/写回）时也一并遍历
+            var otherObjects = new LinkedHashSet<String>();
+            CollectionUtils.emptyIfNull(action.getOntologyUniqueIdentifier()).stream()
+                    .filter(StringUtils::isNotBlank).forEach(otherObjects::add);
+            CollectionUtils.emptyIfNull(detail.getMappingIns()).forEach(mapping -> {
+                if (readNeedsInstance(mapping) || writesProperty(mapping)) {
+                    otherObjects.add(mapping.getOntologyUniqueIdentifier());
+                }
+            });
+            otherObjects.remove(fromObject);
+            otherObjects.remove(toObject);
+            otherObjects.remove("");
+            otherObjects.stream().filter(StringUtils::isNotBlank)
+                    .forEach(objectId -> axes.add(new ObjectAxis(objectId, objectId)));
+            return axes;
+        }
+        var objects = new LinkedHashSet<String>();
+        CollectionUtils.emptyIfNull(action.getOntologyUniqueIdentifier()).stream()
+                .filter(StringUtils::isNotBlank).forEach(objects::add);
+        if (objects.isEmpty()) {
+            // 存量行为的挂载对象列可能为空：按绑定行认对象
+            CollectionUtils.emptyIfNull(detail.getMappingIns()).forEach(mapping -> {
+                var needsObject = readNeedsInstance(mapping) || writesProperty(mapping);
+                if (needsObject && StringUtils.isNotBlank(mapping.getOntologyUniqueIdentifier())) {
+                    objects.add(mapping.getOntologyUniqueIdentifier());
+                }
+            });
+        }
+        PreconditionUtils.checkArgument(!objects.isEmpty(),
+                "行为没有可用于遍历实例的挂载对象：" + action.getApi(), HttpStatus.BAD_REQUEST);
+        var primary = action.primaryOntologyIdentifier();
+        if (StringUtils.isNotBlank(primary)) {
+            objects.remove(primary);
+            axes.add(new ObjectAxis(primary, primary));
+        }
+        objects.forEach(objectId -> axes.add(new ObjectAxis(objectId, objectId)));
+        return axes;
+    }
+
+    private static boolean writesProperty(ActionParamMappingVO mapping) {
+        return mapping.getCategory() == FunctionParamCategoryEnum.OUTPUT
+                && mapping.getOutputMode() == ActionOutputModeEnum.WRITE_PROPERTY;
+    }
+
+    /** 对象模式的一个取值轴：axisKey 是写进 entityPrimaryKeys 的键（对象id 或关系两端 from/to） */
+    private record ObjectAxis(String key, String objectId) {
+    }
+
+    /** 对象下的全部实例主键作为取值轴；没有实例直接报错，别让「一组都没跑」看起来像成功 */
+    private TestAxis instanceAxis(String axisKey, String objectId) {
+        PreconditionUtils.checkArgument(StringUtils.isNotBlank(objectId),
+                "对象模式遍历实例时对象id为空，无法定位实例", HttpStatus.BAD_REQUEST);
+        var primaryKeys = allInstancePrimaryKeys(objectId);
+        PreconditionUtils.checkArgument(!primaryKeys.isEmpty(),
+                "对象[" + objectDisplayName(objectId) + "]下没有实例数据，无法用对象模式执行", HttpStatus.BAD_REQUEST);
+        return new TestAxis(TEST_AXIS_FIELD_ENTITY_PRIMARY_KEYS, axisKey, null, primaryKeys);
+    }
+
+    /** 分页拉取对象下全部实例主键（只取主存储分组的主键列） */
+    private List<Object> allInstancePrimaryKeys(String objectId) {
+        var primaryKeys = new ArrayList<Object>();
+        for (int pageNum = 1; ; pageNum++) {
+            var page = entityService.getEntities(objectId, "", "", pageNum, TREE_BATCH_PAGE_SIZE, false);
+            var records = page.getRecords();
+            if (CollectionUtils.isEmpty(records)) {
+                break;
+            }
+            records.stream().map(EntityInfoVO::getPrimaryKey).filter(Objects::nonNull).forEach(primaryKeys::add);
+            if (records.size() < TREE_BATCH_PAGE_SIZE) {
+                break;
+            }
+        }
+        return primaryKeys;
+    }
+
+    private String objectDisplayName(String objectId) {
+        var meta = ontologyMetaMapper.selectOne(new LambdaQueryWrapper<OntologyMeta>()
+                .eq(OntologyMeta::getUniqueIdentifier, objectId));
+        return meta == null || StringUtils.isEmpty(meta.getDisplayName()) ? objectId : meta.getDisplayName();
+    }
+
+    /**
+     * 对象模式的子表读取规则校验：规则的对象必须是本次遍历到的对象，存储分组必须是该对象的子表分组，
+     * 排序属性必须存在且（指定分组时）属于该分组。配了却不生效的规则直接报错。
+     */
+    private void checkListReadRules(List<ActionTestListReadRuleParam> rules, List<ObjectAxis> objects) {
+        if (CollectionUtils.isEmpty(rules)) {
+            return;
+        }
+        var objectIds = objects.stream().map(ObjectAxis::objectId).collect(Collectors.toSet());
+        var propsByObject = new HashMap<String, List<OntologyProperty>>();
+        var seen = new HashSet<String>();
+        for (var rule : rules) {
+            PreconditionUtils.checkNotNull(rule, "listReadRules 里有空规则", HttpStatus.BAD_REQUEST);
+            var objectId = StringUtils.trimToEmpty(rule.getOntologyUniqueIdentifier());
+            PreconditionUtils.checkArgument(StringUtils.isNotEmpty(objectId),
+                    "子表读取规则必须指定对象id：" + rule, HttpStatus.BAD_REQUEST);
+            PreconditionUtils.checkArgument(objectIds.contains(objectId),
+                    "子表读取规则的对象[" + objectDisplayName(objectId) + "]不在本次遍历的对象里，规则不会生效",
+                    HttpStatus.BAD_REQUEST);
+            var group = StringUtils.trimToEmpty(rule.getStorageGroup());
+            PreconditionUtils.checkArgument(seen.add(objectId + "|" + group),
+                    "对象[" + objectDisplayName(objectId) + "]的分组[" + (group.isEmpty() ? "全部" : group)
+                            + "]配了多条子表读取规则", HttpStatus.BAD_REQUEST);
+            if (rule.getRowCount() != null) {
+                PreconditionUtils.checkArgument(rule.getRowCount() > 0,
+                        "子表读取规则的行数必须大于 0：" + rule.getRowCount(), HttpStatus.BAD_REQUEST);
+            }
+            var props = propsByObject.computeIfAbsent(objectId, id -> ontologyPropertyService.list(
+                    new LambdaQueryWrapper<OntologyProperty>()
+                            .eq(OntologyProperty::getOntologyUniqueIdentifier, id)));
+            var subGroups = props.stream()
+                    .map(p -> StringUtils.defaultIfBlank(p.getStorageGroup(), MAIN_STORAGE_GROUP))
+                    .filter(g -> !MAIN_STORAGE_GROUP.equals(g))
+                    .collect(Collectors.toSet());
+            if (StringUtils.isNotEmpty(group)) {
+                PreconditionUtils.checkArgument(subGroups.contains(group),
+                        "存储分组[" + group + "]不是对象[" + objectDisplayName(objectId) + "]的子表分组，读取规则不会生效",
+                        HttpStatus.BAD_REQUEST);
+            }
+            if (StringUtils.isNotEmpty(rule.getOrderByProperty())) {
+                var property = props.stream()
+                        .filter(p -> rule.getOrderByProperty().equals(p.getApiName()))
+                        .findFirst().orElse(null);
+                PreconditionUtils.checkArgument(property != null
+                                && StringUtils.isNotEmpty(property.getDatasourceColumnName()),
+                        "排序属性[" + rule.getOrderByProperty() + "]不是对象[" + objectDisplayName(objectId)
+                                + "]的属性或没有关联数据源列", HttpStatus.BAD_REQUEST);
+                var propertyGroup = StringUtils.defaultIfBlank(property.getStorageGroup(), MAIN_STORAGE_GROUP);
+                PreconditionUtils.checkArgument(StringUtils.isEmpty(group) ? !MAIN_STORAGE_GROUP.equals(propertyGroup)
+                                : group.equals(propertyGroup),
+                        StringUtils.isEmpty(group)
+                                ? "排序属性[" + rule.getOrderByProperty() + "]在主表分组，子表按它排序不生效"
+                                : "排序属性[" + rule.getOrderByProperty() + "]不属于存储分组[" + group + "]",
+                        HttpStatus.BAD_REQUEST);
+            }
+        }
+    }
+
+    /**
+     * 来源为外部输入的参数必须在 params 里给值：多组测试共用同一个值，缺了只能拿到 null，
+     * 看不出是没给还是算子算出来空。键存在即算给了值（显式 null 也算）。
+     */
+    private void checkExternalParamsProvided(OntologyAction action, Map<String, Object> params) {
+        if (action == null || StringUtils.isEmpty(action.getFunctionApi())) {
+            return;
+        }
+        var detail = getActionByApi(action.getOntologySpaceId(), action.getApi());
+        if (detail == null || CollectionUtils.isEmpty(detail.getMappingIns())) {
+            return;
+        }
+        var namesById = new HashMap<Long, String>();
+        CollectionUtils.emptyIfNull(detail.getFunctionParams()).forEach(p -> {
+            if (p.getParamId() != null && StringUtils.isNotBlank(p.getParamName())) {
+                namesById.putIfAbsent(p.getParamId(), p.getParamName());
+            }
+        });
+        var missing = new LinkedHashSet<String>();
+        for (var mapping : detail.getMappingIns()) {
+            if (mapping.getCategory() != FunctionParamCategoryEnum.INPUT
+                    || mapping.getSourceType() != ActionParamSourceEnum.EXTERNAL) {
+                continue;
+            }
+            var name = StringUtils.isNotBlank(mapping.getParameterName())
+                    ? mapping.getParameterName() : namesById.get(mapping.getFunctionParamId());
+            if (StringUtils.isNotBlank(name) && (params == null || !params.containsKey(name))) {
+                missing.add(name);
+            }
+        }
+        PreconditionUtils.checkArgument(missing.isEmpty(),
+                "来源为外部输入的参数必须在 params 里给值：" + String.join("、", missing)
+                        + "；多组测试共用同一个值，旧行为按字段逐个绑定外部输入的重新保存后会合并成整包绑定",
+                HttpStatus.BAD_REQUEST);
+    }
+
+    private Map<String, Map<String, ActionTestListReadRuleParam>> listReadRulesByObject(
+            List<ActionTestListReadRuleParam> rules) {
+        if (CollectionUtils.isEmpty(rules)) {
+            return null;
+        }
+        var byObject = new LinkedHashMap<String, Map<String, ActionTestListReadRuleParam>>();
+        for (var rule : rules) {
+            if (rule == null || StringUtils.isBlank(rule.getOntologyUniqueIdentifier())) {
+                continue;
+            }
+            var groups = byObject.computeIfAbsent(rule.getOntologyUniqueIdentifier().trim(),
+                    k -> new LinkedHashMap<>());
+            var groupKey = StringUtils.trimToEmpty(rule.getStorageGroup());
+            PreconditionUtils.checkArgument(groups.put(groupKey, rule) == null,
+                    "listReadRules 里对象[" + rule.getOntologyUniqueIdentifier() + "]的分组["
+                            + (groupKey.isEmpty() ? "全部" : groupKey) + "]配了多条读取规则",
+                    HttpStatus.BAD_REQUEST);
+        }
+        return byObject.isEmpty() ? null : byObject;
     }
 
     /**
@@ -4793,6 +5155,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 .dataPrimaryKey(param.getDataPrimaryKey())
                 .linkEntityPrimaryKey(param.getLinkEntityPrimaryKey())
                 .params(param.getParams())
+                .inputMode(param.getInputMode())
+                .listReadRules(param.getListReadRules())
                 .build();
     }
 
@@ -4802,9 +5166,10 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
      * 不加事务：属性值行为写数据湖、实例关系行为写图库、算子行为跨两者，
      * 且发现必填属性缺失时的失效标记必须独立提交，不能被随后的异常回滚掉。
      * <p>
-     * 批量展开只在 {@link #testActionForScheduling(ActionTestParam)} 做：行为树节点也是走这里执行单条行为，
-     * 黑板里的值偶尔本来就是集合，不能在那条链路上悄悄炸成多组。手动执行日志记在对外的 {@link #testAction(ActionTestParam)}，
-     * 这一层一次调用就是一次执行，不重复记。
+     * 批量展开在外层做（对外测试的 {@link #testActionRequest(ActionTestParam)} 与行为树/调度走的
+     * {@link #testActionForScheduling(ActionTestParam)}）：行为树节点走后者执行单条行为，
+     * 黑板里的值偶尔本来就是集合，不能在那条链路上悄悄炸成多组。手动执行日志记在对外的
+     * {@link #testAction(ActionTestParam)}，这一层一次调用就是一次执行，不重复记。
      */
     private ActionTestResultVO runTestAction(ActionInvokeParam param) {
         return runTestAction(param, null);
@@ -4866,7 +5231,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         var result = runBasicFunctionAction(detail, requestActionObject(action, param),
                 param.getEntityPrimaryKey(), param.getEntityPrimaryKeys(), param.getWriteBackEntityPrimaryKey(),
                 param.getParams());
-        return testResult(action, "行为执行成功").setResult(result);
+        return testResult(action, "行为执行成功").setResult(jsonResult(result));
     }
 
     /**
@@ -5304,6 +5669,9 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         // 行为可以挂载在多个对象上：请求只给了一个挂载对象的实例时它就是请求对象，
         // 按多个对象都给了实例时只能靠入参/出参各自给的数据位置
         var ownObject = requestActionObject(action, param);
+        var singleInputTargets = new LinkedHashMap<String, ActionInstanceTargetParam>();
+        var elementInputTargets = new LinkedHashMap<String, List<ActionInstanceTargetParam>>();
+        resolveInputTargets(param.getInputParams(), listParams, singleInputTargets, elementInputTargets);
         var executeParamBuilder = EntityActionExecuteParam.builder()
                 .actionApi(action.getApi())
                 .ontologySpaceId(action.getOntologySpaceId())
@@ -5313,8 +5681,11 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 // 按对象方向给的数据位置：树执行的树级/节点级默认行主键走这里，对外测试请求不带
                 .inputEntities(param.getInputEntities())
                 .outputEntities(param.getOutputEntities())
+                // 对象模式测试的子表读取规则：按对象 + 分组指定行数与排序
+                .listReadRules(listReadRulesByObject(param.getListReadRules()))
                 // 按算子入参/出参指定的数据位置：入参读哪个实例/哪一行、出参写到哪个实例/哪一行
-                .inputParams(singleInputTargets(param.getInputParams(), listParams))
+                .inputParams(singleInputTargets.isEmpty() ? null : singleInputTargets)
+                .inputElementParams(elementInputTargets.isEmpty() ? null : elementInputTargets)
                 .outputParams(param.getOutputParams());
         // 涉及关系时两端实例都由调用方给：测试只跑这一对，不遍历关系下的全部实体
         if (detail.getLinkMapping() != null) {
@@ -5344,7 +5715,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         contextInfoDTO.setResolvedInputs(param.getResolvedInputs());
         var result = entityService.executeEntityAction(executeParam, contextInfoDTO, entityService.getLinkedEntities(contextInfoDTO));
         // 出参可能是 WRITE_PROPERTY 落库，也可能只是 RESULT_ONLY 返回，提示不描述落库
-        return testResult(action, "行为执行成功").setResult(result);
+        return testResult(action, "行为执行成功").setResult(jsonResult(result));
     }
 
     private ActionTestResultVO testResult(OntologyAction action, String message) {
@@ -5355,71 +5726,152 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     }
 
     /**
-     * 单次执行每个入参只能落在一个数据位置上：批量测试已经展开成单元素数组，
-     * 树执行/树试跑一次也只跑一个位置，这里取唯一元素交给执行侧。
-     * <p>LIST 类型入参是例外：它的数组本来就是列表的元素，多个位置合并成同一实例的一次多行读取。</p>
+     * 执行结果是 JSON 文本时对外返回结构化对象：前端直接展示，不用再解析一层，也不会满屏转义。
+     * 不是 JSON 的（提示文本）按文本返回，空串当没有结果。
+     * <p>算子类行为的结果是一层字符串数组（每次算子调用一个返回体），数组元素同样解析成对象；
+     * 只拆这一层，返回体里的字符串字段原样保留。</p>
      */
-    private Map<String, ActionInstanceTargetParam> singleInputTargets(
-            Map<String, List<ActionInstanceTargetParam>> targets, Set<String> listParams) {
-        if (MapUtils.isEmpty(targets)) {
+    private Object jsonResult(String result) {
+        if (StringUtils.isEmpty(result)) {
             return null;
         }
-        Map<String, ActionInstanceTargetParam> single = new LinkedHashMap<>();
-        targets.forEach((paramName, candidates) -> {
-            if (candidates == null) {
-                return;
+        try {
+            var parsed = jsonMapper.readValue(result, Object.class);
+            if (parsed instanceof List<?> items) {
+                return items.stream().map(this::payloadOrText).collect(Collectors.toList());
             }
-            PreconditionUtils.checkArgument(!candidates.isEmpty(),
-                    "入参[" + paramName + "]的数据位置数组不能为空，只用一个位置时数组里放一个元素",
-                    HttpStatus.BAD_REQUEST);
-            if (listParams.contains(paramName)) {
-                single.put(paramName, mergeListTargetPositions("入参[" + paramName + "]", candidates));
-                return;
-            }
-            PreconditionUtils.checkArgument(candidates.size() == 1,
-                    "入参[" + paramName + "]一次只能指定一个数据位置，数组里放一个元素即可",
-                    HttpStatus.BAD_REQUEST);
-            checkInputTargetElement("入参[" + paramName + "]", candidates.get(0));
-            single.put(paramName, candidates.get(0));
-        });
-        return single.isEmpty() ? null : single;
+            return parsed;
+        } catch (Exception e) {
+            return result;
+        }
+    }
+
+    /** 返回体文本是 JSON 就转成对象，不是就保留文本；失败位置是空串，原样留着 */
+    private Object payloadOrText(Object item) {
+        if (!(item instanceof CharSequence text) || StringUtils.isBlank(text.toString())) {
+            return item;
+        }
+        try {
+            return jsonMapper.readValue(text.toString(), Object.class);
+        } catch (Exception e) {
+            return item;
+        }
+    }
+
+    /** 结构化结果转回 JSON 文本：行为树按文本解析返回值（对端结果数组、出参取值路径） */
+    private String resultText(Object result) {
+        if (result == null || result instanceof String) {
+            return (String) result;
+        }
+        try {
+            return jsonMapper.writeValueAsString(result);
+        } catch (Exception e) {
+            return String.valueOf(result);
+        }
     }
 
     /**
-     * LIST 入参的多个数据位置合成一个读取位置：位置里的实例必须相同，各位置读的存储分组也必须相同，
-     * 各分组行主键按数组顺序合并成一列，每个位置正好贡献列表的一个元素；同一行只能出现一次，
-     * 否则会拼出两个完全一样的元素，直接报错。
+     * 把请求里的数据位置拆给执行侧：非 LIST 入参一次只有一个位置，LIST 入参按元素给，
+     * 同一份列表的元素可以来自不同对象、不同实例（元素位置各自带 ontologyIdentifier、entityPrimaryKey）。
+     * <p>批量测试到达这一层时每个入参已经只剩一组取值；二维候选还没展开的说明调用时机不对，直接拒。</p>
      */
-    private ActionInstanceTargetParam mergeListTargetPositions(String label,
-                                                               List<ActionInstanceTargetParam> positions) {
-        var primaryKey = positions.get(0).getEntityPrimaryKey();
-        var groups = listTargetGroups(positions.get(0).getDataPrimaryKeys());
-        var rows = new LinkedHashMap<String, List<Object>>();
-        for (var position : positions) {
-            checkInputTargetElement(label, position);
-            checkSameListInstance(label, primaryKey, position.getEntityPrimaryKey());
-            var positionGroups = listTargetGroups(position.getDataPrimaryKeys());
-            PreconditionUtils.checkArgument(positionGroups.equals(groups),
-                    label + " 是列表类型的入参，数组里的每个位置对应列表的一个元素，各位置读的存储分组必须一致"
-                            + "（要读 " + describeListGroups(groups) + "），请补齐该位置的分组行",
-                    HttpStatus.BAD_REQUEST);
-            positionGroups.forEach(group -> {
-                var rowKey = position.getDataPrimaryKeys().get(group);
-                var groupRows = rows.computeIfAbsent(group, k -> new ArrayList<>());
-                PreconditionUtils.checkArgument(!groupRows.contains(rowKey),
-                        label + " 数组里有两个位置选了同一行：分组[" + group + "]行主键 " + rowKey
-                                + "，同一行只能拼成一个元素，请去掉重复的位置",
+    private void resolveInputTargets(Map<String, ActionInputPositionsParam> targets, Set<String> listParams,
+                                     Map<String, ActionInstanceTargetParam> single,
+                                     Map<String, List<ActionInstanceTargetParam>> elements) {
+        if (MapUtils.isEmpty(targets)) {
+            return;
+        }
+        targets.forEach((paramName, shape) -> {
+            if (shape == null) {
+                return;
+            }
+            var label = "入参[" + paramName + "]";
+            PreconditionUtils.checkArgument(!shape.isEmpty(),
+                    label + "的数据位置数组不能为空", HttpStatus.BAD_REQUEST);
+            var listParam = listParams.contains(paramName);
+            if (shape.isCandidates()) {
+                PreconditionUtils.checkArgument(listParam,
+                        label + "不是列表类型的入参，批量候选请写一维数组（每个元素是一个候选值）",
                         HttpStatus.BAD_REQUEST);
-                groupRows.add(rowKey);
+                PreconditionUtils.checkArgument(shape.getCandidates().size() == 1,
+                        label + "一次执行只能给一份列表，多个候选要先按 inputMode 展开成多组",
+                        HttpStatus.BAD_REQUEST);
+                var candidate = shape.getCandidates().get(0);
+                PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(candidate),
+                        label + "的候选值不能是空列表", HttpStatus.BAD_REQUEST);
+                elements.put(paramName, listElementTargets(label, candidate));
+                return;
+            }
+            var positions = shape.getPositions();
+            if (listParam) {
+                elements.put(paramName, listElementTargets(label, positions));
+                return;
+            }
+            PreconditionUtils.checkArgument(positions.size() == 1,
+                    label + "一次只能指定一个数据位置，数组里放一个元素即可", HttpStatus.BAD_REQUEST);
+            checkInputTargetElement(label, positions.get(0));
+            single.put(paramName, positions.get(0));
+        });
+    }
+
+    /**
+     * LIST 入参的元素位置：一个元素就是列表的一项，各自带对象、实例和分组行。
+     * <p>分组行主键写成数组时按顺序展开成多个元素（同一对象同一实例）；同一行不能重复选，
+     * 否则会拼出两个一样的元素。只有一个元素且没给分组行时按该实例的默认口径读（最近 10 行）。</p>
+     */
+    private List<ActionInstanceTargetParam> listElementTargets(String label,
+                                                               List<ActionInstanceTargetParam> positions) {
+        var elements = new ArrayList<ActionInstanceTargetParam>();
+        Set<String> seenRows = new LinkedHashSet<>();
+        for (var position : positions) {
+            checkInputTargetElement(label, position, true);
+            var groups = listTargetGroups(position.getDataPrimaryKeys());
+            if (groups.isEmpty()) {
+                elements.add(copyParamTarget(position));
+                continue;
+            }
+            var rowsByGroup = new LinkedHashMap<String, List<Object>>();
+            var rowCounts = new LinkedHashSet<Integer>();
+            groups.forEach(group -> {
+                var rows = expandRowKeys(position.getDataPrimaryKeys().get(group));
+                rowsByGroup.put(group, rows);
+                rowCounts.add(rows.size());
             });
+            PreconditionUtils.checkArgument(rowCounts.size() == 1,
+                    label + " 一个元素就是列表的一项：各分组给的行主键个数必须一致（按数组下标拼成同一个元素），当前是 "
+                            + rowCounts + " 行", HttpStatus.BAD_REQUEST);
+            int rowCount = rowsByGroup.values().iterator().next().size();
+            for (int index = 0; index < rowCount; index++) {
+                var dataPrimaryKeys = new LinkedHashMap<String, Object>();
+                for (var entry : rowsByGroup.entrySet()) {
+                    dataPrimaryKeys.put(entry.getKey(), entry.getValue().get(index));
+                }
+                var rowKey = elementRowKey(position, dataPrimaryKeys);
+                PreconditionUtils.checkArgument(seenRows.add(rowKey),
+                        label + " 里有两个元素选了同一行（" + rowKey + "），同一行只能拼成一个元素，请去掉重复的位置",
+                        HttpStatus.BAD_REQUEST);
+                var element = copyParamTarget(position);
+                element.setDataPrimaryKeys(dataPrimaryKeys);
+                elements.add(element);
+            }
         }
-        var builder = ActionInstanceTargetParam.builder().entityPrimaryKey(primaryKey);
-        if (!rows.isEmpty()) {
-            var dataPrimaryKeys = new LinkedHashMap<String, Object>();
-            rows.forEach(dataPrimaryKeys::put);
-            builder.dataPrimaryKeys(dataPrimaryKeys);
+        PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(elements),
+                label + "的数据位置数组不能为空", HttpStatus.BAD_REQUEST);
+        return elements;
+    }
+
+    /** 元素的唯一行标识：没给对象时只按实例 + 分组行，给了对象时带上对象，跨对象同号行不算重复 */
+    private static String elementRowKey(ActionInstanceTargetParam position, Map<String, Object> dataPrimaryKeys) {
+        return StringUtils.defaultString(position.getOntologyIdentifier()) + "|"
+                + position.getEntityPrimaryKey() + "|" + dataPrimaryKeys;
+    }
+
+    /** 分组行主键可能是一个候选值的多行（数组按顺序就是列表的多个元素），单个值仍是一行 */
+    private static List<Object> expandRowKeys(Object value) {
+        if (value instanceof List<?> list) {
+            return new ArrayList<>(list);
         }
-        return builder.build();
+        return new ArrayList<>(List.of(value));
     }
 
     /** 一个位置里真正指定了行主键的存储分组（空分组名与 null 行值不算） */
@@ -5433,20 +5885,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
-    private static String describeListGroups(Set<String> groups) {
-        return groups.isEmpty() ? "不指定分组行（main 分组）" : String.join("、", groups);
-    }
-
-    /** LIST 入参一次执行只读一个实例：位置指向不同实例时无法拼成同一个列表，直接报错而不是拆成多组 */
-    private void checkSameListInstance(String label, Object primaryKey, Object positionPrimaryKey) {
-        PreconditionUtils.checkArgument(Objects.equals(primaryKey, positionPrimaryKey),
-                label + " 是列表类型的入参，数组里的位置是同一个列表的元素，必须读同一个实例"
-                        + "（各元素的 entityPrimaryKey 要一致）",
-                HttpStatus.BAD_REQUEST);
-    }
-
     /**
-     * 行为绑定的算子入参里 LIST 类型的参数名：这些入参的数据位置数组是列表元素，不是批量测试的候选值。
+     * 行为绑定的算子入参里 LIST 类型的参数名：这些入参的一维数据位置数组是列表元素，不是批量测试的候选值。
      * 行为不存在、不绑算子或查不到算子定义时返回空。
      */
     private Set<String> listInputParamNames(ActionInvokeParam param) {
@@ -5486,7 +5926,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
      *   <li>外部输入、固定值来源的入参不读实例，按参数名或字段名给的位置没有数据可读，直接丢弃，
      *       值照旧从 params 与行为定义取。</li>
      * </ul>
-     * 顶层参数名的写法原样保留，与改造前完全一致；同一字段名落在多个入参上时要求改传顶层参数名。
+     * 顶层参数名的写法原样保留，与改造前完全一致；同一字段名落在多个入参上时用「父参数名.字段路径」
+     * （tracks.longitude、tracks.position.longitude）区分，仍对不上再要求改传顶层参数名。
      */
     private void normalizeInputParamKeys(ActionInvokeParam param) {
         var raw = param.getInputParams();
@@ -5534,6 +5975,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 .collect(Collectors.toSet());
         // 字段名 -> 所属顶层入参名；同一字段名落在多个入参上时记下全部候选，用到时要求改传参数名
         Map<String, Set<String>> ownersByField = new LinkedHashMap<>();
+        // 顶层入参名 -> 该入参各绑定行的字段路径，用来识别「父参数名.字段路径」写法
+        Map<String, Set<String>> pathsByOwner = new LinkedHashMap<>();
         for (var mapping : detail.getMappingIns()) {
             if (!readNeedsInstance(mapping) || mapping.getFunctionParamId() == null
                     || StringUtils.isEmpty(mapping.getParamPath())) {
@@ -5547,11 +5990,13 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             addFieldOwner(ownersByField, mapping.getParamPath(), owner.getParamName());
             addFieldOwner(ownersByField, StringUtils.substringAfterLast(mapping.getParamPath(), "."),
                     owner.getParamName());
+            pathsByOwner.computeIfAbsent(owner.getParamName(), k -> new LinkedHashSet<>())
+                    .add(mapping.getParamPath());
         }
 
-        Map<String, List<ActionInstanceTargetParam>> normalized = new LinkedHashMap<>();
+        Map<String, ActionInputPositionsParam> normalized = new LinkedHashMap<>();
         Set<String> directKeys = new LinkedHashSet<>();
-        Map<String, Map<String, List<ActionInstanceTargetParam>>> fieldTargets = new LinkedHashMap<>();
+        Map<String, Map<String, ActionInputPositionsParam>> fieldTargets = new LinkedHashMap<>();
         for (var entry : raw.entrySet()) {
             var key = StringUtils.trimToEmpty(entry.getKey());
             var def = defByName.get(key);
@@ -5570,6 +6015,18 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 }
                 normalized.put(key, entry.getValue());
                 directKeys.add(key);
+                continue;
+            }
+            // 叶子名在多个入参上重复时用「父参数名.字段路径」指明归属：tracks.longitude、tracks.position.longitude
+            var qualifiedOwner = resolveQualifiedOwner(key, pathsByOwner);
+            if (qualifiedOwner != null
+                    && (owners == null || owners.size() != 1 || !owners.contains(qualifiedOwner))) {
+                var qualifiedDef = defByName.get(qualifiedOwner);
+                if (qualifiedDef != null && qualifiedDef.getParamId() != null
+                        && instanceParamIds.contains(qualifiedDef.getParamId())) {
+                    fieldTargets.computeIfAbsent(qualifiedOwner, k -> new LinkedHashMap<>())
+                            .put(key, entry.getValue());
+                }
                 continue;
             }
             if (owners == null || owners.isEmpty()) {
@@ -5594,9 +6051,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                     "入参[" + owner + "]既按参数名又在字段 " + String.join("、", byField.keySet())
                             + " 上给了数据位置，同一入参只用一种写法", HttpStatus.BAD_REQUEST);
             var ownerDef = defByName.get(owner);
-            normalized.put(owner, ownerDef != null && ownerDef.paramTypeEnum() == FunctionParamTypeEnum.LIST
-                    ? mergeFieldElementPositions(owner, byField)
-                    : mergeFieldSinglePositions(owner, byField));
+            normalized.put(owner, mergeFieldPositions(owner, byField,
+                    ownerDef != null && ownerDef.paramTypeEnum() == FunctionParamTypeEnum.LIST));
         });
         param.setInputParams(normalized.isEmpty() ? null : normalized);
     }
@@ -5617,88 +6073,162 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     }
 
     /**
-     * LIST 入参按字段名给的位置：数组里第 i 个位置在所有元素字段上都指向同一个元素，
-     * 拼成单元素位置后交给 {@link #mergeListTargetPositions} 合并；各字段的位置个数必须一致。
+     * 识别「父参数名.字段路径」写法：叶子名在多个入参上重复时，用它指明数据位置属于哪个入参。
+     * 按点逐段尝试前缀，前缀是该行为的入参名、余下部分是该入参某条绑定行的字段路径才算命中。
      */
-    private List<ActionInstanceTargetParam> mergeFieldElementPositions(
-            String owner, Map<String, List<ActionInstanceTargetParam>> byField) {
-        int count = -1;
-        for (var entry : byField.entrySet()) {
-            var positions = entry.getValue();
-            PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(positions),
-                    "入参[" + owner + "]的字段[" + entry.getKey() + "]数据位置数组不能为空", HttpStatus.BAD_REQUEST);
-            if (count < 0) {
-                count = positions.size();
-                continue;
+    private static String resolveQualifiedOwner(String key, Map<String, Set<String>> pathsByOwner) {
+        int dot = key.indexOf('.');
+        while (dot > 0 && dot < key.length() - 1) {
+            var paths = pathsByOwner.get(key.substring(0, dot));
+            if (paths != null && paths.contains(key.substring(dot + 1))) {
+                return key.substring(0, dot);
             }
-            PreconditionUtils.checkArgument(count == positions.size(),
-                    "入参[" + owner + "]是列表类型的入参，各元素字段的位置个数要一致："
-                            + "数组里第 i 个位置拼成第 i 个元素，字段[" + entry.getKey() + "]给了 "
-                            + positions.size() + " 个，其他字段给了 " + count + " 个", HttpStatus.BAD_REQUEST);
+            dot = key.indexOf('.', dot + 1);
         }
-        var elements = new ArrayList<ActionInstanceTargetParam>(count);
-        for (int index = 0; index < count; index++) {
-            Object primaryKey = null;
-            boolean primaryKeyFound = false;
-            var rows = new LinkedHashMap<String, Object>();
-            for (var entry : byField.entrySet()) {
-                var label = "入参[" + owner + "]的字段[" + entry.getKey() + "]第 " + (index + 1) + " 个位置";
-                var position = entry.getValue().get(index);
-                checkInputTargetElement(label, position);
-                if (position.getEntityPrimaryKey() != null) {
-                    if (!primaryKeyFound) {
-                        primaryKey = position.getEntityPrimaryKey();
-                        primaryKeyFound = true;
-                    } else {
-                        checkSameListInstance(label, primaryKey, position.getEntityPrimaryKey());
-                    }
-                }
-                if (MapUtils.isEmpty(position.getDataPrimaryKeys())) {
-                    continue;
-                }
-                for (var row : position.getDataPrimaryKeys().entrySet()) {
-                    if (StringUtils.isBlank(row.getKey()) || row.getValue() == null) {
-                        continue;
-                    }
-                    var existing = rows.get(row.getKey());
-                    PreconditionUtils.checkArgument(existing == null || Objects.equals(existing, row.getValue()),
-                            label + " 在分组[" + row.getKey() + "]上给的行和同一元素的其他字段不一致，"
-                                    + "同一个元素的所有字段必须读同一行", HttpStatus.BAD_REQUEST);
-                    rows.put(row.getKey(), row.getValue());
-                }
-            }
-            var builder = ActionInstanceTargetParam.builder().entityPrimaryKey(primaryKey);
-            if (!rows.isEmpty()) {
-                builder.dataPrimaryKeys(new LinkedHashMap<>(rows));
-            }
-            elements.add(builder.build());
-        }
-        return elements;
+        return null;
     }
 
-    /** 非 LIST 的入参按字段名给的位置：一个入参一次只读一处，各子字段必须指向同一个数据位置 */
-    private List<ActionInstanceTargetParam> mergeFieldSinglePositions(
-            String owner, Map<String, List<ActionInstanceTargetParam>> byField) {
-        ActionInstanceTargetParam first = null;
+    /**
+     * 按绑定行字段名给的位置合并回所属入参：同一个元素的所有字段必须指向同一处
+     * （同一对象、同一实例、同一分组行）。
+     * <ul>
+     *   <li>一维写法：LIST 入参的第 i 个位置就是第 i 个元素；非 LIST 入参的第 i 个位置是第 i 个批量候选。</li>
+     *   <li>二维写法（只允许 LIST 入参）：外层第 c 个是第 c 个候选，内层第 i 个是该候选的第 i 个元素；
+     *       所有字段的候选个数、每个候选里的元素个数都要一致。</li>
+     * </ul>
+     */
+    private ActionInputPositionsParam mergeFieldPositions(
+            String owner, Map<String, ActionInputPositionsParam> byField, boolean listParam) {
+        var shapes = byField.entrySet().iterator();
+        var first = shapes.next().getValue();
+        boolean nested = first != null && first.isCandidates();
         for (var entry : byField.entrySet()) {
-            var label = "入参[" + owner + "]的字段[" + entry.getKey() + "]";
-            var positions = entry.getValue();
-            PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(positions) && positions.size() == 1,
-                    label + " 只能给一个数据位置：这个入参是单个对象，多组取值请用外层数组做批量测试",
-                    HttpStatus.BAD_REQUEST);
-            var position = positions.get(0);
-            checkInputTargetElement(label, position);
-            if (first == null) {
-                first = position;
+            var shape = entry.getValue();
+            PreconditionUtils.checkNotNull(shape,
+                    "入参[" + owner + "]的字段[" + entry.getKey() + "]数据位置不能为空", HttpStatus.BAD_REQUEST);
+            PreconditionUtils.checkArgument(shape.isCandidates() == nested,
+                    "入参[" + owner + "]的字段数据位置写法不一致：字段[" + entry.getKey() + "]和其他字段一个是二维候选、一个是一维列表，"
+                            + "同一入参只用一种写法", HttpStatus.BAD_REQUEST);
+        }
+        if (!nested) {
+            int count = -1;
+            for (var entry : byField.entrySet()) {
+                var positions = entry.getValue().getPositions();
+                PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(positions),
+                        "入参[" + owner + "]的字段[" + entry.getKey() + "]数据位置数组不能为空", HttpStatus.BAD_REQUEST);
+                if (count < 0) {
+                    count = positions.size();
+                    continue;
+                }
+                PreconditionUtils.checkArgument(count == positions.size(),
+                        "入参[" + owner + "]各字段的位置个数要一致：数组里第 i 个位置在所有字段上拼成同一个"
+                                + (listParam ? "元素" : "数据位置") + "，字段[" + entry.getKey() + "]给了 "
+                                + positions.size() + " 个，其他字段给了 " + count + " 个", HttpStatus.BAD_REQUEST);
+            }
+            var merged = new ArrayList<ActionInstanceTargetParam>(count);
+            for (int index = 0; index < count; index++) {
+                merged.add(mergeElementAt(owner, byField, index, 0, false));
+            }
+            return ActionInputPositionsParam.ofPositions(merged);
+        }
+        PreconditionUtils.checkArgument(listParam,
+                "入参[" + owner + "]不是列表类型的入参，不能传二维数组：批量候选请写一维数组（每个元素是一个候选值）",
+                HttpStatus.BAD_REQUEST);
+        int candidateCount = -1;
+        for (var entry : byField.entrySet()) {
+            var candidates = entry.getValue().getCandidates();
+            PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(candidates),
+                    "入参[" + owner + "]的字段[" + entry.getKey() + "]候选数组不能为空", HttpStatus.BAD_REQUEST);
+            if (candidateCount < 0) {
+                candidateCount = candidates.size();
                 continue;
             }
-            PreconditionUtils.checkArgument(
-                    Objects.equals(first.getEntityPrimaryKey(), position.getEntityPrimaryKey())
-                            && Objects.equals(first.getDataPrimaryKeys(), position.getDataPrimaryKeys()),
-                    "入参[" + owner + "]的各字段必须读同一个数据位置，字段[" + entry.getKey() + "]和前面的字段指的不是同一处",
-                    HttpStatus.BAD_REQUEST);
+            PreconditionUtils.checkArgument(candidateCount == candidates.size(),
+                    "入参[" + owner + "]各字段的候选个数要一致：外层第 c 个是同一个候选，字段[" + entry.getKey() + "]给了 "
+                            + candidates.size() + " 个候选，其他字段给了 " + candidateCount + " 个", HttpStatus.BAD_REQUEST);
         }
-        return List.of(first);
+        var mergedCandidates = new ArrayList<List<ActionInstanceTargetParam>>(candidateCount);
+        for (int candidate = 0; candidate < candidateCount; candidate++) {
+            int elementCount = -1;
+            for (var entry : byField.entrySet()) {
+                var elements = entry.getValue().getCandidates().get(candidate);
+                PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(elements),
+                        "入参[" + owner + "]的字段[" + entry.getKey() + "]第 " + (candidate + 1) + " 个候选不能是空列表",
+                        HttpStatus.BAD_REQUEST);
+                if (elementCount < 0) {
+                    elementCount = elements.size();
+                    continue;
+                }
+                PreconditionUtils.checkArgument(elementCount == elements.size(),
+                        "入参[" + owner + "]第 " + (candidate + 1) + " 个候选里各字段的元素个数要一致，字段["
+                                + entry.getKey() + "]给了 " + elements.size() + " 个元素，其他字段给了 " + elementCount + " 个",
+                        HttpStatus.BAD_REQUEST);
+            }
+            var mergedElements = new ArrayList<ActionInstanceTargetParam>(elementCount);
+            for (int index = 0; index < elementCount; index++) {
+                mergedElements.add(mergeElementAt(owner, byField, index, candidate, true));
+            }
+            mergedCandidates.add(mergedElements);
+        }
+        return ActionInputPositionsParam.ofCandidates(mergedCandidates);
+    }
+
+    /**
+     * 同一个元素/候选的各个字段位置合成一个位置：对象、实例必须一致，分组行不能互相矛盾。
+     * 字段可以各自覆盖不同的存储分组，合起来是这个元素完整的行。
+     */
+    private ActionInstanceTargetParam mergeElementAt(String owner, Map<String, ActionInputPositionsParam> byField,
+                                                     int index, int candidate, boolean nested) {
+        String objectId = null;
+        boolean objectFound = false;
+        Object primaryKey = null;
+        boolean primaryKeyFound = false;
+        var rows = new LinkedHashMap<String, Object>();
+        for (var entry : byField.entrySet()) {
+            var label = "入参[" + owner + "]的字段[" + entry.getKey() + "]第 " + (index + 1) + " 个"
+                    + (nested ? "元素（第 " + (candidate + 1) + " 个候选）" : "位置");
+            var position = nested ? entry.getValue().getCandidates().get(candidate).get(index)
+                    : entry.getValue().getPositions().get(index);
+            checkInputTargetElement(label, position);
+            if (StringUtils.isNotBlank(position.getOntologyIdentifier())) {
+                if (!objectFound) {
+                    objectId = position.getOntologyIdentifier();
+                    objectFound = true;
+                } else {
+                    PreconditionUtils.checkArgument(Objects.equals(objectId, position.getOntologyIdentifier()),
+                            label + " 指定的对象和同一元素的其他字段不一致：同一个元素只能读一个对象的数据",
+                            HttpStatus.BAD_REQUEST);
+                }
+            }
+            if (position.getEntityPrimaryKey() != null) {
+                if (!primaryKeyFound) {
+                    primaryKey = position.getEntityPrimaryKey();
+                    primaryKeyFound = true;
+                } else {
+                    PreconditionUtils.checkArgument(Objects.equals(primaryKey, position.getEntityPrimaryKey()),
+                            label + " 指定的实例和同一元素的其他字段不一致：同一个元素只能读一个实例上的行",
+                            HttpStatus.BAD_REQUEST);
+                }
+            }
+            if (MapUtils.isEmpty(position.getDataPrimaryKeys())) {
+                continue;
+            }
+            for (var row : position.getDataPrimaryKeys().entrySet()) {
+                if (StringUtils.isBlank(row.getKey()) || row.getValue() == null) {
+                    continue;
+                }
+                var existing = rows.get(row.getKey());
+                PreconditionUtils.checkArgument(existing == null || Objects.equals(existing, row.getValue()),
+                        label + " 在分组[" + row.getKey() + "]上给的行和同一元素的其他字段不一致，"
+                                + "同一个元素的所有字段必须读同一行", HttpStatus.BAD_REQUEST);
+                rows.put(row.getKey(), row.getValue());
+            }
+        }
+        var builder = ActionInstanceTargetParam.builder().ontologyIdentifier(objectId).entityPrimaryKey(primaryKey);
+        if (!rows.isEmpty()) {
+            builder.dataPrimaryKeys(rows);
+        }
+        return builder.build();
     }
 
     /**
@@ -5729,9 +6259,10 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
 
     /**
      * 收集入参方向的候选值：只有 entityPrimaryKeys（含关系两端 from、to）和 inputParams 参与。
-     * <p>inputParams 每个入参本身就是数据位置数组，一个元素是一组完整取值：只有一个元素时就是单次执行，
-     * 多个元素才作为一个轴参与组合。LIST 类型入参除外：它的数组是列表的元素，一次执行读一个实例的多行，
-     * 既不是候选值也不展开成组。params 不作为轴：LIST 类型入参的值本来就是数组，分不清是候选值还是参数本身。
+     * <p>inputParams 一维数组里，非 LIST 入参的每个元素是一个批量候选（多个才成轴），
+     * LIST 入参的元素是这一次执行的那份列表（各元素可以各自指定对象和实例，一次执行，不展开）；
+     * 二维数组只在 LIST 入参上用，外层每个元素是一份完整的列表候选，多个候选才成轴。
+     * params 不作为轴：LIST 类型入参的值本来就是数组，分不清是候选值还是参数本身。
      * 出参方向出现数组直接拦下，一次执行只能有一个写回位置。</p>
      */
     private List<TestAxis> collectTestAxes(ActionInvokeParam param, Set<String> listParams) {
@@ -5752,45 +6283,102 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         return axes;
     }
 
-    /** 入参方向的数据位置数组：一个元素就是一组完整取值，多个元素才展开成轴；LIST 入参的多个位置是列表元素 */
+    /**
+     * 入参方向的数据位置：一维数组里，LIST 入参是这次执行的列表元素（一次执行，不展开），
+     * 非 LIST 入参每个元素是一个批量候选；二维数组只在 LIST 入参上用，外层一个元素是一组候选
+     * （每个候选就是一份完整的列表），多个候选才展开成轴。
+     */
     private void addInputTargetAxes(List<TestAxis> axes, String field,
-                                    Map<String, List<ActionInstanceTargetParam>> targets,
+                                    Map<String, ActionInputPositionsParam> targets,
                                     Set<String> listParams) {
         if (targets == null) {
             return;
         }
-        targets.forEach((paramName, candidates) -> {
-            if (candidates == null) {
+        targets.forEach((paramName, positions) -> {
+            if (positions == null) {
                 return;
             }
             var label = axisLabel(field, paramName, null);
-            PreconditionUtils.checkArgument(!candidates.isEmpty(), label + " 的数据位置数组不能为空", HttpStatus.BAD_REQUEST);
-            for (var target : candidates) {
-                checkInputTargetElement(label, target);
-            }
-            if (listParams.contains(paramName)) {
-                var primaryKey = candidates.get(0).getEntityPrimaryKey();
-                candidates.forEach(candidate -> checkSameListInstance(label, primaryKey, candidate.getEntityPrimaryKey()));
+            PreconditionUtils.checkArgument(!positions.isEmpty(), label + " 的数据位置数组不能为空", HttpStatus.BAD_REQUEST);
+            var listParam = listParams.contains(paramName);
+            if (positions.isCandidates()) {
+                var candidates = positions.getCandidates();
+                PreconditionUtils.checkArgument(listParam,
+                        label + " 只有列表类型的入参能用二维数组给候选值，非 LIST 入参请用一维数组直接给候选值",
+                        HttpStatus.BAD_REQUEST);
+                for (var candidate : candidates) {
+                    PreconditionUtils.checkArgument(!candidate.isEmpty(),
+                            label + " 的一个候选值就是一份完整的列表元素，候选里不能是空数组", HttpStatus.BAD_REQUEST);
+                    for (var target : candidate) {
+                        checkInputTargetElement(label, target, true);
+                    }
+                }
+                if (candidates.size() > 1) {
+                    axes.add(new TestAxis(field, paramName, null, new ArrayList<>(candidates)));
+                }
                 return;
             }
-            if (candidates.size() > 1) {
-                axes.add(new TestAxis(field, paramName, null, new ArrayList<>(candidates)));
+            var points = positions.getPositions();
+            for (var target : points) {
+                checkInputTargetElement(label, target, listParam);
+            }
+            // LIST 入参的一维数组是同一份列表的元素，不是候选值，不参与展开
+            if (!listParam && points.size() > 1) {
+                axes.add(new TestAxis(field, paramName, null, new ArrayList<>(points)));
             }
         });
     }
 
     /** 一个数据位置元素自身必须是单值：数组只在外层表示多组候选值 */
     private void checkInputTargetElement(String label, ActionInstanceTargetParam target) {
+        checkInputTargetElement(label, target, false);
+    }
+
+    /**
+     * allowRowArrays：LIST 入参在批量展开时，一个候选值就是一个完整的列表，
+     * 分组行主键可以写成数组，按数组顺序读多行，一个下标就是列表的一个元素。
+     */
+    private void checkInputTargetElement(String label, ActionInstanceTargetParam target, boolean allowRowArrays) {
         PreconditionUtils.checkNotNull(target, label + " 的数据位置数组里有 null", HttpStatus.BAD_REQUEST);
         PreconditionUtils.checkArgument(!(target.getEntityPrimaryKey() instanceof List<?>),
                 label + ".entityPrimaryKey 不能再嵌套数组，一个元素就是一组数据位置，多组请在外层数组放多个元素",
                 HttpStatus.BAD_REQUEST);
-        if (target.getDataPrimaryKeys() != null) {
-            target.getDataPrimaryKeys().forEach((group, value) -> PreconditionUtils.checkArgument(
-                    !(value instanceof List<?>),
-                    label + ".dataPrimaryKeys[" + group + "] 不能再嵌套数组，一个元素就是一组数据位置，多组请在外层数组放多个元素",
-                    HttpStatus.BAD_REQUEST));
+        if (target.getDataPrimaryKeys() == null) {
+            return;
         }
+        if (allowRowArrays) {
+            checkListRowArrays(label, target);
+            return;
+        }
+        target.getDataPrimaryKeys().forEach((group, value) -> PreconditionUtils.checkArgument(
+                !(value instanceof List<?>),
+                label + ".dataPrimaryKeys[" + group + "] 不能再嵌套数组，一个元素就是一组数据位置，多组请在外层数组放多个元素",
+                HttpStatus.BAD_REQUEST));
+    }
+
+    /** 一个候选值里各分组读的行数必须一致：按数组下标拼元素，分组间行数不等就没有对应关系 */
+    private void checkListRowArrays(String label, ActionInstanceTargetParam target) {
+        var rowCounts = new LinkedHashSet<Integer>();
+        target.getDataPrimaryKeys().forEach((group, value) -> {
+            if (StringUtils.isBlank(group) || value == null) {
+                return;
+            }
+            if (!(value instanceof List<?> rows)) {
+                rowCounts.add(1);
+                return;
+            }
+            var groupLabel = label + ".dataPrimaryKeys[" + group + "]";
+            PreconditionUtils.checkArgument(!rows.isEmpty(), groupLabel + " 的行主键数组不能为空", HttpStatus.BAD_REQUEST);
+            for (var row : rows) {
+                PreconditionUtils.checkNotNull(row, groupLabel + " 的行主键里有 null", HttpStatus.BAD_REQUEST);
+                PreconditionUtils.checkArgument(!(row instanceof List<?>),
+                        groupLabel + " 的行主键只能是标量，不支持再嵌套数组", HttpStatus.BAD_REQUEST);
+            }
+            rowCounts.add(rows.size());
+        });
+        PreconditionUtils.checkArgument(rowCounts.size() <= 1,
+                label + " 一个候选值就是一个完整的列表：各分组给的行主键个数必须一致（按数组下标拼成同一个元素），当前是 "
+                        + rowCounts + " 行", HttpStatus.BAD_REQUEST);
     }
 
     private void checkOutputSideHasNoArray(String field, Map<String, ActionInstanceTargetParam> targets) {
@@ -5831,23 +6419,29 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     }
 
     /**
-     * 展开批量组合：入参方向的数据位置全部只选实例（主存储分组的行就是实例本身）时按笛卡尔积组合；
-     * 只要有数据位置选了非 main 分组的行，就改成按下标配对成组，第 i 组取每个轴的第 i 个候选值。
+     * 展开批量组合：调用方没指定 inputMode 时的历史口径——入参方向的数据位置全部只选实例
+     * （主存储分组的行就是实例本身）时按笛卡尔积组合；只要有数据位置选了非 main 分组的行，
+     * 就改成按下标配对成组，第 i 组取每个轴的第 i 个候选值。
      * LIST 入参的多行是同一个列表的元素，不是候选值，不参与判断。
      */
     private List<List<Object>> expandTestCombos(ActionInvokeParam param, List<TestAxis> axes,
                                                 Set<String> listParams) {
         return hasNonMainGroupTarget(param.getInputParams(), listParams)
-                ? expandTestGroups(axes) : expandTestProduct(axes);
+                ? expandTestGroups(axes) : expandTestProduct(axes, true);
     }
 
-    /** 笛卡尔积展开，越靠后的取值轴变化越快 */
-    private List<List<Object>> expandTestProduct(List<TestAxis> axes) {
+    /**
+     * 笛卡尔积展开，越靠后的取值轴变化越快。
+     * capByMaxCombos=false 时不受 50 组上限约束（对象模式要把实例全部跑一遍）。
+     */
+    private List<List<Object>> expandTestProduct(List<TestAxis> axes, boolean capByMaxCombos) {
         var total = 1;
         for (var axis : axes) {
             total *= axis.values().size();
         }
-        checkTestComboCount(total, axes);
+        if (capByMaxCombos) {
+            checkTestComboCount(total, axes);
+        }
         var combos = new ArrayList<List<Object>>(total);
         var cursor = new int[axes.size()];
         for (int index = 0; index < total; index++) {
@@ -5870,7 +6464,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     private List<List<Object>> expandTestGroups(List<TestAxis> axes) {
         var total = axes.get(0).values().size();
         PreconditionUtils.checkArgument(axes.stream().allMatch(axis -> axis.values().size() == total),
-                "候选值里选了非 main 分组的行，批量测试按下标配对成组，各取值轴的候选值个数必须一致（"
+                "inputMode=GROUP 时各取值轴按下标配对成组，候选值个数必须一致（"
                         + describeTestAxes(axes) + "），请补齐或减少候选值", HttpStatus.BAD_REQUEST);
         checkTestComboCount(total, axes);
         var combos = new ArrayList<List<Object>>(total);
@@ -5891,11 +6485,13 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     }
 
     /** 入参方向有没有数据位置选了非 main 分组的行：选了子表行就是跨分组，各取值轴不能再自由相乘；LIST 入参不算 */
-    private static boolean hasNonMainGroupTarget(Map<String, List<ActionInstanceTargetParam>> targets,
+    private static boolean hasNonMainGroupTarget(Map<String, ActionInputPositionsParam> targets,
                                                  Set<String> listParams) {
         return targets != null && targets.entrySet().stream()
                 .filter(entry -> !listParams.contains(entry.getKey()))
                 .map(Map.Entry::getValue)
+                .filter(Objects::nonNull)
+                .map(ActionInputPositionsParam::getPositions)
                 .filter(Objects::nonNull)
                 .flatMap(List::stream)
                 .filter(Objects::nonNull)
@@ -5919,18 +6515,20 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
      * 批量行为测试：逐组把标量化的请求交给单组测试，复用它的全部校验与执行链路。
      * <p>每组各自落库、各自记成败，一组失败不影响其余组合，也不回滚已经写进去的数据——
      * 单组测试本来就不加事务。</p>
+     *
+     * @param combos 已按 inputMode 展开好的各组取值
+     * @param prefix 结果提示的前缀（如「对象模式」），为空时用默认提示
      */
     private ActionTestResultVO testActionCombos(ActionInvokeParam param, List<TestAxis> axes,
-                                                Set<String> listParams) {
+                                                List<List<Object>> combos, Set<String> listParams, String prefix) {
         var action = getOne(new LambdaQueryWrapper<OntologyAction>()
                 .eq(OntologyAction::getApi, param.getActionApi())
                 .eq(OntologyAction::getOntologySpaceId, param.getOntologySpaceId()));
         PreconditionUtils.checkArgument(action != null, "无效的action api", HttpStatus.BAD_REQUEST);
         PreconditionUtils.checkArgument(action.getActionKind() != ActionKindEnum.BASE,
                 "属性值/实例关系行为只操作单个实例，不支持批量测试", HttpStatus.BAD_REQUEST);
-        var combos = expandTestCombos(param, axes, listParams);
         var cases = new ArrayList<ActionTestCaseResultVO>(combos.size());
-        var results = new ArrayList<String>(combos.size());
+        var results = new ArrayList<Object>(combos.size());
         var failed = 0;
         for (int index = 0; index < combos.size(); index++) {
             var comboValues = combos.get(index);
@@ -5938,7 +6536,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             for (int axisIndex = 0; axisIndex < axes.size(); axisIndex++) {
                 applyTestAxis(single, axes.get(axisIndex), comboValues.get(axisIndex));
             }
-            String result = null;
+            Object result = null;
             String error = null;
             try {
                 result = runTestAction(single, listParams).getResult();
@@ -5964,8 +6562,10 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                     .build());
         }
         var succeeded = combos.size() - failed;
-        return testResult(action, "共 " + combos.size() + " 组组合，成功 " + succeeded + " / 失败 " + failed)
-                .setResult(toResultsJson(results))
+        var message = (StringUtils.isEmpty(prefix) ? "" : prefix + "：")
+                + "共 " + combos.size() + " 组组合，成功 " + succeeded + " / 失败 " + failed;
+        return testResult(action, message)
+                .setResult(results)
                 .setCases(cases);
     }
 
@@ -5977,26 +6577,23 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         return combo;
     }
 
-    @SneakyThrows
-    private String toResultsJson(List<String> results) {
-        return jsonMapper.writeValueAsString(results);
-    }
-
     /**
      * 算子返回是否整组皆空：执行链路会把算子自己抛的异常吞成空字符串，
      * 批量时不显式判出来就成了「算子报错却报成功」。
+     * <p>结果已经按 JSON 解析过：执行链路返回的是 JSON 字符串数组，解析后就是列表，失败位置是空串或 null。</p>
      */
-    private boolean isBlankFunctionResult(String result) {
-        if (StringUtils.isEmpty(result)) {
+    private boolean isBlankFunctionResult(Object result) {
+        if (result == null) {
             return true;
         }
-        try {
-            var items = jsonMapper.readValue(result, new TypeReference<List<String>>() {
-            });
-            return items.stream().allMatch(StringUtils::isEmpty);
-        } catch (Exception e) {
-            return false;
+        if (result instanceof CharSequence text) {
+            return StringUtils.isEmpty(text.toString());
         }
+        if (result instanceof Collection<?> items) {
+            return items.stream().allMatch(item -> item == null
+                    || (item instanceof CharSequence text && StringUtils.isEmpty(text.toString())));
+        }
+        return false;
     }
 
     /** 复制一份测试请求，只把会被逐组覆盖的入参结构换成可变副本，原请求保持不动 */
@@ -6009,25 +6606,38 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                         ? null : new LinkedHashMap<>(param.getEntityPrimaryKeys()))
                 .inputEntities(param.getInputEntities())
                 .outputEntities(param.getOutputEntities())
-                .inputParams(copyTestTargetLists(param.getInputParams()))
+                .inputParams(copyTestTargets(param.getInputParams()))
                 .outputParams(param.getOutputParams())
                 .dataPrimaryKey(param.getDataPrimaryKey())
                 .linkEntityPrimaryKey(param.getLinkEntityPrimaryKey())
                 .params(param.getParams())
+                .inputMode(param.getInputMode())
+                .listReadRules(param.getListReadRules())
                 .build();
     }
 
-    private Map<String, List<ActionInstanceTargetParam>> copyTestTargetLists(
-            Map<String, List<ActionInstanceTargetParam>> targets) {
+    private Map<String, ActionInputPositionsParam> copyTestTargets(
+            Map<String, ActionInputPositionsParam> targets) {
         if (targets == null) {
             return null;
         }
-        var copy = new LinkedHashMap<String, List<ActionInstanceTargetParam>>();
-        targets.forEach((paramName, candidates) -> copy.put(paramName, candidates == null ? null
-                : candidates.stream()
-                .map(target -> target == null ? null : copyParamTarget(target))
-                .collect(Collectors.toCollection(ArrayList::new))));
+        var copy = new LinkedHashMap<String, ActionInputPositionsParam>();
+        targets.forEach((paramName, positions) -> copy.put(paramName, positions == null ? null
+                : positions.isCandidates()
+                ? ActionInputPositionsParam.ofCandidates(positions.getCandidates().stream()
+                .map(candidate -> copyTestTargetList(candidate))
+                .collect(Collectors.toCollection(ArrayList::new)))
+                : ActionInputPositionsParam.ofPositions(copyTestTargetList(positions.getPositions()))));
         return copy;
+    }
+
+    private List<ActionInstanceTargetParam> copyTestTargetList(List<ActionInstanceTargetParam> positions) {
+        if (positions == null) {
+            return null;
+        }
+        return positions.stream()
+                .map(target -> target == null ? null : copyParamTarget(target))
+                .collect(Collectors.toCollection(ArrayList::new));
     }
 
     private void applyTestAxis(ActionInvokeParam param, TestAxis axis, Object value) {
@@ -6038,8 +6648,22 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         }
     }
 
-    private void applyTestTargetAxis(Map<String, List<ActionInstanceTargetParam>> targets, TestAxis axis, Object value) {
-        targets.put(axis.key(), new ArrayList<>(List.of(copyParamTarget((ActionInstanceTargetParam) value))));
+    /**
+     * 把选中的候选值放回入参位置：非 LIST 入参的候选是一个数据位置，LIST 入参的候选是一份完整列表的元素，
+     * 落成单次执行的写法（LIST 的候选是二维的一份列表，仍按二维写回）。
+     */
+    @SuppressWarnings("unchecked")
+    private void applyTestTargetAxis(Map<String, ActionInputPositionsParam> targets, TestAxis axis, Object value) {
+        if (value instanceof List<?> outer && !outer.isEmpty() && outer.get(0) instanceof List) {
+            targets.put(axis.key(), ActionInputPositionsParam.ofCandidates(outer.stream()
+                    .map(candidate -> copyTestTargetList((List<ActionInstanceTargetParam>) candidate))
+                    .collect(Collectors.toCollection(ArrayList::new))));
+            return;
+        }
+        var positions = value instanceof List<?> elements
+                ? copyTestTargetList((List<ActionInstanceTargetParam>) elements)
+                : new ArrayList<>(List.of(copyParamTarget((ActionInstanceTargetParam) value)));
+        targets.put(axis.key(), ActionInputPositionsParam.ofPositions(positions));
     }
 
     /**
