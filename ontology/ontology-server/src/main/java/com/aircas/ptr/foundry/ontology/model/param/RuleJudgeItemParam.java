@@ -20,28 +20,26 @@ import java.io.IOException;
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@Schema(description = "规则判断条件项：两种形态之一。"
-        + "① 数值/属性条件：leftOperate 比较符 rightOperate，linkFlag 连接下一条；"
-        + "② 监测条件：monitorType 非空时（或规则组 monitorType 已选事件类型时），leftOperate 只给 type=dynamic + OntologyId + storageGroup（可选 entityId 限定实例），"
-        + "本次 CDC 事件命中该对象该分组且事件类型一致即为真，rightOperate/condition 不参与求值。"
-        + "求值时 AND 优先于 OR，括号可改变优先级；一次 CDC 事件只对应一种监测类型和一个分组，"
-        + "多个监测条件之间用 AND 表示同一实例先后发生这些事件（5 分钟累计窗口内凑齐即触发，触发后清空），"
-        + "用 OR 表示任一事件发生即触发")
+@Schema(description = "规则判断条件项：先选事件类型（新增/修改/删除），再选对象+属性+输入值做比较判断。"
+        + "leftOperate 取对象（可选实例）与属性，condition 是比较符，rightOperate 用固定值；"
+        + "新增/删除按事件行的该属性值判断，修改按实例当前属性值判断。"
+        + "求值时 AND 优先于 OR，括号可改变优先级；一次 CDC 事件只对应一种事件类型和一个存储分组/对象，"
+        + "多个不相关条件之间用 AND 表示同一实例先后发生这些事件（5 分钟累计窗口内凑齐即触发，触发后清空），"
+        + "用 OR 表示任一条件成立即触发")
 public class RuleJudgeItemParam {
 
-    @Schema(name = "monitorType", description = "监测类型：insert 新增 / update 更新 / delete 删除。"
-            + "非空即本条为监测条件（只选对象+分组即可），为空走属性比较条件；"
-            + "事件类型已在规则组 monitorType 上选过时本条可省略", example = "insert")
+    @Schema(name = "monitorType", description = "事件类型：新增 / 修改 / 删除（兼容旧值 insert/update/delete）。"
+            + "事件类型已在规则组 monitorType 上选过时本条可省略；都为空时按属性比较条件（修改语义）处理", example = "新增")
     private RuleMonitorTypeEnum monitorType;
 
-    @Schema(name = "leftOperate", description = "左操作数；监测条件时提供监测对象与分组", required = true)
+    @Schema(name = "leftOperate", description = "左操作数：选对象+属性（可选 entityId 限定实例）；新增/删除按事件行该属性值判断", required = true)
     private RuleOperateParam leftOperate;
 
-    @Schema(name = "rightOperate", description = "右操作数；监测条件不需要")
+    @Schema(name = "rightOperate", description = "右操作数：新增/删除用 fixed + fixValue 输入比较值；修改可用 fixed，也可用另一个实例属性 dynamic 比较")
     private RuleOperateParam rightOperate;
 
-    @Schema(name = "condition", description = "比较操作符：数字 LT/LE/EQ/NE/GT/GE；字符串 CONTAINS/NOT_CONTAINS/EQ/NE（大小比较仅限数字，不支持 CH）；"
-            + "监测条件不需要", example = "GT")
+    @Schema(name = "condition", description = "比较操作符：数字 LT/LE/EQ/NE/GT/GE；字符串 CONTAINS/NOT_CONTAINS/EQ/NE（大小比较仅限数字，不支持 CH）",
+            example = "GT")
     private ActionHandleRuleAddConditionEnum condition;
 
     @Schema(name = "isLeft", description = "本条件前左括号个数，支持嵌套如 (( 传 2；兼容旧布尔传法 true=1/false=0", example = "2")
