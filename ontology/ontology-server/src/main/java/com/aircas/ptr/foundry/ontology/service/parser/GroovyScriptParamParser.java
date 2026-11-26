@@ -297,21 +297,61 @@ public class GroovyScriptParamParser implements ScriptParamParser {
     }
 
     /**
-     * 集合类型的元素字段：先剥到最内层元素类型再按脚本内类展开（AST），认不出再试工程内类（反射）。
-     * <p>元素类型不是业务结构（{@code List<String>}、{@code List<Map<String,Object>>}）时返回 null，
-     * 由调用方回落标量层，仍是原来那个没有下一级的参数/result。</p>
+     * 集合类型的元素字段：返回「一个元素」的结构模板。
+     * 元素本身仍是集合时（{@code List<List<Point>>} 的元素是 {@code List<Point>}）保留一层 list 节点，
+     * 其 fields 为内层元素模板，不再直接拍平到最内层标量字段；元素是业务类时展开其字段
+     * （{@code List<Point>} → [latitude, longitude]），与单层口径一致。
      */
     private List<ScriptParsedParam> expandCollectionElementFields(ClassNode collectionType,
                                                                   FunctionParamCategoryEnum category,
                                                                   ParseContext ctx) {
-        String elementType = innermostElementType(collectionType);
-        if (elementType == null) {
+        return collectionElementTemplate(collectionType, category, ctx, 1);
+    }
+
+    /**
+     * 递归构造集合的元素模板：元素是集合则保留一层 list 节点并下钻，元素是业务类则展开其字段；
+     * 元素不是可展开结构（{@code List<String>}、{@code List<Map<String,Object>>}）时返回 null，
+     * 由调用方回落标量层，与改造前一致。
+     */
+    private List<ScriptParsedParam> collectionElementTemplate(ClassNode collectionType,
+                                                              FunctionParamCategoryEnum category,
+                                                              ParseContext ctx, int depth) {
+        if (depth > ProjectClassExpander.MAX_FIELD_DEPTH) {
             return null;
         }
-        List<ScriptParsedParam> fields = expandScriptType(elementType, category,
-                ctx, new LinkedHashSet<>(), 1);
+        ClassNode element = collectionElementNode(collectionType);
+        if (element == null) {
+            return null;
+        }
+        ClassNode innerElement = collectionElementNode(element);
+        if (innerElement != null) {
+            // 元素还是集合（List<List<X>>）：保留这一层 list 节点，fields 装内层元素模板
+            List<ScriptParsedParam> inner = collectionElementTemplate(element, category, ctx, depth + 1);
+            if (inner == null) {
+                return null;
+            }
+            return List.of(ScriptParsedParam.builder()
+                    .name("element")
+                    .type(FunctionParamTypeEnum.LIST)
+                    .rawType(genericTypeText(element))
+                    .elementType(genericTypeText(innerElement))
+                    .category(category)
+                    .source("ANNOTATION")
+                    .fields(inner)
+                    .build());
+        }
+        // 元素是业务类：先按脚本内类展开（AST），认不出再试工程内类（反射）
+        String elementSimple = typeNodeText(element);
+        List<ScriptParsedParam> fields = expandScriptType(elementSimple, category,
+                ctx, new LinkedHashSet<>(), depth);
         return fields != null ? fields
-                : ctx.expander.expandFieldsByName(elementType, category, new LinkedHashSet<>(), 1);
+                : ctx.expander.expandFieldsByName(elementSimple, category, new LinkedHashSet<>(), depth);
+    }
+
+    /** 集合元素本身还是集合（如 {@code List<List<X>>}），需要保留中间 list 节点而非拍平。 */
+    private boolean isMultiLevelCollection(ClassNode type) {
+        ClassNode element = collectionElementNode(type);
+        return element != null && collectionElementNode(element) != null;
     }
 
     private List<ScriptParsedParam> expandFields(ClassNode userClass, FunctionParamCategoryEnum category, String source,
@@ -339,8 +379,11 @@ public class GroovyScriptParamParser implements ScriptParamParser {
                 ClassNode nestedClass = resolveUserClass(prop.getType(), ctx.classByName);
                 if (nestedClass != null && visited.add(propTypeText)) {
                     fb.fields(expandFields(nestedClass, category, source, ctx, visited, depth + 1));
+                } else if (isMultiLevelCollection(prop.getType())) {
+                    // 多级集合（List<List<X>>）：保留中间 list 节点，不拍平到最内层
+                    fb.fields(collectionElementTemplate(prop.getType(), category, ctx, depth + 1));
                 } else {
-                    // 集合泛型：List<Admin> / List<List<Admin>> → 剥到最内层元素类递归展开
+                    // 集合泛型：List<Admin> → 剥到最内层元素类递归展开
                     String innermost = innermostElementType(prop.getType());
                     ClassNode elemNode = innermost == null ? null : lookupScriptClass(innermost, ctx);
                     if (elemNode != null && visited.add(innermost)) {
