@@ -75,18 +75,22 @@ public interface DataLakeObjectMapper extends BaseMapper<Object> {
                                             @Param("offset") Integer offset,
                                             @Param("hasDeletedField") Boolean hasDeletedField);
 
-    /** 整表按指定列排序取数，limit 为空表示不限制条数 */
+    /** 整表按指定列排序取数，limit 为空表示不限制条数；filterColumnName 非空时按该列等值过滤 */
     List<Map<String, Object>> querySortedTableData(@Param("schemaName") String schemaName,
                                                    @Param("tableName") String tableName,
                                                    @Param("columnNames") List<String> columnNames,
+                                                   @Param("filterColumnName") String filterColumnName,
+                                                   @Param("filterColumnValue") Object filterColumnValue,
                                                    @Param("orderBy") String orderBy,
                                                    @Param("sort") String sort,
                                                    @Param("limit") Integer limit,
                                                    @Param("hasDeletedField") Boolean hasDeletedField);
 
     default List<Map<String, Object>> querySortedData(String schemaName, String tableName, List<String> columnNames,
+                                                      String filterColumnName, Object filterColumnValue,
                                                       String orderBy, String sort, Integer limit, Boolean hasDeletedField) {
-        var records = querySortedTableData(schemaName, tableName, columnNames, orderBy, sort, limit, hasDeletedField);
+        var records = querySortedTableData(schemaName, tableName, columnNames, filterColumnName, filterColumnValue,
+                orderBy, sort, limit, hasDeletedField);
         return populate(schemaName, records, tableName, columnNames);
     }
 
@@ -112,12 +116,14 @@ public interface DataLakeObjectMapper extends BaseMapper<Object> {
             return Lists.newArrayList(new TreeMap<>(map));
         }
         List<Map<String, Object>> newRecords = records.stream().map(r -> {
+            // 整行属性列全空时 MyBatis 给的是 null 元素，按「所有列都为空值」的一行处理
+            Map<String, Object> record = r == null ? new HashMap<>() : r;
             columnNames.forEach(col -> {
-                if (!r.containsKey(col)) {
-                    r.put(col, null);
+                if (!record.containsKey(col)) {
+                    record.put(col, null);
                 }
             });
-            return new TreeMap<>(r);
+            return new TreeMap<>(record);
         }).collect(Collectors.toList());
         return newRecords;
     }

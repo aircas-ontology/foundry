@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.util.Date;
+import java.util.List;
 
 @Data
 @Builder
@@ -31,4 +32,7 @@ public class EventStageVO {
 
     @Schema(description = "事件编号，多个用逗号分割")
     private String eventCodes;
+
+    @Schema(description = "阶段下的聚合事件列表")
+    private List<EventAggVO> events;
 }

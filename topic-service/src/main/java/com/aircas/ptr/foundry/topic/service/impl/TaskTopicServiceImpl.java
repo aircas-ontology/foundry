@@ -6,11 +6,14 @@ import com.aircas.ptr.foundry.topic.model.enums.TaskStatusEnum;
 import com.aircas.ptr.foundry.topic.model.param.TaskTopicCreateParam;
 import com.aircas.ptr.foundry.topic.model.param.TaskTopicQueryParam;
 import com.aircas.ptr.foundry.topic.model.param.TaskTopicUpdateParam;
+import com.aircas.ptr.foundry.topic.model.po.EventAgg;
 import com.aircas.ptr.foundry.topic.model.po.EventStage;
 import com.aircas.ptr.foundry.topic.model.po.TaskTopic;
+import com.aircas.ptr.foundry.topic.model.vo.EventAggVO;
 import com.aircas.ptr.foundry.topic.model.vo.EventStageVO;
 import com.aircas.ptr.foundry.topic.model.vo.TaskTopicDetailVO;
 import com.aircas.ptr.foundry.topic.model.vo.TaskTopicVO;
+import com.aircas.ptr.foundry.topic.repository.EventAggMapper;
 import com.aircas.ptr.foundry.topic.repository.EventStageMapper;
 import com.aircas.ptr.foundry.topic.repository.TaskTopicMapper;
 import com.aircas.ptr.foundry.topic.service.TaskTopicService;
@@ -25,14 +28,21 @@ import jakarta.annotation.Resource;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Date;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 public class TaskTopicServiceImpl extends ServiceImpl<TaskTopicMapper, TaskTopic> implements TaskTopicService {
 
     @Resource
     private EventStageMapper eventStageMapper;
+
+    @Resource
+    private EventAggMapper eventAggMapper;
 
     @Transactional
     @Override
@@ -145,17 +155,31 @@ public class TaskTopicServiceImpl extends ServiceImpl<TaskTopicMapper, TaskTopic
     }
 
     private List<EventStageVO> listEventStages(Long taskCode) {
-        return eventStageMapper.selectList(new LambdaQueryWrapper<EventStage>()
-                        .eq(EventStage::getTaskCode, taskCode)
-                        .eq(EventStage::getDeleted, DeletedFlagEnum.NOT_DELETED.getCode())
-                        .orderByAsc(EventStage::getStartTime)
-                        .orderByAsc(EventStage::getId))
-                .stream()
-                .map(this::toEventStageVO)
+        List<EventStage> stages = eventStageMapper.selectList(new LambdaQueryWrapper<EventStage>()
+                .eq(EventStage::getTaskCode, taskCode)
+                .eq(EventStage::getDeleted, DeletedFlagEnum.NOT_DELETED.getCode())
+                .orderByAsc(EventStage::getStartTime)
+                .orderByAsc(EventStage::getId));
+        if (stages.isEmpty()) {
+            return Collections.emptyList();
+        }
+        Map<Long, List<EventAggVO>> eventsByStage = listEventAggs(stages.stream().map(EventStage::getId).toList());
+        return stages.stream()
+                .map(stage -> toEventStageVO(stage, eventsByStage.getOrDefault(stage.getId(), Collections.emptyList())))
                 .toList();
     }
 
-    private EventStageVO toEventStageVO(EventStage stage) {
+    private Map<Long, List<EventAggVO>> listEventAggs(List<Long> stageCodes) {
+        return eventAggMapper.selectList(new LambdaQueryWrapper<EventAgg>()
+                        .in(EventAgg::getStageId, stageCodes)
+                        .orderByAsc(EventAgg::getEventTime)
+                        .orderByAsc(EventAgg::getId))
+                .stream()
+                .collect(Collectors.groupingBy(EventAgg::getStageId, LinkedHashMap::new,
+                        Collectors.mapping(this::toEventAggVO, Collectors.toList())));
+    }
+
+    private EventStageVO toEventStageVO(EventStage stage, List<EventAggVO> events) {
         return EventStageVO.builder()
                 .id(stage.getId())
                 .taskCode(stage.getTaskCode())
@@ -164,6 +188,25 @@ public class TaskTopicServiceImpl extends ServiceImpl<TaskTopicMapper, TaskTopic
                 .endTime(stage.getEndTime())
                 .eventCount(stage.getEventCount())
                 .eventCodes(stage.getEventCodes())
+                .events(events)
+                .build();
+    }
+
+    private EventAggVO toEventAggVO(EventAgg event) {
+        return EventAggVO.builder()
+                .id(event.getId())
+                .eventNo(event.getEventNo())
+                .eventTitle(event.getEventTitle())
+                .eventTime(event.getEventTime())
+                .status(event.getStatus())
+                .process(event.getProcess())
+                .location(event.getLocation())
+                .eventLon(event.getEventLon())
+                .eventLat(event.getEventLat())
+                .sourceType(event.getSourceType())
+                .sourcePlatform(event.getSourcePlatform())
+                .confidence(event.getConfidence())
+                .eventContent(event.getEventContent())
                 .build();
     }
 

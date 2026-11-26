@@ -84,8 +84,8 @@
         LIMIT ${limit} OFFSET ${offset}
     </select>
 
-    <!-- 整表按指定列排序取数：limit 为空表示不限制条数；排序列的空值排到最后，
-         否则降序取「最新一条」会先命中时间为空的行 -->
+    <!-- 整表按指定列排序取数：limit 为空表示不限制条数；filterColumnName 非空时按该列等值过滤；
+         排序列的空值排到最后，否则降序取「最新一条」会先命中时间为空的行 -->
     <select id="querySortedTableData" resultType="java.util.HashMap">
         SELECT
         <if test="columnNames != null and columnNames.size() > 0">
@@ -98,8 +98,11 @@
         </if>
         FROM "${schemaName}"."${tableName}"
         <where>
+            <if test="filterColumnName != null and filterColumnName != ''">
+                "${filterColumnName}" = #{filterColumnValue}
+            </if>
             <if test="hasDeletedField">
-                "is_deleted" = 0
+                AND "is_deleted" = 0
             </if>
         </where>
         <if test="orderBy != null and orderBy != ''">
