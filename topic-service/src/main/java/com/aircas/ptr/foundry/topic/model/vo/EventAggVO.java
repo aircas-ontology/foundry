@@ -49,4 +49,13 @@ public class EventAggVO {
 
     @Schema(description = "事件内容")
     private String eventContent;
+
+    @Schema(description = "关联对象 id，对应 ontology_meta.unique_identifier")
+    private String ontologyIdentifier;
+
+    @Schema(description = "对象实例 id，实例主键值，数字主键按字符串存")
+    private String instanceId;
+
+    @Schema(description = "对象展示名称，对应 ontology_meta.display_name")
+    private String ontologyDisplayName;
 }

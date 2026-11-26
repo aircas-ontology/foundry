@@ -92,4 +92,19 @@ public class EventAgg {
      * 事件阶段编号，对应事件阶段 id
      */
     private Long stageId;
+
+    /**
+     * 关联对象 id，对应 ontology_meta.unique_identifier
+     */
+    private String ontologyUniqueIdentifier;
+
+    /**
+     * 对象实例 id，实例主键值，数字主键按字符串存
+     */
+    private String instanceId;
+
+    /**
+     * 对象展示名称，对应 ontology_meta.display_name
+     */
+    private String ontologyDisplayName;
 }
