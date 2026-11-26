@@ -4594,6 +4594,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                                 .propertyUniqueIdentifier(v.getPropertyUniqueIdentifier())
                                 .propertyType(prop == null ? null : prop.getPropertyType())
                                 .displayName(prop == null ? null : prop.getDisplayName())
+                                .propertyDisplayName(prop == null ? null : prop.getDisplayName())
                                 // 分组名决定按行取参/写回时 dataPrimaryKeys 的键；与执行侧同源实时取，不存快照
                                 .storageGroup(prop == null ? null : prop.getStorageGroup())
                                 .ontologyUniqueIdentifier(StringUtils.isNotEmpty(v.getOntologyUniqueIdentifier())
