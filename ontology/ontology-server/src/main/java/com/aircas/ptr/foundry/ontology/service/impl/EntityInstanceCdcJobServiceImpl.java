@@ -153,7 +153,7 @@ public class EntityInstanceCdcJobServiceImpl implements EntityInstanceCdcJobServ
                 deleteInstanceByPk(OntologyInstanceConverter.buildPk(
                         schema, table, pkProp.getOntologyUniqueIdentifier(), pkValue));
                 deleteGraphNode(pkProp.getOntologyUniqueIdentifier(), pkValue);
-                triggerMainInstanceEvent(pkProp.getOntologyUniqueIdentifier(), pkValue, table, before.keySet());
+                triggerMainInstanceEvent(pkProp.getOntologyUniqueIdentifier(), pkValue, table, before);
             }
         }
         triggerStorageGroupEvents(schema, table, before, before.keySet(), RuleMonitorTypeEnum.DELETE);
@@ -206,7 +206,7 @@ public class EntityInstanceCdcJobServiceImpl implements EntityInstanceCdcJobServ
             // 行级事件到达后触发规则调度：监测条件按事件类型+对象+分组匹配，属性条件按表+变更字段过滤
             try {
                 actionRuleTriggerService.onDataChange(meta.getUniqueIdentifier(), pkValue, table,
-                        MAIN_STORAGE_GROUP, eventType, changedColumns);
+                        MAIN_STORAGE_GROUP, eventType, changedColumns, row);
             } catch (Exception e) {
                 log.error("规则调度触发失败, ontology={}, pk={}", meta.getUniqueIdentifier(), pkValue, e);
             }
@@ -275,11 +275,12 @@ public class EntityInstanceCdcJobServiceImpl implements EntityInstanceCdcJobServ
         log.debug("数据湖实例文档删除, pk={}, 删除 {} 条", pk, response.getDeleted());
     }
 
-    /** 主表行被删除：实例文档与节点已删，再触发规则监测（删除后属性条件取不到值，只有监测条件能命中） */
-    private void triggerMainInstanceEvent(String ontologyUid, Object pkValue, String table, Set<String> columns) {
+    /** 主表行被删除：实例文档与节点已删，再触发规则（删除后取不到当前值，新增/删除条件按删除前的行值判断） */
+    private void triggerMainInstanceEvent(String ontologyUid, Object pkValue, String table, Map<String, Object> before) {
+        Set<String> columns = before == null ? Set.of() : before.keySet();
         try {
             actionRuleTriggerService.onDataChange(ontologyUid, pkValue, table,
-                    MAIN_STORAGE_GROUP, RuleMonitorTypeEnum.DELETE, columns);
+                    MAIN_STORAGE_GROUP, RuleMonitorTypeEnum.DELETE, columns, before);
         } catch (Exception e) {
             log.error("规则调度触发失败, ontology={}, pk={}", ontologyUid, pkValue, e);
         }
@@ -317,7 +318,7 @@ public class EntityInstanceCdcJobServiceImpl implements EntityInstanceCdcJobServ
                 continue;
             }
             try {
-                actionRuleTriggerService.onDataChange(uid, pkValue, table, group, eventType, changedColumns);
+                actionRuleTriggerService.onDataChange(uid, pkValue, table, group, eventType, changedColumns, row);
             } catch (Exception e) {
                 log.error("规则调度触发失败, ontology={}, group={}, table={}, pk={}",
                         uid, group, table, pkValue, e);
