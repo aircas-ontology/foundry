@@ -6486,6 +6486,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     /**
      * 新增/删除条件：选对象 + 属性 + 输入固定值比较，不再选存储分组（分组由属性推导）。
      * 对象必须启用、属性必须在该对象上启用并绑定数据源列，避免配了但永远收不到事件。
+     * 属性在主表(main)分组时不能指定实例：事件行就是实例本身，指定实例会让新增几乎永远不命中。
      */
     private void validateEventOperate(RuleJudgeItemParam item, int index) {
         String name = "judgeParams[" + index + "]";
@@ -6522,6 +6523,12 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         PreconditionUtils.checkNotNull(property, name + " 监测属性不存在或未启用", HttpStatus.BAD_REQUEST);
         PreconditionUtils.checkArgument(StringUtils.isNotBlank(property.getDatasourceColumnName()),
                 name + " 监测属性未绑定数据源列，无法按事件行取值", HttpStatus.BAD_REQUEST);
+        // 主表行就是实例本身：新增/删除的实例由事件行决定，指定实例没有意义（新增几乎永远不命中）
+        var storageGroup = StringUtils.defaultIfBlank(property.getStorageGroup(), MAIN_STORAGE_GROUP);
+        PreconditionUtils.checkArgument(!(MAIN_STORAGE_GROUP.equals(storageGroup)
+                        && StringUtils.isNotBlank(operate.getEntityId())),
+                name + " 监测主表(main)属性时不能指定实例：新增/删除的实例即事件行本身，entityId 请留空",
+                HttpStatus.BAD_REQUEST);
     }
 
     /** 定稿模式的展示用监控对象：优先执行目标对象，其次首个条件操作数对象 */

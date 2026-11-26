@@ -32,7 +32,7 @@ public class RuleJudgeItemParam {
             + "事件类型已在规则组 monitorType 上选过时本条可省略；都为空时按属性比较条件（修改语义）处理", example = "新增")
     private RuleMonitorTypeEnum monitorType;
 
-    @Schema(name = "leftOperate", description = "左操作数：选对象+属性（可选 entityId 限定实例）；新增/删除按事件行该属性值判断", required = true)
+    @Schema(name = "leftOperate", description = "左操作数：选对象+属性（子表属性可选 entityId 限定实例；主表属性不能指定实例）；新增/删除按事件行该属性值判断", required = true)
     private RuleOperateParam leftOperate;
 
     @Schema(name = "rightOperate", description = "右操作数：新增/删除用 fixed + fixValue 输入比较值；修改可用 fixed，也可用另一个实例属性 dynamic 比较")
