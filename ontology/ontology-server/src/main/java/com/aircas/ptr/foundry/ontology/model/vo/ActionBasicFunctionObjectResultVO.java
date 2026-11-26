@@ -18,8 +18,8 @@ import java.util.List;
 @Schema(description = "基础函数行为的一次查询结果")
 public class ActionBasicFunctionObjectResultVO {
 
-    @Schema(name = "ontologyUniqueIdentifier", description = "该条结果对应的对象id；聚合方式选了多个对象时为空，"
-            + "值是这些对象合批算出来的，不指向其中某一个", example = "3f2a9c1e-7b4d-4a86-9e21-5c8d1f0a6b34")
+    @Schema(name = "ontologyUniqueIdentifier", description = "该条结果对应的对象id；聚合方式选了多个对象、查询方式选了多个对象时为空，"
+            + "结果是这些对象的行/值合批得到的，不指向其中某一个", example = "3f2a9c1e-7b4d-4a86-9e21-5c8d1f0a6b34")
     private String ontologyUniqueIdentifier;
 
     @Schema(name = "ontologyDisplayName", description = "对象名称；聚合方式选了多个对象时是各对象名拼在一起", example = "卫星")

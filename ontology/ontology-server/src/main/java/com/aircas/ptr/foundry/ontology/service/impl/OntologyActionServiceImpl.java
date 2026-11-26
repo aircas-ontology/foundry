@@ -1424,6 +1424,16 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 .collect(Collectors.toList());
     }
 
+    /**
+     * 基础函数多对象公共字段：前端选了多个对象后，只能从这批字段里挑查询字段、聚合目标和条件字段。
+     * <p>取交集、类型一致性与数据源关联校验都在执行器里，与保存/执行时的校验同一口径。</p>
+     */
+    @Override
+    public BasicFunctionCommonPropertyVO basicFunctionCommonProperties(BasicFunctionCommonPropertyParam param) {
+        PreconditionUtils.checkNotNull(param, "要提供对象id", HttpStatus.BAD_REQUEST);
+        return basicFunctionActionExecutor.commonProperties(param.getOntologyIdentifiers(), param.getOntologySpaceId());
+    }
+
     /** 基础函数行为：不绑算子，出参与实例要求都按配置里的对象算 */
     private boolean isBasicFunctionAction(OntologyAction bound) {
         return bound.getActionKind() == ActionKindEnum.BASE
@@ -4668,7 +4678,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         // 基础函数按配置一次把所有对象查一遍（配了回写也是这一次执行落库），按对象下实例逐个循环只会把同一个聚合重复算出来
         if (contextInfoDTO.getActionDetailVO().getSubjectType() == ActionSubjectTypeEnum.BASIC_FUNCTION) {
             return runBasicFunctionAction(contextInfoDTO.getActionDetailVO(), param.getOntologyUniqueIdentifier(),
-                    param.getEntityPrimaryKey(), null, null);
+                    param.getEntityPrimaryKey(), null, null, null);
         }
         checkBulkExecutable(contextInfoDTO.getActionDetailVO());
         //获取实体主键列表
@@ -4848,12 +4858,13 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 listParams == null ? listInputParamNames(action) : listParams);
     }
 
-    /** 基础函数行为测试：按配置真实查一遍，选了实例的对象只查该实例 */
+    /** 基础函数行为测试：按配置真实查一遍，选了实例的对象只查该实例；外部输入条件取 params 里的值 */
     private ActionTestResultVO testBasicFunctionAction(OntologyAction action, OntologyActionDetailVO detail,
                                                        ActionInvokeParam param) {
         // 请求按对象传了实例就能认出是哪个挂载对象；只给对象级主键时沿用合并前的单值口径
         var result = runBasicFunctionAction(detail, requestActionObject(action, param),
-                param.getEntityPrimaryKey(), param.getEntityPrimaryKeys(), param.getWriteBackEntityPrimaryKey());
+                param.getEntityPrimaryKey(), param.getEntityPrimaryKeys(), param.getWriteBackEntityPrimaryKey(),
+                param.getParams());
         return testResult(action, "行为执行成功").setResult(result);
     }
 
@@ -4881,7 +4892,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         }
         if (subjectType == ActionSubjectTypeEnum.BASIC_FUNCTION) {
             return runBasicFunctionAction(detail, param.getOntologyUniqueIdentifier(),
-                    param.getEntityPrimaryKey(), param.getEntityPrimaryKeys(), null);
+                    param.getEntityPrimaryKey(), param.getEntityPrimaryKeys(), null, externalParams);
         }
         throw new BusinessException("该行为需要绑定算子后才能执行：" + action.getApi(), HttpStatus.BAD_REQUEST);
     }
@@ -4895,10 +4906,11 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
      * @param entityPrimaryKey          对象级的实例主键，归属对象就是 requestObject（只有一个查询对象时不传对象id 也算给它）
      * @param primaryKeyByObject        按对象给的实例主键，优先于 entityPrimaryKey；回写目标对象不是查询对象时靠它给实例
      * @param writeBackEntityPrimaryKey 单独指定的回写实例主键；不参与查询收窄
+     * @param externalParams            过滤条件里外部输入的参数名 -&gt; 值；没声明外部输入条件时不看这份值
      */
     private String runBasicFunctionAction(OntologyActionDetailVO detail, String requestObject,
                                           Object entityPrimaryKey, Map<String, Object> primaryKeyByObject,
-                                          Object writeBackEntityPrimaryKey) {
+                                          Object writeBackEntityPrimaryKey, Map<String, Object> externalParams) {
         var config = detail.getBasicFunction();
         PreconditionUtils.checkNotNull(config, "基础函数行为没有查询配置：" + detail.getActionApi(), HttpStatus.BAD_REQUEST);
         // 没配回写还传落点实例就是配了不生效，直接拒掉，别让调用方以为数据落库了
@@ -4916,7 +4928,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             }
         });
         if (entityPrimaryKey == null) {
-            return basicFunctionActionExecutor.run(config, targets, writeBackEntityPrimaryKey);
+            return basicFunctionActionExecutor.run(config, targets, writeBackEntityPrimaryKey, externalParams);
         }
         if (identifiers.contains(requestObject)) {
             targets.putIfAbsent(requestObject, entityPrimaryKey);
@@ -4930,7 +4942,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             throw new BusinessException("基础函数行为绑了多个对象，按实例查询时要按对象传实例主键"
                     + "（entityPrimaryKeys：对象id -> 实例主键）：" + detail.getActionApi(), HttpStatus.BAD_REQUEST);
         }
-        return basicFunctionActionExecutor.run(config, targets, writeBackEntityPrimaryKey);
+        return basicFunctionActionExecutor.run(config, targets, writeBackEntityPrimaryKey, externalParams);
     }
 
     /** 行为测试的入参形状与执行不同，这里把测试给的键包成执行用的单实体参数 */

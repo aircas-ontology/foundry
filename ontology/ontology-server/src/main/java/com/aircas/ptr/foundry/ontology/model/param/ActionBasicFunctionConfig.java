@@ -17,9 +17,10 @@ import java.util.List;
  * 基础函数行为（subjectType=BASIC_FUNCTION）的查询定义，序列化为 JSON 存入 ontology_action.basic_function_config。
  * <p>
  * 与基础查询算子的配置同形，但字段引用的是真实属性 apiName，不再有变量名与变量绑定那一层：
- * 单对象时前端从该对象的属性里选，多对象时手输一个 apiName、由创建校验确认每个对象都有这个属性。
- * 多对象只能聚合，且这些对象必须属于同一个对象分类；聚合是把各对象命中的行合成一批，只算一个统一聚合值
- * （不是每个对象各算一个，那样 AVG/COUNT 合不出全局值）。查询只作用于一个对象。
+ * 单对象时前端从该对象的属性里选，多对象时只能选各对象共有的字段（apiName 与类型都一致）。
+ * 聚合方式是这些对象的行合成一批，只算一个统一聚合值（不是每个对象各算一个，那样 AVG/COUNT 合不出全局值）；
+ * 查询方式是每个对象各查一遍选中的字段，再 UNION ALL 合并后统一分页。多对象必须属于同一个对象分类。
+ * <p>过滤条件可以声明取值来源：固定值写在配置里，外部输入在测试/执行时按 paramName 从 params 传入。</p>
  * <p>{@link #writeBack} 配了才落库：不配就是纯查询，行为输出仍只是返回结果。</p>
  */
 @Data
@@ -30,7 +31,8 @@ import java.util.List;
 @Schema(description = "基础函数行为配置")
 public class ActionBasicFunctionConfig {
 
-    @Schema(name = "ontologyIdentifiers", description = "查询的对象id 列表，至少一个；多于一个时必须是同一对象分类下的对象，且只能做聚合",
+    @Schema(name = "ontologyIdentifiers", description = "查询的对象id 列表，至少一个；多于一个时必须是同一对象分类下的对象，"
+            + "聚合按合批算一个统一值，查询按各对象 UNION ALL 合并后统一分页",
             example = "3f2a9c1e-7b4d-4a86-9e21-5c8d1f0a6b34")
     private List<String> ontologyIdentifiers;
 
@@ -51,11 +53,20 @@ public class ActionBasicFunctionConfig {
     private String targetField;
 
     @Schema(name = "selectFields", description = "查询字段属性的 apiName 列表；mode=QUERY 时必填，至少一个。"
+            + "多对象时必须是各对象共有的字段（apiName 与类型都一致），结果按对象 UNION ALL 合并后统一分页；"
             + "字段落在子表（一对多存储分组）时结果按子表行展开", example = "[\"name\",\"speed\"]")
     private List<String> selectFields;
 
+    @Schema(name = "pageNum", description = "查询方式的分页号，作用在结果行上（多对象时作用在 UNION ALL 合并后的整批结果上），默认1", example = "1")
+    private Integer pageNum = 1;
+
+    @Schema(name = "pageSize", description = "查询方式的每页条数，默认10；配了结果回写时这里只决定回显几行，回写仍落全部命中行", example = "10")
+    private Integer pageSize = 10;
+
     @Schema(name = "filters", description = "过滤条件（嵌套过滤树，propertyApiName 写真实属性 apiName）；不传则不加条件。"
-            + "条件里的属性同样必须在每个选中的对象上都存在")
+            + "条件里的属性同样必须在每个选中对象上都存在且类型一致。"
+            + "每个条件的 source 声明取值来源：FIXED（默认，value/values 写死）或 EXTERNAL（配 paramName，"
+            + "测试/执行时在 params 里按参数名给值）")
     private FilterGroupParam filters;
 
     @Schema(name = "writeBack", description = "结果回写配置；不传就是只查不落库。"

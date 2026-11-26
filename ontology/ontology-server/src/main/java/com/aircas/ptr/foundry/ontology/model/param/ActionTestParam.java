@@ -81,6 +81,7 @@ public class ActionTestParam {
     private Object linkEntityPrimaryKey;
 
     @Schema(name = "params", description = "来源为外部输入的参数取值（参数名 -> 值），固定值不在此传；"
+            + "基础函数的过滤条件声明了外部输入时，按条件的 paramName 在这里给值，IN 传数组、BETWEEN 传两个值的数组；"
             + "数组值就是 LIST 参数本身的内容，不参与批量组合")
     private Map<String, Object> params;
 }

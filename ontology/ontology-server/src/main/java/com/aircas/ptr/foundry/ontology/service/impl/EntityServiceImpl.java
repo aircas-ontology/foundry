@@ -54,6 +54,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.function.Predicate;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -3932,6 +3933,161 @@ public class EntityServiceImpl implements EntityService {
     /** 统一聚合外层子查询的表别名 */
     private static final String UNION_SOURCE_ALIAS = "union_src";
 
+    /** 跨对象合并查询外层子查询的表别名：分页与计数包在 UNION ALL 之外 */
+    private static final String UNION_QUERY_ALIAS = "union_query_src";
+
+    @Override
+    public Page<List<EntityPropertyGenericQueryVO>> genericQueryUnion(EntityUnionQueryParam param) {
+        PreconditionUtils.checkNotNull(param, "合并查询参数不能为空", HttpStatus.BAD_REQUEST);
+        var identifiers = param.getOntologyIdentifiers() == null ? List.<String>of()
+                : param.getOntologyIdentifiers().stream().filter(StringUtils::isNotEmpty)
+                .distinct().collect(Collectors.toList());
+        PreconditionUtils.checkArgument(!identifiers.isEmpty(), "合并查询至少要有一个对象", HttpStatus.BAD_REQUEST);
+        // 字段按 apiName 共用，重复的只查一次
+        var selectParams = new LinkedHashMap<String, OntologySelectPropertyParam>();
+        if (param.getSelectProperties() != null) {
+            for (var selectProp : param.getSelectProperties()) {
+                if (selectProp != null && StringUtils.isNotEmpty(selectProp.getPropertyApiName())) {
+                    selectParams.putIfAbsent(selectProp.getPropertyApiName(), selectProp);
+                }
+            }
+        }
+        PreconditionUtils.checkArgument(!selectParams.isEmpty(), "合并查询至少要选择一个字段", HttpStatus.BAD_REQUEST);
+        var selectProperties = new ArrayList<>(selectParams.values());
+        var pageNum = param.getPageNum() == null || param.getPageNum() < 1 ? 1 : param.getPageNum();
+        var pageSize = param.getPageSize() == null || param.getPageSize() < 1 ? 10 : param.getPageSize();
+
+        var branches = new ArrayList<UnionQueryBranch>();
+        for (var identifier : identifiers) {
+            branches.add(buildUnionQueryBranch(identifier,
+                    param.getEntityPrimaryKeys() == null ? null : param.getEntityPrimaryKeys().get(identifier),
+                    selectProperties, param.getFilters()));
+        }
+        var unionSql = branches.stream().map(UnionQueryBranch::sql).collect(Collectors.joining(" UNION ALL "));
+        var unionAlias = wrapWithDoubleQuotes(UNION_QUERY_ALIAS);
+        var total = objectMapper.queryCountBySql("SELECT COUNT(*) FROM (" + unionSql + ") AS " + unionAlias);
+        if (total == 0) {
+            return new Page<>(pageNum, pageSize, 0);
+        }
+        var offset = (long) (pageNum - 1) * pageSize;
+        var dataSql = "SELECT * FROM (" + unionSql + ") AS " + unionAlias
+                + " LIMIT " + pageSize + " OFFSET " + offset;
+        List<Map<String, Object>> resultMaps;
+        try {
+            resultMaps = objectMapper.queryBySql(dataSql);
+        } catch (DataAccessException e) {
+            log.error("跨对象合并查询执行失败, sql: {}", dataSql, e);
+            var cause = StringUtils.defaultString(e.getMostSpecificCause().getMessage());
+            if (cause.contains("cannot be matched")) {
+                throw new BusinessException("各对象上同名字段关联的数据源列类型不一致，合不到一列里，请检查这些字段的数据类型",
+                        HttpStatus.BAD_REQUEST);
+            }
+            throw e;
+        }
+        // 字段展示名按第一个对象取：合批之后的值认不出来自哪个对象，展示名只是这一列的表头
+        var firstPropMap = branches.get(0).propMap();
+        var resultVOs = new ArrayList<List<EntityPropertyGenericQueryVO>>(resultMaps.size());
+        for (var row : resultMaps) {
+            var voList = new ArrayList<EntityPropertyGenericQueryVO>(selectProperties.size());
+            for (var selectProp : selectProperties) {
+                var apiName = selectProp.getPropertyApiName();
+                var prop = firstPropMap.get(apiName);
+                voList.add(EntityPropertyGenericQueryVO.builder()
+                        .propertyApiName(apiName)
+                        .propertyDisplayName(prop != null ? prop.getDisplayName() : apiName)
+                        .alias(selectProp.getAlias())
+                        .value(row == null ? null : row.get(apiName))
+                        .build());
+            }
+            resultVOs.add(voList);
+        }
+        var page = new Page<List<EntityPropertyGenericQueryVO>>(pageNum, pageSize, total);
+        page.setRecords(resultVOs);
+        return page;
+    }
+
+    /**
+     * 合并查询的一个对象分支：按该对象自己的属性表把选中字段的列查出来，列名统一用 apiName。
+     * <p>表的关联、实例主键与过滤条件的处理与 {@link #genericQuery} 同一套：条件里引用到子表字段时
+     * 一样要 LEFT JOIN 过来，命中几行就贡献几行。</p>
+     */
+    private UnionQueryBranch buildUnionQueryBranch(String ontologyIdentifier, Object entityPrimaryKey,
+                                                   List<OntologySelectPropertyParam> selectProperties,
+                                                   FilterGroupParam filters) {
+        PreconditionUtils.checkArgument(StringUtils.isNotEmpty(ontologyIdentifier), "合并查询的对象不能为空", HttpStatus.BAD_REQUEST);
+        var props = propertyMapper.selectList(new LambdaQueryWrapper<OntologyProperty>()
+                .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyIdentifier));
+        var propMap = props.stream()
+                .collect(Collectors.toMap(OntologyProperty::getApiName, v -> v, (existing, ignored) -> existing));
+        var pkProp = props.stream()
+                .filter(p -> p.getIsPrimaryKey() != null && p.getIsPrimaryKey() == 1).findFirst().orElse(null);
+        // 报错文案要点对象名，判定通过时不去查：checkArgument 的消息参数是先求值的，放这里每个对象都要白查一遍库
+        if (pkProp == null || StringUtils.isEmpty(pkProp.getDatasourceId())) {
+            throw new BusinessException("对象[" + objectDisplayName(ontologyIdentifier)
+                    + "]的主键属性不存在或未关联数据源，合并查询跑不出来", HttpStatus.BAD_REQUEST);
+        }
+        if (StringUtils.isEmpty(pkProp.getDatasourceSchema())) {
+            throw new BusinessException("对象[" + objectDisplayName(ontologyIdentifier)
+                    + "]的数据源 schema 为空，请检查数据源配置", HttpStatus.BAD_REQUEST);
+        }
+        var mainSchema = pkProp.getDatasourceSchema();
+        var mainDs = pkProp.getDatasourceId();
+        var selectBuilder = new StringBuilder();
+        var allPropApiNames = new LinkedHashSet<String>();
+        for (var selectProp : selectProperties) {
+            var apiName = selectProp.getPropertyApiName();
+            var prop = propMap.get(apiName);
+            if (prop == null || StringUtils.isEmpty(prop.getDatasourceId())) {
+                throw new BusinessException("对象[" + objectDisplayName(ontologyIdentifier) + "]的属性" + apiName
+                        + "不存在或未关联数据源，合并查询要求每个对象上都有这些字段", HttpStatus.BAD_REQUEST);
+            }
+            if (selectBuilder.length() > 0) {
+                selectBuilder.append(",");
+            }
+            selectBuilder.append(wrapColumnRef(mainSchema, prop.getDatasourceId(), prop.getDatasourceColumnName()))
+                    .append(" AS ").append(wrapWithDoubleQuotes(apiName));
+            allPropApiNames.add(apiName);
+        }
+        allPropApiNames.addAll(collectFilterPropertyApiNames(filters));
+        var fromBuilder = new StringBuilder(wrapTableRef(mainSchema, mainDs));
+        var tableMappingMap = new HashMap<String, TableFieldMapping>();
+        tableFieldMappingMapper.selectBySourceTable(mainSchema, mainDs)
+                .forEach(mapping -> tableMappingMap.put(mapping.getTargetTableName(), mapping));
+        var joinedTables = Sets.newHashSet(mainDs);
+        for (var apiName : allPropApiNames) {
+            var joinProp = propMap.get(apiName);
+            if (joinProp == null || StringUtils.isEmpty(joinProp.getDatasourceId())
+                    || !joinedTables.add(joinProp.getDatasourceId())) {
+                continue;
+            }
+            var mapping = tableMappingMap.get(joinProp.getDatasourceId());
+            PreconditionUtils.checkArgument(mapping != null,
+                    "未找到数据源表 " + joinProp.getDatasourceId() + " 与主表 " + mainDs + " 的关联关系", HttpStatus.BAD_REQUEST);
+            fromBuilder.append(" LEFT JOIN ").append(wrapTableRef(mainSchema, joinProp.getDatasourceId()))
+                    .append(" ON ").append(wrapColumnRef(mainSchema, mainDs, mapping.getSourceColumnName())).append(" = ")
+                    .append(wrapColumnRef(mainSchema, joinProp.getDatasourceId(), mapping.getTargetColumnName()));
+        }
+        var branchFilters = filters;
+        if (entityPrimaryKey != null) {
+            branchFilters = andPrimaryKeyFilter(branchFilters, pkProp.getApiName(), entityPrimaryKey);
+        }
+        if (branchFilters != null) {
+            validateFilterGroup(branchFilters, propMap);
+        }
+        var whereBuilder = new StringBuilder();
+        if (branchFilters != null && CollectionUtils.isNotEmpty(branchFilters.getChildren())) {
+            var whereClause = buildWhereClause(branchFilters, propMap, mainSchema);
+            if (StringUtils.isNotEmpty(whereClause)) {
+                whereBuilder.append(" WHERE ").append(whereClause);
+            }
+        }
+        return new UnionQueryBranch("SELECT " + selectBuilder + " FROM " + fromBuilder + whereBuilder, propMap);
+    }
+
+    /** 合并查询的一个对象分支：拼好的查询 SQL + 该对象的属性表 */
+    private record UnionQueryBranch(String sql, Map<String, OntologyProperty> propMap) {
+    }
+
     @Override
     public Page<List<EntityPropertyGenericQueryVO>> genericAggregateUnion(EntityUnionAggregateParam param) {
         PreconditionUtils.checkNotNull(param, "统一聚合查询参数不能为空", HttpStatus.BAD_REQUEST);
@@ -4319,6 +4475,9 @@ public class EntityServiceImpl implements EntityService {
         return propType;
     }
 
+    /** 数值字面量：允许符号、小数、科学计数，其余（含引号、分号）一律拒绝 */
+    private static final Pattern NUMERIC_LITERAL = Pattern.compile("^[+-]?(\\d+(\\.\\d*)?|\\.\\d+)([eE][+-]?\\d+)?$");
+
     private String formatSqlValue(Object value, OntologyDataTypeEnum type) {
         if (value == null) {
             return "NULL";
@@ -4329,7 +4488,11 @@ public class EntityServiceImpl implements EntityService {
             if (StringUtils.isBlank(strVal)) {
                 throw new BusinessException("数值型过滤值不能为空", HttpStatus.BAD_REQUEST);
             }
-            return strVal;
+            // 数值直接拼进 SQL 不加引号：外部输入的值也走到这里，不是合法数字就报错，别让内容进语句
+            if (!NUMERIC_LITERAL.matcher(strVal.trim()).matches()) {
+                throw new BusinessException("数值型过滤值不合法：" + strVal, HttpStatus.BAD_REQUEST);
+            }
+            return strVal.trim();
         }
         if (type == OntologyDataTypeEnum.Bool) {
             return Boolean.TRUE.equals(value) ? "TRUE" : "FALSE";
@@ -4847,6 +5010,9 @@ public class EntityServiceImpl implements EntityService {
         for (FilterNodeParam node : group.getChildren()) {
             if (node.getType() == FilterNodeTypeEnum.FILTER && node.getFilter() != null) {
                 var filter = node.getFilter();
+                PreconditionUtils.checkArgument(filter.getSource() != FilterValueSourceEnum.EXTERNAL,
+                        "过滤条件中的属性 " + filter.getPropertyApiName()
+                                + " 声明了外部输入，只有基础函数行为支持外部输入条件", HttpStatus.BAD_REQUEST);
                 var prop = propMap.get(filter.getPropertyApiName());
                 PreconditionUtils.checkArgument(prop != null,
                         "过滤条件中的属性 " + filter.getPropertyApiName() + " 不属于该对象", HttpStatus.BAD_REQUEST);
