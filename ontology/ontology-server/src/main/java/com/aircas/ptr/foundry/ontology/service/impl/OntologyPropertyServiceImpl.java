@@ -1080,7 +1080,7 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         List<AutoBindDatasourceResultVO.BlockedItem> blockedItems = Lists.newArrayList();
         for (var entry : notBindPropsMap.entrySet()) {
             var storageGroup = entry.getKey();
-            var tableName = mainStorageGroup.equals(storageGroup) ? mainDS : storageGroup;
+            var tableName = groupTableName(mainDS, storageGroup);
             tableExistMap.computeIfAbsent(tableName, name -> Boolean.TRUE.equals(tableMetadataMapper.isTableExist(schemaName, name)));
             Map<String, String> columnTypes = Maps.newHashMap();
             tableMetadataMapper.queryColumnMetadata(schemaName, tableName)
@@ -1130,9 +1130,9 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
             return autoBindResult(0, totalBoundCount, blockedItems, blockedMessage);
         }
 
-        bindablePropsMap.forEach((ds, list) -> {
+        bindablePropsMap.forEach((storageGroup, list) -> {
             //主属性表
-            if (ds.equals(mainStorageGroup)) {
+            if (storageGroup.equals(mainStorageGroup)) {
                 //检查表名是否存在：不存在创建新表，存在添加列
                 var exist = Boolean.TRUE.equals(tableExistMap.get(mainDS));
                 var columns = list.stream().map(p -> TableColumnDesc.builder()
@@ -1161,8 +1161,9 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
             }
             // 其他属性关联表
             else {
+                var tableName = groupTableName(mainDS, storageGroup);
                 //检查表名是否存在：不存在创建新表，存在添加列
-                var exist = Boolean.TRUE.equals(tableExistMap.get(ds));
+                var exist = Boolean.TRUE.equals(tableExistMap.get(tableName));
                 var columns = list.stream().map(p -> TableColumnDesc.builder()
                         .columnName(p.getApiName())
                         .type(OntologyDataTypeEnum.transfer2Pg(p.getPropertyType()))
@@ -1180,8 +1181,8 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                             .build());
                     //创建新表
                     var table = TableDesc.builder()
-                            .description(ontology.getDisplayName() + "_" + ds)
-                            .tableName(ds)
+                            .description(ontology.getDisplayName() + "_" + storageGroup)
+                            .tableName(tableName)
                             .build();
                     tableMetadataMapper.createTable(schemaName, table, columns);
                     //创建关联舰的索引
@@ -1190,44 +1191,44 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
                     tableFieldMappingMapper.insertMapping(schemaName, TableFieldMapping.builder()
                             .sourceTableName(mainDS)
                             .sourceColumnName(pkColumnName)
-                            .targetTableName(ds)
+                            .targetTableName(tableName)
                             .targetColumnName(relatedColumn)
                             .build());
                     //发送mq消息给数据组织层构建管道
-                    notifyEntityTableSchemaChange(ontologyIdentifier, schemaName, ds, false, columns, pkColumnName, relatedColumn, DatasourceEventTypeEnum.CREATE_TABLE);
+                    notifyEntityTableSchemaChange(ontologyIdentifier, schemaName, tableName, false, columns, pkColumnName, relatedColumn, DatasourceEventTypeEnum.CREATE_TABLE);
                 } else {
                     //创建列
-                    tableMetadataMapper.addColumns(schemaName, ds, columns);
+                    tableMetadataMapper.addColumns(schemaName, tableName, columns);
                     // 检查并添加缺失的关联列
                     var columnTypes = Maps.<String, String>newHashMap();
-                    tableMetadataMapper.queryColumnMetadata(schemaName, ds)
+                    tableMetadataMapper.queryColumnMetadata(schemaName, tableName)
                             .forEach(column -> columnTypes.put(column.getColumnName(), StringUtils.defaultString(column.getType())));
                     if (!columnTypes.containsKey(relatedColumn)) {
-                        tableMetadataMapper.addColumns(schemaName, ds, Lists.newArrayList(TableColumnDesc.builder()
+                        tableMetadataMapper.addColumns(schemaName, tableName, Lists.newArrayList(TableColumnDesc.builder()
                                 .columnName(relatedColumn)
                                 .type("int4")
                                 .description(ontology.getDisplayName() + "主键")
                                 .isPrimaryKey(false)
                                 .build()));
-                        tableMetadataMapper.createIndex(schemaName, ds, relatedColumn);
-                        log.info("对象{}关联表{}已存在但关联列{}缺失，已补充创建", ontologyIdentifier, ds, relatedColumn);
+                        tableMetadataMapper.createIndex(schemaName, tableName, relatedColumn);
+                        log.info("对象{}关联表{}已存在但关联列{}缺失，已补充创建", ontologyIdentifier, tableName, relatedColumn);
                     }
                     //发送mq消息给数据组织层构建管道
-                    notifyEntityTableSchemaChange(ontologyIdentifier, schemaName, ds, false, columns, pkColumnName, relatedColumn, DatasourceEventTypeEnum.ADD_COLUMN);
+                    notifyEntityTableSchemaChange(ontologyIdentifier, schemaName, tableName, false, columns, pkColumnName, relatedColumn, DatasourceEventTypeEnum.ADD_COLUMN);
                     // 表已存在时，检查并创建缺失的映射关系
-                    var existMapping = tableFieldMappingMapper.selectBySourceAndTarget(schemaName, mainDS, ds);
+                    var existMapping = tableFieldMappingMapper.selectBySourceAndTarget(schemaName, mainDS, tableName);
                     if (existMapping == null) {
                         tableFieldMappingMapper.insertMapping(schemaName, TableFieldMapping.builder()
                                 .sourceTableName(mainDS)
                                 .sourceColumnName(pkColumnName)
-                                .targetTableName(ds)
+                                .targetTableName(tableName)
                                 .targetColumnName(relatedColumn)
                                 .build());
-                        log.info("对象{}关联表{}已存在但映射缺失，已补充创建映射", ontologyIdentifier, ds);
+                        log.info("对象{}关联表{}已存在但映射缺失，已补充创建映射", ontologyIdentifier, tableName);
                     }
                 }
                 //更新数据源属性
-                list.forEach(p -> p.setDatasourceId(ds).setDatasourceColumnName(p.getApiName()).setDatasourceSchema(schemaName));
+                list.forEach(p -> p.setDatasourceId(tableName).setDatasourceColumnName(p.getApiName()).setDatasourceSchema(schemaName));
             }
         });
         //批量更新对象属性数据源
@@ -1529,6 +1530,11 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         PreconditionUtils.checkArgument(StringUtils.isNotEmpty(space.getApiName()),
                 "对象空间apiName为空", HttpStatus.BAD_REQUEST);
         return space.getApiName();
+    }
+
+    /** 存储分组对应的实体表名：主分组即主表，其余分组以主表名为前缀，避免不同对象的同名分组建到同一张表上。 */
+    private String groupTableName(String mainTableName, String storageGroup) {
+        return MAIN_STORAGE_GROUP.equals(storageGroup) ? mainTableName : mainTableName + "_" + storageGroup;
     }
 
     private AutoBindDatasourceResultVO.BlockedItem autoBindBlockedItem(OntologyProperty prop, String storageGroup, String tableName,

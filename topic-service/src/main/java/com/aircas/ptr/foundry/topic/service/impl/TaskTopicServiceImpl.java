@@ -207,6 +207,9 @@ public class TaskTopicServiceImpl extends ServiceImpl<TaskTopicMapper, TaskTopic
                 .sourcePlatform(event.getSourcePlatform())
                 .confidence(event.getConfidence())
                 .eventContent(event.getEventContent())
+                .ontologyIdentifier(event.getOntologyUniqueIdentifier())
+                .instanceId(event.getInstanceId())
+                .ontologyDisplayName(event.getOntologyDisplayName())
                 .build();
     }
 
