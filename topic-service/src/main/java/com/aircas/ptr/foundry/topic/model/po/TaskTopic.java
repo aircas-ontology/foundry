@@ -84,27 +84,17 @@ public class TaskTopic {
     private Date createTime;
 
     /**
-     * 目标数量。由后续统计接口写入，创建和编辑不传。
+     * 目标数量。创建不传，编辑时更新。
      */
     private Integer targetCount;
 
     /**
-     * 海上数量
+     * 任务类型统计，如[{"name":"海上","count":1}]。创建不传，编辑时更新。
      */
-    private Integer seaCount;
+    private String taskTypeStat;
 
     /**
-     * 空中数量
-     */
-    private Integer airCount;
-
-    /**
-     * 陆上数量
-     */
-    private Integer landCount;
-
-    /**
-     * 事件数量
+     * 事件数量。创建不传，编辑时更新。
      */
     private Integer eventCount;
 

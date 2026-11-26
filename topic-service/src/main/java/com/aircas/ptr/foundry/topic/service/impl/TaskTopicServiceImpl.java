@@ -17,6 +17,8 @@ import com.aircas.ptr.foundry.topic.repository.EventAggMapper;
 import com.aircas.ptr.foundry.topic.repository.EventStageMapper;
 import com.aircas.ptr.foundry.topic.repository.TaskTopicMapper;
 import com.aircas.ptr.foundry.topic.service.TaskTopicService;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
@@ -37,6 +39,8 @@ import java.util.stream.Collectors;
 
 @Service
 public class TaskTopicServiceImpl extends ServiceImpl<TaskTopicMapper, TaskTopic> implements TaskTopicService {
+
+    private static final ObjectMapper TASK_TYPE_STAT_MAPPER = new ObjectMapper();
 
     @Resource
     private EventStageMapper eventStageMapper;
@@ -109,6 +113,7 @@ public class TaskTopicServiceImpl extends ServiceImpl<TaskTopicMapper, TaskTopic
     @Override
     public void update(TaskTopicUpdateParam param) {
         checkTimeRange(param.getStartTime(), param.getEndTime());
+        checkTaskTypeStat(param.getTaskTypeStat());
         TaskTopic taskTopic = requireTask(param.getId());
         taskTopic.setTaskName(param.getTaskName());
         taskTopic.setTaskType(param.getTaskType());
@@ -119,6 +124,9 @@ public class TaskTopicServiceImpl extends ServiceImpl<TaskTopicMapper, TaskTopic
         taskTopic.setDescription(param.getDescription());
         taskTopic.setOntologySpace(param.getOntologySpace());
         taskTopic.setStatus(param.getStatus());
+        taskTopic.setTaskTypeStat(param.getTaskTypeStat());
+        taskTopic.setTargetCount(param.getTargetCount());
+        taskTopic.setEventCount(param.getEventCount());
         updateById(taskTopic);
     }
 
@@ -137,6 +145,22 @@ public class TaskTopicServiceImpl extends ServiceImpl<TaskTopicMapper, TaskTopic
 
     private void checkTimeRange(Date startTime, Date endTime) {
         PreconditionUtils.checkArgument(!endTime.before(startTime), "任务结束时间不能早于开始时间", HttpStatus.BAD_REQUEST);
+    }
+
+    private void checkTaskTypeStat(String taskTypeStat) {
+        JsonNode node;
+        try {
+            node = TASK_TYPE_STAT_MAPPER.readTree(taskTypeStat);
+        } catch (Exception ex) {
+            node = null;
+        }
+        PreconditionUtils.checkArgument(node != null && node.isArray(), "任务类型统计格式不正确", HttpStatus.BAD_REQUEST);
+        for (JsonNode item : node) {
+            boolean valid = item.isObject()
+                    && item.hasNonNull("name") && item.get("name").isTextual()
+                    && item.has("count") && item.get("count").isIntegralNumber();
+            PreconditionUtils.checkArgument(valid, "任务类型统计格式不正确", HttpStatus.BAD_REQUEST);
+        }
     }
 
     private TaskTopicDetailVO toDetailVO(TaskTopic taskTopic) {
@@ -228,9 +252,7 @@ public class TaskTopicServiceImpl extends ServiceImpl<TaskTopicMapper, TaskTopic
                 .creator(taskTopic.getCreator())
                 .createTime(taskTopic.getCreateTime())
                 .targetCount(taskTopic.getTargetCount())
-                .seaCount(taskTopic.getSeaCount())
-                .airCount(taskTopic.getAirCount())
-                .landCount(taskTopic.getLandCount())
+                .taskTypeStat(taskTopic.getTaskTypeStat())
                 .eventCount(taskTopic.getEventCount())
                 .build();
     }
