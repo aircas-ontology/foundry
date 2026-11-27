@@ -56,10 +56,11 @@ public class ActionContextInfoDTO {
     private Map<String, Object> externalParams;
 
     /**
-     * 对象模式测试配的子表读取规则：对象id -> (存储分组 或 空串表示该对象默认 -> 规则)。
-     * 只影响没指定行的子表读取（行数、排序属性与方向），不传按原口径（行主键倒序取默认行数）。
+     * 对象模式测试配的子表读取规则：算子入参名 -&gt; 规则。
+     * <p>只影响该入参自己的读取视图（行数、排序属性与方向），其余入参仍按原口径取；
+     * 异步回调时随上下文一起序列化。</p>
      */
-    private Map<String, Map<String, ActionTestListReadRuleParam>> listReadRules;
+    private Map<String, ActionTestListReadRuleParam> listReadRules;
 
     /**
      * 本次算子调用真正解析出的入参（顶层入参名 -> 值）：调用方给一个可变容器，{@code callFunction} 回填，

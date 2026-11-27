@@ -8,27 +8,23 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * 对象模式下子表的读取规则：遍历到的实例读多少行子表、按哪个属性、正序还是倒序。
- * <p>不配规则的分组沿用原口径：按行主键倒序取最新 10 行。</p>
+ * 子表读取规则：本次执行里这个入参读多少行、按哪个属性排序、正序还是倒序。
+ * <p>作用范围由 listReadRules 的键（算子入参）决定，对象与存储分组按该入参的绑定行推导。
+ * 不配规则的入参沿用原口径：按行主键倒序取最新 10 行。</p>
  */
-@Schema(description = "对象模式下的子表读取规则：按对象（可细化到存储分组）指定读取行数与排序方式")
+@Schema(description = "子表读取规则：读取行数与排序方式，作用在 listReadRules 键所指的那个入参上")
 @Data
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
 public class ActionTestListReadRuleParam {
 
-    @Schema(name = "ontologyUniqueIdentifier", description = "规则作用的对象id；必须是本次遍历到的对象", required = true, example = "3f2a9c1e-7b4d-4a86-9e21-5c8d1f0a6b34")
-    private String ontologyUniqueIdentifier;
-
-    @Schema(name = "storageGroup", description = "规则作用的存储分组（子表分组名）；不传对该对象下的所有子表分组生效，"
-            + "此时排序属性只在其所属分组生效，其余分组仍按行主键倒序", example = "weapon_load")
-    private String storageGroup;
-
-    @Schema(name = "rowCount", description = "该分组读取的行数；不传按默认 10 行", example = "10")
+    @Schema(name = "rowCount", description = "该入参本次读取的行数；不传按默认 10 行；"
+            + "非列表入参只用到一行，传了会报错", example = "10")
     private Integer rowCount;
 
-    @Schema(name = "orderByProperty", description = "按哪个属性排序，填属性的 apiName；不传按行主键排序", example = "create_time")
+    @Schema(name = "orderByProperty", description = "按哪个属性排序，填属性的 apiName，必须是该入参绑定行所在的子表分组；"
+            + "不传按行主键排序", example = "create_time")
     private String orderByProperty;
 
     @Schema(name = "sort", description = "排序方向：ASC 升序 / DESC 降序，默认 DESC（取最新的行）", example = "DESC")

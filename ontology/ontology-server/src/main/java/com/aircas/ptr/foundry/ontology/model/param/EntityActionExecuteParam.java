@@ -77,9 +77,10 @@ public class EntityActionExecuteParam extends EntityQueryParam {
     private Object linkedEntityPrimaryKey;
 
     /**
-     * 对象模式测试配的子表读取规则：对象id -> (存储分组 或 空串表示该对象默认 -> 规则)。
-     * 只有对象模式的行为测试会填，对外执行请求不接受。
+     * 子表读取规则：算子入参名 -&gt; 规则（键已在测试入口按绑定行归到所属入参）。
+     * <p>只有带规则的入参按它单独建读取视图，其余入参仍走共用视图的默认口径；
+     * 只有对象模式的行为测试会填，对外执行请求不接受。</p>
      */
     @Schema(hidden = true)
-    private Map<String, Map<String, ActionTestListReadRuleParam>> listReadRules;
+    private Map<String, ActionTestListReadRuleParam> listReadRules;
 }

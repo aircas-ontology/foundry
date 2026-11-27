@@ -10,7 +10,6 @@ import lombok.experimental.SuperBuilder;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import java.util.List;
 import java.util.Map;
 
 @Data
@@ -90,12 +89,16 @@ public class ActionTestParam {
     private Object linkEntityPrimaryKey;
 
     @Schema(name = "params", description = "来源为外部输入的参数取值（参数名 -> 值），固定值不在此传；"
+            + "键按整包参数名给值（对象给 JSON 对象、列表给数组），也可以按绑定行的字段路径全名给"
+            + "（tracks.time、startPoint.latitude），全名键优先于同名的裸键；"
             + "基础函数的过滤条件声明了外部输入时，按条件的属性 apiName 在这里给值，IN 传数组、BETWEEN 传两个值的数组；"
             + "数组值就是 LIST 参数本身的内容，不参与批量组合。多组测试共用同一个值，来源为外部输入的参数必须给值")
     private Map<String, Object> params;
 
-    @Schema(name = "listReadRules", description = "对象模式下的子表读取规则：按对象（可细化到存储分组）指定读多少行、"
-            + "按哪个属性排序、正序还是倒序。不配规则的分组沿用原口径：按行主键倒序取最新 10 行；"
-            + "只在 inputMode=OBJECT 时使用")
-    private List<ActionTestListReadRuleParam> listReadRules;
+    @Schema(name = "listReadRules", description = "子表读取规则：算子入参名 -> 读取行数与排序方式，和 inputParams 一样"
+            + "支持三种键写法（顶层入参名 tracks / 绑定行字段名 time / 父参数名.字段路径 tracks.time），"
+            + "后端按绑定行归到所属入参；同一个入参的多条字段行规则必须完全一致，否则报错。"
+            + "对象与存储分组按该入参的绑定行推导，不用在规则里传。"
+            + "不配规则的入参沿用原口径：按行主键倒序取最新 10 行（绑定行配了 rowLimit 的按行数）；只在 inputMode=OBJECT 时使用")
+    private Map<String, ActionTestListReadRuleParam> listReadRules;
 }

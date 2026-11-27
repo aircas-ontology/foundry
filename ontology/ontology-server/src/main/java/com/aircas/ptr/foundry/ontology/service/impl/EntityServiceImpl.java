@@ -468,8 +468,8 @@ public class EntityServiceImpl implements EntityService {
     }
 
     /**
-     * 对象模式测试按规则读子表：listReadRules 是「存储分组 或 空串（该对象默认） -&gt; 规则」，
-     * 只对没指定行的分组生效，规则里的行数、排序属性与方向覆盖默认口径。
+     * 按入参读取规则读子表：listReadRules 是「存储分组 -&gt; 规则」，只对没指定行的分组生效，
+     * 规则里的行数、排序属性与方向覆盖默认口径。
      */
     public List<EntityPropertyDetailVO> getEntityDetail(String ontologyUniqueIdentifier, Object entityPrimaryKey,
                                                         Map<String, Object> rowKeysByGroup,
@@ -601,19 +601,14 @@ public class EntityServiceImpl implements EntityService {
                 .orElse(DEFAULT_GROUP_ROWS);
     }
 
-    /** 该分组适用的读取规则：按分组的规则优先，其次该对象的默认规则（键为空串） */
+    /** 该分组适用的读取规则：按入参建的读取视图只带该入参真正读到的分组 */
     private static ActionTestListReadRuleParam readRuleFor(Map<String, ActionTestListReadRuleParam> rules,
                                                            String storageGroup) {
-        if (MapUtils.isEmpty(rules)) {
-            return null;
-        }
-        var rule = rules.get(storageGroup);
-        return rule != null ? rule : rules.get("");
+        return MapUtils.isEmpty(rules) ? null : rules.get(storageGroup);
     }
 
     /**
-     * 规则里的排序属性对应的列名。规则限定了分组却在该分组里找不到这个属性时直接报错，
-     * 没有限定分组的默认规则只给属性所在的分组指定排序，其余分组仍按行主键取（返回 null）。
+     * 规则里的排序属性对应的列名：规则按入参挂到它绑定的子表分组上，该分组里找不到这个属性就说明规则不会生效，直接报错。
      */
     private String ruleOrderColumn(List<OntologyProperty> groupProps, ActionTestListReadRuleParam rule,
                                    String storageGroup) {
@@ -623,21 +618,68 @@ public class EntityServiceImpl implements EntityService {
         var property = groupProps.stream()
                 .filter(p -> rule.getOrderByProperty().equals(p.getApiName()))
                 .findFirst().orElse(null);
-        if (property == null) {
-            PreconditionUtils.checkArgument(StringUtils.isBlank(rule.getStorageGroup()),
-                    "子表读取规则按属性[" + rule.getOrderByProperty() + "]排序，但该属性不属于存储分组[" + storageGroup
-                            + "]，请检查规则的存储分组与排序属性", HttpStatus.BAD_REQUEST);
-            return null;
-        }
-        PreconditionUtils.checkArgument(StringUtils.isNotEmpty(property.getDatasourceColumnName()),
-                "子表读取规则的排序属性[" + property.getDisplayName() + "]没有关联数据源列，无法排序：" + storageGroup,
-                HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(property != null
+                        && StringUtils.isNotEmpty(property.getDatasourceColumnName()),
+                "子表读取规则按属性[" + rule.getOrderByProperty() + "]排序，但该属性不是存储分组[" + storageGroup
+                        + "]下有关联数据源列的属性，请检查规则配的入参", HttpStatus.BAD_REQUEST);
         return property.getDatasourceColumnName();
     }
 
-    /** 某个对象配的读取规则：对象id -> (分组 -&gt; 规则)，键为空串表示该对象的默认规则 */
-    private static Map<String, ActionTestListReadRuleParam> listReadRulesFor(ActionContextInfoDTO context, String objectId) {
-        return context.getListReadRules() == null ? null : context.getListReadRules().get(objectId);
+    /**
+     * 某个入参在某对象上适用的读取规则：按该入参绑定行读到的子表分组逐个挂上。
+     * <p>规则只对这些分组生效，同一对象上的其它分组和别的入参仍按默认口径读，两个入参绑同一分组也能各读各的。</p>
+     */
+    private Map<String, ActionTestListReadRuleParam> readRulesForParam(ActionContextInfoDTO context,
+                                                                        String paramName, String objectId) {
+        var rule = context.getListReadRules() == null ? null : context.getListReadRules().get(paramName);
+        if (rule == null) {
+            return null;
+        }
+        var groups = paramReadSubGroups(context, paramName, objectId);
+        if (groups.isEmpty()) {
+            return null;
+        }
+        Map<String, ActionTestListReadRuleParam> res = new LinkedHashMap<>();
+        groups.forEach(group -> res.put(group, rule));
+        return res;
+    }
+
+    /** 某个入参在该对象上按绑定行读到的子表存储分组；main 分组就是实例自身那一行，不参与按行读取 */
+    private Set<String> paramReadSubGroups(ActionContextInfoDTO context, String paramName, String objectId) {
+        var paramIds = CollectionUtils.isEmpty(context.getFunctionInputParams()) ? Set.<Long>of()
+                : context.getFunctionInputParams().stream()
+                .filter(p -> StringUtils.equals(paramName, p.getParamName()))
+                .map(FunctionParameterVO::getParamId).filter(Objects::nonNull).collect(Collectors.toSet());
+        Set<String> groups = new LinkedHashSet<>();
+        if (paramIds.isEmpty() || CollectionUtils.isEmpty(context.getMappings())) {
+            return groups;
+        }
+        var legacyObjectId = legacyActionObject(context, context.getEntityActionExecuteParam());
+        var props = CollectionUtils.emptyIfNull(context.getObjectProperties() == null ? null
+                : context.getObjectProperties().get(objectId)).stream().collect(Collectors.toList());
+        for (var mapping : context.getMappings()) {
+            if (!isInstanceInputRow(mapping) || mapping.getFunctionParamId() == null
+                    || !paramIds.contains(mapping.getFunctionParamId())
+                    || StringUtils.isEmpty(mapping.getPropertyUniqueIdentifier())) {
+                continue;
+            }
+            var rowObjectId = StringUtils.isNotEmpty(mapping.getOntologyUniqueIdentifier())
+                    ? mapping.getOntologyUniqueIdentifier() : legacyObjectId;
+            if (!StringUtils.equals(rowObjectId, objectId)) {
+                continue;
+            }
+            var property = props.stream()
+                    .filter(p -> mapping.getPropertyUniqueIdentifier().equals(p.getUniqueIdentifier()))
+                    .findFirst().orElse(null);
+            if (property == null) {
+                continue;
+            }
+            var group = StringUtils.defaultIfBlank(property.getStorageGroup(), "main");
+            if (!"main".equals(group)) {
+                groups.add(group);
+            }
+        }
+        return groups;
     }
 
     /**
@@ -2152,8 +2194,8 @@ public class EntityServiceImpl implements EntityService {
                     "对象[" + objectId + "]未选择实例数据，无法执行行为："
                             + (context.getActionDetailVO() == null ? "" : context.getActionDetailVO().getActionApi()),
                     HttpStatus.BAD_REQUEST);
-            details.addAll(getEntityDetail(objectId, primaryKey, inputRowKeysFor(context, objectId), null,
-                    listReadRulesFor(context, objectId)));
+            // 共用视图不带读取规则：规则按入参生效，带规则的入参在下面各自建视图
+            details.addAll(getEntityDetail(objectId, primaryKey, inputRowKeysFor(context, objectId), null, null));
         }
         return details.stream().collect(Collectors.toMap(EntityPropertyDetailVO::getPropertyUniqIdentifier,
                 EntityPropertyDetailVO::getPropertyValues, (list1, list2) -> list1));
@@ -2165,14 +2207,17 @@ public class EntityServiceImpl implements EntityService {
      * 实例沿用对象级选择、行按指定的取；关系对端不按方向取实例，跳过它、取值回落共用视图——
      * 但该入参显式点了实例时按点的实例读（含关系端点），只影响这一路取值，不改关系边。</p>
      * <p>入参绑定了 List 行数（rowLimit）时即使没给 inputParams 也要单独建视图：共用视图按默认 10 行取，
-     * 拿不到用户要的行数。</p>
+     * 拿不到用户要的行数。配了子表读取规则的入参同理，规则只在自己的视图里生效，
+     * 两个入参绑同一对象同一分组时可以各按各的规则读。</p>
      */
     private Map<String, Map<String, List<Object>>> loadParamEntityDetailMaps(ActionContextInfoDTO context,
                                                                              EntityActionExecuteParam param,
                                                                              String excludeObjectId) {
         var targets = param == null ? null : param.getInputParams();
         var rowLimits = listRowLimits(context);
-        if (MapUtils.isEmpty(targets) && rowLimits.isEmpty()) {
+        var readRuleParams = context.getListReadRules() == null ? Map.<String, ActionTestListReadRuleParam>of()
+                : context.getListReadRules();
+        if (MapUtils.isEmpty(targets) && rowLimits.isEmpty() && readRuleParams.isEmpty()) {
             return null;
         }
         var detail = context.getActionDetailVO();
@@ -2187,6 +2232,7 @@ public class EntityServiceImpl implements EntityService {
             });
         }
         paramNames.addAll(rowLimits.keySet());
+        paramNames.addAll(readRuleParams.keySet());
         // 按元素给位置的入参逐元素读，不走入参级视图；只留它的 rowLimit 给元素读取用
         var elementParams = param == null || param.getInputElementParams() == null ? Set.<String>of()
                 : param.getInputElementParams().keySet();
@@ -2219,7 +2265,7 @@ public class EntityServiceImpl implements EntityService {
                         ? mergeRowKeys(target.getDataPrimaryKeys(), rowKeysOf(inputTargetsFor(context), objectId))
                         : inputRowKeysFor(context, objectId);
                 var objectDetails = getEntityDetail(objectId, primaryKey, rowKeys, limits,
-                        listReadRulesFor(context, objectId));
+                        readRulesForParam(context, paramName, objectId));
                 // 点了实例就必须按它取到数：取不到时回落共用视图会静默读成另一个实例
                 if (explicitPrimaryKey != null) {
                     PreconditionUtils.checkArgument(!objectDetails.isEmpty(),
@@ -2280,8 +2326,8 @@ public class EntityServiceImpl implements EntityService {
                         label + "的对象[" + objectId + "]未选择实例数据，无法执行行为：" + actionApi,
                         HttpStatus.BAD_REQUEST);
                 var rowKeys = mergeRowKeys(element.getDataPrimaryKeys(), rowKeysOf(inputTargetsFor(context), objectId));
-                var details = getEntityDetail(objectId, primaryKey, rowKeys, limits,
-                        listReadRulesFor(context, objectId));
+                // 元素各自点名了分组行，读取规则不参与（规则只在没逐行指定时生效，且与按元素给位置互斥）
+                var details = getEntityDetail(objectId, primaryKey, rowKeys, limits, null);
                 PreconditionUtils.checkArgument(!details.isEmpty(),
                         label + "指定的实例[" + primaryKey + "]在对象[" + objectId + "]下没有数据，无法按该元素取值：" + actionApi,
                         HttpStatus.BAD_REQUEST);
@@ -3161,6 +3207,8 @@ public class EntityServiceImpl implements EntityService {
      * 绑定行的节点取值：先按「父参数名.字段路径」找，没配再按绑定行自己的名字。
      * 两条入参有同名叶子（两条轨迹都有 longitude）时只有限定写法能分得开；
      * 没重名的绑定仍按叶子名命中，老配置不受影响。
+     * 裸名命中且该名字同时挂在多条路径不同的绑定行上时直接报错：
+     * 行为后来加了同名叶子会让老绑定一份覆盖值静默写进两条入参。
      */
     private Object paramRowOverride(ActionContextInfoDTO actionContext, ActionParamMappingVO mapping,
                                     String ownerParamName) {
@@ -3175,7 +3223,27 @@ public class EntityServiceImpl implements EntityService {
         }
         var overrideKey = StringUtils.isNotBlank(mapping.getParameterName())
                 ? mapping.getParameterName() : ownerParamName;
-        return paramValueOverride(actionContext, overrideKey);
+        var bare = paramValueOverride(actionContext, overrideKey);
+        if (bare != null && StringUtils.isNotBlank(mapping.getParameterName())
+                && hasConflictingSameNameBindings(actionContext, mapping)) {
+            throw new BusinessException("节点入参覆盖 [" + overrideKey + "] 命中了多条同名但路径不同的绑定行，"
+                    + "无法确定这个值属于哪个参数，请在行为节点重新选择入参（按 父参数名.字段路径 全名绑定）",
+                    HttpStatus.BAD_REQUEST);
+        }
+        return bare;
+    }
+
+    /** 同名裸键是否还有路径/属性指向不同的其它输入绑定行（完全重复的旧行不算冲突，维持原覆盖口径） */
+    private boolean hasConflictingSameNameBindings(ActionContextInfoDTO actionContext, ActionParamMappingVO mapping) {
+        if (CollectionUtils.isEmpty(actionContext.getMappings())) {
+            return false;
+        }
+        return actionContext.getMappings().stream()
+                .filter(m -> m != null && m.getCategory() != FunctionParamCategoryEnum.OUTPUT)
+                .filter(m -> StringUtils.isNotBlank(m.getParameterName())
+                        && m.getParameterName().equals(mapping.getParameterName()))
+                .anyMatch(m -> !Objects.equals(m.getParamPath(), mapping.getParamPath())
+                        || !Objects.equals(m.getPropertyUniqueIdentifier(), mapping.getPropertyUniqueIdentifier()));
     }
 
     /** 该入参按 inputParams 单独加载的视图里此属性的取值；没指定过这个入参或视图里没有该属性时返回 null，由调用处回落共用视图 */
@@ -3190,10 +3258,13 @@ public class EntityServiceImpl implements EntityService {
     }
 
     /**
-     * 外部输入的取值：先按绑定行的参数名取，再按子字段路径取，最后按整包参数名取。
-     * <p>整包绑定的参数名就是算子入参名；老数据按子字段逐行绑定外部输入时，
-     * 参数名是字段名（列表元素的 latitude、longitude 各算一行），这里按路径和所属入参回退，
+     * 外部输入的取值：先按「父参数名.字段路径」的全名键取，再按绑定行的参数名取，其次按子字段路径取，
+     * 最后按整包参数名取。
+     * <p>整包绑定的参数名就是算子入参名；老数据按子字段逐行绑定外部输入时，参数名是字段名
+     * （列表元素的 latitude、longitude 各算一行），这里按路径和所属入参回退，
      * 请求按「参数名 -&gt; 对象/数组」整包给值时也能取到对应字段。键存在就按显式值返回（null 也算给了值）。</p>
+     * <p>裸字段名同时挂在多条指向不同字段的外部输入绑定行上时直接报错：一个值喂两条入参会静默串值，
+     * 必须让调用方用 {@code tracks.time} 这样的全名键指明给谁。</p>
      */
     private Object externalInputValue(ActionContextInfoDTO actionContext, ActionParamMappingVO mapping,
                                       String ownerParamName) {
@@ -3201,11 +3272,22 @@ public class EntityServiceImpl implements EntityService {
         if (MapUtils.isEmpty(externalParams)) {
             return null;
         }
+        var paramPath = mapping.getParamPath();
+        if (StringUtils.isNotEmpty(ownerParamName) && StringUtils.isNotEmpty(paramPath)) {
+            var qualifiedKey = ownerParamName + "." + paramPath;
+            if (externalParams.containsKey(qualifiedKey)) {
+                return externalParams.get(qualifiedKey);
+            }
+        }
         var parameterName = mapping.getParameterName();
         if (StringUtils.isNotEmpty(parameterName) && externalParams.containsKey(parameterName)) {
+            PreconditionUtils.checkArgument(!hasConflictingExternalBindings(actionContext, mapping),
+                    "外部输入[" + parameterName + "]同时是几条入参上的字段名，params 里给一个值会同时喂给它们："
+                            + "请改按「父参数名.字段路径」传（如 "
+                            + StringUtils.defaultIfBlank(ownerParamName, "父参数名") + "." + parameterName
+                            + "），或按顶层入参名整包给值", HttpStatus.BAD_REQUEST);
             return externalParams.get(parameterName);
         }
-        var paramPath = mapping.getParamPath();
         if (StringUtils.isNotEmpty(paramPath) && externalParams.containsKey(paramPath)) {
             return externalParams.get(paramPath);
         }
@@ -3224,6 +3306,21 @@ public class EntityServiceImpl implements EntityService {
             node = map.get(segment);
         }
         return node;
+    }
+
+    /** 同名裸键是否还挂在其它指向不同字段的外部输入绑定行上（完全重复的旧行不算冲突） */
+    private boolean hasConflictingExternalBindings(ActionContextInfoDTO actionContext,
+                                                   ActionParamMappingVO mapping) {
+        if (CollectionUtils.isEmpty(actionContext.getMappings())) {
+            return false;
+        }
+        return actionContext.getMappings().stream()
+                .filter(m -> m != null && m.getCategory() != FunctionParamCategoryEnum.OUTPUT)
+                .filter(m -> m.getSourceType() == ActionParamSourceEnum.EXTERNAL)
+                .filter(m -> StringUtils.isNotBlank(m.getParameterName())
+                        && m.getParameterName().equals(mapping.getParameterName()))
+                .anyMatch(m -> !Objects.equals(m.getParamPath(), mapping.getParamPath())
+                        || !Objects.equals(m.getPropertyUniqueIdentifier(), mapping.getPropertyUniqueIdentifier()));
     }
 
     /** 固定值按完整 JSON 字面量解析，整串不是合法 JSON 时按原文本返回 */
@@ -3422,6 +3519,8 @@ public class EntityServiceImpl implements EntityService {
                 byDatasource.forEach((tableName, columns) -> {
                     //查询关联建，补全columns
                     var mapping = tableFieldMappingMapper.selectByTargetTable(primaryProp.getDatasourceSchema(), tableName);
+                    PreconditionUtils.checkNotNull(mapping,
+                            "分组表未配置关联列，无法插新行：" + tableName, HttpStatus.BAD_REQUEST);
                     columns.put(mapping.getTargetColumnName(), primaryKey);
                     fillUnwrittenColumns(primaryProp.getDatasourceSchema(), target.objectId(), tableName, columns, propMap);
                     objectMapper.insertObject(primaryProp.getDatasourceSchema(), tableName, columns);

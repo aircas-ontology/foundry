@@ -4881,10 +4881,13 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         if (param.getInputMode() == ActionTestInputModeEnum.OBJECT) {
             return testByObjectInstances(invokeParam);
         }
-        PreconditionUtils.checkArgument(CollectionUtils.isEmpty(param.getListReadRules()),
+        PreconditionUtils.checkArgument(MapUtils.isEmpty(param.getListReadRules()),
                 "listReadRules 只在 inputMode=OBJECT 时使用：" + param.getActionApi(), HttpStatus.BAD_REQUEST);
         normalizeInputParamKeys(invokeParam);
         var listParams = listInputParamNames(invokeParam);
+        // 外部输入参数必须给值：单值直跑与批量展开同样会拿 null 静默继续，统一在分支前校验
+        var testActionPo = findTestAction(param.getOntologySpaceId(), param.getActionApi());
+        checkExternalParamsProvided(testActionPo, param.getParams());
         // 入参方向把某个字段写成数组就是批量测试：按 inputMode 展开成组合后逐组跑一遍
         var testAxes = collectTestAxes(invokeParam, listParams);
         if (testAxes.isEmpty()) {
@@ -4893,7 +4896,6 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         PreconditionUtils.checkArgument(param.getInputMode() != null,
                 "这次测试要按多个候选值展开，请在 inputMode 里指定展开方式：" + describeInputModes(),
                 HttpStatus.BAD_REQUEST);
-        checkExternalParamsProvided(findTestAction(param.getOntologySpaceId(), param.getActionApi()), param.getParams());
         return testActionCombos(invokeParam, testAxes, expandByMode(param.getInputMode(), testAxes, true),
                 listParams, null);
     }
@@ -4959,7 +4961,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         checkExternalParamsProvided(action, param.getParams());
         var detail = getActionByApi(param.getOntologySpaceId(), param.getActionApi());
         var objects = objectModeObjects(action, detail);
-        checkListReadRules(param.getListReadRules(), objects);
+        // 读取规则按入参归位后逐组共用同一份：遍历到的实例不同，读多少行、按哪列排序是本次测试统一配的
+        param.setListReadRules(normalizeListReadRules(param, objects));
         // 逐组把遍历到的实例写进 entityPrimaryKeys：请求里这张表是空的（对象模式不选实例）
         param.setEntityPrimaryKeys(new LinkedHashMap<>());
         var axes = new ArrayList<TestAxis>(objects.size());
@@ -5064,66 +5067,141 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     }
 
     /**
-     * 对象模式的子表读取规则校验：规则的对象必须是本次遍历到的对象，存储分组必须是该对象的子表分组，
-     * 排序属性必须存在且（指定分组时）属于该分组。配了却不生效的规则直接报错。
+     * 子表读取规则按参数行定位：键和 inputParams 一样认顶层入参名、绑定行字段名、父参数名.字段路径三种写法，
+     * 归到所属算子入参后逐条校验它会不会真的生效（入参要读实例、绑到子表分组、对象在本次遍历集合里）。
+     * <p>同一入参的几条字段行读的是同一批行，规则内容必须完全一致，对不上直接报错。</p>
      */
-    private void checkListReadRules(List<ActionTestListReadRuleParam> rules, List<ObjectAxis> objects) {
-        if (CollectionUtils.isEmpty(rules)) {
-            return;
+    private Map<String, ActionTestListReadRuleParam> normalizeListReadRules(ActionInvokeParam param,
+                                                                           List<ObjectAxis> objects) {
+        var raw = param.getListReadRules();
+        if (MapUtils.isEmpty(raw)) {
+            return null;
         }
-        var objectIds = objects.stream().map(ObjectAxis::objectId).collect(Collectors.toSet());
-        var propsByObject = new HashMap<String, List<OntologyProperty>>();
-        var seen = new HashSet<String>();
-        for (var rule : rules) {
-            PreconditionUtils.checkNotNull(rule, "listReadRules 里有空规则", HttpStatus.BAD_REQUEST);
-            var objectId = StringUtils.trimToEmpty(rule.getOntologyUniqueIdentifier());
-            PreconditionUtils.checkArgument(StringUtils.isNotEmpty(objectId),
-                    "子表读取规则必须指定对象id：" + rule, HttpStatus.BAD_REQUEST);
-            PreconditionUtils.checkArgument(objectIds.contains(objectId),
-                    "子表读取规则的对象[" + objectDisplayName(objectId) + "]不在本次遍历的对象里，规则不会生效",
+        var index = inputParamKeyIndex(param.getOntologySpaceId(), param.getActionApi());
+        PreconditionUtils.checkNotNull(index,
+                "子表读取规则只支持绑算子的应用行为：" + param.getActionApi(), HttpStatus.BAD_REQUEST);
+        var traversedObjects = objects.stream().map(ObjectAxis::objectId).collect(Collectors.toSet());
+        Map<String, ActionTestListReadRuleParam> rulesByParam = new LinkedHashMap<>();
+        Map<String, String> keysByParam = new LinkedHashMap<>();
+        for (var entry : raw.entrySet()) {
+            var key = StringUtils.trimToEmpty(entry.getKey());
+            var rule = entry.getValue();
+            PreconditionUtils.checkArgument(StringUtils.isNotEmpty(key),
+                    "子表读取规则里有一条空键，请写成算子入参名或 父参数名.字段路径：" + param.getActionApi(),
                     HttpStatus.BAD_REQUEST);
-            var group = StringUtils.trimToEmpty(rule.getStorageGroup());
-            PreconditionUtils.checkArgument(seen.add(objectId + "|" + group),
-                    "对象[" + objectDisplayName(objectId) + "]的分组[" + (group.isEmpty() ? "全部" : group)
-                            + "]配了多条子表读取规则", HttpStatus.BAD_REQUEST);
-            if (rule.getRowCount() != null) {
-                PreconditionUtils.checkArgument(rule.getRowCount() > 0,
-                        "子表读取规则的行数必须大于 0：" + rule.getRowCount(), HttpStatus.BAD_REQUEST);
-            }
-            var props = propsByObject.computeIfAbsent(objectId, id -> ontologyPropertyService.list(
-                    new LambdaQueryWrapper<OntologyProperty>()
-                            .eq(OntologyProperty::getOntologyUniqueIdentifier, id)));
-            var subGroups = props.stream()
-                    .map(p -> StringUtils.defaultIfBlank(p.getStorageGroup(), MAIN_STORAGE_GROUP))
-                    .filter(g -> !MAIN_STORAGE_GROUP.equals(g))
-                    .collect(Collectors.toSet());
-            if (StringUtils.isNotEmpty(group)) {
-                PreconditionUtils.checkArgument(subGroups.contains(group),
-                        "存储分组[" + group + "]不是对象[" + objectDisplayName(objectId) + "]的子表分组，读取规则不会生效",
+            PreconditionUtils.checkNotNull(rule,
+                    "子表读取规则里入参[" + key + "]的规则是空的，不需要规则就别写这一条", HttpStatus.BAD_REQUEST);
+            var owner = resolveRuleOwner(key, index);
+            PreconditionUtils.checkArgument(owner != null,
+                    "子表读取规则的键[" + key + "]既不是本行为的算子入参名，也对不上任何绑定行的字段路径，"
+                            + "无法确定规则给哪个入参", HttpStatus.BAD_REQUEST);
+            checkListReadRule(owner, key, rule, index, traversedObjects);
+            var previous = rulesByParam.get(owner);
+            if (previous != null && !previous.equals(rule)) {
+                throw new BusinessException("入参[" + owner + "]的读取规则键[" + keysByParam.get(owner) + "]和["
+                        + key + "]配得不一致：同一个入参读的是同一批行，行数与排序要写成一样的（前者是 "
+                        + describeListReadRule(previous) + "，后者是 " + describeListReadRule(rule) + "）",
                         HttpStatus.BAD_REQUEST);
             }
-            if (StringUtils.isNotEmpty(rule.getOrderByProperty())) {
-                var property = props.stream()
-                        .filter(p -> rule.getOrderByProperty().equals(p.getApiName()))
-                        .findFirst().orElse(null);
-                PreconditionUtils.checkArgument(property != null
-                                && StringUtils.isNotEmpty(property.getDatasourceColumnName()),
-                        "排序属性[" + rule.getOrderByProperty() + "]不是对象[" + objectDisplayName(objectId)
-                                + "]的属性或没有关联数据源列", HttpStatus.BAD_REQUEST);
-                var propertyGroup = StringUtils.defaultIfBlank(property.getStorageGroup(), MAIN_STORAGE_GROUP);
-                PreconditionUtils.checkArgument(StringUtils.isEmpty(group) ? !MAIN_STORAGE_GROUP.equals(propertyGroup)
-                                : group.equals(propertyGroup),
-                        StringUtils.isEmpty(group)
-                                ? "排序属性[" + rule.getOrderByProperty() + "]在主表分组，子表按它排序不生效"
-                                : "排序属性[" + rule.getOrderByProperty() + "]不属于存储分组[" + group + "]",
-                        HttpStatus.BAD_REQUEST);
-            }
+            rulesByParam.putIfAbsent(owner, rule);
+            keysByParam.putIfAbsent(owner, key);
         }
+        return rulesByParam;
+    }
+
+    /** 读取规则的键归到所属顶层入参：认顶层入参名、绑定行字段名（唯一时）、父参数名.字段路径；认不出返回 null */
+    private String resolveRuleOwner(String key, InputParamKeyIndex index) {
+        var owners = index.ownersByField().get(key);
+        if (index.defByName().containsKey(key)) {
+            // 同名冲突：键既是顶层入参名、又是另一个入参的字段名，两种解释都成立，不猜
+            PreconditionUtils.checkArgument(owners == null
+                            || owners.stream().allMatch(owner -> StringUtils.equals(owner, key)),
+                    "子表读取规则里的[" + key + "]同时是入参[" + key + "]的参数名和入参 " + owners
+                            + " 的字段名，无法判断规则给哪个入参，请改传顶层入参名", HttpStatus.BAD_REQUEST);
+            return key;
+        }
+        var qualifiedOwner = resolveQualifiedOwner(key, index.pathsByOwner());
+        if (qualifiedOwner != null
+                && (owners == null || owners.size() != 1 || !owners.contains(qualifiedOwner))) {
+            return qualifiedOwner;
+        }
+        if (owners == null || owners.isEmpty()) {
+            return null;
+        }
+        PreconditionUtils.checkArgument(owners.size() == 1,
+                "子表读取规则里的字段[" + key + "]同时属于入参 " + String.join("、", owners)
+                        + "，无法判断规则给哪个入参，请改写成 父参数名.字段路径（如 "
+                        + owners.iterator().next() + "." + key + "）", HttpStatus.BAD_REQUEST);
+        return owners.iterator().next();
+    }
+
+    /** 这条读取规则是否真的会作用在该入参绑定的子表分组上；配了却不生效的直接报错 */
+    private void checkListReadRule(String owner, String key, ActionTestListReadRuleParam rule,
+                                   InputParamKeyIndex index, Set<String> traversedObjects) {
+        var def = index.defByName().get(owner);
+        PreconditionUtils.checkArgument(def != null && def.getParamId() != null
+                        && index.instanceParamIds().contains(def.getParamId()),
+                "入参[" + owner + "]的取值不读实例数据（外部输入或固定值），子表读取规则不会生效，请去掉这条规则",
+                HttpStatus.BAD_REQUEST);
+        if (rule.getRowCount() != null) {
+            PreconditionUtils.checkArgument(rule.getRowCount() > 0,
+                    "子表读取规则的行数必须大于 0：入参[" + owner + "]填的是 " + rule.getRowCount(),
+                    HttpStatus.BAD_REQUEST);
+            PreconditionUtils.checkArgument(def.paramTypeEnum() == FunctionParamTypeEnum.LIST,
+                    "入参[" + owner + "]不是列表入参，一次只用到一行，rowCount 不会生效：要取最新或最早的那一行"
+                            + "请用 orderByProperty 加 sort，把 rowCount 去掉", HttpStatus.BAD_REQUEST);
+        }
+        var propertyIds = index.instanceRows().stream()
+                .filter(mapping -> def.getParamId().equals(mapping.getFunctionParamId()))
+                .map(ActionParamMappingVO::getPropertyUniqueIdentifier)
+                .filter(StringUtils::isNotBlank)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        PreconditionUtils.checkArgument(!propertyIds.isEmpty(),
+                "入参[" + owner + "]没有绑定对象属性，子表读取规则没有可作用的分组：" + key, HttpStatus.BAD_REQUEST);
+        var properties = ontologyPropertyService.list(new LambdaQueryWrapper<OntologyProperty>()
+                .in(OntologyProperty::getUniqueIdentifier, propertyIds));
+        var groups = properties.stream()
+                .map(p -> StringUtils.defaultIfBlank(p.getStorageGroup(), MAIN_STORAGE_GROUP))
+                .filter(group -> !MAIN_STORAGE_GROUP.equals(group))
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        PreconditionUtils.checkArgument(!groups.isEmpty(),
+                "入参[" + owner + "]绑定的属性都在主表，主表只有实例那一行，子表读取规则不会生效：" + key,
+                HttpStatus.BAD_REQUEST);
+        var readObjects = properties.stream()
+                .map(OntologyProperty::getOntologyUniqueIdentifier)
+                .filter(StringUtils::isNotBlank)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        for (var objectId : readObjects) {
+            PreconditionUtils.checkArgument(traversedObjects.contains(objectId),
+                    "入参[" + owner + "]读的[" + objectDisplayName(objectId) + "]不在本次遍历的对象里，"
+                            + "子表读取规则不会生效：" + key, HttpStatus.BAD_REQUEST);
+        }
+        if (StringUtils.isNotEmpty(rule.getOrderByProperty())) {
+            var canOrderBy = properties.stream()
+                    .filter(p -> rule.getOrderByProperty().equals(p.getApiName()))
+                    .filter(p -> StringUtils.isNotEmpty(p.getDatasourceColumnName()))
+                    .map(p -> StringUtils.defaultIfBlank(p.getStorageGroup(), MAIN_STORAGE_GROUP))
+                    .anyMatch(groups::contains);
+            PreconditionUtils.checkArgument(canOrderBy,
+                    "入参[" + owner + "]的读取规则按属性[" + rule.getOrderByProperty() + "]排序，但该入参绑定的子表属性"
+                            + "（分组 " + String.join("、", groups) + "）里没有它，请改成本入参绑定行的属性，"
+                            + "或去掉排序按行主键取", HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    /** 规则内容的简述，只用于「同一入参规则不一致」的报错文案 */
+    private String describeListReadRule(ActionTestListReadRuleParam rule) {
+        var parts = new ArrayList<String>();
+        parts.add(rule.getRowCount() == null ? "默认行数" : "行数 " + rule.getRowCount());
+        parts.add(StringUtils.isEmpty(rule.getOrderByProperty()) ? "按行主键排序"
+                : "按 " + rule.getOrderByProperty() + " " + (rule.getSort() == null ? "DESC" : rule.getSort().name()));
+        return String.join("、", parts);
     }
 
     /**
      * 来源为外部输入的参数必须在 params 里给值：多组测试共用同一个值，缺了只能拿到 null，
      * 看不出是没给还是算子算出来空。键存在即算给了值（显式 null 也算）。
+     * <p>给的键和取值侧同一套：绑定行的参数名、字段路径、父参数名.字段路径全名、整包参数名都算给了值。</p>
      */
     private void checkExternalParamsProvided(OntologyAction action, Map<String, Object> params) {
         if (action == null || StringUtils.isEmpty(action.getFunctionApi())) {
@@ -5140,42 +5218,67 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             }
         });
         var missing = new LinkedHashSet<String>();
+        Set<String> duplicateLeafNames = new LinkedHashSet<>();
+        Map<String, Set<String>> ownersByLeaf = new LinkedHashMap<>();
         for (var mapping : detail.getMappingIns()) {
             if (mapping.getCategory() != FunctionParamCategoryEnum.INPUT
                     || mapping.getSourceType() != ActionParamSourceEnum.EXTERNAL) {
                 continue;
             }
+            var owner = namesById.get(mapping.getFunctionParamId());
             var name = StringUtils.isNotBlank(mapping.getParameterName())
-                    ? mapping.getParameterName() : namesById.get(mapping.getFunctionParamId());
-            if (StringUtils.isNotBlank(name) && (params == null || !params.containsKey(name))) {
-                missing.add(name);
-            }
-        }
-        PreconditionUtils.checkArgument(missing.isEmpty(),
-                "来源为外部输入的参数必须在 params 里给值：" + String.join("、", missing)
-                        + "；多组测试共用同一个值，旧行为按字段逐个绑定外部输入的重新保存后会合并成整包绑定",
-                HttpStatus.BAD_REQUEST);
-    }
-
-    private Map<String, Map<String, ActionTestListReadRuleParam>> listReadRulesByObject(
-            List<ActionTestListReadRuleParam> rules) {
-        if (CollectionUtils.isEmpty(rules)) {
-            return null;
-        }
-        var byObject = new LinkedHashMap<String, Map<String, ActionTestListReadRuleParam>>();
-        for (var rule : rules) {
-            if (rule == null || StringUtils.isBlank(rule.getOntologyUniqueIdentifier())) {
+                    ? mapping.getParameterName() : owner;
+            if (StringUtils.isBlank(name)) {
                 continue;
             }
-            var groups = byObject.computeIfAbsent(rule.getOntologyUniqueIdentifier().trim(),
-                    k -> new LinkedHashMap<>());
-            var groupKey = StringUtils.trimToEmpty(rule.getStorageGroup());
-            PreconditionUtils.checkArgument(groups.put(groupKey, rule) == null,
-                    "listReadRules 里对象[" + rule.getOntologyUniqueIdentifier() + "]的分组["
-                            + (groupKey.isEmpty() ? "全部" : groupKey) + "]配了多条读取规则",
-                    HttpStatus.BAD_REQUEST);
+            if (StringUtils.isNotEmpty(mapping.getParamPath()) && StringUtils.isNotBlank(owner)
+                    && !StringUtils.equals(owner, name)) {
+                ownersByLeaf.computeIfAbsent(name, k -> new LinkedHashSet<>()).add(owner);
+            }
+            if (externalParamProvided(params, name, mapping.getParamPath(), owner)) {
+                continue;
+            }
+            missing.add(name);
         }
-        return byObject.isEmpty() ? null : byObject;
+        ownersByLeaf.forEach((name, owners) -> {
+            if (owners.size() > 1) {
+                duplicateLeafNames.add(name);
+            }
+        });
+        if (missing.isEmpty()) {
+            return;
+        }
+        var message = new StringBuilder("来源为外部输入的参数必须在 params 里给值：")
+                .append(String.join("、", missing));
+        var duplicatedMissing = missing.stream().filter(duplicateLeafNames::contains).collect(Collectors.toList());
+        if (duplicatedMissing.isEmpty()) {
+            message.append("；多组测试共用同一个值，旧行为按字段逐个绑定外部输入的重新保存后会合并成整包绑定");
+        } else {
+            var firstDuplicated = duplicatedMissing.get(0);
+            var exampleOwner = CollectionUtils.emptyIfNull(ownersByLeaf.get(firstDuplicated)).stream()
+                    .filter(StringUtils::isNotBlank).findFirst().orElse(firstDuplicated);
+            message.append("；其中 ").append(String.join("、", duplicatedMissing))
+                    .append(" 是挂在多条入参上的同名字段，同一个键只会喂给全部入参，")
+                    .append("请按 父参数名.字段路径（如 ").append(exampleOwner).append(".").append(firstDuplicated)
+                    .append("）给值");
+        }
+        throw new BusinessException(message.toString(), HttpStatus.BAD_REQUEST);
+    }
+
+    /** 某条外部输入绑定行在 params 里是否有对应的键：参数名 / 字段路径 / 父参数名.字段路径 / 整包参数名 */
+    private static boolean externalParamProvided(Map<String, Object> params, String name, String paramPath,
+                                                 String owner) {
+        if (params == null) {
+            return false;
+        }
+        if (params.containsKey(name) || (StringUtils.isNotEmpty(paramPath) && params.containsKey(paramPath))) {
+            return true;
+        }
+        if (StringUtils.isBlank(owner)) {
+            return false;
+        }
+        return params.containsKey(owner)
+                || (StringUtils.isNotEmpty(paramPath) && params.containsKey(owner + "." + paramPath));
     }
 
     /**
@@ -5721,8 +5824,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 // 按对象方向给的数据位置：树执行的树级/节点级默认行主键走这里，对外测试请求不带
                 .inputEntities(param.getInputEntities())
                 .outputEntities(param.getOutputEntities())
-                // 对象模式测试的子表读取规则：按对象 + 分组指定行数与排序
-                .listReadRules(listReadRulesByObject(param.getListReadRules()))
+                // 对象模式测试配的子表读取规则：入参名 -> 行数与排序，键已在入口按绑定行归到所属入参
+                .listReadRules(param.getListReadRules())
                 // 按算子入参/出参指定的数据位置：入参读哪个实例/哪一行、出参写到哪个实例/哪一行
                 .inputParams(singleInputTargets.isEmpty() ? null : singleInputTargets)
                 .inputElementParams(elementInputTargets.isEmpty() ? null : elementInputTargets)
@@ -5957,6 +6060,83 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     }
 
     /**
+     * 行为绑定行归位到算子入参所需的索引：入参定义、需要读实例的入参、字段名与路径的归属关系。
+     * <p>数据位置和读取规则都要按同一套键写法认入参，所以这两处共用它，避免两套归位口径。</p>
+     */
+    private record InputParamKeyIndex(Map<String, FunctionParameterVO> defByName,
+                                      Map<Long, FunctionParameterVO> defById,
+                                      Set<Long> instanceParamIds,
+                                      Set<Long> boundParamIds,
+                                      Map<String, Set<String>> ownersByField,
+                                      Map<String, Set<String>> pathsByOwner,
+                                      List<ActionParamMappingVO> instanceRows) {
+    }
+
+    /** 按行为绑定的算子定义建索引；行为不存在、不绑算子（基础行为）、行为树或查不到定义时返回 null */
+    private InputParamKeyIndex inputParamKeyIndex(Integer ontologySpaceId, String actionApi) {
+        var action = getOne(new LambdaQueryWrapper<OntologyAction>()
+                .eq(OntologyAction::getApi, actionApi)
+                .eq(OntologyAction::getOntologySpaceId, ontologySpaceId));
+        if (action == null || action.getActionKind() == ActionKindEnum.BASE
+                || action.getActionKind() == ActionKindEnum.TREE || StringUtils.isEmpty(action.getFunctionApi())) {
+            return null;
+        }
+        var function = functionService.getFunctionDetailByApi(ontologySpaceId, action.getFunctionApi(), null);
+        var detail = getActionByApi(ontologySpaceId, action.getApi());
+        if (function == null || CollectionUtils.isEmpty(function.getParams())
+                || detail == null || CollectionUtils.isEmpty(detail.getMappingIns())) {
+            return null;
+        }
+        Map<Long, FunctionParameterVO> defById = new LinkedHashMap<>();
+        Map<String, FunctionParameterVO> defByName = new LinkedHashMap<>();
+        function.getParams().stream()
+                .filter(p -> FunctionParamCategoryEnum.INPUT.equals(p.getCategory()))
+                .forEach(p -> {
+                    if (p.getParamId() != null) {
+                        defById.putIfAbsent(p.getParamId(), p);
+                    }
+                    if (StringUtils.isNotBlank(p.getParamName())) {
+                        defByName.putIfAbsent(p.getParamName(), p);
+                    }
+                });
+        if (defByName.isEmpty()) {
+            return null;
+        }
+        Set<Long> instanceParamIds = detail.getMappingIns().stream()
+                .filter(OntologyActionServiceImpl::readNeedsInstance)
+                .map(ActionParamMappingVO::getFunctionParamId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Set<Long> boundParamIds = detail.getMappingIns().stream()
+                .map(ActionParamMappingVO::getFunctionParamId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        var instanceRows = detail.getMappingIns().stream()
+                .filter(OntologyActionServiceImpl::readNeedsInstance)
+                .filter(mapping -> mapping.getFunctionParamId() != null)
+                .collect(Collectors.toList());
+        Map<String, Set<String>> ownersByField = new LinkedHashMap<>();
+        Map<String, Set<String>> pathsByOwner = new LinkedHashMap<>();
+        for (var mapping : instanceRows) {
+            if (StringUtils.isEmpty(mapping.getParamPath())) {
+                continue;
+            }
+            var owner = defById.get(mapping.getFunctionParamId());
+            if (owner == null || StringUtils.isBlank(owner.getParamName())) {
+                continue;
+            }
+            addFieldOwner(ownersByField, mapping.getParameterName(), owner.getParamName());
+            addFieldOwner(ownersByField, mapping.getParamPath(), owner.getParamName());
+            addFieldOwner(ownersByField, StringUtils.substringAfterLast(mapping.getParamPath(), "."),
+                    owner.getParamName());
+            pathsByOwner.computeIfAbsent(owner.getParamName(), k -> new LinkedHashSet<>())
+                    .add(mapping.getParamPath());
+        }
+        return new InputParamKeyIndex(defByName, defById, instanceParamIds, boundParamIds,
+                ownersByField, pathsByOwner, instanceRows);
+    }
+
+    /**
      * 入参数据位置的键兼容「绑定行字段名」写法：前端按一条绑定行选位置时，LIST 的元素字段（longitude）、
      * 对象子字段（position.longitude）会各自成键，而执行侧只认顶层入参名（trajectories）。
      * 这里按绑定行反查所属顶层入参，把字段键合并回参数名：
@@ -5974,65 +6154,18 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         if (MapUtils.isEmpty(raw) || StringUtils.isEmpty(param.getActionApi())) {
             return;
         }
-        var action = getOne(new LambdaQueryWrapper<OntologyAction>()
-                .eq(OntologyAction::getApi, param.getActionApi())
-                .eq(OntologyAction::getOntologySpaceId, param.getOntologySpaceId()));
-        // 基础行为不绑算子，树不能按单个行为测试，两种都不在这里处理
-        if (action == null || action.getActionKind() == ActionKindEnum.BASE
-                || action.getActionKind() == ActionKindEnum.TREE || StringUtils.isEmpty(action.getFunctionApi())) {
+        var index = inputParamKeyIndex(param.getOntologySpaceId(), param.getActionApi());
+        if (index == null) {
             return;
         }
-        var function = functionService.getFunctionDetailByApi(action.getOntologySpaceId(),
-                action.getFunctionApi(), null);
-        var detail = getActionByApi(action.getOntologySpaceId(), action.getApi());
-        if (function == null || CollectionUtils.isEmpty(function.getParams())
-                || detail == null || CollectionUtils.isEmpty(detail.getMappingIns())) {
-            return;
-        }
-        Map<Long, FunctionParameterVO> defById = new LinkedHashMap<>();
-        Map<String, FunctionParameterVO> defByName = new LinkedHashMap<>();
-        function.getParams().stream()
-                .filter(p -> FunctionParamCategoryEnum.INPUT.equals(p.getCategory()))
-                .forEach(p -> {
-                    if (p.getParamId() != null) {
-                        defById.putIfAbsent(p.getParamId(), p);
-                    }
-                    if (StringUtils.isNotBlank(p.getParamName())) {
-                        defByName.putIfAbsent(p.getParamName(), p);
-                    }
-                });
-        if (defByName.isEmpty()) {
-            return;
-        }
-        Set<Long> instanceParamIds = detail.getMappingIns().stream()
-                .filter(OntologyActionServiceImpl::readNeedsInstance)
-                .map(ActionParamMappingVO::getFunctionParamId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
-        Set<Long> boundParamIds = detail.getMappingIns().stream()
-                .map(ActionParamMappingVO::getFunctionParamId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
+        var defById = index.defById();
+        var defByName = index.defByName();
+        var instanceParamIds = index.instanceParamIds();
+        var boundParamIds = index.boundParamIds();
         // 字段名 -> 所属顶层入参名；同一字段名落在多个入参上时记下全部候选，用到时要求改传参数名
-        Map<String, Set<String>> ownersByField = new LinkedHashMap<>();
+        var ownersByField = index.ownersByField();
         // 顶层入参名 -> 该入参各绑定行的字段路径，用来识别「父参数名.字段路径」写法
-        Map<String, Set<String>> pathsByOwner = new LinkedHashMap<>();
-        for (var mapping : detail.getMappingIns()) {
-            if (!readNeedsInstance(mapping) || mapping.getFunctionParamId() == null
-                    || StringUtils.isEmpty(mapping.getParamPath())) {
-                continue;
-            }
-            var owner = defById.get(mapping.getFunctionParamId());
-            if (owner == null || StringUtils.isBlank(owner.getParamName())) {
-                continue;
-            }
-            addFieldOwner(ownersByField, mapping.getParameterName(), owner.getParamName());
-            addFieldOwner(ownersByField, mapping.getParamPath(), owner.getParamName());
-            addFieldOwner(ownersByField, StringUtils.substringAfterLast(mapping.getParamPath(), "."),
-                    owner.getParamName());
-            pathsByOwner.computeIfAbsent(owner.getParamName(), k -> new LinkedHashSet<>())
-                    .add(mapping.getParamPath());
-        }
+        var pathsByOwner = index.pathsByOwner();
 
         Map<String, ActionInputPositionsParam> normalized = new LinkedHashMap<>();
         Set<String> directKeys = new LinkedHashSet<>();
