@@ -2752,7 +2752,10 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 .nodeId(node.getId())
                 .kind(node.getKind())
                 .displayName(node.getDisplayName())
-                .state(trace.getState() == null ? BehaviorStateEnum.SUCCESS : trace.getState())
+                // trace 存在但没落终态：节点进来过却没跑完（并行超时后仍在后台的孤儿分支被并发读到），
+                // 正常路径每个节点都会写完 SUCCESS/FAILURE/跳过，留空的按未完成失败处理，不能替它谎报成功；
+                // 单轮执行也不会停在 RUNNING，所以兜底取失败而非 RUNNING
+                .state(trace.getState() == null ? BehaviorStateEnum.FAILURE : trace.getState())
                 .skipped(trace.isSkipped())
                 .message(trace.getMessage())
                 .children(children)
@@ -2993,6 +2996,9 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             return label + "的行为没有返回体，出参无法回传黑板，请去掉这些出参的回传配置";
         }
         var rows = treeOutputRows(bound);
+        // 先把每条出参的取值全部算完并校验，暂存到 pending；任一条认不出或取不到就直接返回失败，一条都不写黑板。
+        // 逐条写会出现「前几条已落黑板、后几条失败」的半套回传，下游条件会拿这份残缺值误判成执行
+        Map<String, Object> pending = new LinkedHashMap<>();
         for (var entry : returns.entrySet()) {
             var outputKey = StringUtils.trimToEmpty(entry.getKey());
             var blackboardKey = entry.getValue();
@@ -3011,7 +3017,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                     return label + "的出参「" + row.displayName() + "」整批取不到值，"
                             + "不回传黑板键 " + blackboardKey;
                 }
-                runtime.setBlackboardValue(blackboardKey, values);
+                pending.put(blackboardKey, values);
                 continue;
             }
             var value = readTreeOutputValue(resultJson, row);
@@ -3019,9 +3025,11 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 return label + "的出参「" + row.displayName() + "」在本次返回里取不到值，"
                         + "不回传黑板键 " + blackboardKey;
             }
-            runtime.setBlackboardValue(blackboardKey, listTarget && !(value instanceof List)
+            pending.put(blackboardKey, listTarget && !(value instanceof List)
                     ? Lists.newArrayList(value) : value);
         }
+        // 全部就绪才一次性提交，保证回传要么整套生效、要么一套都不写
+        pending.forEach(runtime::setBlackboardValue);
         return null;
     }
 
@@ -3287,7 +3295,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         Map<String, Object> latestValues = new LinkedHashMap<>();
         List<String> noInstanceObjects = new ArrayList<>();
         propsByObject.forEach((objectId, props) -> {
-            var entityPrimaryKey = runtime.nodeEntityPrimaryKey(nodeId, objectId);
+            // 黑板回读走树级口径（与分组行键 executionInputDataPrimaryKeys 同源）：节点级实例覆盖只影响行为执行，不让不同节点读到不同的行
+            var entityPrimaryKey = runtime.executionEntityPrimaryKey(objectId);
             if (entityPrimaryKey == null) {
                 noInstanceObjects.add(objectId);
                 return;
@@ -6839,6 +6848,10 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 .params(param.getParams())
                 .inputMode(param.getInputMode())
                 .listReadRules(param.getListReadRules())
+                .paramValueOverrides(param.getParamValueOverrides() == null
+                        ? null : new LinkedHashMap<>(param.getParamValueOverrides()))
+                // 解析容器每组独立：执行侧往里回填，共用一个容器会让后一组覆盖前一组
+                .resolvedInputs(param.getResolvedInputs() == null ? null : new LinkedHashMap<>())
                 .build();
     }
 
