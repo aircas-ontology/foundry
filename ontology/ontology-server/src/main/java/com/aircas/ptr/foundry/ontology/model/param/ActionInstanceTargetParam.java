@@ -17,10 +17,10 @@ import java.util.Map;
 @NoArgsConstructor
 public class ActionInstanceTargetParam {
 
-    @Schema(name = "ontologyIdentifier", description = "该位置读哪个对象的数据：只在入参方向用，"
-            + "一个入参的绑定跨多个对象时必填（同一个实例主键在不同对象下指的不是同一条数据）；"
-            + "绑定只涉及一个对象时不用传，按绑定行所属对象算。LIST 入参按元素给位置时逐元素指定，"
-            + "同一份列表的元素可以来自不同对象",
+    @Schema(name = "ontologyIdentifier", description = "该位置读哪个对象的数据：只在按元素给位置的入参方向用，"
+            + "一份列表的绑定跨多个对象时必填（同一个实例主键在不同对象下指的不是同一条数据）；"
+            + "绑定只涉及一个对象时不用传。按子级字段（父参数名.字段路径）给位置时不要传，"
+            + "读哪个对象由创建行为时的绑定行决定，传了报错",
             example = "375e4a851e4944fcbf4d77ebd6d67ac3")
     private String ontologyIdentifier;
 
