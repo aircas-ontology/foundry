@@ -50,6 +50,16 @@ public class OntologyAction {
     @TableField(typeHandler = StringListCommaTypeHandler.class, updateStrategy = FieldStrategy.ALWAYS)
     private List<String> ontologyUniqueIdentifier;
 
+    /**
+     * Column: property_unique_identifier
+     * 行为引用到的属性唯一标识，逗号分隔：入参来源属性、出参写回属性、List 来源属性、
+     * 基础函数配置里的字段与回写属性、行为树黑板绑定的属性。
+     * 属性唯一标识创建后不变，删除属性前按这列判断是否被行为引用；与 ontology_action_mapping_in 的存量检查叠加。
+     * 由创建/编辑时按当次定义重算，全空时写空串，否则改绑定后残留旧属性
+     */
+    @TableField(typeHandler = StringListCommaTypeHandler.class, updateStrategy = FieldStrategy.ALWAYS)
+    private List<String> propertyUniqueIdentifier;
+
     /** 创建时选的那个对象：保存时排在挂载列表首位；没有挂载对象时返回 null */
     public String primaryOntologyIdentifier() {
         return ontologyUniqueIdentifier == null || ontologyUniqueIdentifier.isEmpty() ? null : ontologyUniqueIdentifier.get(0);

@@ -2351,6 +2351,9 @@ public class OntologySpaceServiceImpl extends ServiceImpl<OntologySpaceMapper, O
         copy.setActionCategoryId(categoryId);
         copy.setOntologyUniqueIdentifier(remapIdentifiers(source.getOntologyUniqueIdentifier(), ontologyMapping,
                 "行为 " + source.getApi() + " 挂载的对象未被选中："));
+        // 属性引用也随绑定改到本节点的属性上，否则删源空间属性会被新主题的行为误拦
+        copy.setPropertyUniqueIdentifier(remapIdentifiers(source.getPropertyUniqueIdentifier(), propertyMapping,
+                "行为 " + source.getApi() + " 引用的属性未被选中："));
         actionMapper.insert(copy);
 
         var mappings = actionMappingInMapper.selectList(new LambdaQueryWrapper<OntologyActionMappingIn>()
