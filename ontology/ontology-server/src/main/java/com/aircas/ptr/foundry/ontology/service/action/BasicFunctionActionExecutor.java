@@ -8,12 +8,14 @@ import com.aircas.ptr.foundry.ontology.model.enums.BasicFunctionModeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FilterNodeTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.FilterValueSourceEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.QueryOpEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.SortEnum;
 import com.aircas.ptr.foundry.ontology.model.param.ActionBasicFunctionConfig;
 import com.aircas.ptr.foundry.ontology.model.param.EntityPropertyGenericQueryParam;
 import com.aircas.ptr.foundry.ontology.model.param.EntityUnionAggregateParam;
 import com.aircas.ptr.foundry.ontology.model.param.EntityUnionQueryParam;
 import com.aircas.ptr.foundry.ontology.model.param.FilterGroupParam;
 import com.aircas.ptr.foundry.ontology.model.param.FilterNodeParam;
+import com.aircas.ptr.foundry.ontology.model.param.OrderByParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologySelectPropertyParam;
 import com.aircas.ptr.foundry.ontology.model.param.PropertyFilterParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyCategory;
@@ -275,6 +277,13 @@ public class BasicFunctionActionExecutor {
                 var meta = metas.get(0);
                 var queryParam = buildQueryParam(config, meta, instanceKey(primaryKeyByObject, meta), filters,
                         totalPageNum, totalPageSize);
+                if (writeBackEnabled) {
+                    // 通用查询没有默认排序：回写按主键倒序取最近命中行，同一条件重复执行落的是同一批行，回显页与实写行也对得上
+                    queryParam.setOrderBy(List.of(OrderByParam.builder()
+                            .propertyApiName(requirePrimaryKeyApiName(meta.getUniqueIdentifier()))
+                            .sort(SortEnum.DESC)
+                            .build()));
+                }
                 page = entityService.genericQuery(queryParam);
             } else {
                 // 多对象：各对象各查一遍选中字段，SQL 层 UNION ALL 合并后统一分页
@@ -890,8 +899,7 @@ public class BasicFunctionActionExecutor {
     /** 查询方式的通用查询参数：只查行为选中的那一个对象，字段按选择顺序去重 */
     private EntityPropertyGenericQueryParam buildQueryParam(ActionBasicFunctionConfig config, OntologyMeta meta,
                                                             Object entityPrimaryKey, FilterGroupParam filters,
-                                                            int pageNum, int pageSize) {
-        var selectProperties = new ArrayList<OntologySelectPropertyParam>();
+                                                            int pageNum, int pageSize) {        var selectProperties = new ArrayList<OntologySelectPropertyParam>();
         config.getSelectFields().stream()
                 .filter(StringUtils::isNotBlank)
                 .distinct()
@@ -906,6 +914,17 @@ public class BasicFunctionActionExecutor {
         queryParam.setPageNum(pageNum);
         queryParam.setPageSize(pageSize);
         return queryParam;
+    }
+
+    /** 对象的主键属性 apiName：回写排序按它倒序取；主键属性本身缺失时通用查询也会报错，这里点名提示 */
+    private String requirePrimaryKeyApiName(String ontologyIdentifier) {
+        var pkApiName = propertyMapper.selectList(new LambdaQueryWrapper<OntologyProperty>()
+                        .eq(OntologyProperty::getOntologyUniqueIdentifier, ontologyIdentifier)
+                        .eq(OntologyProperty::getIsPrimaryKey, 1))
+                .stream().findFirst().map(OntologyProperty::getApiName).orElse(null);
+        PreconditionUtils.checkArgument(StringUtils.isNotBlank(pkApiName),
+                "对象 " + ontologyIdentifier + " 没有主键属性，结果回写无法按稳定行序取数", HttpStatus.BAD_REQUEST);
+        return pkApiName;
     }
 
     /** 聚合查询只有一行一列；没有命中数据时数据库回 null */
