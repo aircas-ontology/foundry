@@ -5,7 +5,6 @@ import com.aircas.ptr.foundry.topic.model.enums.DeletedFlagEnum;
 import com.aircas.ptr.foundry.topic.model.param.EventTopicOverviewCreateParam;
 import com.aircas.ptr.foundry.topic.model.po.EventTopic;
 import com.aircas.ptr.foundry.topic.model.po.EventTopicOverview;
-import com.aircas.ptr.foundry.topic.model.vo.EventTopicOverviewVO;
 import com.aircas.ptr.foundry.topic.repository.EventTopicMapper;
 import com.aircas.ptr.foundry.topic.repository.EventTopicOverviewMapper;
 import com.aircas.ptr.foundry.topic.service.EventTopicOverviewService;
@@ -16,8 +15,6 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.List;
 
 @Service
 public class EventTopicOverviewServiceImpl extends ServiceImpl<EventTopicOverviewMapper, EventTopicOverview>
@@ -43,26 +40,5 @@ public class EventTopicOverviewServiceImpl extends ServiceImpl<EventTopicOvervie
                 .build();
         save(overview);
         return overview.getId();
-    }
-
-    @Override
-    public List<EventTopicOverviewVO> listByEventTopicId(Long eventTopicId) {
-        return list(new LambdaQueryWrapper<EventTopicOverview>()
-                .eq(EventTopicOverview::getEventTopicId, eventTopicId)
-                .orderByAsc(EventTopicOverview::getId))
-                .stream()
-                .map(this::toVO)
-                .toList();
-    }
-
-    private EventTopicOverviewVO toVO(EventTopicOverview overview) {
-        return EventTopicOverviewVO.builder()
-                .id(overview.getId())
-                .eventTopicId(overview.getEventTopicId())
-                .type(overview.getType())
-                .name(overview.getName())
-                .proportion(overview.getProportion())
-                .quantity(overview.getQuantity())
-                .build();
     }
 }

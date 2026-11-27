@@ -62,4 +62,18 @@ public class TaskTopicUpdateParam {
     @Min(value = 0, message = "任务状态只能为0或1")
     @Max(value = 1, message = "任务状态只能为0或1")
     private Integer status;
+
+    @Schema(description = "任务类型统计，如[{\"name\":\"海上\",\"count\":1}]", example = "[{\"name\":\"海上\",\"count\":1}]")
+    @NotBlank(message = "任务类型统计不能为空")
+    private String taskTypeStat;
+
+    @Schema(description = "目标数量", example = "1")
+    @NotNull(message = "目标数量不能为空")
+    @Min(value = 0, message = "目标数量不能小于0")
+    private Integer targetCount;
+
+    @Schema(description = "事件数量", example = "1")
+    @NotNull(message = "事件数量不能为空")
+    @Min(value = 0, message = "事件数量不能小于0")
+    private Integer eventCount;
 }

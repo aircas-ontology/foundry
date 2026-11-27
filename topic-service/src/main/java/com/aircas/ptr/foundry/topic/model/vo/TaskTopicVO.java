@@ -50,14 +50,8 @@ public class TaskTopicVO {
     @Schema(description = "目标数量")
     private Integer targetCount;
 
-    @Schema(description = "海上数量")
-    private Integer seaCount;
-
-    @Schema(description = "空中数量")
-    private Integer airCount;
-
-    @Schema(description = "陆上数量")
-    private Integer landCount;
+    @Schema(description = "任务类型统计，如[{\"name\":\"海上\",\"count\":1}]")
+    private String taskTypeStat;
 
     @Schema(description = "事件数量")
     private Integer eventCount;
