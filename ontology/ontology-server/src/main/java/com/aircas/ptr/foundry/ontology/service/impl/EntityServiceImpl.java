@@ -1037,10 +1037,38 @@ public class EntityServiceImpl implements EntityService {
                 .propertyDisplayName(property.getDisplayName())
                 .propertyUniqIdentifier(property.getUniqueIdentifier())
                 .propertyApiName(property.getApiName())
-                .propertyValue(value)
+                .propertyValue(formatPropertyValue(value))
                 .categoryId(property.getPropertyCategoryId())
                 .metadata(property.getMetadata())
                 .build();
+    }
+
+    private static final java.time.format.DateTimeFormatter PROPERTY_TIME_FORMATTER =
+            java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
+    /**
+     * 时间值按本地时区渲染成 yyyy-MM-dd HH:mm:ss，否则 Jackson 会输出成 UTC（...Z），
+     * 比库里的值和过滤条件里传的字面值整整差 8 小时。
+     */
+    private Object formatPropertyValue(Object value) {
+        if (value instanceof java.sql.Timestamp timestamp) {
+            return timestamp.toLocalDateTime().format(PROPERTY_TIME_FORMATTER);
+        }
+        //java.sql.Date 的 toInstant 会直接抛异常，必须排在 java.util.Date 之前
+        if (value instanceof java.sql.Date date) {
+            return date.toLocalDate().atStartOfDay().format(PROPERTY_TIME_FORMATTER);
+        }
+        if (value instanceof java.time.LocalDateTime localDateTime) {
+            return localDateTime.format(PROPERTY_TIME_FORMATTER);
+        }
+        if (value instanceof java.time.LocalDate localDate) {
+            return localDate.atStartOfDay().format(PROPERTY_TIME_FORMATTER);
+        }
+        if (value instanceof java.util.Date date) {
+            return java.time.LocalDateTime.ofInstant(date.toInstant(), java.time.ZoneId.systemDefault())
+                    .format(PROPERTY_TIME_FORMATTER);
+        }
+        return value;
     }
 
     private EntityPropertyRowDetailVO.PropertyGroupData buildRowGroupData(Map<String, Object> row,
