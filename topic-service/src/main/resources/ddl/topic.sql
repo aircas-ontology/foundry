@@ -263,4 +263,28 @@ COMMENT ON COLUMN topic.upload_file.create_time IS '创建时间';
 
 CREATE INDEX IF NOT EXISTS idx_upload_file_name ON topic.upload_file (file_name);
 
+CREATE TABLE IF NOT EXISTS topic.upload_file_overview
+(
+    id                 bigserial PRIMARY KEY,
+    file_id            bigint       NOT NULL,
+    file_total         integer      NOT NULL,
+    extract_list       text         NOT NULL,
+    target_count       integer      NOT NULL,
+    implicit_relation  integer      NOT NULL,
+    creator            varchar(64),
+    create_time        timestamp(6)
+);
+
+COMMENT ON TABLE topic.upload_file_overview IS '文件总览统计';
+COMMENT ON COLUMN topic.upload_file_overview.id IS '文件总览统计编号，自增';
+COMMENT ON COLUMN topic.upload_file_overview.file_id IS '文件编号';
+COMMENT ON COLUMN topic.upload_file_overview.file_total IS '文件总数';
+COMMENT ON COLUMN topic.upload_file_overview.extract_list IS '抽取列表，如[{"name":"实体","quantity":1,"proportion":0.25}]';
+COMMENT ON COLUMN topic.upload_file_overview.target_count IS '关联目标数量';
+COMMENT ON COLUMN topic.upload_file_overview.implicit_relation IS '隐含关系';
+COMMENT ON COLUMN topic.upload_file_overview.creator IS '创建人';
+COMMENT ON COLUMN topic.upload_file_overview.create_time IS '创建时间';
+
+CREATE INDEX IF NOT EXISTS idx_upload_file_overview_file_id ON topic.upload_file_overview (file_id);
+
 

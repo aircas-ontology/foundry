@@ -24,6 +24,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import jakarta.annotation.Resource;
+import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Date;
@@ -118,14 +119,16 @@ public class EventTopicServiceImpl extends ServiceImpl<EventTopicMapper, EventTo
                 .select(EventTopicOverview::getEventTopicId,
                         EventTopicOverview::getType,
                         EventTopicOverview::getName,
-                        EventTopicOverview::getQuantity));
-        Map<Long, Map<StatKey, Integer>> grouped = new HashMap<>();
+                        EventTopicOverview::getQuantity,
+                        EventTopicOverview::getProportion));
+        Map<Long, Map<StatKey, StatValue>> grouped = new HashMap<>();
         for (EventTopicOverview row : rows) {
             StatKey key = new StatKey(StringUtils.defaultString(row.getType()),
                     StringUtils.defaultString(row.getName()));
-            int quantity = row.getQuantity() == null ? 0 : row.getQuantity();
+            StatValue value = new StatValue(row.getQuantity() == null ? 0 : row.getQuantity(),
+                    row.getProportion() == null ? BigDecimal.ZERO : row.getProportion());
             grouped.computeIfAbsent(row.getEventTopicId(), id -> new HashMap<>())
-                    .merge(key, quantity, Integer::sum);
+                    .merge(key, value, StatValue::add);
         }
         Map<Long, List<EventTopicOverviewStatVO>> stats = new HashMap<>();
         grouped.forEach((id, counts) -> stats.put(id, counts.entrySet().stream()
@@ -133,13 +136,20 @@ public class EventTopicServiceImpl extends ServiceImpl<EventTopicMapper, EventTo
                 .map(entry -> EventTopicOverviewStatVO.builder()
                         .type(entry.getKey().type())
                         .name(entry.getKey().name())
-                        .quantity(entry.getValue())
+                        .quantity(entry.getValue().quantity())
+                        .proportion(entry.getValue().proportion())
                         .build())
                 .toList()));
         return stats;
     }
 
     private record StatKey(String type, String name) {
+    }
+
+    private record StatValue(int quantity, BigDecimal proportion) {
+        private StatValue add(StatValue other) {
+            return new StatValue(quantity + other.quantity, proportion.add(other.proportion));
+        }
     }
 
     @Transactional

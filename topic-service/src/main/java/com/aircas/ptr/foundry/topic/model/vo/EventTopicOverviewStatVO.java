@@ -4,6 +4,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 import lombok.Data;
 
+import java.math.BigDecimal;
+
 @Data
 @Builder
 @Schema(description = "事件主题总览统计汇总")
@@ -17,4 +19,7 @@ public class EventTopicOverviewStatVO {
 
     @Schema(description = "数量")
     private Integer quantity;
+
+    @Schema(description = "占比")
+    private BigDecimal proportion;
 }

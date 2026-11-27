@@ -42,6 +42,6 @@ public class EventTopicVO {
     @Schema(description = "状态：0执行中，1执行成功，2执行失败")
     private Integer status;
 
-    @Schema(description = "事件主题总览统计。相同类型和名称的数量已求和")
+    @Schema(description = "事件主题总览统计。相同类型和名称的数量、占比已求和")
     private List<EventTopicOverviewStatVO> overviewStats;
 }
