@@ -1,6 +1,7 @@
 package com.aircas.ptr.foundry.ontology.service.impl;
 
 import com.aircas.ptr.foundry.ontology.converter.OntologyInstanceConverter;
+import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.ontology.model.enums.ActionHandleRuleAddConditionEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.ActionRuleConnectType;
 import com.aircas.ptr.foundry.ontology.model.enums.ActionSchedulingTypeEnum;
@@ -36,6 +37,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 import jakarta.annotation.Resource;
@@ -177,11 +179,11 @@ public class ActionRuleTriggerServiceImpl implements ActionRuleTriggerService {
                     Set<Integer> accumulated = eventGroup
                             ? accumulateMonitorMatches(baseKey, matchedNow)
                             : null;
-                    if (evalAndExecuteGroup(rule.getId(), group, instanceCache, triggerTime, accumulated, eventType)) {
+                    if (evalAndExecuteGroup(rule.getOntologySpaceId(), rule.getId(), group, instanceCache,
+                            triggerTime, accumulated, eventType, cooldownKey)) {
                         if (eventGroup) {
                             monitorAccumulationMap.remove(baseKey);
                         }
-                        markCooldown(cooldownKey);
                     }
                 }
             } catch (Exception e) {
@@ -219,7 +221,8 @@ public class ActionRuleTriggerServiceImpl implements ActionRuleTriggerService {
     @Override
     public void evaluateRuleNow(Long ruleId) {
         var rule = actionHandleRuleService.getById(ruleId);
-        if (rule == null) {
+        // 只评估开启中的规则：启动接口的存量评估异步执行，落地前规则可能已被停用/删除
+        if (rule == null || !ScheduleStatus.START.equals(rule.getStatus())) {
             return;
         }
         var triggerTime = new Date();
@@ -229,24 +232,32 @@ public class ActionRuleTriggerServiceImpl implements ActionRuleTriggerService {
                 return;
             }
             Map<String, Map<String, Object>> instanceCache = new HashMap<>();
-            for (var group : groups) {
+            for (int i = 0; i < groups.size(); i++) {
+                var group = groups.get(i);
                 // 新增/删除条件是事件触发，没有事件上下文时不评估，避免取反条件在启用瞬间误执行
-                if (hasEventCondition(group)) {
+                if (group == null || hasEventCondition(group)) {
                     continue;
                 }
-                evalAndExecuteGroup(rule.getId(), group, instanceCache, triggerTime, null, null);
+                evalAndExecuteGroup(rule.getOntologySpaceId(), rule.getId(), group, instanceCache,
+                        triggerTime, null, null, "eval:" + ruleId + ":" + i + ":stock");
             }
         } catch (Exception e) {
             log.error("规则调度启用时存量评估失败, ruleId={}", ruleId, e);
         }
     }
 
-    private List<RuleJudgeGroupParam> readGroups(ActionHandleRule rule) throws Exception {
+    private List<RuleJudgeGroupParam> readGroups(ActionHandleRule rule) {
         if (StringUtils.isBlank(rule.getJudgeJson())) {
             return List.of();
         }
-        return jsonMapper.readValue(rule.getJudgeJson(), new TypeReference<List<RuleJudgeGroupParam>>() {
-        });
+        try {
+            return jsonMapper.readValue(rule.getJudgeJson(), new TypeReference<List<RuleJudgeGroupParam>>() {
+            });
+        } catch (Exception e) {
+            // 配了规则但结构解析不出来：报错点名规则，避免调度静默不触发
+            throw new BusinessException("规则调度(id=" + rule.getId() + ", name=" + rule.getName()
+                    + ") 的条件配置解析失败，请在调度管理中重新编辑保存该规则", HttpStatus.BAD_REQUEST);
+        }
     }
 
     /** 规则组是否含新增/删除事件条件（事件驱动、不做启用时存量评估） */
@@ -271,10 +282,11 @@ public class ActionRuleTriggerServiceImpl implements ActionRuleTriggerService {
         return type == RuleMonitorTypeEnum.INSERT || type == RuleMonitorTypeEnum.DELETE;
     }
 
-    /** 求值一组条件（含整体取反），成立则执行该组行为；返回是否执行 */
-    private boolean evalAndExecuteGroup(Long ruleId, RuleJudgeGroupParam group,
-                                        Map<String, Map<String, Object>> instanceCache, Date triggerTime,
-                                        Set<Integer> accumulatedMonitorIndexes, RuleMonitorTypeEnum eventType) {
+    /** 求值一组条件（含整体取反），成立则先原子认领冷却窗口再执行该组行为；返回是否执行 */
+    private boolean evalAndExecuteGroup(Integer spaceId, Long ruleId, RuleJudgeGroupParam group,
+                                         Map<String, Map<String, Object>> instanceCache, Date triggerTime,
+                                         Set<Integer> accumulatedMonitorIndexes, RuleMonitorTypeEnum eventType,
+                                         String cooldownKey) {
         boolean result = evalJudgeItems(group.getJudgeParams(), instanceCache, accumulatedMonitorIndexes,
                 group.getMonitorType(), eventType);
         if (Boolean.TRUE.equals(group.getCondition())) {
@@ -283,7 +295,11 @@ public class ActionRuleTriggerServiceImpl implements ActionRuleTriggerService {
         if (!result) {
             return false;
         }
-        executeJudgeAction(ruleId, group.getActionParam(), triggerTime);
+        // 判定与占位一步完成：并发 CDC 事件下同一规则不会被执行两遍
+        if (StringUtils.isNotBlank(cooldownKey) && !tryMarkCooldown(cooldownKey)) {
+            return false;
+        }
+        executeJudgeAction(spaceId, ruleId, group.getActionParam(), triggerTime);
         return true;
     }
 
@@ -595,12 +611,15 @@ public class ActionRuleTriggerServiceImpl implements ActionRuleTriggerService {
         return last != null && System.currentTimeMillis() - last < JUDGE_COOLDOWN_MS;
     }
 
-    private void markCooldown(String key) {
+    /** 原子「判 + 占」冷却窗口：冷却期内返回 false，否则写入当前时间并返回 true */
+    private boolean tryMarkCooldown(String key) {
         long now = System.currentTimeMillis();
         if (judgeCooldownMap.size() > 10_000) {
             judgeCooldownMap.entrySet().removeIf(e -> now - e.getValue() >= JUDGE_COOLDOWN_MS);
         }
-        judgeCooldownMap.put(key, now);
+        Long claimed = judgeCooldownMap.compute(key, (k, last) ->
+                last != null && now - last < JUDGE_COOLDOWN_MS ? last : now);
+        return claimed == now;
     }
 
     private boolean evaluateCondition(ActionHandleRuleAddConditionEnum condition, Object actual, String expected) {
@@ -662,14 +681,22 @@ public class ActionRuleTriggerServiceImpl implements ActionRuleTriggerService {
         }
     }
 
-    /** 执行定稿规则的行为：目标实例由 actionParam 显式指定；entity_json 与周期调度同形式 */
-    private void executeJudgeAction(Long ruleId, RuleActionParam actionParam, Date triggerTime) {
+    /** 执行定稿规则的行为：行为按 api + 调度所属空间定位；目标实例由 actionParam 显式指定；entity_json 与周期调度同形式 */
+    private void executeJudgeAction(Integer spaceId, Long ruleId, RuleActionParam actionParam, Date triggerTime) {
         if (actionParam == null || StringUtils.isBlank(actionParam.getActionApi())) {
             log.warn("规则调度缺少 actionParam.action_api, ruleId={}", ruleId);
             return;
         }
-        var action = actionMapper.selectOne(new LambdaQueryWrapper<OntologyAction>()
-                .eq(OntologyAction::getApi, actionParam.getActionApi()));
+        // 行为 api 只在空间内唯一：按调度记录的空间收敛；老数据空间为空时命中多条只告警跳过，不抛断事件链
+        var candidates = actionMapper.selectList(new LambdaQueryWrapper<OntologyAction>()
+                .eq(OntologyAction::getApi, actionParam.getActionApi())
+                .eq(spaceId != null, OntologyAction::getOntologySpaceId, spaceId));
+        if (candidates.size() > 1) {
+            log.warn("规则调度绑定的行为在多个空间同时存在且调度未记录空间, ruleId={}, actionApi={}",
+                    ruleId, actionParam.getActionApi());
+            return;
+        }
+        var action = candidates.isEmpty() ? null : candidates.get(0);
         if (action == null) {
             log.warn("规则调度绑定的行为不存在, ruleId={}, actionApi={}", ruleId, actionParam.getActionApi());
             return;

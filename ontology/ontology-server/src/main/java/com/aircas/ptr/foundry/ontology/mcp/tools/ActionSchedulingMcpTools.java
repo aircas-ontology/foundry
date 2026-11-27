@@ -63,10 +63,12 @@ public class ActionSchedulingMcpTools implements McpTools {
               比较符 condition：数字 LT/LE/EQ/NE/GT/GE，字符串 CONTAINS/NOT_CONTAINS/EQ/NE（大小比较仅限数字，不支持 CH）。
               isLeft/isRight 为本条件前左括号/后右括号的个数（Integer，支持嵌套如 (( 传 2，兼容旧布尔 true=1/false=0）；
               linkFlag 为与下一条的连接符 AND/OR（AND 优先于 OR，括号可改变优先级），最后一条不传。
-              监测条件：先在规则组上给 monitorType（insert 新增 / update 更新 / delete 删除）选事件类型，
-              再在 judgeParams 里添加条件项，条件项 leftOperate 只需 {"type":"dynamic","ontologyId":"objA","storageGroup":"main"}
-              （选对象+存储分组即可，entityId 可选用于限定单个实例；rightOperate/condition 不参与求值），
-              条件项之间按 linkFlag 用 AND/OR 组合；monitorType 也可逐条写在条件项上（兼容写法，同组内与组级不一致会报错）；
+              监测条件：先在规则组上给 monitorType 选事件类型，线上值为中文「新增 / 修改 / 删除」（历史数据兼容 insert/update/delete 写法），
+              新增/删除按事件行属性值比较：条件项 leftOperate 给 {"type":"dynamic","ontologyId":"objA","propertyName":"speed"}
+              （选对象+监测属性，存储分组由属性推导、不再手填；entityId 可选用于限定单个实例，监测主表(main)属性时不能传），
+              rightOperate 必须给 {"type":"fixed","fixValue":"20.0"}，condition 给比较符（不支持 CH）；缺属性或缺比较值创建即报错；
+              修改/属性条件沿用 leftOperate+rightOperate+condition 的当前值比较语义；
+              条件项之间按 linkFlag 用 AND/OR 组合；monitorType 也可逐条写在条件项上（同组内与组级不一致会报错）；
               该分组数据发生对应事件时本条件为真；
               扩展存储分组表的行事件按与主表的外键折算到主表实例。一次事件只对应一种类型和一个分组，
               多个监测条件之间用 AND 表示同一实例先后发生这些事件（5 分钟累计窗口内凑齐即触发，触发后清空），用 OR 表示任一发生即触发；
@@ -76,8 +78,8 @@ public class ActionSchedulingMcpTools implements McpTools {
               与周期调度 entityJson 同形式、支持数组批量，不传时按行为定义构造最小执行参数）。
               rule.flowDocument 可选：前端规则画布文档的 JSON 字符串（前端 JSON.stringify 产物），后端只直存直返用于回显画布，不参与求值。
             示例（RULE）：{"spaceId":156,"ontologyIdentifier":"abcdef","actionApi":"shipLocation","name":"示例调度","description":"按规则触发","type":"RULE","rule":{"judgeRules":[{"condition":false,"judgeParams":[{"leftOperate":{"type":"dynamic","ontologyId":"abcdef","entityId":"3","propertyName":"longitude"},"rightOperate":{"type":"fixed","fixValue":"20.0"},"condition":"GT"}],"actionParam":{"action_api":"shipLocation"}}]}}
-            示例（RULE 监测-组级类型，两个子表都新增才触发）：{"spaceId":156,"ontologyIdentifier":"abcdef","actionApi":"shipLocation","name":"两个子表都新增即触发","type":"RULE","rule":{"judgeRules":[{"monitorType":"insert","judgeParams":[{"leftOperate":{"type":"dynamic","ontologyId":"abcdef","storageGroup":"groupA"},"linkFlag":"AND"},{"leftOperate":{"type":"dynamic","ontologyId":"abcdef","storageGroup":"groupB"}}],"actionParam":{"action_api":"shipLocation"}}]}}
-            示例（RULE 监测-逐条类型，新增或删除即触发）：{"spaceId":156,"ontologyIdentifier":"abcdef","actionApi":"shipLocation","name":"新增或删除即触发","type":"RULE","rule":{"judgeRules":[{"judgeParams":[{"monitorType":"insert","leftOperate":{"type":"dynamic","ontologyId":"abcdef","storageGroup":"main"}},{"monitorType":"delete","leftOperate":{"type":"dynamic","ontologyId":"abcdef","storageGroup":"main"},"linkFlag":"OR"}],"actionParam":{"action_api":"shipLocation"}}]}}
+            示例（RULE 监测-组级类型，两个扩展分组的属性都新增过满足值的行才触发）：{"spaceId":156,"ontologyIdentifier":"abcdef","actionApi":"shipLocation","name":"两个子表都新增即触发","type":"RULE","rule":{"judgeRules":[{"monitorType":"新增","judgeParams":[{"leftOperate":{"type":"dynamic","ontologyId":"abcdef","propertyName":"fuelLevel"},"rightOperate":{"type":"fixed","fixValue":"80"},"condition":"GE","linkFlag":"AND"},{"leftOperate":{"type":"dynamic","ontologyId":"abcdef","propertyName":"batteryLevel"},"rightOperate":{"type":"fixed","fixValue":"80"},"condition":"GE"}],"actionParam":{"action_api":"shipLocation"}}]}}
+            示例（RULE 监测-逐条类型，主表属性新增或删除任一发生即触发）：{"spaceId":156,"ontologyIdentifier":"abcdef","actionApi":"shipLocation","name":"新增或删除即触发","type":"RULE","rule":{"judgeRules":[{"judgeParams":[{"monitorType":"新增","leftOperate":{"type":"dynamic","ontologyId":"abcdef","propertyName":"longitude"},"rightOperate":{"type":"fixed","fixValue":"20.0"},"condition":"GT"},{"monitorType":"删除","leftOperate":{"type":"dynamic","ontologyId":"abcdef","propertyName":"longitude"},"rightOperate":{"type":"fixed","fixValue":"20.0"},"condition":"GT","linkFlag":"OR"}],"actionParam":{"action_api":"shipLocation"}}]}}
             示例（TASK）：{"spaceId":156,"ontologyIdentifier":"abcdef","actionApi":"shipLocation","name":"示例周期调度","description":"按 cron 周期触发","type":"TASK","task":{"taskCronExpression":"30 * * 1/1 * ? *"}}
             返回新建调度的 id（Long），后续启动/编辑/删除/查执行记录都用它。行为不存在、不绑算子、规则不合法或 xxl-job 创建失败时抛错。
             """)

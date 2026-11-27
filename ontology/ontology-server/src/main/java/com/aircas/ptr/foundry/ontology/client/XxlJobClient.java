@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.client;
 
+import com.aircas.ptr.foundry.common.exception.BusinessException;
 import com.aircas.ptr.foundry.common.util.HttpUtil;
 import com.aircas.ptr.foundry.ontology.config.XxlJobProperties;
 import com.aircas.ptr.foundry.ontology.model.common.Constants;
@@ -11,6 +12,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Maps;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
 import jakarta.annotation.Resource;
@@ -45,6 +47,11 @@ public class XxlJobClient {
 
         var resultVO = HttpUtil.postFormData(addJobUrl, new HashMap<>(), formDataMap, properties.getCookie(), new TypeReference<XxlJobResultVO>() {
         });
+        checkSuccess(resultVO, "创建任务[" + jobDesc + "]", null);
+        if (resultVO.getContent() == null || resultVO.getContent().isBlank()) {
+            throw new BusinessException("xxl-job 创建任务[" + jobDesc + "]成功但未返回 jobId，响应 msg=" + resultVO.getMsg(),
+                    HttpStatus.BAD_REQUEST);
+        }
         return resultVO.getContent();
     }
 
@@ -64,24 +71,27 @@ public class XxlJobClient {
                 .setCronGen_display(scheduleConf);
 
         Map<String, String> map = objectMapper.convertValue(param, Map.class);
-        HttpUtil.postFormData(url, new HashMap<>(), map, properties.getCookie(), new TypeReference<XxlJobResultVO>() {
+        var resultVO = HttpUtil.postFormData(url, new HashMap<>(), map, properties.getCookie(), new TypeReference<XxlJobResultVO>() {
         });
+        checkSuccess(resultVO, "更新任务[" + jobDesc + "]", jobId);
     }
 
     public void startJob(String jobId) {
         var url = properties.getAdmin().getStartJobUrl();
         Map<String, String> map = Maps.newHashMap();
         map.put("id", jobId);
-        HttpUtil.postFormData(url, new HashMap<>(), map, properties.getCookie(), new TypeReference<XxlJobResultVO>() {
+        var resultVO = HttpUtil.postFormData(url, new HashMap<>(), map, properties.getCookie(), new TypeReference<XxlJobResultVO>() {
         });
+        checkSuccess(resultVO, "启动任务", jobId);
     }
 
     public void stopJob(String jobId) {
         var url = properties.getAdmin().getStopJobUrl();
         Map<String, String> map = Maps.newHashMap();
         map.put("id", jobId);
-        HttpUtil.postFormData(url, new HashMap<>(), map, properties.getCookie(), new TypeReference<XxlJobResultVO>() {
+        var resultVO = HttpUtil.postFormData(url, new HashMap<>(), map, properties.getCookie(), new TypeReference<XxlJobResultVO>() {
         });
+        checkSuccess(resultVO, "暂停任务", jobId);
     }
 
 
@@ -89,11 +99,25 @@ public class XxlJobClient {
         var url = properties.getAdmin().getRemoveJobUrl();
         Map<String, String> map = Maps.newHashMap();
         map.put("id", jobId);
-        HttpUtil.postFormData(url, new HashMap<>(), map, properties.getCookie(), new TypeReference<XxlJobResultVO>() {
+        var resultVO = HttpUtil.postFormData(url, new HashMap<>(), map, properties.getCookie(), new TypeReference<XxlJobResultVO>() {
         });
+        checkSuccess(resultVO, "删除任务", jobId);
     }
 
 
+    /**
+     * xxl-admin 的 HTTP 200 不代表业务成功：cookie 过期、jobId 不存在等都以 code/msg 返回。
+     * 不校验 code 会把失败当成功落本地状态，形成删不掉、停不下来的僵尸任务。
+     */
+    private void checkSuccess(XxlJobResultVO resultVO, String action, String jobId) {
+        var code = resultVO == null ? null : resultVO.getCode();
+        if (code == null || code != 200) {
+            throw new BusinessException("xxl-job " + action + "失败"
+                    + (jobId == null || jobId.isBlank() ? "" : "，jobId=" + jobId)
+                    + "：code=" + code + "，msg=" + (resultVO == null ? "响应为空" : resultVO.getMsg())
+                    + "（jobId 无效或调度中心登录态过期时会出现，请确认 xxl-job cookie 是否有效）", HttpStatus.BAD_REQUEST);
+        }
+    }
 
     private String getJobGroupId() {
 
@@ -103,8 +127,16 @@ public class XxlJobClient {
 
         var vo = HttpUtil.postFormData(queryJobExecutorUrl, new HashMap<>(), executorQueryFormDataMap, properties.getCookie(), new TypeReference<XxlJobExecutorQueryVO>() {
         });
-        var jobGroupId = vo.getData().stream().filter(v -> v.getAppname().equals(properties.getExecutor().getAppname())).findFirst().get().getId();
-        return jobGroupId.toString();
+        var jobGroupId = vo.getData() == null ? null : vo.getData().stream()
+                .filter(v -> v.getAppname().equals(properties.getExecutor().getAppname()))
+                .findFirst()
+                .map(v -> v.getId().toString())
+                .orElse(null);
+        if (jobGroupId == null) {
+            throw new BusinessException("xxl-job 调度中心未找到执行器：" + properties.getExecutor().getAppname(),
+                    HttpStatus.BAD_REQUEST);
+        }
+        return jobGroupId;
     }
 
     private String getJobInfoId(String jobDesc, String jobGroupId) {

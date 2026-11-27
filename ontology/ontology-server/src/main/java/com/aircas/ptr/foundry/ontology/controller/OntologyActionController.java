@@ -180,9 +180,9 @@ public class OntologyActionController {
                     schema = @Schema(implementation = ActionSchedulingCreateParam.class),
                     examples = {
                             @ExampleObject(name = "rule", summary = "规则调度示例", value = """
-                                    {"ontologyIdentifier":"abcdef","actionApi":"shipLocation","name":"示例调度","description":"按规则触发","type":"RULE","rule":{"ruleConnectType":"AND","rules":[{"columnName":"longitude","columnValue":"20.0","condition":"CH"}]}}"""),
+                                    {"spaceId":156,"ontologyIdentifier":"abcdef","actionApi":"shipLocation","name":"示例调度","description":"按规则触发","type":"RULE","rule":{"judgeRules":[{"monitorType":"新增","judgeParams":[{"leftOperate":{"type":"dynamic","ontologyId":"abcdef","propertyName":"longitude"},"rightOperate":{"type":"fixed","fixValue":"20.0"},"condition":"GT"}],"actionParam":{"actionApi":"shipLocation"}}]}}"""),
                             @ExampleObject(name = "task", summary = "周期调度示例", value = """
-                                    {"ontologyIdentifier":"abcdef","actionApi":"shipLocation","name":"示例周期调度","description":"按 cron 周期触发","type":"TASK","task":{"taskCronExpression":"30 * * 1/1 * ? *"}}""")
+                                    {"spaceId":156,"ontologyIdentifier":"abcdef","actionApi":"shipLocation","name":"示例周期调度","description":"按 cron 周期触发","type":"TASK","task":{"taskCronExpression":"30 * * 1/1 * ? *"}}""")
                     }))
     public RestResult<Long> createScheduling(@RequestBody @Valid ActionSchedulingCreateParam param) {
         var id = ontologyActionService.createScheduling(param);
@@ -198,7 +198,7 @@ public class OntologyActionController {
                     schema = @Schema(implementation = ActionSchedulingUpdateParam.class),
                     examples = {
                             @ExampleObject(name = "rule", summary = "规则调度示例", value = """
-                                    {"id":123,"ontologyIdentifier":"abcdef","actionApi":"shipLocation","name":"示例调度","description":"按规则触发","type":"RULE","rule":{"ruleConnectType":"AND","rules":[{"columnName":"longitude","columnValue":"20.0","condition":"CH"}]}}"""),
+                                    {"id":123,"spaceId":156,"ontologyIdentifier":"abcdef","actionApi":"shipLocation","name":"示例调度","description":"按规则触发","type":"RULE","rule":{"judgeRules":[{"monitorType":"新增","judgeParams":[{"leftOperate":{"type":"dynamic","ontologyId":"abcdef","propertyName":"longitude"},"rightOperate":{"type":"fixed","fixValue":"20.0"},"condition":"GT"}],"actionParam":{"actionApi":"shipLocation"}}]}}"""),
                             @ExampleObject(name = "task", summary = "周期调度示例", value = """
                                     {"id":123,"ontologyIdentifier":"abcdef","actionApi":"shipLocation","name":"示例周期调度","description":"按 cron 周期触发","type":"TASK","task":{"taskCronExpression":"30 * * 1/1 * ? *"}}""")
                     }))

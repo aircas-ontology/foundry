@@ -194,6 +194,9 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     @Resource(name = "behaviorTreeBranchExecutor")
     private ThreadPoolTaskExecutor behaviorTreeBranchExecutor;
 
+    @Resource(name = "taskExecutor")
+    private ThreadPoolTaskExecutor taskExecutor;
+
     @Resource
     private BasicFunctionActionExecutor basicFunctionActionExecutor;
 
@@ -391,9 +394,22 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         var action = getOne(new LambdaQueryWrapper<OntologyAction>()
                 .eq(OntologyAction::getApi, param.getActionApi())
                 .eq(OntologyAction::getOntologySpaceId, spaceId));
-        PreconditionUtils.checkArgument(action != null, "行为不存在", HttpStatus.BAD_REQUEST);
+        if (action == null) {
+            // 基础函数行为按配置首个对象反推空间：编辑时换了对象/对象挪了空间，推导值会偏离落库空间。
+            // api 全局只找到一条时以落库行为准；多条时无法定位，要求显式传空间。
+            var candidates = list(new LambdaQueryWrapper<OntologyAction>()
+                    .eq(OntologyAction::getApi, param.getActionApi()));
+            PreconditionUtils.checkArgument(candidates.size() <= 1,
+                    "推导空间内没有行为 " + param.getActionApi() + "，且该 api 存在于多个空间，请传 ontologySpaceId 定位",
+                    HttpStatus.BAD_REQUEST);
+            PreconditionUtils.checkArgument(!candidates.isEmpty(), "行为不存在", HttpStatus.BAD_REQUEST);
+            action = candidates.get(0);
+            spaceId = action.getOntologySpaceId();
+        }
         PreconditionUtils.checkArgument(!Objects.equals(action.getStatus(), ActionStatusEnum.PUBLISHED.getValue()),
                 "该行为已发布，不能编辑，请先撤回发布（行为树请先下线）", HttpStatus.BAD_REQUEST);
+        checkNoRunningScheduling(action.getOntologySpaceId(), action.getApi(),
+                "该行为有启动中的调度正在执行，请先暂停调度再编辑");
         // 编辑不改状态：草稿还是草稿、已发布还是已发布
         var originalStatus = action.getStatus();
         var definition = checkActionDefinition(action, param, spaceId);
@@ -4472,9 +4488,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         PreconditionUtils.checkArgument(action != null, "行为不存在", HttpStatus.BAD_REQUEST);
         PreconditionUtils.checkArgument(!Objects.equals(action.getStatus(), ActionStatusEnum.PUBLISHED.getValue()),
                 "该行为已发布，不能直接删除，请先撤回发布（行为树请先下线）", HttpStatus.BAD_REQUEST);
-        // 调度归属行为靠 action_handle_rule.action_id / action_handle_task.action_id，
-        // 这两列已在 alter_table_20260909.sql 中删除，按 id 反查会直接报错，
-        // 待确认该列是否为误删后再恢复「行为在调度中不可删除」的校验
+        // 调度归属行为按 actionApi + 空间反查定时/规则两张调度表：action_id 列已删，但这两张表一直存有这两列，校验可实现
+        checkNoSchedulingAtAll(action.getOntologySpaceId(), action.getApi());
         var referencingTrees = findTreesReferencingAction(action.getOntologySpaceId(), actionApi);
         PreconditionUtils.checkArgument(referencingTrees.isEmpty(),
                 "该行为被行为树引用，不能直接删除：" + String.join(", ", referencingTrees), HttpStatus.BAD_REQUEST);
@@ -4818,6 +4833,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 // 把本次执行结果回填到调度日志表（XxlJobHandler 已按 scheduleId 插入日志行，取最新一条）
                 var handleLog = actionHandleLogMapper.selectOne(new LambdaQueryWrapper<ActionHandleLog>()
                         .eq(ActionHandleLog::getActionHandleId, xxlParam.getScheduleId())
+                        .eq(ActionHandleLog::getActionHandleType, ActionSchedulingTypeEnum.TASK)
                         .orderByDesc(ActionHandleLog::getId), false);
                 if (handleLog != null) {
                     actionHandleLogMapper.updateById(handleLog.setExecuteResult(executeResult));
@@ -6908,13 +6924,62 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     /**
      * 调度接口只认定时和规则两类；MANUAL 是手动执行日志的类型，传进来会一条都不改地走完，直接拒掉。
      */
+    /**
+     * 编辑行为前置：仍有 START 调度绑定时拒绝。暂停后的调度保留绑定关系但不执行，编辑不再拦。
+     * 行为 api 只在空间内唯一，两张调度表都有 action_api + ontology_space_id，按空间反查即可。
+     */
+    private void checkNoRunningScheduling(Integer ontologySpaceId, String actionApi, String message) {
+        var taskWrapper = new LambdaQueryWrapper<ActionHandleTask>()
+                .eq(ActionHandleTask::getActionApi, actionApi)
+                .eq(ActionHandleTask::getStatus, ScheduleStatus.START);
+        var ruleWrapper = new LambdaQueryWrapper<ActionHandleRule>()
+                .eq(ActionHandleRule::getActionApi, actionApi)
+                .eq(ActionHandleRule::getStatus, ScheduleStatus.START);
+        if (ontologySpaceId != null) {
+            taskWrapper.eq(ActionHandleTask::getOntologySpaceId, ontologySpaceId);
+            ruleWrapper.eq(ActionHandleRule::getOntologySpaceId, ontologySpaceId);
+        }
+        boolean running = actionHandleTaskService.count(taskWrapper) > 0
+                || actionHandleRuleService.count(ruleWrapper) > 0;
+        PreconditionUtils.checkArgument(!running, message, HttpStatus.BAD_REQUEST);
+    }
+
+    /** 删除行为前置：调度无论启停都绑定着行为 api，存在任何一条即拒绝删除（先删调度） */
+    private void checkNoSchedulingAtAll(Integer ontologySpaceId, String actionApi) {
+        var taskWrapper = new LambdaQueryWrapper<ActionHandleTask>()
+                .eq(ActionHandleTask::getActionApi, actionApi);
+        var ruleWrapper = new LambdaQueryWrapper<ActionHandleRule>()
+                .eq(ActionHandleRule::getActionApi, actionApi);
+        if (ontologySpaceId != null) {
+            taskWrapper.eq(ActionHandleTask::getOntologySpaceId, ontologySpaceId);
+            ruleWrapper.eq(ActionHandleRule::getOntologySpaceId, ontologySpaceId);
+        }
+        long taskCount = actionHandleTaskService.count(taskWrapper);
+        long ruleCount = actionHandleRuleService.count(ruleWrapper);
+        PreconditionUtils.checkArgument(taskCount == 0 && ruleCount == 0,
+                "该行为已配置行为调度，不能直接删除：定时调度 " + taskCount + " 条、规则调度 " + ruleCount
+                        + " 条，请先在调度管理中删除对应调度", HttpStatus.BAD_REQUEST);
+    }
+
+    /**
+     * 调度链路按 api 定位行为：行为 api 只在空间内唯一，调用方已尽量带上 spaceId 过滤；
+     * 拿不到空间时同名 api 命中多条要显式报错定位，不再让 selectOne 抛多条异常。
+     */
+    private OntologyAction resolveScheduleAction(List<OntologyAction> candidates, String actionApi) {
+        if (candidates.size() > 1) {
+            throw new BusinessException("行为 " + actionApi + " 在多个对象空间同时存在，请传 spaceId 定位",
+                    HttpStatus.BAD_REQUEST);
+        }
+        return candidates.isEmpty() ? null : candidates.get(0);
+    }
+
     private void checkSchedulingType(ActionSchedulingTypeEnum type) {
         PreconditionUtils.checkArgument(type == ActionSchedulingTypeEnum.TASK || type == ActionSchedulingTypeEnum.RULE,
                 "调度类型只支持 TASK 定时和 RULE 规则", HttpStatus.BAD_REQUEST);
     }
 
     @Override
-    @Transactional
+    @Transactional(value = "mainTransactionManager")
     public Long createScheduling(ActionSchedulingCreateParam param) {
         //todo 目前只考虑定时调度
         var schedulingType = param.getType();
@@ -6933,6 +6998,9 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         //允许同一个行为配置多个调度策略
         if (schedulingType.equals(ActionSchedulingTypeEnum.TASK)) {
             var taskParam = param.getTask();
+            PreconditionUtils.checkNotNull(taskParam, "type=TASK 时 task 对象不能为空", HttpStatus.BAD_REQUEST);
+            PreconditionUtils.checkArgument(StringUtils.isNotBlank(taskParam.getTaskCronExpression()),
+                    "type=TASK 时 task.taskCronExpression 不能为空", HttpStatus.BAD_REQUEST);
             var actionHandleTask = ActionHandleTask.builder()
                     .actionApi(action.getApi())
                     .ontologyIdentifier(ontologyIdentifier)
@@ -6964,7 +7032,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             PreconditionUtils.checkNotNull(ruleParam, "规则调度参数不能为空", HttpStatus.BAD_REQUEST);
             PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(ruleParam.getJudgeRules()),
                     "judgeRules 不能为空", HttpStatus.BAD_REQUEST);
-            validateJudgeRules(ruleParam.getJudgeRules());
+            validateJudgeRules(ruleParam.getJudgeRules(), param.getSpaceId());
             // 监控对象来自条件操作数/执行目标，仅用于展示，不要求外部指定
             ontologyIdentifier = judgeMonitorObject(ruleParam.getJudgeRules(), ontologyIdentifier);
             var handleRule = ActionHandleRule.builder()
@@ -6984,17 +7052,23 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     }
 
     @Override
-    @Transactional
+    @Transactional(value = "mainTransactionManager")
     public void updateScheduling(ActionSchedulingUpdateParam param) {
-        // 行为与对象解绑：直接按 actionApi 查行为，空间归属在下面按调度记录原空间校验
-        var action = actionMapper.selectOne(new LambdaQueryWrapper<OntologyAction>()
-                .eq(OntologyAction::getApi, param.getActionApi()));
+        // 行为与对象解绑：按 actionApi 查行为；行为 api 只在空间内唯一，传了 spaceId 就按空间收敛，多条命中时要求定位
+        var action = resolveScheduleAction(actionMapper.selectList(new LambdaQueryWrapper<OntologyAction>()
+                        .eq(OntologyAction::getApi, param.getActionApi())
+                        .eq(param.getSpaceId() != null, OntologyAction::getOntologySpaceId, param.getSpaceId())),
+                param.getActionApi());
         PreconditionUtils.checkNotNull(action, "action不存在：" + param.getActionApi());
         var ontologyIdentifier = scheduleObject(action, param.getOntologyIdentifier());
         //todo 目前只考虑定时调度
         var schedulingType = param.getType();
         checkSchedulingType(schedulingType);
         if (schedulingType.equals(ActionSchedulingTypeEnum.TASK)) {
+            var taskParam = param.getTask();
+            PreconditionUtils.checkNotNull(taskParam, "type=TASK 时 task 对象不能为空", HttpStatus.BAD_REQUEST);
+            PreconditionUtils.checkArgument(StringUtils.isNotBlank(taskParam.getTaskCronExpression()),
+                    "type=TASK 时 task.taskCronExpression 不能为空", HttpStatus.BAD_REQUEST);
             var handleTask = actionHandleTaskService.getById(param.getId());
             PreconditionUtils.checkNotNull(handleTask, "定时调度任务不存在：" + param.getId());
             PreconditionUtils.checkArgument(!ScheduleStatus.START.equals(handleTask.getStatus()), "周期调度已开启，请先暂停后再编辑");
@@ -7005,16 +7079,16 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                     .setOntologyIdentifier(ontologyIdentifier)
                     .setOntologySpaceId(action.getOntologySpaceId())
                     .setDescription(param.getDescription())
-                    .setCron(param.getTask().getTaskCronExpression())
-                    .setPeriodType(param.getTask().getPeriodType())
-                    .setEntityJson(param.getTask().getEntityJson())
+                    .setCron(taskParam.getTaskCronExpression())
+                    .setPeriodType(taskParam.getPeriodType())
+                    .setEntityJson(taskParam.getEntityJson())
                     .setName(param.getName());
             actionHandleTaskService.updateById(handleTask);
             try {
                 xxlJobClient.updateJobInfo(
                         handleTask.getRemark(),
                         param.getName(),
-                        param.getTask().getTaskCronExpression(),
+                        taskParam.getTaskCronExpression(),
                         XxlJobActionExecuteParam.builder()
                                 .scheduleId(param.getId())
                                 .actionApi(param.getActionApi())
@@ -7035,7 +7109,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             PreconditionUtils.checkNotNull(ruleParam, "规则调度参数不能为空", HttpStatus.BAD_REQUEST);
             PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(ruleParam.getJudgeRules()),
                     "judgeRules 不能为空", HttpStatus.BAD_REQUEST);
-            validateJudgeRules(ruleParam.getJudgeRules());
+            validateJudgeRules(ruleParam.getJudgeRules(), action.getOntologySpaceId());
             ontologyIdentifier = judgeMonitorObject(ruleParam.getJudgeRules(), ontologyIdentifier);
             handleRule.setActionApi(action.getApi())
                     .setOntologyIdentifier(ontologyIdentifier)
@@ -7049,7 +7123,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     }
 
     @Override
-    @Transactional
+    @Transactional(value = "mainTransactionManager")
     public void removeScheduling(ActionSchedulingTypeEnum type, Long id) {
         checkSchedulingType(type);
         //todo 只考虑定时任务
@@ -7071,7 +7145,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     }
 
     @Override
-    @Transactional
+    @Transactional(value = "mainTransactionManager")
     public void startScheduling(ActionSchedulingTypeEnum type, Long id) {
         checkSchedulingType(type);
         //todo 只考虑定时任务
@@ -7089,13 +7163,30 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             var handleRule = actionHandleRuleService.getById(id);
             PreconditionUtils.checkNotNull(handleRule, "规则调度不存在：" + id);
             actionHandleRuleService.updateById(handleRule.setStatus(ScheduleStatus.START));
-            // 启用即对条件绑定实例评估一遍存量数据，满足就执行；异步跑，不阻塞启动接口，失败只记日志
-            java.util.concurrent.CompletableFuture.runAsync(() -> actionRuleTriggerService.evaluateRuleNow(handleRule.getId()));
+            // 启用即对条件绑定实例评估一遍存量数据，满足就执行；等状态真正落库后再异步跑，不阻塞启动接口，失败只记日志
+            var ruleId = handleRule.getId();
+            Runnable submitEvaluateStock = () -> {
+                try {
+                    taskExecutor.execute(() -> actionRuleTriggerService.evaluateRuleNow(ruleId));
+                } catch (Exception e) {
+                    log.warn("规则调度启动后存量评估提交失败, ruleId={}", ruleId, e);
+                }
+            };
+            if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        submitEvaluateStock.run();
+                    }
+                });
+            } else {
+                submitEvaluateStock.run();
+            }
         }
     }
 
     @Override
-    @Transactional
+    @Transactional(value = "mainTransactionManager")
     public void stopScheduling(ActionSchedulingTypeEnum type, Long id) {
         checkSchedulingType(type);
         //todo 只考虑定时任务
@@ -7295,7 +7386,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     }
 
     /** 定稿规则校验：行为存在且绑算子、操作数完整、比较符合法、linkFlag/括号配对 */
-    private void validateJudgeRules(List<RuleJudgeGroupParam> groups) {
+    private void validateJudgeRules(List<RuleJudgeGroupParam> groups, Integer spaceId) {
         for (var group : groups) {
             PreconditionUtils.checkArgument(CollectionUtils.isNotEmpty(group.getJudgeParams()),
                     "judgeParams 不能为空", HttpStatus.BAD_REQUEST);
@@ -7303,8 +7394,11 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             PreconditionUtils.checkNotNull(actionParam, "actionParam 不能为空", HttpStatus.BAD_REQUEST);
             PreconditionUtils.checkArgument(StringUtils.isNotBlank(actionParam.getActionApi()),
                     "actionParam.action_api 不能为空", HttpStatus.BAD_REQUEST);
-            var branchAction = actionMapper.selectOne(new LambdaQueryWrapper<OntologyAction>()
-                    .eq(OntologyAction::getApi, actionParam.getActionApi()));
+            // 行为 api 只在空间内唯一，按调度所属空间收敛，避免跨空间同名行为误命中
+            var branchAction = resolveScheduleAction(actionMapper.selectList(new LambdaQueryWrapper<OntologyAction>()
+                            .eq(OntologyAction::getApi, actionParam.getActionApi())
+                            .eq(spaceId != null, OntologyAction::getOntologySpaceId, spaceId)),
+                    actionParam.getActionApi());
             PreconditionUtils.checkNotNull(branchAction, "规则绑定的行为不存在：" + actionParam.getActionApi(), HttpStatus.BAD_REQUEST);
             PreconditionUtils.checkArgument(StringUtils.isNotEmpty(branchAction.getFunctionApi()),
                     "规则绑定的行为未绑算子，不支持调度：" + actionParam.getActionApi(), HttpStatus.BAD_REQUEST);
