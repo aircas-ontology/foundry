@@ -4666,24 +4666,26 @@ public class EntityServiceImpl implements EntityService {
         //关联表数据：优先取 relatedTables（新格式：行对象列表），否则从 properties 里还原（旧格式：平行数组）
         var relatedTables = node.getRelatedTables();
         if (relatedTables != null && !relatedTables.isEmpty()) {
-            relatedTables.forEach((storageGroup, rows) -> {
+            // relatedTables 的键导出侧写的是物理表名、旧数据里也可能是存储分组名，归组一律按行内属性在本对象上的 storageGroup 取
+            var rowsByGroup = Maps.<String, List<List<EntityCreateParam.PropertyInfo>>>newLinkedHashMap();
+            relatedTables.forEach((tableKey, rows) -> {
                 if (CollectionUtils.isEmpty(rows)) {
                     return;
                 }
-                var propRows = Lists.<List<EntityCreateParam.PropertyInfo>>newArrayList();
                 for (var rowMap : rows) {
                     var rowInfos = toPropertyInfos(rowMap, propertyMap, false);
-                    if (CollectionUtils.isNotEmpty(rowInfos)) {
-                        propRows.add(rowInfos);
+                    if (CollectionUtils.isEmpty(rowInfos)) {
+                        continue;
                     }
-                }
-                if (CollectionUtils.isNotEmpty(propRows)) {
-                    entityProperties.add(EntityCreateParam.EntityProperty.builder()
-                            .storageGroup(storageGroup)
-                            .props(propRows)
-                            .build());
+                    rowsByGroup.computeIfAbsent(resolveRelatedStorageGroup(rowMap, propertyMap, tableKey),
+                            k -> Lists.newArrayList()).add(rowInfos);
                 }
             });
+            rowsByGroup.forEach((storageGroup, propRows) -> entityProperties.add(
+                    EntityCreateParam.EntityProperty.builder()
+                            .storageGroup(storageGroup)
+                            .props(propRows)
+                            .build()));
         } else {
             //旧格式兼容：非 main 组属性散落在 properties 里，值为 List 或标量
             var groupedValues = Maps.<String, Map<String, Object>>newLinkedHashMap();
@@ -4715,6 +4717,23 @@ public class EntityServiceImpl implements EntityService {
         return EntityCreateParam.Entity.builder()
                 .entityProperties(entityProperties)
                 .build();
+    }
+
+    /**
+     * 取关联表行所属的存储分组名：行内 apiName 在本对象属性上能查到分组就用分组名，
+     * 全部查不到（属性未绑定数据源列）时回退用 relatedTables 原键。
+     */
+    private String resolveRelatedStorageGroup(Map<String, Object> rowMap,
+                                              Map<String, OntologyProperty> propertyMap,
+                                              String defaultGroup) {
+        for (var apiName : rowMap.keySet()) {
+            var prop = propertyMap.get(apiName);
+            if (prop != null && StringUtils.isNotEmpty(prop.getStorageGroup())
+                    && !"main".equals(prop.getStorageGroup())) {
+                return prop.getStorageGroup();
+            }
+        }
+        return defaultGroup;
     }
 
     /**
