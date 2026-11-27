@@ -7,6 +7,7 @@ import com.aircas.ptr.foundry.ontology.converter.DataConverter;
 import com.aircas.ptr.foundry.ontology.model.dto.EntityDatasourceColumnDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.EntityDatasourceDTO;
 import com.aircas.ptr.foundry.ontology.model.dto.EntityDatasourceSchemaChangeEventDTO;
+import com.aircas.ptr.foundry.ontology.model.enums.ActionParamSourceEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.DatasourceEventTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.MetadataValueTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.param.*;
@@ -57,6 +58,10 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
     /** 主存储分组名称，与 getStorageGroup、实体侧落库取值一致。 */
     private static final String MAIN_STORAGE_GROUP = "main";
 
+    /** 行为属性引用列存逗号分隔的属性id，两端补分隔符后整段匹配，避免前缀/子串误命中 */
+    private static final String PROPERTY_IDENTIFIER_CONTAINS =
+            "strpos(',' || coalesce(property_unique_identifier, '') || ',', concat(',', {0}, ',')) > 0";
+
     private final TableMetadataMapper tableMetadataMapper;
 
     private final TableFieldMappingMapper tableFieldMappingMapper;
@@ -64,6 +69,8 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
     private final EntityService entityService;
 
     private final OntologyActionMappingInMapper mappingInMapper;
+
+    private final OntologyActionMapper actionMapper;
 
     private final OntologyMetaMapper metaMapper;
 
@@ -381,6 +388,15 @@ public class OntologyPropertyServiceImpl extends ServiceImpl<OntologyPropertyMap
         //被行为使用到的属性不能删除
         var mappingList = mappingInMapper.selectList(new LambdaQueryWrapper<OntologyActionMappingIn>().eq(OntologyActionMappingIn::getPropertyUniqueIdentifier, propertyUniqueIdentifier));
         PreconditionUtils.checkArgument(CollectionUtils.isEmpty(mappingList), "该属性被对象行为用到", HttpStatus.FORBIDDEN);
+        // 创建/编辑行为时汇总的属性引用：List 来源、基础函数字段、行为树黑板这些不落在绑定行上的引用
+        var actionUsage = actionMapper.selectCount(new LambdaQueryWrapper<OntologyAction>()
+                .apply(PROPERTY_IDENTIFIER_CONTAINS, propertyUniqueIdentifier));
+        PreconditionUtils.checkArgument(actionUsage == 0, "该属性被对象行为用到", HttpStatus.FORBIDDEN);
+        // 存量行为的 List 来源属性没有汇总到行为列，仍存在 source_config 的 JSON 数组里
+        var legacyListUsage = mappingInMapper.selectCount(new LambdaQueryWrapper<OntologyActionMappingIn>()
+                .eq(OntologyActionMappingIn::getSourceType, ActionParamSourceEnum.LIST)
+                .like(OntologyActionMappingIn::getSourceConfig, propertyUniqueIdentifier));
+        PreconditionUtils.checkArgument(legacyListUsage == 0, "该属性被对象行为用到", HttpStatus.FORBIDDEN);
         //delete
         remove(new LambdaQueryWrapper<OntologyProperty>().eq(OntologyProperty::getUniqueIdentifier, propertyUniqueIdentifier));
     }

@@ -604,6 +604,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         // 只有基础函数那一类会填这份配置，其他类别拿到的是 null，编辑改成别的类别时旧配置跟着清掉
         action.setBasicFunctionConfig(definition.basicFunctionConfig);
         action.setOntologyUniqueIdentifier(new ArrayList<>(definition.objectIdentifiers));
+        action.setPropertyUniqueIdentifier(new ArrayList<>(definition.propertyIdentifiers));
         return definition;
     }
 
@@ -652,6 +653,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         action.setDefinition(writeTreeDefinition(tree));
         // 树自己不指向对象，它的挂载对象就是各节点绑定的行为的挂载对象
         action.setOntologyUniqueIdentifier(new ArrayList<>(treeObjectIdentifiers(boundApis, spaceId)));
+        // 黑板按对象属性取值的键直接引用属性：节点绑定的行为自己会记，这里只补树定义里的引用
+        action.setPropertyUniqueIdentifier(new ArrayList<>(treePropertyIdentifiers(tree)));
         // 新建的树是未发布状态，编辑不改状态：发布/下线是单独动作，不像行为那样「编辑即重新发布」
         if (action.getStatus() == null) {
             action.setStatus(ActionStatusEnum.DRAFT.getValue());
@@ -3573,6 +3576,11 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                     : mapping.getOutputMode() == ActionOutputModeEnum.WRITE_PROPERTY);
             if (touchesProperty) {
                 definition.objectIdentifiers.add(property.getOntologyUniqueIdentifier());
+                definition.propertyIdentifiers.add(property.getUniqueIdentifier());
+            }
+            // List 来源不落到 property_unique_identifier 列，属性 id 都在 source_config 的数组里
+            if (isInput && sourceType == ActionParamSourceEnum.LIST) {
+                definition.propertyIdentifiers.addAll(listSourcePropertyIdentifiers(mapping.getSourceConfig()));
             }
             definition.mappings.add(OntologyActionMappingIn.builder()
                     .functionParamId(funcParam.getId())
@@ -4204,6 +4212,30 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 HttpStatus.BAD_REQUEST);
         definition.basicFunctionConfig = basicFunctionActionExecutor.write(config);
         definition.objectIdentifiers.addAll(basicFunctionActionExecutor.configOntologyIdentifiers(config));
+        collectBasicFunctionPropertyIdentifiers(config, definition);
+    }
+
+    /**
+     * 基础函数配置里的字段按属性 apiName 引用，保存时按选中对象解析成属性唯一标识记到行为上，
+     * 删除属性时才能拦住；多对象共用同名字段时各对象的属性都算被引用。
+     */
+    private void collectBasicFunctionPropertyIdentifiers(ActionBasicFunctionConfig config, ActionDefinition definition) {
+        var objectIds = basicFunctionActionExecutor.configOntologyIdentifiers(config);
+        var apiNames = basicFunctionActionExecutor.referencedPropertyApiNames(config);
+        if (!objectIds.isEmpty() && !apiNames.isEmpty()) {
+            ontologyPropertyService.list(new LambdaQueryWrapper<OntologyProperty>()
+                            .in(OntologyProperty::getOntologyUniqueIdentifier, objectIds)
+                            .in(OntologyProperty::getApiName, apiNames))
+                    .forEach(property -> definition.propertyIdentifiers.add(property.getUniqueIdentifier()));
+        }
+        var writeBack = config.getWriteBack();
+        if (writeBack == null || CollectionUtils.isEmpty(writeBack.getBindings())) {
+            return;
+        }
+        writeBack.getBindings().stream()
+                .map(ActionBasicFunctionConfig.FieldBinding::getTargetPropertyIdentifier)
+                .filter(StringUtils::isNotBlank)
+                .forEach(definition.propertyIdentifiers::add);
     }
 
     /** 属性值行为：对某个存储分组（物理表）做新增/修改/删除，不绑算子 */
@@ -4260,6 +4292,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             PreconditionUtils.checkArgument(sourceType != ActionParamSourceEnum.OBJECT && sourceType != ActionParamSourceEnum.LIST,
                     "属性值行为的取值来源不支持" + sourceType.getName() + "，请用对象属性、固定值或外部输入：" + property.getDisplayName(),
                     HttpStatus.BAD_REQUEST);
+            definition.propertyIdentifiers.add(propertyId);
             definition.mappings.add(OntologyActionMappingIn.builder()
                     .parameterName(StringUtils.isEmpty(mapping.getParameterName()) ? property.getApiName() : mapping.getParameterName())
                     .propertyUniqueIdentifier(propertyId)
@@ -4454,6 +4487,41 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         return identifiers;
     }
 
+    /** 行为树黑板里按对象属性取值的键，属性 id 记到树上：删属性时要看是否被树引用 */
+    private Set<String> treePropertyIdentifiers(BehaviorTreeDefinition tree) {
+        var identifiers = new LinkedHashSet<String>();
+        if (tree == null || CollectionUtils.isEmpty(tree.getBlackboard())) {
+            return identifiers;
+        }
+        tree.getBlackboard().stream()
+                .filter(item -> item.resolvedSource() == BehaviorBlackboardSourceEnum.PROPERTY)
+                .map(BehaviorBlackboardItem::getBindPropertyUniqueIdentifier)
+                .filter(StringUtils::isNotBlank)
+                .forEach(identifiers::add);
+        return identifiers;
+    }
+
+    /**
+     * List 入参的来源属性 id 存在 source_config 的 JSON 数组里，解析出来记到行为上。
+     * 形状认不出来时按空处理：存量数据可能来自手工改库，保存本身不因记录失败而拒绝。
+     */
+    private Set<String> listSourcePropertyIdentifiers(String sourceConfig) {
+        var identifiers = new LinkedHashSet<String>();
+        if (StringUtils.isBlank(sourceConfig)) {
+            return identifiers;
+        }
+        try {
+            List<String> propertyIds = jsonMapper.readValue(sourceConfig, new TypeReference<List<String>>() {
+            });
+            propertyIds.stream()
+                    .filter(StringUtils::isNotBlank)
+                    .forEach(identifiers::add);
+        } catch (Exception e) {
+            log.warn("行为 List 入参来源配置无法解析，引用的属性不记入行为：{}", sourceConfig);
+        }
+        return identifiers;
+    }
+
     private void saveActionChildren(Long actionId, ActionDefinition definition) {
         if (definition.actionLink != null) {
             definition.actionLink.setOntologyActionId(actionId);
@@ -4477,6 +4545,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         private final List<OntologyActionMappingIn> mappings = new ArrayList<>();
         /** 本次绑定里能认出的挂载对象id，校验顺路收集，落库到行为的挂载对象列 */
         private final Set<String> objectIdentifiers = new LinkedHashSet<>();
+        /** 本次定义引用到的属性id，校验顺路收集，落库到行为的属性引用列 */
+        private final Set<String> propertyIdentifiers = new LinkedHashSet<>();
     }
 
     @Override

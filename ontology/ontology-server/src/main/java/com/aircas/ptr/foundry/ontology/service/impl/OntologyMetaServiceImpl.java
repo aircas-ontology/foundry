@@ -504,6 +504,11 @@ public class OntologyMetaServiceImpl extends ServiceImpl<OntologyMetaMapper, Ont
                             : action.getOntologyUniqueIdentifier().stream()
                             .map(id -> parentIdentifier.equals(id) ? childIdentifier : id)
                             .distinct().collect(Collectors.toList()))
+                    // 属性引用里父对象的属性换成子对象的同名属性，绑在其他对象上的照旧
+                    .propertyUniqueIdentifier(action.getPropertyUniqueIdentifier() == null ? new ArrayList<>()
+                            : action.getPropertyUniqueIdentifier().stream()
+                            .map(id -> findChildOntologyProperty(parentProperties, childProps, id))
+                            .distinct().collect(Collectors.toList()))
                     .icon(action.getIcon())
                     .build();
             actionService.save(ontologyAction);

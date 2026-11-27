@@ -757,6 +757,11 @@ public class BasicFunctionActionExecutor {
         return fields;
     }
 
+    /** 配置里引用到的属性 apiName，保存行为时用来把属性唯一标识记录到行为上（删除属性时据此拦截） */
+    public Set<String> referencedPropertyApiNames(ActionBasicFunctionConfig config) {
+        return referencedFields(config);
+    }
+
     private void collectFilterFields(FilterGroupParam group, Set<String> fields) {
         if (group == null || CollectionUtils.isEmpty(group.getChildren())) {
             return;
