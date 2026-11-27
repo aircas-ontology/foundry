@@ -972,8 +972,19 @@ public class EntityServiceImpl implements EntityService {
             filterColumn = entityKeyColumn;
             filterValue = datalakeKey(schemaName, groupTable, entityKeyColumn, param.getEntityPrimaryKey());
         }
+        //属性过滤复用通用查询的过滤树；分组数据都在同一张表，过滤属性只认本分组的属性
+        String whereClause = null;
+        if (param.getFilters() != null && CollectionUtils.isNotEmpty(param.getFilters().getChildren())) {
+            var groupPropByApiName = groupProps.stream()
+                    .collect(Collectors.toMap(OntologyProperty::getApiName, v -> v, (a, b) -> a));
+            collectFilterPropertyApiNames(param.getFilters()).forEach(apiName -> PreconditionUtils.checkArgument(
+                    groupPropByApiName.containsKey(apiName),
+                    "过滤属性" + apiName + "不属于存储分组" + storageGroup + "，分组过滤只能用本分组的属性", HttpStatus.BAD_REQUEST));
+            validateFilterGroup(param.getFilters(), groupPropByApiName);
+            whereClause = buildWhereClause(param.getFilters(), groupPropByApiName, schemaName);
+        }
         var hasDeletedField = tableMetadataMapper.isColumnExist(schemaName, groupTable, "is_deleted");
-        var rows = objectMapper.querySortedData(schemaName, groupTable, columns, filterColumn, filterValue,
+        var rows = objectMapper.querySortedData(schemaName, groupTable, columns, filterColumn, filterValue, whereClause,
                 sortColumn, param.sortOrDefault().getValue(), param.getLimit(), hasDeletedField);
 
         //关联分组的展示名不在本表里，按本次涉及到的实体主键一次性回捞主表

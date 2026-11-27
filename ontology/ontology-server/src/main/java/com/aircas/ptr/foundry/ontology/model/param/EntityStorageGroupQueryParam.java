@@ -43,6 +43,10 @@ public class EntityStorageGroupQueryParam {
     @Min(value = 1, message = "limit must be greater than 0")
     private Integer limit;
 
+    @Schema(name = "filters", description = "属性过滤条件（选填），与实例数据属性查询同一套结构，支持嵌套 AND/OR 与 "
+            + "EQ/NE/GT/GE/LT/LE/IN/BETWEEN/LIKE/IS_NULL；过滤属性只能是此存储分组内的属性（与返回数据同表）")
+    private FilterGroupParam filters;
+
     public QuerySortEnum sortOrDefault() {
         return sort == null ? QuerySortEnum.DESC : sort;
     }

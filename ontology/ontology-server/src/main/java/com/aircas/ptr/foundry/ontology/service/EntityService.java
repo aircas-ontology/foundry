@@ -149,6 +149,9 @@ public interface EntityService {
      *
      * <p>传了 entityPrimaryKey 就只取该实例在此分组下的数据行（实体不存在直接报错，与 row_detail 口径一致），
      * 不传则覆盖该对象全部实例的数据。</p>
+     *
+     * <p>filters 复用通用查询的过滤树（大于/小于/等于/IN/BETWEEN/LIKE 等）与值类型校验；
+     * 分组数据都在同一张表里，所以过滤属性只能是本分组的属性。</p>
      */
     List<EntityStorageGroupDataVO> queryByStorageGroup(List<EntityStorageGroupQueryParam> params);
 

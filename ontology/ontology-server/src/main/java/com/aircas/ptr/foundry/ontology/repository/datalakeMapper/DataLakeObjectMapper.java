@@ -75,22 +75,23 @@ public interface DataLakeObjectMapper extends BaseMapper<Object> {
                                             @Param("offset") Integer offset,
                                             @Param("hasDeletedField") Boolean hasDeletedField);
 
-    /** 整表按指定列排序取数，limit 为空表示不限制条数；filterColumnName 非空时按该列等值过滤 */
+    /** 整表按指定列排序取数，limit 为空表示不限制条数；filterColumnName 非空时按该列等值过滤，whereClause 非空时再 AND 上去 */
     List<Map<String, Object>> querySortedTableData(@Param("schemaName") String schemaName,
                                                    @Param("tableName") String tableName,
                                                    @Param("columnNames") List<String> columnNames,
                                                    @Param("filterColumnName") String filterColumnName,
                                                    @Param("filterColumnValue") Object filterColumnValue,
+                                                   @Param("whereClause") String whereClause,
                                                    @Param("orderBy") String orderBy,
                                                    @Param("sort") String sort,
                                                    @Param("limit") Integer limit,
                                                    @Param("hasDeletedField") Boolean hasDeletedField);
 
     default List<Map<String, Object>> querySortedData(String schemaName, String tableName, List<String> columnNames,
-                                                      String filterColumnName, Object filterColumnValue,
+                                                      String filterColumnName, Object filterColumnValue, String whereClause,
                                                       String orderBy, String sort, Integer limit, Boolean hasDeletedField) {
         var records = querySortedTableData(schemaName, tableName, columnNames, filterColumnName, filterColumnValue,
-                orderBy, sort, limit, hasDeletedField);
+                whereClause, orderBy, sort, limit, hasDeletedField);
         return populate(schemaName, records, tableName, columnNames);
     }
 

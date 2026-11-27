@@ -75,7 +75,7 @@ public class OntologyEntityController {
     }
 
     @PostMapping("/storage_group/query")
-    @Operation(summary = "按存储分组查询实例数据（可按实体id过滤，按指定属性排序取前limit条，每行带所属实体在主存储分组的展示名）")
+    @Operation(summary = "按存储分组查询实例数据（支持属性过滤条件与按实体id过滤，按指定属性排序取前limit条，每行带所属实体在主存储分组的展示名）")
     public RestResult<List<EntityStorageGroupDataVO>> queryByStorageGroup(@RequestBody @Valid List<EntityStorageGroupQueryParam> params) {
         return RestResult.ofData(entityService.queryByStorageGroup(params));
     }
