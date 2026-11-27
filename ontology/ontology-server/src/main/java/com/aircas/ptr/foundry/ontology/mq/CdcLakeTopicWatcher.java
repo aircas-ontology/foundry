@@ -35,6 +35,11 @@ import java.util.regex.Pattern;
  * 只处理消费端：若新表连 topic 都没建出来（Debezium 侧没捕获该表），本组件不会触发，那种情况仍需重启服务
  * 让 {@code CdcTaskBuilder} 重新下发连接器配置。
  * <p>
+ * 没有选择覆盖 {@code kafkaListenerContainerFactory}：Spring Kafka 的 topicPattern 运行期刷新依赖
+ * {@code ContainerProperties.setTopicPatternRefreshMs}，该方法在 spring-kafka 3.3.7 上是否存在未经确认，
+ * 而容器重新启动一次本来就会重新解析 pattern，效果相同，所以这里探测到新 topic 后只重启湖监听容器，
+ * Boot 默认装配的工厂（retry / 错误处理 / 反序列化 / group.id / auto-offset-reset）一概不动。
+ * <p>
  * 由 xxl-job 调度（JobHandler = DISCOVER_CDC_LAKE_TOPIC），多实例部署下路由策略必须选「广播执行」：
  * 这里重启的是当前 JVM 内的监听容器，只路由到一台 executor 时其余实例的 pattern 依旧不会刷新，
  * 等于退回"新增表要重启服务"的老问题。
