@@ -8,8 +8,14 @@ import java.util.List;
 
 @Data
 @Builder
-@Schema(description = "文件总览统计汇总")
+@Schema(description = "文件总览统计")
 public class UploadFileOverviewStatVO {
+
+    @Schema(description = "编号")
+    private Long id;
+
+    @Schema(description = "文件编号")
+    private Long fileId;
 
     @Schema(description = "文件总数")
     private Integer fileTotal;
@@ -20,6 +26,6 @@ public class UploadFileOverviewStatVO {
     @Schema(description = "隐含关系")
     private Integer implicitRelation;
 
-    @Schema(description = "抽取列表，相同名称的数量和占比已求和")
+    @Schema(description = "抽取列表")
     private List<ExtractItemVO> extractList;
 }

@@ -5,6 +5,7 @@ import com.aircas.ptr.foundry.topic.model.param.ImplicitRelationOverviewCreatePa
 import com.aircas.ptr.foundry.topic.model.param.ImplicitRelationOverviewUpdateParam;
 import com.aircas.ptr.foundry.topic.model.po.ImplicitRelation;
 import com.aircas.ptr.foundry.topic.model.po.ImplicitRelationOverview;
+import com.aircas.ptr.foundry.topic.model.vo.ImplicitRelationOverviewStatVO;
 import com.aircas.ptr.foundry.topic.repository.ImplicitRelationMapper;
 import com.aircas.ptr.foundry.topic.repository.ImplicitRelationOverviewMapper;
 import com.aircas.ptr.foundry.topic.service.ImplicitRelationOverviewService;
@@ -14,6 +15,11 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 @Service
 public class ImplicitRelationOverviewServiceImpl extends ServiceImpl<ImplicitRelationOverviewMapper, ImplicitRelationOverview>
@@ -48,6 +54,31 @@ public class ImplicitRelationOverviewServiceImpl extends ServiceImpl<ImplicitRel
         overview.setName(param.getName().trim());
         overview.setQuantity(param.getQuantity());
         updateById(overview);
+    }
+
+    @Override
+    public List<ImplicitRelationOverviewStatVO> listStats() {
+        Map<String, StatValue> grouped = new HashMap<>();
+        for (ImplicitRelationOverview row : list()) {
+            String relationType = StringUtils.defaultString(row.getRelationType());
+            StatValue value = new StatValue(StringUtils.defaultString(row.getName()),
+                    row.getQuantity() == null ? 0 : row.getQuantity());
+            grouped.merge(relationType, value, StatValue::add);
+        }
+        return grouped.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey(Comparator.naturalOrder()))
+                .map(entry -> ImplicitRelationOverviewStatVO.builder()
+                        .relationType(entry.getKey())
+                        .name(entry.getValue().name())
+                        .quantity(entry.getValue().quantity())
+                        .build())
+                .toList();
+    }
+
+    private record StatValue(String name, int quantity) {
+        private StatValue add(StatValue other) {
+            return new StatValue(name, quantity + other.quantity);
+        }
     }
 
     private void requireImplicitRelation(Long implicitRelationId) {

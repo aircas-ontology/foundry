@@ -40,7 +40,4 @@ public class UploadFileVO {
 
     @Schema(description = "是否删除：0未删除，1已删除")
     private Integer deleted;
-
-    @Schema(description = "文件总览统计。文件总数、关联目标数量已求和，抽取列表按相同名称汇总数量和占比")
-    private UploadFileOverviewStatVO overviewStat;
 }

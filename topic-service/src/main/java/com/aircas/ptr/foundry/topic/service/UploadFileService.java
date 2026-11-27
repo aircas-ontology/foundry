@@ -6,12 +6,13 @@ import com.aircas.ptr.foundry.topic.model.po.UploadFile;
 import com.aircas.ptr.foundry.topic.model.vo.UploadFileDetailVO;
 import com.aircas.ptr.foundry.topic.model.vo.UploadFileVO;
 import com.baomidou.mybatisplus.spring.service.IService;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
 public interface UploadFileService extends IService<UploadFile> {
 
-    Long create(UploadFileCreateParam param);
+    Long create(MultipartFile file, UploadFileCreateParam param);
 
     List<UploadFileVO> listFiles(UploadFileQueryParam param);
 

@@ -71,6 +71,11 @@ public class UploadFile {
     private Integer deleted;
 
     /**
+     * 文件内容。图片暂不识别。
+     */
+    private String context;
+
+    /**
      * 创建时间
      */
     @TableField(fill = FieldFill.INSERT)

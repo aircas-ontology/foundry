@@ -5,7 +5,6 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.util.Date;
-import java.util.List;
 
 @Data
 @Builder
@@ -38,7 +37,4 @@ public class ImplicitRelationVO {
 
     @Schema(description = "更新时间")
     private Date updateTime;
-
-    @Schema(description = "隐含关系总览统计。相同关联类型和名称的数量已求和")
-    private List<ImplicitRelationOverviewStatVO> overviewStats;
 }

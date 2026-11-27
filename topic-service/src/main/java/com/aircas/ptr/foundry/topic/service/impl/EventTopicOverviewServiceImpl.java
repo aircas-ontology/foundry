@@ -5,6 +5,7 @@ import com.aircas.ptr.foundry.topic.model.enums.DeletedFlagEnum;
 import com.aircas.ptr.foundry.topic.model.param.EventTopicOverviewCreateParam;
 import com.aircas.ptr.foundry.topic.model.po.EventTopic;
 import com.aircas.ptr.foundry.topic.model.po.EventTopicOverview;
+import com.aircas.ptr.foundry.topic.model.vo.EventTopicOverviewStatVO;
 import com.aircas.ptr.foundry.topic.repository.EventTopicMapper;
 import com.aircas.ptr.foundry.topic.repository.EventTopicOverviewMapper;
 import com.aircas.ptr.foundry.topic.service.EventTopicOverviewService;
@@ -15,6 +16,12 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 @Service
 public class EventTopicOverviewServiceImpl extends ServiceImpl<EventTopicOverviewMapper, EventTopicOverview>
@@ -40,5 +47,32 @@ public class EventTopicOverviewServiceImpl extends ServiceImpl<EventTopicOvervie
                 .build();
         save(overview);
         return overview.getId();
+    }
+
+    @Override
+    public List<EventTopicOverviewStatVO> listStats() {
+        Map<String, StatValue> grouped = new HashMap<>();
+        for (EventTopicOverview row : list()) {
+            String type = StringUtils.defaultString(row.getType());
+            StatValue value = new StatValue(StringUtils.defaultString(row.getName()),
+                    row.getQuantity() == null ? 0 : row.getQuantity(),
+                    row.getProportion() == null ? BigDecimal.ZERO : row.getProportion());
+            grouped.merge(type, value, StatValue::add);
+        }
+        return grouped.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey(Comparator.naturalOrder()))
+                .map(entry -> EventTopicOverviewStatVO.builder()
+                        .type(entry.getKey())
+                        .name(entry.getValue().name())
+                        .quantity(entry.getValue().quantity())
+                        .proportion(entry.getValue().proportion())
+                        .build())
+                .toList();
+    }
+
+    private record StatValue(String name, int quantity, BigDecimal proportion) {
+        private StatValue add(StatValue other) {
+            return new StatValue(name, quantity + other.quantity, proportion.add(other.proportion));
+        }
     }
 }

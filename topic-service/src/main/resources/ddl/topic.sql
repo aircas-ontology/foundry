@@ -245,6 +245,7 @@ CREATE TABLE IF NOT EXISTS topic.upload_file
     uploader             varchar(64),
     extract_time         timestamp(6),
     deleted              smallint     DEFAULT 0 NOT NULL,
+    context              text,
     create_time          timestamp(6)
 );
 
@@ -260,6 +261,9 @@ COMMENT ON COLUMN topic.upload_file.uploader IS '上传人员，由页面传入�
 COMMENT ON COLUMN topic.upload_file.extract_time IS '抽取时间';
 COMMENT ON COLUMN topic.upload_file.deleted IS '是否删除：0未删除，1已删除';
 COMMENT ON COLUMN topic.upload_file.create_time IS '创建时间';
+
+ALTER TABLE topic.upload_file ADD COLUMN IF NOT EXISTS context text;
+COMMENT ON COLUMN topic.upload_file.context IS '文件内容。txt、doc、docx、pdf、xlsx读取正文，png、jpg暂不识别';
 
 CREATE INDEX IF NOT EXISTS idx_upload_file_name ON topic.upload_file (file_name);
 

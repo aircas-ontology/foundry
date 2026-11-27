@@ -3,17 +3,21 @@ package com.aircas.ptr.foundry.topic.controller;
 import com.aircas.ptr.foundry.common.base.RestResult;
 import com.aircas.ptr.foundry.topic.model.param.ImplicitRelationOverviewCreateParam;
 import com.aircas.ptr.foundry.topic.model.param.ImplicitRelationOverviewUpdateParam;
+import com.aircas.ptr.foundry.topic.model.vo.ImplicitRelationOverviewStatVO;
 import com.aircas.ptr.foundry.topic.service.ImplicitRelationOverviewService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 @Tag(name = "隐含关系总览统计")
 @RestController
@@ -35,5 +39,11 @@ public class ImplicitRelationOverviewController {
     public RestResult<Void> update(@RequestBody @Valid ImplicitRelationOverviewUpdateParam param) {
         implicitRelationOverviewService.update(param);
         return RestResult.success();
+    }
+
+    @GetMapping
+    @Operation(summary = "查询隐含关系总览统计，相同关联类型的数量求和")
+    public RestResult<List<ImplicitRelationOverviewStatVO>> list() {
+        return RestResult.ofData(implicitRelationOverviewService.listStats());
     }
 }

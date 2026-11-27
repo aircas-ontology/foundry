@@ -13,6 +13,10 @@ spring:
     active: local
   application:
     name: topic
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
   jackson:
     default-property-inclusion: non_null
   datasource:

@@ -10,14 +10,17 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -30,10 +33,11 @@ public class UploadFileController {
 
     private final UploadFileService uploadFileService;
 
-    @PostMapping
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(summary = "创建上传文件")
-    public RestResult<Long> create(@RequestBody @Valid UploadFileCreateParam param) {
-        return RestResult.ofData(uploadFileService.create(param));
+    public RestResult<Long> create(@RequestParam("file") MultipartFile file,
+                                   @Valid @ModelAttribute UploadFileCreateParam param) {
+        return RestResult.ofData(uploadFileService.create(file, param));
     }
 
     @GetMapping

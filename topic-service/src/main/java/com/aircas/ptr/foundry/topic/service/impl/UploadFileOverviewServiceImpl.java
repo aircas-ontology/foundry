@@ -6,6 +6,7 @@ import com.aircas.ptr.foundry.topic.model.param.UploadFileOverviewCreateParam;
 import com.aircas.ptr.foundry.topic.model.param.UploadFileOverviewUpdateParam;
 import com.aircas.ptr.foundry.topic.model.po.UploadFile;
 import com.aircas.ptr.foundry.topic.model.po.UploadFileOverview;
+import com.aircas.ptr.foundry.topic.model.vo.UploadFileOverviewStatVO;
 import com.aircas.ptr.foundry.topic.repository.UploadFileMapper;
 import com.aircas.ptr.foundry.topic.repository.UploadFileOverviewMapper;
 import com.aircas.ptr.foundry.topic.service.UploadFileOverviewService;
@@ -17,6 +18,8 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
 
 @Service
 public class UploadFileOverviewServiceImpl extends ServiceImpl<UploadFileOverviewMapper, UploadFileOverview>
@@ -55,6 +58,20 @@ public class UploadFileOverviewServiceImpl extends ServiceImpl<UploadFileOvervie
         overview.setTargetCount(param.getTargetCount());
         overview.setImplicitRelation(param.getImplicitRelation());
         updateById(overview);
+    }
+
+    @Override
+    public List<UploadFileOverviewStatVO> listStats() {
+        return list(new LambdaQueryWrapper<UploadFileOverview>().orderByAsc(UploadFileOverview::getId)).stream()
+                .map(row -> UploadFileOverviewStatVO.builder()
+                        .id(row.getId())
+                        .fileId(row.getFileId())
+                        .fileTotal(row.getFileTotal())
+                        .targetCount(row.getTargetCount())
+                        .implicitRelation(row.getImplicitRelation())
+                        .extractList(ExtractListSupport.read(row.getExtractList()))
+                        .build())
+                .toList();
     }
 
     private void requireFile(Long fileId) {
