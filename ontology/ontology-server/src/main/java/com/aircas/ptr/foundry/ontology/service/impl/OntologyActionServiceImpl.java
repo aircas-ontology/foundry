@@ -1529,6 +1529,9 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
      * 行为声明的算子入参，按绑定行带出取值来源。
      * <p>同一参数有多个子字段绑定时合成一条：只要有一行来源是外部输入，这个参数就要调用方整包传值。
      * 来源缺省和创建校验保持一致：绑了算子的按对象属性，不绑算子的基础行为按外部输入。</p>
+     * <p>读实例的字段行在同一叶子名落在多个入参（或同一入参的多条路径）上时，名字写成
+     * 「父参数名.字段路径」，和行为测试 inputParams 的写法一致：展示、节点绑定、取值覆盖都靠它区分，
+     * 不会再把两条轨迹的 longitude 合成一行。外部输入、固定值仍按叶子名，params 是平铺结构。</p>
      */
     private List<TreeInputParamDef> treeInputParamDefs(OntologyAction bound) {
         var mappings = ontologyActionMappingInService.list(new LambdaQueryWrapper<OntologyActionMappingIn>()
@@ -1554,6 +1557,20 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 .collect(Collectors.toMap(OntologyProperty::getUniqueIdentifier, property -> property,
                         (existing, ignored) -> existing));
 
+        // 叶子名 -> 该名字出现过的「父参数名.字段路径」：多个才需要带上级区分
+        Map<String, Set<String>> ownersByField = new LinkedHashMap<>();
+        for (var mapping : mappings) {
+            var funcParam = mapping.getFunctionParamId() == null ? null : funcParams.get(mapping.getFunctionParamId());
+            if (funcParam == null || funcParam.getCategory() != FunctionParamCategoryEnum.INPUT
+                    || StringUtils.isBlank(mapping.getParameterName())
+                    || StringUtils.isBlank(mapping.getParamPath())
+                    || StringUtils.isBlank(funcParam.getParamName())) {
+                continue;
+            }
+            ownersByField.computeIfAbsent(mapping.getParameterName(), k -> new LinkedHashSet<>())
+                    .add(funcParam.getParamName() + "." + mapping.getParamPath());
+        }
+
         Map<String, TreeInputParamDef> params = new LinkedHashMap<>();
         for (var mapping : mappings) {
             var funcParam = mapping.getFunctionParamId() == null ? null : funcParams.get(mapping.getFunctionParamId());
@@ -1572,7 +1589,9 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
             var sourceType = mapping.getSourceType() == null
                     ? (funcParam == null ? ActionParamSourceEnum.EXTERNAL : ActionParamSourceEnum.PROPERTY)
                     : mapping.getSourceType();
-            var existing = params.get(mapping.getParameterName());
+            var ownerName = funcParam != null ? funcParam.getParamName() : mapping.getParameterName();
+            var key = treeInputKey(mapping, ownerName, sourceType, ownersByField);
+            var existing = params.get(key);
             // 参数级取值只能一种来源：有一行要外部输入，整包就由调用方给
             if (existing != null && (existing.sourceType() == ActionParamSourceEnum.EXTERNAL
                     || sourceType != ActionParamSourceEnum.EXTERNAL)) {
@@ -1583,14 +1602,33 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                     && sourceType != ActionParamSourceEnum.FIXED;
             var objectId = !bindsProperty ? null : StringUtils.defaultIfBlank(mapping.getOntologyUniqueIdentifier(),
                     property == null ? null : property.getOntologyUniqueIdentifier());
-            params.put(mapping.getParameterName(), new TreeInputParamDef(mapping.getParameterName(), type,
+            params.put(key, new TreeInputParamDef(key, type,
                     description, sourceType, objectId,
                     bindsProperty ? mapping.getPropertyUniqueIdentifier() : null,
                     bindsProperty && property != null ? property.getDisplayName() : null,
-                    funcParam != null ? funcParam.getParamName() : mapping.getParameterName(),
+                    ownerName,
                     bindsProperty && property != null ? property.getStorageGroup() : null));
         }
         return new ArrayList<>(params.values());
+    }
+
+    /**
+     * 入参行的键：整包绑定和外部输入/固定值用叶子名或参数名；读实例的字段行在同一叶子名
+     * 出现在多个「父参数名.字段路径」上时带上级，和行为测试 inputParams 的限定写法一致。
+     * 只有重名才带前缀，没重名的参数保持原名，已存的节点绑定不用跟着改。
+     */
+    private static String treeInputKey(OntologyActionMappingIn mapping, String ownerName,
+                                       ActionParamSourceEnum sourceType,
+                                       Map<String, Set<String>> ownersByField) {
+        var parameterName = mapping.getParameterName();
+        var path = StringUtils.trimToEmpty(mapping.getParamPath());
+        if (StringUtils.isBlank(path) || StringUtils.equals(parameterName, ownerName)
+                || StringUtils.isBlank(ownerName)
+                || sourceType == ActionParamSourceEnum.EXTERNAL || sourceType == ActionParamSourceEnum.FIXED) {
+            return parameterName;
+        }
+        var owners = ownersByField.get(parameterName);
+        return owners != null && owners.size() > 1 ? ownerName + "." + path : parameterName;
     }
 
     /** 属性类型转黑板值类型；黑板没有对应类型的复杂属性按字符串接收 */
@@ -2094,7 +2132,8 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
 
     /**
      * 行为声明的一个算子入参：名字、类型、取值来源，属性来源时带绑定属性和它所在的存储分组，用于执行要求逐条列出。
-     * <p>paramName 是所属顶层算子入参名：LIST 的元素字段行按字段名逐条列出，数据位置仍要按参数名传。</p>
+     * <p>paramName 是所属顶层算子入参名：LIST 的元素字段行按字段名逐条列出，数据位置按参数名或该字段名给。
+     * 叶子名在多个入参上重复时 name 带上级（父参数名.字段路径），paramName 仍是顶层参数名。</p>
      */
     private record TreeInputParamDef(String name, FunctionParamTypeEnum type, String description,
                                      ActionParamSourceEnum sourceType, String objectIdentifier,
@@ -2418,6 +2457,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
                 .bindableInputs(treeInputParamDefs(action).stream()
                         .map(param -> TreeActionParamVO.builder()
                                 .name(param.name())
+                                .paramName(param.paramName())
                                 .type(param.type())
                                 .description(param.description())
                                 .sourceType(param.sourceType())

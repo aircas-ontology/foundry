@@ -44,12 +44,8 @@ public class PropertyFilterParam {
     @Schema(name = "dataType", description = "变量数据类型：STRING/NUMBER/BOOLEAN", example = "NUMBER")
     private String dataType;
 
-    /** 取值来源，不传按 FIXED；只有基础函数行为的配置认这两个字段 */
-    @Schema(name = "source", description = "取值来源：FIXED 固定值（value/values 写死）/ EXTERNAL 外部输入（测试、执行时按 paramName 传入）；不传按 FIXED",
-            example = "EXTERNAL")
+    /** 取值来源，不传按 FIXED；只有基础函数行为的配置认这个字段 */
+    @Schema(name = "source", description = "取值来源：FIXED 固定值（value/values 写死）/ EXTERNAL 外部输入"
+            + "（测试、执行时在 params 里按属性 apiName 传值）；不传按 FIXED", example = "EXTERNAL")
     private FilterValueSourceEnum source;
-
-    @Schema(name = "paramName", description = "source=EXTERNAL 时必填：外部输入的参数名，测试/执行请求在 params 里按它给值。"
-            + "IN/NOT_IN 传数组，BETWEEN/NOT_BETWEEN 传长度为 2 的数组", example = "beginTime")
-    private String paramName;
 }

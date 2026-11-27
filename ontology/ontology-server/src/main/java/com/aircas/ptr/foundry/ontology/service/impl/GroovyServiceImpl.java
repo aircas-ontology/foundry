@@ -46,6 +46,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -275,6 +276,7 @@ public class GroovyServiceImpl implements GroovyService {
         if (value == null) {
             return null;
         }
+        value = unwrapElementTemplateWrappers(value, declaredType);
         JavaType javaType = objectMapper.getTypeFactory().constructType(declaredType);
         if (!javaType.hasGenericTypes() && javaType.getRawClass().isInstance(value)) {
             return value;
@@ -290,6 +292,48 @@ public class GroovyServiceImpl implements GroovyService {
             throw new BusinessException("算子入参[" + paramInfo.getParamName() + "]类型转换失败：期望 "
                     + javaType.toCanonical() + "，收到的值是 " + value, HttpStatus.BAD_REQUEST);
         }
+    }
+
+    /** 多级集合的 fields 里，元素本身是集合时用的占位节点名 */
+    private static final String ELEMENT_TEMPLATE_NODE = "element";
+
+    /**
+     * 多级集合入参（{@code List<List<Point>>}）的 fields 里，元素本身是集合时用名为 {@code element}
+     * 的 list 节点占位，前端照着它渲染会把每个元素包成 {@code {"element":[...]}}。
+     * 按声明类型把这一层占位壳剥掉，兼容「带壳」与「直接嵌套数组」两种写法；单层集合与非集合形参不动。
+     */
+    private Object unwrapElementTemplateWrappers(Object value, Type declaredType) {
+        if (!isCollectionType(declaredType) || !(value instanceof Collection<?> items)) {
+            return value;
+        }
+        Type elementType = collectionElementType(declaredType);
+        // 只有元素本身还是集合时才可能存在 element 占位壳
+        if (elementType == null || !isCollectionType(elementType)) {
+            return value;
+        }
+        var unwrapped = new ArrayList<>(items.size());
+        for (Object item : items) {
+            var target = item;
+            if (item instanceof Map<?, ?> map && map.size() == 1 && map.containsKey(ELEMENT_TEMPLATE_NODE)) {
+                target = map.get(ELEMENT_TEMPLATE_NODE);
+            }
+            unwrapped.add(unwrapElementTemplateWrappers(target, elementType));
+        }
+        return unwrapped;
+    }
+
+    private static boolean isCollectionType(Type type) {
+        return type instanceof ParameterizedType parameterized
+                && parameterized.getRawType() instanceof Class<?> rawClass
+                && Collection.class.isAssignableFrom(rawClass);
+    }
+
+    private static Type collectionElementType(Type type) {
+        if (!(type instanceof ParameterizedType parameterized)) {
+            return null;
+        }
+        Type[] arguments = parameterized.getActualTypeArguments();
+        return arguments.length == 1 ? arguments[0] : null;
     }
 
     /**

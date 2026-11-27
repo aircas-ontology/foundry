@@ -20,7 +20,7 @@ import java.util.List;
  * 单对象时前端从该对象的属性里选，多对象时只能选各对象共有的字段（apiName 与类型都一致）。
  * 聚合方式是这些对象的行合成一批，只算一个统一聚合值（不是每个对象各算一个，那样 AVG/COUNT 合不出全局值）；
  * 查询方式是每个对象各查一遍选中的字段，再 UNION ALL 合并后统一分页。多对象必须属于同一个对象分类。
- * <p>过滤条件可以声明取值来源：固定值写在配置里，外部输入在测试/执行时按 paramName 从 params 传入。</p>
+ * <p>过滤条件可以声明取值来源：固定值写在配置里，外部输入在测试/执行时按属性 apiName 从 params 传入。</p>
  * <p>{@link #writeBack} 配了才落库：不配就是纯查询，行为输出仍只是返回结果。</p>
  */
 @Data
@@ -65,8 +65,8 @@ public class ActionBasicFunctionConfig {
 
     @Schema(name = "filters", description = "过滤条件（嵌套过滤树，propertyApiName 写真实属性 apiName）；不传则不加条件。"
             + "条件里的属性同样必须在每个选中对象上都存在且类型一致。"
-            + "每个条件的 source 声明取值来源：FIXED（默认，value/values 写死）或 EXTERNAL（配 paramName，"
-            + "测试/执行时在 params 里按参数名给值）")
+            + "每个条件的 source 声明取值来源：FIXED（默认，value/values 写死）或 EXTERNAL（测试/执行时"
+            + "在 params 里按该条件的属性 apiName 给值）")
     private FilterGroupParam filters;
 
     @Schema(name = "writeBack", description = "结果回写配置；不传就是只查不落库。"

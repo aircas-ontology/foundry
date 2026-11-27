@@ -2966,9 +2966,7 @@ public class EntityServiceImpl implements EntityService {
     /** 不按元素读实例的取值：节点覆盖优先，其次固定值、外部输入；没有这些来源时返回 null */
     private Object sharedSourceValue(ActionParamMappingVO mapping, ActionContextInfoDTO actionContext,
                                      String ownerParamName) {
-        var overrideKey = StringUtils.isNotBlank(mapping.getParameterName())
-                ? mapping.getParameterName() : ownerParamName;
-        var nodeValue = paramValueOverride(actionContext, overrideKey);
+        var nodeValue = paramRowOverride(actionContext, mapping, ownerParamName);
         if (nodeValue != null) {
             return nodeValue;
         }
@@ -3056,9 +3054,7 @@ public class EntityServiceImpl implements EntityService {
      */
     private List<Object> resolveInputValues(ActionParamMappingVO mapping, ActionContextInfoDTO actionContext,
                                             String ownerParamName) {
-        var overrideKey = StringUtils.isNotBlank(mapping.getParameterName())
-                ? mapping.getParameterName() : ownerParamName;
-        var nodeValue = paramValueOverride(actionContext, overrideKey);
+        var nodeValue = paramRowOverride(actionContext, mapping, ownerParamName);
         if (nodeValue != null) {
             return asValueList(nodeValue);
         }
@@ -3132,9 +3128,7 @@ public class EntityServiceImpl implements EntityService {
     private Object resolveInputValue(ActionParamMappingVO mapping, FunctionParamTypeEnum paramType,
                                      ActionContextInfoDTO actionContext, String ownerParamName) {
         // 行为节点给这个入参配了取值来源（黑板变量/上游行为出参）时按节点给的算，属性、固定值来源也一样被覆盖
-        var overrideKey = StringUtils.isNotBlank(mapping.getParameterName())
-                ? mapping.getParameterName() : ownerParamName;
-        var nodeValue = paramValueOverride(actionContext, overrideKey);
+        var nodeValue = paramRowOverride(actionContext, mapping, ownerParamName);
         if (nodeValue != null) {
             return nodeValue;
         }
@@ -3161,6 +3155,27 @@ public class EntityServiceImpl implements EntityService {
             return null;
         }
         return overrides.get(paramName);
+    }
+
+    /**
+     * 绑定行的节点取值：先按「父参数名.字段路径」找，没配再按绑定行自己的名字。
+     * 两条入参有同名叶子（两条轨迹都有 longitude）时只有限定写法能分得开；
+     * 没重名的绑定仍按叶子名命中，老配置不受影响。
+     */
+    private Object paramRowOverride(ActionContextInfoDTO actionContext, ActionParamMappingVO mapping,
+                                    String ownerParamName) {
+        if (mapping == null) {
+            return paramValueOverride(actionContext, ownerParamName);
+        }
+        if (StringUtils.isNotBlank(mapping.getParamPath()) && StringUtils.isNotBlank(ownerParamName)) {
+            var qualified = paramValueOverride(actionContext, ownerParamName + "." + mapping.getParamPath());
+            if (qualified != null) {
+                return qualified;
+            }
+        }
+        var overrideKey = StringUtils.isNotBlank(mapping.getParameterName())
+                ? mapping.getParameterName() : ownerParamName;
+        return paramValueOverride(actionContext, overrideKey);
     }
 
     /** 该入参按 inputParams 单独加载的视图里此属性的取值；没指定过这个入参或视图里没有该属性时返回 null，由调用处回落共用视图 */

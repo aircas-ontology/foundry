@@ -57,7 +57,8 @@ import java.util.stream.Collectors;
  * 查询方式单个对象直接查、多个对象按 UNION ALL 合并后统一分页，聚合方式把每个对象的取值合批（UNION ALL）后只算一次。
  * 实例主键按对象给，给了就把该对象贡献的行收窄到那条实例，没给按该对象全量参与。</p>
  *
- * <p>过滤条件可以声明取值来源：固定值随配置落库，外部输入的参数名随配置落库、值在测试/执行时按 params 传入。</p>
+ * <p>过滤条件可以声明取值来源：固定值随配置落库，外部输入只随配置落库「是哪个属性」，
+ * 值在测试/执行时按该属性的 apiName 从 params 传入。</p>
  */
 @Slf4j
 @Component
@@ -229,7 +230,7 @@ public class BasicFunctionActionExecutor {
      * @param primaryKeyByObject        对象id -&gt; 实例主键；某个查询对象没有键时该对象按全量参与。
      *                                  没单独给回写实例时，这份键里要带上回写目标对象的实例主键，否则回写没有归属、直接报错
      * @param writeBackEntityPrimaryKey 单独指定的回写实例主键；只覆盖回写目标对象，不参与查询收窄
-     * @param externalParams            外部输入的参数名 -&gt; 值，解析过滤条件里 source=EXTERNAL 的条件；
+     * @param externalParams            属性 apiName -&gt; 值，解析过滤条件里 source=EXTERNAL 的条件；
      *                                  没声明外部输入条件时不看这份值
      * @return 结果 JSON，一条；聚合方式多对象时也是合批算出的那一个统一值。配了回写时附带 writeBack 说明落到了哪里、落了几行
      */
@@ -765,7 +766,7 @@ public class BasicFunctionActionExecutor {
     }
 
     /**
-     * 过滤条件的取值来源校验：固定值要填值，外部输入要填参数名且不能同时填固定值。
+     * 过滤条件的取值来源校验：固定值要填值，外部输入要指明属性且不能同时填固定值。
      * <p>创建时校验，执行时再走一遍——存量配置可能来自手工改库。</p>
      */
     private void checkFilterConfig(FilterGroupParam group) {
@@ -790,8 +791,8 @@ public class BasicFunctionActionExecutor {
         if (filter.getSource() == FilterValueSourceEnum.EXTERNAL) {
             PreconditionUtils.checkArgument(op != QueryOpEnum.APPLY,
                     "过滤条件[" + apiName + "]的 APPLY 不能用外部输入", HttpStatus.BAD_REQUEST);
-            PreconditionUtils.checkArgument(StringUtils.isNotBlank(filter.getParamName()),
-                    "过滤条件[" + apiName + "]的取值来源是外部输入，要填外部输入的参数名", HttpStatus.BAD_REQUEST);
+            PreconditionUtils.checkArgument(StringUtils.isNotBlank(apiName),
+                    "过滤条件的取值来源是外部输入，要指明是哪个属性（按属性 apiName 传值）", HttpStatus.BAD_REQUEST);
             PreconditionUtils.checkArgument(filter.getValue() == null && CollectionUtils.isEmpty(filter.getValues()),
                     "过滤条件[" + apiName + "]的取值来源是外部输入，不要再填固定值（填了也不会用）", HttpStatus.BAD_REQUEST);
             return;
@@ -819,8 +820,8 @@ public class BasicFunctionActionExecutor {
     }
 
     /**
-     * 把外部输入条件换成具体值：复制一份条件树，EXTERNAL 节点按 paramName 从本次执行的值里取值，
-     * 其余节点原样保留。原配置不受影响（配置里始终只存参数名，不存某一次的值）。
+     * 把外部输入条件换成具体值：复制一份条件树，EXTERNAL 节点按属性 apiName 从本次执行的值里取值，
+     * 其余节点原样保留。原配置不受影响（配置里始终只存取值来源，不存某一次的值）。
      */
     private FilterGroupParam resolveFilters(FilterGroupParam group, Map<String, Object> externalParams) {
         if (group == null || CollectionUtils.isEmpty(group.getChildren())) {
@@ -847,18 +848,17 @@ public class BasicFunctionActionExecutor {
         return FilterGroupParam.builder().logic(group.getLogic()).children(children).build();
     }
 
-    /** 单个条件的外部输入取值；不是外部输入的原样返回，避免无谓复制 */
+    /** 单个条件的外部输入取值，参数名就是属性 apiName；不是外部输入的原样返回，避免无谓复制 */
     private PropertyFilterParam resolveFilter(PropertyFilterParam filter, Map<String, Object> externalParams) {
         if (filter.getSource() != FilterValueSourceEnum.EXTERNAL) {
             return filter;
         }
-        var apiName = filter.getPropertyApiName();
-        var paramName = StringUtils.trimToEmpty(filter.getParamName());
-        PreconditionUtils.checkArgument(StringUtils.isNotBlank(paramName),
-                "过滤条件[" + apiName + "]的取值来源是外部输入，但没有配参数名", HttpStatus.BAD_REQUEST);
-        PreconditionUtils.checkArgument(externalParams != null && externalParams.get(paramName) != null,
-                "过滤条件[" + apiName + "]用了外部输入参数[" + paramName + "]，本次执行没有提供它的值", HttpStatus.BAD_REQUEST);
-        var raw = externalParams.get(paramName);
+        var apiName = StringUtils.trimToEmpty(filter.getPropertyApiName());
+        PreconditionUtils.checkArgument(StringUtils.isNotBlank(apiName),
+                "过滤条件的取值来源是外部输入，要指明是哪个属性（按属性 apiName 传值）", HttpStatus.BAD_REQUEST);
+        PreconditionUtils.checkArgument(externalParams != null && externalParams.get(apiName) != null,
+                "过滤条件[" + apiName + "]用了外部输入参数[" + apiName + "]，本次执行没有提供它的值", HttpStatus.BAD_REQUEST);
+        var raw = externalParams.get(apiName);
         var op = filter.getOp() == null ? QueryOpEnum.EQ : filter.getOp();
         var resolved = PropertyFilterParam.builder()
                 .propertyApiName(apiName)
@@ -867,11 +867,11 @@ public class BasicFunctionActionExecutor {
                 .source(FilterValueSourceEnum.FIXED)
                 .build();
         if (op == QueryOpEnum.IN || op == QueryOpEnum.NOT_IN) {
-            resolved.setValues(externalValueList(raw, paramName));
+            resolved.setValues(externalValueList(raw, apiName));
         } else if (op == QueryOpEnum.BETWEEN || op == QueryOpEnum.NOT_BETWEEN) {
-            var values = externalValueList(raw, paramName);
+            var values = externalValueList(raw, apiName);
             PreconditionUtils.checkArgument(values.size() >= 2,
-                    "过滤条件[" + apiName + "]是 " + op + "，外部输入参数[" + paramName + "]要给两个值：[下界, 上界]",
+                    "过滤条件[" + apiName + "]是 " + op + "，外部输入参数[" + apiName + "]要给两个值：[下界, 上界]",
                     HttpStatus.BAD_REQUEST);
             resolved.setValues(values);
         } else {
@@ -880,11 +880,11 @@ public class BasicFunctionActionExecutor {
         return resolved;
     }
 
-    private List<Object> externalValueList(Object raw, String paramName) {
+    private List<Object> externalValueList(Object raw, String apiName) {
         if (raw instanceof Collection<?> values) {
             return new ArrayList<>(values);
         }
-        throw new BusinessException("外部输入参数[" + paramName + "]要传数组值，当前给的是单值", HttpStatus.BAD_REQUEST);
+        throw new BusinessException("外部输入参数[" + apiName + "]要传数组值，当前给的是单值", HttpStatus.BAD_REQUEST);
     }
 
     /** 查询方式的通用查询参数：只查行为选中的那一个对象，字段按选择顺序去重 */
