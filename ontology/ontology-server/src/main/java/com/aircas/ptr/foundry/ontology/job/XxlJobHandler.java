@@ -2,6 +2,7 @@ package com.aircas.ptr.foundry.ontology.job;
 
 import com.aircas.ptr.foundry.ontology.model.common.Constants;
 import com.aircas.ptr.foundry.ontology.model.enums.ActionSchedulingTypeEnum;
+import com.aircas.ptr.foundry.ontology.model.enums.ScheduleStatus;
 import com.aircas.ptr.foundry.ontology.model.enums.TaskStatusEnum;
 import com.aircas.ptr.foundry.ontology.model.param.ActionTestParam;
 import com.aircas.ptr.foundry.ontology.model.param.XxlJobActionExecuteParam;
@@ -57,7 +58,20 @@ public class XxlJobHandler {
             String entityJson = null;
             if (executeParam.getScheduleId() != null) {
                 var scheduledTask = actionHandleTaskMapper.selectById(executeParam.getScheduleId());
-                if (scheduledTask != null && StringUtils.isNotBlank(scheduledTask.getEntityJson())) {
+                // 调度已删除或已暂停但 xxl-job 侧仍在触发（如远程状态分叉）时不再执行，避免僵尸调度持续落库
+                if (scheduledTask == null) {
+                    var skipMsg = "调度已删除，跳过执行：scheduleId=" + executeParam.getScheduleId();
+                    log.warn(skipMsg);
+                    XxlJobHelper.log(skipMsg);
+                    return;
+                }
+                if (!ScheduleStatus.START.equals(scheduledTask.getStatus())) {
+                    var skipMsg = "调度未处于启动状态，跳过执行：scheduleId=" + executeParam.getScheduleId();
+                    log.warn(skipMsg);
+                    XxlJobHelper.log(skipMsg);
+                    return;
+                }
+                if (StringUtils.isNotBlank(scheduledTask.getEntityJson())) {
                     entityJson = scheduledTask.getEntityJson();
                     requestParam = entityJson;
                 }

@@ -20,8 +20,14 @@ import lombok.experimental.SuperBuilder;
 @Schema(description = "行为树可绑定行为的参数")
 public class TreeActionParamVO {
 
-    @Schema(name = "name", description = "参数名，行为的外部输入参数按它从执行请求取值（nodeExecutes.params 优先，回退 inputs）", example = "satelliteId")
+    @Schema(name = "name", description = "参数名，行为的外部输入参数按它从执行请求取值（nodeExecutes.params 优先，回退 inputs）；"
+            + "绑定的键就是它。列表元素/对象子字段的叶子名在多个入参上重复时这里是「父参数名.字段路径」，绑定后照样按它取覆盖值",
+            example = "satelliteId")
     private String name;
+
+    @Schema(name = "paramName", description = "所属顶层算子入参名：name 带上级时就是名字的前缀，仅可绑定入参列表（bindableInputs）里有值；"
+            + "数据位置仍可只按它给（同一参数只给一个位置时）", example = "tracks")
+    private String paramName;
 
     @Schema(name = "type", description = "参数类型", example = "STRING")
     private FunctionParamTypeEnum type;

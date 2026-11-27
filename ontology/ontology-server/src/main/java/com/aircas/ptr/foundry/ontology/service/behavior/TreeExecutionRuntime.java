@@ -59,6 +59,9 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
     /** 节点没配执行数据时的空壳，字段全空即全部回退全树默认值 */
     private static final TreeNodeExecuteParam EMPTY_NODE_EXECUTE = new TreeNodeExecuteParam();
 
+    /** 冷却占位记录里代表「空实例主键（整棵树共享）」的哨兵，与真实主键区分开 */
+    private static final Object EMPTY_COOLDOWN_SCOPE = new Object();
+
     private final BehaviorTreeDefinition definition;
 
     /** 树 api，冷却节点按「树 + 节点 + 实例」定位持久化状态 */
@@ -97,6 +100,8 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
 
     private final TreeCooldownTracker cooldownTracker;
 
+    private final TreeCooldownRefunder cooldownRefunder;
+
     private final TreeBranchRunner branchRunner;
 
     private final TreeActionInvoker actionInvoker;
@@ -126,6 +131,9 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
     /** 节点标识 -> 子树里的行为节点标识（含自身）：节点本轮没执行时，整棵子树的旧产出都要清掉 */
     private final Map<String, List<String>> nodeOutputScopes = new LinkedHashMap<>();
 
+    /** 冷却节点本轮占位用的实例主键，空主键（整棵树共享）用哨兵代替 null：跳过时按同一条退还 */
+    private final Map<String, Object> cooldownScopes = new ConcurrentHashMap<>();
+
     /**
      * 当前线程上生效的限时截止时间。限时节点在本线程压栈，子树在并行分支线程执行时把快照带过去；
      * 只用于「超时后不再发起新的行为」，不中断已经开始的行为。
@@ -151,6 +159,7 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
                                 Map<String, ActionInstanceTargetParam> outputParams,
                                 Object linkEntityPrimaryKey, Map<String, TreeNodeExecuteParam> nodeExecutes,
                                 Integer spaceId, TreeCooldownTracker cooldownTracker,
+                                TreeCooldownRefunder cooldownRefunder,
                                 TreeBranchRunner branchRunner, TreeActionInvoker actionInvoker,
                                 TreeBlackboardRefresher blackboardRefresher) {
         this.definition = definition;
@@ -166,6 +175,7 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
         this.nodeExecutes = nodeExecutes == null ? Map.of() : Map.copyOf(nodeExecutes);
         this.spaceId = spaceId;
         this.cooldownTracker = cooldownTracker;
+        this.cooldownRefunder = cooldownRefunder;
         this.branchRunner = branchRunner;
         this.actionInvoker = actionInvoker;
         this.blackboardRefresher = blackboardRefresher;
@@ -623,7 +633,25 @@ public class TreeExecutionRuntime implements BehaviorTreeRuntime {
             refreshBlackboard(nodeId);
             scope = blackboard.get(entityPrimaryKeyKey);
         }
-        return cooldownTracker.tryRun(spaceId, treeApi, nodeId, scope, intervalSeconds);
+        var decision = cooldownTracker.tryRun(spaceId, treeApi, nodeId, scope, intervalSeconds);
+        if (decision.acquired() && !decision.unavailable()) {
+            // 记下占位用的实例主键：子节点本轮被跳过要退还冷却时，删除的必须是同一条记录，
+            // 不能靠重算——期间黑板可能因别的节点刷新而取到不同的值；空主键（整棵树共享）用哨兵占位
+            cooldownScopes.put(nodeId, scope == null ? EMPTY_COOLDOWN_SCOPE : scope);
+        }
+        return decision;
+    }
+
+    /**
+     * 冷却节点本轮的子节点被跳过时退还占位：行为没真实执行，不该占用冷却窗口。
+     * <p>只在 tryRunCooldown 真正占位后调用；没占位就没有可退的，重复调用按没记录处理。</p>
+     */
+    public void refundCooldown(String nodeId) {
+        var scope = cooldownScopes.remove(nodeId);
+        if (scope != null) {
+            cooldownRefunder.refund(spaceId, treeApi, nodeId,
+                    scope == EMPTY_COOLDOWN_SCOPE ? null : scope);
+        }
     }
 
     @Override

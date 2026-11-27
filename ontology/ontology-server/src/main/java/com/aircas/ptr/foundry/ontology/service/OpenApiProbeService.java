@@ -22,6 +22,7 @@ import io.swagger.parser.OpenAPIParser;
 import io.swagger.v3.parser.core.models.ParseOptions;
 import io.swagger.v3.parser.core.models.SwaggerParseResult;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
@@ -70,6 +71,10 @@ public class OpenApiProbeService {
             throw new BusinessException("接口文档解析失败" + (msgs.isBlank() ? "" : "：" + msgs));
         }
 
+        Map<String, Schema> components = openAPI.getComponents() == null
+                ? null : openAPI.getComponents().getSchemas();
+        ProbeContext ctx = new ProbeContext(components);
+
         List<ContainerInterface> interfaces = new ArrayList<>();
         for (Map.Entry<String, PathItem> pathEntry : openAPI.getPaths().entrySet()) {
             String urlPath = pathEntry.getKey();
@@ -81,8 +86,16 @@ public class OpenApiProbeService {
             for (Map.Entry<PathItem.HttpMethod, Operation> opEntry : operations.entrySet()) {
                 String method = opEntry.getKey().name().toUpperCase(Locale.ROOT);
                 Operation operation = opEntry.getValue();
-                interfaces.add(buildInterface(urlPath, method, operation));
+                interfaces.add(buildInterface(urlPath, method, operation, ctx));
             }
+        }
+        if (!ctx.unresolvedRefs.isEmpty()) {
+            List<String> refs = ctx.unresolvedRefs;
+            String shown = String.join("; ", refs.subList(0, Math.min(5, refs.size())));
+            throw new BusinessException("接口文档存在无法解析的模型引用（引用了外部文件或未定义的模型），"
+                    + "相关接口的出入参字段结构会丢失：" + shown
+                    + (refs.size() > 5 ? " 等共 " + refs.size() + " 处" : "")
+                    + "。请导出为内嵌全部模型定义的单文件文档后重新上传", HttpStatus.BAD_REQUEST);
         }
         return interfaces;
     }
@@ -100,7 +113,7 @@ public class OpenApiProbeService {
         }
     }
 
-    private ContainerInterface buildInterface(String urlPath, String method, Operation operation) {
+    private ContainerInterface buildInterface(String urlPath, String method, Operation operation, ProbeContext ctx) {
         String api = method + " " + urlPath;
         String name = firstNonBlank(operation.getOperationId(), operation.getSummary(), api);
         String description = firstNonBlank(operation.getSummary(), operation.getDescription(), "");
@@ -108,11 +121,13 @@ public class OpenApiProbeService {
         List<ContainerInterfaceParam> inputs = new ArrayList<>();
         if (operation.getParameters() != null) {
             for (Parameter parameter : operation.getParameters()) {
+                Schema<?> paramSchema = deref(parameter.getSchema(), ctx,
+                        api + " 参数 " + parameter.getName());
                 ContainerInterfaceParam param = ContainerInterfaceParam.builder()
                         .name(parameter.getName())
                         .in(parameter.getIn())
                         .required(parameter.getRequired())
-                        .type(schemaType(parameter.getSchema()))
+                        .type(schemaType(paramSchema))
                         .description(firstNonBlank(parameter.getDescription(), ""))
                         .build();
                 inputs.add(param);
@@ -121,7 +136,7 @@ public class OpenApiProbeService {
         RequestBody requestBody = operation.getRequestBody();
         if (requestBody != null && requestBody.getContent() != null) {
             Schema<?> bodySchema = pickJsonSchema(requestBody.getContent());
-            flattenSchemaInto(bodySchema, "body", inputs);
+            flattenSchemaInto(bodySchema, "body", inputs, ctx, api + " 请求体");
         }
 
         List<ContainerInterfaceParam> outputs = new ArrayList<>();
@@ -136,7 +151,7 @@ public class OpenApiProbeService {
                     continue;
                 }
                 Schema<?> respSchema = pickJsonSchema(response.getContent());
-                flattenSchemaInto(respSchema, "body", outputs);
+                flattenSchemaInto(respSchema, "body", outputs, ctx, api + " 响应(" + respEntry.getKey() + ")");
                 break;
             }
         }
@@ -158,14 +173,16 @@ public class OpenApiProbeService {
      * <p>字段名保持文档中的原始名（{@code id}、{@code name}），不拼成 {@code student.id}：
      * 执行期按顶层参数名组装请求体，扁平名会让容器收到字面量键 {@code "student.id"}。</p>
      */
-    private void flattenSchemaInto(Schema<?> schema, String in, List<ContainerInterfaceParam> target) {
-        target.addAll(describeFields(schema, in, 0, Collections.newSetFromMap(new IdentityHashMap<>())));
+    private void flattenSchemaInto(Schema<?> schema, String in, List<ContainerInterfaceParam> target,
+                                   ProbeContext ctx, String where) {
+        target.addAll(describeFields(schema, in, 0, Collections.newSetFromMap(new IdentityHashMap<>()), ctx, where));
     }
 
     /** 列出 schema 的字段，并递归填充每个字段的 fields；depth 从 0 起算 */
-    private List<ContainerInterfaceParam> describeFields(Schema<?> schema, String in, int depth, Set<Schema<?>> path) {
+    private List<ContainerInterfaceParam> describeFields(Schema<?> schema, String in, int depth, Set<Schema<?>> path,
+                                                         ProbeContext ctx, String where) {
         List<ContainerInterfaceParam> fields = new ArrayList<>();
-        Schema<?> carrier = fieldCarrier(schema);
+        Schema<?> carrier = fieldCarrier(schema, ctx, where);
         if (carrier == null || depth >= MAX_FIELD_DEPTH || !path.add(carrier)) {
             return fields;
         }
@@ -177,8 +194,9 @@ public class OpenApiProbeService {
         List<String> required = carrier.getRequired() == null ? Collections.emptyList() : carrier.getRequired();
         try {
             for (Map.Entry<String, Schema> entry : props.entrySet()) {
-                Schema<?> prop = entry.getValue();
-                List<ContainerInterfaceParam> children = describeFields(prop, in, depth + 1, path);
+                String fieldWhere = where + "." + entry.getKey();
+                Schema<?> prop = deref(entry.getValue(), ctx, fieldWhere);
+                List<ContainerInterfaceParam> children = describeFields(prop, in, depth + 1, path, ctx, fieldWhere);
                 fields.add(ContainerInterfaceParam.builder()
                         .name(entry.getKey())
                         .in(in)
@@ -195,16 +213,17 @@ public class OpenApiProbeService {
     }
 
     /**
-     * 取 schema 的「字段承载体」：先合并组合 schema，数组再下探到 items。
+     * 取 schema 的「字段承载体」：先回填残留引用，再合并组合 schema，数组最后下探到 items。
      * <p>items 只在 {@link ArraySchema} 上提供，非该实例的 array（解析器未归类）按无子字段处理。</p>
      */
-    private Schema<?> fieldCarrier(Schema<?> schema) {
+    private Schema<?> fieldCarrier(Schema<?> schema, ProbeContext ctx, String where) {
         if (schema == null) {
             return null;
         }
-        Schema<?> merged = mergeComposed(schema);
+        Schema<?> resolved = deref(schema, ctx, where);
+        Schema<?> merged = mergeComposed(resolved, ctx, where);
         if (merged instanceof ArraySchema arraySchema) {
-            return arraySchema.getItems();
+            return arraySchema.getItems() == null ? null : deref(arraySchema.getItems(), ctx, where + "[]");
         }
         return merged;
     }
@@ -213,7 +232,7 @@ public class OpenApiProbeService {
      * 合并 {@code allOf}（退化时取 {@code oneOf} / {@code anyOf}）成员的 properties 与 required。
      * <p>文档常用 {@code allOf: [$ref]} 包一层，{@code resolveFully} 不保证已展平为普通对象 schema。</p>
      */
-    private Schema<?> mergeComposed(Schema<?> schema) {
+    private Schema<?> mergeComposed(Schema<?> schema, ProbeContext ctx, String where) {
         if (!(schema instanceof ComposedSchema composed)) {
             return schema;
         }
@@ -223,7 +242,7 @@ public class OpenApiProbeService {
         List<String> required = new ArrayList<>();
         if (members != null) {
             for (Schema<?> member : members) {
-                Schema<?> carrier = fieldCarrier(member);
+                Schema<?> carrier = fieldCarrier(member, ctx, where + "(composed)");
                 if (carrier == null) {
                     continue;
                 }
@@ -243,6 +262,50 @@ public class OpenApiProbeService {
         merged.setProperties(props);
         merged.setRequired(required);
         return merged;
+    }
+
+    /**
+     * 回填 {@code resolveFully} 未展开的残留引用（循环引用、根引用等场景解析器会留下 {@code $ref}）：
+     * 引用可在本文档 components 中命中时用定义对象替换，调用方靠层级上限与实例去重防环；
+     * 引用外部文件或指向未定义模型时字段结构必然丢失，记录位置由 {@code probe} 统一报错，不再静默降级。
+     */
+    private Schema<?> deref(Schema<?> schema, ProbeContext ctx, String where) {
+        Schema<?> current = schema;
+        int hops = 0;
+        while (current != null && current.get$ref() != null && hops++ < 10) {
+            if (current.getProperties() != null && !current.getProperties().isEmpty()) {
+                return current;
+            }
+            String ref = current.get$ref();
+            Schema<?> target = ref.startsWith("#/") && ctx.components != null
+                    ? ctx.components.get(ref.substring(ref.lastIndexOf('/') + 1))
+                    : null;
+            if (target == null) {
+                ctx.recordUnresolved(where + " -> " + ref);
+                return current;
+            }
+            if (target == current) {
+                return current;
+            }
+            current = target;
+        }
+        return current;
+    }
+
+    /** 一次探查的上下文：文档内模型定义 + 无法解析的引用位置清单 */
+    private static final class ProbeContext {
+        private final Map<String, Schema> components;
+        private final List<String> unresolvedRefs = new ArrayList<>();
+
+        private ProbeContext(Map<String, Schema> components) {
+            this.components = components;
+        }
+
+        private void recordUnresolved(String entry) {
+            if (!unresolvedRefs.contains(entry)) {
+                unresolvedRefs.add(entry);
+            }
+        }
     }
 
     private Schema<?> pickJsonSchema(Content content) {

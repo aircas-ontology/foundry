@@ -2,10 +2,11 @@ package com.aircas.ptr.foundry.ontology.config;
 
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
- * CDC 消费侧配置：打开 Spring 的定时任务，供 {@code CdcLakeTopicWatcher} 周期性检查数据湖是否新增了 topic。
+ * CDC 消费侧配置占位。定时任务已改由无条件的 {@link SchedulingConfig} 统一打开，
+ * 本模块的 {@code @Scheduled} 任务（如 action_handle_log 超时清扫）不再随 cdc 开关一起失效；
+ * {@code CdcLakeTopicWatcher} 自身带同条件注解，cdc 关闭时该组件仍会被一并关掉。
  * <p>
  * 没有选择覆盖 {@code kafkaListenerContainerFactory}：Spring Kafka 的 topicPattern 运行期刷新依赖
  * {@code ContainerProperties.setTopicPatternRefreshMs}，该方法在 spring-kafka 3.3.7 上是否存在未经确认，
@@ -14,6 +15,5 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  */
 @Configuration
 @ConditionalOnProperty(prefix = "foundry.integration.cdc", name = "enabled", havingValue = "true", matchIfMissing = true)
-@EnableScheduling
 public class CdcKafkaConsumerConfig {
 }

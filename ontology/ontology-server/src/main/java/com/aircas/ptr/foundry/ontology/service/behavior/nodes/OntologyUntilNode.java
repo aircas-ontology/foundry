@@ -84,8 +84,11 @@ public class OntologyUntilNode extends Decorator {
             attempt++;
             var childStatus = child.execute(tick);
             if (childStatus == B3Status.RUNNING) {
-                runtime.setNodeState(nodeId, BehaviorStateEnum.RUNNING);
-                return B3Status.RUNNING;
+                // 单轮引擎不会恢复 RUNNING：与其它节点收口口径一致按未达成失败处理，
+                // 既不能停在「还没跑完」这种不可恢复状态，也不能在 UNTIL_FAILURE 下把 RUNNING 误当已达成
+                runtime.setNodeState(nodeId, BehaviorStateEnum.FAILURE);
+                runtime.appendNodeMessage(nodeId, "子节点返回 RUNNING，单轮执行不会恢复，按未达成失败处理");
+                return B3Status.FAILURE;
             }
             // 跳过不等于达成：子节点本轮没有执行，不能再按「直到成功/失败」判断结果
             if (StringUtils.isNotBlank(childNodeId) && runtime.isNodeSkipped(childNodeId)) {

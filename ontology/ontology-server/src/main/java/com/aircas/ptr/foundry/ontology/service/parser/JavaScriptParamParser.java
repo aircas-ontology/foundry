@@ -203,22 +203,79 @@ public class JavaScriptParamParser implements ScriptParamParser {
     }
 
     /**
-     * 集合类型的元素字段：先按脚本内类展开（AST），认不出再试工程内类（反射）。
-     * <p>元素类型不是业务结构（{@code List<String>}）时返回 null，由调用方回落标量层，
-     * 仍是原来那个没有下一级的参数/result。</p>
+     * 集合类型的元素字段：返回「一个元素」的结构模板。
+     * 元素本身仍是集合时（{@code List<List<Point>>} 的元素是 {@code List<Point>}）保留一层 list 节点，
+     * 其 fields 为内层元素模板；元素是业务类时展开其字段（{@code List<Point>} → [latitude, longitude]）。
      */
     private List<ScriptParsedParam> expandCollectionElementFields(Type collectionType,
                                                                  FunctionParamCategoryEnum category,
                                                                  Map<String, ClassOrInterfaceDeclaration> classByName,
                                                                  ProjectClassExpander expander) {
-        String elementType = extractCollectionElementType(collectionType);
-        if (elementType == null) {
+        return collectionElementTemplate(collectionType, category, classByName, expander, 1);
+    }
+
+    /**
+     * 递归构造集合的元素模板：元素是集合则保留一层 list 节点并下钻，元素是业务类则展开其字段；
+     * 元素不是可展开结构（{@code List<String>}）时返回 null，由调用方回落标量层。
+     */
+    private List<ScriptParsedParam> collectionElementTemplate(Type collectionType,
+                                                              FunctionParamCategoryEnum category,
+                                                              Map<String, ClassOrInterfaceDeclaration> classByName,
+                                                              ProjectClassExpander expander, int depth) {
+        if (depth > ProjectClassExpander.MAX_FIELD_DEPTH) {
             return null;
         }
-        List<ScriptParsedParam> fields = expandScriptType(elementType, category,
-                classByName, expander, new LinkedHashSet<>(), 1);
+        Type element = collectionElementTypeNode(collectionType);
+        if (element == null) {
+            return null;
+        }
+        Type innerElement = collectionElementTypeNode(element);
+        if (innerElement != null) {
+            // 元素还是集合（List<List<X>>）：保留这一层 list 节点，fields 装内层元素模板
+            List<ScriptParsedParam> inner = collectionElementTemplate(element, category, classByName, expander, depth + 1);
+            if (inner == null) {
+                return null;
+            }
+            return List.of(ScriptParsedParam.builder()
+                    .name("element")
+                    .type(FunctionParamTypeEnum.LIST)
+                    .rawType(element.asString())
+                    .elementType(innerElement.asString())
+                    .category(category)
+                    .source("ANNOTATION")
+                    .fields(inner)
+                    .build());
+        }
+        // 元素是业务类：先按脚本内类展开（AST），认不出再试工程内类（反射）
+        String elementText = element.asString();
+        List<ScriptParsedParam> fields = expandScriptType(elementText, category,
+                classByName, expander, new LinkedHashSet<>(), depth);
         return fields != null ? fields
-                : expander.expandFieldsByName(elementType, category, new LinkedHashSet<>(), 1);
+                : expander.expandFieldsByName(elementText, category, new LinkedHashSet<>(), depth);
+    }
+
+    /** 集合/数组的直接元素类型节点；非集合返回 null。 */
+    private Type collectionElementTypeNode(Type type) {
+        if (type instanceof ArrayType arrayType) {
+            return arrayType.getComponentType();
+        }
+        if (!(type instanceof ClassOrInterfaceType classType)) {
+            return null;
+        }
+        String baseName = baseName(classType.getName().getIdentifier());
+        if (!COLLECTION_LIKE.contains(baseName.toLowerCase())) {
+            return null;
+        }
+        return classType.getTypeArguments()
+                .filter(args -> !args.isEmpty())
+                .map(args -> (Type) args.get(0))
+                .orElse(null);
+    }
+
+    /** 集合元素本身还是集合（如 {@code List<List<X>>}），需要保留中间 list 节点而非拍平。 */
+    private boolean isMultiLevelCollection(Type type) {
+        Type element = collectionElementTypeNode(type);
+        return element != null && collectionElementTypeNode(element) != null;
     }
 
     private List<ScriptParsedParam> expandFields(ClassOrInterfaceDeclaration cls, FunctionParamCategoryEnum category, String source,
@@ -249,6 +306,9 @@ public class JavaScriptParamParser implements ScriptParamParser {
                     ClassOrInterfaceDeclaration nestedClass = resolveUserClass(fieldTypeText, classByName);
                     if (nestedClass != null && visited.add(fieldTypeText)) {
                         fb.fields(expandFields(nestedClass, category, source, classByName, expander, visited, depth + 1));
+                    } else if (isMultiLevelCollection(var.getType())) {
+                        // 多级集合（List<List<X>>）：保留中间 list 节点，不拍平到最内层
+                        fb.fields(collectionElementTemplate(var.getType(), category, classByName, expander, depth + 1));
                     } else {
                         // 集合泛型：List<Admin> / Set<User> → 提取泛型参数递归展开
                         String probeType = elementType == null ? fieldTypeText : elementType;

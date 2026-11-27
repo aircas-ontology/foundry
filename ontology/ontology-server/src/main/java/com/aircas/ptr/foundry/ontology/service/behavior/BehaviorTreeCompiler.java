@@ -27,9 +27,11 @@ import org.springframework.http.HttpStatus;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -60,6 +62,11 @@ public final class BehaviorTreeCompiler {
     private BehaviorTreeCompiler() {
     }
 
+    /** 报错里给用户的节点称呼：优先界面名称，没配才退回标识 */
+    private static String nodeLabel(BehaviorTreeNode node) {
+        return StringUtils.defaultIfBlank(node.getDisplayName(), node.getId());
+    }
+
     public static BehaviorTree compile(String api, BehaviorTreeDefinition definition) {
         var roots = definition.getRoots();
         if (roots.size() != 1) {
@@ -70,7 +77,7 @@ public final class BehaviorTreeCompiler {
         cfg.setTitle(api);
         Map<String, BTNodeCfg> nodes = new LinkedHashMap<>();
         var sequence = new AtomicInteger();
-        var rootKey = compileNode(roots.get(0), null, nodes, sequence);
+        var rootKey = compileNode(roots.get(0), null, nodes, sequence, new HashSet<>());
         cfg.setRoot(rootKey);
         cfg.setNodes(nodes);
         var tree = new BehaviorTree();
@@ -80,13 +87,45 @@ public final class BehaviorTreeCompiler {
 
     /**
      * 编译一个定义节点，返回它在节点表里的 key（Guard 的 key，父节点连的是它）。
+     * <p>保存期已有 checkTreeDefinition 复核结构，这里是执行侧的兜底：库里可能存有早于校验规则的历史定义，
+     * 编译前自己再核对一遍，用可见的 400 代替越界 500、静默编空容器或重复 id 互相覆盖执行痕迹。</p>
      *
      * @param parentKind 父定义节点的类型；Guard 据此决定「跳过」返回成功还是失败，根节点为空
+     * @param seenIds 已编译过的节点标识集合，用于发现重复 id
      */
     private static String compileNode(BehaviorTreeNode node, BehaviorNodeKindEnum parentKind,
-                                      Map<String, BTNodeCfg> nodes, AtomicInteger sequence) {
+                                      Map<String, BTNodeCfg> nodes, AtomicInteger sequence, Set<String> seenIds) {
         if (node.getKind() == null) {
-            throw new BusinessException("行为树节点缺少类型：" + node.getId(), HttpStatus.BAD_REQUEST);
+            throw new BusinessException("行为树节点缺少类型：" + nodeLabel(node), HttpStatus.BAD_REQUEST);
+        }
+        if (StringUtils.isBlank(node.getId())) {
+            throw new BusinessException("行为树节点缺少标识：" + nodeLabel(node), HttpStatus.BAD_REQUEST);
+        }
+        if (!seenIds.add(node.getId())) {
+            throw new BusinessException("行为树节点标识重复：" + node.getId()
+                    + "，重复节点的执行痕迹会互相覆盖，请改用不同标识", HttpStatus.BAD_REQUEST);
+        }
+        var children = node.getChildren();
+        switch (node.getKind().getCategory()) {
+            case COMPOSITE -> {
+                if (children.isEmpty()) {
+                    throw new BusinessException(node.getKind().getName() + " " + nodeLabel(node)
+                            + " 至少要有子节点", HttpStatus.BAD_REQUEST);
+                }
+            }
+            case DECORATOR -> {
+                if (children.size() != 1) {
+                    throw new BusinessException(node.getKind().getName() + " " + nodeLabel(node)
+                            + " 只能有一个子节点，当前 " + children.size() + " 个", HttpStatus.BAD_REQUEST);
+                }
+            }
+            default -> {
+                // 叶子节点带子节点是脏数据：编译器只按叶子接线，多出来的子节点不会执行，直接拒绝避免误解
+                if (!children.isEmpty()) {
+                    throw new BusinessException(node.getKind().getName() + " " + nodeLabel(node)
+                            + " 是叶子节点，不能有子节点", HttpStatus.BAD_REQUEST);
+                }
+            }
         }
         var bodyKey = "n" + sequence.incrementAndGet();
         var guardKey = "g" + sequence.incrementAndGet();
@@ -98,13 +137,13 @@ public final class BehaviorTreeCompiler {
         body.setTitle(node.getDisplayName());
         body.setProperties(bodyProperties(node));
         if (node.getKind().getCategory() == BehaviorNodeCategoryEnum.COMPOSITE) {
-            List<String> children = new ArrayList<>();
-            for (var child : node.getChildren()) {
-                children.add(compileNode(child, node.getKind(), nodes, sequence));
+            List<String> childKeys = new ArrayList<>();
+            for (var child : children) {
+                childKeys.add(compileNode(child, node.getKind(), nodes, sequence, seenIds));
             }
-            body.setChildren(children);
+            body.setChildren(childKeys);
         } else if (node.getKind().getCategory() == BehaviorNodeCategoryEnum.DECORATOR) {
-            body.setChild(compileNode(node.getChildren().get(0), node.getKind(), nodes, sequence));
+            body.setChild(compileNode(children.get(0), node.getKind(), nodes, sequence, seenIds));
         }
         nodes.put(bodyKey, body);
 
@@ -168,11 +207,13 @@ public final class BehaviorTreeCompiler {
         if (StringUtils.isNotBlank(node.getWhileCondition())) {
             props.put("whileCondition", node.getWhileCondition());
         }
-        // 并行节点要按分支定位 skipped 标记，循环节点要判断子节点是否被跳过，都把子节点标识按顺序带过去
+        // 并行节点要按分支定位 skipped 标记，循环节点要判断子节点是否被跳过，冷却节点要判断子节点是否被跳过（跳过则不占冷却），
+        // 都把子节点标识按顺序带过去
         if (node.getKind() == BehaviorNodeKindEnum.PARALLEL
                 || node.getKind() == BehaviorNodeKindEnum.REPEATER
                 || node.getKind() == BehaviorNodeKindEnum.UNTIL_SUCCESS
-                || node.getKind() == BehaviorNodeKindEnum.UNTIL_FAILURE) {
+                || node.getKind() == BehaviorNodeKindEnum.UNTIL_FAILURE
+                || node.getKind() == BehaviorNodeKindEnum.COOLDOWN) {
             props.put("childNodeIds", writeJson(node.getChildren().stream().map(BehaviorTreeNode::getId).toList()));
         }
         return props;

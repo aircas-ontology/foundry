@@ -89,6 +89,12 @@ public interface BehaviorTreeRuntime {
     TreeCooldownTracker.CooldownDecision tryRunCooldown(String nodeId, int intervalSeconds, String entityPrimaryKeyKey);
 
     /**
+     * 冷却节点本轮的子节点被跳过时退还刚占的冷却：行为没真实执行，不该占用冷却窗口。
+     * <p>只在 {@link #tryRunCooldown} 真正占位后调用；退还删的是占位时同一条记录。</p>
+     */
+    void refundCooldown(String nodeId);
+
+    /**
      * 并发执行并行节点的分支，最多 maxConcurrency 个同时运行，按提交顺序返回结果。
      * <p>用应用统一线程池，节点自己不创建线程；分支内部自己兜异常。</p>
      */

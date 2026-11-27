@@ -9,6 +9,7 @@ import com.aircas.ptr.foundry.ontology.model.param.ActionCreateOrUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionSchedulingCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionSchedulingUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionTestParam;
+import com.aircas.ptr.foundry.ontology.model.param.BasicFunctionCommonPropertyParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyActionExecuteParam;
 import com.aircas.ptr.foundry.ontology.model.param.TreeBatchExecuteParam;
 import com.aircas.ptr.foundry.ontology.model.param.TreeExecuteParam;
@@ -119,6 +120,14 @@ public class OntologyActionController {
         return RestResult.ofData(ontologyActionService.getActionByApi(ontologySpaceId, actionApi));
     }
 
+    @Operation(summary = "基础函数多对象公共字段：返回各对象共有（apiName 与类型一致、都已关联数据源）的字段，供前端选查询字段/聚合目标/条件字段")
+    @PostMapping("/basic-function/common-properties")
+    public RestResult<BasicFunctionCommonPropertyVO> basicFunctionCommonProperties(
+            @RequestBody @Valid BasicFunctionCommonPropertyParam param) {
+        return RestResult.ofData(ontologyActionService.basicFunctionCommonProperties(param));
+    }
+
+
     @Operation(summary = "执行对象单个行为")
     @PostMapping("/execute")
     public RestResult executeAction(@RequestBody @Valid OntologyActionExecuteParam param) {
@@ -171,9 +180,9 @@ public class OntologyActionController {
                     schema = @Schema(implementation = ActionSchedulingCreateParam.class),
                     examples = {
                             @ExampleObject(name = "rule", summary = "规则调度示例", value = """
-                                    {"ontologyIdentifier":"abcdef","actionApi":"shipLocation","name":"示例调度","description":"按规则触发","type":"RULE","rule":{"ruleConnectType":"AND","rules":[{"columnName":"longitude","columnValue":"20.0","condition":"CH"}]}}"""),
+                                    {"spaceId":156,"ontologyIdentifier":"abcdef","actionApi":"shipLocation","name":"示例调度","description":"按规则触发","type":"RULE","rule":{"judgeRules":[{"monitorType":"新增","judgeParams":[{"leftOperate":{"type":"dynamic","ontologyId":"abcdef","propertyName":"longitude"},"rightOperate":{"type":"fixed","fixValue":"20.0"},"condition":"GT"}],"actionParam":{"actionApi":"shipLocation"}}]}}"""),
                             @ExampleObject(name = "task", summary = "周期调度示例", value = """
-                                    {"ontologyIdentifier":"abcdef","actionApi":"shipLocation","name":"示例周期调度","description":"按 cron 周期触发","type":"TASK","task":{"taskCronExpression":"30 * * 1/1 * ? *"}}""")
+                                    {"spaceId":156,"ontologyIdentifier":"abcdef","actionApi":"shipLocation","name":"示例周期调度","description":"按 cron 周期触发","type":"TASK","task":{"taskCronExpression":"30 * * 1/1 * ? *"}}""")
                     }))
     public RestResult<Long> createScheduling(@RequestBody @Valid ActionSchedulingCreateParam param) {
         var id = ontologyActionService.createScheduling(param);
@@ -189,7 +198,7 @@ public class OntologyActionController {
                     schema = @Schema(implementation = ActionSchedulingUpdateParam.class),
                     examples = {
                             @ExampleObject(name = "rule", summary = "规则调度示例", value = """
-                                    {"id":123,"ontologyIdentifier":"abcdef","actionApi":"shipLocation","name":"示例调度","description":"按规则触发","type":"RULE","rule":{"ruleConnectType":"AND","rules":[{"columnName":"longitude","columnValue":"20.0","condition":"CH"}]}}"""),
+                                    {"id":123,"spaceId":156,"ontologyIdentifier":"abcdef","actionApi":"shipLocation","name":"示例调度","description":"按规则触发","type":"RULE","rule":{"judgeRules":[{"monitorType":"新增","judgeParams":[{"leftOperate":{"type":"dynamic","ontologyId":"abcdef","propertyName":"longitude"},"rightOperate":{"type":"fixed","fixValue":"20.0"},"condition":"GT"}],"actionParam":{"actionApi":"shipLocation"}}]}}"""),
                             @ExampleObject(name = "task", summary = "周期调度示例", value = """
                                     {"id":123,"ontologyIdentifier":"abcdef","actionApi":"shipLocation","name":"示例周期调度","description":"按 cron 周期触发","type":"TASK","task":{"taskCronExpression":"30 * * 1/1 * ? *"}}""")
                     }))
