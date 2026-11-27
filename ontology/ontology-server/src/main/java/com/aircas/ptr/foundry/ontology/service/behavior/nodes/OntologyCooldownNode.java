@@ -6,6 +6,7 @@ import com.github.silencesu.behavior3java.config.BTNodeCfg;
 import com.github.silencesu.behavior3java.constant.B3Status;
 import com.github.silencesu.behavior3java.core.Decorator;
 import com.github.silencesu.behavior3java.core.Tick;
+import org.apache.commons.lang.StringUtils;
 
 /**
  * 冷却节点：距上次执行不足间隔时不再执行子节点，直接上报配置的结果状态。
@@ -16,6 +17,9 @@ public class OntologyCooldownNode extends Decorator {
 
     private String nodeId;
 
+    /** 被包裹子节点的定义标识，用来回查本轮是否被跳过（跳过则退还冷却） */
+    private String childNodeId;
+
     private BehaviorCooldownConfig config;
 
     @Override
@@ -24,6 +28,8 @@ public class OntologyCooldownNode extends Decorator {
         var props = OntologyTreeNodes.props(cfg);
         this.nodeId = props.get("nodeId");
         this.config = OntologyTreeNodes.config(props, BehaviorCooldownConfig.class);
+        var childNodeIds = OntologyTreeNodes.stringList(props, "childNodeIds");
+        this.childNodeId = childNodeIds.isEmpty() ? null : childNodeIds.get(0);
     }
 
     @Override
@@ -43,6 +49,7 @@ public class OntologyCooldownNode extends Decorator {
             return B3Status.FAILURE;
         }
         var scopeKey = config == null ? null : config.getEntityPrimaryKeyKey();
+        var claimed = false;
         if (intervalSeconds != null) {
             var decision = runtime.tryRunCooldown(nodeId, intervalSeconds, scopeKey);
             if (decision.unavailable()) {
@@ -56,9 +63,16 @@ public class OntologyCooldownNode extends Decorator {
                 runtime.setNodeMessage(nodeId, "冷却中：距上次执行未满 " + intervalSeconds + " 秒，本次不执行子节点"
                         + (configured == BehaviorStateEnum.RUNNING ? "（配置的 RUNNING 在单轮执行里按 FAILURE 上报）" : ""));
                 return OntologyTreeNodes.toB3(hitResult);
+            } else {
+                claimed = true;
             }
         }
         var status = child.execute(tick);
+        // 子节点本轮被跳过（enabled=false / skipIf 成立）时行为没真实执行，退还刚占的冷却，
+        // 否则一次空跑会把后面整段冷却期都白白拦掉；子节点执行失败不退还，避免失败后立即重试打满下游
+        if (claimed && StringUtils.isNotBlank(childNodeId) && runtime.isNodeSkipped(childNodeId)) {
+            runtime.refundCooldown(nodeId);
+        }
         runtime.setNodeState(nodeId, OntologyTreeNodes.toState(status));
         return status;
     }

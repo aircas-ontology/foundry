@@ -33,6 +33,20 @@ public interface BehaviorTreeCooldownMapper {
                    @Param("scopeKey") String scopeKey,
                    @Param("intervalSeconds") int intervalSeconds);
 
+    /**
+     * 退还冷却占位：子节点本轮被跳过、行为没真实执行时删掉刚占的记录，让下一轮重新计时。
+     * <p>按与 {@link #tryAcquire} 完全相同的 scopeKey 定位，删除的是同一条；记录不存在时删 0 行，不报错。</p>
+     */
+    @Delete("""
+            DELETE FROM ontology.ontology_behavior_tree_cooldown
+            WHERE ontology_space_id = #{spaceId} AND tree_api = #{treeApi}
+              AND node_id = #{nodeId} AND scope_key = #{scopeKey}
+            """)
+    int refund(@Param("spaceId") Integer spaceId,
+               @Param("treeApi") String treeApi,
+               @Param("nodeId") String nodeId,
+               @Param("scopeKey") String scopeKey);
+
     /** 删除整棵树的冷却记录，树被删除后同名树重建不会继承旧冷却 */
     @Delete("""
             DELETE FROM ontology.ontology_behavior_tree_cooldown

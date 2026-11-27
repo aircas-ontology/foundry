@@ -22,6 +22,7 @@ import com.aircas.ptr.foundry.ontology.service.behavior.CompiledBehaviorTree;
 import com.aircas.ptr.foundry.ontology.service.behavior.TreeActionInvoker;
 import com.aircas.ptr.foundry.ontology.service.behavior.TreeBranchRunner;
 import com.aircas.ptr.foundry.ontology.service.behavior.TreeCooldownTracker;
+import com.aircas.ptr.foundry.ontology.service.behavior.TreeCooldownRefunder;
 import com.aircas.ptr.foundry.ontology.service.behavior.TreeExecutionRuntime;
 import com.aircas.ptr.foundry.ontology.utils.FunctionOutputValueReader;
 import com.aircas.ptr.foundry.ontology.utils.ScriptParamSchemaUtil;
@@ -46,8 +47,12 @@ import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import jakarta.annotation.Resource;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -2559,7 +2564,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         return new TreeExecutionRuntime(definition, compiled.api(), entityPrimaryKey, entityPrimaryKeys, inputs,
                 dataPrimaryKey, inputDataPrimaryKeys, outputDataPrimaryKeys, inputParams, outputParams,
                 linkEntityPrimaryKey, nodeExecutes, compiled.spaceId(),
-                this::tryRunTreeCooldown, this::runTreeBranches, this::invokeTreeNodeAction,
+                this::tryRunTreeCooldown, this::refundTreeCooldown, this::runTreeBranches, this::invokeTreeNodeAction,
                 this::refreshTreeBlackboardProperties);
     }
 
@@ -2628,6 +2633,40 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
     }
 
     /**
+     * 冷却记录定位用的实例主键：为空落空串（整棵树共享），超长时不能裸截断——
+     * 两个共享前 255 字符的长主键会撞成同一条记录互相顶掉冷却，改成「前缀 + 全值哈希」保证不同值不同键。
+     * <p>占位与退还必须走本方法，算出完全相同的 scopeKey 才能删到同一条。</p>
+     */
+    private String treeCooldownScopeKey(Object entityPrimaryKey) {
+        if (entityPrimaryKey == null) {
+            return "";
+        }
+        var value = String.valueOf(entityPrimaryKey);
+        if (value.length() <= TREE_COOLDOWN_SCOPE_MAX_LENGTH) {
+            return value;
+        }
+        // 预留 17 字符给 "#"+16位哈希，前缀取剩余长度，总长正好 255 不溢出列宽
+        var hash = sha256Hex(value).substring(0, 16);
+        return value.substring(0, TREE_COOLDOWN_SCOPE_MAX_LENGTH - hash.length() - 1) + "#" + hash;
+    }
+
+    private static String sha256Hex(String value) {
+        try {
+            var digest = MessageDigest.getInstance("SHA-256");
+            var bytes = digest.digest(value.getBytes(StandardCharsets.UTF_8));
+            var sb = new StringBuilder(bytes.length * 2);
+            for (byte b : bytes) {
+                sb.append(Character.forDigit((b >> 4) & 0xF, 16));
+                sb.append(Character.forDigit(b & 0xF, 16));
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            // SHA-256 是 JDK 必备算法，取不到属于环境异常；退化为原值哈希兜底仍保证不同值大概率不同键
+            return Integer.toHexString(value.hashCode());
+        }
+    }
+
+    /**
      * 冷却占位：同一棵树、同一节点、同一执行实例只保留最近一次执行时间。
      * upsert 自带间隔判断，并发执行时不会出现两次都读到旧时间后同时放行。
      * <p>冷却状态表缺失时按「不可用」返回，由冷却节点放行并在结果里提示；
@@ -2635,10 +2674,7 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
      */
     private TreeCooldownTracker.CooldownDecision tryRunTreeCooldown(Integer spaceId, String treeApi, String nodeId,
                                                                     Object entityPrimaryKey, int intervalSeconds) {
-        var scopeKey = entityPrimaryKey == null ? "" : String.valueOf(entityPrimaryKey);
-        if (scopeKey.length() > TREE_COOLDOWN_SCOPE_MAX_LENGTH) {
-            scopeKey = scopeKey.substring(0, TREE_COOLDOWN_SCOPE_MAX_LENGTH);
-        }
+        var scopeKey = treeCooldownScopeKey(entityPrimaryKey);
         try {
             return behaviorTreeCooldownMapper.tryAcquire(spaceId, treeApi, nodeId, scopeKey, intervalSeconds) > 0
                     ? TreeCooldownTracker.CooldownDecision.acquire()
@@ -2646,6 +2682,23 @@ public class OntologyActionServiceImpl extends ServiceImpl<OntologyActionMapper,
         } catch (DataAccessException e) {
             warnCooldownTableUnavailable(e);
             return TreeCooldownTracker.CooldownDecision.storeUnavailable();
+        }
+    }
+
+    /**
+     * 退还冷却占位：子节点本轮被跳过时删掉刚占的记录，行为没真实执行不该占用冷却窗口。
+     * <p>scopeKey 用与 {@link #tryRunTreeCooldown} 完全相同的规则算出，删的是同一条。
+     * 冷却表不可用时跳过删除（同占位：不让辅助表把主流程事务打断）——占位那次本就没写成功。</p>
+     */
+    private void refundTreeCooldown(Integer spaceId, String treeApi, String nodeId, Object entityPrimaryKey) {
+        if (!cooldownTableReady()) {
+            return;
+        }
+        var scopeKey = treeCooldownScopeKey(entityPrimaryKey);
+        try {
+            behaviorTreeCooldownMapper.refund(spaceId, treeApi, nodeId, scopeKey);
+        } catch (DataAccessException e) {
+            warnCooldownTableUnavailable(e);
         }
     }
 
