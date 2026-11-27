@@ -626,60 +626,18 @@ public class EntityServiceImpl implements EntityService {
     }
 
     /**
-     * 某个入参在某对象上适用的读取规则：按该入参绑定行读到的子表分组逐个挂上。
-     * <p>规则只对这些分组生效，同一对象上的其它分组和别的入参仍按默认口径读，两个入参绑同一分组也能各读各的。</p>
+     * 某个入参在某对象上适用的读取规则：入参名 -> 对象id -> 存储分组 -> 规则，取本次这个对象的这一段。
+     * <p>规则按子级字段归位到它所在的子表，同一入参下来自不同对象的子表各有各的规则；
+     * 没被规则指到的分组和别的入参仍按默认口径读。</p>
      */
     private Map<String, ActionTestListReadRuleParam> readRulesForParam(ActionContextInfoDTO context,
                                                                         String paramName, String objectId) {
-        var rule = context.getListReadRules() == null ? null : context.getListReadRules().get(paramName);
-        if (rule == null) {
+        var rulesByParam = context.getListReadRules();
+        if (MapUtils.isEmpty(rulesByParam)) {
             return null;
         }
-        var groups = paramReadSubGroups(context, paramName, objectId);
-        if (groups.isEmpty()) {
-            return null;
-        }
-        Map<String, ActionTestListReadRuleParam> res = new LinkedHashMap<>();
-        groups.forEach(group -> res.put(group, rule));
-        return res;
-    }
-
-    /** 某个入参在该对象上按绑定行读到的子表存储分组；main 分组就是实例自身那一行，不参与按行读取 */
-    private Set<String> paramReadSubGroups(ActionContextInfoDTO context, String paramName, String objectId) {
-        var paramIds = CollectionUtils.isEmpty(context.getFunctionInputParams()) ? Set.<Long>of()
-                : context.getFunctionInputParams().stream()
-                .filter(p -> StringUtils.equals(paramName, p.getParamName()))
-                .map(FunctionParameterVO::getParamId).filter(Objects::nonNull).collect(Collectors.toSet());
-        Set<String> groups = new LinkedHashSet<>();
-        if (paramIds.isEmpty() || CollectionUtils.isEmpty(context.getMappings())) {
-            return groups;
-        }
-        var legacyObjectId = legacyActionObject(context, context.getEntityActionExecuteParam());
-        var props = CollectionUtils.emptyIfNull(context.getObjectProperties() == null ? null
-                : context.getObjectProperties().get(objectId)).stream().collect(Collectors.toList());
-        for (var mapping : context.getMappings()) {
-            if (!isInstanceInputRow(mapping) || mapping.getFunctionParamId() == null
-                    || !paramIds.contains(mapping.getFunctionParamId())
-                    || StringUtils.isEmpty(mapping.getPropertyUniqueIdentifier())) {
-                continue;
-            }
-            var rowObjectId = StringUtils.isNotEmpty(mapping.getOntologyUniqueIdentifier())
-                    ? mapping.getOntologyUniqueIdentifier() : legacyObjectId;
-            if (!StringUtils.equals(rowObjectId, objectId)) {
-                continue;
-            }
-            var property = props.stream()
-                    .filter(p -> mapping.getPropertyUniqueIdentifier().equals(p.getUniqueIdentifier()))
-                    .findFirst().orElse(null);
-            if (property == null) {
-                continue;
-            }
-            var group = StringUtils.defaultIfBlank(property.getStorageGroup(), "main");
-            if (!"main".equals(group)) {
-                groups.add(group);
-            }
-        }
-        return groups;
+        var rulesByGroup = rulesByParam.get(paramName) == null ? null : rulesByParam.get(paramName).get(objectId);
+        return MapUtils.isEmpty(rulesByGroup) ? null : rulesByGroup;
     }
 
     /**
@@ -1786,8 +1744,10 @@ public class EntityServiceImpl implements EntityService {
                                    EntityActionExecuteParam param) {
         var inputTargets = param == null ? null : param.getInputParams();
         var elementTargets = param == null ? null : param.getInputElementParams();
+        var fieldTargets = param == null ? null : param.getInputFieldParams();
         var outputTargets = param == null ? null : param.getOutputParams();
-        if (MapUtils.isEmpty(inputTargets) && MapUtils.isEmpty(elementTargets) && MapUtils.isEmpty(outputTargets)) {
+        if (MapUtils.isEmpty(inputTargets) && MapUtils.isEmpty(elementTargets)
+                && MapUtils.isEmpty(fieldTargets) && MapUtils.isEmpty(outputTargets)) {
             return;
         }
         PreconditionUtils.checkArgument(functionDetailVO != null,
@@ -1799,13 +1759,65 @@ public class EntityServiceImpl implements EntityService {
                 FunctionParamCategoryEnum.INPUT, "inputParams", "入参",
                 counterpartObjectOf(linkGroup, param));
         checkInputElementTargets(detail, params, elementTargets);
+        checkInputFieldTargets(detail, params, fieldTargets);
         if (MapUtils.isNotEmpty(inputTargets) && MapUtils.isNotEmpty(elementTargets)) {
             elementTargets.keySet().stream().filter(inputTargets::containsKey).findFirst().ifPresent(key -> {
                 throw new BusinessException("入参[" + key + "]同时按参数名和按元素给了数据位置，同一入参只用一种写法",
                         HttpStatus.BAD_REQUEST);
             });
         }
+        if (MapUtils.isNotEmpty(fieldTargets)) {
+            fieldTargets.keySet().stream().filter(key -> MapUtils.isNotEmpty(inputTargets) && inputTargets.containsKey(key))
+                    .findFirst().ifPresent(key -> {
+                        throw new BusinessException("入参[" + key + "]同时按参数名和按子级给了数据位置，同一入参只用一种写法",
+                                HttpStatus.BAD_REQUEST);
+                    });
+            fieldTargets.keySet().stream().filter(key -> MapUtils.isNotEmpty(elementTargets) && elementTargets.containsKey(key))
+                    .findFirst().ifPresent(key -> {
+                        throw new BusinessException("入参[" + key + "]同时按元素和按子级给了数据位置，同一入参只用一种写法",
+                                HttpStatus.BAD_REQUEST);
+                    });
+        }
         checkOutputTargets(detail, params, outputTargets);
+    }
+
+    /**
+     * LIST 入参按子级给的数据位置：每个子级只给一个位置，位置里至少要有实例主键或分组行主键。
+     * <p>同一入参的子级可以来自不同对象、不同实例，所以不要求各子级指到同一个位置；
+     * 没给分组行的子级按该子表默认口径读。</p>
+     */
+    private void checkInputFieldTargets(OntologyActionDetailVO detail, List<FunctionParameterVO> allParams,
+                                        Map<String, Map<String, ActionInstanceTargetParam>> fieldTargets) {
+        if (MapUtils.isEmpty(fieldTargets)) {
+            return;
+        }
+        var params = allParams.stream().filter(v -> v.getCategory() == FunctionParamCategoryEnum.INPUT)
+                .collect(Collectors.toList());
+        fieldTargets.forEach((paramName, byProperty) -> {
+            var def = params.stream().filter(p -> StringUtils.equals(paramName, p.getParamName()))
+                    .findFirst().orElse(null);
+            PreconditionUtils.checkNotNull(def,
+                    "inputParams 里的入参[" + paramName + "]不是该算子的入参，请检查名称是否正确", HttpStatus.BAD_REQUEST);
+            PreconditionUtils.checkArgument(def.paramTypeEnum() == FunctionParamTypeEnum.LIST,
+                    "入参[" + paramName + "]不是列表类型，不能按子级给数据位置", HttpStatus.BAD_REQUEST);
+            PreconditionUtils.checkArgument(MapUtils.isNotEmpty(byProperty),
+                    "入参[" + paramName + "]的子级数据位置不能为空", HttpStatus.BAD_REQUEST);
+            var mappingIns = CollectionUtils.emptyIfNull(detail.getMappingIns());
+            byProperty.forEach((propertyId, position) -> {
+                var mapping = mappingIns.stream()
+                        .filter(row -> Objects.equals(def.getParamId(), row.getFunctionParamId()))
+                        .filter(row -> StringUtils.equals(propertyId, row.getPropertyUniqueIdentifier()))
+                        .findFirst().orElse(null);
+                var childName = mapping == null ? propertyId
+                        : StringUtils.defaultIfBlank(mapping.getParamPath(),
+                        StringUtils.defaultIfBlank(mapping.getParameterName(), propertyId));
+                var label = "入参[" + paramName + "]的子级[" + childName + "]";
+                PreconditionUtils.checkNotNull(position, label + "的数据位置不能为空", HttpStatus.BAD_REQUEST);
+                PreconditionUtils.checkArgument(position.getEntityPrimaryKey() != null
+                                || MapUtils.isNotEmpty(position.getDataPrimaryKeys()),
+                        label + "没给实例主键，也没给分组行主键", HttpStatus.BAD_REQUEST);
+            });
+        });
     }
 
     /**
@@ -2214,10 +2226,13 @@ public class EntityServiceImpl implements EntityService {
                                                                              EntityActionExecuteParam param,
                                                                              String excludeObjectId) {
         var targets = param == null ? null : param.getInputParams();
+        var fieldTargets = param == null ? null : param.getInputFieldParams();
         var rowLimits = listRowLimits(context);
-        var readRuleParams = context.getListReadRules() == null ? Map.<String, ActionTestListReadRuleParam>of()
+        var readRuleParams = context.getListReadRules() == null
+                ? Map.<String, Map<String, Map<String, ActionTestListReadRuleParam>>>of()
                 : context.getListReadRules();
-        if (MapUtils.isEmpty(targets) && rowLimits.isEmpty() && readRuleParams.isEmpty()) {
+        if (MapUtils.isEmpty(targets) && MapUtils.isEmpty(fieldTargets)
+                && rowLimits.isEmpty() && readRuleParams.isEmpty()) {
             return null;
         }
         var detail = context.getActionDetailVO();
@@ -2231,6 +2246,9 @@ public class EntityServiceImpl implements EntityService {
                 }
             });
         }
+        if (MapUtils.isNotEmpty(fieldTargets)) {
+            paramNames.addAll(fieldTargets.keySet());
+        }
         paramNames.addAll(rowLimits.keySet());
         paramNames.addAll(readRuleParams.keySet());
         // 按元素给位置的入参逐元素读，不走入参级视图；只留它的 rowLimit 给元素读取用
@@ -2242,45 +2260,157 @@ public class EntityServiceImpl implements EntityService {
                 continue;
             }
             var target = targets == null ? null : targets.get(paramName);
-            var objectIds = paramDataObjectIds(context.getMappings(), context.getFunctionInputParams(),
-                    paramName, this::isInstanceInputRow, legacyObjectId);
+            var fieldPositions = fieldTargets == null ? null : fieldTargets.get(paramName);
             var limits = rowLimits.get(paramName);
-            var details = Lists.<EntityPropertyDetailVO>newArrayList();
             var explicitPrimaryKey = target == null ? null : target.getEntityPrimaryKey();
-            for (var objectId : objectIds) {
-                // 关系对端由本次遍历到的实例提供；该入参显式点了实例时以入参为准
-                if (StringUtils.equals(objectId, excludeObjectId) && explicitPrimaryKey == null) {
-                    continue;
+            Map<String, List<Object>> values = new LinkedHashMap<>();
+            // 子级全部点了实例时不必再按对象读一遍，未点名的绑定行仍按入参/对象级实例读
+            if (needsSharedRead(context, paramName, fieldPositions)) {
+                var objectIds = paramDataObjectIds(context.getMappings(), context.getFunctionInputParams(),
+                        paramName, this::isInstanceInputRow, legacyObjectId);
+                for (var objectId : objectIds) {
+                    // 关系对端由本次遍历到的实例提供；该入参显式点了实例时以入参为准
+                    if (StringUtils.equals(objectId, excludeObjectId) && explicitPrimaryKey == null) {
+                        continue;
+                    }
+                    var primaryKey = explicitPrimaryKey != null ? explicitPrimaryKey
+                            : resolveEntityPrimaryKey(context, param, objectId, inputTargetsFor(context));
+                    // 该入参没点名实例：沿用同一对象在别的入参上选过的实例，未指定行就按默认取最近 10 行
+                    if (primaryKey == null) {
+                        primaryKey = paramTargetPrimaryKey(context, param, objectId);
+                    }
+                    PreconditionUtils.checkNotNull(primaryKey,
+                            "入参[" + paramName + "]的对象[" + objectId + "]未选择实例数据，无法执行行为：" + actionApi,
+                            HttpStatus.BAD_REQUEST);
+                    var rowKeys = target != null
+                            ? mergeRowKeys(target.getDataPrimaryKeys(), rowKeysOf(inputTargetsFor(context), objectId))
+                            : inputRowKeysFor(context, objectId);
+                    var objectDetails = getEntityDetail(objectId, primaryKey, rowKeys, limits,
+                            readRulesForParam(context, paramName, objectId));
+                    // 点了实例就必须按它取到数：取不到时回落共用视图会静默读成另一个实例
+                    if (explicitPrimaryKey != null) {
+                        PreconditionUtils.checkArgument(!objectDetails.isEmpty(),
+                                "入参[" + paramName + "]指定的实例[" + explicitPrimaryKey + "]在对象[" + objectId
+                                        + "]下没有数据，无法按该实例取值：" + actionApi, HttpStatus.BAD_REQUEST);
+                    }
+                    objectDetails.forEach(d -> values.putIfAbsent(d.getPropertyUniqIdentifier(), d.getPropertyValues()));
                 }
-                var primaryKey = explicitPrimaryKey != null ? explicitPrimaryKey
-                        : resolveEntityPrimaryKey(context, param, objectId, inputTargetsFor(context));
-                // 该入参没点名实例：沿用同一对象在别的入参上选过的实例，未指定行就按默认取最近 10 行
-                if (primaryKey == null) {
-                    primaryKey = paramTargetPrimaryKey(context, param, objectId);
-                }
-                PreconditionUtils.checkNotNull(primaryKey,
-                        "入参[" + paramName + "]的对象[" + objectId + "]未选择实例数据，无法执行行为：" + actionApi,
-                        HttpStatus.BAD_REQUEST);
-                var rowKeys = target != null
-                        ? mergeRowKeys(target.getDataPrimaryKeys(), rowKeysOf(inputTargetsFor(context), objectId))
-                        : inputRowKeysFor(context, objectId);
-                var objectDetails = getEntityDetail(objectId, primaryKey, rowKeys, limits,
-                        readRulesForParam(context, paramName, objectId));
-                // 点了实例就必须按它取到数：取不到时回落共用视图会静默读成另一个实例
-                if (explicitPrimaryKey != null) {
-                    PreconditionUtils.checkArgument(!objectDetails.isEmpty(),
-                            "入参[" + paramName + "]指定的实例[" + explicitPrimaryKey + "]在对象[" + objectId
-                                    + "]下没有数据，无法按该实例取值：" + actionApi, HttpStatus.BAD_REQUEST);
-                }
-                details.addAll(objectDetails);
             }
-            if (!details.isEmpty()) {
-                res.put(paramName, details.stream().collect(Collectors.toMap(
-                        EntityPropertyDetailVO::getPropertyUniqIdentifier,
-                        EntityPropertyDetailVO::getPropertyValues, (list1, list2) -> list1)));
+            if (MapUtils.isNotEmpty(fieldPositions)) {
+                readFieldPositions(context, param, paramName, fieldPositions, limits, values);
+            }
+            // 子级或规则各读各的子表时行数可能不同：按下标拼元素，按最短的多值列对齐，多出来的行丢掉
+            if (MapUtils.isNotEmpty(fieldPositions) || readRuleParams.containsKey(paramName)) {
+                truncateToShortestRows(values);
+            }
+            if (!values.isEmpty()) {
+                res.put(paramName, values);
             }
         }
         return res.isEmpty() ? null : res;
+    }
+
+    /**
+     * 子级是否还要按入参级口径读：入参整包点了位置，或还有绑定行没被任何子级位置点名。
+     * <p>全部子级都点了实例时只按子级读，调用方不必再给 entityPrimaryKeys；只要剩一条没点名，
+     * 它仍要靠入参/对象级实例回退，按原口径读。</p>
+     */
+    private boolean needsSharedRead(ActionContextInfoDTO context, String paramName,
+                                    Map<String, ActionInstanceTargetParam> fieldPositions) {
+        if (MapUtils.isEmpty(fieldPositions)) {
+            return true;
+        }
+        var paramId = paramIdByName(context.getFunctionInputParams(), paramName);
+        if (paramId == null) {
+            return true;
+        }
+        return CollectionUtils.emptyIfNull(context.getMappings()).stream()
+                .filter(this::isInstanceInputRow)
+                .filter(mapping -> Objects.equals(paramId, mapping.getFunctionParamId()))
+                .anyMatch(mapping -> StringUtils.isBlank(mapping.getPropertyUniqueIdentifier())
+                        || !fieldPositions.containsKey(mapping.getPropertyUniqueIdentifier()));
+    }
+
+    /**
+     * 按子级读：每个子级用它自己的实例和分组行取数，没给行就按该子表默认口径读。
+     * <p>同一入参的不同子级可以落在不同对象、不同实例上，互不影响；取值按属性唯一标识回填，
+     * 元素组装时按数组下标把各子级的序列拼成列表元素。</p>
+     */
+    private void readFieldPositions(ActionContextInfoDTO context, EntityActionExecuteParam param, String paramName,
+                                    Map<String, ActionInstanceTargetParam> positions,
+                                    Map<String, Integer> limits, Map<String, List<Object>> values) {
+        var legacyObjectId = legacyActionObject(context, param);
+        var actionApi = context.getActionDetailVO() == null ? "" : context.getActionDetailVO().getActionApi();
+        var rows = instanceRowsOfParam(context, paramName);
+        positions.forEach((propertyId, position) -> {
+            var mapping = rows.stream()
+                    .filter(row -> StringUtils.equals(propertyId, row.getPropertyUniqueIdentifier()))
+                    .findFirst().orElse(null);
+            PreconditionUtils.checkNotNull(mapping,
+                    "入参[" + paramName + "]的子级没找到绑定行，无法读取数据位置：" + propertyId, HttpStatus.BAD_REQUEST);
+            var fieldLabel = "入参[" + paramName + "]的子级["
+                    + StringUtils.defaultIfBlank(mapping.getParamPath(),
+                    StringUtils.defaultIfBlank(mapping.getParameterName(), propertyId)) + "]";
+            var objectId = StringUtils.isNotEmpty(mapping.getOntologyUniqueIdentifier())
+                    ? mapping.getOntologyUniqueIdentifier() : legacyObjectId;
+            PreconditionUtils.checkNotNull(objectId,
+                    fieldLabel + "没有绑定对象，无法读取数据位置：" + actionApi, HttpStatus.BAD_REQUEST);
+            var primaryKey = position.getEntityPrimaryKey();
+            if (primaryKey == null) {
+                primaryKey = resolveEntityPrimaryKey(context, param, objectId, inputTargetsFor(context));
+            }
+            if (primaryKey == null) {
+                primaryKey = paramTargetPrimaryKey(context, param, objectId);
+            }
+            PreconditionUtils.checkNotNull(primaryKey,
+                    fieldLabel + "没给实例主键，也无法从其它入参推出实例，请在它的数据位置里传 entityPrimaryKey",
+                    HttpStatus.BAD_REQUEST);
+            var rowKeys = mergeRowKeys(position.getDataPrimaryKeys(), rowKeysOf(inputTargetsFor(context), objectId));
+            // 没给行才按子表读取规则取；给了行以行主键为准
+            var objectDetails = getEntityDetail(objectId, primaryKey, rowKeys, limits,
+                    readRulesForParam(context, paramName, objectId));
+            var detail = objectDetails.stream()
+                    .filter(d -> StringUtils.equals(propertyId, d.getPropertyUniqIdentifier()))
+                    .findFirst().orElse(null);
+            PreconditionUtils.checkNotNull(detail,
+                    fieldLabel + "指定的实例[" + primaryKey + "]在对象[" + objectId + "]下没有数据，无法按该子级取值："
+                            + actionApi, HttpStatus.BAD_REQUEST);
+            values.put(propertyId, detail.getPropertyValues());
+        });
+    }
+
+    /** 子级各读各的子表时行数可能对不上：按最短的列截齐，单值列（实例级取值）照旧广播到每一行 */
+    private static void truncateToShortestRows(Map<String, List<Object>> values) {
+        int shortest = values.values().stream()
+                .filter(value -> value != null && value.size() > 1)
+                .mapToInt(List::size)
+                .min().orElse(0);
+        if (shortest <= 1) {
+            return;
+        }
+        values.replaceAll((property, value) -> value != null && value.size() > shortest
+                ? new ArrayList<>(value.subList(0, shortest)) : value);
+    }
+
+    /** 入参按名字找算子参数 id；不绑算子或名字对不上时返回 null */
+    private static Long paramIdByName(List<FunctionParameterVO> params, String paramName) {
+        if (CollectionUtils.isEmpty(params) || StringUtils.isEmpty(paramName)) {
+            return null;
+        }
+        return params.stream().filter(p -> StringUtils.equals(paramName, p.getParamName()))
+                .map(FunctionParameterVO::getParamId).filter(Objects::nonNull).findFirst().orElse(null);
+    }
+
+    /** 该入参需要读实例的绑定行 */
+    private List<ActionParamMappingVO> instanceRowsOfParam(ActionContextInfoDTO context, String paramName) {
+        var paramId = paramIdByName(context.getFunctionInputParams(), paramName);
+        if (paramId == null) {
+            return List.of();
+        }
+        return CollectionUtils.emptyIfNull(context.getMappings()).stream()
+                .filter(this::isInstanceInputRow)
+                .filter(mapping -> Objects.equals(paramId, mapping.getFunctionParamId()))
+                .collect(Collectors.toList());
     }
 
     /**
@@ -2382,8 +2512,10 @@ public class EntityServiceImpl implements EntityService {
                                             String excludeObjectId) {
         var inputTargets = param == null ? null : param.getInputParams();
         var elementTargets = param == null ? null : param.getInputElementParams();
+        var fieldTargets = param == null ? null : param.getInputFieldParams();
         var outputTargets = param == null ? null : param.getOutputParams();
-        if (MapUtils.isEmpty(inputTargets) && MapUtils.isEmpty(elementTargets) && MapUtils.isEmpty(outputTargets)) {
+        if (MapUtils.isEmpty(inputTargets) && MapUtils.isEmpty(elementTargets)
+                && MapUtils.isEmpty(fieldTargets) && MapUtils.isEmpty(outputTargets)) {
             return Set.of();
         }
         if (CollectionUtils.isEmpty(context.getMappings())) {
@@ -2391,6 +2523,7 @@ public class EntityServiceImpl implements EntityService {
         }
         var legacyObjectId = legacyActionObject(context, param);
         var elementCoveredObjects = elementCoveredObjects(context, elementTargets, legacyObjectId);
+        var fieldCoveredObjects = fieldCoveredObjects(context, fieldTargets, legacyObjectId);
         Set<String> needTargetObjects = new LinkedHashSet<>();
         Set<String> uncoveredObjects = new HashSet<>();
         for (var mapping : context.getMappings()) {
@@ -2410,12 +2543,52 @@ public class EntityServiceImpl implements EntityService {
                     ? paramTargetOf(targets, paramNameOf(context.getFunctionInputParams(), mapping.getFunctionParamId()))
                     : outputTargetFor(context, targets, mapping);
             if ((target == null || target.getEntityPrimaryKey() == null)
-                    && !(isInputRow && elementCoveredObjects.contains(objectId))) {
+                    && !(isInputRow && elementCoveredObjects.contains(objectId))
+                    && !(isInputRow && fieldCoveredObjects.contains(objectId))) {
                 uncoveredObjects.add(objectId);
             }
         }
         needTargetObjects.removeAll(uncoveredObjects);
         return needTargetObjects;
+    }
+
+    /**
+     * 按子级给位置的入参覆盖到的对象：该对象不是关系对端，且指向它的每条读实例绑定行都点了实例主键。
+     * <p>覆盖后这个对象不必再在 entityPrimaryKeys 里选实例；只要有一条绑定行没点名或没给实例，就要回退对象级选择。</p>
+     */
+    private Set<String> fieldCoveredObjects(ActionContextInfoDTO context,
+                                            Map<String, Map<String, ActionInstanceTargetParam>> fieldTargets,
+                                            String legacyObjectId) {
+        if (MapUtils.isEmpty(fieldTargets)) {
+            return Set.of();
+        }
+        Set<String> covered = new LinkedHashSet<>();
+        Set<String> uncovered = new HashSet<>();
+        fieldTargets.forEach((paramName, byProperty) -> {
+            var objectIds = paramDataObjectIds(context.getMappings(), context.getFunctionInputParams(),
+                    paramName, this::isInstanceInputRow, legacyObjectId);
+            if (MapUtils.isEmpty(byProperty)) {
+                uncovered.addAll(objectIds);
+                return;
+            }
+            for (var objectId : objectIds) {
+                var objectRows = instanceRowsOfParam(context, paramName).stream()
+                        .filter(mapping -> StringUtils.equals(objectId,
+                                StringUtils.isNotEmpty(mapping.getOntologyUniqueIdentifier())
+                                        ? mapping.getOntologyUniqueIdentifier() : legacyObjectId))
+                        .collect(Collectors.toList());
+                if (!objectRows.isEmpty() && objectRows.stream().allMatch(mapping -> {
+                    var position = byProperty.get(mapping.getPropertyUniqueIdentifier());
+                    return position != null && position.getEntityPrimaryKey() != null;
+                })) {
+                    covered.add(objectId);
+                } else {
+                    uncovered.add(objectId);
+                }
+            }
+        });
+        covered.removeAll(uncovered);
+        return covered;
     }
 
     /**

@@ -62,8 +62,13 @@ public class ActionTestParam {
             + "写法分两种：一维数组的元素就是数据位置，LIST 入参里它们是这次执行的那份列表的元素（各元素可以各自指定对象和实例，"
             + "一份列表可以由不同对象、不同实例的行拼成），非 LIST 入参里每个元素是一个批量候选值；"
             + "二维数组只在 LIST 入参上用，外层是批量候选、内层是该候选的整份列表元素，这时才按 inputMode 展开成多组。"
-            + "每个位置可以写 ontologyIdentifier（绑定跨多个对象时必填）、entityPrimaryKey（不传用 entityPrimaryKeys 里该对象的实例）、"
+            + "LIST 入参按子级键给位置时每个子级只给一个位置，各子级各自读自己的对象和实例：没给 dataPrimaryKeys 的子级"
+            + "按该子表默认行数（或 listReadRules）读，给了行按下标取；各子级读到的行数不一致时按最短的对齐，"
+            + "此时不必再在 entityPrimaryKeys 里给这些对象选实例。"
+            + "每个位置可以写 entityPrimaryKey（不传用 entityPrimaryKeys 里该对象的实例）、"
             + "dataPrimaryKeys（存储分组 -> 行主键，行主键数组按顺序展开成多个元素）；"
+            + "按子级键给位置时不传 ontologyIdentifier，读哪个对象由创建行为时的绑定行决定，传了报错；"
+            + "按元素给位置时一条列表可以由不同对象的行拼成，绑定跨多个对象时元素里必须传 ontologyIdentifier；"
             + "命中时优先于 entityPrimaryKeys，只影响该入参的读取，不影响出参写回和关系落库；"
             + "绑定落在关系端点对象上也按这里指定的实例读，关系边仍由 from/to 决定；不绑算子的行为也不支持",
             example = "{\"name\":[{\"entityPrimaryKey\":11}],"
@@ -95,10 +100,16 @@ public class ActionTestParam {
             + "数组值就是 LIST 参数本身的内容，不参与批量组合。多组测试共用同一个值，来源为外部输入的参数必须给值")
     private Map<String, Object> params;
 
-    @Schema(name = "listReadRules", description = "子表读取规则：算子入参名 -> 读取行数与排序方式，和 inputParams 一样"
-            + "支持三种键写法（顶层入参名 tracks / 绑定行字段名 time / 父参数名.字段路径 tracks.time），"
-            + "后端按绑定行归到所属入参；同一个入参的多条字段行规则必须完全一致，否则报错。"
-            + "对象与存储分组按该入参的绑定行推导，不用在规则里传。"
-            + "不配规则的入参沿用原口径：按行主键倒序取最新 10 行（绑定行配了 rowLimit 的按行数）；只在 inputMode=OBJECT 时使用")
+    @Schema(name = "listReadRules", description = "子表读取规则：子级字段 -> 读取行数与排序方式。键写成「父参数名.字段路径」"
+            + "（如 tracks.time、startPoint.position.longitude），字段名只属于一个入参时也可裸写字段名；"
+            + "没有字段路径的绑定行按它绑的属性的 apiName 当字段名。不接受顶层入参名做键：同一个入参的子级可以来自"
+            + "不同对象的不同子表，一张子表一次只能按一个列取一段行，按入参给规则分不开。一条键命中的所有绑定行共用"
+            + "这份规则；落到同一张子表上的多条键必须写成一致的内容，否则报错。排序属性必须是这条键所在子表上绑过的属性，"
+            + "行数与排序都不会作用到别的子表上。不配规则的子表沿用原口径：按行主键倒序取最新 10 行"
+            + "（绑定行配了 rowLimit 的按行数）；子级位置自己给了行主键时以行主键为准。"
+            + "对象、笛卡尔积、分组三种执行方式都能用：只选实例不选子级时按规则取行，同一入参有多列子表行数不一致时"
+            + "按最短的对齐；逐元素给位置的入参不能用规则，同时传会直接报错",
+            example = "{\"tracks.time\":{\"rowCount\":20,\"orderByProperty\":\"create_time\",\"sort\":\"ASC\"},"
+                    + "\"history.time\":{\"rowCount\":5}}")
     private Map<String, ActionTestListReadRuleParam> listReadRules;
 }
