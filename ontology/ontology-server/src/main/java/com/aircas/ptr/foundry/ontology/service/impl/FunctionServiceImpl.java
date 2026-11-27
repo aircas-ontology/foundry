@@ -1046,7 +1046,8 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
             return executeContainerFunction(function, funParamMap);
         }
         //脚本函数：按参数定义组装单对象入参（handle(input)），按语言路由到对应引擎执行
-        Map<String, Object> inputMap = buildInputMap(executeInputParams, funParamMap);
+        Map<String, Object> inputMap = withExplicitNulls(buildInputMap(executeInputParams, funParamMap),
+                executeInputParams, param.getParameters());
         FunctionLanguageEnum language = function.getLanguage() == null ? inferLanguageFromCode(function.getCode()) : function.getLanguage();
         // 单对象入参解包：当只有一个入参时，直接将该参数的值作为 runner 的 input，
         // 避免脚本里写 input.input.xxx 的双层嵌套（用户给参数起名 input/user/whatever 都能直接用 input.xxx 或 input）
@@ -1612,6 +1613,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
      * 未赋值（value 为 null）的参数不写入 input：各语言对“键存在但值为 null”的处理不一致
      * （Python input.get('name','world') 会拿到 None 而非默认值，只有 Groovy 的 input.name ?: 'world' 能兜底），
      * 省略缺值键可让脚本自己的默认值在各语言统一生效。
+     * 显式传 null 的参数不在此处补，由 {@link #withExplicitNulls} 在请求确实写了 paramValue:null 时补键。
      */
     static Map<String, Object> buildInputMap(List<FunctionParamPO> inputParams, Map<String, Object> funParamMap) {
         Map<String, Object> input = new LinkedHashMap<>();
@@ -1633,6 +1635,35 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                         input.put(p.getParamName(), value);
                     }
                 }
+            }
+        }
+        return input;
+    }
+
+    /**
+     * 把「显式传 null」的参数补进脚本 input：只有请求 JSON 里写了 {@code paramValue:null} 才补键，
+     * 省略该字段仍不写入（与 {@link #buildInputMap} 省略缺值的口径一致，脚本默认值照旧生效）。
+     * <p>以前显式 null 被当成未赋值丢掉，脚本里 {@code input.x == null} 取不到键，
+     * Groovy 抛 MissingPropertyException、Python 抛 KeyError，没法在脚本里判空。</p>
+     *
+     * @param declaredParams 函数定义里声明的入参（草稿测试传 null 表示不校验声明）
+     */
+    static Map<String, Object> withExplicitNulls(Map<String, Object> input,
+                                                 List<FunctionParamPO> declaredParams,
+                                                 List<FunctionParameter> requestParams) {
+        if (input == null || CollectionUtils.isEmpty(requestParams)) {
+            return input;
+        }
+        Set<String> declaredNames = CollectionUtils.isEmpty(declaredParams) ? null
+                : declaredParams.stream().map(FunctionParamPO::getParamName).collect(Collectors.toSet());
+        for (FunctionParameter p : requestParams) {
+            String name = p.getParamName();
+            if (StringUtils.isEmpty(name) || p.getParamValue() != null || p.getFields() != null
+                    || !p.isParamValueSpecified() || input.containsKey(name)) {
+                continue;
+            }
+            if (declaredNames == null || declaredNames.contains(name)) {
+                input.put(name, null);
             }
         }
         return input;
@@ -1760,7 +1791,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
      */
     @SneakyThrows
     private Object testDraftFunction(FunctionTestParam param) {
-        // 组装入参 Map
+        // 组装入参 Map（草稿没有落库入参声明，显式传 null 的参数直接补键）
         Map<String, Object> inputMap = CollectionUtils.isEmpty(param.getParameters())
                 ? new LinkedHashMap<>()
                 : param.getParameters().stream().collect(LinkedHashMap::new,
@@ -1770,6 +1801,7 @@ public class FunctionServiceImpl extends ServiceImpl<FunctionMapper, Function> i
                         m.put(p.getParamName(), v);
                     }
                 }, LinkedHashMap::putAll);
+        withExplicitNulls(inputMap, null, param.getParameters());
 
         FunctionTypeEnum type = param.getType();
         switch (type) {

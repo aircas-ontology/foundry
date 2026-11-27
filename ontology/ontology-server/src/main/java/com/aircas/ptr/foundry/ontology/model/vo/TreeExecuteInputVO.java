@@ -23,12 +23,14 @@ import lombok.experimental.SuperBuilder;
 public class TreeExecuteInputVO {
 
     @Schema(name = "key", description = "参数名：与绑定行为声明的入参同名；来源是外部输入时按节点传给 nodeExecutes[节点标识].params。"
-            + "绑算子时 LIST 的元素字段各占一行，这里是字段名，数据位置要按 paramName 传",
+            + "绑算子时 LIST 的元素字段各占一行，这里是字段名；叶子名在多个入参上重复时这里是「父参数名.字段路径」，"
+            + "和行为测试 inputParams 的写法一致。数据位置按 key 或 paramName 都能给",
             example = "ammoCount")
     private String key;
 
     @Schema(name = "paramName", description = "所属顶层算子入参名：nodeExecutes[节点标识].inputParams 按它给数据位置；"
-            + "LIST 入参按同一 paramName 的任意元素字段行给位置即可，多个位置按数组传，每个位置是列表的一个元素",
+            + "LIST 入参按同一 paramName 的任意元素字段行给位置即可，多个位置按数组传，每个位置是列表的一个元素；"
+            + "同一叶子名落在多个入参上时改按 key（父参数名.字段路径）指名",
             example = "trajectories")
     private String paramName;
 

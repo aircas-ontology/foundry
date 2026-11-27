@@ -58,8 +58,10 @@ public class TreeNodeExecuteParam {
 
     @Schema(name = "inputParams",
             description = "本节点按算子入参指定的数据位置（入参名 -> 实例主键 + 分组行主键）；不传沿用执行请求的 inputParams。"
+                    + "键可以按顶层入参名，也可以按绑定行字段名给；叶子名落在多个入参上时用「父参数名.字段路径」指明归属。"
                     + "LIST 入参可以给多个位置，每个位置是列表的一个元素：必须是同一实例、同一分组，各给该分组的一行；"
-                    + "其余入参只能一个位置。一个位置时也可以直接写成对象（与旧写法一致）",
+                    + "其余入参只能一个位置。一个位置时也可以直接写成对象（与旧写法一致）。"
+                    + "行为树是单次执行，没有批量组合：二维候选和 inputMode 都不认",
             example = "{\"trajectories\":[{\"entityPrimaryKey\":101,\"dataPrimaryKeys\":{\"orbit_point\":11}},"
                     + "{\"entityPrimaryKey\":101,\"dataPrimaryKeys\":{\"orbit_point\":12}}]}")
     // 入站请求体走 Jackson 3、工程内自建 mapper 走 Jackson 2，两个注解各管一侧，缺一不可

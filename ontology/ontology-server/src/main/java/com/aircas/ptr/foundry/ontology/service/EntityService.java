@@ -131,6 +131,14 @@ public interface EntityService {
      */
     Page<List<EntityPropertyGenericQueryVO>> genericAggregateUnion(EntityUnionAggregateParam param);
 
+    /**
+     * 跨对象合并查询：每个对象各查一遍同一批字段，SQL 层 UNION ALL 拼起来后统一分页、统一算总行数。
+     *
+     * <p>与 {@link #genericQuery} 逐对象查再在内存合并的差别：分页与总数要作用在整批结果上，
+     * 各对象各查一页再拼会让页码失去意义。字段按 apiName 共用，各对象按自己的属性表解析。</p>
+     */
+    Page<List<EntityPropertyGenericQueryVO>> genericQueryUnion(EntityUnionQueryParam param);
+
     EntityPropertyRowDetailVO getEntityPropertyRowDetail(EntityPropertyRowQueryParam param);
 
     Page<EntityPropertyRowDetailVO.PropertyGroupData> getEntityPropertyRowDetailPage(EntityPropertyRowPageQueryParam param);

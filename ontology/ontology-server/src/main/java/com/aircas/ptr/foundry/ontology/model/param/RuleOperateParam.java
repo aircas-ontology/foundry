@@ -26,7 +26,8 @@ public class RuleOperateParam {
     @Schema(name = "OntologyId", description = "对象唯一标识；type=dynamic 必填", example = "objA")
     private String ontologyId;
 
-    @Schema(name = "entityId", description = "实例对象主键；新增/删除条件可不传（表示该对象任意实例），修改等属性条件必填", example = "3")
+    @Schema(name = "entityId", description = "实例对象主键；新增/删除条件可不传（表示该对象任意实例），"
+            + "但属性在主表(main)分组时不能指定（事件行即实例本身）；修改等属性条件必填", example = "3")
     private String entityId;
 
     @Schema(name = "dataPrimaryKey", description = "子表数据行主键；type=dynamic 可选。属性在扩展存储分组时指定取哪一行的值，"

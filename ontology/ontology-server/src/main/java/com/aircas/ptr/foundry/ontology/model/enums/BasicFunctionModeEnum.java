@@ -6,8 +6,8 @@ import lombok.Getter;
 /**
  * 基础函数的操作方式。
  * <p>
- * AGGREGATE 聚合：对一个聚合目标字段施加聚合函数，每个对象得到一个个聚合值；
- * QUERY 查询：按选中的字段列出实例数据，只作用于单个对象。
+ * AGGREGATE 聚合：对一个聚合目标字段施加聚合函数，各对象的行合批后只算一个统一值；
+ * QUERY 查询：按选中的字段列出实例数据，多对象时各对象的结果按 UNION ALL 合并后统一分页。
  */
 @AllArgsConstructor
 @Getter

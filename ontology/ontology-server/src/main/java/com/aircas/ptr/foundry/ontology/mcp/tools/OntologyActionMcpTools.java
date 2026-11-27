@@ -294,15 +294,16 @@ public class OntologyActionMcpTools implements McpTools {
             - entityPrimaryKey：行为所属对象的实例主键，只涉及一个对象时用它，不支持数组。
             - entityPrimaryKeys：对象 id -> 实例主键 的映射，映射涉及的对象都要提供；行为绑关系时用保留键 from/to 传关系两端实例。
               值写成数组即批量测试：只选实例时各轴做笛卡尔积，选了非 main 分组的行时改为按下标配对成组，最多 50 组，逐组执行各自落库。
-            - inputParams：入参名 -> 数据位置数组（每个元素 {"entityPrimaryKey":..,"dataPrimaryKeys":{分组:行主键}}），
-              按算子入参单独指定读哪个实例/哪一行，多元素即批量候选值；命中时优先于 entityPrimaryKeys。
+            - inputParams：入参名/绑定行字段名 -> 数据位置。非 LIST 入参写一维数组，每个元素 {"ontologyIdentifier":..,"entityPrimaryKey":..,"dataPrimaryKeys":{分组:行主键}} 是一个批量候选，多个才按 inputMode 展开；
+              LIST 入参一维数组是这一次执行的列表元素（可来自不同对象/实例，一次执行不展开），要按候选展开就写二维数组（外层一个元素是一份完整列表），按 inputMode 展开；
+              命中时优先于 entityPrimaryKeys。
             - outputParams：出参 key -> 写回位置 {"entityPrimaryKey":..,"dataPrimaryKeys":{..}}，
               key 优先级：属性唯一标识 > 出参字段名 > 顶层算子出参名；不支持数组。
             - dataPrimaryKey：分组表行主键，属性值-修改/删除必填；linkEntityPrimaryKey：关系对端实体主键（兼容写法，建议用 from/to）。
             - params：来源为外部输入的参数取值（参数名 -> 值），固定值不传。
             示例：{"ontologySpaceId":156,"actionApi":"syncSpeed","entityPrimaryKey":1,"params":{"factor":2}}
-            返回 ActionTestResultVO：actionApi、message 落库动作说明、result 算子返回结果（绑算子时）、
-            cases 批量测试时逐组的执行结果与失败原因。
+            返回 ActionTestResultVO：actionApi、message 落库动作说明、result 执行结果（绑算子时；JSON 结果直接是对象，
+            不需要再解析字符串）、cases 批量测试时逐组的执行结果与失败原因。
             """)
     public ActionTestResultVO testAction(
             @ToolParam(description = "ActionTestParam 的 JSON 对象字符串，字段见工具描述") String testParamJson) {

@@ -2,6 +2,7 @@ package com.aircas.ptr.foundry.ontology.model.dto;
 
 
 import com.aircas.ptr.foundry.ontology.model.param.ActionLinkMappingParam;
+import com.aircas.ptr.foundry.ontology.model.param.ActionTestListReadRuleParam;
 import com.aircas.ptr.foundry.ontology.model.param.EntityActionExecuteParam;
 import com.aircas.ptr.foundry.ontology.model.po.OntologyProperty;
 import com.aircas.ptr.foundry.ontology.model.vo.*;
@@ -36,6 +37,13 @@ public class ActionContextInfoDTO {
     private Map<String, Map<String, List<Object>>> paramEntityDetailMaps;
 
     /**
+     * LIST 入参按元素给的数据位置：入参名 -> 按元素顺序排列的属性取值（属性id -> 单个值）。
+     * <p>同一份列表的元素可以来自不同对象、不同实例，不能按列对齐拼装，元素字段只取该元素自己那个对象的属性。
+     * 只有请求里 inputElementParams 点到的入参有条目；异步回调时随上下文一起序列化。</p>
+     */
+    private Map<String, List<Map<String, Object>>> paramElementDetailMaps;
+
+    /**
      * 行为节点上配了取值来源的入参取值：参数名 -> 值，取值时优先于该绑定行自己的来源。
      * <p>来源是黑板变量或上游行为出参；按参数名覆盖，所以属性来源的绑定行也一样生效。
      * 异步回调时随上下文一起序列化。</p>
@@ -46,6 +54,12 @@ public class ActionContextInfoDTO {
      * 来源为「外部输入」的参数取值（参数名 -> 值），只有行为测试接口会传入；定时执行为空
      */
     private Map<String, Object> externalParams;
+
+    /**
+     * 对象模式测试配的子表读取规则：对象id -> (存储分组 或 空串表示该对象默认 -> 规则)。
+     * 只影响没指定行的子表读取（行数、排序属性与方向），不传按原口径（行主键倒序取默认行数）。
+     */
+    private Map<String, Map<String, ActionTestListReadRuleParam>> listReadRules;
 
     /**
      * 本次算子调用真正解析出的入参（顶层入参名 -> 值）：调用方给一个可变容器，{@code callFunction} 回填，

@@ -6,6 +6,7 @@ import com.aircas.ptr.foundry.ontology.model.dto.ActionContextInfoDTO;
 import com.aircas.ptr.foundry.ontology.model.enums.ActionSchedulingTypeEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.TaskStatusEnum;
 import com.aircas.ptr.foundry.ontology.model.param.ActionCreateOrUpdateParam;
+import com.aircas.ptr.foundry.ontology.model.param.BasicFunctionCommonPropertyParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionSchedulingCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionSchedulingUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.param.EntityActionExecuteParam;
@@ -72,6 +73,12 @@ public interface OntologyActionService extends IService<OntologyAction> {
                                                      List<String> functionApis);
 
     OntologyActionDetailVO getActionByApi(Integer ontologySpaceId, String actionApi);
+
+    /**
+     * 基础函数多对象的公共字段：前端选了多个对象后，查询字段、聚合目标与条件字段只能从这批里选。
+     * <p>只返回每个对象都有、类型完全一致且都已关联数据源的属性；单对象时返回该对象全部可用字段。</p>
+     */
+    BasicFunctionCommonPropertyVO basicFunctionCommonProperties(BasicFunctionCommonPropertyParam param);
 
     /**
      * 按对象下全部实例执行行为（对外手动触发）：一次请求记一条手动执行日志。

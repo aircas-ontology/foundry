@@ -9,6 +9,7 @@ import com.aircas.ptr.foundry.ontology.model.param.ActionCreateOrUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionSchedulingCreateParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionSchedulingUpdateParam;
 import com.aircas.ptr.foundry.ontology.model.param.ActionTestParam;
+import com.aircas.ptr.foundry.ontology.model.param.BasicFunctionCommonPropertyParam;
 import com.aircas.ptr.foundry.ontology.model.param.OntologyActionExecuteParam;
 import com.aircas.ptr.foundry.ontology.model.param.TreeBatchExecuteParam;
 import com.aircas.ptr.foundry.ontology.model.param.TreeExecuteParam;
@@ -118,6 +119,14 @@ public class OntologyActionController {
                                                              @RequestParam(required = true, name = "actionApi") @Parameter(description = "行为api") String actionApi) {
         return RestResult.ofData(ontologyActionService.getActionByApi(ontologySpaceId, actionApi));
     }
+
+    @Operation(summary = "基础函数多对象公共字段：返回各对象共有（apiName 与类型一致、都已关联数据源）的字段，供前端选查询字段/聚合目标/条件字段")
+    @PostMapping("/basic-function/common-properties")
+    public RestResult<BasicFunctionCommonPropertyVO> basicFunctionCommonProperties(
+            @RequestBody @Valid BasicFunctionCommonPropertyParam param) {
+        return RestResult.ofData(ontologyActionService.basicFunctionCommonProperties(param));
+    }
+
 
     @Operation(summary = "执行对象单个行为")
     @PostMapping("/execute")

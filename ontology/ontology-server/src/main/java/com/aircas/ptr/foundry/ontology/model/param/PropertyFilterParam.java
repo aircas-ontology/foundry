@@ -1,5 +1,6 @@
 package com.aircas.ptr.foundry.ontology.model.param;
 
+import com.aircas.ptr.foundry.ontology.model.enums.FilterValueSourceEnum;
 import com.aircas.ptr.foundry.ontology.model.enums.QueryOpEnum;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
@@ -42,4 +43,9 @@ public class PropertyFilterParam {
     /** 变量数据类型（STRING/NUMBER/BOOLEAN），基础查询算子创建时使用 */
     @Schema(name = "dataType", description = "变量数据类型：STRING/NUMBER/BOOLEAN", example = "NUMBER")
     private String dataType;
+
+    /** 取值来源，不传按 FIXED；只有基础函数行为的配置认这个字段 */
+    @Schema(name = "source", description = "取值来源：FIXED 固定值（value/values 写死）/ EXTERNAL 外部输入"
+            + "（测试、执行时在 params 里按属性 apiName 传值）；不传按 FIXED", example = "EXTERNAL")
+    private FilterValueSourceEnum source;
 }
